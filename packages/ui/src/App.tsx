@@ -9,7 +9,6 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useMenuActions } from '@/hooks/useMenuActions';
-import { useMessageSync } from '@/hooks/useMessageSync';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
 import { useRouter } from '@/hooks/useRouter';
@@ -176,7 +175,7 @@ function App({ apis }: AppProps) {
 
   useMenuActions(handleToggleMemoryDebug);
 
-  useMessageSync();
+
 
   useSessionStatusBootstrap();
   useSessionAutoCleanup();

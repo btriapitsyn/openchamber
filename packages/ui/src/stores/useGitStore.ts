@@ -15,6 +15,10 @@ const DIFF_PREFETCH_MAX_FILES = 25;
 const DIFF_PREFETCH_CONCURRENCY = 4;
 const DIFF_PREFETCH_TIMEOUT_MS = 15000;
 
+// Diff cache limits to prevent memory bloat with many modified files
+const DIFF_CACHE_MAX_ENTRIES = 30;
+const DIFF_CACHE_MAX_TOTAL_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
+
 interface DirectoryGitState {
   isGitRepo: boolean | null;
   status: GitStatus | null;
@@ -91,6 +95,45 @@ const createEmptyDirectoryState = (): DirectoryGitState => ({
   lastLogFetch: 0,
   logMaxCount: 25,
 });
+
+// LRU eviction helper for diff cache
+const evictDiffCacheIfNeeded = (
+  diffCache: Map<string, { original: string; modified: string; fetchedAt: number }>,
+  maxEntries: number = DIFF_CACHE_MAX_ENTRIES,
+  maxTotalSize: number = DIFF_CACHE_MAX_TOTAL_SIZE_BYTES
+): Map<string, { original: string; modified: string; fetchedAt: number }> => {
+  // Calculate total size
+  let totalSize = 0;
+  for (const entry of diffCache.values()) {
+    totalSize += (entry.original?.length ?? 0) + (entry.modified?.length ?? 0);
+  }
+
+  // If within limits, return as-is
+  if (diffCache.size <= maxEntries && totalSize <= maxTotalSize) {
+    return diffCache;
+  }
+
+  // Sort entries by fetchedAt (oldest first) for LRU eviction
+  const entries = Array.from(diffCache.entries())
+    .sort((a, b) => a[1].fetchedAt - b[1].fetchedAt);
+
+  const newCache = new Map<string, { original: string; modified: string; fetchedAt: number }>();
+  let newTotalSize = 0;
+
+  // Keep entries from newest to oldest until limits are reached
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const [path, entry] = entries[i];
+    const entrySize = (entry.original?.length ?? 0) + (entry.modified?.length ?? 0);
+
+    if (newCache.size >= maxEntries) break;
+    if (newTotalSize + entrySize > maxTotalSize && newCache.size > 0) continue;
+
+    newCache.set(path, entry);
+    newTotalSize += entrySize;
+  }
+
+  return newCache;
+};
 
 const haveDiffStatsChanged = (
   previous?: GitStatus['diffStats'],
@@ -410,7 +453,9 @@ export const useGitStore = create<GitStore>()(
         const dirState = newDirectories.get(directory) ?? createEmptyDirectoryState();
         const newDiffCache = new Map(dirState.diffCache);
         newDiffCache.set(filePath, { ...diff, fetchedAt: Date.now() });
-        newDirectories.set(directory, { ...dirState, diffCache: newDiffCache });
+        // Apply LRU eviction to prevent memory bloat
+        const evictedCache = evictDiffCacheIfNeeded(newDiffCache);
+        newDirectories.set(directory, { ...dirState, diffCache: evictedCache });
         set({ directories: newDirectories });
       },
 
@@ -486,7 +531,9 @@ export const useGitStore = create<GitStore>()(
           });
         });
 
-        newDirectories.set(directory, { ...currentDirState, diffCache: newDiffCache });
+        // Apply LRU eviction to prevent memory bloat
+        const evictedCache = evictDiffCacheIfNeeded(newDiffCache);
+        newDirectories.set(directory, { ...currentDirState, diffCache: evictedCache });
         set({ directories: newDirectories });
       },
 

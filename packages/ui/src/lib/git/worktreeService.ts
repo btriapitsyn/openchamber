@@ -2,7 +2,7 @@ import { addGitWorktree, deleteGitBranch, deleteRemoteBranch, getGitStatus, list
 import { opencodeClient } from '@/lib/opencode/client';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { FilesAPI, RuntimeAPIs } from '@/lib/api/types';
-import { getWorktreeSetupCommands, substituteCommandVariables } from '@/lib/openchamberConfig';
+import { substituteCommandVariables } from '@/lib/openchamberConfig';
 
 const WORKTREE_ROOT = '.openchamber';
 const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || '/api';
@@ -100,6 +100,7 @@ export async function resolveWorktreePath(projectDirectory: string, worktreeSlug
 }
 
 export async function createWorktree(options: CreateWorktreeOptions): Promise<WorktreeMetadata> {
+  // LEGACY_WORKTREES: creates <project>/.openchamber/<slug> git worktrees.
   const { projectDirectory, worktreeSlug, branch, createBranch, startPoint } = options;
   const normalizedProject = normalize(projectDirectory);
   const worktreePath = await resolveWorktreePath(normalizedProject, worktreeSlug);
@@ -114,6 +115,7 @@ export async function createWorktree(options: CreateWorktreeOptions): Promise<Wo
   await addGitWorktree(normalizedProject, payload);
 
   return {
+    source: 'legacy',
     path: worktreePath,
     branch,
     label: shortBranchLabel(branch),
@@ -172,7 +174,10 @@ export async function getWorktreeStatus(worktreePath: string): Promise<WorktreeM
 export function mapWorktreeToMetadata(projectDirectory: string, info: GitWorktreeInfo): WorktreeMetadata {
   const normalizedProject = normalize(projectDirectory);
   const normalizedPath = normalize(info.worktree);
+  const legacyRoot = `${normalizedProject}/${WORKTREE_ROOT}/`;
+  const source: WorktreeMetadata['source'] = normalizedPath.startsWith(legacyRoot) ? 'legacy' : 'sdk';
   return {
+    source,
     path: normalizedPath,
     branch: info.branch ?? '',
     label: shortBranchLabel(info.branch ?? ''),
@@ -200,16 +205,16 @@ export interface WorktreeSetupResult {
  * This does not block - it returns a promise that resolves when all commands complete.
  * 
  * @param worktreePath - The path to the new worktree where commands will run
- * @param projectDirectory - The root project directory (for $ROOT_WORKTREE_PATH substitution)
- * @param commands - Optional commands to run. If not provided, reads from config.
+ * @param projectDirectory - The root project directory (for $ROOT_PROJECT_PATH substitution)
+ * @param commands - Commands to run.
  * @returns Promise resolving to setup results
  */
 export async function runWorktreeSetupCommands(
   worktreePath: string,
   projectDirectory: string,
-  commands?: string[]
+  commands: string[]
 ): Promise<WorktreeSetupResult> {
-  const commandsToRun = commands ?? await getWorktreeSetupCommands(projectDirectory);
+  const commandsToRun = Array.isArray(commands) ? commands : [];
   
   if (commandsToRun.length === 0) {
     return { success: true, results: [] };
@@ -336,10 +341,4 @@ export async function runWorktreeSetupCommands(
   }
 }
 
-/**
- * Check if worktree setup commands are configured for a project.
- */
-export async function hasWorktreeSetupCommands(projectDirectory: string): Promise<boolean> {
-  const commands = await getWorktreeSetupCommands(projectDirectory);
-  return commands.length > 0;
-}
+// (intentionally no `hasWorktreeSetupCommands`; setup commands now run via SDK worktree startCommand)

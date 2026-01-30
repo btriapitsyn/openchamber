@@ -3,6 +3,7 @@ import { ChatViewProvider } from './ChatViewProvider';
 import { AgentManagerPanelProvider } from './AgentManagerPanelProvider';
 import { SessionEditorPanelProvider } from './SessionEditorPanelProvider';
 import { createOpenCodeManager, type OpenCodeManager } from './opencode';
+import { startGlobalEventWatcher, stopGlobalEventWatcher, setChatViewProvider } from './sessionActivityWatcher';
 
 let chatViewProvider: ChatViewProvider | undefined;
 let agentManagerProvider: AgentManagerPanelProvider | undefined;
@@ -539,6 +540,15 @@ export async function activate(context: vscode.ExtensionContext) {
       chatViewProvider?.updateConnectionStatus(status, error);
       agentManagerProvider?.updateConnectionStatus(status, error);
       sessionEditorProvider?.updateConnectionStatus(status, error);
+
+      // Start/stop global event watcher based on connection status
+      // Mirrors web server and desktop Tauri behavior
+      if (status === 'connected' && chatViewProvider && openCodeManager) {
+        setChatViewProvider(chatViewProvider);
+        void startGlobalEventWatcher(openCodeManager, chatViewProvider);
+      } else if (status === 'disconnected' || status === 'error') {
+        stopGlobalEventWatcher();
+      }
     })
   );
 
@@ -548,6 +558,7 @@ export async function activate(context: vscode.ExtensionContext) {
 }
 
 export async function deactivate() {
+  stopGlobalEventWatcher();
   await openCodeManager?.stop();
   openCodeManager = undefined;
   chatViewProvider = undefined;

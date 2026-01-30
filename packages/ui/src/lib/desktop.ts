@@ -90,6 +90,7 @@ export type DesktopSettingsApi = {
 
 export type DesktopApi = {
   homeDirectory?: string;
+  macosMajorVersion?: number | null;
   getServerInfo: () => Promise<DesktopServerInfo>;
   restartOpenCode: () => Promise<{ success: boolean }>;
   shutdown: () => Promise<{ success: boolean }>;

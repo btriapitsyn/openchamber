@@ -98,7 +98,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             </Button>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="@container/commit-actions flex items-center gap-2 min-w-0">
             <Button
               variant="outline"
               size="sm"
@@ -110,13 +110,15 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
                 isBusy
               }
               type="button"
+              aria-label="Generate"
+              className="commit-actions__btn"
             >
               {isGeneratingMessage ? (
                 <RiLoader4Line className="size-4 animate-spin" />
               ) : (
                 <RiAiGenerate2 className="size-4 text-primary" />
               )}
-              Generate
+              <span className="commit-actions__label">Generate</span>
             </Button>
 
             <div className="flex-1" />
@@ -125,17 +127,18 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
               variant="outline"
               onClick={onCommit}
               disabled={!canCommit || isGeneratingMessage}
-              className="whitespace-nowrap"
+              className="commit-actions__btn whitespace-nowrap"
+              aria-label="Commit"
             >
               {commitAction === 'commit' ? (
                 <>
                   <RiLoader4Line className="size-4 animate-spin" />
-                  Committing...
+                  <span className="commit-actions__label">Committing...</span>
                 </>
               ) : (
                 <>
                   <RiGitCommitLine className="size-4" />
-                  Commit
+                  <span className="commit-actions__label">Commit</span>
                 </>
               )}
             </ButtonLarge>
@@ -167,16 +170,18 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
                 variant="default"
                 onClick={onCommitAndPush}
                 disabled={!canCommit || isGeneratingMessage}
+                className="commit-actions__btn"
+                aria-label="Commit & Push"
               >
                 {commitAction === 'commitAndPush' ? (
                   <>
                     <RiLoader4Line className="size-4 animate-spin" />
-                    Pushing...
+                    <span className="commit-actions__label commit-actions__label--long">Pushing...</span>
                   </>
                 ) : (
                   <>
                     <RiArrowUpLine className="size-4" />
-                    Commit &amp; Push
+                    <span className="commit-actions__label commit-actions__label--long">Commit &amp; Push</span>
                   </>
                 )}
               </ButtonLarge>

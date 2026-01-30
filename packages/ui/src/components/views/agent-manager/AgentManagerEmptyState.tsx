@@ -22,6 +22,7 @@ import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSe
 import { AgentSelector } from '@/components/multirun/AgentSelector';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
+import type { ProjectRef } from '@/lib/openchamberConfig';
 import type { CreateMultiRunParams, MultiRunFileAttachment } from '@/types/multirun';
 
 /** Max file size in bytes (10MB) */
@@ -87,39 +88,36 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
   // Get project directory for setup commands
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const projects = useProjectsStore((state) => state.projects);
-  const projectDirectory = React.useMemo(() => {
+  const projectRef = React.useMemo<ProjectRef | null>(() => {
     // VS Code panel should always use the current workspace root.
     if (isVSCodeRuntime && vscodeWorkspaceFolder) {
-      return vscodeWorkspaceFolder;
+      return { id: `vscode:${vscodeWorkspaceFolder}`, path: vscodeWorkspaceFolder };
     }
 
     if (activeProjectId) {
       const project = projects.find((p) => p.id === activeProjectId);
-      if (project?.path) return project.path;
+      if (project?.path) {
+        return { id: project.id, path: project.path };
+      }
     }
 
-    const base = currentDirectory ?? vscodeWorkspaceFolder;
-    if (!base) return null;
+    if (currentDirectory) {
+      return { id: `path:${currentDirectory}`, path: currentDirectory };
+    }
 
-
-    const normalized = base.replace(/\\/g, '/').replace(/\/+$/, '') || base;
-    const marker = '/.openchamber/';
-    const markerIndex = normalized.indexOf(marker);
-    if (markerIndex > 0) return normalized.slice(0, markerIndex);
-    if (normalized.endsWith('/.openchamber')) return normalized.slice(0, normalized.length - '/.openchamber'.length);
-    return normalized;
+    return null;
   }, [activeProjectId, projects, currentDirectory, vscodeWorkspaceFolder, isVSCodeRuntime]);
 
   // Load setup commands from config
   React.useEffect(() => {
-    if (!projectDirectory) return;
+    if (!projectRef) return;
     
     let cancelled = false;
     setIsLoadingSetupCommands(true);
     
     (async () => {
       try {
-        const commands = await getWorktreeSetupCommands(projectDirectory);
+        const commands = await getWorktreeSetupCommands(projectRef);
         if (!cancelled) {
           setSetupCommands(commands);
         }
@@ -133,7 +131,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
     })();
     
     return () => { cancelled = true; };
-  }, [projectDirectory]);
+  }, [projectRef]);
 
   const handleAddModel = React.useCallback((model: ModelSelectionWithId) => {
     if (selectedModels.length >= MAX_MODELS) {
@@ -331,7 +329,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
           <CollapsibleContent>
             <div className="pt-2 space-y-2">
               <p className="typography-micro text-muted-foreground/70">
-                Commands run in each new worktree. Use <code className="font-mono text-xs">$ROOT_WORKTREE_PATH</code> for project root.
+                Commands run in each new worktree. Use <code className="font-mono text-xs">$ROOT_PROJECT_PATH</code> for project root.
               </p>
               {isLoadingSetupCommands ? (
                 <p className="typography-meta text-muted-foreground/70">Loading...</p>

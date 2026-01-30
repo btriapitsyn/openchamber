@@ -1296,6 +1296,7 @@ export async function setGitIdentity(
  * Ensure .openchamber is in git exclude
  */
 export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
+  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
   const excludeFile = path.join(directory, '.git', 'info', 'exclude');
   
   try {

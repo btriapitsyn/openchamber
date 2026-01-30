@@ -22,6 +22,16 @@ interface EventData {
   properties?: Record<string, unknown>;
 }
 
+const readStringProp = (obj: unknown, keys: string[]): string | null => {
+  if (!obj || typeof obj !== 'object') return null;
+  const record = obj as Record<string, unknown>;
+  for (let i = 0; i < keys.length; i++) {
+    const value = record[keys[i]];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return null;
+};
+
 type MessageTracker = (messageId: string, event?: string, extraData?: Record<string, unknown>) => void;
 
 declare global {
@@ -315,9 +325,10 @@ export const useEventStream = () => {
         console.info('[useEventStream] Bootstrapping state:', reason);
       }
       try {
+        const activeLimit = getActiveSessionWindow();
         await Promise.all([
           loadSessions(),
-          currentSessionId ? resyncMessages(currentSessionId, reason, Infinity) : Promise.resolve(),
+          currentSessionId ? resyncMessages(currentSessionId, reason, activeLimit) : Promise.resolve(),
         ]);
       } catch (error) {
         console.warn('[useEventStream] Bootstrap failed:', reason, error);
@@ -325,6 +336,31 @@ export const useEventStream = () => {
     },
     [currentSessionId, loadSessions, resyncMessages]
   );
+
+  const scheduleSoftResync = React.useCallback(
+    (sessionId: string, reason: string, limit = getActiveSessionWindow()): Promise<void> => {
+      if (!sessionId) return Promise.resolve();
+
+      const memory = useSessionStore.getState().sessionMemoryState.get(sessionId);
+      const cooldownUntil = memory?.streamingCooldownUntil;
+      const now = Date.now();
+      if (typeof cooldownUntil === 'number' && cooldownUntil > now) {
+        const delay = Math.min(3000, Math.max(0, cooldownUntil - now));
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            resyncMessages(sessionId, reason, limit).finally(resolve);
+          }, delay);
+        });
+      }
+
+      return resyncMessages(sessionId, reason, limit);
+    },
+    [resyncMessages]
+  );
+
+  React.useEffect(() => {
+    scheduleSoftResyncRef.current = scheduleSoftResync;
+  }, [scheduleSoftResync]);
 
   const trackMessage = React.useCallback((messageId: string, event?: string, extraData?: Record<string, unknown>) => {
     if (streamDebugEnabled()) {
@@ -368,6 +404,14 @@ export const useEventStream = () => {
   const pauseTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const staleCheckIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const lastEventTimestampRef = React.useRef<number>(Date.now());
+  const lastMessageEventBySessionRef = React.useRef<Map<string, number>>(new Map());
+  const pendingMessageStallTimersRef = React.useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const lastMessageStallRecoveryBySessionRef = React.useRef<Map<string, number>>(new Map());
+
+  const scheduleSoftResyncRef = React.useRef<
+    (sessionId: string, reason: string, limit?: number) => Promise<void>
+  >(() => Promise.resolve());
+  const scheduleReconnectRef = React.useRef<(hint?: string) => void>(() => {});
   const isDesktopRuntimeRef = React.useRef<boolean>(false);
 
   const maybeBootstrapIfStale = React.useCallback(
@@ -470,6 +514,52 @@ export const useEventStream = () => {
     if (storePhase === phase) {
       sessionActivityPhaseRef.current = new Map(useSessionStore.getState().sessionActivityPhase ?? new Map());
       return;
+    }
+
+    const shouldArmMessageStallCheck = storePhase === 'idle' && (phase === 'busy' || phase === 'cooldown');
+    const shouldDisarmMessageStallCheck = phase === 'idle';
+
+    if (shouldDisarmMessageStallCheck) {
+      const pending = pendingMessageStallTimersRef.current.get(sessionId);
+      if (pending) {
+        clearTimeout(pending);
+        pendingMessageStallTimersRef.current.delete(sessionId);
+      }
+    }
+
+    if (shouldArmMessageStallCheck) {
+      const pending = pendingMessageStallTimersRef.current.get(sessionId);
+      if (pending) {
+        clearTimeout(pending);
+        pendingMessageStallTimersRef.current.delete(sessionId);
+      }
+
+      const startAt = Date.now();
+      const timer = setTimeout(() => {
+        const currentPhase = useSessionStore.getState().sessionActivityPhase?.get(sessionId);
+        if (currentPhase !== 'busy' && currentPhase !== 'cooldown') {
+          return;
+        }
+
+        const lastRecoveryAt = lastMessageStallRecoveryBySessionRef.current.get(sessionId) ?? 0;
+        if (Date.now() - lastRecoveryAt < 15000) {
+          return;
+        }
+
+        const lastMsgAt = lastMessageEventBySessionRef.current.get(sessionId) ?? 0;
+        if (lastMsgAt >= startAt) {
+          return;
+        }
+
+        lastMessageStallRecoveryBySessionRef.current.set(sessionId, Date.now());
+
+        void scheduleSoftResyncRef.current(sessionId, 'activity_started_no_message', getActiveSessionWindow())
+          .finally(() => {
+            scheduleReconnectRef.current('No message events after activity start');
+          });
+      }, 2000);
+
+      pendingMessageStallTimersRef.current.set(sessionId, timer);
     }
 
     const existingTimer = sessionCooldownTimersRef.current.get(sessionId);
@@ -716,25 +806,19 @@ export const useEventStream = () => {
         const partExt = part as Record<string, unknown>;
         const messageInfo = (typeof props.info === 'object' && props.info !== null) ? (props.info as Record<string, unknown>) : props;
 
-        const messageInfoSessionId = typeof (messageInfo as { sessionID?: unknown }).sessionID === 'string'
-          ? (messageInfo as { sessionID?: string }).sessionID
-          : null;
+        const messageInfoSessionId = readStringProp(messageInfo, ['sessionID', 'sessionId']);
 
         const resolvedSessionId =
-          (typeof partExt.sessionID === 'string' && (partExt.sessionID as string).length > 0) ? (partExt.sessionID as string) :
-          (typeof messageInfoSessionId === 'string' && messageInfoSessionId.length > 0) ? messageInfoSessionId :
-          (typeof props.sessionID === 'string' && (props.sessionID as string).length > 0) ? (props.sessionID as string) :
-          null;
+          readStringProp(partExt, ['sessionID', 'sessionId']) ||
+          messageInfoSessionId ||
+          readStringProp(props, ['sessionID', 'sessionId']);
 
-        const messageInfoId = typeof (messageInfo as { id?: unknown }).id === 'string'
-          ? (messageInfo as { id?: string }).id
-          : null;
+        const messageInfoId = readStringProp(messageInfo, ['messageID', 'messageId', 'id']);
 
         const resolvedMessageId =
-          (typeof partExt.messageID === 'string' && (partExt.messageID as string).length > 0) ? (partExt.messageID as string) :
-          (typeof messageInfoId === 'string' && messageInfoId.length > 0) ? messageInfoId :
-          (typeof props.messageID === 'string' && (props.messageID as string).length > 0) ? (props.messageID as string) :
-          null;
+          readStringProp(partExt, ['messageID', 'messageId']) ||
+          messageInfoId ||
+          readStringProp(props, ['messageID', 'messageId']);
 
         if (!resolvedSessionId || !resolvedMessageId) {
           if (streamDebugEnabled()) {
@@ -748,6 +832,13 @@ export const useEventStream = () => {
 
         const sessionId = resolvedSessionId;
         const messageId = resolvedMessageId;
+
+        lastMessageEventBySessionRef.current.set(sessionId, Date.now());
+        const pendingTimer = pendingMessageStallTimersRef.current.get(sessionId);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          pendingMessageStallTimersRef.current.delete(sessionId);
+        }
 
         const trimmedHeadMaxId = useSessionStore.getState().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
         if (trimmedHeadMaxId && !isIdNewer(messageId, trimmedHeadMaxId)) {
@@ -796,14 +887,12 @@ export const useEventStream = () => {
         const messageExt = message as Record<string, unknown>;
 
         const resolvedSessionId =
-          (typeof messageExt.sessionID === 'string' && (messageExt.sessionID as string).length > 0) ? (messageExt.sessionID as string) :
-          (typeof props.sessionID === 'string' && (props.sessionID as string).length > 0) ? (props.sessionID as string) :
-          null;
+          readStringProp(messageExt, ['sessionID', 'sessionId']) ||
+          readStringProp(props, ['sessionID', 'sessionId']);
 
         const resolvedMessageId =
-          (typeof messageExt.id === 'string' && (messageExt.id as string).length > 0) ? (messageExt.id as string) :
-          (typeof props.messageID === 'string' && (props.messageID as string).length > 0) ? (props.messageID as string) :
-          null;
+          readStringProp(messageExt, ['messageID', 'messageId', 'id']) ||
+          readStringProp(props, ['messageID', 'messageId']);
 
         if (!resolvedSessionId || !resolvedMessageId) {
           if (streamDebugEnabled()) {
@@ -817,6 +906,13 @@ export const useEventStream = () => {
 
         const sessionId = resolvedSessionId;
         const messageId = resolvedMessageId;
+
+        lastMessageEventBySessionRef.current.set(sessionId, Date.now());
+        const pendingTimer = pendingMessageStallTimersRef.current.get(sessionId);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          pendingMessageStallTimersRef.current.delete(sessionId);
+        }
 
         const trimmedHeadMaxId = useSessionStore.getState().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
         if (trimmedHeadMaxId && !isIdNewer(messageId, trimmedHeadMaxId)) {
@@ -1648,21 +1744,21 @@ export const useEventStream = () => {
       // already-running sessions (e.g., started via CLI before UI opened)
       void refreshSessionActivityStatus();
 
-      if (shouldRefresh) {
-        void bootstrapState('sse_reconnected');
-      } else {
-        const sessionId = currentSessionIdRef.current;
-        if (sessionId) {
-          setTimeout(() => {
-            resyncMessages(sessionId, 'sse_reconnected', Infinity)
+       if (shouldRefresh) {
+         void bootstrapState('sse_reconnected');
+       } else {
+         const sessionId = currentSessionIdRef.current;
+         if (sessionId) {
+           setTimeout(() => {
+            scheduleSoftResync(sessionId, 'sse_reconnected', getActiveSessionWindow())
               .then(() => requestSessionMetadataRefresh(sessionId))
-              .catch((error) => {
+              .catch((error: unknown) => {
                 console.warn('[useEventStream] Failed to resync messages after reconnect:', error);
               });
-          }, 0);
+            }, 0);
+          }
         }
-      }
-    };
+      };
 
     if (streamDebugEnabled()) {
       console.info('[useEventStream] Connecting to event source (SDK SSE only):', {
@@ -1725,7 +1821,7 @@ export const useEventStream = () => {
     stopStream,
     publishStatus,
     checkConnection,
-    resyncMessages,
+    scheduleSoftResync,
     requestSessionMetadataRefresh,
     handleEvent,
     effectiveDirectory,
@@ -1744,6 +1840,10 @@ export const useEventStream = () => {
       } else {
         publishStatus('paused', 'Paused while hidden');
       }
+      return;
+    }
+
+    if (reconnectTimeoutRef.current) {
       return;
     }
 
@@ -1766,6 +1866,10 @@ export const useEventStream = () => {
       startStream({ resetAttempts: false });
     }, delay);
   }, [shouldHoldConnection, stopStream, publishStatus, startStream]);
+
+  React.useEffect(() => {
+    scheduleReconnectRef.current = scheduleReconnect;
+  }, [scheduleReconnect]);
 
   React.useEffect(() => {
     const cooldownTimers = sessionCooldownTimersRef.current;
@@ -1794,64 +1898,58 @@ export const useEventStream = () => {
       }
     };
 
-    const pauseStreamSoon = () => {
-      if (pauseTimeoutRef.current) return;
-
-      pauseTimeoutRef.current = setTimeout(() => {
-        const pendingVisibility = resolveVisibilityState();
-        visibilityStateRef.current = pendingVisibility;
-
-        if (pendingVisibility !== 'visible') {
-          stopStream();
-          pendingResumeRef.current = true;
-          publishStatus('paused', 'Paused while hidden');
-        } else {
-          clearPauseTimeout();
-        }
-      }, 5000);
-    };
-
     const handleVisibilityChange = () => {
       visibilityStateRef.current = resolveVisibilityState();
 
-    if (visibilityStateRef.current === 'visible') {
+      if (visibilityStateRef.current !== 'visible') {
+        // Keep SSE connection alive while hidden; browsers may briefly toggle
+        // visibility during tab/window transitions.
+        return;
+      }
+
       clearPauseTimeout();
       maybeBootstrapIfStale('visibility_restore');
+
+      const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
+      if (isStalled) {
+        console.info('[useEventStream] Visibility restored with stalled stream, reconnecting...');
+        pendingResumeRef.current = true;
+      }
+
       if (pendingResumeRef.current || !unsubscribeRef.current) {
         console.info('[useEventStream] Visibility restored, triggering soft refresh...');
         const sessionId = currentSessionIdRef.current;
-          if (sessionId) {
-            resyncMessages(sessionId, 'visibility_restore', getActiveSessionWindow()).catch(() => {});
-            requestSessionMetadataRefresh(sessionId);
-          }
-          
-          void refreshSessionActivityStatus();
-          publishStatus('connecting', 'Resuming stream');
-          startStream({ resetAttempts: true });
+        if (sessionId) {
+          scheduleSoftResync(sessionId, 'visibility_restore', getActiveSessionWindow());
+          requestSessionMetadataRefresh(sessionId);
         }
-      } else {
-        publishStatus('paused', 'Paused while hidden');
-        pauseStreamSoon();
+
+        void refreshSessionActivityStatus();
+        publishStatus('connecting', 'Resuming stream');
+        startStream({ resetAttempts: true });
       }
     };
 
-    const handleWindowFocus = () => {
-      visibilityStateRef.current = resolveVisibilityState();
+      const handleWindowFocus = () => {
+        visibilityStateRef.current = resolveVisibilityState();
 
     if (visibilityStateRef.current === 'visible') {
       clearPauseTimeout();
       maybeBootstrapIfStale('window_focus');
 
+      const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
+      if (isStalled) {
+        pendingResumeRef.current = true;
+      }
+
       if (pendingResumeRef.current || !unsubscribeRef.current) {
         console.info('[useEventStream] Window focused after pause, triggering soft refresh...');
           const sessionId = currentSessionIdRef.current;
-          if (sessionId) {
-            requestSessionMetadataRefresh(sessionId);
-            resyncMessages(sessionId, 'window_focus', getActiveSessionWindow())
-              .then(() => console.info('[useEventStream] Messages refreshed on focus'))
-              .catch((err) => console.warn('[useEventStream] Failed to refresh messages:', err));
-          }
-          void refreshSessionActivityStatus();
+           if (sessionId) {
+             requestSessionMetadataRefresh(sessionId);
+             scheduleSoftResync(sessionId, 'window_focus', getActiveSessionWindow());
+           }
+           void refreshSessionActivityStatus();
 
           publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
@@ -1859,31 +1957,54 @@ export const useEventStream = () => {
       }
     };
 
-    const handleOnline = () => {
-      onlineStatusRef.current = true;
-      maybeBootstrapIfStale('network_restored');
-      if (pendingResumeRef.current || !unsubscribeRef.current) {
-        publishStatus('connecting', 'Network restored');
-        startStream({ resetAttempts: true });
+      const handleOnline = () => {
+        onlineStatusRef.current = true;
+        maybeBootstrapIfStale('network_restored');
+        if (pendingResumeRef.current || !unsubscribeRef.current) {
+          publishStatus('connecting', 'Network restored');
+          startStream({ resetAttempts: true });
+        }
+      };
+
+      const handleOffline = () => {
+        onlineStatusRef.current = false;
+        pendingResumeRef.current = true;
+        publishStatus('offline', 'Waiting for network');
+        stopStream();
+      };
+
+      const handlePageHide = () => {
+        pendingResumeRef.current = true;
+        stopStream();
+        publishStatus('paused', 'Paused while hidden');
+      };
+
+      const handlePageShow = (event: PageTransitionEvent) => {
+        // If page was restored from bfcache, SSE is definitely gone.
+        pendingResumeRef.current = pendingResumeRef.current || Boolean(event.persisted);
+        visibilityStateRef.current = resolveVisibilityState();
+        if (visibilityStateRef.current === 'visible') {
+          const sessionId = currentSessionIdRef.current;
+          if (sessionId) {
+            void scheduleSoftResync(sessionId, 'page_show', getActiveSessionWindow());
+            requestSessionMetadataRefresh(sessionId);
+          }
+          void refreshSessionActivityStatus();
+          startStream({ resetAttempts: true });
+        }
+      };
+
+     if (typeof document !== 'undefined') {
+       document.addEventListener('visibilitychange', handleVisibilityChange);
+     }
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        window.addEventListener('focus', handleWindowFocus);
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('pageshow', handlePageShow as EventListener);
       }
-    };
-
-    const handleOffline = () => {
-      onlineStatusRef.current = false;
-      pendingResumeRef.current = true;
-      publishStatus('offline', 'Waiting for network');
-      stopStream();
-    };
-
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-    }
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', handleOnline);
-      window.addEventListener('offline', handleOffline);
-      window.addEventListener('focus', handleWindowFocus);
-    }
 
     const startTimer = setTimeout(() => {
       startStream({ resetAttempts: true });
@@ -1893,32 +2014,36 @@ export const useEventStream = () => {
       clearInterval(staleCheckIntervalRef.current);
     }
 
-    staleCheckIntervalRef.current = setInterval(() => {
-      if (!shouldHoldConnection()) return;
+        staleCheckIntervalRef.current = setInterval(() => {
+          if (!shouldHoldConnection()) return;
 
-      const now = Date.now();
-      const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
-        (phase) => phase === 'busy' || phase === 'cooldown'
-      );
-      if (hasBusySessions) {
-        void refreshSessionActivityStatus();
-      }
-      if (now - lastEventTimestampRef.current > 45000) {
-        Promise.resolve().then(async () => {
-          try {
-            const healthy = await opencodeClient.checkHealth();
-            if (!healthy) {
-              scheduleReconnect('Refreshing stalled stream');
-            } else {
-              lastEventTimestampRef.current = Date.now();
-            }
-          } catch (error) {
-            console.warn('Health check after stale stream failed:', error);
-            scheduleReconnect('Refreshing stalled stream');
+          const now = Date.now();
+          const hasBusySessions = Array.from(useSessionStore.getState().sessionActivityPhase?.values?.() ?? []).some(
+            (phase) => phase === 'busy' || phase === 'cooldown'
+          );
+
+          if (hasBusySessions) {
+            void refreshSessionActivityStatus();
           }
-        });
-      }
-    }, 10000);
+          if (now - lastEventTimestampRef.current > 45000) {
+            Promise.resolve().then(async () => {
+              try {
+                const healthy = await opencodeClient.checkHealth();
+                if (!healthy) {
+                  scheduleReconnect('Refreshing stalled stream');
+                  return;
+                }
+
+                // If health is ok but SSE has been silent (including heartbeat),
+                // treat it as a stalled connection and reconnect.
+                scheduleReconnect('Refreshing stalled stream');
+              } catch (error) {
+                console.warn('Health check after stale stream failed:', error);
+                scheduleReconnect('Refreshing stalled stream');
+              }
+            });
+          }
+        }, 10000);
 
     return () => {
       clearTimeout(startTimer);
@@ -1935,6 +2060,8 @@ export const useEventStream = () => {
         window.removeEventListener('online', handleOnline);
         window.removeEventListener('offline', handleOffline);
         window.removeEventListener('focus', handleWindowFocus);
+        window.removeEventListener('pagehide', handlePageHide);
+        window.removeEventListener('pageshow', handlePageShow as EventListener);
       }
 
       clearPauseTimeout();
@@ -1981,6 +2108,7 @@ export const useEventStream = () => {
     loadSessions,
     maybeBootstrapIfStale,
     resyncMessages,
-    notifyOnSubtasks
+    scheduleSoftResync,
+    notifyOnSubtasks,
   ]);
 };

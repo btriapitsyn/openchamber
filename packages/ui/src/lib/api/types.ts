@@ -367,7 +367,6 @@ export interface FilesAPI {
 }
 
 export interface WorktreeDefaults {
-  branchPrefix?: string;        // e.g. "feature", "bugfix" (no trailing slash)
   baseBranch?: string;          // e.g. "main", "develop", or "HEAD"
   autoCreateWorktree?: boolean; // future: skip dialog, create worktree automatically
 }

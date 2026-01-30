@@ -17,10 +17,9 @@ import { cn, formatPathForDisplay } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk/v2';
 import type { WorktreeMetadata } from '@/types/worktree';
 import {
-    archiveWorktree,
     getWorktreeStatus,
 } from '@/lib/git/worktreeService';
-import { ensureOpenChamberIgnored } from '@/lib/gitApi';
+import { removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -53,7 +52,6 @@ type DeleteDialogState = {
 export const SessionDialogs: React.FC = () => {
     const [isDirectoryDialogOpen, setIsDirectoryDialogOpen] = React.useState(false);
     const [hasShownInitialDirectoryPrompt, setHasShownInitialDirectoryPrompt] = React.useState(false);
-    const ensuredIgnoreDirectories = React.useRef<Set<string>>(new Set());
     const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
     const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
     const [deleteDialogShouldRemoveRemote, setDeleteDialogShouldRemoveRemote] = React.useState(false);
@@ -103,20 +101,7 @@ export const SessionDialogs: React.FC = () => {
     const removeRemoteOptionDisabled =
         isProcessingDelete || !isWorktreeDelete || !canRemoveRemoteBranches;
 
-    React.useEffect(() => {
-        if (!projectDirectory) {
-            return;
-        }
-        if (ensuredIgnoreDirectories.current.has(projectDirectory)) {
-            return;
-        }
-        ensureOpenChamberIgnored(projectDirectory)
-            .then(() => ensuredIgnoreDirectories.current.add(projectDirectory))
-            .catch((error) => {
-                console.warn('Failed to ensure .openchamber directory is ignored:', error);
-                ensuredIgnoreDirectories.current.delete(projectDirectory);
-            });
-    }, [projectDirectory]);
+    // NOTE: stop auto-modifying .gitignore for legacy `.openchamber`.
 
     React.useEffect(() => {
         loadSessions();
@@ -291,13 +276,11 @@ export const SessionDialogs: React.FC = () => {
 
             if (deleteDialog.sessions.length === 0 && isWorktreeDelete && deleteDialog.worktree) {
                 const shouldRemoveRemote = deleteDialogShouldRemoveRemote && canRemoveRemoteBranches;
-                await archiveWorktree({
-                    projectDirectory: projectDirectory,
-                    path: deleteDialog.worktree.path,
-                    branch: deleteDialog.worktree.branch,
-                    force: true,
-                    deleteRemote: shouldRemoveRemote,
-                });
+                await removeProjectWorktree(
+                    { id: activeProjectId || `path:${projectDirectory}`, path: projectDirectory },
+                    deleteDialog.worktree,
+                    { deleteRemoteBranch: shouldRemoveRemote, force: true }
+                );
                 const archiveNote = shouldRemoveRemote ? 'Worktree and remote branch removed.' : 'Worktree removed.';
                 toast.success('Worktree removed', {
                     description: renderToastDescription(archiveNote),
@@ -374,7 +357,19 @@ export const SessionDialogs: React.FC = () => {
         } finally {
             setIsProcessingDelete(false);
         }
-    }, [deleteDialog, deleteDialogShouldRemoveRemote, deleteSession, deleteSessions, closeDeleteDialog, shouldArchiveWorktree, isWorktreeDelete, canRemoveRemoteBranches, projectDirectory, loadSessions]);
+    }, [
+        deleteDialog,
+        deleteDialogShouldRemoveRemote,
+        deleteSession,
+        deleteSessions,
+        closeDeleteDialog,
+        shouldArchiveWorktree,
+        isWorktreeDelete,
+        canRemoveRemoteBranches,
+        projectDirectory,
+        activeProjectId,
+        loadSessions,
+    ]);
 
     const targetWorktree = deleteDialog?.worktree ?? deleteDialogSummaries[0]?.metadata ?? null;
     const deleteDialogDescription = deleteDialog
@@ -492,7 +487,9 @@ export const SessionDialogs: React.FC = () => {
 
     const deleteDialogActions = isWorktreeDelete ? (
         <div className="flex w-full items-center justify-between gap-3">
-            {deleteRemoteBranchAction}
+            <div className="flex flex-col items-start gap-1">
+                {deleteRemoteBranchAction}
+            </div>
             <div className="flex items-center gap-2">
                 <Button variant="ghost" onClick={closeDeleteDialog} disabled={isProcessingDelete}>
                     Cancel

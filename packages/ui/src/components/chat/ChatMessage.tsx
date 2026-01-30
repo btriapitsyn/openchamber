@@ -755,16 +755,20 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         onContentChange?.('structural');
     }, [isUser, onContentChange]);
 
+    const setImagePreviewOpen = useUIStore((state) => state.setImagePreviewOpen);
+
     const handleShowPopup = React.useCallback((content: ToolPopupContent) => {
 
         if (content.image) {
             setPopupContent(content);
+            setImagePreviewOpen(true);
         }
-    }, []);
+    }, [setImagePreviewOpen]);
 
     const handlePopupChange = React.useCallback((open: boolean) => {
         setPopupContent((prev) => ({ ...prev, open }));
-    }, []);
+        setImagePreviewOpen(open);
+    }, [setImagePreviewOpen]);
 
     const isAnimationSettled = Boolean(getMessageInfoProp(message.info, 'animationSettled'));
     const isStreamingPhase = streamPhase === 'streaming';

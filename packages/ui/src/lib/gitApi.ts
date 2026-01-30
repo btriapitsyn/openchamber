@@ -134,6 +134,7 @@ export async function removeGitWorktree(directory: string, payload: import('./ap
 }
 
 export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
+  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
   const runtime = getRuntimeGit();
   if (runtime) return runtime.ensureOpenChamberIgnored(directory);
   return gitHttp.ensureOpenChamberIgnored(directory);

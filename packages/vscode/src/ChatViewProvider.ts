@@ -142,7 +142,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
       });
     }
   }
-  
+
+  public postMessage(message: unknown): void {
+    if (this._view) {
+      this._view.webview.postMessage(message);
+    }
+  }
+
   private _sendCachedState() {
     if (!this._view) {
       return;

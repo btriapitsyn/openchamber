@@ -618,7 +618,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             {/* Favorites Section */}
                                             {filteredFavorites.length > 0 && (
                                                 <>
-                                                    <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground flex items-center gap-2 px-2 py-1.5">
+                                                    <DropdownMenuLabel className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
                                                         <RiStarFill className="h-4 w-4 text-primary" />
                                                         Favorites
                                                     </DropdownMenuLabel>
@@ -633,7 +633,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             {filteredRecents.length > 0 && (
                                                 <>
                                                     {filteredFavorites.length > 0 && <DropdownMenuSeparator />}
-                                                    <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground flex items-center gap-2 px-2 py-1.5">
+                                                    <DropdownMenuLabel className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
                                                         <RiTimeLine className="h-4 w-4" />
                                                         Recent
                                                     </DropdownMenuLabel>
@@ -653,7 +653,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             {filteredProviders.map((provider, index) => (
                                                 <React.Fragment key={provider.id}>
                                                     {index > 0 && <DropdownMenuSeparator />}
-                                                    <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground flex items-center gap-2 px-2 py-1.5">
+                                                    <DropdownMenuLabel className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
                                                         <ProviderLogo
                                                             providerId={provider.id}
                                                             className="h-4 w-4 flex-shrink-0"

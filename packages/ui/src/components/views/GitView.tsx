@@ -23,6 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+// (dropdown menu used inside IntegrateCommitsSection)
 import {
   Command,
   CommandEmpty,
@@ -34,6 +35,7 @@ import {
 
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
+import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 
 import { GitHeader } from './git/GitHeader';
 import { GitEmptyState } from './git/GitEmptyState';
@@ -44,6 +46,7 @@ import { PullRequestSection } from './git/PullRequestSection';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
+
 
 type GitViewSnapshot = {
   directory?: string;
@@ -190,6 +193,7 @@ export const GitView: React.FC = () => {
     ? worktreeMap.get(currentSessionId) ?? undefined
     : undefined;
 
+
   const { profiles, globalIdentity, defaultGitIdentityId, loadProfiles, loadGlobalIdentity, loadDefaultGitIdentityId } =
     useGitIdentitiesStore();
 
@@ -256,10 +260,32 @@ export const GitView: React.FC = () => {
   );
   const [hasUserAdjustedSelection, setHasUserAdjustedSelection] = React.useState(false);
   const [revertingPaths, setRevertingPaths] = React.useState<Set<string>>(new Set());
+  const [integrateRefreshKey, setIntegrateRefreshKey] = React.useState(0);
   const [isGeneratingMessage, setIsGeneratingMessage] = React.useState(false);
   const [generatedHighlights, setGeneratedHighlights] = React.useState<string[]>(
     initialSnapshot?.generatedHighlights ?? []
   );
+
+  const repoRootForIntegrate = worktreeMetadata?.projectDirectory || null;
+  const sourceBranchForIntegrate = status?.current || null;
+  const shouldShowIntegrateCommits = React.useMemo(() => {
+    // For PR worktrees from forks we set upstream to a non-origin remote (e.g. pr-<owner>-<repo>).
+    // Re-integrate commits is intended for local scratch branches -> base branch, not fork PR branches.
+    const tracking = status?.tracking;
+    if (!tracking) return true;
+    return tracking.startsWith('origin/');
+  }, [status?.tracking]);
+  const defaultTargetBranch = React.useMemo(() => {
+    const fromMeta = worktreeMetadata?.createdFromBranch;
+    if (typeof fromMeta === 'string' && fromMeta.trim().length > 0) {
+      return fromMeta.trim();
+    }
+    const fromProject = activeProject?.worktreeDefaults?.baseBranch;
+    if (typeof fromProject === 'string' && fromProject.trim().length > 0) {
+      return fromProject.trim();
+    }
+    return 'main';
+  }, [worktreeMetadata?.createdFromBranch, activeProject?.worktreeDefaults?.baseBranch]);
   const clearGeneratedHighlights = React.useCallback(() => {
     setGeneratedHighlights([]);
   }, []);
@@ -584,6 +610,7 @@ export const GitView: React.FC = () => {
       }
 
       await refreshLog();
+      setIntegrateRefreshKey((v) => v + 1);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create commit';
       toast.error(message);
@@ -1030,7 +1057,24 @@ export const GitView: React.FC = () => {
               )}
             </div>
 
-            {currentDirectory && status?.current ? (
+            {worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate && shouldShowIntegrateCommits ? (
+              <IntegrateCommitsSection
+                repoRoot={repoRootForIntegrate}
+                sourceBranch={sourceBranchForIntegrate}
+                worktreeMetadata={worktreeMetadata}
+                localBranches={localBranches}
+                defaultTargetBranch={defaultTargetBranch}
+                refreshKey={integrateRefreshKey}
+                onRefresh={() => {
+                  if (!currentDirectory) return;
+                  fetchStatus(currentDirectory, git);
+                  fetchBranches(currentDirectory, git);
+                  fetchLog(currentDirectory, git, logMaxCountLocal);
+                }}
+              />
+            ) : null}
+
+            {currentDirectory && status?.current && status?.tracking ? (
               <PullRequestSection
                 directory={currentDirectory}
                 branch={status.current}

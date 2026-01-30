@@ -29,6 +29,7 @@ import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { createWorktreeSessionForNewBranchExact } from '@/lib/worktreeSessionCreator';
 import { gitFetch } from '@/lib/gitApi';
+import { execCommand, execCommands } from '@/lib/execCommands';
 import type { GitHubPullRequestContextResult, GitHubPullRequestSummary, GitHubPullRequestsListResult } from '@/lib/api/types';
 
 const parsePullRequestNumber = (value: string): number | null => {
@@ -52,6 +53,15 @@ const parsePullRequestNumber = (value: string): number | null => {
 
 const buildPullRequestContextText = (payload: GitHubPullRequestContextResult) => {
   return `GitHub pull request context (JSON)\n${JSON.stringify(payload, null, 2)}`;
+};
+
+const sanitizeGitRemoteName = (value: string): string => {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
 };
 
 export function GitHubPullRequestPickerDialog({
@@ -80,6 +90,7 @@ export function GitHubPullRequestPickerDialog({
   const [startingNumber, setStartingNumber] = React.useState<number | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
+  const [existingBranchHeads, setExistingBranchHeads] = React.useState<Map<string, boolean>>(new Map());
   const [error, setError] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async () => {
@@ -154,10 +165,43 @@ export function GitHubPullRequestPickerDialog({
       setStartingNumber(null);
       setIsLoading(false);
       setError(null);
+      setExistingBranchHeads(new Map());
       return;
     }
     void refresh();
   }, [open, refresh]);
+
+  const checkLocalBranchExists = React.useCallback(async (heads: string[]) => {
+    if (!projectDirectory) return;
+    const unique = Array.from(new Set(heads.map((h) => (h || '').trim()).filter(Boolean)));
+    if (unique.length === 0) return;
+
+    // Only check unknown heads (optimistic enable; disable after result arrives).
+    const unknown = unique.filter((h) => !existingBranchHeads.has(h));
+    if (unknown.length === 0) return;
+
+    // optimistic UI: no spinner; disable once results arrive
+    {
+      // Avoid shell wrappers; rely on exit code only.
+      const commands = unknown.map((h) => `git show-ref --verify --quiet ${JSON.stringify(`refs/heads/${h}`)}`);
+      const res = await execCommands(commands, projectDirectory);
+      setExistingBranchHeads((prev) => {
+        const next = new Map(prev);
+        for (let i = 0; i < unknown.length; i += 1) {
+          const head = unknown[i];
+          next.set(head, Boolean(res.results[i]?.success));
+        }
+        return next;
+      });
+    }
+  }, [projectDirectory, existingBranchHeads]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (!projectDirectory) return;
+    if (!createInWorktree) return;
+    void checkLocalBranchExists(prs.map((pr) => pr.head));
+  }, [open, projectDirectory, createInWorktree, prs, checkLocalBranchExists]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -186,6 +230,15 @@ export function GitHubPullRequestPickerDialog({
       return pr.title.toLowerCase().includes(q);
     });
   }, [prs, query]);
+
+  const isPrDisabledForWorktree = React.useCallback((pr: GitHubPullRequestSummary): boolean => {
+    if (!createInWorktree) return false;
+    const head = pr.head?.trim();
+    if (!head) return true;
+    const exists = existingBranchHeads.get(head);
+    // Optimistic: treat unknown as enabled.
+    return exists === true;
+  }, [createInWorktree, existingBranchHeads]);
 
   const directNumber = React.useMemo(() => parsePullRequestNumber(query), [query]);
 
@@ -263,13 +316,91 @@ export function GitHubPullRequestPickerDialog({
       throw new Error('Failed to fetch PR head');
     }
 
+    const headCommitish = pr.headSha?.trim() || (await execCommand('git rev-parse FETCH_HEAD', projectDirectory)).stdout?.trim() || '';
+    if (!headCommitish) {
+      throw new Error('PR head commit not resolvable');
+    }
+
     const preferredBranch = pr.head;
-    const session = await createWorktreeSessionForNewBranchExact(projectDirectory, preferredBranch, 'FETCH_HEAD');
+
+    // Prevent clobbering/removing an existing local branch when using PR worktree mode.
+    if (existingBranchHeads.get(preferredBranch) === true) {
+      throw new Error(`Local branch already exists: ${preferredBranch}`);
+    }
+
+    const session = await createWorktreeSessionForNewBranchExact(projectDirectory, preferredBranch, headCommitish, {
+      kind: 'pr',
+    });
     if (!session?.id) {
       throw new Error('Failed to create PR worktree session');
     }
+
+    const meta = useSessionStore.getState().worktreeMetadata.get(session.id);
+    const worktreeDir = meta?.path;
+    if (!worktreeDir) {
+      throw new Error('Worktree directory not found');
+    }
+
+    // Switch the new worktree to the PR branch and delete the SDK-created opencode/* branch immediately.
+    // This makes the worktree directly operate on the PR branch.
+    const commands: string[] = [
+      // Create local branch from the fetched PR head commit.
+      `git -C ${JSON.stringify(worktreeDir)} switch -c ${JSON.stringify(preferredBranch)} ${JSON.stringify(headCommitish)}`,
+    ];
+    const originalBranch = (meta?.branch || session.branch || '').replace(/^refs\/heads\//, '').trim();
+    if (meta?.kind === 'pr' && originalBranch && originalBranch.startsWith('opencode/')) {
+      commands.push(`git -C ${JSON.stringify(projectDirectory)} branch -D ${JSON.stringify(originalBranch)}`);
+    }
+
+    const result = await execCommands(commands, projectDirectory);
+    if (!result.success) {
+      const failed = result.results.find((r) => !r.success);
+      throw new Error(failed?.stderr || failed?.stdout || 'Failed to switch worktree to PR branch');
+    }
+
+    // Best-effort: set upstream for PR branch (without pushing).
+    try {
+      const remoteName = isFork
+        ? sanitizeGitRemoteName(`pr-${headRepo?.owner || 'fork'}-${headRepo?.repo || ''}`)
+        : 'origin';
+      const remoteUrl = isFork ? (headRepo?.cloneUrl || headRepo?.url || '') : '';
+      const fetchRefspec = `+refs/heads/${preferredBranch}:refs/remotes/${remoteName}/${preferredBranch}`;
+
+      const upstreamCommands: string[] = [];
+      if (isFork && remoteUrl) {
+        upstreamCommands.push(
+          `git -C ${JSON.stringify(projectDirectory)} remote add ${JSON.stringify(remoteName)} ${JSON.stringify(remoteUrl)} 2>/dev/null || git -C ${JSON.stringify(projectDirectory)} remote set-url ${JSON.stringify(remoteName)} ${JSON.stringify(remoteUrl)}`
+        );
+      }
+      upstreamCommands.push(
+        `git -C ${JSON.stringify(projectDirectory)} fetch ${JSON.stringify(remoteName)} ${JSON.stringify(fetchRefspec)}`
+      );
+      upstreamCommands.push(
+        `git -C ${JSON.stringify(worktreeDir)} branch --set-upstream-to=${JSON.stringify(`${remoteName}/${preferredBranch}`)} ${JSON.stringify(preferredBranch)}`
+      );
+
+      const upstreamResult = await execCommands(upstreamCommands, projectDirectory);
+      if (!upstreamResult.success) {
+        const failed = upstreamResult.results.find((r) => !r.success);
+        toast.message('PR upstream not set', { description: failed?.stderr || failed?.stdout || 'Configure remote manually if needed.' });
+      }
+    } catch {
+      toast.message('PR upstream not set', { description: 'Configure remote manually if needed.' });
+    }
+
+    // Update stored metadata for better UX + reintegration target.
+    useSessionStore.getState().setWorktreeMetadata(session.id, {
+      ...(meta || { path: worktreeDir, projectDirectory, branch: preferredBranch, label: preferredBranch }),
+      path: worktreeDir,
+      projectDirectory,
+      branch: preferredBranch,
+      label: preferredBranch,
+      createdFromBranch: pr.base,
+      kind: 'pr' as const,
+    });
+
     return { id: session.id };
-  }, [projectDirectory]);
+  }, [projectDirectory, existingBranchHeads]);
 
   const startSession = React.useCallback(async (number: number) => {
     if (!projectDirectory) {
@@ -536,35 +667,55 @@ Nice-to-have:
             <div className="text-center text-muted-foreground py-8">{query ? 'No PRs found' : 'No open PRs found'}</div>
           ) : null}
 
-          {filtered.map((pr) => (
-            <div
-              key={pr.number}
-              className={cn(
-                'group flex items-center gap-2 py-1.5 hover:bg-muted/30 rounded transition-colors cursor-pointer',
-                startingNumber === pr.number && 'bg-muted/30'
-              )}
-              onClick={() => void startSession(pr.number)}
-            >
-              <span className="typography-meta text-muted-foreground w-12 text-right flex-shrink-0">#{pr.number}</span>
-              <p className="flex-1 min-w-0 typography-small text-foreground truncate ml-0.5">{pr.title}</p>
-              <div className="flex-shrink-0 h-5 flex items-center mr-2">
-                {startingNumber === pr.number ? (
-                  <RiLoader4Line className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : (
-                  <a
-                    href={pr.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hidden group-hover:flex h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="Open in GitHub"
-                  >
-                    <RiExternalLinkLine className="h-4 w-4" />
-                  </a>
+          {filtered.map((pr) => {
+            const disabledByWorktree = isPrDisabledForWorktree(pr);
+
+            return (
+              <div
+                key={pr.number}
+                className={cn(
+                  'group flex items-start gap-2 py-1.5 rounded transition-colors',
+                  startingNumber === pr.number && 'bg-muted/30',
+                  disabledByWorktree
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-muted/30 cursor-pointer'
                 )}
+                onClick={() => {
+                  if (disabledByWorktree) return;
+                  void startSession(pr.number);
+                }}
+              >
+                <span className="typography-meta text-muted-foreground w-12 text-right flex-shrink-0 pt-0.5">#{pr.number}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="typography-small text-foreground truncate ml-0.5">{pr.title}</p>
+                  {createInWorktree && disabledByWorktree ? (
+                    <p className="typography-micro text-muted-foreground mt-0.5 ml-0.5">
+                      PR worktree disabled: local branch exists ({pr.head})
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex-shrink-0 h-5 flex items-center mr-2 pt-0.5">
+                  {startingNumber === pr.number ? (
+                    <RiLoader4Line className="h-4 w-4 animate-spin text-muted-foreground" />
+                  ) : (
+                    <a
+                      href={pr.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={cn(
+                        'hidden group-hover:flex h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors',
+                        disabledByWorktree && 'pointer-events-none'
+                      )}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Open in GitHub"
+                    >
+                      <RiExternalLinkLine className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {hasMore && connected && projectDirectory && github ? (
             <div className="py-2 flex justify-center">
@@ -624,6 +775,7 @@ Nice-to-have:
               </button>
               <span className="typography-meta text-muted-foreground">Create session in PR worktree</span>
             </div>
+
 
             <div
               className="flex items-center gap-2 cursor-pointer"

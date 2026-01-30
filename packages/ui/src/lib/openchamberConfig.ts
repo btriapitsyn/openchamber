@@ -1,13 +1,47 @@
 /**
  * OpenChamber project-level configuration service.
- * Manages .openchamber/openchamber.json file for project-specific settings.
+ * Stores per-project settings in ~/.config/openchamber/<projectId>.json.
+ * Migrates from legacy <project>/.openchamber/openchamber.json.
  */
 
-import { opencodeClient } from './opencode/client';
 import type { FilesAPI, RuntimeAPIs } from './api/types';
+import { getDesktopHomeDirectory } from './desktop';
+import { isVSCodeRuntime } from './desktop';
+
+type ProjectRef = { id: string; path: string };
 
 const CONFIG_FILENAME = 'openchamber.json';
-const CONFIG_DIR = '.openchamber';
+// LEGACY_PROJECT_CONFIG: legacy per-project config root inside repo.
+const LEGACY_CONFIG_DIR = '.openchamber';
+const USER_CONFIG_DIR_SEGMENTS = ['.config', 'openchamber'];
+const USER_PROJECTS_DIR_SEGMENTS = ['.config', 'openchamber', 'projects'];
+const SETTINGS_FILENAME = 'settings.json';
+
+const projectIdCache = new Map<string, string>();
+
+const isSafeConfigFileId = (value: string): boolean => /^[A-Za-z0-9._-]+$/.test(value);
+
+const toHex = (bytes: Uint8Array): string => {
+  let out = '';
+  for (const b of bytes) {
+    out += b.toString(16).padStart(2, '0');
+  }
+  return out;
+};
+
+const sha1Hex = async (value: string): Promise<string | null> => {
+  try {
+    if (typeof crypto === 'undefined' || !crypto.subtle) {
+      return null;
+    }
+    const encoder = new TextEncoder();
+    const data = encoder.encode(value);
+    const digest = await crypto.subtle.digest('SHA-1', data);
+    return toHex(new Uint8Array(digest));
+  } catch {
+    return null;
+  }
+};
 
 /**
  * Get the runtime Files API if available (Desktop/VSCode).
@@ -40,100 +74,298 @@ const joinPath = (base: string, segment: string): string => {
   return `${normalizedBase}/${cleanSegment}`;
 };
 
-const getConfigPath = (projectDirectory: string): string => {
-  return joinPath(joinPath(projectDirectory, CONFIG_DIR), CONFIG_FILENAME);
+const getLegacyConfigPath = (projectDirectory: string): string => {
+  return joinPath(joinPath(projectDirectory, LEGACY_CONFIG_DIR), CONFIG_FILENAME);
 };
 
-/**
- * Read the openchamber.json config file for a project.
- * Returns null if file doesn't exist or is invalid.
- */
-export async function readOpenChamberConfig(projectDirectory: string): Promise<OpenChamberConfig | null> {
-  const configPath = getConfigPath(projectDirectory);
-  
-  try {
-    // Try runtime API first (Desktop/VSCode)
-    const runtimeFiles = getRuntimeFilesAPI();
-    if (runtimeFiles?.readFile) {
-      try {
-        const result = await runtimeFiles.readFile(configPath);
-        if (!result.content.trim()) {
-          return null;
-        }
-        const parsed = JSON.parse(result.content);
-        if (!parsed || typeof parsed !== 'object') {
-          return null;
-        }
-        return parsed as OpenChamberConfig;
-      } catch {
-        return null;
-      }
-    }
+const getBaseUrl = (): string => {
+  const defaultBaseUrl = import.meta.env.VITE_OPENCODE_URL || '/api';
+  if (defaultBaseUrl.startsWith('/')) {
+    return defaultBaseUrl;
+  }
+  return defaultBaseUrl;
+};
 
-    // Fall back to web API
-    const response = await fetch(`${getBaseUrl()}/fs/read?path=${encodeURIComponent(configPath)}`);
+const postJson = async <T>(url: string, body: unknown): Promise<{ ok: boolean; data: T | null }> => {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
     if (!response.ok) {
-      if (response.status === 404) {
-        return null;
+      return { ok: false, data: null };
+    }
+    const data = (await response.json().catch(() => null)) as T | null;
+    return { ok: true, data };
+  } catch {
+    return { ok: false, data: null };
+  }
+};
+
+const mkdirp = async (path: string): Promise<boolean> => {
+  const runtimeFiles = getRuntimeFilesAPI();
+  if (runtimeFiles?.createDirectory) {
+    try {
+      const result = await runtimeFiles.createDirectory(path);
+      if (result?.success) {
+        return true;
       }
+    } catch {
+      // fall through
+    }
+  }
+
+  const res = await postJson<{ success?: boolean }>(`${getBaseUrl()}/fs/mkdir`, { path });
+  return Boolean(res.ok);
+};
+
+const readTextFile = async (path: string): Promise<string | null> => {
+  const runtimeFiles = getRuntimeFilesAPI();
+  if (runtimeFiles?.readFile) {
+    try {
+      const result = await runtimeFiles.readFile(path);
+      const content = typeof result?.content === 'string' ? result.content : '';
+      return content;
+    } catch {
       return null;
     }
-    
-    const text = await response.text();
-    if (!text.trim()) {
+  }
+
+  try {
+    const response = await fetch(`${getBaseUrl()}/fs/read?path=${encodeURIComponent(path)}`);
+    if (!response.ok) {
       return null;
     }
-    
-    const parsed = JSON.parse(text);
-    if (!parsed || typeof parsed !== 'object') {
-      return null;
-    }
-    
-    return parsed as OpenChamberConfig;
+    return await response.text();
   } catch {
     return null;
   }
+};
+
+const writeTextFile = async (path: string, content: string): Promise<boolean> => {
+  const runtimeFiles = getRuntimeFilesAPI();
+  if (runtimeFiles?.writeFile) {
+    try {
+      const result = await runtimeFiles.writeFile(path, content);
+      if (result?.success) {
+        return true;
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  const res = await postJson<{ success?: boolean }>(`${getBaseUrl()}/fs/write`, { path, content });
+  return Boolean(res.ok);
+};
+
+const resolveHomeDirectory = async (): Promise<string | null> => {
+  // VSCode webview sets __OPENCHAMBER_HOME__ to workspace folder (not OS home).
+  // For user config (~/.config/openchamber), always use /api/fs/home in VSCode.
+  if (!isVSCodeRuntime()) {
+    const desktopHome = await getDesktopHomeDirectory().catch(() => null);
+    if (desktopHome && desktopHome.trim().length > 0) {
+      return normalize(desktopHome);
+    }
+  }
+
+  try {
+    const response = await fetch(`${getBaseUrl()}/fs/home`);
+    if (!response.ok) {
+      return null;
+    }
+    const payload = await response.json().catch(() => null) as { home?: unknown } | null;
+    const home = typeof payload?.home === 'string' ? payload.home.trim() : '';
+    return home ? normalize(home) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getUserConfigRootDirectory = async (): Promise<string | null> => {
+  const home = await resolveHomeDirectory();
+  if (!home) {
+    return null;
+  }
+  return USER_CONFIG_DIR_SEGMENTS.reduce((acc, segment) => joinPath(acc, segment), home);
+};
+
+const getUserProjectsDirectory = async (): Promise<string | null> => {
+  const home = await resolveHomeDirectory();
+  if (!home) {
+    return null;
+  }
+  return USER_PROJECTS_DIR_SEGMENTS.reduce((acc, segment) => joinPath(acc, segment), home);
+};
+
+const getSettingsPath = async (): Promise<string | null> => {
+  const base = await getUserConfigRootDirectory();
+  if (!base) {
+    return null;
+  }
+  return joinPath(base, SETTINGS_FILENAME);
+};
+
+const resolveConfigProjectId = async (project: ProjectRef): Promise<string | null> => {
+  const projectDirectory = typeof project?.path === 'string' ? project.path.trim() : '';
+  const normalizedProject = projectDirectory ? normalize(projectDirectory) : '';
+
+  const explicitId = typeof project?.id === 'string' ? project.id.trim() : '';
+  if (explicitId && isSafeConfigFileId(explicitId)) {
+    return explicitId;
+  }
+
+  if (normalizedProject) {
+    const cached = projectIdCache.get(normalizedProject);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  // Best-effort map project directory -> persisted project id from settings.json.
+  const settingsPath = await getSettingsPath();
+  if (settingsPath && normalizedProject) {
+    const raw = await readTextFile(settingsPath);
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw) as { projects?: unknown };
+        const projects = Array.isArray(parsed?.projects) ? parsed.projects : [];
+        for (const entry of projects) {
+          if (!entry || typeof entry !== 'object') continue;
+          const record = entry as { id?: unknown; path?: unknown };
+          const id = typeof record.id === 'string' ? record.id.trim() : '';
+          const path = typeof record.path === 'string' ? normalize(record.path.trim()) : '';
+          if (id && isSafeConfigFileId(id) && path && path === normalizedProject) {
+            projectIdCache.set(normalizedProject, id);
+            return id;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  // Fallback: stable id derived from path (used in VSCode when project isn't registered).
+  if (normalizedProject) {
+    const digest = await sha1Hex(normalizedProject);
+    const fallback = digest ? `path_${digest}` : `path_${normalizedProject.replace(/[^A-Za-z0-9._-]+/g, '_')}`;
+    projectIdCache.set(normalizedProject, fallback);
+    return fallback;
+  }
+
+  return null;
+};
+
+const getUserConfigPath = async (project: ProjectRef): Promise<string | null> => {
+  const base = await getUserProjectsDirectory();
+  if (!base) {
+    return null;
+  }
+  const safeId = await resolveConfigProjectId(project);
+  if (!safeId) {
+    return null;
+  }
+  return joinPath(base, `${safeId}.json`);
+};
+
+/**
+ * Read the config for a project.
+ * Returns null if file doesn't exist or is invalid.
+ */
+export async function readOpenChamberConfig(project: ProjectRef): Promise<OpenChamberConfig | null> {
+  const projectDirectory = typeof project?.path === 'string' ? project.path.trim() : '';
+  if (!projectDirectory) {
+    return null;
+  }
+
+  const configPath = await getUserConfigPath(project);
+
+  const readText = async (path: string): Promise<string | null> => {
+    // Keep behavior consistent with other helpers.
+    const text = await readTextFile(path);
+    if (text === null) {
+      return null;
+    }
+    return text;
+  };
+
+  const parseConfig = (text: string | null): OpenChamberConfig | null => {
+    if (typeof text !== 'string') {
+      return null;
+    }
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (!parsed || typeof parsed !== 'object') {
+        return null;
+      }
+      return parsed as OpenChamberConfig;
+    } catch {
+      return null;
+    }
+  };
+
+  // 1) Prefer new per-user config.
+  if (configPath) {
+    const existing = parseConfig(await readText(configPath));
+    if (existing) {
+      return existing;
+    }
+  }
+
+  // 2) Migrate legacy <project>/.openchamber/openchamber.json.
+  // LEGACY_PROJECT_CONFIG: migrate project-local openchamber.json -> ~/.config/openchamber/projects/<projectId>.json
+  const legacyPath = getLegacyConfigPath(projectDirectory);
+  const legacyConfig = parseConfig(await readText(legacyPath));
+  if (!legacyConfig) {
+    return null;
+  }
+
+  // Best-effort write + delete legacy.
+  try {
+    const wrote = await writeOpenChamberConfig(project, legacyConfig);
+    if (wrote) {
+      await deleteLegacyOpenChamberConfig(projectDirectory);
+    }
+  } catch {
+    // Ignore migration failures; still return legacy content.
+  }
+
+  return legacyConfig;
 }
 
 /**
- * Write the openchamber.json config file for a project.
+ * Write the per-user config for a project.
  */
 export async function writeOpenChamberConfig(
-  projectDirectory: string, 
+  project: ProjectRef,
   config: OpenChamberConfig
 ): Promise<boolean> {
-  const configPath = getConfigPath(projectDirectory);
-  const configDir = joinPath(projectDirectory, CONFIG_DIR);
-  
+  const projectDirectory = typeof project?.path === 'string' ? project.path.trim() : '';
+  if (!projectDirectory) {
+    return false;
+  }
+
+  const configDir = await getUserProjectsDirectory();
+  const configPath = await getUserConfigPath(project);
+  if (!configDir || !configPath) {
+    return false;
+  }
+
   try {
-    // Ensure .openchamber directory exists
-    await opencodeClient.createDirectory(configDir);
-    
-    // Try runtime API first (Desktop/VSCode)
-    const runtimeFiles = getRuntimeFilesAPI();
-    if (runtimeFiles?.writeFile) {
-      try {
-        const result = await runtimeFiles.writeFile(configPath, JSON.stringify(config, null, 2));
-        return result.success;
-      } catch (error) {
-        console.error('Failed to write openchamber config via runtime API:', error);
-        return false;
-      }
+    // Ensure user config directory exists.
+    const okDir = await mkdirp(configDir);
+    if (!okDir) {
+      return false;
     }
-    
-    // Fall back to web API
-    const response = await fetch(`${getBaseUrl()}/fs/write`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        path: configPath,
-        content: JSON.stringify(config, null, 2),
-      }),
-    });
-    
-    return response.ok;
+
+    const content = JSON.stringify(config, null, 2);
+    return await writeTextFile(configPath, content);
   } catch (error) {
     console.error('Failed to write openchamber config:', error);
     return false;
@@ -144,52 +376,64 @@ export async function writeOpenChamberConfig(
  * Update specific keys in the config, preserving other values.
  */
 export async function updateOpenChamberConfig(
-  projectDirectory: string,
+  project: ProjectRef,
   updates: Partial<OpenChamberConfig>
 ): Promise<boolean> {
-  const existing = await readOpenChamberConfig(projectDirectory) || {};
+  const existing = await readOpenChamberConfig(project) || {};
   const merged = { ...existing, ...updates };
-  return writeOpenChamberConfig(projectDirectory, merged);
+  return writeOpenChamberConfig(project, merged);
 }
 
 /**
  * Get worktree setup commands from config.
  */
-export async function getWorktreeSetupCommands(projectDirectory: string): Promise<string[]> {
-  const config = await readOpenChamberConfig(projectDirectory);
+export async function getWorktreeSetupCommands(project: ProjectRef): Promise<string[]> {
+  const config = await readOpenChamberConfig(project);
   return config?.['setup-worktree'] ?? [];
 }
 
-/**
- * Save worktree setup commands to config.
- */
-export async function saveWorktreeSetupCommands(
-  projectDirectory: string,
-  commands: string[]
-): Promise<boolean> {
-  // Filter out empty commands
-  const filtered = commands.filter(cmd => cmd.trim().length > 0);
-  return updateOpenChamberConfig(projectDirectory, { 'setup-worktree': filtered });
+export async function saveWorktreeSetupCommands(project: ProjectRef, commands: string[]): Promise<boolean> {
+  const filtered = commands.filter((cmd) => cmd.trim().length > 0);
+  return updateOpenChamberConfig(project, { 'setup-worktree': filtered });
 }
 
 /**
  * Substitute variables in a command string.
  * Supported variables:
- * - $ROOT_WORKTREE_PATH: The root project directory path
+ * - $ROOT_PROJECT_PATH: The root project directory path
+ * - $ROOT_WORKTREE_PATH: Legacy alias for $ROOT_PROJECT_PATH
  */
 export function substituteCommandVariables(
   command: string,
   variables: { rootWorktreePath: string }
 ): string {
   return command
+    // New preferred name
+    .replace(/\$ROOT_PROJECT_PATH/g, variables.rootWorktreePath)
+    .replace(/\$\{ROOT_PROJECT_PATH\}/g, variables.rootWorktreePath)
+    // Legacy
     .replace(/\$ROOT_WORKTREE_PATH/g, variables.rootWorktreePath)
     .replace(/\$\{ROOT_WORKTREE_PATH\}/g, variables.rootWorktreePath);
 }
 
-function getBaseUrl(): string {
-  const defaultBaseUrl = import.meta.env.VITE_OPENCODE_URL || '/api';
-  if (defaultBaseUrl.startsWith('/')) {
-    return defaultBaseUrl;
+async function deleteLegacyOpenChamberConfig(projectDirectory: string): Promise<void> {
+  const legacyPath = getLegacyConfigPath(projectDirectory);
+  const runtimeFiles = getRuntimeFilesAPI();
+
+  if (runtimeFiles?.delete) {
+    try {
+      await runtimeFiles.delete(legacyPath);
+      return;
+    } catch {
+      // fall through
+    }
   }
-  return defaultBaseUrl;
+
+  try {
+    await postJson(`${getBaseUrl()}/fs/delete`, { path: legacyPath });
+  } catch {
+    // ignored
+  }
 }
+
+export type { ProjectRef };

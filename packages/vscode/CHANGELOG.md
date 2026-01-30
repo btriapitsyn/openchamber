@@ -1,3 +1,16 @@
+## [1.6.0] - 2026-01-29
+
+- Added message stall detection with automatic soft resync for more reliable message delivery.
+- Fixed "Load older" button in long sessions with proper progressive pagination.
+- Session activity status now updates reliably even when the extension panel is hidden or collapsed.
+
+
+## [1.5.9] - 2026-01-28
+
+- Agent Manager: migrated to Opencode SDK worktree implementation; sessions in worktrees are now completely isolated.
+- Agent Manager: worktree setup commands are now persistant per project and automatically saved/restored.
+
+
 ## [1.5.8] - 2026-01-26
 
 - Plans: added new Plan/Build mode switching support.

@@ -27,6 +27,9 @@ const PRELOAD_LANGS: SupportedLanguages[] = [
   'bash',
 ];
 
+// Limit warmup to prevent memory bloat with many modified files
+const WARMUP_MAX_FILES = 10;
+
 // Matches cache key logic in `packages/ui/src/components/views/PierreDiffViewer.tsx`
 function getPierreCacheKey(fileName: string, original: string, modified: string): string {
   const sampleOriginal = original.length > 100
@@ -107,7 +110,9 @@ const WorkerPoolWarmup: React.FC<{ children: React.ReactNode }> = ({ children })
     let cancelled = false;
     let cancelScheduled: (() => void) | null = null;
 
-    const entries = Array.from(dirState.diffCache.entries());
+    // Limit entries to prevent memory bloat with many modified files
+    const allEntries = Array.from(dirState.diffCache.entries());
+    const entries = allEntries.slice(0, WARMUP_MAX_FILES);
 
     let index = 0;
 
@@ -190,8 +195,8 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
     <WorkerPoolContextProvider
       poolOptions={{
         workerFactory,
-        poolSize: 4,
-        totalASTLRUCacheSize: 200,
+        poolSize: 2,
+        totalASTLRUCacheSize: 50,
       }}
       highlighterOptions={highlighterOptions}
     >

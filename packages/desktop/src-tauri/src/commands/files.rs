@@ -605,6 +605,11 @@ async fn resolve_sandboxed_path(
         .await
         .map_err(FsCommandError::from)?;
 
+    // Allow OpenChamber per-project config under ~/.config/openchamber.
+    if is_within_openchamber_user_config(&canonicalized) {
+        return Ok(canonicalized);
+    }
+
     if !workspace_roots.is_empty()
         && !workspace_roots
             .iter()
@@ -637,11 +642,15 @@ async fn resolve_creatable_path(
         fallback_root.join(candidate)
     };
 
+    // Allow OpenChamber per-project config under ~/.config/openchamber.
+    // Needed because Desktop FS commands are sandboxed to workspace roots.
+    if is_within_openchamber_user_config(&absolute) {
+        return Ok(absolute);
+    }
+
     let parent = absolute.parent().ok_or(FsCommandError::NotDirectory)?;
 
-    let canonical_parent = fs::canonicalize(parent)
-        .await
-        .map_err(FsCommandError::from)?;
+    let canonical_parent = canonicalize_existing_ancestor(&parent.to_path_buf()).await?;
 
     if !workspace_roots.is_empty()
         && !workspace_roots
@@ -720,6 +729,30 @@ async fn resolve_workspace_roots(settings: &SettingsStore) -> (Vec<PathBuf>, Opt
 
 fn default_home_directory() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("/"))
+}
+
+fn openchamber_user_config_root() -> PathBuf {
+    default_home_directory().join(".config").join("openchamber")
+}
+
+fn is_within_openchamber_user_config(path: &PathBuf) -> bool {
+    path.starts_with(&openchamber_user_config_root())
+}
+
+async fn canonicalize_existing_ancestor(path: &PathBuf) -> Result<PathBuf, FsCommandError> {
+    let mut current = Some(path.as_path());
+    while let Some(candidate) = current {
+        match fs::canonicalize(candidate).await {
+            Ok(canon) => return Ok(canon),
+            Err(err) => {
+                if err.kind() != std::io::ErrorKind::NotFound {
+                    return Err(FsCommandError::from(err));
+                }
+            }
+        }
+        current = candidate.parent();
+    }
+    Err(FsCommandError::NotDirectory)
 }
 
 fn clamp_search_limit(value: Option<usize>) -> usize {

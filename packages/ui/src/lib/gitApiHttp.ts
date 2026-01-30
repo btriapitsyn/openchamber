@@ -325,6 +325,7 @@ export async function removeGitWorktree(directory: string, payload: GitRemoveWor
 }
 
 export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
+  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
   const response = await fetch(buildUrl(`${API_BASE}/ignore-openchamber`, directory), {
     method: 'POST',
   });

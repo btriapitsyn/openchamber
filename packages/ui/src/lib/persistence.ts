@@ -147,9 +147,6 @@ const sanitizeProjects = (value: unknown): DesktopSettings['projects'] | undefin
     if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
       const wt = candidate.worktreeDefaults as Record<string, unknown>;
       const defaults: Record<string, unknown> = {};
-      if (typeof wt.branchPrefix === 'string' && wt.branchPrefix.trim()) {
-        defaults.branchPrefix = wt.branchPrefix.trim();
-      }
       if (typeof wt.baseBranch === 'string' && wt.baseBranch.trim()) {
         defaults.baseBranch = wt.baseBranch.trim();
       }

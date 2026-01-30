@@ -398,6 +398,10 @@ export const useMessageStore = create<MessageStore>()(
                         const revertMessageId = getSessionRevertMessageId(sessionId);
                         const messagesWithoutReverted = filterRevertedMessages(allMessages, revertMessageId);
 
+                        // If we fetched more than we keep (usually via buffer), there are older messages above.
+                        // This intentionally ignores watermark filtering so "Load older" can remain available.
+                        const hasMoreAbove = messagesWithoutReverted.length > targetLimit;
+
                         const watermark = get().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
 
                         const afterWatermark = watermark
@@ -485,8 +489,8 @@ export const useMessageStore = create<MessageStore>()(
                                 isStreaming: false,
                                 lastAccessedAt: Date.now(),
                                 backgroundMessageCount: 0,
-                                totalAvailableMessages: allMessages.length,
-                                hasMoreAbove: allMessages.length > messagesToKeep.length,
+                                totalAvailableMessages: previousMemoryState?.totalAvailableMessages,
+                                hasMoreAbove,
                                 trimmedHeadMaxId: previousMemoryState?.trimmedHeadMaxId,
                                 streamingCooldownUntil: undefined,
                             });
@@ -2257,6 +2261,9 @@ export const useMessageStore = create<MessageStore>()(
                         const updatedMemoryState = {
                             ...memoryState,
                             viewportAnchor: anchor - start,
+                            // If we trimmed older messages out of the in-memory window,
+                            // keep "Load older" available even if the last fetch didn't exceed its limit.
+                            hasMoreAbove: Boolean(memoryState.hasMoreAbove) || start > 0,
                             trimmedHeadMaxId: computeMaxTrimmedHeadId(removedOlder, memoryState.trimmedHeadMaxId),
                         };
                         newMemoryState.set(sessionId, updatedMemoryState);
@@ -2402,11 +2409,18 @@ export const useMessageStore = create<MessageStore>()(
                         return;
                     }
 
-                    if (memoryState.totalAvailableMessages && currentMessages.length >= memoryState.totalAvailableMessages) {
-                        return;
-                    }
+                    const memLimits = getMemoryLimits();
+                    // OpenCode may default to "last N" when limit is omitted.
+                    // For "Load older" we progressively increase the tail window.
+                    const desiredLimit = Math.max(
+                        currentMessages.length + memLimits.VIEWPORT_MESSAGES + memLimits.FETCH_BUFFER,
+                        memLimits.HISTORICAL_MESSAGES + memLimits.FETCH_BUFFER,
+                    );
 
-                        const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId));
+                    const allMessages = await executeWithSessionDirectory(
+                        sessionId,
+                        () => opencodeClient.getSessionMessages(sessionId, desiredLimit)
+                    );
 
                         if (direction === "up" && currentMessages.length > 0) {
                             const dedupedMessages = dedupeMessagesById(allMessages);
@@ -2430,7 +2444,10 @@ export const useMessageStore = create<MessageStore>()(
                                         ...memoryState,
                                         viewportAnchor: memoryState.viewportAnchor + addedCount,
                                         hasMoreAbove: indexInAll - loadCount > 0,
-                                        totalAvailableMessages: dedupedMessages.length,
+                                        totalAvailableMessages: Math.max(
+                                            memoryState.totalAvailableMessages ?? 0,
+                                            dedupedMessages.length
+                                        ),
                                     });
 
                                     return {
@@ -2444,7 +2461,10 @@ export const useMessageStore = create<MessageStore>()(
                                     newMemoryState.set(sessionId, {
                                         ...memoryState,
                                         hasMoreAbove: false,
-                                        totalAvailableMessages: dedupedMessages.length,
+                                        totalAvailableMessages: Math.max(
+                                            memoryState.totalAvailableMessages ?? 0,
+                                            dedupedMessages.length
+                                        ),
                                     });
                                     return { sessionMemoryState: newMemoryState };
                                 });

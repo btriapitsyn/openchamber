@@ -56,12 +56,15 @@ interface UIStore {
 
   favoriteModels: Array<{ providerID: string; modelID: string }>;
   recentModels: Array<{ providerID: string; modelID: string }>;
+  recentAgents: string[];
+  recentEfforts: Record<string, string[]>;
 
   diffLayoutPreference: 'dynamic' | 'inline' | 'side-by-side';
   diffFileLayout: Record<string, 'inline' | 'side-by-side'>;
   diffWrapLines: boolean;
   diffViewMode: 'single' | 'stacked';
   isTimelineDialogOpen: boolean;
+  isImagePreviewOpen: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
   notifyOnSubtasks: boolean;
@@ -108,12 +111,15 @@ interface UIStore {
   toggleFavoriteModel: (providerID: string, modelID: string) => void;
   isFavoriteModel: (providerID: string, modelID: string) => boolean;
   addRecentModel: (providerID: string, modelID: string) => void;
+  addRecentAgent: (agentName: string) => void;
+  addRecentEffort: (providerID: string, modelID: string, variant: string | undefined) => void;
   setDiffLayoutPreference: (mode: 'dynamic' | 'inline' | 'side-by-side') => void;
   setDiffFileLayout: (filePath: string, mode: 'inline' | 'side-by-side') => void;
   setDiffWrapLines: (wrap: boolean) => void;
   setDiffViewMode: (mode: 'single' | 'stacked') => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
+  setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
   setNotifyOnSubtasks: (value: boolean) => void;
@@ -162,11 +168,14 @@ export const useUIStore = create<UIStore>()(
         inputBarOffset: 0,
         favoriteModels: [],
         recentModels: [],
+        recentAgents: [],
+        recentEfforts: {},
         diffLayoutPreference: 'inline',
         diffFileLayout: {},
         diffWrapLines: false,
         diffViewMode: 'stacked',
         isTimelineDialogOpen: false,
+        isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
         notifyOnSubtasks: true,
@@ -480,6 +489,45 @@ export const useUIStore = create<UIStore>()(
           });
         },
 
+        addRecentAgent: (agentName) => {
+          const normalized = typeof agentName === 'string' ? agentName.trim() : '';
+          if (!normalized) {
+            return;
+          }
+          set((state) => {
+            if (state.recentAgents.includes(normalized)) {
+              return state;
+            }
+            const filtered = state.recentAgents;
+            return {
+              recentAgents: [normalized, ...filtered].slice(0, 5),
+            };
+          });
+        },
+
+        addRecentEffort: (providerID, modelID, variant) => {
+          const provider = typeof providerID === 'string' ? providerID.trim() : '';
+          const model = typeof modelID === 'string' ? modelID.trim() : '';
+          if (!provider || !model) {
+            return;
+          }
+          const key = `${provider}/${model}`;
+          const normalizedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant.trim() : 'default';
+          set((state) => {
+            const current = state.recentEfforts[key] ?? [];
+            if (current.includes(normalizedVariant)) {
+              return state;
+            }
+            const filtered = current;
+            return {
+              recentEfforts: {
+                ...state.recentEfforts,
+                [key]: [normalizedVariant, ...filtered].slice(0, 5),
+              },
+            };
+          });
+        },
+
         updateProportionalSidebarWidths: () => {
           if (typeof window === 'undefined') {
             return;
@@ -537,6 +585,10 @@ export const useUIStore = create<UIStore>()(
           set({ isTimelineDialogOpen: open });
         },
 
+        setImagePreviewOpen: (open) => {
+          set({ isImagePreviewOpen: open });
+        },
+
         setNativeNotificationsEnabled: (value) => {
           set({ nativeNotificationsEnabled: value });
         },
@@ -575,6 +627,8 @@ export const useUIStore = create<UIStore>()(
           cornerRadius: state.cornerRadius,
           favoriteModels: state.favoriteModels,
           recentModels: state.recentModels,
+          recentAgents: state.recentAgents,
+          recentEfforts: state.recentEfforts,
           diffLayoutPreference: state.diffLayoutPreference,
           diffWrapLines: state.diffWrapLines,
           diffViewMode: state.diffViewMode,

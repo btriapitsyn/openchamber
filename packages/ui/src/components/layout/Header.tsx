@@ -107,6 +107,31 @@ export const Header: React.FC = () => {
     return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
   }, []);
 
+  const macosMajorVersion = React.useMemo(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    // Use Tauri-provided version if available (accurate), otherwise fall back to UA parsing
+    const desktopApi = (window as typeof window & { opencodeDesktop?: { macosMajorVersion?: number | null } }).opencodeDesktop;
+    if (desktopApi?.macosMajorVersion != null) {
+      return desktopApi.macosMajorVersion;
+    }
+    // Fallback: WebKit reports "Mac OS X 10_15_7" format where 10 is legacy prefix
+    if (typeof navigator === 'undefined') {
+      return null;
+    }
+    const match = (navigator.userAgent || '').match(/Mac OS X (\d+)[._](\d+)/);
+    if (!match) {
+      return null;
+    }
+    const first = Number.parseInt(match[1], 10);
+    const second = Number.parseInt(match[2], 10);
+    if (Number.isNaN(first)) {
+      return null;
+    }
+    return first === 10 ? second : first;
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
@@ -284,10 +309,23 @@ export const Header: React.FC = () => {
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
       // Always reserve space for Mac traffic lights since header is always on top
-      return 'pl-[5.75rem]';
+      return 'pl-[5.5rem]';
     }
     return 'pl-3';
   }, [isDesktopApp, isMacPlatform]);
+
+  const macosHeaderSizeClass = React.useMemo(() => {
+    if (!isDesktopApp || !isMacPlatform || macosMajorVersion === null) {
+      return '';
+    }
+    if (macosMajorVersion >= 26) {
+      return 'h-12';
+    }
+    if (macosMajorVersion <= 15) {
+      return 'h-14';
+    }
+    return '';
+  }, [isDesktopApp, isMacPlatform, macosMajorVersion]);
 
   const updateHeaderHeight = React.useCallback(() => {
     if (typeof document === 'undefined') {
@@ -329,7 +367,7 @@ export const Header: React.FC = () => {
 
   useEffect(() => {
     updateHeaderHeight();
-  }, [updateHeaderHeight, isMobile]);
+  }, [updateHeaderHeight, isMobile, macosHeaderSizeClass]);
 
   const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
@@ -463,7 +501,8 @@ export const Header: React.FC = () => {
       onMouseDown={handleDragStart}
       className={cn(
         'app-region-drag relative flex h-12 select-none items-center',
-        desktopPaddingClass
+        desktopPaddingClass,
+        macosHeaderSizeClass
       )}
       role="tablist"
       aria-label="Main navigation"

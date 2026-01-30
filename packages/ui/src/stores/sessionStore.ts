@@ -4,7 +4,8 @@ import type { Session } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { getSafeStorage } from "./utils/safeStorage";
 import type { WorktreeMetadata } from "@/types/worktree";
-import { archiveWorktree, getWorktreeStatus, listWorktrees, mapWorktreeToMetadata } from "@/lib/git/worktreeService";
+import { getWorktreeStatus, listWorktrees, mapWorktreeToMetadata } from "@/lib/git/worktreeService";
+import { listProjectWorktrees, removeProjectWorktree } from "@/lib/worktrees/worktreeManager";
 import { useDirectoryStore } from "./useDirectoryStore";
 import { useProjectsStore } from "./useProjectsStore";
 import type { ProjectEntry } from "@/lib/api/types";
@@ -135,14 +136,25 @@ const archiveSessionWorktree = async (
     options?: { deleteRemoteBranch?: boolean; remoteName?: string }
 ) => {
     const status = metadata.status ?? (await getWorktreeStatus(metadata.path).catch(() => undefined));
-    await archiveWorktree({
-        projectDirectory: metadata.projectDirectory,
-        path: metadata.path,
-        branch: metadata.branch,
-        force: Boolean(status?.isDirty),
-        deleteRemote: Boolean(options?.deleteRemoteBranch),
-        remote: options?.remoteName,
-    });
+
+    const projects = useProjectsStore.getState().projects;
+    const normalizedProject = normalizePath(metadata.projectDirectory) ?? metadata.projectDirectory;
+    const projectEntry = projects.find((project) => normalizePath(project.path) === normalizedProject);
+
+    const projectRef = {
+        id: projectEntry?.id ?? `path:${normalizedProject}`,
+        path: normalizedProject,
+    };
+
+    await removeProjectWorktree(
+        projectRef,
+        status ? ({ ...metadata, status } as WorktreeMetadata) : metadata,
+        {
+            deleteRemoteBranch: options?.deleteRemoteBranch,
+            remoteName: options?.remoteName,
+            force: Boolean(status?.isDirty),
+        }
+    );
 };
 
 const normalizePath = (value?: string | null): string | null => {
@@ -551,7 +563,19 @@ export const useSessionStore = create<SessionStore>()(
                                     try {
                                         const candidates = new Set<string>();
 
-                                        // Check if .openchamber directory exists before trying to list it
+                                        const managedWorktrees = await listProjectWorktrees({
+                                            id: project.id,
+                                            path: normalizedProject,
+                                        }).catch(() => []);
+                                        discoveredWorktrees = managedWorktrees;
+                                        managedWorktrees.forEach((meta) => {
+                                            if (meta?.path) {
+                                                candidates.add(normalizePath(meta.path) ?? meta.path);
+                                            }
+                                        });
+
+                                        // LEGACY_WORKTREES: check if .openchamber directory exists before listing it
+                                        // LEGACY_WORKTREES: filesystem scan fallback for legacy <project>/.openchamber/*
                                         const projectEntriesList = await opencodeClient.listLocalDirectory(normalizedProject);
                                         const worktreeDirExists = projectEntriesList.some(
                                             (entry) => entry.isDirectory && entry.name === WORKTREE_ROOT
@@ -567,14 +591,6 @@ export const useSessionStore = create<SessionStore>()(
                                                     const normalizedPath = normalizePath(resolvedPath) ?? resolvedPath;
                                                     candidates.add(normalizedPath);
                                                 });
-                                        }
-
-                                        const listedWorktrees = await listWorktrees(normalizedProject);
-                                        if (Array.isArray(listedWorktrees)) {
-                                            discoveredWorktrees = listedWorktrees
-                                                .map((info) => mapWorktreeToMetadata(normalizedProject, info))
-                                                .filter((meta) => meta.path.includes(`/${WORKTREE_ROOT}/`));
-                                            discoveredWorktrees.forEach((meta) => candidates.add(meta.path));
                                         }
 
                                         candidates.forEach((candidate) => {

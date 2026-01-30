@@ -276,12 +276,6 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                   New Session in Worktree
                 </DropdownMenuItem>
               )}
-              {isRepo && !hideDirectoryControls && onOpenBranchPicker && (
-                <DropdownMenuItem onClick={onOpenBranchPicker}>
-                  <RiGitRepositoryLine className="mr-1.5 h-4 w-4" />
-                  Browse Branches
-                </DropdownMenuItem>
-              )}
               {isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
                 <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
                   <RiGithubLine className="mr-1.5 h-4 w-4" />
@@ -298,6 +292,12 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                 <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
                   <ArrowsMerge className="mr-1.5 h-4 w-4" />
                   New Multi-Run
+                </DropdownMenuItem>
+              )}
+              {isRepo && !hideDirectoryControls && onOpenBranchPicker && (
+                <DropdownMenuItem onClick={onOpenBranchPicker}>
+                  <RiGitRepositoryLine className="mr-1.5 h-4 w-4" />
+                  Manage Branches
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem
@@ -420,6 +420,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [branchPickerOpen, setBranchPickerOpen] = React.useState(false);
+  const [branchPickerProjectId, setBranchPickerProjectId] = React.useState<string | null>(null);
   const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
   const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
   const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
@@ -619,7 +620,29 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             return next;
           });
         })
-        .catch(() => {
+        .catch(async () => {
+          // SDK worktrees can be outside UI runtime FS permissions.
+          // Probe via OpenCode API instead of local FS.
+          const looksLikeSdkWorktree =
+            directory.includes('/opencode/worktree/') ||
+            directory.includes('/.opencode/data/worktree/') ||
+            directory.includes('/.local/share/opencode/worktree/');
+
+          if (looksLikeSdkWorktree) {
+            const ok = await opencodeClient.probeDirectory(directory).catch(() => false);
+            if (ok) {
+              setDirectoryStatus((prev) => {
+                const next = new Map(prev);
+                if (next.get(directory) === 'exists') {
+                  return prev;
+                }
+                next.set(directory, 'exists');
+                return next;
+              });
+              return;
+            }
+          }
+
           setDirectoryStatus((prev) => {
             const next = new Map(prev);
             if (next.get(directory) === 'missing') {
@@ -1211,17 +1234,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 disabled={isMissingDirectory}
                 onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
                 className={cn(
-                  'flex min-w-0 flex-1 flex-col gap-0 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
+                  'flex min-w-0 flex-1 flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
                 )}
               >
                 {}
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex w-full items-center gap-2 min-w-0 flex-1 overflow-hidden">
                   {isStreaming ? (
                     <GridLoader size="xs" className="text-primary flex-shrink-0" />
                   ) : null}
-                  <span className="truncate typography-ui-label font-normal text-foreground">
+                  <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">
                     {sessionTitle}
-                  </span>
+                  </div>
 
                   {pendingPermissionCount > 0 ? (
                     <span
@@ -1653,7 +1676,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       }
                       createWorktreeSession();
                     }}
-                    onOpenBranchPicker={() => setBranchPickerOpen(true)}
+                    onOpenBranchPicker={() => {
+                      setBranchPickerProjectId(projectKey);
+                      setBranchPickerOpen(true);
+                    }}
                     onNewSessionFromGitHubIssue={() => {
                       if (projectKey !== activeProjectId) {
                         setActiveProject(projectKey);
@@ -1712,8 +1738,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       <BranchPickerDialog
         open={branchPickerOpen}
         onOpenChange={setBranchPickerOpen}
-        projects={normalizedProjects}
-        activeProjectId={activeProjectId}
+        project={branchPickerProjectId
+          ? normalizedProjects.find((p) => p.id === branchPickerProjectId) ?? null
+          : null}
       />
 
       <GitHubIssuePickerDialog

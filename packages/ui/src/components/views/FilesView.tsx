@@ -11,6 +11,8 @@ import {
   RiCheckLine,
   RiFolder3Fill,
   RiFolderOpenFill,
+  RiFullscreenExitLine,
+  RiFullscreenLine,
   RiLoader4Line,
   RiRefreshLine,
   RiSearchLine,
@@ -261,6 +263,7 @@ export const FilesView: React.FC = () => {
 
   const [showMobilePageContent, setShowMobilePageContent] = React.useState(false);
   const [wrapLines, setWrapLines] = React.useState(isMobile);
+  const [isFullscreen, setIsFullscreen] = React.useState(false);
 
   const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(new Set());
   const [childrenByDir, setChildrenByDir] = React.useState<Record<string, FileNode[]>>({});
@@ -1510,6 +1513,26 @@ export const FilesView: React.FC = () => {
               )}
             </Button>
           )}
+
+          {selectedFile && !isMobile && (
+            <>
+              <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="h-5 w-5 p-0"
+                title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              >
+                {isFullscreen ? (
+                  <RiFullscreenExitLine className="h-4 w-4" />
+                ) : (
+                  <RiFullscreenLine className="h-4 w-4" />
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1756,9 +1779,200 @@ export const FilesView: React.FC = () => {
     </section>
   );
 
+  // Fullscreen file viewer overlay
+  const fullscreenViewer = isFullscreen && selectedFile && (
+    <div className="absolute inset-0 z-50 flex flex-col bg-background">
+      {/* Fullscreen header */}
+      <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-4 py-2 flex-shrink-0">
+        <div className="min-w-0 flex-1">
+          <div className="typography-ui-label font-medium truncate">
+            {selectedFile.name}
+          </div>
+          <div className="typography-meta text-muted-foreground truncate" title={displaySelectedPath}>
+            {displaySelectedPath}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1">
+          {canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void saveDraft()}
+              disabled={!isDirty || isSaving}
+              className="h-6 w-6 p-0 text-[color:var(--status-success)] opacity-70 hover:opacity-100"
+              title={`Save (${getModifierLabel()}+S)`}
+              aria-label={`Save (${getModifierLabel()}+S)`}
+            >
+              {isSaving ? (
+                <RiLoader4Line className="h-4 w-4 animate-spin" />
+              ) : (
+                <RiSave3Line className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+
+          {canEdit && !isSelectedImage && (
+            <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
+          )}
+
+          {!isSelectedImage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setWrapLines(!wrapLines)}
+              className={cn(
+                'h-6 w-6 p-0 transition-opacity',
+                wrapLines ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
+              )}
+              title={wrapLines ? 'Disable line wrap' : 'Enable line wrap'}
+            >
+              <RiTextWrap className="size-4" />
+            </Button>
+          )}
+
+          {(canCopy || canCopyPath || isMarkdownFile(selectedFile.path)) && (canEdit || !isSelectedImage) && (
+            <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
+          )}
+
+          {isMarkdownFile(selectedFile.path) && (
+            <PreviewToggleButton
+              currentMode={getMdViewMode()}
+              onToggle={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
+            />
+          )}
+
+          {canCopy && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(fileContent);
+                  setCopiedContent(true);
+                  if (copiedContentTimeoutRef.current !== null) {
+                    window.clearTimeout(copiedContentTimeoutRef.current);
+                  }
+                  copiedContentTimeoutRef.current = window.setTimeout(() => {
+                    setCopiedContent(false);
+                  }, 1200);
+                } catch {
+                  toast.error('Copy failed');
+                }
+              }}
+              className="h-6 w-6 p-0"
+              title="Copy file contents"
+              aria-label="Copy file contents"
+            >
+              {copiedContent ? (
+                <RiCheckLine className="h-4 w-4 text-[color:var(--status-success)]" />
+              ) : (
+                <RiClipboardLine className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+
+          {canCopyPath && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(displaySelectedPath);
+                  setCopiedPath(true);
+                  if (copiedPathTimeoutRef.current !== null) {
+                    window.clearTimeout(copiedPathTimeoutRef.current);
+                  }
+                  copiedPathTimeoutRef.current = window.setTimeout(() => {
+                    setCopiedPath(false);
+                  }, 1200);
+                } catch {
+                  toast.error('Copy failed');
+                }
+              }}
+              className="h-6 w-6 p-0"
+              title={`Copy file path (${displaySelectedPath})`}
+              aria-label={`Copy file path (${displaySelectedPath})`}
+            >
+              {copiedPath ? (
+                <RiCheckLine className="h-4 w-4 text-[color:var(--status-success)]" />
+              ) : (
+                <RiFileCopy2Line className="h-4 w-4" />
+              )}
+            </Button>
+          )}
+
+          <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsFullscreen(false)}
+            className="h-6 w-6 p-0"
+            title="Exit fullscreen"
+            aria-label="Exit fullscreen"
+          >
+            <RiFullscreenExitLine className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Fullscreen content */}
+      <div className="flex-1 min-h-0 min-w-0 relative">
+        <ScrollableOverlay outerClassName="h-full min-w-0" className="h-full min-w-0">
+          {fileLoading ? (
+            <div className="p-4 flex items-center gap-2 typography-ui text-muted-foreground">
+              <RiLoader4Line className="h-4 w-4 animate-spin" />
+              Loading…
+            </div>
+          ) : fileError ? (
+            <div className="p-4 typography-ui text-[color:var(--status-error)]">{fileError}</div>
+          ) : isSelectedImage ? (
+            <div className="flex h-full items-center justify-center p-4">
+              <img
+                src={imageSrc}
+                alt={selectedFile.name}
+                className="max-w-full max-h-full object-contain rounded-md border border-border/30 bg-primary/10"
+              />
+            </div>
+          ) : isMarkdownFile(selectedFile.path) && getMdViewMode() === 'preview' ? (
+            <div className="h-full overflow-auto p-4">
+              {fileContent.length > 500 * 1024 && (
+                <div className="mb-3 rounded-md border border-warning/20 bg-warning/10 px-3 py-2 text-sm text-warning">
+                  This file is large ({Math.round(fileContent.length / 1024)}KB). Preview may be limited.
+                </div>
+              )}
+              <ErrorBoundary
+                fallback={
+                  <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
+                    <div className="mb-1 font-medium text-destructive">Preview unavailable</div>
+                    <div className="text-sm text-muted-foreground">
+                      Switch to edit mode to fix the issue.
+                    </div>
+                  </div>
+                }
+              >
+                <SimpleMarkdownRenderer content={fileContent} className="typography-markdown-body" />
+              </ErrorBoundary>
+            </div>
+          ) : (
+            <div className="h-full">
+              <CodeMirrorEditor
+                value={draftContent}
+                onChange={setDraftContent}
+                extensions={editorExtensions}
+                className="h-full"
+              />
+            </div>
+          )}
+        </ScrollableOverlay>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex h-full min-h-0 overflow-hidden bg-background">
+    <div className="flex h-full min-h-0 overflow-hidden bg-background relative">
       {renderDialogs()}
+      {fullscreenViewer}
       {isMobile ? (
         showMobilePageContent ? (
           fileViewer

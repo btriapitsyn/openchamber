@@ -145,6 +145,7 @@ export const createDesktopGitAPI = (): GitAPI => ({
   },
 
   async ensureOpenChamberIgnored(directory: string): Promise<void> {
+    // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
     return safeGitInvoke<void>('ensure_openchamber_ignored', { directory });
   },
 

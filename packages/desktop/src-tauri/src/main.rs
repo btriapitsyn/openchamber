@@ -85,13 +85,6 @@ use tokio::{
 use tower_http::cors::CorsLayer;
 use window_state::{load_window_state, persist_window_state, WindowStateManager};
 
-#[cfg(target_os = "macos")]
-use std::sync::atomic::{AtomicBool, Ordering};
-
-
-
-#[cfg(target_os = "macos")]
-static NEEDS_TRAFFIC_LIGHT_FIX: AtomicBool = AtomicBool::new(false);
 
 const PROXY_BODY_LIMIT: usize = 50 * 1024 * 1024; // 50MB
 const CLIENT_RELOAD_DELAY_MS: u64 = 800;
@@ -324,31 +317,14 @@ fn get_macos_major_version() -> isize {
     version.majorVersion
 }
 
-#[cfg(target_os = "macos")]
-fn adjust_traffic_lights_position<R: tauri::Runtime>(
-    window: &tauri::WebviewWindow<R>,
-    x: f64,
-    y: f64,
-) {
-    use objc2::msg_send;
-    use objc2::runtime::AnyObject;
-    use objc2_foundation::{NSPoint, NSRect};
+#[cfg(not(target_os = "macos"))]
+fn get_macos_major_version() -> isize {
+    0
+}
 
-    if let Ok(ns_window) = window.ns_window() {
-        unsafe {
-            let ns_window: *mut AnyObject = ns_window.cast();
-            let close_button: *mut AnyObject = msg_send![ns_window, standardWindowButton: 0usize];
-
-            if !close_button.is_null() {
-                let superview: *mut AnyObject = msg_send![close_button, superview];
-                if !superview.is_null() {
-                    let frame: NSRect = msg_send![superview, frame];
-                    let new_frame = NSRect::new(NSPoint::new(x, y), frame.size);
-                    let _: () = msg_send![superview, setFrame: new_frame];
-                }
-            }
-        }
-    }
+#[tauri::command]
+fn desktop_get_macos_version() -> isize {
+    get_macos_major_version()
 }
 
 #[cfg(target_os = "macos")]
@@ -712,14 +688,6 @@ fn main() {
             if let Some(window) = app.get_webview_window("main") {
                 #[cfg(target_os = "macos")]
                 {
-                    let macos_version = get_macos_major_version();
-                    info!("[macos] Detected macOS version: {}", macos_version);
-
-                    if macos_version < 26 {
-                        NEEDS_TRAFFIC_LIGHT_FIX.store(true, Ordering::SeqCst);
-                        adjust_traffic_lights_position(&window, 17.0, 16.0);
-                    }
-
                     // Apply layer optimizations for smoother scrolling
                     optimize_webview_layer(&window);
                 }
@@ -856,6 +824,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             desktop_server_info,
             desktop_restart_opencode,
+            desktop_get_macos_version,
             #[cfg(feature = "devtools")]
             desktop_open_devtools,
             load_settings,
@@ -1084,12 +1053,6 @@ fn main() {
                         size.height as f64,
                         is_maximized,
                     );
-                    #[cfg(target_os = "macos")]
-                    if NEEDS_TRAFFIC_LIGHT_FIX.load(Ordering::SeqCst) {
-                        if let Some(webview) = window.app_handle().get_webview_window("main") {
-                            adjust_traffic_lights_position(&webview, 17.0, 16.0);
-                        }
-                    }
                 }
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();

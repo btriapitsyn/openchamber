@@ -2,8 +2,8 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
 import { opencodeClient } from '@/lib/opencode/client';
-import { createWorktree, runWorktreeSetupCommands } from '@/lib/git/worktreeService';
 import { saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
+import { createSdkWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
 import { useDirectoryStore } from './useDirectoryStore';
@@ -30,53 +30,33 @@ const toModelSlug = (providerID: string, modelID: string): string => {
 };
 
 /**
- * Generate branch name for a run.
- * Format: <groupSlug>/<modelSlug>
+ * Seed name for SDK worktree creation.
+ * Uses slashes for readability; SDK will slugify.
  */
-const generateBranchName = (groupSlug: string, modelSlug: string): string => {
+const generateWorktreeNameSeed = (groupSlug: string, modelSlug: string): string => {
   return `${groupSlug}/${modelSlug}`;
 };
 
-/**
- * Generate a stable worktree slug for a branch name.
- * Keeps `.openchamber/<slug>` branch-aligned.
- */
-const sanitizeWorktreeSlug = (value: string): string => {
-  return value
-    .trim()
-    .replace(/[^A-Za-z0-9._-]+/g, '-')
-    .replace(/^[-_]+|[-_]+$/g, '')
-    .slice(0, 120);
-};
-
-
-const resolveProjectDirectory = (): string | null => {
+const resolveActiveProject = (): ProjectRef | null => {
   const projectsState = useProjectsStore.getState();
   const activeProjectId = projectsState.activeProjectId;
-  const activeProjectPath = activeProjectId
-    ? projectsState.projects.find((project) => project.id === activeProjectId)?.path
-    : undefined;
-
-  if (typeof activeProjectPath === 'string' && activeProjectPath.trim().length > 0) {
-    return activeProjectPath;
-  }
-
-  const currentDirectory = useDirectoryStore.getState().currentDirectory ?? null;
-  if (!currentDirectory) {
+  if (!activeProjectId) {
     return null;
   }
 
-  const normalized = currentDirectory.replace(/\\/g, '/').replace(/\/+$/, '') || currentDirectory;
-  const marker = '/.openchamber/';
-  const markerIndex = normalized.indexOf(marker);
-  if (markerIndex > 0) {
-    return normalized.slice(0, markerIndex);
-  }
-  if (normalized.endsWith('/.openchamber')) {
-    return normalized.slice(0, normalized.length - '/.openchamber'.length);
+  const project = projectsState.projects.find((entry) => entry.id === activeProjectId);
+  if (project?.path) {
+    return { id: project.id, path: project.path };
   }
 
-  return normalized;
+  // Fall back to current directory only when active project is missing.
+  const currentDirectory = useDirectoryStore.getState().currentDirectory ?? null;
+  if (currentDirectory && currentDirectory.trim().length > 0) {
+    const normalized = currentDirectory.replace(/\\/g, '/').replace(/\/+$/, '') || currentDirectory;
+    return { id: `path:${normalized}`, path: normalized };
+  }
+
+  return null;
 };
 
 interface MultiRunState {
@@ -126,11 +106,13 @@ export const useMultiRunStore = create<MultiRunStore>()(
         set({ isLoading: true, error: null });
 
         try {
-          const directory = resolveProjectDirectory();
-          if (!directory) {
-            set({ error: 'No directory selected', isLoading: false });
+          const project = resolveActiveProject();
+          if (!project) {
+            set({ error: 'Select a project', isLoading: false });
             return null;
           }
+
+          const directory = project.path;
 
           const isGit = await checkIsGitRepository(directory);
           if (!isGit) {
@@ -174,29 +156,22 @@ export const useMultiRunStore = create<MultiRunStore>()(
 
             const modelSlug = toModelSlug(model.providerID, model.modelID);
             // Append index only when same model is selected multiple times
-            const branch = count > 1
-              ? generateBranchName(groupSlug, `${modelSlug}/${index}`)
-              : generateBranchName(groupSlug, modelSlug);
-
-            if (!branch) {
-              set({ error: 'Branch name is required for worktree creation', isLoading: false });
-              return null;
-            }
-
-            const worktreeSlug = sanitizeWorktreeSlug(branch);
-            if (!worktreeSlug) {
-              set({ error: `Invalid branch name: ${branch}`, isLoading: false });
-              return null;
-            }
+            const preferredName = count > 1
+              ? generateWorktreeNameSeed(groupSlug, `${modelSlug}/${index}`)
+              : generateWorktreeNameSeed(groupSlug, modelSlug);
 
             try {
-              const worktreeMetadata = await createWorktree({
-                projectDirectory: directory,
-                worktreeSlug,
-                branch,
-                createBranch: true,
-                startPoint,
+              const worktreeMetadata = await createSdkWorktree(project, {
+                preferredName,
+                setupCommands: commandsToRun,
+                startPoint: startPoint ?? null,
               });
+
+              const enrichedMetadata = {
+                ...worktreeMetadata,
+                createdFromBranch: startPoint ?? 'HEAD',
+                kind: 'standard' as const,
+              };
 
               // Session title format: groupSlug/provider/model (or groupSlug/provider/model/index for duplicates)
               const sessionTitle = count > 1
@@ -208,7 +183,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 () => opencodeClient.createSession({ title: sessionTitle })
               );
 
-              useSessionStore.getState().setWorktreeMetadata(session.id, worktreeMetadata);
+              useSessionStore.getState().setWorktreeMetadata(session.id, enrichedMetadata);
 
               createdRuns.push({
                 sessionId: session.id,
@@ -227,7 +202,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
           // Save setup commands to config if any were provided (for future worktree creation)
           const commandsToSave = setupCommands?.filter(cmd => cmd.trim().length > 0) ?? [];
           if (commandsToSave.length > 0) {
-            saveWorktreeSetupCommands(directory, commandsToSave).catch(() => {
+            saveWorktreeSetupCommands(project, commandsToSave).catch(() => {
               console.warn('[MultiRun] Failed to save worktree setup commands');
             });
           }
@@ -257,21 +232,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
             // Ignore refresh errors
           }
 
-          // Kick off setup commands after sessions are visible.
-          if (commandsToRun.length > 0) {
-            for (const run of createdRuns) {
-              void runWorktreeSetupCommands(run.worktreePath, directory, commandsToRun)
-                .then((result) => {
-                  if (!result.success) {
-                    const failed = result.results.filter((r) => !r.success);
-                    console.warn(`[MultiRun] Setup commands failed for ${run.worktreePath}:`, failed);
-                  }
-                })
-                .catch((err) => {
-                  console.warn(`[MultiRun] Setup commands error for ${run.worktreePath}:`, err);
-                });
-            }
-          }
+          // Setup commands run via SDK worktree startCommand.
 
           void (async () => {
             try {

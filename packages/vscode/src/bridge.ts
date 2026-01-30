@@ -795,9 +795,8 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:fs/home': {
-        const workspaceHome = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-        const home = workspaceHome || os.homedir();
-        return { id, type, success: true, data: { home: normalizeFsPath(home) } };
+        // Match web/desktop semantics: OS home directory.
+        return { id, type, success: true, data: { home: normalizeFsPath(os.homedir()) } };
       }
 
       case 'api:fs:read': {
@@ -2288,6 +2287,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:git/ignore-openchamber': {
+        // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
         const { directory } = (payload || {}) as { directory?: string };
         if (!directory) {
           return { id, type, success: false, error: 'Directory is required' };

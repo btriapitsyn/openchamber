@@ -124,9 +124,6 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
       const wt = candidate.worktreeDefaults as Record<string, unknown>;
       const defaults: WorktreeDefaults = {};
-      if (typeof wt.branchPrefix === 'string') {
-        defaults.branchPrefix = wt.branchPrefix;
-      }
       if (typeof wt.baseBranch === 'string') {
         defaults.baseBranch = wt.baseBranch;
       }
@@ -463,13 +460,6 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       const merged: WorktreeDefaults = { ...target.worktreeDefaults };
-      if (defaults.branchPrefix !== undefined) {
-        if (defaults.branchPrefix.trim()) {
-          merged.branchPrefix = defaults.branchPrefix.trim();
-        } else {
-          delete merged.branchPrefix;
-        }
-      }
       if (defaults.baseBranch !== undefined) {
         if (defaults.baseBranch.trim()) {
           merged.baseBranch = defaults.baseBranch.trim();

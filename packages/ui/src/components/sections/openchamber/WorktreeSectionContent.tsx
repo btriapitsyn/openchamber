@@ -14,12 +14,14 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useGitBranches, useIsGitRepo } from '@/stores/useGitStore';
+import { useGitBranches } from '@/stores/useGitStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { checkIsGitRepository, getGitBranches } from '@/lib/gitApi';
 import { getWorktreeSetupCommands, saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
-import { listWorktrees, mapWorktreeToMetadata } from '@/lib/git/worktreeService';
+import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { sessionEvents } from '@/lib/sessionEvents';
 import type { WorktreeMetadata } from '@/types/worktree';
+import { formatPathForDisplay } from '@/lib/utils';
 
 type BranchOption = {
   value: string;
@@ -34,12 +36,11 @@ export const WorktreeSectionContent: React.FC = () => {
   const projectPath = activeProject?.path ?? null;
   const worktreeDefaults = activeProject?.worktreeDefaults;
 
-  const isGitRepoFromStore = useIsGitRepo(projectPath);
   const branchesFromStore = useGitBranches(projectPath);
 
   const { sessions, getWorktreeMetadata } = useSessionStore();
+  const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
 
-  const [branchPrefix, setBranchPrefix] = React.useState(worktreeDefaults?.branchPrefix ?? '');
   const [baseBranch, setBaseBranch] = React.useState(worktreeDefaults?.baseBranch ?? 'HEAD');
   const [setupCommands, setSetupCommands] = React.useState<string[]>([]);
   const [isLoadingCommands, setIsLoadingCommands] = React.useState(false);
@@ -49,41 +50,32 @@ export const WorktreeSectionContent: React.FC = () => {
   const [availableWorktrees, setAvailableWorktrees] = React.useState<WorktreeMetadata[]>([]);
   const [isLoadingWorktrees, setIsLoadingWorktrees] = React.useState(false);
 
-  const WORKTREE_ROOT = '.openchamber';
-
-  const joinWorktreePath = React.useCallback((projectDirectory: string, slug: string): string => {
-    const normalizedProject = projectDirectory.replace(/\\/g, '/').replace(/\/+$/, '');
-    const base = !normalizedProject || normalizedProject === '/'
-      ? `/${WORKTREE_ROOT}`
-      : `${normalizedProject}/${WORKTREE_ROOT}`;
-    return slug ? `${base}/${slug}` : base;
-  }, []);
+  const projectRef = React.useMemo(() => {
+    if (!activeProject?.id || !projectPath) {
+      return null;
+    }
+    return { id: activeProject.id, path: projectPath };
+  }, [activeProject?.id, projectPath]);
 
   const refreshWorktrees = React.useCallback(async () => {
-    if (!projectPath || isGitRepoLocal === false) return;
+    if (!projectRef || isGitRepoLocal === false) return;
 
     try {
-      const worktrees = await listWorktrees(projectPath);
-      const mapped = worktrees.map((info) => mapWorktreeToMetadata(projectPath, info));
-      const worktreeRoot = joinWorktreePath(projectPath, '');
-      const worktreePrefix = `${worktreeRoot}/`;
-      const filtered = mapped.filter((item) => item.path.startsWith(worktreePrefix));
-      setAvailableWorktrees(filtered);
+      const worktrees = await listProjectWorktrees(projectRef);
+      setAvailableWorktrees(worktrees);
     } catch {
       // Ignore errors
     }
-  }, [projectPath, isGitRepoLocal, joinWorktreePath]);
+  }, [projectRef, isGitRepoLocal]);
 
-  // Load git info when project changes
+  // Load repo + branch info
   React.useEffect(() => {
     if (!projectPath) return;
 
     let cancelled = false;
     setIsLoadingGit(true);
-    setIsLoadingWorktrees(true);
     setIsGitRepoLocal(null);
     setBranchesLocal(null);
-    setAvailableWorktrees([]);
 
     (async () => {
       try {
@@ -91,31 +83,18 @@ export const WorktreeSectionContent: React.FC = () => {
         if (cancelled) return;
         setIsGitRepoLocal(repoStatus);
 
-        if (repoStatus) {
-          const [branchData, worktrees] = await Promise.all([
-            getGitBranches(projectPath),
-            listWorktrees(projectPath).catch(() => []),
-          ]);
-
-          if (!cancelled) {
-            if (branchData) {
-              setBranchesLocal({ all: branchData.all, current: branchData.current });
-            }
-
-            // Filter worktrees to only show those under .openchamber
-            const mapped = worktrees.map((info) => mapWorktreeToMetadata(projectPath, info));
-            const worktreeRoot = `${projectPath.replace(/\\/g, '/').replace(/\/+$/, '')}/${WORKTREE_ROOT}`;
-            const worktreePrefix = `${worktreeRoot}/`;
-            const filtered = mapped.filter((item) => item.path.startsWith(worktreePrefix));
-            setAvailableWorktrees(filtered);
-          }
+        if (!repoStatus) {
+          return;
         }
+
+        const branchData = await getGitBranches(projectPath);
+        if (cancelled) return;
+        setBranchesLocal({ all: branchData.all, current: branchData.current });
       } catch {
         // Ignore errors
       } finally {
         if (!cancelled) {
           setIsLoadingGit(false);
-          setIsLoadingWorktrees(false);
         }
       }
     })();
@@ -125,16 +104,53 @@ export const WorktreeSectionContent: React.FC = () => {
     };
   }, [projectPath]);
 
+  // Load existing worktrees
+  React.useEffect(() => {
+    if (!projectRef) {
+      setAvailableWorktrees([]);
+      setIsLoadingWorktrees(false);
+      return;
+    }
+
+    if (isGitRepoLocal === false) {
+      setAvailableWorktrees([]);
+      setIsLoadingWorktrees(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoadingWorktrees(true);
+    setAvailableWorktrees([]);
+
+    (async () => {
+      try {
+        const worktrees = await listProjectWorktrees(projectRef);
+        if (cancelled) return;
+        setAvailableWorktrees(worktrees);
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) {
+          setIsLoadingWorktrees(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectRef, isGitRepoLocal]);
+
   // Load setup commands
   React.useEffect(() => {
-    if (!projectPath) return;
+    if (!projectRef) return;
 
     let cancelled = false;
     setIsLoadingCommands(true);
 
     (async () => {
       try {
-        const commands = await getWorktreeSetupCommands(projectPath);
+        const commands = await getWorktreeSetupCommands(projectRef);
         if (!cancelled) {
           setSetupCommands(commands.length > 0 ? commands : ['']);
         }
@@ -152,17 +168,15 @@ export const WorktreeSectionContent: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [projectPath]);
+  }, [projectRef]);
 
   // Sync local state with store when project changes
   React.useEffect(() => {
-    setBranchPrefix(worktreeDefaults?.branchPrefix ?? '');
     setBaseBranch(worktreeDefaults?.baseBranch ?? 'HEAD');
   }, [worktreeDefaults]);
 
   // Use local branches if available, otherwise fall back to store
   const branches = branchesLocal ?? branchesFromStore;
-  const isGitRepo = isGitRepoLocal ?? isGitRepoFromStore;
 
   const branchOptions = React.useMemo<BranchOption[]>(() => {
     const options: BranchOption[] = [];
@@ -193,33 +207,6 @@ export const WorktreeSectionContent: React.FC = () => {
     return options;
   }, [branches]);
 
-  // Track pending changes for save-on-unmount
-  const pendingBranchPrefixRef = React.useRef<string | null>(null);
-
-  const handleBranchPrefixChange = React.useCallback((value: string) => {
-    setBranchPrefix(value);
-    pendingBranchPrefixRef.current = value;
-  }, []);
-
-  const saveBranchPrefix = React.useCallback((value: string) => {
-    if (!activeProject?.id) return;
-    updateWorktreeDefaults(activeProject.id, { branchPrefix: value });
-    pendingBranchPrefixRef.current = null;
-  }, [activeProject?.id, updateWorktreeDefaults]);
-
-  const handleBranchPrefixBlur = React.useCallback(() => {
-    saveBranchPrefix(branchPrefix);
-  }, [branchPrefix, saveBranchPrefix]);
-
-  // Save pending changes on unmount
-  React.useEffect(() => {
-    return () => {
-      if (pendingBranchPrefixRef.current !== null && activeProject?.id) {
-        updateWorktreeDefaults(activeProject.id, { branchPrefix: pendingBranchPrefixRef.current });
-      }
-    };
-  }, [activeProject?.id, updateWorktreeDefaults]);
-
   const handleBaseBranchChange = React.useCallback((value: string) => {
     setBaseBranch(value);
     if (!activeProject?.id) return;
@@ -238,20 +225,25 @@ export const WorktreeSectionContent: React.FC = () => {
     setSetupCommands((prev) => [...prev, '']);
   }, []);
 
-  const handleRemoveCommand = React.useCallback((index: number) => {
-    setSetupCommands((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  const persistSetupCommands = React.useCallback(async (commands: string[]) => {
+    if (!projectRef) return;
+    const filtered = commands.filter((cmd) => cmd.trim().length > 0);
+    await saveWorktreeSetupCommands(projectRef, filtered);
+  }, [projectRef]);
 
-  const saveSetupCommands = React.useCallback(async () => {
-    if (!projectPath) return;
-    const filtered = setupCommands.filter((cmd) => cmd.trim().length > 0);
-    await saveWorktreeSetupCommands(projectPath, filtered);
-  }, [projectPath, setupCommands]);
+  const handleRemoveCommand = React.useCallback((index: number) => {
+    setSetupCommands((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      // Keep at least 1 row in UI, but persist empty config when all removed.
+      void persistSetupCommands(next);
+      return next.length > 0 ? next : [''];
+    });
+  }, [persistSetupCommands]);
 
   // Save setup commands on blur
   const handleCommandBlur = React.useCallback(() => {
-    saveSetupCommands();
-  }, [saveSetupCommands]);
+    void persistSetupCommands(setupCommands);
+  }, [persistSetupCommands, setupCommands]);
 
   // Delete worktree handler
   const handleDeleteWorktree = React.useCallback((worktree: WorktreeMetadata) => {
@@ -332,15 +324,7 @@ export const WorktreeSectionContent: React.FC = () => {
     );
   }
 
-  if (isLoadingGit) {
-    return (
-      <p className="typography-meta text-muted-foreground">
-        Loading...
-      </p>
-    );
-  }
-
-  if (isGitRepo === false) {
+  if (isGitRepoLocal === false) {
     return (
       <p className="typography-meta text-muted-foreground">
         Worktree settings are only available for Git repositories.
@@ -350,36 +334,8 @@ export const WorktreeSectionContent: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Branch prefix */}
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="typography-ui-header font-semibold text-foreground">Branch prefix</h3>
-            <Tooltip delayDuration={1000}>
-              <TooltipTrigger asChild>
-                <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent sideOffset={8} className="max-w-xs">
-                Prefix for auto-generated branch names when creating new worktrees.
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <p className="typography-meta text-muted-foreground">
-            e.g. feature, bugfix, wip (no trailing slash)
-          </p>
-        </div>
-
-        <Input
-          value={branchPrefix}
-          onChange={(e) => handleBranchPrefixChange(e.target.value)}
-          onBlur={handleBranchPrefixBlur}
-          placeholder="feature"
-          className="max-w-xs"
-        />
-      </div>
-
       {/* Default base branch */}
-      <div className="space-y-4 border-t border-border/40 pt-6">
+      <div className="space-y-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h3 className="typography-ui-header font-semibold text-foreground">Base branch</h3>
@@ -397,55 +353,59 @@ export const WorktreeSectionContent: React.FC = () => {
           </p>
         </div>
 
-        <Select value={baseBranch} onValueChange={handleBaseBranchChange}>
-          <SelectTrigger className="w-auto max-w-xs typography-meta text-foreground">
-            <SelectValue placeholder="Select a branch" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Default</SelectLabel>
-              {branchOptions
-                .filter((option) => option.group === 'special')
-                .map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-            </SelectGroup>
+        {isLoadingGit ? (
+          <p className="typography-meta text-muted-foreground">Loading...</p>
+        ) : (
+          <Select value={baseBranch} onValueChange={handleBaseBranchChange}>
+            <SelectTrigger className="w-auto max-w-xs typography-meta text-foreground">
+              <SelectValue placeholder="Select a branch" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectLabel>Default</SelectLabel>
+                {branchOptions
+                  .filter((option) => option.group === 'special')
+                  .map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+              </SelectGroup>
 
-            {branchOptions.some((option) => option.group === 'local') && (
-              <>
-                <SelectSeparator />
-                <SelectGroup>
-                  <SelectLabel>Local branches</SelectLabel>
-                  {branchOptions
-                    .filter((option) => option.group === 'local')
-                    .map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                </SelectGroup>
-              </>
-            )}
+              {branchOptions.some((option) => option.group === 'local') && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Local branches</SelectLabel>
+                    {branchOptions
+                      .filter((option) => option.group === 'local')
+                      .map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </>
+              )}
 
-            {branchOptions.some((option) => option.group === 'remote') && (
-              <>
-                <SelectSeparator />
-                <SelectGroup>
-                  <SelectLabel>Remote branches</SelectLabel>
-                  {branchOptions
-                    .filter((option) => option.group === 'remote')
-                    .map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                </SelectGroup>
-              </>
-            )}
-          </SelectContent>
-        </Select>
+              {branchOptions.some((option) => option.group === 'remote') && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>Remote branches</SelectLabel>
+                    {branchOptions
+                      .filter((option) => option.group === 'remote')
+                      .map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                </>
+              )}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {/* Setup commands */}
@@ -453,8 +413,9 @@ export const WorktreeSectionContent: React.FC = () => {
         <div className="space-y-1">
           <h3 className="typography-ui-header font-semibold text-foreground">Setup commands</h3>
           <p className="typography-meta text-muted-foreground">
-            Run automatically when a new worktree is created.
-            Use <code className="font-mono text-xs bg-sidebar-accent/50 px-1 rounded">$ROOT_WORKTREE_PATH</code> for the project root.
+            Run automatically inside the new worktree directory when a worktree is created.
+            <br />
+            Use <code className="font-mono text-xs bg-sidebar-accent/50 px-1 rounded">$ROOT_PROJECT_PATH</code> for the project root.
           </p>
         </div>
 
@@ -471,16 +432,14 @@ export const WorktreeSectionContent: React.FC = () => {
                   placeholder="e.g., bun install"
                   className="flex-1 font-mono text-xs"
                 />
-                <button
-                  type="button"
-                  onClick={() => {
+                  <button
+                    type="button"
+                    onClick={() => {
                     handleRemoveCommand(index);
-                    // Save after removing
-                    setTimeout(saveSetupCommands, 0);
-                  }}
-                  className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label="Remove command"
-                >
+                    }}
+                    className="flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                    aria-label="Remove command"
+                  >
                   <RiCloseLine className="h-4 w-4" />
                 </button>
               </div>
@@ -507,8 +466,8 @@ export const WorktreeSectionContent: React.FC = () => {
                 <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
               </TooltipTrigger>
               <TooltipContent sideOffset={8} className="max-w-xs">
-                Worktrees created under <code className="font-mono text-xs">.openchamber</code> directory.
-                Deleting a worktree will also remove any linked sessions.
+                SDK worktrees live outside the repo (OpenCode-managed). Legacy <code className="font-mono text-xs">.openchamber</code> worktrees are still supported.
+                Deleting a worktree also removes linked sessions.
               </TooltipContent>
             </Tooltip>
           </div>
@@ -521,7 +480,7 @@ export const WorktreeSectionContent: React.FC = () => {
           <p className="typography-meta text-muted-foreground">Loading worktrees...</p>
         ) : availableWorktrees.length === 0 ? (
           <p className="typography-meta text-muted-foreground/70">
-            No worktrees found under <code className="font-mono text-xs">.openchamber</code>
+            No worktrees found for this project
           </p>
         ) : (
           <div className="space-y-1">
@@ -531,11 +490,18 @@ export const WorktreeSectionContent: React.FC = () => {
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-sidebar-accent/30 transition-colors group"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="typography-meta text-foreground truncate">
-                    {worktree.label || worktree.branch || 'Detached HEAD'}
-                  </p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="typography-meta text-foreground truncate min-w-0">
+                      {worktree.label || worktree.branch || 'Detached HEAD'}
+                    </p>
+                    <span className="typography-micro text-muted-foreground/60 px-1.5 py-[1px] rounded bg-sidebar-accent/40 flex-shrink-0 self-center leading-none">
+                      {worktree.source === 'sdk' ? 'OpenCode' : 'OpenChamber'}
+                    </span>
+                  </div>
                   <p className="typography-micro text-muted-foreground/60 truncate">
-                    {worktree.relativePath || worktree.path}
+                    {worktree.source === 'sdk'
+                      ? formatPathForDisplay(worktree.path, homeDirectory)
+                      : (worktree.relativePath || worktree.path)}
                   </p>
                 </div>
                 <button

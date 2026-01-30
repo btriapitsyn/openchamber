@@ -122,6 +122,7 @@ if (homeDirectory) {
 
 window.opencodeDesktop = {
   homeDirectory,
+  macosMajorVersion: null as number | null,
   async getServerInfo() {
     try {
       const info = await invoke<ServerInfo>('desktop_server_info');
@@ -261,6 +262,16 @@ window.opencodeDesktop = {
     return restartToUpdate();
   }
 };
+
+// Fetch macOS version from Rust
+try {
+  const macosVersion = await invoke<number>('desktop_get_macos_version');
+  window.opencodeDesktop.macosMajorVersion = macosVersion > 0 ? macosVersion : null;
+  console.info('[main] macOS version:', macosVersion);
+} catch (err) {
+  console.warn('[main] Failed to get macOS version:', err);
+  window.opencodeDesktop.macosMajorVersion = null;
+}
 
 console.info('[main] window.opencodeDesktop assigned');
 

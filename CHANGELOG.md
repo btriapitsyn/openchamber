@@ -2,7 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.6.0] - 2026-01-29
+
+- Chat: added message stall detection with automatic soft resync for more reliable message delivery.
+- Chat: fixed "Load older" button behavior in chat with proper pagination implementation.
+- Git: PR picker now validates local branch existence and includes a refresh action.
+- Git: worktree integration now syncs clean target directories before merging.
+- Diff: fixed memory leak when viewing many modified files; large changesets now lazy-load for smoother performance.
+- VSCode: session activity status now updates reliably even when the webview is hidden.
+- Web: session activity tracking now works consistently across browser tabs.
+- Reliability: plans directory no longer errors when missing.
+
+
+## [1.5.9] - 2026-01-28
+
+- Worktrees: migrated to Opencode SDK worktree implementation; sessions in worktrees are now completely isolated.
+- Git: integrate worktree commits back to a target branch with commit previews and guided conflict handling.
+- Files: toggle markdown preview when viewing files (thanks to @Jovines).
+- Files: open the file viewer in fullscreen for focused review and editing (thanks to @TaylorBeeston).
+- Plans: switch between markdown preview and edit mode in the Plan view.
+- UI: Files, Diff, Git, and Terminal now follow the active session/worktree directory, including new-session drafts.
+- Web: plan lists no longer error when the plans directory is missing.
+
 
 ## [1.5.8] - 2026-01-26
 

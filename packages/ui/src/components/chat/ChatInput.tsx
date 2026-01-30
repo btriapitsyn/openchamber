@@ -4,7 +4,6 @@ import {
     RiAddCircleLine,
     RiAiAgentLine,
     RiAttachment2,
-    RiCloseCircleLine,
     RiFileUploadLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
@@ -23,6 +22,8 @@ import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomp
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
+import { StatusChip } from './StatusChip';
+import { UnifiedControlsDrawer } from './UnifiedControlsDrawer';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
@@ -31,6 +32,8 @@ import { toast } from '@/components/ui';
 import { useFileStore } from '@/stores/fileStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
+import { StopIcon } from '@/components/icons/StopIcon';
+import type { MobileControlsPanel } from './mobileControlsUtils';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -108,6 +111,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [showSkillAutocomplete, setShowSkillAutocomplete] = React.useState(false);
     const [skillQuery, setSkillQuery] = React.useState('');
     const [textareaSize, setTextareaSize] = React.useState<{ height: number; maxHeight: number } | null>(null);
+    const [mobileControlsOpen, setMobileControlsOpen] = React.useState(false);
+    const [mobileControlsPanel, setMobileControlsPanel] = React.useState<MobileControlsPanel>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const mentionRef = React.useRef<FileMentionHandle>(null);
@@ -121,7 +126,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const abortCurrentOperation = useSessionStore((state) => state.abortCurrentOperation);
     const acknowledgeSessionAbort = useSessionStore((state) => state.acknowledgeSessionAbort);
     const abortPromptSessionId = useSessionStore((state) => state.abortPromptSessionId);
-    const abortPromptExpiresAt = useSessionStore((state) => state.abortPromptExpiresAt);
     const clearAbortPrompt = useSessionStore((state) => state.clearAbortPrompt);
     const sessionAbortFlags = useSessionStore((state) => state.sessionAbortFlags);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
@@ -202,6 +206,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         } catch {
             // ignored
         }
+    }, [isMobile]);
+
+    const handleOpenMobileControls = React.useCallback(() => {
+        if (!isMobile) {
+            return;
+        }
+
+        if (mobileControlsOpen) {
+            setMobileControlsOpen(false);
+            return;
+        }
+
+        setMobileControlsPanel(null);
+
+        if (isKeyboardOpen) {
+            textareaRef.current?.blur();
+            requestAnimationFrame(() => {
+                setMobileControlsOpen(true);
+            });
+            return;
+        }
+
+        setMobileControlsOpen(true);
+    }, [isMobile, isKeyboardOpen, mobileControlsOpen]);
+
+    const handleCloseMobileControls = React.useCallback(() => {
+        setMobileControlsOpen(false);
+    }, []);
+
+    const handleOpenMobilePanel = React.useCallback((panel: MobileControlsPanel) => {
+        if (!isMobile) {
+            return;
+        }
+        setMobileControlsOpen(false);
+        textareaRef.current?.blur();
+        requestAnimationFrame(() => {
+            setMobileControlsPanel(panel);
+        });
+    }, [isMobile]);
+
+    const handleReturnToUnifiedControls = React.useCallback(() => {
+        if (!isMobile) {
+            return;
+        }
+        setMobileControlsPanel(null);
+        requestAnimationFrame(() => {
+            setMobileControlsOpen(true);
+        });
     }, [isMobile]);
 
     // Consume pending input text (e.g., from revert action)
@@ -296,11 +348,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const canSend = hasContent || hasQueuedMessages;
 
     const canAbort = working.isWorking;
-
-    const isAbortPromptActive = React.useMemo(() => {
-        if (!currentSessionId) return false;
-        return abortPromptSessionId === currentSessionId && Boolean(abortPromptExpiresAt);
-    }, [abortPromptSessionId, abortPromptExpiresAt, currentSessionId]);
 
     // Add message to queue instead of sending
     const handleQueueMessage = React.useCallback(() => {
@@ -981,6 +1028,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [currentSessionId, isMobile]);
 
     React.useEffect(() => {
+        if (!isMobile) {
+            setMobileControlsOpen(false);
+            setMobileControlsPanel(null);
+        }
+    }, [isMobile]);
+
+    React.useEffect(() => {
         if (abortPromptSessionId && abortPromptSessionId !== currentSessionId) {
             clearAbortPrompt();
         }
@@ -1149,22 +1203,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
     );
 
-    // Desktop and VSCode: show abort button in footer when Esc triggered
-    const showAbortInFooter = !isMobile && isAbortPromptActive && canAbort;
-
-    const actionButton = showAbortInFooter ? (
+    const stopButton = canAbort ? (
         <button
-            type='button'
+            type="button"
             onClick={handleAbort}
             className={cn(
                 iconButtonBaseClass,
+                'absolute right-2 top-2 z-10',
                 'text-[var(--status-error)] hover:text-[var(--status-error)]'
             )}
-            aria-label='Stop generating'
+            aria-label="Stop generating"
         >
-            <RiCloseCircleLine className={cn(iconSizeClass)} />
+            <StopIcon className={cn(iconSizeClass)} />
         </button>
-    ) : (
+    ) : null;
+
+    const actionButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
             disabled={!canSend || (!currentSessionId && !newSessionDraftOpen)}
@@ -1201,7 +1255,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     ? 'text-primary hover:text-primary'
                     : 'opacity-30'
             )}
-            aria-label='Send message'
+            aria-label="Send message"
         >
             <RiSendPlane2Line className={cn(iconSizeClass)} />
         </button>
@@ -1319,9 +1373,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         };
     }, []);
 
-    // For mobile only, show abort in StatusRow; desktop and vscode show in footer (Esc-triggered)
-    const showAbortInStatusRow = isMobile && canAbort;
-
     return (
 
         <form
@@ -1344,8 +1395,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     abortActive={working.abortActive}
                     completionId={working.lastCompletionId}
                     isComplete={working.isComplete}
-                    showAbort={showAbortInStatusRow}
-                    onAbort={handleAbort}
                     showAbortStatus={showAbortStatus}
                 />
             </div>
@@ -1394,6 +1443,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     )}
                     style={chatInputWrapperStyle}
                 >
+                    {stopButton}
                         {}
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
@@ -1447,6 +1497,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         className={cn(
                             'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",
+                            canAbort && 'pr-10',
                             "focus-visible:outline-none focus-visible:ring-0"
                         )}
                         style={{
@@ -1471,17 +1522,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         data-chat-input-footer="true"
                     >
                         {isMobile ? (
-                            <div className="flex w-full items-center gap-x-1.5">
-                                <div className="flex items-center flex-shrink-0 gap-x-1">
-                                    {attachmentsControls}
-                                </div>
-                                <div className="flex flex-1 items-center justify-end gap-x-1 min-w-0">
-                                    <div className="flex flex-1 min-w-0 justify-end overflow-hidden">
-                                        <ModelControls className={cn('w-full flex items-center justify-end min-w-0')} />
+                            <>
+                                <div className="flex w-full items-center gap-x-1.5">
+                                    <div className="flex items-center flex-shrink-0 gap-x-1">
+                                        {attachmentsControls}
                                     </div>
-                                    {actionButton}
+                                    <div className="flex flex-1 items-center justify-center min-w-0">
+                                        <StatusChip onClick={handleOpenMobileControls} className="min-w-0" />
+                                    </div>
+                                    <div className="flex-shrink-0">
+                                        {actionButton}
+                                    </div>
                                 </div>
-                            </div>
+                                <ModelControls
+                                    className="hidden"
+                                    mobilePanel={mobileControlsPanel}
+                                    onMobilePanelChange={setMobileControlsPanel}
+                                    onMobilePanelSelection={handleReturnToUnifiedControls}
+                                />
+                                <UnifiedControlsDrawer
+                                    open={mobileControlsOpen}
+                                    onClose={handleCloseMobileControls}
+                                    onOpenAgent={() => handleOpenMobilePanel('agent')}
+                                    onOpenModel={() => handleOpenMobilePanel('model')}
+                                    onOpenEffort={() => handleOpenMobilePanel('variant')}
+                                />
+                            </>
                         ) : (
                             <>
                                 <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>

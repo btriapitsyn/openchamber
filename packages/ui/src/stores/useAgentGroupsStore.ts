@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
+import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { useDirectoryStore } from './useDirectoryStore';
 import { useProjectsStore } from './useProjectsStore';
 import { useSessionStore } from './useSessionStore';
@@ -8,6 +9,7 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { listWorktrees, mapWorktreeToMetadata } from '@/lib/git/worktreeService';
 import type { Session } from '@opencode-ai/sdk/v2';
 
+// LEGACY_WORKTREES: legacy worktree root inside project.
 const OPENCHAMBER_DIR = '.openchamber';
 
 const resolveProjectDirectory = (currentDirectory: string | null | undefined): string | null => {
@@ -19,14 +21,6 @@ const resolveProjectDirectory = (currentDirectory: string | null | undefined): s
 
   if (typeof activeProjectPath === 'string' && activeProjectPath.trim().length > 0) {
     return activeProjectPath;
-  }
-
-  const normalizedCurrent = typeof currentDirectory === 'string' ? normalize(currentDirectory) : '';
-  const marker = `/${OPENCHAMBER_DIR}/`;
-  const markerIndex = normalizedCurrent.indexOf(marker);
-
-  if (markerIndex > 0) {
-    return normalizedCurrent.slice(0, markerIndex);
   }
 
   return currentDirectory ? normalize(currentDirectory) : null;
@@ -401,7 +395,13 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
         }
 
         const normalizedProject = normalize(projectDirectory);
-        const openChamberRoot = buildOpenChamberRoot(normalizedProject);
+
+        const projectsState = useProjectsStore.getState();
+        const projectEntry = projectsState.projects.find((p) => normalize(p.path) === normalizedProject);
+        const projectRef = {
+          id: projectEntry?.id ?? `path:${normalizedProject}`,
+          path: normalizedProject,
+        };
 
         const previousGroups = get().groups;
         set({ isLoading: true, error: null });
@@ -409,7 +409,21 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
         try {
           const apiClient = opencodeClient.getApiClient();
           const canonicalProject = await resolveCanonicalDirectory(apiClient, normalizedProject);
-          const openChamberRootCanonical = buildOpenChamberRoot(canonicalProject);
+          const canonicalRef = canonicalProject && canonicalProject !== normalizedProject
+            ? { ...projectRef, path: canonicalProject }
+            : null;
+
+          const managedWorktrees = await listProjectWorktrees(projectRef).catch(() => []);
+          const managedWorktreesCanonical = canonicalRef
+            ? await listProjectWorktrees(canonicalRef).catch(() => [])
+            : [];
+
+          const worktreeDirectorySet = new Set<string>();
+          [...managedWorktrees, ...managedWorktreesCanonical].forEach((meta) => {
+            if (meta?.path) {
+              worktreeDirectorySet.add(normalize(meta.path));
+            }
+          });
 
           // Get git worktree info first - we need to query each worktree separately
           let worktreeInfoMap = new Map<string, Awaited<ReturnType<typeof listWorktrees>>[number]>();
@@ -429,7 +443,7 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
               const list = Array.isArray(scoped.data) ? scoped.data : [];
               if (list.some((session) => {
                 const dir = normalize((session as { directory?: string | null }).directory ?? '');
-                return startsWithDirectory(dir, openChamberRoot) || startsWithDirectory(dir, openChamberRootCanonical);
+                return dir ? worktreeDirectorySet.has(dir) : false;
               })) {
                 return list;
               }
@@ -472,26 +486,29 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
             if (!dir) {
               return false;
             }
-            return startsWithDirectory(dir, openChamberRoot) || startsWithDirectory(dir, openChamberRootCanonical);
+            return worktreeDirectorySet.has(dir);
           });
 
           // Some OpenCode builds do not return sessions across directories in the global list.
-          // If we didn't discover any group sessions, fall back to querying each `.openchamber` worktree directory directly.
+          // If we didn't discover any group sessions, fall back to querying each worktree directory directly.
           if (allSessions.length === 0) {
             const candidates = new Set<string>();
 
-            // 1) Git worktree list
+            // 1) Known worktree directories for this project
+            worktreeDirectorySet.forEach((dir) => candidates.add(dir));
+
+            // 2) Git worktree list (covers SDK + legacy)
             worktreeInfoList
               .map((info) => normalize(info.worktree))
-              .filter((worktreePath) =>
-                startsWithDirectory(worktreePath, openChamberRoot) || startsWithDirectory(worktreePath, openChamberRootCanonical)
-              )
+              .filter(Boolean)
               .forEach((worktreePath) => candidates.add(worktreePath));
 
-            // 2) Filesystem scan (handles cases where git worktree listing breaks or isn't available)
-            const roots = Array.from(new Set([openChamberRoot, openChamberRootCanonical].map((p) => normalize(p)).filter(Boolean)));
+            // LEGACY_WORKTREES: optional filesystem scan for legacy <project>/.openchamber/*
+            const roots = [buildOpenChamberRoot(normalizedProject), buildOpenChamberRoot(canonicalProject)]
+              .map((p) => normalize(p))
+              .filter(Boolean);
             await Promise.all(
-              roots.map(async (root) => {
+              Array.from(new Set(roots)).map(async (root) => {
                 const dirs = await listOpenChamberDirectories(root);
                 dirs.forEach((dir) => candidates.add(dir));
               })

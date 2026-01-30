@@ -1474,6 +1474,7 @@ pub async fn remove_git_worktree(
 
 #[tauri::command]
 pub async fn ensure_openchamber_ignored(
+    // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
     directory: String,
     state: State<'_, DesktopRuntime>,
 ) -> Result<(), String> {

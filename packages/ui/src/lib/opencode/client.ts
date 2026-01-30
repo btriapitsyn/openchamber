@@ -136,6 +136,7 @@ const getDesktopFilesApi = (): FilesAPI | null => {
 class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
+  private scopedClients: Map<string, OpencodeClient> = new Map();
   private sseAbortControllers: Map<string, AbortController> = new Map();
   private currentDirectory: string | undefined = undefined;
 
@@ -152,6 +153,26 @@ class OpencodeService {
     const requestedBaseUrl = desktopBase || baseUrl;
     this.baseUrl = ensureAbsoluteBaseUrl(requestedBaseUrl);
     this.client = createOpencodeClient({ baseUrl: this.baseUrl });
+  }
+
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  /**
+   * Returns an SDK client scoped to a project directory.
+   * Needed for worktree APIs where backend ignores per-call directory.
+   */
+  getScopedApiClient(directory: string): OpencodeClient {
+    const normalized = this.normalizeCandidatePath(directory) ?? directory;
+    const key = normalized || '';
+    const existing = this.scopedClients.get(key);
+    if (existing) {
+      return existing;
+    }
+    const scoped = createOpencodeClient({ baseUrl: this.baseUrl, directory: normalized });
+    this.scopedClients.set(key, scoped);
+    return scoped;
   }
 
   private normalizeCandidatePath(path?: string | null): string | null {
@@ -307,6 +328,25 @@ class OpencodeService {
 
     const [primary] = Array.from(candidates);
     return this.deriveHomeDirectory(primary);
+  }
+
+  /**
+   * Best-effort probe whether a directory is accessible to OpenCode.
+   * This is intentionally NOT the same as local filesystem access in the UI runtime.
+   */
+  async probeDirectory(directory: string): Promise<boolean> {
+    const normalized = this.normalizeCandidatePath(directory);
+    if (!normalized) {
+      return false;
+    }
+    try {
+      const response = await this.client.path.get({ directory: normalized });
+      const info = response.data as { directory?: unknown } | undefined;
+      const returned = typeof info?.directory === 'string' ? info.directory : null;
+      return Boolean(returned && returned.trim().length > 0);
+    } catch {
+      return false;
+    }
   }
 
   // Session Management
