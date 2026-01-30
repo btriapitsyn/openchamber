@@ -1066,6 +1066,10 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
         let filePath: unknown;
         if (part.tool === 'edit' || part.tool === 'multiedit') {
             filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
+        } else if (part.tool === 'apply_patch') {
+            const files = Array.isArray(metadata?.files) ? metadata?.files : [];
+            const firstFile = files[0] as { relativePath?: string; filePath?: string } | undefined;
+            filePath = firstFile?.relativePath || firstFile?.filePath;
         } else if (['write', 'create', 'file_write', 'read', 'view', 'file_read', 'cat'].includes(part.tool)) {
             filePath = input?.filePath || input?.file_path || input?.path || metadata?.filePath || metadata?.file_path || metadata?.path;
         }
