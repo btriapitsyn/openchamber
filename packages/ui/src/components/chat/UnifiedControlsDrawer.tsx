@@ -1,20 +1,37 @@
 import React from 'react';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { cn } from '@/lib/utils';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
-import { useIsTextTruncated } from '@/hooks/useIsTextTruncated';
 import {
     formatEffortLabel,
     getAgentDisplayName,
-    getModelDisplayName,
     getQuickEffortOptions,
     isPrimaryMode,
     parseEffortVariant,
 } from './mobileControlsUtils';
+
+const MAX_QUICK_AGENTS = 3;
+
+const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+});
+
+const formatTokens = (value?: number | null) => {
+    if (typeof value !== 'number' || Number.isNaN(value)) {
+        return null;
+    }
+    if (value === 0) {
+        return '0';
+    }
+    const formatted = COMPACT_NUMBER_FORMATTER.format(value);
+    return formatted.endsWith('.0') ? formatted.slice(0, -2) : formatted;
+};
 
 interface UnifiedControlsDrawerProps {
     open: boolean;
@@ -31,36 +48,6 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
     onOpenModel,
     onOpenEffort,
 }) => {
-    const AgentRow: React.FC<{
-        name: string;
-        isSelected: boolean;
-        description?: string | null;
-        onSelect: () => void;
-    }> = ({ name, isSelected, description, onSelect }) => {
-        const descriptionRef = React.useRef<HTMLSpanElement>(null);
-        const shouldScroll = useIsTextTruncated(descriptionRef, [description, name]);
-
-        return (
-            <button
-                type="button"
-                onClick={onSelect}
-                className={cn(
-                    'flex min-h-[44px] w-full items-start justify-between gap-2 rounded-xl border px-2 py-2 text-left',
-                    isSelected ? 'border-primary/30 bg-primary/10' : 'border-border/40 hover:bg-muted/50'
-                )}
-                aria-pressed={isSelected}
-            >
-                <div className="min-w-0 flex-1">
-                    <div className="typography-meta font-medium text-foreground truncate">{name}</div>
-                    {description ? (
-                        <span ref={descriptionRef} className="block min-w-0 overflow-hidden typography-micro text-muted-foreground">
-                            <span className={cn('marquee-text', shouldScroll && 'marquee-text--auto')}>{description}</span>
-                        </span>
-                    ) : null}
-                </div>
-            </button>
-        );
-    };
     const {
         providers,
         currentProviderId,
@@ -71,9 +58,9 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
         setProvider,
         setModel,
         setCurrentVariant,
-        getCurrentProvider,
         getCurrentModelVariants,
         getVisibleAgents,
+        getModelMetadata,
     } = useConfigStore();
     const { addRecentModel, addRecentAgent, addRecentEffort, recentAgents, recentEfforts } = useUIStore();
     const { recentModelsList } = useModelLists();
@@ -100,14 +87,14 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
 
     const quickAgentNames = React.useMemo(() => {
         const fallback = primaryAgents.length > 0 ? primaryAgents.map((agent) => agent.name) : agents.map((agent) => agent.name);
-        const base = fallback.slice(0, 4);
+        const base = fallback.slice(0, MAX_QUICK_AGENTS);
         const orderedRecents = recentAgentNames.slice().reverse();
         for (const recent of orderedRecents) {
             if (!recent || base.includes(recent)) {
                 continue;
             }
             base.unshift(recent);
-            base.splice(4);
+            base.splice(MAX_QUICK_AGENTS);
         }
         if (uiAgentName && !base.includes(uiAgentName)) {
             if (base.length > 0) {
@@ -121,20 +108,25 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
 
     const hasAgentOverflow = agents.some((agent) => !quickAgentNames.includes(agent.name));
 
-    const currentProvider = getCurrentProvider();
-    const currentModelLabel = getModelDisplayName(currentProvider, currentModelId);
-    const recentModels = recentModelsList.slice(0, 4);
-    const hasCurrentInRecents = recentModels.some(
+    const recentModelsBase = recentModelsList.slice(0, 4);
+    const hasCurrentInRecents = recentModelsBase.some(
         (entry) => entry.providerID === currentProviderId && entry.modelID === currentModelId
     );
-    const currentModelRow = currentProviderId && currentModelId
-        ? {
-            providerID: currentProviderId,
-            modelID: currentModelId,
-            providerName: currentProvider?.name || currentProviderId,
-            modelName: currentModelLabel,
+    // If current model not in recents, prepend it so it's always visible
+    const recentModels = React.useMemo(() => {
+        if (hasCurrentInRecents || !currentProviderId || !currentModelId) {
+            return recentModelsBase;
         }
-        : null;
+        const currentProvider = providers.find((p) => p.id === currentProviderId);
+        const currentModel = currentProvider?.models?.find((m) => m.id === currentModelId);
+        if (!currentModel) {
+            return recentModelsBase;
+        }
+        return [
+            { providerID: currentProviderId, modelID: currentModelId, provider: currentProvider, model: currentModel },
+            ...recentModelsBase.slice(0, 3),
+        ];
+    }, [recentModelsBase, hasCurrentInRecents, currentProviderId, currentModelId, providers]);
 
     const variants = getCurrentModelVariants();
     const hasEffort = variants.length > 0;
@@ -221,100 +213,92 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
                     <div className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground">
                         Agent
                     </div>
-                    {agents.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-border/50 px-2 py-2 typography-meta text-muted-foreground">
-                            No agents configured
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-2">
-                            {quickAgentNames.map((agentName) => {
-                                const agent = agents.find((entry) => entry.name === agentName);
+                    <div className="rounded-xl border border-border/40 overflow-hidden">
+                        {agents.length === 0 ? (
+                            <div className="px-3 py-2 typography-meta text-muted-foreground">
+                                No agents configured
+                            </div>
+                        ) : (
+                            quickAgentNames.map((agentName) => {
                                 const displayName = getAgentDisplayName(agents, agentName);
+                                const isSelected = agentName === uiAgentName;
                                 return (
-                                    <AgentRow
+                                    <button
                                         key={agentName}
-                                        name={displayName}
-                                        description={agent?.description}
-                                        isSelected={agentName === uiAgentName}
-                                        onSelect={() => handleAgentSelect(agentName)}
-                                    />
+                                        type="button"
+                                        onClick={() => handleAgentSelect(agentName)}
+                                        className={cn(
+                                            'flex min-h-[44px] w-full items-center border-b border-border/30 px-3 py-2 text-left last:border-b-0',
+                                            isSelected ? 'bg-primary/10' : ''
+                                        )}
+                                        aria-pressed={isSelected}
+                                    >
+                                        <span className="typography-meta font-medium text-foreground truncate">
+                                            {displayName}
+                                        </span>
+                                    </button>
                                 );
-                            })}
-                            {hasAgentOverflow && (
-                                <button
-                                    type="button"
-                                    onClick={onOpenAgent}
-                                    className="flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border/40 px-2 py-2 typography-meta font-medium text-muted-foreground hover:bg-muted/50"
-                                    aria-label="More agents"
-                                >
-                                    ...
-                                </button>
-                            )}
-                        </div>
-                    )}
+                            })
+                        )}
+                        {hasAgentOverflow && (
+                            <button
+                                type="button"
+                                onClick={onOpenAgent}
+                                className="flex min-h-[44px] w-full items-center justify-center border-t border-border/30 px-3 py-2 typography-meta font-medium text-muted-foreground"
+                                aria-label="More agents"
+                            >
+                                ...
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex flex-col gap-2">
                     <div className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground">
                         Model
                     </div>
-                    <div className="flex flex-col gap-2">
-                        {!hasCurrentInRecents && currentModelRow && (
-                            <button
-                                type="button"
-                                onClick={() => handleModelSelect(currentModelRow.providerID, currentModelRow.modelID)}
-                                className={cn(
-                                    'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-xl border px-2 py-2 text-left',
-                                    currentProviderId === currentModelRow.providerID && currentModelId === currentModelRow.modelID
-                                        ? 'border-primary/30 bg-primary/10'
-                                        : 'border-border/40 hover:bg-muted/50'
-                                )}
-                            >
-                                <div className="min-w-0">
-                                    <div className="typography-meta font-medium text-foreground truncate">
-                                        {currentModelRow.modelName}
-                                    </div>
-                                    <div className="typography-micro text-muted-foreground">Current model</div>
-                                </div>
-                                <span className="typography-micro text-muted-foreground">{currentModelRow.providerName}</span>
-                            </button>
+                    <div className="rounded-xl border border-border/40 overflow-hidden">
+                        {recentModels.length === 0 && !hasCurrentInRecents && (
+                            <div className="px-3 py-2 typography-meta text-muted-foreground">
+                                No recent models
+                            </div>
                         )}
-
-                        {recentModels.map(({ providerID, modelID, provider, model }) => {
+                        {recentModels.map(({ providerID, modelID, model }) => {
                             const isSelected = providerID === currentProviderId && modelID === currentModelId;
                             const modelName = typeof model?.name === 'string' && model.name.trim().length > 0
                                 ? model.name
                                 : modelID;
+                            const metadata = getModelMetadata(providerID, modelID);
+                            const ctxTokens = formatTokens(metadata?.limit?.context);
+                            const outTokens = formatTokens(metadata?.limit?.output);
                             return (
                                 <button
                                     key={`recent-${providerID}-${modelID}`}
                                     type="button"
                                     onClick={() => handleModelSelect(providerID, modelID)}
                                     className={cn(
-                                        'flex min-h-[44px] w-full items-center justify-between gap-2 rounded-xl border px-2 py-2 text-left',
-                                        isSelected ? 'border-primary/30 bg-primary/10' : 'border-border/40 hover:bg-muted/50'
+                                        'flex min-h-[44px] w-full items-center gap-2 border-b border-border/30 px-3 py-2 text-left last:border-b-0',
+                                        isSelected ? 'bg-primary/10' : ''
                                     )}
                                 >
-                                    <span className="typography-meta font-medium text-foreground truncate min-w-0">
+                                    <ProviderLogo providerId={providerID} className="h-4 w-4 flex-shrink-0" />
+                                    <span className="typography-meta font-medium text-foreground truncate min-w-0 flex-1">
                                         {modelName}
                                     </span>
-                                    <span className="typography-micro text-muted-foreground">
-                                        {provider?.name || providerID}
-                                    </span>
+                                    {(ctxTokens || outTokens) && (
+                                        <span className="typography-micro text-muted-foreground whitespace-nowrap flex-shrink-0">
+                                            {ctxTokens && `${ctxTokens} ctx`}
+                                            {ctxTokens && outTokens && ' • '}
+                                            {outTokens && `${outTokens} out`}
+                                        </span>
+                                    )}
                                 </button>
                             );
                         })}
-
-                        {recentModels.length === 0 && !currentModelRow && (
-                            <div className="rounded-xl border border-dashed border-border/50 px-2 py-2 typography-meta text-muted-foreground">
-                                Not selected
-                            </div>
-                        )}
-
                         <button
                             type="button"
                             onClick={onOpenModel}
-                            className="flex min-h-[44px] w-full items-center justify-center rounded-xl border border-border/40 px-2 py-2 typography-meta font-medium text-muted-foreground hover:bg-muted/50"
+                            className="flex min-h-[44px] w-full items-center justify-center border-t border-border/30 px-3 py-2 typography-meta font-medium text-muted-foreground"
                             aria-label="More models"
                         >
                             ...

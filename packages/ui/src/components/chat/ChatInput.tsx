@@ -1527,8 +1527,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                     <div className="flex items-center flex-shrink-0 gap-x-1">
                                         {attachmentsControls}
                                     </div>
-                                    <div className="flex flex-1 items-center gap-x-1 min-w-0">
+                                    <div className="flex flex-1 items-center justify-center min-w-0">
                                         <StatusChip onClick={handleOpenMobileControls} className="min-w-0" />
+                                    </div>
+                                    <div className="flex-shrink-0">
                                         {actionButton}
                                     </div>
                                 </div>
