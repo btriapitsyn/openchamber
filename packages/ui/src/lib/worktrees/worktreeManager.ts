@@ -61,6 +61,21 @@ const deriveSdkWorktreeNameFromDirectory = (directory: string): string => {
   return parts[parts.length - 1] ?? normalized;
 };
 
+type WorktreeRemovalParams = Record<string, unknown>;
+type WorktreeRemovalMethod = (params?: WorktreeRemovalParams) => Promise<unknown>;
+
+const getWorktreeMethod = (client: unknown, key: string): WorktreeRemovalMethod | null => {
+  if (!client || (typeof client !== 'object' && typeof client !== 'function')) {
+    return null;
+  }
+  const record = client as Record<string, unknown>;
+  const candidate = record[key];
+  if (typeof candidate !== 'function') {
+    return null;
+  }
+  return candidate as WorktreeRemovalMethod;
+};
+
 export const buildSdkStartCommand = (args: {
   projectDirectory: string;
   setupCommands: string[];
@@ -229,7 +244,23 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
 
   if (worktree.source === 'sdk') {
     const scoped = opencodeClient.getScopedApiClient(projectDirectory);
-    await scoped.worktree.remove({ worktreeRemoveInput: { directory: worktree.path } });
+    const worktreeClient = scoped.worktree as unknown;
+    const removeMethod = getWorktreeMethod(worktreeClient, 'remove');
+    if (removeMethod) {
+      await removeMethod({ worktreeRemoveInput: { directory: worktree.path } });
+    } else {
+      const deleteMethod = getWorktreeMethod(worktreeClient, 'delete');
+      if (deleteMethod) {
+        await deleteMethod({ worktreeDeleteInput: { directory: worktree.path } });
+      } else {
+        const archiveMethod = getWorktreeMethod(worktreeClient, 'archive');
+        if (archiveMethod) {
+          await archiveMethod({ worktreeArchiveInput: { directory: worktree.path } });
+        } else {
+          throw new Error('Worktree removal is not supported by this SDK version.');
+        }
+      }
+    }
 
     // Best-effort branch cleanup. Some OpenCode builds may keep the branch.
     const branchName = (worktree.branch || '').replace(/^refs\/heads\//, '').trim();
