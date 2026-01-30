@@ -22,6 +22,8 @@ import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomp
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
+import { StatusChip } from './StatusChip';
+import { UnifiedControlsDrawer } from './UnifiedControlsDrawer';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
@@ -31,6 +33,7 @@ import { useFileStore } from '@/stores/fileStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { StopIcon } from '@/components/icons/StopIcon';
+import type { MobileControlsPanel } from './mobileControlsUtils';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -108,6 +111,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [showSkillAutocomplete, setShowSkillAutocomplete] = React.useState(false);
     const [skillQuery, setSkillQuery] = React.useState('');
     const [textareaSize, setTextareaSize] = React.useState<{ height: number; maxHeight: number } | null>(null);
+    const [mobileControlsOpen, setMobileControlsOpen] = React.useState(false);
+    const [mobileControlsPanel, setMobileControlsPanel] = React.useState<MobileControlsPanel>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const mentionRef = React.useRef<FileMentionHandle>(null);
@@ -201,6 +206,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         } catch {
             // ignored
         }
+    }, [isMobile]);
+
+    const handleOpenMobileControls = React.useCallback(() => {
+        if (!isMobile) {
+            return;
+        }
+
+        if (mobileControlsOpen) {
+            setMobileControlsOpen(false);
+            return;
+        }
+
+        setMobileControlsPanel(null);
+
+        if (isKeyboardOpen) {
+            textareaRef.current?.blur();
+            requestAnimationFrame(() => {
+                setMobileControlsOpen(true);
+            });
+            return;
+        }
+
+        setMobileControlsOpen(true);
+    }, [isMobile, isKeyboardOpen, mobileControlsOpen]);
+
+    const handleCloseMobileControls = React.useCallback(() => {
+        setMobileControlsOpen(false);
+    }, []);
+
+    const handleOpenMobilePanel = React.useCallback((panel: MobileControlsPanel) => {
+        if (!isMobile) {
+            return;
+        }
+        setMobileControlsOpen(false);
+        textareaRef.current?.blur();
+        requestAnimationFrame(() => {
+            setMobileControlsPanel(panel);
+        });
+    }, [isMobile]);
+
+    const handleReturnToUnifiedControls = React.useCallback(() => {
+        if (!isMobile) {
+            return;
+        }
+        setMobileControlsPanel(null);
+        requestAnimationFrame(() => {
+            setMobileControlsOpen(true);
+        });
     }, [isMobile]);
 
     // Consume pending input text (e.g., from revert action)
@@ -975,6 +1028,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [currentSessionId, isMobile]);
 
     React.useEffect(() => {
+        if (!isMobile) {
+            setMobileControlsOpen(false);
+            setMobileControlsPanel(null);
+        }
+    }, [isMobile]);
+
+    React.useEffect(() => {
         if (abortPromptSessionId && abortPromptSessionId !== currentSessionId) {
             clearAbortPrompt();
         }
@@ -1462,17 +1522,30 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         data-chat-input-footer="true"
                     >
                         {isMobile ? (
-                            <div className="flex w-full items-center gap-x-1.5">
-                                <div className="flex items-center flex-shrink-0 gap-x-1">
-                                    {attachmentsControls}
-                                </div>
-                                <div className="flex flex-1 items-center justify-end gap-x-1 min-w-0">
-                                    <div className="flex flex-1 min-w-0 justify-end overflow-hidden">
-                                        <ModelControls className={cn('w-full flex items-center justify-end min-w-0')} />
+                            <>
+                                <div className="flex w-full items-center gap-x-1.5">
+                                    <div className="flex items-center flex-shrink-0 gap-x-1">
+                                        {attachmentsControls}
                                     </div>
-                                    {actionButton}
+                                    <div className="flex flex-1 items-center gap-x-1 min-w-0">
+                                        <StatusChip onClick={handleOpenMobileControls} className="min-w-0" />
+                                        {actionButton}
+                                    </div>
                                 </div>
-                            </div>
+                                <ModelControls
+                                    className="hidden"
+                                    mobilePanel={mobileControlsPanel}
+                                    onMobilePanelChange={setMobileControlsPanel}
+                                    onMobilePanelSelection={handleReturnToUnifiedControls}
+                                />
+                                <UnifiedControlsDrawer
+                                    open={mobileControlsOpen}
+                                    onClose={handleCloseMobileControls}
+                                    onOpenAgent={() => handleOpenMobilePanel('agent')}
+                                    onOpenModel={() => handleOpenMobilePanel('model')}
+                                    onOpenEffort={() => handleOpenMobilePanel('variant')}
+                                />
+                            </>
                         ) : (
                             <>
                                 <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
