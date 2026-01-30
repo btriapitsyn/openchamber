@@ -119,8 +119,7 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
         return base;
     }, [agents, primaryAgents, recentAgentNames, uiAgentName]);
 
-    const agentPoolCount = primaryAgents.length > 0 ? primaryAgents.length : agents.length;
-    const hasAgentOverflow = agentPoolCount > quickAgentNames.length;
+    const hasAgentOverflow = agents.some((agent) => !quickAgentNames.includes(agent.name));
 
     const currentProvider = getCurrentProvider();
     const currentModelLabel = getModelDisplayName(currentProvider, currentModelId);
