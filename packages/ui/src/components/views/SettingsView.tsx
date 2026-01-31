@@ -25,6 +25,8 @@ import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
 import { ProvidersSidebar } from '@/components/sections/providers/ProvidersSidebar';
 import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
+import { UsageSidebar } from '@/components/sections/usage/UsageSidebar';
+import { UsagePage } from '@/components/sections/usage/UsagePage';
 import { GitIdentitiesSidebar } from '@/components/sections/git-identities/GitIdentitiesSidebar';
 import { GitIdentitiesPage } from '@/components/sections/git-identities/GitIdentitiesPage';
 import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPage';
@@ -305,6 +307,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <SkillsSidebar onItemSelect={handleMobileSidebarClick} />;
       case 'providers':
         return <ProvidersSidebar onItemSelect={handleMobileSidebarClick} />;
+      case 'usage':
+        return <UsageSidebar onItemSelect={handleMobileSidebarClick} />;
       case 'git-identities':
         return <GitIdentitiesSidebar onItemSelect={handleMobileSidebarClick} />;
       default:
@@ -324,6 +328,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <SkillsPage />;
       case 'providers':
         return <ProvidersPage />;
+      case 'usage':
+        return <UsagePage />;
       case 'git-identities':
         return <GitIdentitiesPage />;
       case 'settings':
