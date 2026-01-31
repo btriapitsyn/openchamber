@@ -786,6 +786,12 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.notifyOnSubtasks === 'boolean') {
     result.notifyOnSubtasks = candidate.notifyOnSubtasks;
   }
+  if (typeof candidate.usageAutoRefresh === 'boolean') {
+    result.usageAutoRefresh = candidate.usageAutoRefresh;
+  }
+  if (typeof candidate.usageRefreshIntervalMs === 'number' && Number.isFinite(candidate.usageRefreshIntervalMs)) {
+    result.usageRefreshIntervalMs = Math.max(30000, Math.min(300000, Math.round(candidate.usageRefreshIntervalMs)));
+  }
   if (typeof candidate.autoDeleteEnabled === 'boolean') {
     result.autoDeleteEnabled = candidate.autoDeleteEnabled;
   }
@@ -4111,6 +4117,14 @@ async function main(options = {}) {
     return authLibrary;
   };
 
+  let quotaProviders = null;
+  const getQuotaProviders = async () => {
+    if (!quotaProviders) {
+      quotaProviders = await import('./lib/quota-providers.js');
+    }
+    return quotaProviders;
+  };
+
   // ================= GitHub OAuth (Device Flow) =================
 
   // Note: scopes may be overridden via OPENCHAMBER_GITHUB_SCOPES or settings.json (see github-auth.js).
@@ -5239,6 +5253,32 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to get provider sources:', error);
       res.status(500).json({ error: error.message || 'Failed to get provider sources' });
+    }
+  });
+
+  app.get('/api/quota/providers', async (_req, res) => {
+    try {
+      const { listConfiguredQuotaProviders } = await getQuotaProviders();
+      const providers = listConfiguredQuotaProviders();
+      res.json({ providers });
+    } catch (error) {
+      console.error('Failed to list quota providers:', error);
+      res.status(500).json({ error: error.message || 'Failed to list quota providers' });
+    }
+  });
+
+  app.get('/api/quota/:providerId', async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      if (!providerId) {
+        return res.status(400).json({ error: 'Provider ID is required' });
+      }
+      const { fetchQuotaForProvider } = await getQuotaProviders();
+      const result = await fetchQuotaForProvider(providerId);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to fetch quota:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch quota' });
     }
   });
 
