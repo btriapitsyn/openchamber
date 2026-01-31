@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import { createOpencodeServer } from '@opencode-ai/sdk/server';
+import { createOpencodeServer } from '@opencode-ai/sdk/v2/server';
 
 const READY_CHECK_TIMEOUT_MS = 30000;
 
@@ -86,6 +86,7 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
 }
 
 async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<ReadyResult> {
+  let outputChannel = vscode.window.createOutputChannel('OpenChamberManager');
   const start = Date.now();
   const candidates = getCandidateBaseUrls(serverUrl);
   let attempts = 0;
@@ -98,15 +99,26 @@ async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<Ready
         const timeout = setTimeout(() => controller.abort(), 3000);
 
         // Keep using /config since the UI proxies to it (via /api -> strip prefix).
-        const url = new URL(`${baseUrl}/config`);
+        const url = new URL(`${baseUrl}/global/health`);
         const res = await fetch(url.toString(), {
           method: 'GET',
           headers: { Accept: 'application/json' },
           signal: controller.signal,
         });
 
+        let body: { healthy?: boolean, version?: string } | null = null;
+        try {
+          body = (await res.json()) as { healthy?: boolean, version?: string };
+        } catch {
+          body = null;
+        }
+
         clearTimeout(timeout);
-        if (res.ok) {
+        outputChannel?.appendLine(
+          `Health check to ${url.toString()} returned ${res.status} with body: ${JSON.stringify(body)}`
+        );
+
+        if (res.ok && body?.healthy === true) {
           return { ok: true, baseUrl, elapsedMs: Date.now() - start, attempts };
         }
       } catch {
@@ -244,7 +256,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
       if (server && server.url) {
         // Validate readiness for the current workspace context.
-        const ready = await waitForReady(server.url, 10000);
+        const ready = await waitForReady(server.url, READY_CHECK_TIMEOUT_MS);
         lastReadyElapsedMs = ready.elapsedMs;
         lastReadyAttempts = ready.attempts;
         if (ready.ok) {
