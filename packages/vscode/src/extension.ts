@@ -415,6 +415,7 @@ export async function activate(context: vscode.ExtensionContext) {
       };
 
       const probeTargets: Array<{ label: string; path: string; includeDirectory?: boolean; timeoutMs?: number }> = [
+        { label: 'health', path: '/global/health', includeDirectory: false },
         { label: 'config', path: '/config', includeDirectory: true },
         { label: 'providers', path: '/config/providers', includeDirectory: true },
         // Can be slower on large configs; keep the probe from producing false negatives.
@@ -446,6 +447,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const lines = [
         `Time: ${new Date().toISOString()}`,
         `OpenChamber version: ${extensionVersion || '(unknown)'}`,
+        `OpenCode Version: ${debug?.version ?? '(unknown)'}`,
         `VS Code version: ${vscode.version}`,
         `Platform: ${process.platform} ${process.arch}`,
         `Workspace folders: ${workspaceFolders.length}${workspaceFolders.length ? ` (${workspaceFolders.join(', ')})` : ''}`,
