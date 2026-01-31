@@ -6116,20 +6116,27 @@ async function main(options = {}) {
 
   app.post('/api/fs/mkdir', async (req, res) => {
     try {
-      const { path: dirPath } = req.body;
+      const { path: dirPath, allowOutsideWorkspace } = req.body ?? {};
 
-      if (!dirPath) {
+      if (typeof dirPath !== 'string' || !dirPath.trim()) {
         return res.status(400).json({ error: 'Path is required' });
       }
 
-      const resolved = await resolveWorkspacePathFromContext(req, dirPath);
-      if (!resolved.ok) {
-        return res.status(400).json({ error: resolved.error });
+      let resolvedPath = '';
+
+      if (allowOutsideWorkspace) {
+        resolvedPath = path.resolve(normalizeDirectoryPath(dirPath));
+      } else {
+        const resolved = await resolveWorkspacePathFromContext(req, dirPath);
+        if (!resolved.ok) {
+          return res.status(400).json({ error: resolved.error });
+        }
+        resolvedPath = resolved.resolved;
       }
 
-      await fsPromises.mkdir(resolved.resolved, { recursive: true });
+      await fsPromises.mkdir(resolvedPath, { recursive: true });
 
-      res.json({ success: true, path: resolved.resolved });
+      res.json({ success: true, path: resolvedPath });
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });
