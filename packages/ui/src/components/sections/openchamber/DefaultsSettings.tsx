@@ -4,9 +4,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getDesktopSettings, isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useQuotaStore } from '@/stores/useQuotaStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel } from '@/lib/utils';
 
@@ -48,6 +50,11 @@ export const DefaultsSettings: React.FC = () => {
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
   const setSettingsAutoCreateWorktree = useConfigStore((state) => state.setSettingsAutoCreateWorktree);
   const providers = useConfigStore((state) => state.providers);
+  const usageAutoRefresh = useQuotaStore((state) => state.autoRefresh);
+  const usageRefreshIntervalMs = useQuotaStore((state) => state.refreshIntervalMs);
+  const setUsageAutoRefresh = useQuotaStore((state) => state.setAutoRefresh);
+  const setUsageRefreshInterval = useQuotaStore((state) => state.setRefreshInterval);
+  const loadUsageSettings = useQuotaStore((state) => state.loadSettings);
 
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
   const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
@@ -123,6 +130,10 @@ export const DefaultsSettings: React.FC = () => {
     };
     loadSettings();
   }, []);
+
+  React.useEffect(() => {
+    void loadUsageSettings();
+  }, [loadUsageSettings]);
 
   const handleModelChange = React.useCallback(async (providerId: string, modelId: string) => {
     const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
@@ -242,6 +253,39 @@ export const DefaultsSettings: React.FC = () => {
     }
   }, [setSettingsAutoCreateWorktree]);
 
+  const persistUsageSettings = React.useCallback(async (changes: { usageAutoRefresh?: boolean; usageRefreshIntervalMs?: number }) => {
+    try {
+      await updateDesktopSettings(changes);
+
+      if (!isDesktopRuntime()) {
+        const response = await fetch('/api/config/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(changes)
+        });
+        if (!response.ok) {
+          console.warn('Failed to save usage settings to server:', response.status, response.statusText);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to save usage settings:', error);
+    }
+  }, []);
+
+  const handleUsageAutoRefreshChange = React.useCallback(async (enabled: boolean) => {
+    setUsageAutoRefresh(enabled);
+    await persistUsageSettings({ usageAutoRefresh: enabled });
+  }, [persistUsageSettings, setUsageAutoRefresh]);
+
+  const handleUsageRefreshIntervalChange = React.useCallback(async (value: string) => {
+    const next = Number(value);
+    if (!Number.isFinite(next)) {
+      return;
+    }
+    setUsageRefreshInterval(next);
+    await persistUsageSettings({ usageRefreshIntervalMs: next });
+  }, [persistUsageSettings, setUsageRefreshInterval]);
+
   if (isLoading) {
     return null;
   }
@@ -300,7 +344,7 @@ export const DefaultsSettings: React.FC = () => {
          </div>
        </div>
 
-          {(parsedModel.providerId || defaultAgent) && (
+      {(parsedModel.providerId || defaultAgent) && (
         <div className="typography-meta text-muted-foreground">
           New sessions will start with:{' '}
           {parsedModel.providerId && (
@@ -313,6 +357,42 @@ export const DefaultsSettings: React.FC = () => {
           {defaultAgent && <span className="text-foreground">{defaultAgent}</span>}
         </div>
       )}
+
+      <div className="border-t border-border/40 pt-4 space-y-3">
+        <div className="typography-ui-header font-semibold text-foreground">Usage Refresh</div>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="typography-ui-label text-foreground">Auto-refresh</span>
+            <span className="typography-meta text-muted-foreground">
+              Automatically refresh provider usage data
+            </span>
+          </div>
+          <Switch checked={usageAutoRefresh} onCheckedChange={handleUsageAutoRefreshChange} />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col">
+            <span className="typography-ui-label text-foreground">Refresh interval</span>
+            <span className="typography-meta text-muted-foreground">
+              How often to fetch new quota data
+            </span>
+          </div>
+          <Select
+            value={String(usageRefreshIntervalMs)}
+            onValueChange={handleUsageRefreshIntervalChange}
+            disabled={!usageAutoRefresh}
+          >
+            <SelectTrigger className="w-auto max-w-xs typography-meta text-foreground">
+              <SelectValue placeholder="Select interval" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30000" className="pr-2 [&>span:first-child]:hidden">30 seconds</SelectItem>
+              <SelectItem value="60000" className="pr-2 [&>span:first-child]:hidden">1 minute</SelectItem>
+              <SelectItem value="300000" className="pr-2 [&>span:first-child]:hidden">5 minutes</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       {!isVSCode && (
         <div className="pt-2">
