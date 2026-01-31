@@ -37,6 +37,9 @@ export const UsagePage: React.FC = () => {
     if (selectedProviderId) {
       return;
     }
+    if (results.length === 0) {
+      return;
+    }
     const firstConfigured = results.find((entry) => entry.configured)?.providerId;
     setSelectedProvider(firstConfigured ?? QUOTA_PROVIDERS[0]?.id ?? null);
   }, [results, selectedProviderId, setSelectedProvider]);
