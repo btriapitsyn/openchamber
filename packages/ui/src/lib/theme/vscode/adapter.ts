@@ -238,8 +238,6 @@ const applyAlpha = (color: string, opacity: number): string => {
   return color;
 };
 
-const forceOpaque = (color: string): string => applyAlpha(color, 1);
-
 const readKind = (preferred?: VSCodeThemeKind): VSCodeThemeKind => {
   if (preferred === 'light' || preferred === 'dark' || preferred === 'high-contrast') {
     return preferred;

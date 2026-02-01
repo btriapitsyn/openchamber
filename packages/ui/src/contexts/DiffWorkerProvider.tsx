@@ -225,9 +225,16 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
 
   const workerThemeKey = `${lightTheme.metadata.id}:${darkTheme.metadata.id}:${isDark ? 'dark' : 'light'}`;
 
+  const renderTheme = useMemo(
+    () => ({
+      light: lightTheme.metadata.id,
+      dark: darkTheme.metadata.id,
+    }),
+    [darkTheme.metadata.id, lightTheme.metadata.id],
+  );
+
   return (
     <WorkerPoolContextProvider
-      key={`pierre-worker-pool:${lightTheme.metadata.id}:${darkTheme.metadata.id}:${isDark ? 'dark' : 'light'}`}
       poolOptions={{
         workerFactory,
         poolSize: 2,
@@ -237,10 +244,7 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
     >
       <WorkerPoolWarmup
         themeKey={workerThemeKey}
-        renderTheme={{
-          light: lightTheme.metadata.id,
-          dark: darkTheme.metadata.id,
-        }}
+        renderTheme={renderTheme}
       >
         {children}
       </WorkerPoolWarmup>
