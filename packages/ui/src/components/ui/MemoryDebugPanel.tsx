@@ -134,12 +134,12 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
                     <RiPulseLine className="h-3 w-3 text-primary animate-pulse" />
                   )}
                   {stat.isZombie && (
-                    <span className="text-warning">!</span>
+                    <span className="text-status-warning">!</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`font-mono ${
-                    stat.messageCount > MEMORY_LIMITS.VIEWPORT_MESSAGES ? 'text-warning' : ''
+                    stat.messageCount > MEMORY_LIMITS.VIEWPORT_MESSAGES ? 'text-status-warning' : ''
                   }`}>
                     {stat.messageCount} msgs
                   </span>

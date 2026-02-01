@@ -646,8 +646,8 @@ Nice-to-have:
           {directNumber && projectDirectory && github && connected ? (
             <div
               className={cn(
-                'group flex items-center gap-2 py-1.5 hover:bg-muted/30 rounded transition-colors cursor-pointer',
-                startingNumber === directNumber && 'bg-muted/30'
+                'group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer',
+                startingNumber === directNumber && 'bg-interactive-selection/30'
               )}
               onClick={() => void startSession(directNumber)}
             >
@@ -675,10 +675,10 @@ Nice-to-have:
                 key={pr.number}
                 className={cn(
                   'group flex items-start gap-2 py-1.5 rounded transition-colors',
-                  startingNumber === pr.number && 'bg-muted/30',
+                  startingNumber === pr.number && 'bg-interactive-selection/30',
                   disabledByWorktree
                     ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:bg-muted/30 cursor-pointer'
+                    : 'hover:bg-interactive-hover/30 cursor-pointer'
                 )}
                 onClick={() => {
                   if (disabledByWorktree) return;

@@ -6,8 +6,8 @@ import { RiSendPlane2Line } from '@remixicon/react';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { ensureFlexokiThemesRegistered } from '@/lib/shiki/registerFlexokiThemes';
-import { flexokiThemeNames } from '@/lib/shiki/flexokiThemes';
+import { ensurePierreThemeRegistered, getResolvedShikiTheme } from '@/lib/shiki/appThemeRegistry';
+import { getDefaultTheme } from '@/lib/theme/themes';
 
 import { toast } from '@/components/ui';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,51 +52,51 @@ const WEBKIT_SCROLL_FIX_CSS = `
   [data-code] {
     -webkit-overflow-scrolling: touch;
   }
-  
+
   /* Mobile touch selection support */
   [data-line-number] {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     cursor: pointer;
   }
-  
+
   /* Ensure interactive line numbers work on touch */
   pre[data-interactive-line-numbers] [data-line-number] {
     touch-action: manipulation;
   }
   /* Reduce hunk separator height */
-  [data-separator-content] {
-    height: 24px !important;
-  }
-  [data-expand-button] {
-    height: 24px !important;
-    width: 24px !important;
-  }
-  [data-separator-multi-button] {
-    row-gap: 0 !important;
-  }
-  [data-expand-up] {
-    height: 12px !important;
-    min-height: 12px !important;
-    max-height: 12px !important;
-    margin: 0 !important;
-    margin-top: 3px !important;
-    padding: 0 !important;
-    border-radius: 4px 4px 0 0 !important;
-  }
-  [data-expand-down] {
-    height: 12px !important;
-    min-height: 12px !important;
-    max-height: 12px !important;
-    margin: 0 !important;
-    margin-top: -3px !important;
-    padding: 0 !important;
-    border-radius: 0 0 4px 4px !important;
-  }
+  // [data-separator-content] {
+  //   height: 24px !important;
+  // }
+  // [data-expand-button] {
+  //   height: 24px !important;
+  //   width: 24px !important;
+  // }
+  // [data-separator-multi-button] {
+  //   row-gap: 0 !important;
+  // }
+  // [data-expand-up] {
+  //   height: 12px !important;
+  //   min-height: 12px !important;
+  //   max-height: 12px !important;
+  //   margin: 0 !important;
+  //   margin-top: 3px !important;
+  //   padding: 0 !important;
+  //   border-radius: 4px 4px 0 0 !important;
+  // }
+  // [data-expand-down] {
+  //   height: 12px !important;
+  //   min-height: 12px !important;
+  //   max-height: 12px !important;
+  //   margin: 0 !important;
+  //   margin-top: -3px !important;
+  //   padding: 0 !important;
+  //   border-radius: 0 0 4px 4px !important;
+  // }
 `;
 
 // Fast cache key - use length + samples instead of full hash
-function getCacheKey(fileName: string, original: string, modified: string): string {
+function getCacheKey(fileName: string, original: string, modified: string, themeKey: string): string {
   // Sample a few characters instead of hashing entire content
   const sampleOriginal = original.length > 100
     ? `${original.slice(0, 50)}${original.slice(-50)}`
@@ -104,7 +104,7 @@ function getCacheKey(fileName: string, original: string, modified: string): stri
   const sampleModified = modified.length > 100
     ? `${modified.slice(0, 50)}${modified.slice(-50)}`
     : modified;
-  return `${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
+  return `${themeKey}::${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
 }
 
 const extractSelectedCode = (original: string, modified: string, range: SelectedLineRange): string => {
@@ -112,13 +112,13 @@ const extractSelectedCode = (original: string, modified: string, range: Selected
   const isOriginal = range.side === 'deletions';
   const content = isOriginal ? original : modified;
   const lines = content.split('\n');
-  
+
   // Ensure bounds
   const startLine = Math.max(1, range.start);
   const endLine = Math.min(lines.length, range.end);
-  
+
   if (startLine > endLine) return '';
-  
+
   return lines.slice(startLine - 1, endLine).join('\n');
 };
 
@@ -133,47 +133,65 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 }) => {
   const { isMobile } = useDeviceInfo();
   const { inputBarOffset, isKeyboardOpen } = useUIStore();
-  
+
   const themeSystem = useOptionalThemeSystem();
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
+
+  const fallbackLight = getDefaultTheme(false);
+  const fallbackDark = getDefaultTheme(true);
+
+  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id;
+  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id;
+
+  const lightTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ??
+    fallbackLight;
+  const darkTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
+    fallbackDark;
 
   const setActiveMainTab = useUIStore(state => state.setActiveMainTab);
 
   const [selection, setSelection] = useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = useState('');
   const commentContainerRef = useRef<HTMLDivElement>(null);
-  
-  // Calculate initial center synchronously to avoid flicker
-  const getMainContentCenter = useCallback(() => {
-    if (isMobile) return '50%';
+
+  // Calculate initial center and width synchronously to avoid flicker
+  const getMainContentMetrics = useCallback(() => {
+    if (isMobile) return { center: '50%', width: '100vw' };
     const mainContent = document.querySelector('main.flex-1');
     if (mainContent) {
       const rect = mainContent.getBoundingClientRect();
-      return `${rect.left + rect.width / 2}px`;
+      return {
+        center: `${rect.left + rect.width / 2}px`,
+        width: `${rect.width}px`
+      };
     }
-    return '50%';
+    return { center: '50%', width: '100vw' };
   }, [isMobile]);
-  
-  const [mainContentCenter, setMainContentCenter] = useState<string>(getMainContentCenter);
-  
+
+  const [mainContentMetrics, setMainContentMetrics] = useState(getMainContentMetrics);
+  const mainContentCenter = mainContentMetrics.center;
+  const mainContentWidth = mainContentMetrics.width;
+
   const sendMessage = useSessionStore(state => state.sendMessage);
   const currentSessionId = useSessionStore(state => state.currentSessionId);
   const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore();
   const getSessionAgentSelection = useContextStore(state => state.getSessionAgentSelection);
   const getAgentModelForSession = useContextStore(state => state.getAgentModelForSession);
   const getAgentModelVariantForSession = useContextStore(state => state.getAgentModelVariantForSession);
-  
-  // Update main content center on resize
+
+  // Update main content metrics on resize
   useEffect(() => {
     if (isMobile) return;
-    
-    const updateCenter = () => {
-      setMainContentCenter(getMainContentCenter());
+
+    const updateMetrics = () => {
+      setMainContentMetrics(getMainContentMetrics());
     };
-    
-    window.addEventListener('resize', updateCenter);
-    return () => window.removeEventListener('resize', updateCenter);
-  }, [isMobile, getMainContentCenter]);
+
+    window.addEventListener('resize', updateMetrics);
+    return () => window.removeEventListener('resize', updateMetrics);
+  }, [isMobile, getMainContentMetrics]);
 
   const handleSelectionChange = useCallback((range: SelectedLineRange | null) => {
     // On mobile: implement "tap to extend" behavior
@@ -182,11 +200,11 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       const tappedLine = range.start;
       const existingStart = selection.start;
       const existingEnd = selection.end;
-      
+
       // Extend the selection to include the tapped line
       const newStart = Math.min(existingStart, existingEnd, tappedLine);
       const newEnd = Math.max(existingStart, existingEnd, tappedLine);
-      
+
       // Only extend if tapping outside current selection
       if (tappedLine < existingStart || tappedLine > existingEnd) {
         setSelection({
@@ -197,7 +215,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         return;
       }
     }
-    
+
     setSelection(range);
     if (!range) {
       setCommentText('');
@@ -207,16 +225,16 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   // Dismiss selection when clicking outside line numbers (desktop behavior)
   useEffect(() => {
     if (!selection) return;
-    
+
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      
+
       // Check if click is inside the comment UI portal
       if (commentContainerRef.current?.contains(target)) return;
 
       // Check if click is inside toast (sonner)
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
-      
+
       // Check if click is on a line number (inside shadow DOM)
       const path = e.composedPath();
       const isLineNumber = path.some((el) => {
@@ -225,18 +243,18 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         }
         return false;
       });
-      
+
       if (!isLineNumber) {
         setSelection(null);
         setCommentText('');
       }
     };
-    
+
     // Use timeout to avoid immediate dismissal from the same click that selected
     const timeoutId = setTimeout(() => {
       document.addEventListener('click', handleClickOutside);
     }, 100);
-    
+
     return () => {
       clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
@@ -264,19 +282,19 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     const effectiveVariant = sessionAgent && effectiveProviderId && effectiveModelId
       ? getAgentModelVariantForSession(currentSessionId, sessionAgent, effectiveProviderId, effectiveModelId) ?? currentVariant
       : currentVariant;
-    
+
     const code = extractSelectedCode(original, modified, selection);
     const startLine = selection.start;
     const endLine = selection.end;
     const side = selection.side === 'deletions' ? 'original' : 'modified';
-    
+
     const message = `Comment on \`${fileName}\` lines ${startLine}-${endLine} (${side}):\n\`\`\`${language}\n${code}\n\`\`\`\n\n${commentText}`;
-    
+
     // Clear state and switch tab immediately for responsive UX
     setCommentText('');
     setSelection(null);
     setActiveMainTab('chat');
-    
+
     void sendMessage(
       message,
       effectiveProviderId,
@@ -291,7 +309,89 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     });
   }, [selection, commentText, original, modified, fileName, language, sendMessage, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession]);
 
-  ensureFlexokiThemesRegistered();
+  ensurePierreThemeRegistered(lightTheme);
+  ensurePierreThemeRegistered(darkTheme);
+
+  const diffThemeKey = `${lightTheme.metadata.id}:${darkTheme.metadata.id}:${isDark ? 'dark' : 'light'}`;
+
+  const diffRootRef = useRef<HTMLDivElement | null>(null);
+
+  const lightResolvedTheme = useMemo(() => getResolvedShikiTheme(lightTheme), [lightTheme]);
+  const darkResolvedTheme = useMemo(() => getResolvedShikiTheme(darkTheme), [darkTheme]);
+
+  // Fast-path: update base diff theme vars immediately.
+  // Without this, already-mounted diffs can keep old bg/bars until async highlight completes.
+  React.useLayoutEffect(() => {
+    const root = diffRootRef.current;
+    if (!root) return;
+
+    const container = root.querySelector('diffs-container') as HTMLElement | null;
+    if (!container) return;
+
+    const currentResolved = isDark ? darkResolvedTheme : lightResolvedTheme;
+
+    const getColor = (
+      resolved: typeof currentResolved,
+      key: string,
+    ): string | undefined => {
+      const colors = resolved.colors as Record<string, string> | undefined;
+      return colors?.[key];
+    };
+
+    const lightAdd = getColor(lightResolvedTheme, 'terminal.ansiGreen');
+    const lightDel = getColor(lightResolvedTheme, 'terminal.ansiRed');
+    const lightMod = getColor(lightResolvedTheme, 'terminal.ansiBlue');
+
+    const darkAdd = getColor(darkResolvedTheme, 'terminal.ansiGreen');
+    const darkDel = getColor(darkResolvedTheme, 'terminal.ansiRed');
+    const darkMod = getColor(darkResolvedTheme, 'terminal.ansiBlue');
+
+    // Apply on host; vars inherit into shadow root.
+    container.style.setProperty('--shiki-light', lightResolvedTheme.fg);
+    container.style.setProperty('--shiki-light-bg', lightResolvedTheme.bg);
+    if (lightAdd) container.style.setProperty('--shiki-light-addition-color', lightAdd);
+    if (lightDel) container.style.setProperty('--shiki-light-deletion-color', lightDel);
+    if (lightMod) container.style.setProperty('--shiki-light-modified-color', lightMod);
+
+    container.style.setProperty('--shiki-dark', darkResolvedTheme.fg);
+    container.style.setProperty('--shiki-dark-bg', darkResolvedTheme.bg);
+    if (darkAdd) container.style.setProperty('--shiki-dark-addition-color', darkAdd);
+    if (darkDel) container.style.setProperty('--shiki-dark-deletion-color', darkDel);
+    if (darkMod) container.style.setProperty('--shiki-dark-modified-color', darkMod);
+
+    container.style.setProperty('--diffs-bg', currentResolved.bg);
+    container.style.setProperty('--diffs-fg', currentResolved.fg);
+
+    const currentAdd = isDark ? darkAdd : lightAdd;
+    const currentDel = isDark ? darkDel : lightDel;
+    const currentMod = isDark ? darkMod : lightMod;
+    if (currentAdd) container.style.setProperty('--diffs-addition-color-override', currentAdd);
+    if (currentDel) container.style.setProperty('--diffs-deletion-color-override', currentDel);
+    if (currentMod) container.style.setProperty('--diffs-modified-color-override', currentMod);
+
+    // Pierre also inlines theme styles on <pre> inside shadow root.
+    // Patch it too so already-expanded diffs switch instantly.
+    const pre = container.shadowRoot?.querySelector('pre') as HTMLPreElement | null;
+    if (pre) {
+      pre.style.setProperty('--shiki-light', lightResolvedTheme.fg);
+      pre.style.setProperty('--shiki-light-bg', lightResolvedTheme.bg);
+      if (lightAdd) pre.style.setProperty('--shiki-light-addition-color', lightAdd);
+      if (lightDel) pre.style.setProperty('--shiki-light-deletion-color', lightDel);
+      if (lightMod) pre.style.setProperty('--shiki-light-modified-color', lightMod);
+
+      pre.style.setProperty('--shiki-dark', darkResolvedTheme.fg);
+      pre.style.setProperty('--shiki-dark-bg', darkResolvedTheme.bg);
+      if (darkAdd) pre.style.setProperty('--shiki-dark-addition-color', darkAdd);
+      if (darkDel) pre.style.setProperty('--shiki-dark-deletion-color', darkDel);
+      if (darkMod) pre.style.setProperty('--shiki-dark-modified-color', darkMod);
+
+      pre.style.setProperty('--diffs-bg', currentResolved.bg);
+      pre.style.setProperty('--diffs-fg', currentResolved.fg);
+      if (currentAdd) pre.style.setProperty('--diffs-addition-color-override', currentAdd);
+      if (currentDel) pre.style.setProperty('--diffs-deletion-color-override', currentDel);
+      if (currentMod) pre.style.setProperty('--diffs-modified-color-override', currentMod);
+    }
+  }, [darkResolvedTheme, diffThemeKey, isDark, lightResolvedTheme]);
 
   // Cache the last computed diff to avoid recomputing on every render
   const diffCacheRef = useRef<{
@@ -301,7 +401,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   // Pre-parse the diff with cacheKey for worker pool caching
   const fileDiff = useMemo(() => {
-    const cacheKey = getCacheKey(fileName, original, modified);
+    const cacheKey = getCacheKey(fileName, original, modified, diffThemeKey);
 
     // Return cached diff if inputs haven't changed
     if (diffCacheRef.current?.key === cacheKey) {
@@ -328,12 +428,12 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     diffCacheRef.current = { key: cacheKey, fileDiff: diff };
 
     return diff;
-  }, [fileName, original, modified, language]);
+  }, [diffThemeKey, fileName, original, modified, language]);
 
   const options = useMemo(() => ({
     theme: {
-      dark: flexokiThemeNames.dark,
-      light: flexokiThemeNames.light,
+      dark: darkTheme.metadata.id,
+      light: lightTheme.metadata.id,
     },
     themeType: isDark ? ('dark' as const) : ('light' as const),
     diffStyle: renderSideBySide ? ('split' as const) : ('unified' as const),
@@ -346,21 +446,26 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     enableHoverUtility: false,
     onLineSelected: handleSelectionChange,
     unsafeCSS: WEBKIT_SCROLL_FIX_CSS,
-  }), [isDark, renderSideBySide, wrapLines, handleSelectionChange]);
- 
+  }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id, renderSideBySide, wrapLines, handleSelectionChange]);
+
   if (typeof window === 'undefined') {
     return null;
   }
- 
+
   // Extracted Comment Interface Content for reuse in Portal or In-Flow
   const renderCommentContent = () => {
     if (!selection) return null;
     return (
-      <div 
+      <div
         className="flex flex-col items-center gap-2 px-4"
-        style={{ width: 'min(100vw - 1rem, 42rem)' }}
+        style={{ width: `min(calc(${mainContentWidth} - 2rem), 42rem)` }}
       >
-        <div className="w-full rounded-xl border bg-sidebar flex flex-col relative shadow-lg" style={{ borderColor: 'var(--primary)' }}>
+        <div
+          className="w-full rounded-xl flex flex-col relative shadow-lg border border-border/80 focus-within:border-primary/70 focus-within:ring-1 focus-within:ring-primary/50"
+          style={{
+            backgroundColor: themeSystem?.currentTheme?.colors?.surface?.subtle,
+          }}
+        >
           {/* Textarea - auto-grows from 1 line to max 5 lines */}
           <Textarea
             value={commentText}
@@ -374,7 +479,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
               textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
             }}
             placeholder="Type your comment..."
-            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 shadow-none rounded-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent dark:bg-transparent focus-visible:outline-none overflow-y-auto"
+            outerClassName="focus-within:ring-0"
+            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 rounded-none appearance-none hover:border-transparent bg-transparent dark:bg-transparent overflow-y-auto focus:ring-0 focus:shadow-none"
             autoFocus={!isMobile}
             rows={1}
             onKeyDown={(e) => {
@@ -437,7 +543,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   // If we're in an inline diff ('inline' layout), render via Portal (fixed over content).
   if (layout === 'fill') {
     return (
-      <div 
+      <div
         className={cn("flex flex-col relative", "size-full")}
         style={{
           // Apply keyboard padding to the main container, just like ChatContainer
@@ -450,23 +556,26 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             disableHorizontal={false}
             fillContainer={true}
           >
-            <FileDiff
-              fileDiff={fileDiff}
-              options={options}
-              selectedLines={selection}
-            />
+            <div ref={diffRootRef} className="size-full">
+              <FileDiff
+                key={diffThemeKey}
+                fileDiff={fileDiff}
+                options={options}
+                selectedLines={selection}
+              />
+            </div>
           </ScrollableOverlay>
         </div>
-        
-        {/* Render Input In-Flow at the bottom */}
+
+        {/* Render Input overlay at the bottom */}
         {selection && (
-          <div 
+          <div
             className={cn(
-              "pointer-events-auto relative pb-2 transition-none z-50 flex justify-center",
+              "pointer-events-auto absolute bottom-0 left-0 right-0 pb-2 transition-none z-50 flex justify-center w-full",
               isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
             style={{
-              marginBottom: isMobile 
+              marginBottom: isMobile
                 ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
                 : '16px'
             }}
@@ -485,31 +594,32 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   // Use simple div with overflow-x-auto to avoid nested ScrollableOverlay issues in Chrome
   return (
     <div className={cn("relative", "w-full")}>
-      <div className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible">
+      <div ref={diffRootRef} className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible">
         <FileDiff
+          key={diffThemeKey}
           fileDiff={fileDiff}
           options={options}
           selectedLines={selection}
         />
       </div>
-      
+
       {selection && createPortal(
-        <div 
+        <div
           className="fixed inset-0 z-50 flex flex-col justify-end items-start pointer-events-none transition-none transform-gpu"
-          style={{ 
+          style={{
             paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : '0px',
             isolation: 'isolate'
           }}
         >
-          <div 
+          <div
             className={cn(
               "pointer-events-auto relative pb-2 transition-none",
               isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
-            style={{ 
+            style={{
               marginLeft: mainContentCenter,
               transform: 'translateX(-50%)',
-              marginBottom: isMobile 
+              marginBottom: isMobile
                 ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
                 : '16px'
             }}

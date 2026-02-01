@@ -4,6 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getDesktopSettings, isDesktopRuntime, isVSCodeRuntime } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -124,6 +125,7 @@ export const DefaultsSettings: React.FC = () => {
     loadSettings();
   }, []);
 
+
   const handleModelChange = React.useCallback(async (providerId: string, modelId: string) => {
     const newValue = providerId && modelId ? `${providerId}/${modelId}` : undefined;
     setDefaultModel(newValue);
@@ -242,6 +244,7 @@ export const DefaultsSettings: React.FC = () => {
     }
   }, [setSettingsAutoCreateWorktree]);
 
+
   if (isLoading) {
     return null;
   }
@@ -300,7 +303,7 @@ export const DefaultsSettings: React.FC = () => {
          </div>
        </div>
 
-          {(parsedModel.providerId || defaultAgent) && (
+      {(parsedModel.providerId || defaultAgent) && (
         <div className="typography-meta text-muted-foreground">
           New sessions will start with:{' '}
           {parsedModel.providerId && (
@@ -314,20 +317,19 @@ export const DefaultsSettings: React.FC = () => {
         </div>
       )}
 
+
       {!isVSCode && (
         <div className="pt-2">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="h-3.5 w-3.5 accent-primary"
+            <Checkbox
               checked={settingsAutoCreateWorktree}
-              onChange={handleAutoWorktreeChange}
+              onChange={(checked) => handleAutoWorktreeChange({ target: { checked } } as React.ChangeEvent<HTMLInputElement>)}
             />
             <span className="typography-ui-label text-foreground">
               Always create worktree for new sessions
             </span>
           </label>
-          <p className="typography-meta text-muted-foreground pl-5.5 mt-1">
+          <p className="typography-meta text-muted-foreground pl-5 mt-1">
             {settingsAutoCreateWorktree
               ? `New session (Worktree): ${getModifierLabel()} + N  •  New session (Standard): Shift + ${getModifierLabel()} + N`
               : `New session (Standard): ${getModifierLabel()} + N  •  New session (Worktree): Shift + ${getModifierLabel()} + N`}

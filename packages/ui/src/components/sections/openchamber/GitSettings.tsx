@@ -1,6 +1,7 @@
 import React from 'react';
 import { RiInformationLine } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Checkbox } from '@/components/ui/checkbox';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { isDesktopRuntime, getDesktopSettings } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -105,11 +106,9 @@ export const GitSettings: React.FC = () => {
       <div className="space-y-3">
         <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="h-3.5 w-3.5 accent-primary"
+            <Checkbox
               checked={settingsGitmojiEnabled}
-              onChange={handleGitmojiChange}
+              onChange={(checked) => handleGitmojiChange({ target: { checked } } as React.ChangeEvent<HTMLInputElement>)}
             />
             <span className="typography-ui-label text-foreground">Enable gitmoji picker</span>
           </label>
@@ -128,11 +127,9 @@ export const GitSettings: React.FC = () => {
       <div className="space-y-3">
         <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              className="h-3.5 w-3.5 accent-primary"
+            <Checkbox
               checked={showGitignored}
-              onChange={(event) => setFilesViewShowGitignored(event.target.checked)}
+              onChange={setFilesViewShowGitignored}
             />
             <span className="typography-ui-label text-foreground">Display gitignored files</span>
           </label>

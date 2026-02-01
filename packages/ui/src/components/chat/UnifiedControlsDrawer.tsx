@@ -323,7 +323,7 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
                                             'inline-flex items-center rounded-full border px-2.5 py-1 typography-meta font-medium',
                                             isSelected
                                                 ? 'border-primary/30 bg-primary/10 text-foreground'
-                                                : 'border-border/40 text-muted-foreground hover:bg-muted/50'
+                                                : 'border-border/40 text-muted-foreground hover:bg-interactive-hover/50'
                                         )}
                                         aria-pressed={isSelected}
                                     >
@@ -335,7 +335,7 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
                                 <button
                                     type="button"
                                     onClick={onOpenEffort}
-                                    className="inline-flex items-center rounded-full border border-border/40 px-2.5 py-1 typography-meta font-medium text-muted-foreground hover:bg-muted/50"
+                                    className="inline-flex items-center rounded-full border border-border/40 px-2.5 py-1 typography-meta font-medium text-muted-foreground hover:bg-interactive-hover/50"
                                     aria-label="More effort options"
                                 >
                                     ...

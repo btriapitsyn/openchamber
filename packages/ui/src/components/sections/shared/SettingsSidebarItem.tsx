@@ -70,8 +70,8 @@ export const SettingsSidebarItem: React.FC<SettingsSidebarItemProps> = ({
       className={cn(
         'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
         selected
-          ? 'dark:bg-accent/80 bg-primary/12'
-          : 'hover:dark:bg-accent/40 hover:bg-primary/6',
+          ? 'bg-interactive-selection'
+          : 'hover:bg-interactive-hover',
         className
       )}
     >

@@ -542,7 +542,7 @@ export const ProvidersPage: React.FC = () => {
                   type="button"
                   className={cn(
                     "flex w-fit items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 py-2 typography-ui-label",
-                    "hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    "hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   )}
                 >
                   <span className={candidateProviderId ? "text-foreground" : "text-muted-foreground"}>

@@ -4,6 +4,7 @@ import { RiInformationLine } from '@remixicon/react';
 import { NumberInput } from '@/components/ui/number-input';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useDeviceInfo } from '@/lib/device';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
@@ -60,11 +61,9 @@ export const SessionRetentionSettings: React.FC = () => {
       </div>
 
       <label className="flex items-center gap-2 cursor-pointer">
-        <input
-          type="checkbox"
-          className="h-3.5 w-3.5 accent-primary"
+        <Checkbox
           checked={autoDeleteEnabled}
-          onChange={(event) => setAutoDeleteEnabled(event.target.checked)}
+          onChange={setAutoDeleteEnabled}
         />
         <span className="typography-ui-header font-semibold text-foreground">Enable auto-cleanup</span>
       </label>

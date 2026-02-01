@@ -86,6 +86,12 @@ Run OpenChamber remotely using GitHub Actions. No local computer required.
 
 [**Read the Guide: OpenChamber for Actions**](docs/OPENCHAMBER_FOR_ACTIONS.md)
 
+### Custom Themes
+
+Create your own color schemes by dropping JSON files into `~/.config/openchamber/themes/`. Hot reload supported — no restart needed.
+
+[**Read the Guide: Custom Themes**](docs/CUSTOM_THEMES.md)
+
 ## Installation
 
 ### VS Code Extension

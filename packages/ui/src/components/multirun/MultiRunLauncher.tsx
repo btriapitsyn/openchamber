@@ -334,7 +334,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                   type="button"
                   onClick={onCancel}
                   aria-label="Close (Esc)"
-                  className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary app-region-no-drag"
+                  className="inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary app-region-no-drag"
                 >
                   <RiCloseLine className="h-5 w-5" />
                 </button>
@@ -399,7 +399,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 
               {/* Setup commands collapsible */}
               <Collapsible open={isSetupCommandsOpen} onOpenChange={setIsSetupCommandsOpen}>
-                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:opacity-80 transition-opacity">
+                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:bg-[var(--interactive-hover)] rounded-md px-1 -mx-1 transition-colors">
                   <p className="typography-ui-label font-medium text-foreground">
                     Setup commands
                     {setupCommands.filter(cmd => cmd.trim()).length > 0 && (

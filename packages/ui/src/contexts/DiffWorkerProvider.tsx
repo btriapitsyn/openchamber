@@ -5,8 +5,8 @@ import type { SupportedLanguages } from '@pierre/diffs';
 
 import { useOptionalThemeSystem } from './useThemeSystem';
 import { workerFactory } from '@/lib/diff/workerFactory';
-import { ensureFlexokiThemesRegistered } from '@/lib/shiki/registerFlexokiThemes';
-import { flexokiThemeNames } from '@/lib/shiki/flexokiThemes';
+import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
+import { getDefaultTheme } from '@/lib/theme/themes';
 import { useGitStore } from '@/stores/useGitStore';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 
@@ -31,14 +31,14 @@ const PRELOAD_LANGS: SupportedLanguages[] = [
 const WARMUP_MAX_FILES = 10;
 
 // Matches cache key logic in `packages/ui/src/components/views/PierreDiffViewer.tsx`
-function getPierreCacheKey(fileName: string, original: string, modified: string): string {
+function getPierreCacheKey(fileName: string, original: string, modified: string, themeKey: string): string {
   const sampleOriginal = original.length > 100
     ? `${original.slice(0, 50)}${original.slice(-50)}`
     : original;
   const sampleModified = modified.length > 100
     ? `${modified.slice(0, 50)}${modified.slice(-50)}`
     : modified;
-  return `${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
+  return `${themeKey}::${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
 }
 
 interface DiffWorkerProviderProps {
@@ -57,7 +57,11 @@ function scheduleWarmupWork(cb: (deadline?: IdleDeadlineLike) => void): () => vo
 }
 
 // Component that warms up the worker pool and precomputes diff ASTs
-const WorkerPoolWarmup: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const WorkerPoolWarmup: React.FC<{
+  children: React.ReactNode;
+  themeKey: string;
+  renderTheme: { light: string; dark: string };
+}> = ({ children, themeKey, renderTheme }) => {
   const workerPool = useWorkerPool();
   const activeDirectory = useGitStore((state) => state.activeDirectory);
   const lastStatusChange = useGitStore((state) => {
@@ -71,6 +75,20 @@ const WorkerPoolWarmup: React.FC<{ children: React.ReactNode }> = ({ children })
 
   const didDummyWarmupRef = useRef(false);
   const warmedStatusRef = useRef(new Map<string, number>());
+
+  useEffect(() => {
+    warmedStatusRef.current.clear();
+  }, [themeKey]);
+
+  useEffect(() => {
+    if (!workerPool) {
+      return;
+    }
+
+    // Important: WorkerPoolContextProvider uses a singleton and does not react to
+    // prop changes. Update the worker pool render options explicitly.
+    void workerPool.setRenderOptions({ theme: renderTheme });
+  }, [renderTheme, workerPool]);
 
   useEffect(() => {
     if (!workerPool || didDummyWarmupRef.current) return;
@@ -128,7 +146,7 @@ const WorkerPoolWarmup: React.FC<{ children: React.ReactNode }> = ({ children })
         index += 1;
 
         const language = getLanguageFromExtension(filePath) || 'text';
-        const cacheKey = getPierreCacheKey(filePath, diff.original, diff.modified);
+        const cacheKey = getPierreCacheKey(filePath, diff.original, diff.modified, themeKey);
 
         const oldFile: FileContents = {
           name: filePath,
@@ -171,7 +189,7 @@ const WorkerPoolWarmup: React.FC<{ children: React.ReactNode }> = ({ children })
       cancelled = true;
       cancelScheduled?.();
     };
-  }, [workerPool, activeDirectory, lastStatusChange, diffCacheSize]);
+  }, [workerPool, activeDirectory, lastStatusChange, diffCacheSize, themeKey]);
 
   return <>{children}</>;
 };
@@ -180,16 +198,40 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   const themeSystem = useOptionalThemeSystem();
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
 
-  ensureFlexokiThemesRegistered();
+  const fallbackLight = getDefaultTheme(false);
+  const fallbackDark = getDefaultTheme(true);
+
+  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id;
+  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id;
+
+  const lightTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ??
+    fallbackLight;
+  const darkTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
+    fallbackDark;
+
+  ensurePierreThemeRegistered(lightTheme);
+  ensurePierreThemeRegistered(darkTheme);
 
   const highlighterOptions = useMemo(() => ({
     theme: {
-      dark: flexokiThemeNames.dark,
-      light: flexokiThemeNames.light,
+      dark: darkTheme.metadata.id,
+      light: lightTheme.metadata.id,
     },
     themeType: isDark ? ('dark' as const) : ('light' as const),
     langs: PRELOAD_LANGS,
-  }), [isDark]);
+  }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id]);
+
+  const workerThemeKey = `${lightTheme.metadata.id}:${darkTheme.metadata.id}:${isDark ? 'dark' : 'light'}`;
+
+  const renderTheme = useMemo(
+    () => ({
+      light: lightTheme.metadata.id,
+      dark: darkTheme.metadata.id,
+    }),
+    [darkTheme.metadata.id, lightTheme.metadata.id],
+  );
 
   return (
     <WorkerPoolContextProvider
@@ -200,7 +242,10 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
       }}
       highlighterOptions={highlighterOptions}
     >
-      <WorkerPoolWarmup>
+      <WorkerPoolWarmup
+        themeKey={workerThemeKey}
+        renderTheme={renderTheme}
+      >
         {children}
       </WorkerPoolWarmup>
     </WorkerPoolContextProvider>

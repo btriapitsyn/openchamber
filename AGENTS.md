@@ -72,6 +72,17 @@ All scripts are in `package.json`.
 - No new deps unless asked.
 - Never add secrets (`.env`, keys) or log sensitive data.
 
+## Theme System (MANDATORY for UI work)
+
+When working on any UI components, styling, or visual changes, agents **MUST** study the theme system skill first.
+
+**Before starting any UI work:**
+```
+skill({ name: "theme-system" })
+```
+
+This skill contains all color tokens, semantic logic, decision tree, and usage patterns. All UI colors must use theme tokens - never hardcoded values or Tailwind color classes.
+
 ## Recent changes
 - Releases + high-level changes: `CHANGELOG.md`
 - Recent commits: `git log --oneline` (latest tags: `v1.4.6`, `v1.4.5`)

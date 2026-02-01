@@ -89,7 +89,7 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-interactive-hover"
             >
               <RiCloseLine className="h-4 w-4" />
             </button>

@@ -898,7 +898,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         displayParts.length === 0 ? null : (
                         <FadeInOnReveal>
                             <div className="flex justify-end">
-                                <div className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary/10 dark:bg-primary/10 px-5 py-3 shadow-sm border border-primary/5">
+                                <div style={{ backgroundColor: 'var(--chat-user-message-bg)' }} className="max-w-[85%] rounded-2xl rounded-br-sm px-5 py-3 shadow-sm border border-primary/5">
                                     <MessageBody
                                         messageId={message.info.id}
                                         parts={displayParts}
@@ -932,7 +932,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         </FadeInOnReveal>
                         )
                     ) : (
-                        <div className="relative pl-4 ml-1">
+                        <div className="relative">
                             {shouldShowHeader && (
                                 <MessageHeader
                                     isUser={isUser}

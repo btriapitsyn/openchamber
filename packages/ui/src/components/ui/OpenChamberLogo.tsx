@@ -78,10 +78,37 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
     isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
 
-  const strokeColor = isDark ? 'white' : 'black';
-  const fillColor = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
-  const logoFillColor = isDark ? 'white' : 'black';
-  const cellHighlightColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.4)';
+  const strokeColor = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const fromVars = getComputedStyle(document.documentElement).getPropertyValue('--splash-stroke').trim();
+      if (fromVars) {
+        return fromVars;
+      }
+    }
+    return isDark ? 'white' : 'black';
+  }, [isDark]);
+
+  const fillColor = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const fromVars = getComputedStyle(document.documentElement).getPropertyValue('--splash-face-fill').trim();
+      if (fromVars) {
+        return fromVars;
+      }
+    }
+    return isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
+  }, [isDark]);
+
+  const cellHighlightColor = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const fromVars = getComputedStyle(document.documentElement).getPropertyValue('--splash-cell-fill').trim();
+      if (fromVars) {
+        return fromVars;
+      }
+    }
+    return isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.4)';
+  }, [isDark]);
+
+  const logoFillColor = strokeColor;
 
 
 

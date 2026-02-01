@@ -28,6 +28,7 @@ pub async fn load_settings(state: State<'_, DesktopRuntime>) -> Result<SettingsL
         .settings()
         .update_with(|mut settings| {
             migrate_legacy_project_settings(&mut settings);
+            migrate_legacy_theme_settings(&mut settings);
             normalize_project_selection(&mut settings);
             (settings, ())
         })
@@ -52,6 +53,7 @@ pub async fn save_settings(
         .settings()
         .update_with(|current| {
             let mut merged = merge_persisted_settings(&current, &sanitized_changes);
+            migrate_legacy_theme_settings(&mut merged);
             normalize_project_selection(&mut merged);
             (merged, ())
         })
@@ -607,6 +609,70 @@ fn migrate_legacy_project_settings(settings: &mut Value) {
             seen.insert(value.to_string());
             true
         });
+    }
+}
+
+fn migrate_legacy_theme_settings(settings: &mut Value) {
+    if !settings.is_object() {
+        *settings = json!({});
+    }
+
+    let obj = settings.as_object_mut().unwrap();
+
+    let theme_id = obj
+        .get("themeId")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+
+    let theme_variant = obj
+        .get("themeVariant")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| *value == "light" || *value == "dark")
+        .map(|value| value.to_string());
+
+    let has_light = obj
+        .get("lightThemeId")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty());
+    let has_dark = obj
+        .get("darkThemeId")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty());
+
+    if has_light && has_dark {
+        return;
+    }
+
+    let default_light = "flexoki-light".to_string();
+    let default_dark = "flexoki-dark".to_string();
+
+    if !has_light {
+        let next = if let (Some(id), Some(variant)) = (theme_id.as_ref(), theme_variant.as_ref()) {
+            if variant == "light" {
+                id.clone()
+            } else {
+                default_light.clone()
+            }
+        } else {
+            default_light.clone()
+        };
+        obj.insert("lightThemeId".to_string(), json!(next));
+    }
+
+    if !has_dark {
+        let next = if let (Some(id), Some(variant)) = (theme_id.as_ref(), theme_variant.as_ref()) {
+            if variant == "dark" {
+                id.clone()
+            } else {
+                default_dark.clone()
+            }
+        } else {
+            default_dark.clone()
+        };
+        obj.insert("darkThemeId".to_string(), json!(next));
     }
 }
 

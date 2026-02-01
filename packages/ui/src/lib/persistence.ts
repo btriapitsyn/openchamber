@@ -351,6 +351,12 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.notifyOnSubtasks === 'boolean') {
     result.notifyOnSubtasks = candidate.notifyOnSubtasks;
   }
+  if (typeof candidate.usageAutoRefresh === 'boolean') {
+    result.usageAutoRefresh = candidate.usageAutoRefresh;
+  }
+  if (typeof candidate.usageRefreshIntervalMs === 'number' && Number.isFinite(candidate.usageRefreshIntervalMs)) {
+    result.usageRefreshIntervalMs = candidate.usageRefreshIntervalMs;
+  }
   if (
     typeof candidate.toolCallExpansion === 'string'
     && (candidate.toolCallExpansion === 'collapsed'

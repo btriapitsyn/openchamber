@@ -55,6 +55,8 @@ export type DesktopSettings = {
   nativeNotificationsEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
   notifyOnSubtasks?: boolean;
+  usageAutoRefresh?: boolean;
+  usageRefreshIntervalMs?: number;
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   defaultModel?: string; // format: "provider/model"

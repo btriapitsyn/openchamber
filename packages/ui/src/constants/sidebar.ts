@@ -1,7 +1,7 @@
-import { RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiSettings3Line, RiStackLine, RiBookLine } from '@remixicon/react';
+import { RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiSettings3Line, RiStackLine, RiBookLine, RiBarChart2Line } from '@remixicon/react';
 import type { ComponentType } from 'react';
 
-export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'skills' | 'providers' | 'git-identities' | 'settings';
+export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'skills' | 'providers' | 'usage' | 'git-identities' | 'settings';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type IconComponent = ComponentType<any>;
@@ -43,6 +43,12 @@ export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
         label: 'Providers',
         description: 'Configure AI model providers and API credentials.',
         icon: RiStackLine,
+    },
+    {
+        id: 'usage',
+        label: 'Usage',
+        description: 'Monitor API quota and usage across providers.',
+        icon: RiBarChart2Line,
     },
     {
         id: 'git-identities',

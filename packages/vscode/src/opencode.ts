@@ -275,7 +275,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
           'More Info'
         ).then(selection => {
           if (selection === 'More Info') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/opencode-ai/opencode'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/anomalyco/opencode'));
           }
         });
       } else {

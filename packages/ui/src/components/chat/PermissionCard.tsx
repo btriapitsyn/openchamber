@@ -313,7 +313,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
           <div className="px-2 py-1.5 border-b border-border/20 bg-muted/5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <RiQuestionLine className="h-3.5 w-3.5 text-yellow-500" />
+                <RiQuestionLine className="h-3.5 w-3.5 text-[var(--status-warning)]" />
                 <span className="typography-meta font-medium text-muted-foreground">
                   Permission Required
                 </span>

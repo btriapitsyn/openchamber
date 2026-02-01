@@ -58,7 +58,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
               {this.state.error && (
                 <details className="text-xs font-mono bg-muted p-3 rounded">
-                  <summary className="cursor-pointer hover:bg-muted/80">Error details</summary>
+                  <summary className="cursor-pointer hover:bg-interactive-hover/80">Error details</summary>
                   <pre className="mt-2 overflow-x-auto">
                     {this.state.error.toString()}
                   </pre>
