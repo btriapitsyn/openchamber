@@ -5,11 +5,7 @@
     "description": "Ayu",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [
-      "light",
-      "imported",
-      "palette"
-    ]
+    "tags": [ "light", "palette" ]
   },
   "colors": {
     "primary": {

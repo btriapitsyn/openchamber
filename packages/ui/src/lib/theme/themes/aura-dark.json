@@ -5,11 +5,7 @@
     "description": "Aura",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [
-      "dark",
-      "imported",
-      "palette"
-    ]
+    "tags": [ "dark", "palette" ]
   },
   "colors": {
     "primary": {
