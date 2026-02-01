@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiAlertLine, RiArrowDownLine, RiArrowGoBackLine, RiArrowLeftLine, RiArrowRightLine, RiArrowUpLine, RiCheckboxCircleLine, RiCircleLine, RiCloseLine, RiCommandLine, RiDeleteBinLine, RiRestartLine } from '@remixicon/react';
+import { RiAddLine, RiAlertLine, RiArrowDownLine, RiArrowGoBackLine, RiArrowLeftLine, RiArrowRightLine, RiArrowUpLine, RiCheckboxCircleLine, RiCircleLine, RiCloseLine, RiCommandLine, RiDeleteBinLine, RiRestartLine } from '@remixicon/react';
 
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -17,6 +17,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { isDesktopRuntime, isWebRuntime } from '@/lib/desktop';
 
 const TERMINAL_FONT_SIZE = 13;
 
@@ -79,6 +80,7 @@ export const TerminalView: React.FC = () => {
     const { currentTheme } = useThemeSystem();
     const { monoFont } = useFontPreferences();
     const { isMobile, hasTouchInput } = useDeviceInfo();
+    const enableTabs = !isMobile && (isWebRuntime() || isDesktopRuntime());
     const showTerminalQuickKeysOnDesktop = useUIStore((state) => state.showTerminalQuickKeysOnDesktop);
     const showQuickKeys = isMobile || showTerminalQuickKeysOnDesktop;
 
@@ -100,22 +102,42 @@ export const TerminalView: React.FC = () => {
 
     const terminalStore = useTerminalStore();
     const terminalSessions = terminalStore.sessions;
-    const setTerminalSession = terminalStore.setTerminalSession;
+    const terminalHydrated = terminalStore.hasHydrated;
+    const ensureDirectory = terminalStore.ensureDirectory;
+    const createTab = terminalStore.createTab;
+    const setActiveTab = terminalStore.setActiveTab;
+    const closeTab = terminalStore.closeTab;
+    const setTabSessionId = terminalStore.setTabSessionId;
     const setConnecting = terminalStore.setConnecting;
     const appendToBuffer = terminalStore.appendToBuffer;
-    const clearTerminalSession = terminalStore.clearTerminalSession;
-    const removeTerminalSession = terminalStore.removeTerminalSession;
     const clearBuffer = terminalStore.clearBuffer;
 
-    const terminalState = React.useMemo(() => {
+    const directoryTerminalState = React.useMemo(() => {
         if (!effectiveDirectory) return undefined;
         return terminalSessions.get(effectiveDirectory);
     }, [terminalSessions, effectiveDirectory]);
-    const terminalSessionRef = terminalState?.terminalSessionId ?? null;
-    const bufferChunks = terminalState?.bufferChunks ?? [];
-    const bufferLength = terminalState?.bufferLength ?? 0;
-    const isConnecting = terminalState?.isConnecting ?? false;
-    const terminalSessionId = terminalSessionRef;
+
+    const activeTabId = React.useMemo(() => {
+        if (!directoryTerminalState) return null;
+        if (enableTabs) {
+            return directoryTerminalState.activeTabId ?? directoryTerminalState.tabs[0]?.id ?? null;
+        }
+        return directoryTerminalState.tabs[0]?.id ?? null;
+    }, [directoryTerminalState, enableTabs]);
+
+    const activeTab = React.useMemo(() => {
+        if (!directoryTerminalState) return undefined;
+        if (!activeTabId) return directoryTerminalState.tabs[0];
+        return (
+            directoryTerminalState.tabs.find((tab) => tab.id === activeTabId) ??
+            directoryTerminalState.tabs[0]
+        );
+    }, [directoryTerminalState, activeTabId]);
+
+    const terminalSessionId = activeTab?.terminalSessionId ?? null;
+    const bufferChunks = activeTab?.bufferChunks ?? [];
+    const bufferLength = activeTab?.bufferLength ?? 0;
+    const isConnecting = activeTab?.isConnecting ?? false;
 
     const [connectionError, setConnectionError] = React.useState<string | null>(null);
     const [isFatalError, setIsFatalError] = React.useState(false);
@@ -124,9 +146,35 @@ export const TerminalView: React.FC = () => {
 
     const streamCleanupRef = React.useRef<(() => void) | null>(null);
     const activeTerminalIdRef = React.useRef<string | null>(null);
+    const activeTabIdRef = React.useRef<string | null>(activeTabId);
     const terminalIdRef = React.useRef<string | null>(terminalSessionId);
     const directoryRef = React.useRef<string | null>(effectiveDirectory);
     const terminalControllerRef = React.useRef<TerminalController | null>(null);
+    const lastViewportSizeRef = React.useRef<{ cols: number; rows: number } | null>(null);
+    const nudgeOnConnectTerminalIdRef = React.useRef<string | null>(null);
+    const rehydratedTerminalIdsRef = React.useRef<Set<string>>(new Set());
+    const rehydratedSnapshotTakenRef = React.useRef(false);
+
+    React.useEffect(() => {
+        if (!terminalHydrated) {
+            return;
+        }
+
+        if (rehydratedSnapshotTakenRef.current) {
+            return;
+        }
+        rehydratedSnapshotTakenRef.current = true;
+
+        const ids = new Set<string>();
+        for (const [, dirState] of useTerminalStore.getState().sessions.entries()) {
+            for (const tab of dirState.tabs) {
+                if (tab.terminalSessionId) {
+                    ids.add(tab.terminalSessionId);
+                }
+            }
+        }
+        rehydratedTerminalIdsRef.current = ids;
+    }, [terminalHydrated]);
 
     const activeMainTab = useUIStore((state) => state.activeMainTab);
     const isTerminalActive = activeMainTab === 'terminal';
@@ -134,6 +182,10 @@ export const TerminalView: React.FC = () => {
     React.useEffect(() => {
         terminalIdRef.current = terminalSessionId;
     }, [terminalSessionId]);
+
+    React.useEffect(() => {
+        activeTabIdRef.current = activeTabId;
+    }, [activeTabId]);
 
     React.useEffect(() => {
         directoryRef.current = effectiveDirectory;
@@ -166,19 +218,23 @@ export const TerminalView: React.FC = () => {
     );
 
     const startStream = React.useCallback(
-        (terminalId: string) => {
+        (directory: string, tabId: string, terminalId: string) => {
             if (activeTerminalIdRef.current === terminalId) {
                 return;
             }
 
             disconnectStream();
 
+            // Mark active before connect so early events aren't dropped.
+            activeTerminalIdRef.current = terminalId;
+
             const subscription = terminal.connect(
                 terminalId,
                 {
                     onEvent: (event: TerminalStreamEvent) => {
-                        const directory = directoryRef.current;
-                        if (!directory) return;
+                        if (activeTerminalIdRef.current !== terminalId) {
+                            return;
+                        }
 
                         switch (event.type) {
                             case 'connected': {
@@ -187,10 +243,19 @@ export const TerminalView: React.FC = () => {
                                         `[Terminal] connected runtime=${event.runtime ?? 'unknown'} pty=${event.ptyBackend ?? 'unknown'}`
                                     );
                                 }
-                                setConnecting(directory, false);
+                                setConnecting(directory, tabId, false);
                                 setConnectionError(null);
                                 setIsFatalError(false);
                                 terminalControllerRef.current?.focus();
+
+                                // After a reload, buffer is empty and a reused PTY can look "stuck"
+                                // until the first output arrives. Nudge with a newline once.
+                                if (nudgeOnConnectTerminalIdRef.current === terminalId) {
+                                    nudgeOnConnectTerminalIdRef.current = null;
+                                    void terminal.sendInput(terminalId, '\r').catch(() => {
+                                        // ignore
+                                    });
+                                }
                                 break;
                             }
                             case 'reconnecting': {
@@ -202,7 +267,7 @@ export const TerminalView: React.FC = () => {
                             }
                             case 'data': {
                                 if (event.data) {
-                                    appendToBuffer(directory, event.data);
+                                    appendToBuffer(directory, tabId, event.data);
                                 }
                                 break;
                             }
@@ -212,12 +277,13 @@ export const TerminalView: React.FC = () => {
                                 const signal = typeof event.signal === 'number' ? event.signal : null;
                                 appendToBuffer(
                                     directory,
+                                    tabId,
                                     `\r\n[Process exited${
                                         exitCode !== null ? ` with code ${exitCode}` : ''
                                     }${signal !== null ? ` (signal ${signal})` : ''}]\r\n`
                                 );
-                                clearTerminalSession(directory);
-                                setConnecting(directory, false);
+                                setTabSessionId(directory, tabId, null);
+                                setConnecting(directory, tabId, false);
                                 setConnectionError('Terminal session ended');
                                 setIsFatalError(false);
                                 disconnectStream();
@@ -226,8 +292,9 @@ export const TerminalView: React.FC = () => {
                         }
                     },
                     onError: (error, fatal) => {
-                        const directory = directoryRef.current;
-                        if (!directory) return;
+                        if (activeTerminalIdRef.current !== terminalId) {
+                            return;
+                        }
 
                         const errorMsg = fatal
                             ? `Connection failed: ${error.message}`
@@ -237,9 +304,9 @@ export const TerminalView: React.FC = () => {
                         setIsFatalError(!!fatal);
 
                         if (fatal) {
-                            setConnecting(directory, false);
+                            setConnecting(directory, tabId, false);
+                            setTabSessionId(directory, tabId, null);
                             disconnectStream();
-                            removeTerminalSession(directory);
                         }
                     },
                 },
@@ -250,13 +317,16 @@ export const TerminalView: React.FC = () => {
                 subscription.close();
                 activeTerminalIdRef.current = null;
             };
-            activeTerminalIdRef.current = terminalId;
         },
-        [appendToBuffer, clearTerminalSession, disconnectStream, removeTerminalSession, setConnecting, terminal, setConnectionError]
+        [appendToBuffer, disconnectStream, setConnecting, setTabSessionId, terminal]
     );
 
     React.useEffect(() => {
         let cancelled = false;
+
+        if (!terminalHydrated) {
+            return;
+        }
 
         if (!effectiveDirectory) {
             setConnectionError(
@@ -271,25 +341,55 @@ export const TerminalView: React.FC = () => {
         const ensureSession = async () => {
             const directory = effectiveDirectory;
             if (!directoryRef.current || directoryRef.current !== directory) return;
-            const currentState = useTerminalStore.getState().getTerminalSession(directory);
 
-            let terminalId = currentState?.terminalSessionId ?? null;
+            ensureDirectory(directory);
+
+            const state = useTerminalStore.getState().getDirectoryState(directory);
+            if (!state || state.tabs.length === 0) {
+                return;
+            }
+
+            const tabId = enableTabs
+                ? (state.activeTabId ?? state.tabs[0]?.id ?? null)
+                : (state.tabs[0]?.id ?? null);
+            if (!tabId) {
+                return;
+            }
+
+            const tab = state.tabs.find((t) => t.id === tabId) ?? state.tabs[0];
+            let terminalId = tab?.terminalSessionId ?? null;
+
+            const shouldNudgeExisting =
+                Boolean(terminalId) &&
+                rehydratedTerminalIdsRef.current.has(terminalId as string) &&
+                (tab?.bufferLength ?? 0) === 0 &&
+                (tab?.bufferChunks?.length ?? 0) === 0;
 
             if (!terminalId) {
                 setConnectionError(null);
                 setIsFatalError(false);
-                setConnecting(directory, true);
+                setConnecting(directory, tabId, true);
                 try {
+                    const size = lastViewportSizeRef.current;
                     const session = await terminal.createSession({
                         cwd: directory,
+                        cols: size?.cols,
+                        rows: size?.rows,
                     });
-                    if (cancelled) {
+
+                    const stillActive =
+                        !cancelled &&
+                        directoryRef.current === directory &&
+                        activeTabIdRef.current === tabId;
+
+                    if (!stillActive) {
                         try {
                             await terminal.close(session.sessionId);
                         } catch { /* ignored */ }
                         return;
                     }
-                    setTerminalSession(directory, session);
+
+                    setTabSessionId(directory, tabId, session.sessionId);
                     terminalId = session.sessionId;
                 } catch (error) {
                     if (!cancelled) {
@@ -299,7 +399,7 @@ export const TerminalView: React.FC = () => {
                                 : 'Failed to start terminal session'
                         );
                         setIsFatalError(true);
-                        setConnecting(directory, false);
+                        setConnecting(directory, tabId, false);
                     }
                     return;
                 }
@@ -308,7 +408,12 @@ export const TerminalView: React.FC = () => {
             if (!terminalId || cancelled) return;
 
             terminalIdRef.current = terminalId;
-            startStream(terminalId);
+
+            if (shouldNudgeExisting) {
+                nudgeOnConnectTerminalIdRef.current = terminalId;
+                rehydratedTerminalIdsRef.current.delete(terminalId);
+            }
+            startStream(directory, tabId, terminalId);
         };
 
         void ensureSession();
@@ -322,9 +427,12 @@ export const TerminalView: React.FC = () => {
         hasActiveContext,
         effectiveDirectory,
         terminalSessionId,
-        removeTerminalSession,
+        activeTabId,
+        enableTabs,
+        terminalHydrated,
+        ensureDirectory,
         setConnecting,
-        setTerminalSession,
+        setTabSessionId,
         startStream,
         disconnectStream,
         terminal,
@@ -334,82 +442,37 @@ export const TerminalView: React.FC = () => {
         if (!effectiveDirectory) return;
         if (isRestarting) return;
 
+        const state = useTerminalStore.getState().getDirectoryState(effectiveDirectory);
+        const tabId = isMobile
+            ? (state?.tabs[0]?.id ?? null)
+            : (activeTabId ?? state?.activeTabId ?? state?.tabs[0]?.id ?? null);
+        if (!tabId) return;
+
         setIsRestarting(true);
         setConnectionError(null);
         setIsFatalError(false);
+
         disconnectStream();
 
-        const currentTerminalId = terminalIdRef.current;
-
         try {
-            if (terminal.restartSession && currentTerminalId) {
-                const newSession = await terminal.restartSession(currentTerminalId, {
-                    cwd: effectiveDirectory,
-                });
-                setTerminalSession(effectiveDirectory, newSession);
-                terminalIdRef.current = newSession.sessionId;
-                startStream(newSession.sessionId);
-            } else {
-                if (currentTerminalId) {
-                    try {
-                        await terminal.close(currentTerminalId);
-                    } catch { /* ignored */ }
-                }
-                removeTerminalSession(effectiveDirectory);
-            }
+            await closeTab(effectiveDirectory, tabId);
         } catch (error) {
-            setConnectionError(
-                error instanceof Error ? error.message : 'Failed to restart terminal'
-            );
+            setConnectionError(error instanceof Error ? error.message : 'Failed to restart terminal');
             setIsFatalError(true);
         } finally {
             setIsRestarting(false);
         }
-    }, [effectiveDirectory, isRestarting, disconnectStream, terminal, setTerminalSession, startStream, removeTerminalSession]);
+    }, [activeTabId, closeTab, disconnectStream, effectiveDirectory, isMobile, isRestarting]);
 
     const handleHardRestart = React.useCallback(async () => {
-        if (!effectiveDirectory) return;
-        if (isRestarting) return;
-
-        setIsRestarting(true);
-        setConnectionError(null);
-        setIsFatalError(false);
-        disconnectStream();
-
-        try {
-            if (terminal.forceKill) {
-                await terminal.forceKill({ cwd: effectiveDirectory });
-            }
-        } catch { /* ignored */ }
-
-        removeTerminalSession(effectiveDirectory);
-        clearBuffer(effectiveDirectory);
-        terminalControllerRef.current?.clear();
-
-        await new Promise(r => setTimeout(r, 100));
-
-        try {
-            setConnecting(effectiveDirectory, true);
-            const session = await terminal.createSession({
-                cwd: effectiveDirectory,
-            });
-            setTerminalSession(effectiveDirectory, session);
-            terminalIdRef.current = session.sessionId;
-            startStream(session.sessionId);
-        } catch (error) {
-            setConnectionError(
-                error instanceof Error ? error.message : 'Failed to create terminal'
-            );
-            setIsFatalError(true);
-            setConnecting(effectiveDirectory, false);
-        } finally {
-            setIsRestarting(false);
-        }
-    }, [effectiveDirectory, isRestarting, disconnectStream, terminal, removeTerminalSession, clearBuffer, setConnecting, setTerminalSession, startStream]);
+        // Keep semantics: “close tab -> new clean tab”.
+        await handleRestart();
+    }, [handleRestart]);
 
     const handleClear = React.useCallback(() => {
         if (!effectiveDirectory) return;
-        clearBuffer(effectiveDirectory);
+        if (!activeTabId) return;
+        clearBuffer(effectiveDirectory, activeTabId);
         terminalControllerRef.current?.clear();
         terminalControllerRef.current?.focus();
 
@@ -419,7 +482,42 @@ export const TerminalView: React.FC = () => {
                 setConnectionError(error instanceof Error ? error.message : 'Failed to refresh prompt');
             });
         }
-    }, [clearBuffer, effectiveDirectory, setConnectionError, terminal]);
+    }, [activeTabId, clearBuffer, effectiveDirectory, setConnectionError, terminal]);
+
+    const handleCreateTab = React.useCallback(() => {
+        if (!effectiveDirectory) return;
+        const tabId = createTab(effectiveDirectory);
+        setActiveTab(effectiveDirectory, tabId);
+        setConnectionError(null);
+        setIsFatalError(false);
+        disconnectStream();
+    }, [createTab, disconnectStream, effectiveDirectory, setActiveTab]);
+
+    const handleSelectTab = React.useCallback(
+        (tabId: string) => {
+            if (!effectiveDirectory) return;
+            setActiveTab(effectiveDirectory, tabId);
+            setConnectionError(null);
+            setIsFatalError(false);
+            disconnectStream();
+        },
+        [disconnectStream, effectiveDirectory, setActiveTab]
+    );
+
+    const handleCloseTab = React.useCallback(
+        (tabId: string) => {
+            if (!effectiveDirectory) return;
+
+            if (tabId === activeTabId) {
+                disconnectStream();
+            }
+
+            setConnectionError(null);
+            setIsFatalError(false);
+            void closeTab(effectiveDirectory, tabId);
+        },
+        [activeTabId, closeTab, disconnectStream, effectiveDirectory]
+    );
 
 
     const handleViewportInput = React.useCallback(
@@ -463,6 +561,7 @@ export const TerminalView: React.FC = () => {
 
     const handleViewportResize = React.useCallback(
         (cols: number, rows: number) => {
+            lastViewportSizeRef.current = { cols, rows };
             const terminalId = terminalIdRef.current;
             if (!terminalId) return;
             void terminal.resize({ sessionId: terminalId, cols, rows }).catch(() => {
@@ -595,9 +694,12 @@ export const TerminalView: React.FC = () => {
 
     const terminalSessionKey = React.useMemo(() => {
         const directoryPart = effectiveDirectory ?? 'no-dir';
-        const terminalPart = terminalSessionId ?? 'pending';
-        return `${directoryPart}::${terminalPart}`;
-    }, [effectiveDirectory, terminalSessionId]);
+        const tabPart = activeTabId ?? 'no-tab';
+        const terminalPart = terminalSessionId ?? `pending-${tabPart}`;
+        return `${directoryPart}::${tabPart}::${terminalPart}`;
+    }, [effectiveDirectory, activeTabId, terminalSessionId]);
+
+    const viewportSessionKey = terminalSessionId ?? terminalSessionKey;
 
     React.useEffect(() => {
         if (!isTerminalActive) {
@@ -628,13 +730,13 @@ export const TerminalView: React.FC = () => {
 
     const statusIcon = connectionError
         ? isReconnecting
-            ? <RiAlertLine size={20} className="text-amber-400" />
-            : <RiCloseLine size={20} className="text-destructive" />
+            ? <RiAlertLine size={20} className="text-[color:var(--status-warning)]" />
+            : <RiCloseLine size={20} className="text-[color:var(--status-error)]" />
         : terminalSessionId && !isConnecting && !isRestarting
-            ? <RiCheckboxCircleLine size={20} className="text-emerald-400" />
+            ? <RiCheckboxCircleLine size={20} className="text-[color:var(--status-success)]" />
             : isConnecting || isRestarting
-                ? <RiCircleLine size={20} className="text-amber-400 animate-pulse" />
-                : <RiCircleLine size={20} className="text-muted-foreground" />;
+                ? <RiCircleLine size={20} className="text-[color:var(--status-warning)] animate-pulse" />
+                : <RiCircleLine size={20} className="text-[var(--surface-muted-foreground)]" />;
 
     if (!hasActiveContext) {
         return (
@@ -661,40 +763,93 @@ export const TerminalView: React.FC = () => {
     const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting;
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background">
-            <div className="px-3 py-2 text-xs bg-background">
+        <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
+            <div className="px-3 py-2 text-xs bg-[var(--surface-background)]">
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
                         <span className="truncate font-mono text-foreground/90">{displayDirectory}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {statusIcon}
-                        <Button
-                            size="sm"
-                            variant="default"
-                            className="h-7 px-2 py-0"
-                            onClick={handleClear}
-                            disabled={!bufferLength}
-                            title="Clear output"
-                            type="button"
-                        >
-                            <RiDeleteBinLine size={16} />
-                            Clear
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="default"
-                            className="h-7 px-2 py-0"
-                            onClick={handleRestart}
-                            disabled={isRestarting}
-                            title="Restart terminal session"
-                            type="button"
-                        >
-                            <RiRestartLine size={16} className={cn((isConnecting || isRestarting) && 'animate-spin')} />
-                            Restart
-                        </Button>
-                    </div>
+                    {isMobile ? (
+                        <div className="flex items-center gap-2">
+                            {statusIcon}
+                            <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 px-2 py-0"
+                                onClick={handleClear}
+                                disabled={!bufferLength}
+                                title="Clear output"
+                                type="button"
+                            >
+                                <RiDeleteBinLine size={16} />
+                                Clear
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 px-2 py-0"
+                                onClick={handleRestart}
+                                disabled={isRestarting}
+                                title="Restart terminal"
+                                type="button"
+                            >
+                                <RiRestartLine size={16} className={cn((isConnecting || isRestarting) && 'animate-spin')} />
+                                Restart
+                            </Button>
+                        </div>
+                    ) : null}
                 </div>
+
+                {enableTabs && directoryTerminalState ? (
+                    <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-1">
+                        {directoryTerminalState.tabs.map((tab) => {
+                            const isActive = tab.id === activeTabId;
+                            return (
+                                <div
+                                    key={tab.id}
+                                    className={cn(
+                                        'group flex items-center gap-1 rounded-md border px-2 py-1 text-xs whitespace-nowrap',
+                                        isActive
+                                            ? 'bg-[var(--interactive-selection)] border-[var(--primary-muted)] text-[var(--interactive-selection-foreground)]'
+                                            : 'bg-transparent border-[var(--interactive-border)] text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]'
+                                    )}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelectTab(tab.id)}
+                                        className="max-w-[10rem] truncate text-left"
+                                        title={tab.label}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={cn(
+                                            'rounded-sm p-0.5 text-[var(--surface-muted-foreground)] hover:text-[var(--surface-foreground)]',
+                                            !isActive && 'opacity-0 group-hover:opacity-100'
+                                        )}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCloseTab(tab.id);
+                                        }}
+                                        title="Close tab"
+                                    >
+                                        <RiCloseLine size={14} />
+                                    </button>
+                                </div>
+                            );
+                        })}
+
+                        <button
+                            type="button"
+                            onClick={handleCreateTab}
+                            className="ml-1 flex h-7 w-7 items-center justify-center rounded-md border border-[var(--interactive-border)] bg-transparent text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]"
+                            title="New tab"
+                        >
+                            <RiAddLine size={16} />
+                        </button>
+                    </div>
+                ) : null}
                 {showQuickKeys ? (
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                         <Button
@@ -808,11 +963,11 @@ export const TerminalView: React.FC = () => {
                     {isTerminalActive ? (
                         isMobile ? (
                             <TerminalViewport
-                                key={terminalSessionKey}
+                                key={viewportSessionKey}
                                 ref={(controller) => {
                                     terminalControllerRef.current = controller;
                                 }}
-                                sessionKey={terminalSessionKey}
+                                sessionKey={viewportSessionKey}
                                 chunks={bufferChunks}
                                 onInput={handleViewportInput}
                                 onResize={handleViewportResize}
@@ -824,11 +979,11 @@ export const TerminalView: React.FC = () => {
                         ) : (
                             <ScrollableOverlay outerClassName="h-full" className="h-full w-full" disableHorizontal>
                                 <TerminalViewport
-                                    key={terminalSessionKey}
+                                    key={viewportSessionKey}
                                     ref={(controller) => {
                                         terminalControllerRef.current = controller;
                                     }}
-                                    sessionKey={terminalSessionKey}
+                                    sessionKey={viewportSessionKey}
                                     chunks={bufferChunks}
                                     onInput={handleViewportInput}
                                     onResize={handleViewportResize}
@@ -842,9 +997,9 @@ export const TerminalView: React.FC = () => {
                     ) : null}
                 </div>
                 {connectionError && (
-                    <div className="absolute inset-x-0 bottom-0 bg-destructive/90 px-3 py-2 text-xs text-destructive-foreground flex items-center justify-between gap-2">
+                    <div className="absolute inset-x-0 bottom-0 bg-[var(--status-error-background)] px-3 py-2 text-xs text-[var(--status-error-foreground)] flex items-center justify-between gap-2">
                         <span>{connectionError}</span>
-                        {isFatalError && (
+                        {isFatalError && isMobile && (
                             <Button
                                 size="sm"
                                 variant="secondary"
