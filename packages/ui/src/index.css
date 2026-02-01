@@ -15,9 +15,9 @@ textarea[data-chat-input="true"] {
   box-shadow: none;
 }
 
+textarea[data-chat-input="true"]:hover,
 textarea[data-chat-input="true"]:focus,
-textarea[data-chat-input="true"]:focus-visible,
-textarea[data-chat-input="true"]:hover {
+textarea[data-chat-input="true"]:focus-visible {
   outline: none;
   border: none;
   box-shadow: none;
@@ -331,6 +331,7 @@ html:not(.dark) .chat-scroll {
 .overlay-scrollbar-target {
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
+  scrollbar-gutter: auto !important;
 }
 
 .overlay-scrollbar-target::-webkit-scrollbar {
@@ -443,6 +444,9 @@ html:not(.dark) .chat-scroll {
 @media (max-width: 940px) {
   :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
     display: none;
+  }
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-badge {
+    margin-left: -0.125rem;
   }
 }
 

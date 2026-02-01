@@ -9,6 +9,7 @@ import { cn, getModifierLabel } from '@/lib/utils';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Select,
     SelectContent,
@@ -611,11 +612,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
             {shouldShow('reasoning') && (
                 <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 accent-primary"
+                    <Checkbox
                         checked={showReasoningTraces}
-                        onChange={(event) => setShowReasoningTraces(event.target.checked)}
+                        onChange={setShowReasoningTraces}
                     />
                     <span className="typography-ui-header font-semibold text-foreground">
                         Show thinking / reasoning traces
@@ -625,11 +624,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
             {shouldShow('textJustificationActivity') && (
                 <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 accent-primary"
+                    <Checkbox
                         checked={showTextJustificationActivity}
-                        onChange={(event) => setShowTextJustificationActivity(event.target.checked)}
+                        onChange={setShowTextJustificationActivity}
                     />
                     <span className="typography-ui-header font-semibold text-foreground">
                         Show text justification in activity
@@ -640,11 +637,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
             {shouldShow('queueMode') && (
                 <div className="space-y-2">
                     <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            className="h-3.5 w-3.5 accent-primary"
+                        <Checkbox
                             checked={queueModeEnabled}
-                            onChange={(event) => setQueueMode(event.target.checked)}
+                            onChange={setQueueMode}
                         />
                         <span className="typography-ui-header font-semibold text-foreground">
                             Queue messages by default

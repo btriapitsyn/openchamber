@@ -25,22 +25,22 @@
       "foreground": "#2D2640",
       "muted": "#EFE8FC",
       "mutedForeground": "#5C5270",
-      "elevated": "#FAF7FF",
+      "elevated": "#f1ebfb",
       "elevatedForeground": "#2D2640",
       "overlay": "#15101F20",
-      "subtle": "#FDFCFF"
+      "subtle": "#EFE8FC"
     },
     "interactive": {
       "border": "#E0D6F2",
       "borderHover": "#D5C9EB",
       "borderFocus": "#A593C8",
-      "selection": "#15101F22",
+      "selection": "#bdb2d74c",
       "selectionForeground": "#15101F",
       "focus": "#A277FF",
       "focusRing": "#A277FF40",
       "cursor": "#15101F",
-      "hover": "#EFE8FC",
-      "active": "#FAF7FF"
+      "hover": "#bdb2d72d",
+      "active": "#bdb2d74c"
     },
     "status": {
       "error": "#D94F4F",
@@ -143,7 +143,7 @@
     },
     "tools": {
       "background": "#EFE8FC80",
-      "border": "#E0D6F280",
+      "border": "#bdb5cd80",
       "headerHover": "#FDFCFF",
       "icon": "#5C5270",
       "title": "#2D2640",

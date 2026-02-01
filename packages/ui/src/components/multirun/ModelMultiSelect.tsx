@@ -379,7 +379,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
             let currentFlatIndex = 0;
 
             return (
-              <div className="absolute bottom-full left-0 mb-1 z-50 border border-border/30 rounded-xl overflow-hidden bg-background shadow-lg w-[min(380px,calc(100vw-2rem))] flex flex-col">
+              <div style={{ backgroundColor: 'var(--surface-elevated)' }} className="absolute bottom-full left-0 mb-1 z-50 border border-border/30 rounded-xl overflow-hidden shadow-lg w-[min(380px,calc(100vw-2rem))] flex flex-col">
                 {/* Search input */}
                 <div className="p-2 border-b border-border/40">
                   <div className="relative">
@@ -411,7 +411,10 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                     {/* Favorites Section */}
                     {filteredFavorites.length > 0 && (
                       <>
-                        <div className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
+                        <div
+                          style={{ backgroundColor: 'var(--surface-elevated)' }}
+                          className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30"
+                        >
                           <RiStarFill className="h-4 w-4 text-primary" />
                           Favorites
                         </div>
@@ -426,7 +429,10 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                     {filteredRecents.length > 0 && (
                       <>
                         {filteredFavorites.length > 0 && <div className="h-px bg-border/40 my-1" />}
-                        <div className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
+                        <div
+                          style={{ backgroundColor: 'var(--surface-elevated)' }}
+                          className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30"
+                        >
                           <RiTimeLine className="h-4 w-4" />
                           Recent
                         </div>
@@ -446,7 +452,7 @@ export const ModelMultiSelect: React.FC<ModelMultiSelectProps> = ({
                     {filteredProviders.map((provider, index) => (
                       <React.Fragment key={provider.id}>
                         {index > 0 && <div className="h-px bg-border/40 my-1" />}
-                        <div className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
+                        <div style={{ backgroundColor: 'var(--surface-elevated)' }} className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30">
                           <ProviderLogo
                             providerId={provider.id}
                             className="h-4 w-4 flex-shrink-0"

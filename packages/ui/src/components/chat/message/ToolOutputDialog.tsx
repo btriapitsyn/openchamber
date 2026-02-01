@@ -209,7 +209,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                                 : {}),
                                                     }}
                                                 >
-                                                    <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
+                                                    <span className="w-12 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
                                                         {line.lineNumber || ''}
                                                     </span>
                                                     <div className="flex-1 min-w-0">
@@ -282,7 +282,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                         }}
                                                     >
                                                         <div className="flex">
-                                                            <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
+                                                            <span className="w-12 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
                                                                 {line.leftLine.lineNumber || ''}
                                                             </span>
                                                             <div className="flex-1 min-w-0">
@@ -336,7 +336,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                         }}
                                                     >
                                                         <div className="flex">
-                                                            <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-3 self-start select-none">
+                                                            <span className="w-12 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
                                                                 {line.rightLine.lineNumber || ''}
                                                             </span>
                                                             <div className="flex-1 min-w-0">
@@ -500,12 +500,12 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
 
                                                 const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
 
-                                                return (
-                                                    <div key={idx} className={`typography-code font-mono flex ${isInfo ? 'text-muted-foreground/70 italic' : ''}`}>
-                                                        <span className="text-muted-foreground/60 w-10 flex-shrink-0 text-right pr-4 self-start select-none">
-                                                            {shouldShowLineNumber ? lineNumber : ''}
-                                                        </span>
-                                                        <div className="flex-1 min-w-0">
+                                                    return (
+                                                        <div key={idx} className={`typography-code font-mono flex ${isInfo ? 'text-muted-foreground/70 italic' : ''}`}>
+                                                            <span className="w-12 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
+                                                                {shouldShowLineNumber ? lineNumber : ''}
+                                                            </span>
+                                                            <div className="flex-1 min-w-0">
                                                             {isInfo ? (
                                                                 <div className="whitespace-pre-wrap break-words">{line}</div>
                                                             ) : (

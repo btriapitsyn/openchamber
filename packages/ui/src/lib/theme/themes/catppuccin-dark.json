@@ -13,7 +13,7 @@
   },
   "colors": {
     "primary": {
-      "base": "#B4BEFE",
+      "base": "#7d8fff",
       "hover": "#9EA6DF",
       "active": "#BEC6FE",
       "foreground": "#1E1E2E",
@@ -23,24 +23,24 @@
     "surface": {
       "background": "#1E1E2E",
       "foreground": "#CDD6F4",
-      "muted": "#211F31",
-      "mutedForeground": "#A6ADC8",
-      "elevated": "#1C1C29",
+      "muted": "#2a273b",
+      "mutedForeground": "#c3cbea",
+      "elevated": "#282841",
       "elevatedForeground": "#CDD6F4",
       "overlay": "#F4F2FF20",
-      "subtle": "#191926"
+      "subtle": "#2f2f50"
     },
     "interactive": {
       "border": "#35324A",
       "borderHover": "#393655",
       "borderFocus": "#575379",
-      "selection": "#F4F2FF33",
+      "selection": "#8883ae5c",
       "selectionForeground": "#F4F2FF",
       "focus": "#B4BEFE",
       "focusRing": "#B4BEFE40",
       "cursor": "#F4F2FF",
-      "hover": "#211F31",
-      "active": "#1C1C29"
+      "hover": "#a19ace20",
+      "active": "#a19ace20"
     },
     "status": {
       "error": "#F38BA8",
@@ -121,21 +121,21 @@
       }
     },
     "markdown": {
-      "heading1": "#B4BEFE",
-      "heading2": "#F38BA8",
-      "heading3": "#F9E2AF",
+      "heading1": "#CDD6F4",
+      "heading2": "#CDD6F4",
+      "heading3": "#CDD6F4",
       "heading4": "#CDD6F4",
       "link": "#89DCEB",
       "linkHover": "#B4BEFE",
       "inlineCode": "#A6E3A1",
-      "inlineCodeBackground": "#211F31",
+      "inlineCodeBackground": "#2d2a42",
       "blockquote": "#F9E2AF",
       "blockquoteBorder": "#35324A",
       "listMarker": "#B4BEFE99"
     },
     "chat": {
       "userMessage": "#CDD6F4",
-      "userMessageBackground": "#211F31",
+      "userMessageBackground": "#3a3a5b",
       "assistantMessage": "#CDD6F4",
       "assistantMessageBackground": "#1E1E2E",
       "timestamp": "#A6ADC8",
@@ -143,7 +143,7 @@
     },
     "tools": {
       "background": "#211F3180",
-      "border": "#35324A80",
+      "border": "#534e7180",
       "headerHover": "#191926",
       "icon": "#A6ADC8",
       "title": "#CDD6F4",

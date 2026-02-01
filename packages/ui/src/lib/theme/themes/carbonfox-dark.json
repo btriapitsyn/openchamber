@@ -23,24 +23,24 @@
     "surface": {
       "background": "#161616",
       "foreground": "#F2F4F8",
-      "muted": "#262626",
-      "mutedForeground": "#8D8D8D",
-      "elevated": "#0D0D0D",
+      "muted": "#222222",
+      "mutedForeground": "#b4b3b3",
+      "elevated": "#222222",
       "elevatedForeground": "#F2F4F8",
       "overlay": "#FFFFFF20",
-      "subtle": "#000000"
+      "subtle": "#292828"
     },
     "interactive": {
       "border": "#393939",
       "borderHover": "#4C4C4C",
       "borderFocus": "#4589FF",
-      "selection": "#FFFFFF33",
+      "selection": "#ffffff20",
       "selectionForeground": "#FFFFFF",
       "focus": "#4589FF",
       "focusRing": "#4589FF40",
       "cursor": "#FFFFFF",
-      "hover": "#262626",
-      "active": "#0D0D0D"
+      "hover": "#ffffff12",
+      "active": "#ffffff12"
     },
     "status": {
       "error": "#FF8389",
@@ -121,14 +121,14 @@
       }
     },
     "markdown": {
-      "heading1": "#82CFFF",
-      "heading2": "#FFFFFF",
-      "heading3": "#BE95FF",
+      "heading1": "#F2F4F8",
+      "heading2": "#F2F4F8",
+      "heading3": "#F2F4F8",
       "heading4": "#F2F4F8",
       "link": "#33B1FF",
       "linkHover": "#78A9FF",
       "inlineCode": "#42BE65",
-      "inlineCodeBackground": "#262626",
+      "inlineCodeBackground": "#1e1e1e",
       "blockquote": "#8D8D8D",
       "blockquoteBorder": "#393939",
       "listMarker": "#33B1FF99"
@@ -143,7 +143,7 @@
     },
     "tools": {
       "background": "#26262680",
-      "border": "#39393980",
+      "border": "#4e4c4c80",
       "headerHover": "#000000",
       "icon": "#8D8D8D",
       "title": "#F2F4F8",

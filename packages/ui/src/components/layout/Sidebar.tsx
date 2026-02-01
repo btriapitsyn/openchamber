@@ -182,7 +182,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 <div className="flex-1 overflow-hidden">
                     <ErrorBoundary>{children}</ErrorBoundary>
                 </div>
-                <div className="flex-shrink-0 border-t border-border h-12 px-2 bg-sidebar-accent/10">
+                <div className="flex-shrink-0 border-t border-border h-12 px-2 bg-sidebar">
                     <div className="flex h-full items-center justify-between gap-2">
                         <button
                             onClick={() => setSettingsDialogOpen(true)}

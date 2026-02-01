@@ -134,13 +134,13 @@
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'Liberation Mono', Menlo, monospace) !important;
   }
 
-  /* Remove focus rings globally */
-  *:focus {
+  /* Remove focus rings globally (except inputs/textareas/dropdowns/selects) */
+  *:focus:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not([data-slot="dropdown-menu-sub-content"]):not([data-slot="select-content"]) {
     outline: none !important;
     box-shadow: none !important;
   }
 
-  *:focus-visible {
+  *:focus-visible:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not([data-slot="dropdown-menu-sub-content"]):not([data-slot="select-content"]) {
     outline: none !important;
     box-shadow: none !important;
   }

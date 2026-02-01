@@ -334,7 +334,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
                   type="button"
                   onClick={onCancel}
                   aria-label="Close (Esc)"
-                  className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary app-region-no-drag"
+                  className="inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary app-region-no-drag"
                 >
                   <RiCloseLine className="h-5 w-5" />
                 </button>

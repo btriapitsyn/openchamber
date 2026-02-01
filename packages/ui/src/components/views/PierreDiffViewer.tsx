@@ -52,47 +52,47 @@ const WEBKIT_SCROLL_FIX_CSS = `
   [data-code] {
     -webkit-overflow-scrolling: touch;
   }
-  
+
   /* Mobile touch selection support */
   [data-line-number] {
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     cursor: pointer;
   }
-  
+
   /* Ensure interactive line numbers work on touch */
   pre[data-interactive-line-numbers] [data-line-number] {
     touch-action: manipulation;
   }
   /* Reduce hunk separator height */
-  [data-separator-content] {
-    height: 24px !important;
-  }
-  [data-expand-button] {
-    height: 24px !important;
-    width: 24px !important;
-  }
-  [data-separator-multi-button] {
-    row-gap: 0 !important;
-  }
-  [data-expand-up] {
-    height: 12px !important;
-    min-height: 12px !important;
-    max-height: 12px !important;
-    margin: 0 !important;
-    margin-top: 3px !important;
-    padding: 0 !important;
-    border-radius: 4px 4px 0 0 !important;
-  }
-  [data-expand-down] {
-    height: 12px !important;
-    min-height: 12px !important;
-    max-height: 12px !important;
-    margin: 0 !important;
-    margin-top: -3px !important;
-    padding: 0 !important;
-    border-radius: 0 0 4px 4px !important;
-  }
+  // [data-separator-content] {
+  //   height: 24px !important;
+  // }
+  // [data-expand-button] {
+  //   height: 24px !important;
+  //   width: 24px !important;
+  // }
+  // [data-separator-multi-button] {
+  //   row-gap: 0 !important;
+  // }
+  // [data-expand-up] {
+  //   height: 12px !important;
+  //   min-height: 12px !important;
+  //   max-height: 12px !important;
+  //   margin: 0 !important;
+  //   margin-top: 3px !important;
+  //   padding: 0 !important;
+  //   border-radius: 4px 4px 0 0 !important;
+  // }
+  // [data-expand-down] {
+  //   height: 12px !important;
+  //   min-height: 12px !important;
+  //   max-height: 12px !important;
+  //   margin: 0 !important;
+  //   margin-top: -3px !important;
+  //   padding: 0 !important;
+  //   border-radius: 0 0 4px 4px !important;
+  // }
 `;
 
 // Fast cache key - use length + samples instead of full hash
@@ -112,13 +112,13 @@ const extractSelectedCode = (original: string, modified: string, range: Selected
   const isOriginal = range.side === 'deletions';
   const content = isOriginal ? original : modified;
   const lines = content.split('\n');
-  
+
   // Ensure bounds
   const startLine = Math.max(1, range.start);
   const endLine = Math.min(lines.length, range.end);
-  
+
   if (startLine > endLine) return '';
-  
+
   return lines.slice(startLine - 1, endLine).join('\n');
 };
 
@@ -133,7 +133,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 }) => {
   const { isMobile } = useDeviceInfo();
   const { inputBarOffset, isKeyboardOpen } = useUIStore();
-  
+
   const themeSystem = useOptionalThemeSystem();
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
 
@@ -155,38 +155,43 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const [selection, setSelection] = useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = useState('');
   const commentContainerRef = useRef<HTMLDivElement>(null);
-  
-  // Calculate initial center synchronously to avoid flicker
-  const getMainContentCenter = useCallback(() => {
-    if (isMobile) return '50%';
+
+  // Calculate initial center and width synchronously to avoid flicker
+  const getMainContentMetrics = useCallback(() => {
+    if (isMobile) return { center: '50%', width: '100vw' };
     const mainContent = document.querySelector('main.flex-1');
     if (mainContent) {
       const rect = mainContent.getBoundingClientRect();
-      return `${rect.left + rect.width / 2}px`;
+      return {
+        center: `${rect.left + rect.width / 2}px`,
+        width: `${rect.width}px`
+      };
     }
-    return '50%';
+    return { center: '50%', width: '100vw' };
   }, [isMobile]);
-  
-  const [mainContentCenter, setMainContentCenter] = useState<string>(getMainContentCenter);
-  
+
+  const [mainContentMetrics, setMainContentMetrics] = useState(getMainContentMetrics);
+  const mainContentCenter = mainContentMetrics.center;
+  const mainContentWidth = mainContentMetrics.width;
+
   const sendMessage = useSessionStore(state => state.sendMessage);
   const currentSessionId = useSessionStore(state => state.currentSessionId);
   const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore();
   const getSessionAgentSelection = useContextStore(state => state.getSessionAgentSelection);
   const getAgentModelForSession = useContextStore(state => state.getAgentModelForSession);
   const getAgentModelVariantForSession = useContextStore(state => state.getAgentModelVariantForSession);
-  
-  // Update main content center on resize
+
+  // Update main content metrics on resize
   useEffect(() => {
     if (isMobile) return;
-    
-    const updateCenter = () => {
-      setMainContentCenter(getMainContentCenter());
+
+    const updateMetrics = () => {
+      setMainContentMetrics(getMainContentMetrics());
     };
-    
-    window.addEventListener('resize', updateCenter);
-    return () => window.removeEventListener('resize', updateCenter);
-  }, [isMobile, getMainContentCenter]);
+
+    window.addEventListener('resize', updateMetrics);
+    return () => window.removeEventListener('resize', updateMetrics);
+  }, [isMobile, getMainContentMetrics]);
 
   const handleSelectionChange = useCallback((range: SelectedLineRange | null) => {
     // On mobile: implement "tap to extend" behavior
@@ -195,11 +200,11 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       const tappedLine = range.start;
       const existingStart = selection.start;
       const existingEnd = selection.end;
-      
+
       // Extend the selection to include the tapped line
       const newStart = Math.min(existingStart, existingEnd, tappedLine);
       const newEnd = Math.max(existingStart, existingEnd, tappedLine);
-      
+
       // Only extend if tapping outside current selection
       if (tappedLine < existingStart || tappedLine > existingEnd) {
         setSelection({
@@ -210,7 +215,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         return;
       }
     }
-    
+
     setSelection(range);
     if (!range) {
       setCommentText('');
@@ -220,16 +225,16 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   // Dismiss selection when clicking outside line numbers (desktop behavior)
   useEffect(() => {
     if (!selection) return;
-    
+
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      
+
       // Check if click is inside the comment UI portal
       if (commentContainerRef.current?.contains(target)) return;
 
       // Check if click is inside toast (sonner)
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
-      
+
       // Check if click is on a line number (inside shadow DOM)
       const path = e.composedPath();
       const isLineNumber = path.some((el) => {
@@ -238,18 +243,18 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         }
         return false;
       });
-      
+
       if (!isLineNumber) {
         setSelection(null);
         setCommentText('');
       }
     };
-    
+
     // Use timeout to avoid immediate dismissal from the same click that selected
     const timeoutId = setTimeout(() => {
       document.addEventListener('click', handleClickOutside);
     }, 100);
-    
+
     return () => {
       clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
@@ -277,19 +282,19 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     const effectiveVariant = sessionAgent && effectiveProviderId && effectiveModelId
       ? getAgentModelVariantForSession(currentSessionId, sessionAgent, effectiveProviderId, effectiveModelId) ?? currentVariant
       : currentVariant;
-    
+
     const code = extractSelectedCode(original, modified, selection);
     const startLine = selection.start;
     const endLine = selection.end;
     const side = selection.side === 'deletions' ? 'original' : 'modified';
-    
+
     const message = `Comment on \`${fileName}\` lines ${startLine}-${endLine} (${side}):\n\`\`\`${language}\n${code}\n\`\`\`\n\n${commentText}`;
-    
+
     // Clear state and switch tab immediately for responsive UX
     setCommentText('');
     setSelection(null);
     setActiveMainTab('chat');
-    
+
     void sendMessage(
       message,
       effectiveProviderId,
@@ -446,20 +451,19 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   if (typeof window === 'undefined') {
     return null;
   }
- 
+
   // Extracted Comment Interface Content for reuse in Portal or In-Flow
   const renderCommentContent = () => {
     if (!selection) return null;
     return (
-      <div 
+      <div
         className="flex flex-col items-center gap-2 px-4"
-        style={{ width: 'min(100vw - 1rem, 42rem)' }}
+        style={{ width: `min(calc(${mainContentWidth} - 2rem), 42rem)` }}
       >
-        <div 
-          className="w-full rounded-xl border flex flex-col relative shadow-lg" 
-          style={{ 
-            borderColor: 'var(--primary)',
-            backgroundColor: themeSystem?.currentTheme?.colors?.surface?.elevated,
+        <div
+          className="w-full rounded-xl flex flex-col relative shadow-lg border border-border/80 focus-within:border-primary/70 focus-within:ring-1 focus-within:ring-primary/50"
+          style={{
+            backgroundColor: themeSystem?.currentTheme?.colors?.surface?.subtle,
           }}
         >
           {/* Textarea - auto-grows from 1 line to max 5 lines */}
@@ -475,7 +479,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
               textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
             }}
             placeholder="Type your comment..."
-            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 shadow-none rounded-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent dark:bg-transparent focus-visible:outline-none overflow-y-auto"
+            outerClassName="focus-within:ring-0"
+            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 rounded-none appearance-none hover:border-transparent bg-transparent dark:bg-transparent overflow-y-auto focus:ring-0 focus:shadow-none"
             autoFocus={!isMobile}
             rows={1}
             onKeyDown={(e) => {
@@ -538,7 +543,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   // If we're in an inline diff ('inline' layout), render via Portal (fixed over content).
   if (layout === 'fill') {
     return (
-      <div 
+      <div
         className={cn("flex flex-col relative", "size-full")}
         style={{
           // Apply keyboard padding to the main container, just like ChatContainer
@@ -561,16 +566,16 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             </div>
           </ScrollableOverlay>
         </div>
-        
-        {/* Render Input In-Flow at the bottom */}
+
+        {/* Render Input overlay at the bottom */}
         {selection && (
-          <div 
+          <div
             className={cn(
-              "pointer-events-auto relative pb-2 transition-none z-50 flex justify-center",
+              "pointer-events-auto absolute bottom-0 left-0 right-0 pb-2 transition-none z-50 flex justify-center w-full",
               isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
             style={{
-              marginBottom: isMobile 
+              marginBottom: isMobile
                 ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
                 : '16px'
             }}
@@ -597,24 +602,24 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
           selectedLines={selection}
         />
       </div>
-      
+
       {selection && createPortal(
-        <div 
+        <div
           className="fixed inset-0 z-50 flex flex-col justify-end items-start pointer-events-none transition-none transform-gpu"
-          style={{ 
+          style={{
             paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : '0px',
             isolation: 'isolate'
           }}
         >
-          <div 
+          <div
             className={cn(
               "pointer-events-auto relative pb-2 transition-none",
               isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
-            style={{ 
+            style={{
               marginLeft: mainContentCenter,
               transform: 'translateX(-50%)',
-              marginBottom: isMobile 
+              marginBottom: isMobile
                 ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
                 : '16px'
             }}

@@ -13,7 +13,7 @@
   },
   "colors": {
     "primary": {
-      "base": "#6C71C4",
+      "base": "#278BD2",
       "hover": "#5C65AC",
       "active": "#8285C9",
       "foreground": "#001F27",
@@ -21,26 +21,26 @@
       "emphasis": "#5C65AC"
     },
     "surface": {
-      "background": "#001F27",
+      "background": "#001e25",
       "foreground": "#93A1A1",
-      "muted": "#022733",
-      "mutedForeground": "#6C7F80",
-      "elevated": "#01222B",
+      "muted": "#02232e",
+      "mutedForeground": "#89999a",
+      "elevated": "#052832",
       "elevatedForeground": "#93A1A1",
       "overlay": "#FDF6E320",
-      "subtle": "#032830"
+      "subtle": "#042b34"
     },
     "interactive": {
       "border": "#20373F",
       "borderHover": "#243E47",
       "borderFocus": "#3A5A6B",
-      "selection": "#FDF6E333",
+      "selection": "#98afbd33",
       "selectionForeground": "#FDF6E3",
       "focus": "#6C71C4",
       "focusRing": "#6C71C440",
       "cursor": "#FDF6E3",
-      "hover": "#022733",
-      "active": "#01222B"
+      "hover": "#98afbd25",
+      "active": "#98afbd33"
     },
     "status": {
       "error": "#DC322F",
@@ -121,9 +121,9 @@
       }
     },
     "markdown": {
-      "heading1": "#6C71C4",
-      "heading2": "#D33682",
-      "heading3": "#B58900",
+      "heading1": "#93A1A1",
+      "heading2": "#93A1A1",
+      "heading3": "#93A1A1",
       "heading4": "#93A1A1",
       "link": "#2AA198",
       "linkHover": "#6C71C4",
@@ -135,7 +135,7 @@
     },
     "chat": {
       "userMessage": "#93A1A1",
-      "userMessageBackground": "#022733",
+      "userMessageBackground": "#042B34",
       "assistantMessage": "#93A1A1",
       "assistantMessageBackground": "#001F27",
       "timestamp": "#6C7F80",
@@ -143,7 +143,7 @@
     },
     "tools": {
       "background": "#02273380",
-      "border": "#20373F80",
+      "border": "#2b495380",
       "headerHover": "#032830",
       "icon": "#6C7F80",
       "title": "#93A1A1",
@@ -153,7 +153,7 @@
         "addedBackground": "#85990025",
         "removed": "#DC322F",
         "removedBackground": "#DC322F25",
-        "lineNumber": "#2D4958"
+        "lineNumber": "#345567"
       }
     }
   },

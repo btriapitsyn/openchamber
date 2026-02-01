@@ -21,8 +21,12 @@ function Command({
   return (
     <CommandPrimitive
       data-slot="command"
+      style={{
+        backgroundColor: 'var(--surface-elevated)',
+        color: 'var(--surface-elevated-foreground)',
+      }}
       className={cn(
-        "bg-background text-foreground flex h-full w-full flex-col overflow-hidden rounded-xl",
+        "flex h-full w-full flex-col overflow-hidden rounded-xl",
         className
       )}
       {...props}

@@ -700,7 +700,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                             'bg-background hover:bg-background',
                             isExpanded ? 'rounded-b-none' : 'rounded-b-xl',
                             isSelected
-                                ? 'text-primary'
+                                ? 'text-foreground'
                                 : 'text-muted-foreground hover:text-foreground'
                         )}
                     >

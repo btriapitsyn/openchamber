@@ -24,23 +24,23 @@
       "background": "#1E222A",
       "foreground": "#ABB2BF",
       "muted": "#212631",
-      "mutedForeground": "#818899",
-      "elevated": "#1B1F27",
+      "mutedForeground": "#939bad",
+      "elevated": "#232832",
       "elevatedForeground": "#ABB2BF",
       "overlay": "#F6F7FB20",
-      "subtle": "#171B23"
+      "subtle": "#2E3442"
     },
     "interactive": {
       "border": "#323848",
       "borderHover": "#363D52",
       "borderFocus": "#555C79",
-      "selection": "#F6F7FB33",
+      "selection": "#a8aec533",
       "selectionForeground": "#F6F7FB",
       "focus": "#61AFEF",
       "focusRing": "#61AFEF40",
       "cursor": "#F6F7FB",
-      "hover": "#212631",
-      "active": "#1B1F27"
+      "hover": "#a8aec525",
+      "active": "#a8aec533"
     },
     "status": {
       "error": "#E06C75",
@@ -121,21 +121,21 @@
       }
     },
     "markdown": {
-      "heading1": "#61AFEF",
-      "heading2": "#E06C75",
-      "heading3": "#E5C07B",
+      "heading1": "#ABB2BF",
+      "heading2": "#ABB2BF",
+      "heading3": "#ABB2BF",
       "heading4": "#ABB2BF",
       "link": "#56B6C2",
       "linkHover": "#61AFEF",
-      "inlineCode": "#98C379",
-      "inlineCodeBackground": "#212631",
+      "inlineCode": "#a0c288",
+      "inlineCodeBackground": "#232937",
       "blockquote": "#E5C07B",
       "blockquoteBorder": "#323848",
       "listMarker": "#61AFEF99"
     },
     "chat": {
       "userMessage": "#ABB2BF",
-      "userMessageBackground": "#212631",
+      "userMessageBackground": "#2e3442",
       "assistantMessage": "#ABB2BF",
       "assistantMessageBackground": "#1E222A",
       "timestamp": "#818899",
@@ -143,7 +143,7 @@
     },
     "tools": {
       "background": "#21263180",
-      "border": "#32384880",
+      "border": "#41495e80",
       "headerHover": "#171B23",
       "icon": "#818899",
       "title": "#ABB2BF",
@@ -153,7 +153,7 @@
         "addedBackground": "#98C37925",
         "removed": "#E06C75",
         "removedBackground": "#E06C7525",
-        "lineNumber": "#424967"
+        "lineNumber": "#545c81"
       }
     }
   },

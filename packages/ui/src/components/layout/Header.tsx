@@ -13,7 +13,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCodeLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiPlayListAddLine, RiQuestionLine, RiSettings3Line, RiTerminalBoxLine, type RemixiconComponentType } from '@remixicon/react';
+import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -64,7 +65,7 @@ const resolveTilde = (path: string, homeDir: string | null): string => {
 interface TabConfig {
   id: MainTab;
   label: string;
-  icon: RemixiconComponentType;
+  icon: RemixiconComponentType | 'diff';
   badge?: number;
   showDot?: boolean;
 }
@@ -415,7 +416,7 @@ export const Header: React.FC = () => {
       {
         id: 'diff',
         label: 'Diff',
-        icon: RiCodeLine,
+        icon: 'diff',
         badge: !isMobile && diffFileCount > 0 ? diffFileCount : undefined,
       },
       { id: 'files', label: 'Files', icon: RiFolder6Line },
@@ -447,12 +448,26 @@ export const Header: React.FC = () => {
 
   const renderTab = (tab: TabConfig) => {
     const isActive = activeMainTab === tab.id;
-    const Icon = tab.icon;
+    const isDiffTab = tab.icon === 'diff';
+    const Icon = isDiffTab ? null : (tab.icon as RemixiconComponentType);
     const isChatTab = tab.id === 'chat';
+    const showContextTooltip = isChatTab && !isMobile && contextUsage && contextUsage.totalTokens > 0;
 
-    return (
+    const renderIcon = (iconSize: number) => {
+      if (isDiffTab) {
+        return <DiffIcon size={iconSize} />;
+      }
+      return Icon ? <Icon size={iconSize} /> : null;
+    };
+
+    const formatTokens = (tokens: number) => {
+      if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+      if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
+      return tokens.toFixed(1).replace(/\.0$/, '');
+    };
+
+    const tabButton = (
       <button
-        key={tab.id}
         type="button"
         onClick={() => setActiveMainTab(tab.id)}
         onMouseDown={isActive ? handleActiveTabDragStart : undefined}
@@ -469,33 +484,57 @@ export const Header: React.FC = () => {
         role="tab"
       >
         {isMobile ? (
-          <Icon size={20} />
+          renderIcon(20)
         ) : (
           <>
-            <Icon size={16} />
+            {renderIcon(16)}
             <span className="header-tab-label">{tab.label}</span>
           </>
         )}
 
-        {isChatTab && !isMobile && contextUsage && contextUsage.totalTokens > 0 && (
-          <span className="ml-1">
-            <ContextUsageDisplay
-              totalTokens={contextUsage.totalTokens}
-              percentage={contextUsage.percentage}
-              contextLimit={contextUsage.contextLimit}
-              outputLimit={contextUsage.outputLimit ?? 0}
-              size="compact"
-            />
+        {showContextTooltip && (
+          <span className="header-tab-badge">
+            <div className={cn(
+              'app-region-no-drag flex items-center gap-1.5 text-muted-foreground/60 select-none typography-micro',
+            )}>
+              <span className={cn(
+                'font-medium',
+                contextUsage.percentage >= 90 ? 'text-status-error' :
+                contextUsage.percentage >= 75 ? 'text-status-warning' : 'text-status-success'
+              )}>
+                {Math.min(contextUsage.percentage, 999).toFixed(1)}%
+              </span>
+            </div>
           </span>
         )}
 
         {tab.badge !== undefined && tab.badge > 0 && (
-          <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary/10 px-1 text-[10px] font-bold text-primary">
+          <span className="header-tab-badge typography-micro text-status-info font-medium">
             {tab.badge}
           </span>
         )}
       </button>
     );
+
+    if (showContextTooltip) {
+      const safeOutputLimit = typeof contextUsage.outputLimit === 'number' ? Math.max(contextUsage.outputLimit, 0) : 0;
+      return (
+        <Tooltip key={tab.id} delayDuration={1000}>
+          <TooltipTrigger asChild>
+            {tabButton}
+          </TooltipTrigger>
+          <TooltipContent>
+            <div className="space-y-0.5">
+              <p className="typography-micro leading-tight">Used tokens: {formatTokens(contextUsage.totalTokens)}</p>
+              <p className="typography-micro leading-tight">Context limit: {formatTokens(contextUsage.contextLimit)}</p>
+              <p className="typography-micro leading-tight">Output limit: {formatTokens(safeOutputLimit)}</p>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      );
+    }
+
+    return <React.Fragment key={tab.id}>{tabButton}</React.Fragment>;
   };
 
   const renderDesktop = () => (
@@ -699,7 +738,8 @@ export const Header: React.FC = () => {
           <div className="flex items-center gap-0.5" role="tablist" aria-label="Main navigation">
             {tabs.map((tab) => {
               const isActive = activeMainTab === tab.id;
-              const Icon = tab.icon;
+              const isDiffTab = tab.icon === 'diff';
+              const Icon = isDiffTab ? null : (tab.icon as RemixiconComponentType);
               return (
                 <Tooltip key={tab.id} delayDuration={500}>
                   <TooltipTrigger asChild>
@@ -720,7 +760,11 @@ export const Header: React.FC = () => {
                         isActive && 'bg-interactive-selection text-interactive-selection-foreground'
                       )}
                     >
-                      <Icon className="h-5 w-5" />
+                      {isDiffTab ? (
+                        <DiffIcon className="h-5 w-5" />
+                      ) : Icon ? (
+                        <Icon className="h-5 w-5" />
+                      ) : null}
                       {tab.badge !== undefined && tab.badge > 0 && (
                         <span className="absolute -top-1 -right-1 text-[10px] font-semibold text-primary">
                           {tab.badge}

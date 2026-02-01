@@ -192,7 +192,7 @@ export const AgentManagerSidebar: React.FC<AgentManagerSidebarProps> = ({
   const remainingCount = filteredGroups.length - MAX_VISIBLE;
   
   return (
-    <div className={cn('flex h-full flex-col bg-sidebar/80 text-foreground border-r border-border/30', className)}>
+    <div className={cn('flex h-full flex-col text-foreground border-r border-border/30', className)}>
       {/* Search Input */}
       <div className="px-2.5 pt-3 pb-2">
         <div className="relative">

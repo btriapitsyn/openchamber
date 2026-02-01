@@ -932,7 +932,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         </FadeInOnReveal>
                         )
                     ) : (
-                        <div className="relative pl-4 ml-1">
+                        <div className="relative">
                             {shouldShowHeader && (
                                 <MessageHeader
                                     isUser={isUser}

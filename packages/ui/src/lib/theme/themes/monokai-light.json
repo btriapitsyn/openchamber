@@ -39,7 +39,7 @@
       "focus": "#BF7BFF",
       "focusRing": "#BF7BFF40",
       "cursor": "#1C150C",
-      "hover": "#F8F2E6",
+      "hover": "#e6e0d5",
       "active": "#FBF5E8"
     },
     "status": {
@@ -121,9 +121,9 @@
       }
     },
     "markdown": {
-      "heading1": "#BF7BFF",
-      "heading2": "#D9487C",
-      "heading3": "#F1A948",
+      "heading1": "#292318",
+      "heading2": "#292318",
+      "heading3": "#292318",
       "heading4": "#292318",
       "link": "#2D9AD7",
       "linkHover": "#BF7BFF",
@@ -143,7 +143,7 @@
     },
     "tools": {
       "background": "#F8F2E680",
-      "border": "#E9E0CF80",
+      "border": "#d0c8b880",
       "headerHover": "#F7EFDD",
       "icon": "#6D5C40",
       "title": "#292318",
@@ -153,7 +153,7 @@
         "addedBackground": "#4FB54B25",
         "removed": "#E54B4B",
         "removedBackground": "#E54B4B25",
-        "lineNumber": "#CABFAD"
+        "lineNumber": "#bfb5a4"
       }
     }
   },

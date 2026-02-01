@@ -436,7 +436,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       type="button"
                       aria-label="Switch project"
                       title={activeProjectLabel}
-                      className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary border border-[var(--interactive-border)]"
                     >
                       <RiFolderLine className="h-5 w-5" />
                     </button>
@@ -446,7 +446,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       aria-label="Switch project"
                       title={activeProjectLabel}
                       className={cn(
-                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 text-foreground outline-none hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring',
+                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 rounded-lg text-foreground outline-none hover:bg-interactive-hover/50 focus-visible:ring-2 focus-visible:ring-ring border border-[var(--interactive-border)]',
                         !isMobile && 'app-region-no-drag'
                       )}
                     >
@@ -487,7 +487,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                     onClick={onClose}
                     aria-label="Close settings"
                     className={cn(
-                      'inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                      'inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                       !isMobile && 'app-region-no-drag'
                     )}
                   >

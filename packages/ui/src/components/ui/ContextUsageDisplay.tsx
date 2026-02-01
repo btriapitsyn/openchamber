@@ -11,6 +11,7 @@ interface ContextUsageDisplayProps {
   outputLimit?: number;
   size?: 'default' | 'compact';
   isMobile?: boolean;
+  hideIcon?: boolean;
 }
 
 export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
@@ -20,6 +21,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   outputLimit,
   size = 'default',
   isMobile = false,
+  hideIcon = false,
 }) => {
   const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState(false);
   const longPressTimerRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
@@ -80,7 +82,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
       onTouchStart={isMobile ? handleLongPressStart : undefined}
       onTouchEnd={isMobile ? handleLongPressEnd : undefined}
     >
-      {!isMobile && <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />}
+      {!isMobile && !hideIcon && <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />}
       <span className={cn(getPercentageColor(percentage), 'font-medium')}>
         {Math.min(percentage, 999).toFixed(1)}%
       </span>

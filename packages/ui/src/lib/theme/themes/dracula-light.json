@@ -23,24 +23,24 @@
     "surface": {
       "background": "#F8F8F2",
       "foreground": "#1F1F2F",
-      "muted": "#F1F2ED",
+      "muted": "#eff1eb",
       "mutedForeground": "#52526B",
-      "elevated": "#F6F6F1",
+      "elevated": "#eeeee5",
       "elevatedForeground": "#1F1F2F",
       "overlay": "#05040C20",
-      "subtle": "#F2F2EC"
+      "subtle": "#edeee7"
     },
     "interactive": {
       "border": "#E2E3DA",
       "borderHover": "#D8D9D0",
       "borderFocus": "#B0B2A7",
-      "selection": "#05040C22",
+      "selection": "#c2bcea63",
       "selectionForeground": "#05040C",
       "focus": "#7C6BF5",
       "focusRing": "#7C6BF540",
       "cursor": "#05040C",
-      "hover": "#F1F2ED",
-      "active": "#F6F6F1"
+      "hover": "#c2bcea38",
+      "active": "#c2bcea63"
     },
     "status": {
       "error": "#D9536F",
@@ -121,9 +121,9 @@
       }
     },
     "markdown": {
-      "heading1": "#7C6BF5",
-      "heading2": "#D16090",
-      "heading3": "#F7A14D",
+      "heading1": "#1F1F2F",
+      "heading2": "#1F1F2F",
+      "heading3": "#1F1F2F",
       "heading4": "#1F1F2F",
       "link": "#1D7FC5",
       "linkHover": "#7C6BF5",

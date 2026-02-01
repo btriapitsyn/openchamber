@@ -1371,7 +1371,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 value={mobileModelQuery}
                                 onChange={(event) => setMobileModelQuery(event.target.value)}
                                 placeholder="Search providers or models"
-                                className="pl-7 h-9 rounded-xl border-border/40 bg-background/95 typography-meta"
+                                className="pl-7 h-9 rounded-xl border-border/40 bg-[var(--surface-elevated)] typography-meta"
                             />
                             {mobileModelQuery && (
                                 <button
@@ -1394,7 +1394,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
                     {/* Favorites Section for Mobile */}
                     {!mobileModelQuery && favoriteModelsList.length > 0 && (
-                        <div className="rounded-xl border border-border/40 bg-background/95 overflow-hidden">
+                        <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 <RiStarFill className="h-3 w-3 inline-block mr-1.5 text-primary" />
                                 Favorites
@@ -1440,7 +1440,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
                     {/* Recent Section for Mobile */}
                     {!mobileModelQuery && recentModelsList.length > 0 && (
-                        <div className="rounded-xl border border-border/40 bg-background/95 overflow-hidden">
+                        <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 <RiTimeLine className="h-3 w-3 inline-block mr-1.5" />
                                 Recent
@@ -1492,8 +1492,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                         const isActiveProvider = provider.id === currentProviderId;
                         const isExpanded = expandedMobileProviders.has(provider.id) || normalizedQuery.length > 0;
 
-                        return (
-                            <div key={provider.id} className="rounded-xl border border-border/40 bg-background/95 overflow-hidden">
+                         return (
+                             <div key={provider.id} className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                                 <button
                                     type="button"
                                     onClick={() => toggleMobileProviderExpansion(provider.id)}
@@ -1584,9 +1584,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                             toggleFavoriteModel(provider.id as string, model.id as string);
                                                         }}
                                                         className={cn(
-                                                            "model-favorite-button flex h-5 w-5 items-center justify-center hover:text-yellow-600 flex-shrink-0",
+                                                            "model-favorite-button flex h-5 w-5 items-center justify-center hover:text-primary/80 flex-shrink-0",
                                                             isFavoriteModel(provider.id as string, model.id as string)
-                                                                ? "text-yellow-500"
+                                                                ? "text-primary"
                                                                 : "text-muted-foreground"
                                                         )}
                                                         aria-label={isFavoriteModel(provider.id as string, model.id as string) ? "Unfavorite" : "Favorite"}
@@ -1901,8 +1901,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                             toggleFavoriteModel(providerID, modelID);
                         }}
                         className={cn(
-                            "model-favorite-button flex h-4 w-4 items-center justify-center hover:text-yellow-600",
-                            isFavorite ? "text-yellow-500" : "text-muted-foreground"
+                            "model-favorite-button flex h-4 w-4 items-center justify-center hover:text-primary/80",
+                            isFavorite ? "text-primary" : "text-muted-foreground"
                         )}
                         aria-label={isFavorite ? "Unfavorite" : "Favorite"}
                         title={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -2082,7 +2082,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     {/* Favorites Section */}
                                     {filteredFavorites.length > 0 && (
                                         <>
-                                            <DropdownMenuLabel className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
+                                            <DropdownMenuLabel
+                                                style={{ backgroundColor: 'var(--surface-elevated)' }}
+                                                className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30"
+                                            >
                                                 <RiStarFill className="h-4 w-4 text-primary" />
                                                 Favorites
                                             </DropdownMenuLabel>
@@ -2097,7 +2100,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     {filteredRecents.length > 0 && (
                                         <>
                                             {filteredFavorites.length > 0 && <DropdownMenuSeparator />}
-                                            <DropdownMenuLabel className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
+                                            <DropdownMenuLabel
+                                                style={{ backgroundColor: 'var(--surface-elevated)' }}
+                                                className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30"
+                                            >
                                                 <RiTimeLine className="h-4 w-4" />
                                                 Recent
                                             </DropdownMenuLabel>
@@ -2117,7 +2123,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     {filteredProviders.map((provider, index) => (
                                         <React.Fragment key={provider.id}>
                                             {index > 0 && <DropdownMenuSeparator />}
-                                            <DropdownMenuLabel className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 bg-background border-b border-border/30">
+                                            <DropdownMenuLabel
+                                                style={{ backgroundColor: 'var(--surface-elevated)' }}
+                                                className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30"
+                                            >
                                                 <ProviderLogo
                                                     providerId={provider.id}
                                                     className="h-4 w-4 flex-shrink-0"

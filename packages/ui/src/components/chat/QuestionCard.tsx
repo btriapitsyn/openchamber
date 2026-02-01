@@ -1,5 +1,6 @@
 import React from 'react';
-import { RiCheckLine, RiCheckboxCircleFill, RiCircleLine, RiCloseLine, RiEditLine, RiListCheck3, RiQuestionLine } from '@remixicon/react';
+import { RiCheckLine, RiCloseLine, RiEditLine, RiListCheck3, RiQuestionLine } from '@remixicon/react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 import { cn } from '@/lib/utils';
 import type { QuestionRequest } from '@/types/question';
@@ -255,11 +256,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
                       >
                         <div className="flex items-start gap-2">
                           <div className="mt-0.5 shrink-0">
-                            {selected ? (
-                              <RiCheckboxCircleFill className="h-3.5 w-3.5 text-primary" />
-                            ) : (
-                              <RiCircleLine className="h-3.5 w-3.5 text-muted-foreground/50" />
-                            )}
+                            <Checkbox
+                              checked={selected}
+                              onChange={() => handleToggleOption(option.label)}
+                              disabled={isResponding}
+                            />
                           </div>
 
                           <div className="min-w-0 flex-1">
