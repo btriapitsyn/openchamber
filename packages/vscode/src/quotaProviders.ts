@@ -20,6 +20,44 @@ type ProviderUsage = {
   models?: Record<string, ProviderUsage>;
 };
 
+type OpenAiUsagePayload = {
+  rate_limit?: {
+    primary_window?: {
+      used_percent?: number;
+      limit_window_seconds?: number;
+      reset_at?: number;
+    };
+    secondary_window?: {
+      used_percent?: number;
+      limit_window_seconds?: number;
+      reset_at?: number;
+    };
+  };
+};
+
+type GoogleModelsPayload = {
+  models?: Record<string, {
+    quotaInfo?: {
+      remainingFraction?: number;
+      resetTime?: string;
+    };
+  }>;
+};
+
+type ZaiLimit = {
+  type?: string;
+  number?: number;
+  unit?: number;
+  nextResetTime?: number;
+  percentage?: number;
+};
+
+type ZaiPayload = {
+  data?: {
+    limits?: ZaiLimit[];
+  };
+};
+
 export type ProviderResult = {
   providerId: string;
   providerName: string;
@@ -245,7 +283,7 @@ export const fetchOpenaiQuota = async (): Promise<ProviderResult> => {
       });
     }
 
-    const payload = await response.json() as Record<string, any>;
+    const payload = await response.json() as OpenAiUsagePayload;
     const primary = payload?.rate_limit?.primary_window ?? null;
     const secondary = payload?.rate_limit?.secondary_window ?? null;
 
@@ -427,9 +465,9 @@ export const fetchGoogleQuota = async (): Promise<ProviderResult> => {
   }
 
   const models: Record<string, ProviderUsage> = {};
-  const payloadModels = (payload as { models?: Record<string, unknown> }).models ?? {};
-  for (const [modelName, modelData] of Object.entries(payloadModels as Record<string, any>)) {
-    const quotaInfo = (modelData as Record<string, any>)?.quotaInfo;
+  const payloadModels = (payload as GoogleModelsPayload).models ?? {};
+  for (const [modelName, modelData] of Object.entries(payloadModels)) {
+    const quotaInfo = modelData?.quotaInfo;
     const remainingFraction = quotaInfo?.remainingFraction;
     const remainingPercent = typeof remainingFraction === 'number'
       ? Math.round(remainingFraction * 100)
@@ -519,7 +557,7 @@ export const fetchZaiQuota = async (): Promise<ProviderResult> => {
       });
     }
 
-    const payload = await response.json() as Record<string, any>;
+    const payload = await response.json() as ZaiPayload;
     const limits = Array.isArray(payload?.data?.limits) ? payload.data.limits : [];
     const tokensLimit = limits.find((limit: Record<string, unknown>) => limit?.type === 'TOKENS_LIMIT');
     const windowSeconds = resolveWindowSeconds(tokensLimit as Record<string, unknown> | undefined);
