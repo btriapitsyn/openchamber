@@ -22,6 +22,7 @@ import { BranchSelector, useBranchOptions } from '@/components/multirun/BranchSe
 import { AgentSelector } from '@/components/multirun/AgentSelector';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ProjectRef } from '@/lib/openchamberConfig';
 import type { CreateMultiRunParams, MultiRunFileAttachment } from '@/types/multirun';
 
@@ -66,6 +67,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
   
+  const { currentTheme } = useThemeSystem();
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory ?? null);
   const { isGitRepository, isLoading: isLoadingBranches } = useBranchOptions(currentDirectory);
   
@@ -312,7 +314,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
 
         {/* Setup commands collapsible */}
         <Collapsible open={isSetupCommandsOpen} onOpenChange={setIsSetupCommandsOpen}>
-          <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:opacity-80 transition-opacity">
+          <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:bg-[var(--interactive-hover)] rounded-md px-1 -mx-1 transition-colors">
             <p className="typography-ui-label font-medium text-foreground">
               Setup commands
               {setupCommands.filter(cmd => cmd.trim()).length > 0 && (
@@ -409,7 +411,10 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
           <label htmlFor="prompt" className="typography-ui-label font-medium text-foreground">
             Prompt
           </label>
-          <div className="rounded-xl border border-border/60 bg-input/10 dark:bg-input/30 overflow-hidden">
+          <div
+            className="rounded-xl border border-border/80 overflow-hidden focus-within:ring-1 focus-within:ring-primary/50"
+            style={{ backgroundColor: currentTheme?.colors?.surface?.subtle }}
+          >
             {/* Text Area */}
             <Textarea
               ref={textareaRef}
@@ -418,7 +423,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
               onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask anything..."
-              className="min-h-[100px] max-h-[300px] resize-none border-0 bg-transparent px-4 py-3 typography-markdown focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="min-h-[100px] max-h-[300px] resize-none border-0 bg-transparent dark:bg-transparent px-4 py-3 typography-markdown focus-visible:ring-0 focus-visible:ring-offset-0"
             />
             
             {/* Attached Files Display */}
@@ -450,7 +455,7 @@ export const AgentManagerEmptyState: React.FC<AgentManagerEmptyStateProps> = ({
             )}
             
             {/* Footer Controls */}
-            <div className="flex items-center justify-between px-3 py-2 border-t border-border/40">
+            <div className="flex items-center justify-between px-3 py-2 border-t border-border/40 bg-transparent">
               {/* Left Controls - Attachments */}
               <div className="flex items-center gap-2">
                 <input

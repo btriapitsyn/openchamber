@@ -159,6 +159,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                                             isExpanded && 'opacity-0',
                                             !isExpanded && !isMobile && 'group-hover/tool:opacity-0'
                                         )}
+                                        style={{ color: 'var(--tools-icon)' }}
                                     >
                                         <RiStackLine className="h-3.5 w-3.5" />
                                     </div>
@@ -178,10 +179,10 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                                     </div>
                                 </>
                             ) : (
-                                <RiStackLine className="h-3.5 w-3.5" />
+                                <RiStackLine className="h-3.5 w-3.5" style={{ color: 'var(--tools-icon)' }} />
                             )}
                         </div>
-                        <span className="typography-meta font-medium">Activity</span>
+                        <span className="typography-meta font-medium" style={{ color: 'var(--tools-title)' }}>Activity</span>
                     </div>
 
                     {diffStats && (diffStats.additions > 0 || diffStats.deletions > 0) && (
@@ -201,11 +202,13 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
 
                 <div
                     className={cn(
-                        'relative pr-2 pb-1 pt-1 pl-[1.4375rem]',
-                        'before:absolute before:left-[0.4375rem] before:w-px before:bg-border/80 before:content-[""]',
-                        'before:top-[-0.25rem] before:bottom-0'
+                        'relative pr-2 pb-1 pt-1 pl-[1.4375rem]'
                     )}
                 >
+                    <div 
+                        className="absolute left-[0.4375rem] w-px top-[-0.25rem] bottom-0"
+                        style={{ backgroundColor: 'var(--tools-border)', borderWidth: '0', width: '1px' }}
+                    ></div>
                     {!isExpanded && hiddenCount > 0 && (
                         <div
                             className="typography-micro text-muted-foreground/70 mb-1 cursor-pointer hover:text-muted-foreground"

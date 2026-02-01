@@ -11,8 +11,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore, type QueuedMessage } from '@/stores/messageQueueStore';
-import type { AttachedFile, EditPermissionMode } from '@/stores/types/sessionTypes';
-import { getEditModeColors } from '@/lib/permissions/editModeColors';
+import type { AttachedFile } from '@/stores/types/sessionTypes';
 import { AttachedFilesList } from './FileAttachment';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
@@ -40,7 +39,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useContextStore } from '@/stores/contextStore';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -51,53 +50,6 @@ interface ChatInputProps {
 }
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
-type PermissionAction = 'allow' | 'ask' | 'deny';
-type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
-
-const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
-    if (!Array.isArray(value)) {
-        return null;
-    }
-    const rules: PermissionRule[] = [];
-    for (const entry of value) {
-        if (!entry || typeof entry !== 'object') {
-            continue;
-        }
-        const candidate = entry as Partial<PermissionRule>;
-        if (typeof candidate.permission !== 'string' || typeof candidate.pattern !== 'string' || typeof candidate.action !== 'string') {
-            continue;
-        }
-        if (candidate.action !== 'allow' && candidate.action !== 'ask' && candidate.action !== 'deny') {
-            continue;
-        }
-        rules.push({ permission: candidate.permission, pattern: candidate.pattern, action: candidate.action });
-    }
-    return rules;
-};
-
-const resolveWildcardPermissionAction = (ruleset: unknown, permission: string): PermissionAction | undefined => {
-    const rules = asPermissionRuleset(ruleset);
-    if (!rules || rules.length === 0) {
-        return undefined;
-    }
-
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.permission === permission && rule.pattern === '*') {
-            return rule.action;
-        }
-    }
-
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.permission === '*' && rule.pattern === '*') {
-            return rule.action;
-        }
-    }
-
-    return undefined;
-};
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
     const [message, setMessage] = React.useState('');
@@ -140,6 +92,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const agents = getVisibleAgents();
     const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius } = useUIStore();
     const { working } = useAssistantStatus();
+    const { currentTheme } = useThemeSystem();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const prevWasAbortedRef = React.useRef(false);
@@ -269,79 +222,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }
         }
     }, [pendingInputText, consumePendingInputText]);
-
-    const currentAgent = React.useMemo(() => {
-        const selectedName = currentSessionId
-            ? (useContextStore.getState().getSessionAgentSelection(currentSessionId) || currentAgentName)
-            : currentAgentName;
-        if (!selectedName) {
-            return undefined;
-        }
-        return agents.find((agent) => agent.name === selectedName);
-    }, [agents, currentAgentName, currentSessionId]);
-
-    const agentEditAction = React.useMemo<EditPermissionMode>(() => {
-        if (!currentAgent) {
-            return 'deny';
-        }
-
-        return resolveWildcardPermissionAction(currentAgent.permission, 'edit') ?? 'allow';
-    }, [currentAgent]);
-
-    const sessionEditMode = useContextStore(
-        React.useCallback((state) => {
-            if (!currentAgentName) {
-                return undefined;
-            }
-            const sessionId = currentSessionId ?? '__global__';
-            return state.getSessionAgentEditMode(sessionId, currentAgentName, 'ask');
-        }, [currentAgentName, currentSessionId])
-    );
-
-    const selectionContextReady = Boolean(currentSessionId && currentAgentName);
-
-    const effectiveEditPermission = React.useMemo<EditPermissionMode>(() => {
-        // Only show accent when edits are effectively allowed.
-        if (agentEditAction === 'allow') {
-            return 'allow';
-        }
-        if (agentEditAction !== 'ask') {
-            return 'ask';
-        }
-
-        const sessionMode = selectionContextReady ? (sessionEditMode ?? 'ask') : 'ask';
-        return (sessionMode === 'allow' || sessionMode === 'full') ? 'allow' : 'ask';
-    }, [agentEditAction, selectionContextReady, sessionEditMode]);
-
-    const chatInputAccent = React.useMemo(() => getEditModeColors(effectiveEditPermission), [effectiveEditPermission]);
-
-    // VS Code webviews tend to have stronger status border colors; in web/desktop themes the same
-    // border tokens can already be subtle, so avoid double-softening there.
-    const softenBorderColor = React.useCallback((color: string) => (
-        isVSCodeRuntime()
-            ? `color-mix(in srgb, ${color} 55%, transparent)`
-            : color
-    ), []);
-
-    const chatInputWrapperStyle = React.useMemo<React.CSSProperties | undefined>(() => {
-        // Keep border width stable so toggling modes doesn't shift layout.
-        const baseBorderWidth = isVSCodeRuntime() ? 1 : 2;
-
-        const baseStyle: React.CSSProperties = {
-            borderRadius: cornerRadius,
-        };
-
-        if (!chatInputAccent) {
-            return { ...baseStyle, borderWidth: baseBorderWidth };
-        }
-
-        const borderColor = chatInputAccent.border ?? chatInputAccent.text;
-        return {
-            ...baseStyle,
-            borderColor: softenBorderColor(borderColor),
-            borderWidth: baseBorderWidth,
-        };
-    }, [chatInputAccent, softenBorderColor, cornerRadius]);
 
     const hasContent = message.trim() || attachedFiles.length > 0;
     const hasQueuedMessages = queuedMessages.length > 0;
@@ -1378,7 +1258,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         <form
             onSubmit={handleSubmit}
             className={cn(
-                "relative pt-0 pb-2 md:pb-4",
+                "relative pt-0 pb-4",
                 isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
             data-keyboard-avoid="true"
@@ -1438,10 +1318,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 />
                 <div
                     className={cn(
-                        "border border-border/80 bg-input/10 dark:bg-input/30",
-                        "flex flex-col relative overflow-visible"
+                        "flex flex-col relative overflow-visible",
+                        "border border-border/80",
+                        "focus-within:ring-1 focus-within:ring-primary/50"
                     )}
-                    style={chatInputWrapperStyle}
+                    style={{
+                        borderRadius: cornerRadius,
+                        backgroundColor: currentTheme?.colors?.surface?.subtle,
+                    }}
                 >
                     {stopButton}
                         {}
@@ -1493,12 +1377,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 ? "# for agents; @ for files; / for commands"
                                 : "Select or create a session to start chatting"}
                             disabled={!currentSessionId && !newSessionDraftOpen}
-
+                            outerClassName="focus-within:ring-0"
                         className={cn(
-                            'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
+                            'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent',
                             isMobile ? "py-2.5" : "pt-4 pb-2",
-                            canAbort && 'pr-10',
-                            "focus-visible:outline-none focus-visible:ring-0"
+                            canAbort && 'pr-10'
                         )}
                         style={{
                             flex: 'none',

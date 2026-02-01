@@ -26,3 +26,4 @@ local-dev*
 *.njsproj
 *.sln
 *.sw?
+.opencode/plans/*

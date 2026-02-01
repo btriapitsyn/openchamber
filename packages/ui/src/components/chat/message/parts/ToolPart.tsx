@@ -256,7 +256,8 @@ const ToolScrollableSection: React.FC<ToolScrollableSectionProps> = ({
 }) => (
     <ScrollableOverlay
         outerClassName={cn('w-full min-w-0 flex-none overflow-hidden', maxHeightClass, outerClassName)}
-        className={cn('tool-output-surface p-2 rounded-xl w-full min-w-0 border border-border/20 bg-transparent', className)}
+        className={cn('tool-output-surface p-2 rounded-xl w-full min-w-0 bg-transparent', className)}
+        style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}
         disableHorizontal={disableHorizontal}
     >
         <div className="w-full min-w-0">
@@ -410,8 +411,8 @@ interface DiffPreviewProps {
 const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, syntaxTheme, input }) => (
     <div className="typography-code px-1 pb-1 pt-0 space-y-0">
         {parseDiffToUnified(diff).map((hunk, hunkIdx) => (
-            <div key={hunkIdx} className="-mx-1 px-1 border-b border-border/20 last:border-b-0">
-                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border-b border-border/10 break-words -mx-1">
+            <div key={hunkIdx} className="-mx-1 px-1 last:border-b-0" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
+                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground break-words -mx-1" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
                     {`${hunk.file} (line ${hunk.oldStart})`}
                 </div>
 
@@ -433,7 +434,7 @@ const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, syntaxTheme,
                                         : {}
                             }
                         >
-                            <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                            <span className="w-10 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
                                 {line.lineNumber || ''}
                             </span>
                             <div className="flex-1 min-w-0">
@@ -454,9 +455,15 @@ const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, syntaxTheme,
                                     whiteSpace: 'pre-wrap',
                                     wordBreak: 'break-all',
                                     overflowWrap: 'anywhere',
+                                    color: line.type === 'removed' ? 'var(--tools-edit-removed)' : line.type === 'added' ? 'var(--tools-edit-added)' : 'inherit',
                                 }}
                                 codeTagProps={{
-                                    style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' },
+                                    style: { 
+                                        background: 'transparent', 
+                                        backgroundColor: 'transparent', 
+                                        fontSize: 'inherit',
+                                        color: line.type === 'removed' ? 'var(--tools-edit-removed)' : line.type === 'added' ? 'var(--tools-edit-added)' : 'inherit',
+                                    },
                                 }}
                             >
                                 {line.content}
@@ -491,13 +498,13 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = React.memo(({ conten
 
     return (
         <div className="w-full min-w-0">
-            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border border-border/10 rounded-lg mb-1">
+            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground rounded-lg mb-1" style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}>
                 {`${displayPath} (${headerLineLabel})`}
             </div>
             <div className="space-y-0">
                 {lines.map((line, lineIdx) => (
                     <div key={lineIdx} className="typography-code font-mono px-2 py-0.5 flex -mx-1">
-                        <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-2 self-start select-none">
+                        <span className="w-10 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
                             {lineIdx + 1}
                         </span>
                         <div className="flex-1 min-w-0">
@@ -560,10 +567,10 @@ const ImagePreview: React.FC<ImagePreviewProps> = React.memo(({ content, filePat
 
     return (
         <div className="w-full min-w-0">
-            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground border border-border/10 rounded-lg mb-2">
+            <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground rounded-lg mb-2" style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}>
                 {displayPath}
             </div>
-            <div className="flex justify-center p-4 bg-muted/10 rounded-lg border border-border/10">
+            <div className="flex justify-center p-4 bg-muted/10 rounded-lg" style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}>
                 <img
                     src={imageSrc}
                     alt={displayPath}
@@ -815,7 +822,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
                             return (
                                 <div key={idx} className={cn('typography-code font-mono flex w-full min-w-0', isInfo && 'text-muted-foreground/70 italic')}>
-                                    <span className="text-muted-foreground/60 w-8 flex-shrink-0 text-right pr-3 self-start select-none">
+                                    <span className="w-10 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
                                         {shouldShowLineNumber ? lineNumber : ''}
                                     </span>
                                     <div className="flex-1 min-w-0">
@@ -892,12 +899,18 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     return (
         <div
             className={cn(
-                'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]',
-                'before:absolute before:left-[0.4375rem] before:w-px before:bg-border/80 before:content-[""]',
-                hasPrevTool ? 'before:top-[-0.45rem]' : 'before:top-[-0.25rem]',
-                hasNextTool ? 'before:bottom-[-0.6rem]' : 'before:bottom-0'
+                'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]'
             )}
         >
+            <div 
+                className="absolute left-[0.4375rem] w-px"
+                style={{
+                    backgroundColor: 'var(--tools-border)',
+                    top: hasPrevTool ? '-0.45rem' : '-0.25rem',
+                    bottom: hasNextTool ? '-0.6rem' : '0',
+                    width: '1px'
+                }}
+            ></div>
             {(part.tool === 'todowrite' || part.tool === 'todoread' || part.tool === 'question') ? (
                 renderResultContent()
             ) : (
@@ -1109,7 +1122,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                                 isExpanded && 'opacity-0',
                                 !isExpanded && !isMobile && 'group-hover/tool:opacity-0'
                             )}
-                            style={!isTaskTool && isError ? { color: 'var(--status-error)' } : {}}
+                            style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-icon)' }}
                         >
                             {getToolIcon(part.tool)}
                         </div>
@@ -1127,13 +1140,13 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                     </div>
                     <span
                         className="typography-meta font-medium"
-                        style={!isTaskTool && isError ? { color: 'var(--status-error)' } : {}}
+                        style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
                     >
                         {displayName}
                     </span>
                 </div>
 
-                <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta text-muted-foreground/70">
+                <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
                     {description && (
                         <span className={cn("truncate", isMobile && "max-w-[120px]")}>
                             {description}

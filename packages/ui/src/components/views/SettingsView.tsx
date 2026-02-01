@@ -395,7 +395,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                         className={cn(
                           'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
                           'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                          isActive ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground'
+                          isActive ? 'bg-interactive-selection text-interactive-selection-foreground shadow-sm' : 'text-muted-foreground hover:bg-interactive-hover/50'
                         )}
                         aria-pressed={isActive}
                         aria-label={label}
@@ -418,7 +418,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   onMouseDown={isActive ? handleActiveTabDragStart : undefined}
                   className={cn(
                     'relative flex h-8 items-center gap-2 px-3 rounded-md typography-ui-label font-medium transition-colors',
-                    isActive ? 'app-region-drag bg-secondary text-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                    isActive ? 'app-region-drag bg-interactive-selection text-interactive-selection-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                   )}
                   aria-pressed={isActive}
@@ -442,7 +442,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       type="button"
                       aria-label="Switch project"
                       title={activeProjectLabel}
-                      className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary border border-[var(--interactive-border)]"
                     >
                       <RiFolderLine className="h-5 w-5" />
                     </button>
@@ -452,7 +452,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       aria-label="Switch project"
                       title={activeProjectLabel}
                       className={cn(
-                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 text-foreground outline-none hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring',
+                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 rounded-lg text-foreground outline-none hover:bg-interactive-hover/50 focus-visible:ring-2 focus-visible:ring-ring border border-[var(--interactive-border)]',
                         !isMobile && 'app-region-no-drag'
                       )}
                     >
@@ -493,7 +493,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                     onClick={onClose}
                     aria-label="Close settings"
                     className={cn(
-                      'inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                      'inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                       !isMobile && 'app-region-no-drag'
                     )}
                   >

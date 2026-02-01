@@ -491,7 +491,7 @@ export const SessionDialogs: React.FC = () => {
                         {targetWorktree ? formatPathForDisplay(targetWorktree.path, homeDirectory) : 'Worktree path unavailable.'}
                     </p>
                     {hasDirtyWorktrees && (
-                        <p className="typography-micro text-warning">Uncommitted changes will be discarded.</p>
+                        <p className="typography-micro text-status-warning">Uncommitted changes will be discarded.</p>
                     )}
 
                 </div>

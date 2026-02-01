@@ -756,7 +756,7 @@ export const AgentsPage: React.FC = () => {
                   const newValue = Math.max(0, current - 0.1);
                   setTemperature(parseFloat(newValue.toFixed(1)));
                 }}
-                className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-interactive-hover text-muted-foreground hover:text-foreground"
               >
                 <RiSubtractLine className="h-3.5 w-3.5" />
               </button>
@@ -795,7 +795,7 @@ export const AgentsPage: React.FC = () => {
                   const newValue = Math.min(2, current + 0.1);
                   setTemperature(parseFloat(newValue.toFixed(1)));
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-interactive-hover text-muted-foreground hover:text-foreground"
               >
                 <RiAddLine className="h-3.5 w-3.5" />
               </button>
@@ -824,7 +824,7 @@ export const AgentsPage: React.FC = () => {
                   const newValue = Math.max(0, current - 0.1);
                   setTopP(parseFloat(newValue.toFixed(1)));
                 }}
-                className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-interactive-hover text-muted-foreground hover:text-foreground"
               >
                 <RiSubtractLine className="h-3.5 w-3.5" />
               </button>
@@ -863,7 +863,7 @@ export const AgentsPage: React.FC = () => {
                   const newValue = Math.min(1, current + 0.1);
                   setTopP(parseFloat(newValue.toFixed(1)));
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+                className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center h-6 w-6 rounded hover:bg-interactive-hover text-muted-foreground hover:text-foreground"
               >
                 <RiAddLine className="h-3.5 w-3.5" />
               </button>

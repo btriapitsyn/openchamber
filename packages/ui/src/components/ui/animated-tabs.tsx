@@ -67,7 +67,7 @@ export function AnimatedTabs<T extends string>({
           animate ? '[transition:clip-path_200ms_ease]' : null
         )}
       >
-        <div className="flex h-9 items-center gap-1 rounded-lg bg-accent px-1.5 text-accent-foreground">
+        <div className="flex h-9 items-center gap-1 rounded-lg bg-interactive-selection px-1.5 text-interactive-selection-foreground">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
@@ -101,7 +101,7 @@ export function AnimatedTabs<T extends string>({
               className={cn(
                 'flex h-7 flex-1 items-center justify-center gap-1.25 rounded-lg px-2.5 text-sm font-semibold transition-colors duration-150',
                 isActive ? 'text-accent-foreground' : 'text-muted-foreground',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-background'
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
               )}
               aria-pressed={isActive}
               aria-disabled={!isInteractive}

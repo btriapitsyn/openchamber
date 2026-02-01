@@ -65,6 +65,163 @@ const normalizeDirectoryPath = (value) => {
 };
 
 const OPENCHAMBER_USER_CONFIG_ROOT = path.join(os.homedir(), '.config', 'openchamber');
+const OPENCHAMBER_USER_THEMES_DIR = path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'themes');
+
+const MAX_THEME_JSON_BYTES = 512 * 1024;
+
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+const isValidThemeColor = (value) => isNonEmptyString(value);
+
+const normalizeThemeJson = (raw) => {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  const metadata = raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : null;
+  const colors = raw.colors && typeof raw.colors === 'object' ? raw.colors : null;
+  if (!metadata || !colors) {
+    return null;
+  }
+
+  const id = metadata.id;
+  const name = metadata.name;
+  const variant = metadata.variant;
+  if (!isNonEmptyString(id) || !isNonEmptyString(name) || (variant !== 'light' && variant !== 'dark')) {
+    return null;
+  }
+
+  const primary = colors.primary;
+  const surface = colors.surface;
+  const interactive = colors.interactive;
+  const status = colors.status;
+  const syntax = colors.syntax;
+  const syntaxBase = syntax && typeof syntax === 'object' ? syntax.base : null;
+  const syntaxHighlights = syntax && typeof syntax === 'object' ? syntax.highlights : null;
+
+  if (!primary || !surface || !interactive || !status || !syntaxBase || !syntaxHighlights) {
+    return null;
+  }
+
+  // Minimal fields required by CSSVariableGenerator and diff/syntax rendering.
+  const required = [
+    primary.base,
+    primary.foreground,
+    surface.background,
+    surface.foreground,
+    surface.muted,
+    surface.mutedForeground,
+    surface.elevated,
+    surface.elevatedForeground,
+    surface.subtle,
+    interactive.border,
+    interactive.selection,
+    interactive.selectionForeground,
+    interactive.focusRing,
+    interactive.hover,
+    status.error,
+    status.errorForeground,
+    status.errorBackground,
+    status.errorBorder,
+    status.warning,
+    status.warningForeground,
+    status.warningBackground,
+    status.warningBorder,
+    status.success,
+    status.successForeground,
+    status.successBackground,
+    status.successBorder,
+    status.info,
+    status.infoForeground,
+    status.infoBackground,
+    status.infoBorder,
+    syntaxBase.background,
+    syntaxBase.foreground,
+    syntaxBase.keyword,
+    syntaxBase.string,
+    syntaxBase.number,
+    syntaxBase.function,
+    syntaxBase.variable,
+    syntaxBase.type,
+    syntaxBase.comment,
+    syntaxBase.operator,
+    syntaxHighlights.diffAdded,
+    syntaxHighlights.diffRemoved,
+    syntaxHighlights.lineNumber,
+  ];
+
+  if (!required.every(isValidThemeColor)) {
+    return null;
+  }
+
+  const tags = Array.isArray(metadata.tags)
+    ? metadata.tags.filter((tag) => typeof tag === 'string' && tag.trim().length > 0)
+    : [];
+
+  return {
+    ...raw,
+    metadata: {
+      ...metadata,
+      id: id.trim(),
+      name: name.trim(),
+      description: typeof metadata.description === 'string' ? metadata.description : '',
+      version: typeof metadata.version === 'string' && metadata.version.trim().length > 0 ? metadata.version : '1.0.0',
+      variant,
+      tags,
+    },
+  };
+};
+
+const readCustomThemesFromDisk = async () => {
+  try {
+    const entries = await fsPromises.readdir(OPENCHAMBER_USER_THEMES_DIR, { withFileTypes: true });
+    const themes = [];
+    const seen = new Set();
+
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      if (!entry.name.toLowerCase().endsWith('.json')) continue;
+
+      const filePath = path.join(OPENCHAMBER_USER_THEMES_DIR, entry.name);
+      try {
+        const stat = await fsPromises.stat(filePath);
+        if (!stat.isFile()) continue;
+        if (stat.size > MAX_THEME_JSON_BYTES) {
+          console.warn(`[themes] Skip ${entry.name}: too large (${stat.size} bytes)`);
+          continue;
+        }
+
+        const rawText = await fsPromises.readFile(filePath, 'utf8');
+        const parsed = JSON.parse(rawText);
+        const normalized = normalizeThemeJson(parsed);
+        if (!normalized) {
+          console.warn(`[themes] Skip ${entry.name}: invalid theme JSON`);
+          continue;
+        }
+
+        const id = normalized.metadata.id;
+        if (seen.has(id)) {
+          console.warn(`[themes] Skip ${entry.name}: duplicate theme id "${id}"`);
+          continue;
+        }
+
+        seen.add(id);
+        themes.push(normalized);
+      } catch (error) {
+        console.warn(`[themes] Failed to read ${entry.name}:`, error);
+      }
+    }
+
+    return themes;
+  } catch (error) {
+    // Missing dir is fine.
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return [];
+    }
+    console.warn('[themes] Failed to list custom themes dir:', error);
+    return [];
+  }
+};
 
 const isPathWithinRoot = (resolvedPath, rootPath) => {
   const resolvedRoot = path.resolve(rootPath || os.homedir());
@@ -97,13 +254,48 @@ const resolveWorkspacePath = (targetPath, baseDirectory) => {
   return { ok: false, error: 'Path is outside of active workspace' };
 };
 
+const resolveWorkspacePathFromWorktrees = async (targetPath, baseDirectory) => {
+  const normalized = normalizeDirectoryPath(targetPath);
+  if (!normalized || typeof normalized !== 'string') {
+    return { ok: false, error: 'Path is required' };
+  }
+
+  const resolved = path.resolve(normalized);
+  const resolvedBase = path.resolve(baseDirectory || os.homedir());
+
+  try {
+    const { getWorktrees } = await import('./lib/git-service.js');
+    const worktrees = await getWorktrees(resolvedBase);
+
+    for (const worktree of worktrees) {
+      const candidate = typeof worktree?.worktree === 'string' ? normalizeDirectoryPath(worktree.worktree) : '';
+      if (!candidate) {
+        continue;
+      }
+      const candidateResolved = path.resolve(candidate);
+      if (isPathWithinRoot(resolved, candidateResolved)) {
+        return { ok: true, base: candidateResolved, resolved };
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to resolve worktree roots:', error);
+  }
+
+  return { ok: false, error: 'Path is outside of active workspace' };
+};
+
 const resolveWorkspacePathFromContext = async (req, targetPath) => {
   const resolvedProject = await resolveProjectDirectory(req);
   if (!resolvedProject.directory) {
     return { ok: false, error: resolvedProject.error || 'Active workspace is required' };
   }
 
-  return resolveWorkspacePath(targetPath, resolvedProject.directory);
+  const resolved = resolveWorkspacePath(targetPath, resolvedProject.directory);
+  if (resolved.ok || resolved.error !== 'Path is outside of active workspace') {
+    return resolved;
+  }
+
+  return resolveWorkspacePathFromWorktrees(targetPath, resolvedProject.directory);
 };
 
 
@@ -1063,13 +1255,58 @@ const migrateSettingsFromLegacyLastDirectory = async (current) => {
   return { settings: merged, changed: true };
 };
 
+const migrateSettingsFromLegacyThemePreferences = async (current) => {
+  const settings = current && typeof current === 'object' ? current : {};
+
+  const themeId = typeof settings.themeId === 'string' ? settings.themeId.trim() : '';
+  const themeVariant = typeof settings.themeVariant === 'string' ? settings.themeVariant.trim() : '';
+
+  const hasLight = typeof settings.lightThemeId === 'string' && settings.lightThemeId.trim().length > 0;
+  const hasDark = typeof settings.darkThemeId === 'string' && settings.darkThemeId.trim().length > 0;
+
+  if (hasLight && hasDark) {
+    return { settings, changed: false };
+  }
+
+  const defaultLight = 'flexoki-light';
+  const defaultDark = 'flexoki-dark';
+
+  let nextLightThemeId = hasLight ? settings.lightThemeId : undefined;
+  let nextDarkThemeId = hasDark ? settings.darkThemeId : undefined;
+
+  if (!hasLight) {
+    if (themeId && themeVariant === 'light') {
+      nextLightThemeId = themeId;
+    } else {
+      nextLightThemeId = defaultLight;
+    }
+  }
+
+  if (!hasDark) {
+    if (themeId && themeVariant === 'dark') {
+      nextDarkThemeId = themeId;
+    } else {
+      nextDarkThemeId = defaultDark;
+    }
+  }
+
+  const merged = mergePersistedSettings(settings, {
+    ...settings,
+    ...(nextLightThemeId ? { lightThemeId: nextLightThemeId } : {}),
+    ...(nextDarkThemeId ? { darkThemeId: nextDarkThemeId } : {}),
+  });
+
+  return { settings: merged, changed: true };
+};
+
 const readSettingsFromDiskMigrated = async () => {
   const current = await readSettingsFromDisk();
-  const { settings, changed } = await migrateSettingsFromLegacyLastDirectory(current);
-  if (changed) {
-    await writeSettingsToDisk(settings);
+  const migration1 = await migrateSettingsFromLegacyLastDirectory(current);
+  const migration2 = await migrateSettingsFromLegacyThemePreferences(migration1.settings);
+  if (migration1.changed || migration2.changed) {
+    await writeSettingsToDisk(migration2.settings);
   }
-  return settings;
+  return migration2.settings;
 };
 
 const getOrCreateVapidKeys = async () => {
@@ -3306,6 +3543,16 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to load settings:', error);
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load settings' });
+    }
+  });
+
+  app.get('/api/config/themes', async (_req, res) => {
+    try {
+      const customThemes = await readCustomThemesFromDisk();
+      res.json({ themes: customThemes });
+    } catch (error) {
+      console.error('Failed to load custom themes:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load custom themes' });
     }
   });
 
@@ -6156,20 +6403,27 @@ async function main(options = {}) {
 
   app.post('/api/fs/mkdir', async (req, res) => {
     try {
-      const { path: dirPath } = req.body;
+      const { path: dirPath, allowOutsideWorkspace } = req.body ?? {};
 
-      if (!dirPath) {
+      if (typeof dirPath !== 'string' || !dirPath.trim()) {
         return res.status(400).json({ error: 'Path is required' });
       }
 
-      const resolved = await resolveWorkspacePathFromContext(req, dirPath);
-      if (!resolved.ok) {
-        return res.status(400).json({ error: resolved.error });
+      let resolvedPath = '';
+
+      if (allowOutsideWorkspace) {
+        resolvedPath = path.resolve(normalizeDirectoryPath(dirPath));
+      } else {
+        const resolved = await resolveWorkspacePathFromContext(req, dirPath);
+        if (!resolved.ok) {
+          return res.status(400).json({ error: resolved.error });
+        }
+        resolvedPath = resolved.resolved;
       }
 
-      await fsPromises.mkdir(resolved.resolved, { recursive: true });
+      await fsPromises.mkdir(resolvedPath, { recursive: true });
 
-      res.json({ success: true, path: resolved.resolved });
+      res.json({ success: true, path: resolvedPath });
     } catch (error) {
       console.error('Failed to create directory:', error);
       res.status(500).json({ error: error.message || 'Failed to create directory' });

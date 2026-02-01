@@ -134,13 +134,13 @@
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, 'Liberation Mono', Menlo, monospace) !important;
   }
 
-  /* Remove focus rings globally */
-  *:focus {
+  /* Remove focus rings globally (except inputs/textareas/dropdowns/selects) */
+  *:focus:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not([data-slot="dropdown-menu-sub-content"]):not([data-slot="select-content"]) {
     outline: none !important;
     box-shadow: none !important;
   }
 
-  *:focus-visible {
+  *:focus-visible:not(input):not(textarea):not([data-slot="dropdown-menu-content"]):not([data-slot="dropdown-menu-sub-content"]):not([data-slot="select-content"]) {
     outline: none !important;
     box-shadow: none !important;
   }
@@ -223,6 +223,19 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Interactive state tokens (Theme.colors.interactive.*) */
+  --color-interactive-hover: var(--interactive-hover);
+  --color-interactive-active: var(--interactive-active);
+  --color-interactive-selection: var(--interactive-selection);
+  --color-interactive-selection-foreground: var(--interactive-selection-foreground);
+  --color-interactive-border-hover: var(--interactive-border-hover);
+  --color-interactive-border-focus: var(--interactive-border-focus);
+  --color-interactive-focus-ring: var(--interactive-focus-ring);
+
+  /* Short aliases (optional) */
+  --color-border-hover: var(--interactive-border-hover);
+  --color-border-focus: var(--interactive-border-focus);
 
   /* Markdown typography variables */
   --markdown-body-font-size: var(--text-markdown);

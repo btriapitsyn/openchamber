@@ -41,7 +41,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({ onClick, className }) =>
                 'inline-flex min-w-0 items-center justify-center',
                 'rounded-lg border border-border/50 px-1.5',
                 'typography-meta font-medium text-foreground/80',
-                'focus:outline-none',
+                'focus:outline-none hover:bg-[var(--interactive-hover)]',
                 className
             )}
             style={{ 

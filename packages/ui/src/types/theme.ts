@@ -4,7 +4,7 @@ export interface ThemeMetadata {
   id: string;
   name: string;
   description: string;
-  author: string;
+  author?: string;
   version: string;
   variant: 'light' | 'dark';
   tags: string[];

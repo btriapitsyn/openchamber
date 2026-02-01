@@ -182,14 +182,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 <div className="flex-1 overflow-hidden">
                     <ErrorBoundary>{children}</ErrorBoundary>
                 </div>
-                <div className="flex-shrink-0 border-t border-border h-12 px-2 bg-sidebar-accent/10">
+                <div className="flex-shrink-0 border-t border-border h-12 px-2 bg-sidebar">
                     <div className="flex h-full items-center justify-between gap-2">
                         <button
                             onClick={() => setSettingsDialogOpen(true)}
                             className={cn(
                                 'flex h-8 items-center gap-2 rounded-md px-2',
                                 'text-sm font-semibold text-sidebar-foreground/90',
-                                'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                'hover:text-sidebar-foreground hover:bg-interactive-hover',
                                 'transition-all duration-200'
                             )}
                         >
@@ -219,7 +219,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                                         className={cn(
                                             'flex h-8 w-8 items-center justify-center rounded-md',
                                             'text-sidebar-foreground/70',
-                                            'hover:text-sidebar-foreground hover:bg-sidebar-accent',
+                                            'hover:text-sidebar-foreground hover:bg-interactive-hover',
                                             'transition-all duration-200'
                                         )}
                                     >

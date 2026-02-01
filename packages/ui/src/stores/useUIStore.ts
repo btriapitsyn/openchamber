@@ -27,6 +27,7 @@ interface UIStore {
   isSessionSwitcherOpen: boolean;
   activeMainTab: MainTab;
   mainTabGuard: MainTabGuard | null;
+  sidebarOpenBeforeFullscreenTab: boolean | null;
   pendingDiffFile: string | null;
   isMobile: boolean;
   isKeyboardOpen: boolean;
@@ -144,6 +145,7 @@ export const useUIStore = create<UIStore>()(
         isSessionSwitcherOpen: false,
         activeMainTab: 'chat',
         mainTabGuard: null,
+        sidebarOpenBeforeFullscreenTab: null,
         pendingDiffFile: null,
         isMobile: false,
         isKeyboardOpen: false,
@@ -238,7 +240,36 @@ export const useUIStore = create<UIStore>()(
           if (guard && !guard(tab)) {
             return;
           }
-          set({ activeMainTab: tab });
+          const state = get();
+          const currentTab = state.activeMainTab;
+          const fullscreenTabs: MainTab[] = ['files', 'diff'];
+          const isEnteringFullscreen = fullscreenTabs.includes(tab) && !fullscreenTabs.includes(currentTab);
+          const isLeavingFullscreen = !fullscreenTabs.includes(tab) && fullscreenTabs.includes(currentTab);
+
+          if (isEnteringFullscreen) {
+            // Save current sidebar state and close it
+            set({
+              activeMainTab: tab,
+              sidebarOpenBeforeFullscreenTab: state.isSidebarOpen,
+              isSidebarOpen: false,
+            });
+          } else if (isLeavingFullscreen) {
+            // Restore sidebar state if it was open before
+            const shouldRestore = state.sidebarOpenBeforeFullscreenTab === true;
+            set({
+              activeMainTab: tab,
+              sidebarOpenBeforeFullscreenTab: null,
+              ...(shouldRestore && typeof window !== 'undefined'
+                ? {
+                    isSidebarOpen: true,
+                    sidebarWidth: Math.floor(window.innerWidth * 0.2),
+                    hasManuallyResizedLeftSidebar: false,
+                  }
+                : {}),
+            });
+          } else {
+            set({ activeMainTab: tab });
+          }
         },
 
         setPendingDiffFile: (filePath) => {
@@ -250,7 +281,21 @@ export const useUIStore = create<UIStore>()(
           if (guard && !guard('diff')) {
             return;
           }
-          set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
+          const state = get();
+          const currentTab = state.activeMainTab;
+          const fullscreenTabs: MainTab[] = ['files', 'diff'];
+          const isEnteringFullscreen = !fullscreenTabs.includes(currentTab);
+
+          if (isEnteringFullscreen) {
+            set({
+              pendingDiffFile: filePath,
+              activeMainTab: 'diff',
+              sidebarOpenBeforeFullscreenTab: state.isSidebarOpen,
+              isSidebarOpen: false,
+            });
+          } else {
+            set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
+          }
         },
 
         consumePendingDiffFile: () => {

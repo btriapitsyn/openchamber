@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { ButtonLarge } from '@/components/ui/button-large';
 import { Input } from '@/components/ui/input';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -362,16 +363,16 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
                         key={item.skillDir}
                         className={
                           'flex items-start gap-3 rounded-lg border bg-muted/10 px-3 py-2 cursor-pointer transition-colors ' +
-                          (disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-muted/20')
+                          (disabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-interactive-hover/20')
                         }
                       >
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4"
-                          checked={checked}
-                          disabled={disabled}
-                          onChange={(e) => setSelected((prev) => ({ ...prev, [item.skillDir]: e.target.checked }))}
-                        />
+                        <div className="mt-1">
+                          <Checkbox
+                            checked={checked}
+                            disabled={disabled}
+                            onChange={(newChecked) => setSelected((prev) => ({ ...prev, [item.skillDir]: newChecked }))}
+                          />
+                        </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <div className="typography-ui-label truncate">{item.skillName}</div>

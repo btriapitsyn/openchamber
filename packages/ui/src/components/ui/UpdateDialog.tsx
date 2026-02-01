@@ -360,7 +360,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
                   onClick={handleCopyCommand}
                   className={cn(
                     'flex items-center justify-center p-2 rounded-md',
-                    'text-muted-foreground hover:text-foreground hover:bg-accent',
+                    'text-muted-foreground hover:text-foreground hover:bg-interactive-hover',
                     'transition-colors',
                     copied && 'text-primary'
                   )}
@@ -406,7 +406,7 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
               className={cn(
                 'flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md',
                 'text-sm text-muted-foreground',
-                'hover:text-foreground hover:bg-accent',
+                'hover:text-foreground hover:bg-interactive-hover',
                 'transition-colors'
               )}
             >

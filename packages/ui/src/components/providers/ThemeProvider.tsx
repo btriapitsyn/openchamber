@@ -6,30 +6,12 @@ interface ThemeProviderProps {
 }
 
 export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const { theme, applyTheme, fontSize, applyTypography, padding, applyPadding } = useUIStore();
+  const { fontSize, applyTypography, padding, applyPadding } = useUIStore();
 
   React.useLayoutEffect(() => {
-    applyTheme();
     applyTypography();
     applyPadding();
-  }, [theme, applyTheme, fontSize, applyTypography, padding, applyPadding]);
-
-  React.useEffect(() => {
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const handleChange = () => {
-      if (theme === 'system') {
-        applyTheme();
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, [theme, applyTheme]);
+  }, [fontSize, applyTypography, padding, applyPadding]);
 
   return <>{children}</>;
 };

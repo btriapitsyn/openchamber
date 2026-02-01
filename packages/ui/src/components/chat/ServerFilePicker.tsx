@@ -269,18 +269,18 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
       case 'css':
       case 'scss':
       case 'less':
-        return <RiCodeLine className="h-3.5 w-3.5 text-blue-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-[var(--status-info)]" />;
       case 'json':
-        return <RiCodeLine className="h-3.5 w-3.5 text-yellow-500" />;
+        return <RiCodeLine className="h-3.5 w-3.5 text-[var(--status-warning)]" />;
       case 'md':
       case 'mdx':
-        return <RiFileTextLine className="h-3.5 w-3.5 text-gray-500" />;
+        return <RiFileTextLine className="h-3.5 w-3.5 text-muted-foreground" />;
       case 'png':
       case 'jpg':
       case 'jpeg':
       case 'gif':
       case 'svg':
-        return <RiFileImageLine className="h-3.5 w-3.5 text-green-500" />;
+        return <RiFileImageLine className="h-3.5 w-3.5 text-[var(--status-success)]" />;
       default:
         return <RiFileTextLine className="h-3.5 w-3.5 text-muted-foreground" />;
     }
@@ -381,7 +381,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
     const row = (
       <div
         className={cn(
-          "flex w-full items-center justify-start gap-1 px-2 py-1.5 rounded hover:bg-muted cursor-pointer typography-ui-label text-foreground text-left",
+          "flex w-full items-center justify-start gap-1 px-2 py-1.5 rounded hover:bg-interactive-hover cursor-pointer typography-ui-label text-foreground text-left",
           file.type === 'file' && selectedFiles.has(file.path) && "bg-primary/10"
         )}
         style={{ paddingLeft: `${level * 12}px` }}
@@ -514,7 +514,7 @@ export const ServerFilePicker: React.FC<ServerFilePickerProps> = ({
                 e.stopPropagation();
                 setSearchQuery('');
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-muted rounded"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 hover:bg-interactive-hover rounded"
             >
               <RiCloseLine className="h-3 w-3"/>
             </button>

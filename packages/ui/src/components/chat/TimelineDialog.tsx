@@ -117,7 +117,7 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({ open, onOpenChan
                             return (
                                 <div
                                     key={message.info.id}
-                                    className="group flex items-center gap-2 py-1.5 hover:bg-muted/30 rounded transition-colors cursor-pointer"
+                                    className="group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer"
                                     onClick={() => {
                                         onScrollToMessage?.(message.info.id);
                                         onOpenChange(false);

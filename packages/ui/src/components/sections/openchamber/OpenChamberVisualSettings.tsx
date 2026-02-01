@@ -9,6 +9,14 @@ import { cn, getModifierLabel } from '@/lib/utils';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import {
@@ -109,7 +117,45 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const {
         themeMode,
         setThemeMode,
+        availableThemes,
+        customThemesLoading,
+        reloadCustomThemes,
+        lightThemeId,
+        darkThemeId,
+        setLightThemePreference,
+        setDarkThemePreference,
     } = useThemeSystem();
+
+    const [themesReloading, setThemesReloading] = React.useState(false);
+
+    const lightThemes = React.useMemo(
+        () => availableThemes
+            .filter((theme) => theme.metadata.variant === 'light')
+            .sort((a, b) => a.metadata.name.localeCompare(b.metadata.name)),
+        [availableThemes],
+    );
+
+    const darkThemes = React.useMemo(
+        () => availableThemes
+            .filter((theme) => theme.metadata.variant === 'dark')
+            .sort((a, b) => a.metadata.name.localeCompare(b.metadata.name)),
+        [availableThemes],
+    );
+
+    const selectedLightTheme = React.useMemo(
+        () => lightThemes.find((theme) => theme.metadata.id === lightThemeId) ?? lightThemes[0],
+        [lightThemes, lightThemeId],
+    );
+
+    const selectedDarkTheme = React.useMemo(
+        () => darkThemes.find((theme) => theme.metadata.id === darkThemeId) ?? darkThemes[0],
+        [darkThemes, darkThemeId],
+    );
+
+    const formatThemeLabel = React.useCallback((themeName: string, variant: 'light' | 'dark') => {
+        const suffix = variant === 'dark' ? ' Dark' : ' Light';
+        return themeName.endsWith(suffix) ? themeName.slice(0, -suffix.length) : themeName;
+    }, []);
 
     const shouldShow = (setting: VisibleSetting): boolean => {
         if (!visibleSettings) return true;
@@ -137,6 +183,62 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 {option.label}
                             </ButtonSmall>
                         ))}
+                    </div>
+
+                    <div className="flex gap-10">
+                        <div className="flex flex-col gap-1.5">
+                            <h4 className="typography-ui-label font-medium text-foreground">Light Theme</h4>
+                            <Select value={selectedLightTheme?.metadata.id ?? ''} onValueChange={setLightThemePreference}>
+                                <SelectTrigger aria-label="Select light theme" className="min-w-32">
+                                    <SelectValue placeholder="Select theme" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-64 min-w-40">
+                                    {lightThemes.map((theme) => (
+                                        <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
+                                            {formatThemeLabel(theme.metadata.name, 'light')}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                            <h4 className="typography-ui-label font-medium text-foreground">Dark Theme</h4>
+                            <Select value={selectedDarkTheme?.metadata.id ?? ''} onValueChange={setDarkThemePreference}>
+                                <SelectTrigger aria-label="Select dark theme" className="min-w-32">
+                                    <SelectValue placeholder="Select theme" />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-64 min-w-40">
+                                    {darkThemes.map((theme) => (
+                                        <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
+                                            {formatThemeLabel(theme.metadata.name, 'dark')}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <button
+                            type="button"
+                            disabled={customThemesLoading || themesReloading}
+                            onClick={async () => {
+                                setThemesReloading(true);
+                                try {
+                                    await reloadCustomThemes();
+                                } finally {
+                                    setThemesReloading(false);
+                                }
+                            }}
+                            className="typography-ui-label text-muted-foreground hover:text-foreground hover:underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        >
+                            <RiRestartLine className={cn('h-3.5 w-3.5', themesReloading && 'animate-spin')} />
+                            Reload custom themes
+                        </button>
+                        <p className="typography-meta text-muted-foreground/70">
+                            Import themes from ~/.config/openchamber/themes/
+                        </p>
                     </div>
                 </div>
             )}
@@ -172,7 +274,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             variant="ghost"
                             onClick={() => setFontSize(100)}
                             disabled={fontSize === 100}
-                            className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                            className="h-8 w-8 px-0 border border-border bg-background hover:bg-interactive-hover disabled:opacity-100 disabled:bg-background"
                             aria-label="Reset font size"
                             title="Reset"
                         >
@@ -213,7 +315,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 variant="ghost"
                                 onClick={() => setPadding(100)}
                                 disabled={padding === 100}
-                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-interactive-hover disabled:opacity-100 disabled:bg-background"
                                 aria-label="Reset spacing"
                                 title="Reset"
                             >
@@ -244,7 +346,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 variant="ghost"
                                 onClick={() => setPadding(100)}
                                 disabled={padding === 100}
-                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-interactive-hover disabled:opacity-100 disabled:bg-background"
                                 aria-label="Reset spacing"
                                 title="Reset"
                             >
@@ -304,7 +406,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 variant="ghost"
                                 onClick={() => setCornerRadius(12)}
                                 disabled={cornerRadius === 12}
-                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-interactive-hover disabled:opacity-100 disabled:bg-background"
                                 aria-label="Reset corner radius"
                                 title="Reset"
                             >
@@ -336,7 +438,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 variant="ghost"
                                 onClick={() => setCornerRadius(12)}
                                 disabled={cornerRadius === 12}
-                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-interactive-hover disabled:opacity-100 disabled:bg-background"
                                 aria-label="Reset corner radius"
                                 title="Reset"
                             >
@@ -380,7 +482,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 variant="ghost"
                                 onClick={() => setInputBarOffset(0)}
                                 disabled={inputBarOffset === 0}
-                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-interactive-hover disabled:opacity-100 disabled:bg-background"
                                 aria-label="Reset input bar offset"
                                 title="Reset"
                             >
@@ -412,7 +514,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 variant="ghost"
                                 onClick={() => setInputBarOffset(0)}
                                 disabled={inputBarOffset === 0}
-                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-accent disabled:opacity-100 disabled:bg-background"
+                                className="h-8 w-8 px-0 border border-border bg-background hover:bg-interactive-hover disabled:opacity-100 disabled:bg-background"
                                 aria-label="Reset input bar offset"
                                 title="Reset"
                             >
@@ -540,11 +642,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
             {shouldShow('reasoning') && (
                 <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 accent-primary"
+                    <Checkbox
                         checked={showReasoningTraces}
-                        onChange={(event) => setShowReasoningTraces(event.target.checked)}
+                        onChange={setShowReasoningTraces}
                     />
                     <span className="typography-ui-header font-semibold text-foreground">
                         Show thinking / reasoning traces
@@ -554,11 +654,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
             {shouldShow('textJustificationActivity') && (
                 <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        className="h-3.5 w-3.5 accent-primary"
+                    <Checkbox
                         checked={showTextJustificationActivity}
-                        onChange={(event) => setShowTextJustificationActivity(event.target.checked)}
+                        onChange={setShowTextJustificationActivity}
                     />
                     <span className="typography-ui-header font-semibold text-foreground">
                         Show text justification in activity
@@ -569,11 +667,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
             {shouldShow('queueMode') && (
                 <div className="space-y-2">
                     <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                            type="checkbox"
-                            className="h-3.5 w-3.5 accent-primary"
+                        <Checkbox
                             checked={queueModeEnabled}
-                            onChange={(event) => setQueueMode(event.target.checked)}
+                            onChange={setQueueMode}
                         />
                         <span className="typography-ui-header font-semibold text-foreground">
                             Queue messages by default

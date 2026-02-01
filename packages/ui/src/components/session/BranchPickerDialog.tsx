@@ -236,7 +236,7 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
                 return (
                   <div
                     key={branchName}
-                    className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-muted/30 rounded-md overflow-hidden"
+                    className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-interactive-hover/30 rounded-md overflow-hidden"
                   >
                     <RiGitBranchLine className="h-4 w-4 text-muted-foreground flex-shrink-0" />
 
@@ -327,7 +327,7 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
                               type="button"
                               onClick={() => beginRename(branchName)}
                               disabled={disableRename}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                              className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-interactive-hover/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                               aria-label="Rename"
                             >
                               <RiPencilLine className="h-4 w-4" />
@@ -371,7 +371,7 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
                           type="button"
                           onClick={() => void commitRename(branchName)}
                           disabled={isRenaming}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-interactive-hover/40 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                           aria-label="Confirm rename"
                         >
                           {isRenaming ? (
@@ -383,7 +383,7 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
                         <button
                           type="button"
                           onClick={cancelRename}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-interactive-hover/40 text-muted-foreground hover:text-foreground transition-colors"
                           aria-label="Cancel rename"
                         >
                           <RiCloseLine className="h-4 w-4" />
@@ -420,7 +420,7 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
                         <button
                           type="button"
                           onClick={cancelDelete}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-interactive-hover/40 text-muted-foreground hover:text-foreground transition-colors"
                           aria-label="Cancel delete"
                         >
                           <RiCloseLine className="h-4 w-4" />
