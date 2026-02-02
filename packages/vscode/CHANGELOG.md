@@ -1,3 +1,17 @@
+## [1.6.2] - 2026-02-1
+
+- Added multi-provider quota dashboard in settings to monitor API usage across OpenAI, Google, and z.ai with auto-refresh support (thanks to @nelsonPires5).
+- Enhanced token-based theming system for better themes support.
+
+
+## [1.6.1] - 2026-01-30
+
+- Chat: added Stop button to cancel generation mid-response.
+- Chat: improved compact controls on narrow panels with a unified drawer for model and tool options.
+- Chat: added Apply Patch tool support for opening files in editor
+- Reliability: improved event stream reconnection when the panel is hidden/shown or VS Code regains focus.
+
+
 ## [1.6.0] - 2026-01-29
 
 - Added message stall detection with automatic soft resync for more reliable message delivery.

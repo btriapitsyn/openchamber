@@ -8,10 +8,13 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { GridLoader } from '@/components/ui/grid-loader';
 
 export const NotificationSettings: React.FC = () => {
+  const isWeb = isWebRuntime();
   const nativeNotificationsEnabled = useUIStore(state => state.nativeNotificationsEnabled);
   const setNativeNotificationsEnabled = useUIStore(state => state.setNativeNotificationsEnabled);
   const notificationMode = useUIStore(state => state.notificationMode);
   const setNotificationMode = useUIStore(state => state.setNotificationMode);
+  const notifyOnSubtasks = useUIStore(state => state.notifyOnSubtasks);
+  const setNotifyOnSubtasks = useUIStore(state => state.setNotifyOnSubtasks);
 
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission>('default');
   const [pushSupported, setPushSupported] = React.useState(false);
@@ -19,6 +22,12 @@ export const NotificationSettings: React.FC = () => {
   const [pushBusy, setPushBusy] = React.useState(false);
 
   React.useEffect(() => {
+    if (!isWeb) {
+      setPushSupported(false);
+      setPushSubscribed(false);
+      return;
+    }
+
     if (typeof Notification !== 'undefined') {
       setNotificationPermission(Notification.permission);
     }
@@ -49,9 +58,12 @@ export const NotificationSettings: React.FC = () => {
     };
 
     void refresh();
-  }, []);
+  }, [isWeb]);
 
   const handleToggleChange = async (checked: boolean) => {
+    if (!isWeb) {
+      return;
+    }
     if (checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       try {
         const permission = await Notification.requestPermission();
@@ -74,15 +86,15 @@ export const NotificationSettings: React.FC = () => {
     }
   };
 
-  const canShowNotifications = typeof Notification !== 'undefined' && Notification.permission === 'granted';
+  const canShowNotifications = isWeb && typeof Notification !== 'undefined' && Notification.permission === 'granted';
 
-  const base64UrlToUint8Array = (base64Url: string): Uint8Array => {
+  const base64UrlToUint8Array = (base64Url: string): Uint8Array<ArrayBuffer> => {
     const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
     const base64 = (base64Url + padding)
       .replace(/-/g, '+')
       .replace(/_/g, '/');
     const raw = atob(base64);
-    const output = new Uint8Array(raw.length);
+    const output = new Uint8Array(raw.length) as Uint8Array<ArrayBuffer>;
     for (let i = 0; i < raw.length; i += 1) {
       output[i] = raw.charCodeAt(i);
     }
@@ -351,113 +363,141 @@ export const NotificationSettings: React.FC = () => {
     }
   };
 
-  if (!isWebRuntime()) {
-    return null;
-  }
-
   return (
     <div className="space-y-6">
+      {/* General Notification Settings */}
       <div className="space-y-1">
         <h3 className="typography-ui-header font-semibold text-foreground">
-          Foreground Notifications
+          Notification Preferences
         </h3>
         <p className="typography-ui text-muted-foreground">
-          Uses the browser Notification API while OpenChamber is open.
+          Configure how and when you receive notifications.
         </p>
       </div>
 
       <div className="flex items-center justify-between">
-        <span className="typography-ui text-foreground">
-          Enable foreground notifications
-        </span>
+        <div className="space-y-0.5">
+          <span className="typography-ui text-foreground">
+            Notify for subtasks
+          </span>
+          <p className="typography-micro text-muted-foreground">
+            When off, no notifications for child sessions created during multi-run.
+          </p>
+        </div>
         <Switch
-          checked={nativeNotificationsEnabled && canShowNotifications}
-          onCheckedChange={handleToggleChange}
+          checked={notifyOnSubtasks}
+          onCheckedChange={(checked) => setNotifyOnSubtasks(checked)}
           className="data-[state=checked]:bg-status-info"
         />
       </div>
 
-      {nativeNotificationsEnabled && canShowNotifications && (
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="typography-ui text-foreground">
-              Notify even when visible
-            </span>
-            <p className="typography-micro text-muted-foreground">
-              When off, only notifies when the tab is hidden or the window is not focused.
-            </p>
-          </div>
-          <Switch
-            checked={notificationMode === 'always'}
-            onCheckedChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
-            className="data-[state=checked]:bg-status-info"
-          />
-        </div>
-      )}
-
-      {notificationPermission === 'denied' && (
-        <p className="typography-micro text-destructive">
-          Notification permission denied. Enable notifications in your browser settings.
-        </p>
-      )}
-
-       {notificationPermission === 'granted' && !nativeNotificationsEnabled && (
-         <p className="typography-micro text-muted-foreground">
-           Permission granted, but foreground notifications are disabled.
-         </p>
-       )}
-
-      <div className="space-y-1 pt-2">
-        <h3 className="typography-ui-header font-semibold text-foreground">
-          Background Notifications (Push)
-        </h3>
-        <p className="typography-ui text-muted-foreground">
-          Uses push notifications; works when OpenChamber is closed.
-        </p>
-      </div>
-
-      {!pushSupported ? (
-        <p className="typography-micro text-muted-foreground">
-          Push not supported in this browser.
-        </p>
-      ) : (
-        <p className="typography-micro text-muted-foreground">
-          Desktop Chrome/Edge and Android support push in the browser. iOS requires an installed PWA.
-        </p>
-      )}
-
-      {pushSupported && (
-        <div className="flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <span className="typography-ui text-foreground">
-              Enable background notifications
-            </span>
-            <p className="typography-micro text-muted-foreground">
-              Opens chat with /?session=&lt;id&gt; deep link.
+      {isWeb && (
+        <>
+          {/* Foreground Notifications */}
+          <div className="space-y-1 pt-4">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Foreground Notifications
+            </h3>
+            <p className="typography-ui text-muted-foreground">
+              Uses the browser Notification API while OpenChamber is open.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            {pushBusy && (
-              <div className="text-muted-foreground">
-                <GridLoader size="sm" />
-              </div>
-            )}
-
+          <div className="flex items-center justify-between">
+            <span className="typography-ui text-foreground">
+              Enable foreground notifications
+            </span>
             <Switch
-              checked={pushSubscribed}
-              disabled={pushBusy}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  void handleEnableBackgroundNotifications();
-                } else {
-                  void handleDisableBackgroundNotifications();
-                }
-              }}
+              checked={nativeNotificationsEnabled && canShowNotifications}
+              onCheckedChange={handleToggleChange}
               className="data-[state=checked]:bg-status-info"
             />
           </div>
-        </div>
+
+          {nativeNotificationsEnabled && canShowNotifications && (
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <span className="typography-ui text-foreground">
+                  Notify even when visible
+                </span>
+                <p className="typography-micro text-muted-foreground">
+                  When off, only notifies when the tab is hidden or the window is not focused.
+                </p>
+              </div>
+              <Switch
+                checked={notificationMode === 'always'}
+                onCheckedChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
+                className="data-[state=checked]:bg-status-info"
+              />
+            </div>
+          )}
+
+          {notificationPermission === 'denied' && (
+            <p className="typography-micro text-destructive">
+              Notification permission denied. Enable notifications in your browser settings.
+            </p>
+          )}
+
+          {notificationPermission === 'granted' && !nativeNotificationsEnabled && (
+            <p className="typography-micro text-muted-foreground">
+              Permission granted, but foreground notifications are disabled.
+            </p>
+          )}
+
+          {/* Background Notifications */}
+          <div className="space-y-1 pt-4">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Background Notifications (Push)
+            </h3>
+            <p className="typography-ui text-muted-foreground">
+              Uses push notifications; works when OpenChamber is closed.
+            </p>
+          </div>
+
+          {!pushSupported ? (
+            <p className="typography-micro text-muted-foreground">
+              Push not supported in this browser.
+            </p>
+          ) : (
+            <p className="typography-micro text-muted-foreground">
+              Desktop Chrome/Edge and Android support push in the browser. iOS requires an installed PWA.
+            </p>
+          )}
+
+          {pushSupported && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <span className="typography-ui text-foreground">
+                  Enable background notifications
+                </span>
+                <p className="typography-micro text-muted-foreground">
+                  Opens chat with /?session=&lt;id&gt; deep link.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {pushBusy && (
+                  <div className="text-muted-foreground">
+                    <GridLoader size="sm" />
+                  </div>
+                )}
+
+                <Switch
+                  checked={pushSubscribed}
+                  disabled={pushBusy}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      void handleEnableBackgroundNotifications();
+                    } else {
+                      void handleDisableBackgroundNotifications();
+                    }
+                  }}
+                  className="data-[state=checked]:bg-status-info"
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

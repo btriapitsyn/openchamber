@@ -220,7 +220,7 @@ jobs:
         run: |
           mkdir -p artifacts
           VERSION="${{ needs.create-release.outputs.version }}"
-          
+
           # Copy DMG (Tauri names it with the target triple in the path)
           DMG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg"
           if ls $DMG_PATH 1> /dev/null 2>&1; then
@@ -231,11 +231,11 @@ jobs:
             echo "Error: DMG file not found at $DMG_PATH"
             exit 1
           fi
-          
+
           # Copy tar.gz and signature for updater
           TAR_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz"
           SIG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz.sig"
-          
+
           if ls $TAR_PATH 1> /dev/null 2>&1; then
             TAR_FILE=$(ls $TAR_PATH | head -n 1)
             TAR_BASE=$(basename "$TAR_FILE")
@@ -245,7 +245,7 @@ jobs:
             echo "Error: tar.gz file not found at $TAR_PATH"
             exit 1
           fi
-          
+
           if ls $SIG_PATH 1> /dev/null 2>&1; then
             SIG_FILE=$(ls $SIG_PATH | head -n 1)
             SIG_BASE=$(basename "$SIG_FILE")
@@ -255,14 +255,14 @@ jobs:
             echo "Error: signature file not found at $SIG_PATH"
             exit 1
           fi
-          
+
           echo "Successfully prepared artifacts:"
           ls -lh artifacts/
 
       - name: Generate update manifest
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-          
+
           # Find the signature file for this platform
           SIG_FILE=$(find artifacts -name "*-${{ matrix.platform }}.tar.gz.sig" | head -1)
           if [ -f "$SIG_FILE" ]; then
@@ -270,11 +270,11 @@ jobs:
           else
             SIGNATURE=""
           fi
-          
+
           # Find the tar.gz file name for this platform
           TAR_FILE=$(find artifacts -name "*-${{ matrix.platform }}.tar.gz" ! -name "*.sig" | head -1)
           TAR_NAME=$(basename "$TAR_FILE" 2>/dev/null || echo "OpenChamber-${{ matrix.platform }}.app.tar.gz")
-          
+
           cat > artifacts/latest-${{ matrix.platform }}.json << EOF
           {
             "version": "${VERSION}",
@@ -288,7 +288,7 @@ jobs:
             }
           }
           EOF
-          
+
           echo "Generated latest-${{ matrix.platform }}.json:"
           cat artifacts/latest-${{ matrix.platform }}.json
 
@@ -303,7 +303,7 @@ jobs:
             artifacts/latest-${{ matrix.platform }}.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Upload manifest as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -360,52 +360,52 @@ jobs:
         with:
           name: manifest-darwin-aarch64
           path: artifacts
-          
+
       - name: Download x86_64 manifest
         uses: actions/download-artifact@v4
         with:
           name: manifest-darwin-x86_64
           path: artifacts
-          
+
       - name: Combine manifests
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
           PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           REPO="${{ github.repository }}"
-          
+
           # Validate that both manifest files exist and are valid JSON
           if [ ! -f artifacts/latest-darwin-aarch64.json ]; then
             echo "Error: aarch64 manifest not found"
             exit 1
           fi
-          
+
           if [ ! -f artifacts/latest-darwin-x86_64.json ]; then
             echo "Error: x86_64 manifest not found"
             exit 1
           fi
-          
+
           # Validate JSON structure
           if ! jq empty artifacts/latest-darwin-aarch64.json 2>/dev/null; then
             echo "Error: aarch64 manifest is not valid JSON"
             exit 1
           fi
-          
+
           if ! jq empty artifacts/latest-darwin-x86_64.json 2>/dev/null; then
             echo "Error: x86_64 manifest is not valid JSON"
             exit 1
           fi
-          
+
           # Validate platform data exists in manifests
           if ! jq -e '.platforms["darwin-aarch64"]' artifacts/latest-darwin-aarch64.json > /dev/null; then
             echo "Error: darwin-aarch64 platform data not found in manifest"
             exit 1
           fi
-          
+
           if ! jq -e '.platforms["darwin-x86_64"]' artifacts/latest-darwin-x86_64.json > /dev/null; then
             echo "Error: darwin-x86_64 platform data not found in manifest"
             exit 1
           fi
-          
+
           # Use jq to properly combine the manifests
           jq -n \
             --arg version "$VERSION" \
@@ -422,10 +422,10 @@ jobs:
                 "darwin-x86_64": $x86_64[0].platforms["darwin-x86_64"]
               }
             }' > artifacts/latest.json
-          
+
           echo "Generated combined latest.json:"
           cat artifacts/latest.json
-          
+
       - name: Upload combined manifest
         uses: softprops/action-gh-release@v2
         with:

@@ -216,6 +216,9 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
       store.setNotificationMode(settings.notificationMode);
     }
   }
+  if (typeof settings.notifyOnSubtasks === 'boolean' && settings.notifyOnSubtasks !== store.notifyOnSubtasks) {
+    store.setNotifyOnSubtasks(settings.notifyOnSubtasks);
+  }
   if (typeof settings.toolCallExpansion === 'string'
     && (settings.toolCallExpansion === 'collapsed' || settings.toolCallExpansion === 'activity' || settings.toolCallExpansion === 'detailed')) {
     if (settings.toolCallExpansion !== store.toolCallExpansion) {
@@ -344,6 +347,15 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.notificationMode === 'string' && (candidate.notificationMode === 'always' || candidate.notificationMode === 'hidden-only')) {
     result.notificationMode = candidate.notificationMode;
+  }
+  if (typeof candidate.notifyOnSubtasks === 'boolean') {
+    result.notifyOnSubtasks = candidate.notifyOnSubtasks;
+  }
+  if (typeof candidate.usageAutoRefresh === 'boolean') {
+    result.usageAutoRefresh = candidate.usageAutoRefresh;
+  }
+  if (typeof candidate.usageRefreshIntervalMs === 'number' && Number.isFinite(candidate.usageRefreshIntervalMs)) {
+    result.usageRefreshIntervalMs = candidate.usageRefreshIntervalMs;
   }
   if (
     typeof candidate.toolCallExpansion === 'string'

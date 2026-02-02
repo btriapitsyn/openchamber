@@ -61,6 +61,22 @@ const deriveSdkWorktreeNameFromDirectory = (directory: string): string => {
   return parts[parts.length - 1] ?? normalized;
 };
 
+type WorktreeRemovalParams = Record<string, unknown>;
+type WorktreeRemovalMethod = (params?: WorktreeRemovalParams) => Promise<unknown>;
+
+const getWorktreeMethod = (client: unknown, key: string): WorktreeRemovalMethod | null => {
+  if (!client || (typeof client !== 'object' && typeof client !== 'function')) {
+    return null;
+  }
+  const record = client as Record<string, unknown>;
+  const candidate = record[key];
+  if (typeof candidate !== 'function') {
+    return null;
+  }
+  // Keep method binding; SDK methods use `this.client`.
+  return (params?: WorktreeRemovalParams) => (candidate as (this: unknown, p?: WorktreeRemovalParams) => Promise<unknown>).call(client, params);
+};
+
 export const buildSdkStartCommand = (args: {
   projectDirectory: string;
   setupCommands: string[];
@@ -71,6 +87,8 @@ export const buildSdkStartCommand = (args: {
   const startPoint = typeof args.startPoint === 'string' ? args.startPoint.trim() : '';
   if (startPoint && startPoint !== 'HEAD') {
     commands.push(`git reset --hard ${shellQuote(startPoint)}`);
+  } else {
+    commands.push('git reset --hard HEAD');
   }
 
   for (const raw of args.setupCommands) {
@@ -227,7 +245,44 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
 
   if (worktree.source === 'sdk') {
     const scoped = opencodeClient.getScopedApiClient(projectDirectory);
-    await scoped.worktree.remove({ worktreeRemoveInput: { directory: worktree.path } });
+    const worktreeClient = scoped.worktree as unknown;
+    const force = Boolean(options?.force ?? true);
+
+    const fallbackRemoveViaGit = async () => {
+      await removeGitWorktree(projectDirectory, { path: worktree.path, force });
+    };
+
+    const removeMethod = getWorktreeMethod(worktreeClient, 'remove');
+    if (removeMethod) {
+      const raw = await removeMethod({ worktreeRemoveInput: { directory: worktree.path } });
+      const ok = unwrapSdkData(raw);
+      if (ok !== true) {
+        await fallbackRemoveViaGit();
+      }
+    } else {
+      const deleteMethod = getWorktreeMethod(worktreeClient, 'delete');
+      if (deleteMethod) {
+        const raw = await deleteMethod({ worktreeDeleteInput: { directory: worktree.path } });
+        const ok = unwrapSdkData(raw);
+        if (ok !== true) {
+          await fallbackRemoveViaGit();
+        }
+      } else {
+        const archiveMethod = getWorktreeMethod(worktreeClient, 'archive');
+        if (archiveMethod) {
+          const raw = await archiveMethod({ worktreeArchiveInput: { directory: worktree.path } });
+          const ok = unwrapSdkData(raw);
+          if (ok !== true) {
+            await fallbackRemoveViaGit();
+          }
+        } else {
+          throw new Error('Worktree removal is not supported by this SDK version.');
+        }
+      }
+    }
+
+    // Some OpenCode builds only update internal state; remove git worktree best-effort.
+    await fallbackRemoveViaGit().catch(() => undefined);
 
     // Best-effort branch cleanup. Some OpenCode builds may keep the branch.
     const branchName = (worktree.branch || '').replace(/^refs\/heads\//, '').trim();

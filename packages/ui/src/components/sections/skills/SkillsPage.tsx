@@ -509,7 +509,7 @@ export const SkillsPage: React.FC = () => {
               {filesToShow.map((file) => (
                 <div
                   key={file.path}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg border bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
+                  className="flex items-center justify-between px-3 py-2 rounded-lg border bg-muted/30 hover:bg-interactive-hover cursor-pointer transition-colors"
                   onClick={() => handleEditFile(file.path)}
                 >
                   <div className="flex items-center gap-2 min-w-0">
@@ -608,7 +608,7 @@ export const SkillsPage: React.FC = () => {
                 setIsFileDialogOpen(false);
                 setEditingFilePath(null);
               }}
-              className="text-foreground hover:bg-muted hover:text-foreground"
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
             >
               Cancel
             </Button>

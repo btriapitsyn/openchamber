@@ -116,7 +116,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const desktopHeaderPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
       // Match main app header: reserve space for Mac traffic lights.
-      return 'pl-[5.75rem]';
+      return 'pl-[5.5rem]';
     }
     return 'pl-3';
   }, [isDesktopApp, isMacPlatform]);
@@ -138,6 +138,20 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
       }
     }
   }, [isDesktopApp]);
+
+  // Handle ESC key to dismiss
+  React.useEffect(() => {
+    if (!onCancel) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onCancel]);
 
   // Use the BranchSelector hook for branch state management
   const [worktreeBaseBranch, setWorktreeBaseBranch] = React.useState<string>('HEAD');
@@ -306,31 +320,27 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
       <header
         onMouseDown={handleDragStart}
         className={cn(
-          'flex h-12 items-center justify-between border-b app-region-drag select-none',
+          'relative flex h-12 items-center justify-center border-b app-region-drag select-none',
           desktopHeaderPaddingClass
         )}
         style={{ borderColor: 'var(--interactive-border)' }}
       >
-        <div
-          className="flex items-center gap-3"
-        >
-          <h1 className="typography-ui-label font-medium">New Multi-Run</h1>
-        </div>
+        <h1 className="typography-ui-label font-medium">New Multi-Run</h1>
         {onCancel && (
-          <div className="flex items-center pr-3">
+          <div className="absolute right-0 flex items-center pr-3">
             <Tooltip delayDuration={500}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
                   onClick={onCancel}
-                  aria-label="Close"
-                  className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary app-region-no-drag"
+                  aria-label="Close (Esc)"
+                  className="inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary app-region-no-drag"
                 >
                   <RiCloseLine className="h-5 w-5" />
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Close</p>
+                <p>Close (Esc)</p>
               </TooltipContent>
             </Tooltip>
           </div>
@@ -389,7 +399,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
 
               {/* Setup commands collapsible */}
               <Collapsible open={isSetupCommandsOpen} onOpenChange={setIsSetupCommandsOpen}>
-                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:opacity-80 transition-opacity">
+                <CollapsibleTrigger className="w-full flex items-center justify-between py-1 hover:bg-[var(--interactive-hover)] rounded-md px-1 -mx-1 transition-colors">
                   <p className="typography-ui-label font-medium text-foreground">
                     Setup commands
                     {setupCommands.filter(cmd => cmd.trim()).length > 0 && (

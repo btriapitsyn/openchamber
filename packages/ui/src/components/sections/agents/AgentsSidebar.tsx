@@ -405,7 +405,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
             <Button
               variant="ghost"
               onClick={() => setRenameDialogAgent(null)}
-              className="text-foreground hover:bg-muted hover:text-foreground"
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
             >
               Cancel
             </Button>
@@ -446,7 +446,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
     <div
       className={cn(
         'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
-        isSelected ? 'dark:bg-accent/80 bg-primary/12' : 'hover:dark:bg-accent/40 hover:bg-primary/6'
+        isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
       )}
     >
       <div className="flex min-w-0 flex-1 items-center">

@@ -292,7 +292,7 @@ export const DirectoryAutocomplete = React.forwardRef<DirectoryAutocompleteHandl
                 ref={(el) => { itemRefs.current[index] = el; }}
                 className={cn(
                   "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label",
-                  isSelected && "bg-muted"
+                  isSelected && "bg-interactive-selection"
                 )}
                 onClick={() => { handleSelectSuggestion(entry); onClose(); }}
                 onMouseEnter={() => setSelectedIndex(index)}

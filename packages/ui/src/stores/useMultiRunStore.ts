@@ -170,6 +170,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
               const enrichedMetadata = {
                 ...worktreeMetadata,
                 createdFromBranch: startPoint ?? 'HEAD',
+                kind: 'standard' as const,
               };
 
               // Session title format: groupSlug/provider/model (or groupSlug/provider/model/index for duplicates)

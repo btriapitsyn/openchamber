@@ -161,7 +161,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 ref={(el) => { itemRefs.current[flatIndex] = el; }}
                 className={cn(
                     "typography-meta group flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer",
-                    isHighlighted ? "bg-accent" : "hover:bg-accent/50"
+                    isHighlighted ? "bg-interactive-selection" : "hover:bg-interactive-hover/50"
                 )}
                 onClick={() => handleProviderAndModelChange(provID, modID)}
                 onMouseEnter={() => setSelectedIndex(flatIndex)}
@@ -190,8 +190,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                             toggleFavoriteModel(provID, modID);
                         }}
                         className={cn(
-                            "model-favorite-button flex h-4 w-4 items-center justify-center hover:text-yellow-600",
-                            isFavorite ? "text-yellow-500" : "text-muted-foreground"
+                            "model-favorite-button flex h-4 w-4 items-center justify-center hover:text-primary/80",
+                            isFavorite ? "text-primary" : "text-muted-foreground"
                         )}
                         aria-label={isFavorite ? "Unfavorite" : "Favorite"}
                         title={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -253,7 +253,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <div className="space-y-1">
                     {/* Favorites Section for Mobile */}
                     {favoriteModelsList.length > 0 && (
-                        <div className="rounded-xl border border-border/40 bg-background/95 mb-2">
+                        <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] mb-2">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 Favorites
                             </div>
@@ -293,7 +293,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                     e.stopPropagation();
                                                     toggleFavoriteModel(providerID, modelID);
                                                 }}
-                                                className="model-favorite-button flex h-8 w-8 items-center justify-center text-yellow-500 hover:text-yellow-600 active:scale-95 touch-manipulation"
+                                                className="model-favorite-button flex h-8 w-8 items-center justify-center text-primary hover:text-primary/80 active:scale-95 touch-manipulation"
                                                 aria-label="Unfavorite"
                                             >
                                                 <RiStarFill className="h-4 w-4" />
@@ -307,7 +307,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
                     {/* Recents Section for Mobile */}
                     {recentModelsList.length > 0 && (
-                        <div className="rounded-xl border border-border/40 bg-background/95 mb-2">
+                        <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] mb-2">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 Recents
                             </div>
@@ -347,7 +347,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                     e.stopPropagation();
                                                     toggleFavoriteModel(providerID, modelID);
                                                 }}
-                                                className="model-favorite-button flex h-8 w-8 items-center justify-center text-muted-foreground/50 hover:text-yellow-600 active:scale-95 touch-manipulation"
+                                                className="model-favorite-button flex h-8 w-8 items-center justify-center text-muted-foreground/50 hover:text-primary/80 active:scale-95 touch-manipulation"
                                                 aria-label="Favorite"
                                             >
                                                 <RiStarLine className="h-4 w-4" />
@@ -367,7 +367,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                         const isExpanded = expandedMobileProviders.has(provider.id);
 
                         return (
-                            <div key={provider.id} className="rounded-xl border border-border/40 bg-background/95">
+                            <div key={provider.id} className="rounded-xl border border-border/40 bg-[var(--surface-elevated)]">
                                 <button
                                     type="button"
                                     className="flex w-full items-center justify-between gap-1.5 px-2 py-1.5 text-left"
@@ -425,9 +425,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                                 toggleFavoriteModel(provider.id as string, modelItem.id as string);
                                                             }}
                                                             className={cn(
-                                                                "flex h-8 w-8 items-center justify-center active:scale-95 touch-manipulation",
+                                                                "flex h-8 w-8 items-center justify-center active:scale-95 touch-manipulation hover:text-primary/80",
                                                                 isFavoriteModel(provider.id as string, modelItem.id as string)
-                                                                    ? "text-yellow-500"
+                                                                    ? "text-primary"
                                                                     : "text-muted-foreground/50"
                                                             )}
                                                             aria-label={isFavoriteModel(provider.id as string, modelItem.id as string) ? "Unfavorite" : "Favorite"}
@@ -454,7 +454,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
                     <button
                         type="button"
-                        className="flex w-full items-center justify-between rounded-lg border border-border/40 bg-background/95 px-2 py-1.5 text-left"
+                        className="flex w-full items-center justify-between rounded-lg border border-border/40 bg-[var(--surface-elevated)] px-2 py-1.5 text-left"
                         onClick={() => {
                             handleProviderAndModelChange('', '');
                             closeMobilePanel();
@@ -474,7 +474,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     type="button"
                     onClick={() => setIsMobilePanelOpen(true)}
                     className={cn(
-                        'flex w-full items-center justify-between gap-2 rounded-lg border border-border/40 bg-background/95 px-2 py-1.5 text-left',
+                        'flex w-full items-center justify-between gap-2 rounded-lg border border-border/40 bg-[var(--surface-elevated)] px-2 py-1.5 text-left',
                         className
                     )}
                 >
@@ -497,7 +497,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
                     <DropdownMenuTrigger asChild>
                         <div className={cn(
-                            'flex items-center gap-2 px-2 rounded-lg bg-accent/20 border border-border/20 cursor-pointer hover:bg-accent/30 h-6 w-fit',
+                            'flex items-center gap-2 px-2 rounded-lg bg-interactive-selection/20 border border-border/20 cursor-pointer hover:bg-interactive-hover/30 h-6 w-fit',
                             className
                         )}>
                             {providerId ? (
@@ -596,7 +596,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             <div
                                                 className={cn(
                                                     "typography-meta flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer",
-                                                    "hover:bg-accent/50"
+                                                    "hover:bg-interactive-hover/50"
                                                 )}
                                                 onClick={() => handleProviderAndModelChange('', '')}
                                             >
@@ -618,7 +618,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             {/* Favorites Section */}
                                             {filteredFavorites.length > 0 && (
                                                 <>
-                                                    <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground flex items-center gap-2 px-2 py-1.5">
+                                                    <DropdownMenuLabel style={{ backgroundColor: 'var(--surface-elevated)' }} className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30">
                                                         <RiStarFill className="h-4 w-4 text-primary" />
                                                         Favorites
                                                     </DropdownMenuLabel>
@@ -633,7 +633,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             {filteredRecents.length > 0 && (
                                                 <>
                                                     {filteredFavorites.length > 0 && <DropdownMenuSeparator />}
-                                                    <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground flex items-center gap-2 px-2 py-1.5">
+                                                    <DropdownMenuLabel style={{ backgroundColor: 'var(--surface-elevated)' }} className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30">
                                                         <RiTimeLine className="h-4 w-4" />
                                                         Recent
                                                     </DropdownMenuLabel>
@@ -653,7 +653,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                             {filteredProviders.map((provider, index) => (
                                                 <React.Fragment key={provider.id}>
                                                     {index > 0 && <DropdownMenuSeparator />}
-                                                    <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground flex items-center gap-2 px-2 py-1.5">
+                                                    <DropdownMenuLabel style={{ backgroundColor: 'var(--surface-elevated)' }} className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 sticky top-0 z-10 border-b border-border/30">
                                                         <ProviderLogo
                                                             providerId={provider.id}
                                                             className="h-4 w-4 flex-shrink-0"

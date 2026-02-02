@@ -33,13 +33,13 @@ function formatCommitDate(date: string) {
 function getChangeTypeColor(changeType: string) {
   switch (changeType) {
     case 'A':
-      return 'text-emerald-500';
+      return 'text-[var(--status-success)]';
     case 'D':
-      return 'text-red-500';
+      return 'text-[var(--status-error)]';
     case 'M':
-      return 'text-amber-500';
+      return 'text-[var(--status-warning)]';
     case 'R':
-      return 'text-blue-500';
+      return 'text-[var(--status-info)]';
     default:
       return 'text-muted-foreground';
   }

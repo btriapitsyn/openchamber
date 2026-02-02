@@ -2,10 +2,10 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui';
 import { useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
-import { RiCheckLine, RiInformationLine, RiSaveLine, RiTerminalBoxLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
-import { cn } from '@/lib/utils';
+import { RiInformationLine, RiSaveLine, RiTerminalBoxLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
 import { ModelSelector } from '../agents/ModelSelector';
 import { AgentSelector } from './AgentSelector';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -309,22 +309,10 @@ export const CommandsPage: React.FC = () => {
 
           <div className="space-y-2">
             <label className="typography-ui-label font-medium text-foreground flex items-center gap-2 cursor-pointer">
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={subtask}
-                  onChange={(e) => setSubtask(e.target.checked)}
-                  className="sr-only"
-                />
-                <div className={cn(
-                  "w-5 h-5 rounded border-2 flex items-center justify-center",
-                  subtask
-                    ? "bg-primary border-primary"
-                    : "bg-background border-border hover:border-primary/50"
-                )}>
-                  {subtask && <RiCheckLine className="w-3 h-3 text-primary-foreground" />}
-                </div>
-              </div>
+              <Checkbox
+                checked={subtask}
+                onChange={(checked) => setSubtask(checked)}
+              />
               Force Subagent Invocation
             </label>
             <div className="flex items-center gap-2">

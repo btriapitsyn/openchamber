@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+## [1.6.2] - 2026-02-1
+
+- Usage: new multi-provider quota dashboard to monitor API usage across OpenAI, Google, and z.ai (thanks to @nelsonPires5).
+- Settings: now opens in a windowed dialog on desktop with backdrop blur for better focus.
+- Terminal: added tabbed interface to manage multiple terminal sessions per directory.
+- Files: added multi-file tabs on desktop and dropdown selector on mobile (thanks to @nelsonPires5).
+- UI: introduced token-based theming system and 18 themes with light/dark variants; with support for custom user themes from `~/.config/openchamber/themes`.
+- Diff: optimized stacked view with worker-pool processing and lazy DOM rendering for smoother scrolling.
+- Worktrees: workspace path now resolves correctly when using git worktrees (thanks to @nelsonPires5).
+- Projects: fixed directory creation outside workspace in the Add Project modal (thanks to @nelsonPires5).
+
+
+## [1.6.1] - 2026-01-30
+
+- Chat: added Stop button to cancel generation mid-response.
+- Mobile: revamped chat controls on small screens with a unified controls drawer (thanks to @nelsonPires5).
+- UI: update dialog now includes the changelog so you can review what's new before updating.
+- Terminal: added optional on-screen key bar (Esc/Ctrl/arrows/Enter) for easier terminal navigation.
+- Notifications: added "Notify for subtasks" toggle to silence child-session notifications during multi-run (thanks to @Jovines).
+- Reliability: improved event-stream reconnection when the app becomes visible again.
+- Worktrees: starting new worktree sessions now defaults to HEAD when no start point is provided.
+- Git: commit message generation now includes untracked files and handles git diff --no-index comparisons more reliably (thanks to @MrLYC).
+- Desktop: improved macOS window chrome and header spacing, including steadier traffic lights on older macOS versions (thanks to @yulia-ivashko).
+
+
 ## [1.6.0] - 2026-01-29
 
 - Chat: added message stall detection with automatic soft resync for more reliable message delivery.

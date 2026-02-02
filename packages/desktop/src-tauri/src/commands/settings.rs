@@ -28,6 +28,7 @@ pub async fn load_settings(state: State<'_, DesktopRuntime>) -> Result<SettingsL
         .settings()
         .update_with(|mut settings| {
             migrate_legacy_project_settings(&mut settings);
+            migrate_legacy_theme_settings(&mut settings);
             normalize_project_selection(&mut settings);
             (settings, ())
         })
@@ -52,6 +53,7 @@ pub async fn save_settings(
         .settings()
         .update_with(|current| {
             let mut merged = merge_persisted_settings(&current, &sanitized_changes);
+            migrate_legacy_theme_settings(&mut merged);
             normalize_project_selection(&mut merged);
             (merged, ())
         })
@@ -295,6 +297,12 @@ fn sanitize_settings_update(payload: &Value) -> Value {
         if let Some(Value::Bool(b)) = obj.get("nativeNotificationsEnabled") {
             result_obj.insert("nativeNotificationsEnabled".to_string(), json!(b));
         }
+        if let Some(Value::Bool(b)) = obj.get("notifyOnSubtasks") {
+            result_obj.insert("notifyOnSubtasks".to_string(), json!(b));
+        }
+        if let Some(Value::Bool(b)) = obj.get("usageAutoRefresh") {
+            result_obj.insert("usageAutoRefresh".to_string(), json!(b));
+        }
         if let Some(Value::String(s)) = obj.get("notificationMode") {
             let trimmed = s.trim();
             if trimmed == "always" || trimmed == "hidden-only" {
@@ -370,6 +378,16 @@ fn sanitize_settings_update(payload: &Value) -> Value {
             if let Some(value) = parsed {
                 let clamped = value.max(0).min(100);
                 result_obj.insert("inputBarOffset".to_string(), json!(clamped));
+            }
+        }
+        if let Some(Value::Number(n)) = obj.get("usageRefreshIntervalMs") {
+            let parsed = n
+                .as_u64()
+                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
+                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
+            if let Some(value) = parsed {
+                let clamped = value.max(30000).min(300000);
+                result_obj.insert("usageRefreshIntervalMs".to_string(), json!(clamped));
             }
         }
 
@@ -604,6 +622,70 @@ fn migrate_legacy_project_settings(settings: &mut Value) {
             seen.insert(value.to_string());
             true
         });
+    }
+}
+
+fn migrate_legacy_theme_settings(settings: &mut Value) {
+    if !settings.is_object() {
+        *settings = json!({});
+    }
+
+    let obj = settings.as_object_mut().unwrap();
+
+    let theme_id = obj
+        .get("themeId")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.to_string());
+
+    let theme_variant = obj
+        .get("themeVariant")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| *value == "light" || *value == "dark")
+        .map(|value| value.to_string());
+
+    let has_light = obj
+        .get("lightThemeId")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty());
+    let has_dark = obj
+        .get("darkThemeId")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty());
+
+    if has_light && has_dark {
+        return;
+    }
+
+    let default_light = "flexoki-light".to_string();
+    let default_dark = "flexoki-dark".to_string();
+
+    if !has_light {
+        let next = if let (Some(id), Some(variant)) = (theme_id.as_ref(), theme_variant.as_ref()) {
+            if variant == "light" {
+                id.clone()
+            } else {
+                default_light.clone()
+            }
+        } else {
+            default_light.clone()
+        };
+        obj.insert("lightThemeId".to_string(), json!(next));
+    }
+
+    if !has_dark {
+        let next = if let (Some(id), Some(variant)) = (theme_id.as_ref(), theme_variant.as_ref()) {
+            if variant == "dark" {
+                id.clone()
+            } else {
+                default_dark.clone()
+            }
+        } else {
+            default_dark.clone()
+        };
+        obj.insert("darkThemeId".to_string(), json!(next));
     }
 }
 

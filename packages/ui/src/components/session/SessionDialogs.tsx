@@ -77,6 +77,13 @@ export const SessionDialogs: React.FC = () => {
         return normalizeProjectDirectory(targetPath);
     }, [activeProjectId, currentDirectory, projects]);
 
+    const getProjectRefForWorktree = React.useCallback((worktree: WorktreeMetadata) => {
+        const normalized = normalizeProjectDirectory(worktree.projectDirectory);
+        const fallbackPath = normalized || projectDirectory;
+        const match = projects.find((project) => normalizeProjectDirectory(project.path) === fallbackPath) ?? null;
+        return { id: match?.id ?? `path:${fallbackPath}`, path: fallbackPath };
+    }, [projectDirectory, projects]);
+
     const hasDirtyWorktrees = React.useMemo(
         () =>
             (deleteDialog?.worktree?.status?.isDirty ?? false) ||
@@ -276,11 +283,19 @@ export const SessionDialogs: React.FC = () => {
 
             if (deleteDialog.sessions.length === 0 && isWorktreeDelete && deleteDialog.worktree) {
                 const shouldRemoveRemote = deleteDialogShouldRemoveRemote && canRemoveRemoteBranches;
-                await removeProjectWorktree(
-                    { id: activeProjectId || `path:${projectDirectory}`, path: projectDirectory },
-                    deleteDialog.worktree,
-                    { deleteRemoteBranch: shouldRemoveRemote, force: true }
-                );
+                try {
+                    await removeProjectWorktree(
+                        getProjectRefForWorktree(deleteDialog.worktree),
+                        deleteDialog.worktree,
+                        { deleteRemoteBranch: shouldRemoveRemote, force: true }
+                    );
+                } catch (error) {
+                    toast.error('Failed to remove worktree', {
+                        description: renderToastDescription(error instanceof Error ? error.message : 'Please try again.'),
+                    });
+                    closeDeleteDialog();
+                    return;
+                }
                 const archiveNote = shouldRemoveRemote ? 'Worktree and remote branch removed.' : 'Worktree removed.';
                 toast.success('Worktree removed', {
                     description: renderToastDescription(archiveNote),
@@ -293,7 +308,9 @@ export const SessionDialogs: React.FC = () => {
             if (deleteDialog.sessions.length === 1) {
                 const target = deleteDialog.sessions[0];
                 const success = await deleteSession(target.id, {
-                    archiveWorktree: shouldArchive,
+                    // In "worktree" mode, remove the selected worktree explicitly below.
+                    // Don't try to derive worktree removal from per-session metadata (may be missing).
+                    archiveWorktree: isWorktreeDelete ? false : shouldArchive,
                     deleteRemoteBranch: removeRemoteBranch,
                 });
                 if (!success) {
@@ -301,7 +318,7 @@ export const SessionDialogs: React.FC = () => {
                     setIsProcessingDelete(false);
                     return;
                 }
-                const archiveNote = shouldArchive
+                const archiveNote = !isWorktreeDelete && shouldArchive
                     ? removeRemoteBranch
                         ? 'Worktree and remote branch removed.'
                         : 'Attached worktree archived.'
@@ -316,12 +333,30 @@ export const SessionDialogs: React.FC = () => {
             } else {
                 const ids = deleteDialog.sessions.map((session) => session.id);
                 const { deletedIds, failedIds } = await deleteSessions(ids, {
-                    archiveWorktree: shouldArchive,
+                    archiveWorktree: isWorktreeDelete ? false : shouldArchive,
                     deleteRemoteBranch: removeRemoteBranch,
                 });
 
+                if (isWorktreeDelete && deleteDialog.worktree && failedIds.length === 0) {
+                    // Remove selected worktree even if per-session metadata is missing.
+                    // Use same projectRef logic as the no-sessions path.
+                    const shouldRemoveRemote = deleteDialogShouldRemoveRemote && canRemoveRemoteBranches;
+                    try {
+                        await removeProjectWorktree(
+                            getProjectRefForWorktree(deleteDialog.worktree),
+                            deleteDialog.worktree,
+                            { deleteRemoteBranch: shouldRemoveRemote, force: true }
+                        );
+                        await loadSessions();
+                    } catch (error) {
+                        toast.error('Failed to remove worktree', {
+                            description: renderToastDescription(error instanceof Error ? error.message : 'Please try again.'),
+                        });
+                    }
+                }
+
                 if (deletedIds.length > 0) {
-                    const archiveNote = shouldArchive
+                    const archiveNote = !isWorktreeDelete && shouldArchive
                         ? removeRemoteBranch
                             ? 'Archived worktrees and removed remote branches.'
                             : 'Attached worktrees archived.'
@@ -353,6 +388,22 @@ export const SessionDialogs: React.FC = () => {
                 }
             }
 
+            if (isWorktreeDelete && deleteDialog.sessions.length === 1 && deleteDialog.worktree) {
+                const shouldRemoveRemote = deleteDialogShouldRemoveRemote && canRemoveRemoteBranches;
+                try {
+                    await removeProjectWorktree(
+                        getProjectRefForWorktree(deleteDialog.worktree),
+                        deleteDialog.worktree,
+                        { deleteRemoteBranch: shouldRemoveRemote, force: true }
+                    );
+                    await loadSessions();
+                } catch (error) {
+                    toast.error('Failed to remove worktree', {
+                        description: renderToastDescription(error instanceof Error ? error.message : 'Please try again.'),
+                    });
+                }
+            }
+
             closeDeleteDialog();
         } finally {
             setIsProcessingDelete(false);
@@ -366,8 +417,7 @@ export const SessionDialogs: React.FC = () => {
         shouldArchiveWorktree,
         isWorktreeDelete,
         canRemoveRemoteBranches,
-        projectDirectory,
-        activeProjectId,
+        getProjectRefForWorktree,
         loadSessions,
     ]);
 
@@ -441,7 +491,7 @@ export const SessionDialogs: React.FC = () => {
                         {targetWorktree ? formatPathForDisplay(targetWorktree.path, homeDirectory) : 'Worktree path unavailable.'}
                     </p>
                     {hasDirtyWorktrees && (
-                        <p className="typography-micro text-warning">Uncommitted changes will be discarded.</p>
+                        <p className="typography-micro text-status-warning">Uncommitted changes will be discarded.</p>
                     )}
 
                 </div>

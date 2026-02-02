@@ -145,6 +145,7 @@ export function CodeMirrorEditor({ value, onChange, extensions, className, readO
         'h-full w-full',
         '[&_.cm-editor]:h-full [&_.cm-editor]:w-full',
         '[&_.cm-scroller]:font-mono [&_.cm-scroller]:text-[var(--text-code)] [&_.cm-scroller]:leading-6',
+        '[&_.cm-lineNumbers]:text-[var(--tools-edit-line-number)]',
         className,
       )}
     />

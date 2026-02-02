@@ -11,6 +11,8 @@ type ScrollableOverlayProps = React.HTMLAttributes<HTMLElement> & {
   disableHorizontal?: boolean;
   fillContainer?: boolean;
   keyboardAvoid?: boolean;
+  /** Prevent scroll from propagating to parent when at boundaries */
+  preventOverscroll?: boolean;
 };
 
 export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlayProps>(
@@ -26,6 +28,7 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
     disableHorizontal = false,
     fillContainer = true,
     keyboardAvoid = false,
+    preventOverscroll = false,
     ...rest
   }, ref) => {
     const containerRef = React.useRef<HTMLElement | null>(null);
@@ -34,13 +37,18 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
 
     return (
       <div
-        className={cn("relative flex flex-col min-h-0 w-full overflow-hidden overscroll-auto", outerClassName)}
+        className={cn(
+          "relative flex flex-col min-h-0 w-full overflow-hidden",
+          preventOverscroll && "overscroll-none",
+          outerClassName
+        )}
         data-keyboard-avoid={keyboardAvoid ? "true" : undefined}
       >
         <Component
           ref={containerRef as React.Ref<HTMLElement>}
           className={cn(
-            "overlay-scrollbar-target overlay-scrollbar-container overscroll-auto",
+            "overlay-scrollbar-target overlay-scrollbar-container",
+            preventOverscroll && "overscroll-none",
             fillContainer ? "flex-1 min-h-0 w-full" : "flex-none w-full h-auto",
             disableHorizontal ? "overflow-y-auto overflow-x-hidden" : "overflow-auto",
             className

@@ -54,6 +54,9 @@ export type DesktopSettings = {
   showTextJustificationActivity?: boolean;
   nativeNotificationsEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
+  notifyOnSubtasks?: boolean;
+  usageAutoRefresh?: boolean;
+  usageRefreshIntervalMs?: number;
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   defaultModel?: string; // format: "provider/model"
@@ -89,6 +92,7 @@ export type DesktopSettingsApi = {
 
 export type DesktopApi = {
   homeDirectory?: string;
+  macosMajorVersion?: number | null;
   getServerInfo: () => Promise<DesktopServerInfo>;
   restartOpenCode: () => Promise<{ success: boolean }>;
   shutdown: () => Promise<{ success: boolean }>;

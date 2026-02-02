@@ -328,7 +328,9 @@ export function GitHubPullRequestPickerDialog({
       throw new Error(`Local branch already exists: ${preferredBranch}`);
     }
 
-    const session = await createWorktreeSessionForNewBranchExact(projectDirectory, preferredBranch, headCommitish);
+    const session = await createWorktreeSessionForNewBranchExact(projectDirectory, preferredBranch, headCommitish, {
+      kind: 'pr',
+    });
     if (!session?.id) {
       throw new Error('Failed to create PR worktree session');
     }
@@ -341,12 +343,12 @@ export function GitHubPullRequestPickerDialog({
 
     // Switch the new worktree to the PR branch and delete the SDK-created opencode/* branch immediately.
     // This makes the worktree directly operate on the PR branch.
-    const originalBranch = (meta?.branch || session.branch || '').replace(/^refs\/heads\//, '').trim();
     const commands: string[] = [
       // Create local branch from the fetched PR head commit.
       `git -C ${JSON.stringify(worktreeDir)} switch -c ${JSON.stringify(preferredBranch)} ${JSON.stringify(headCommitish)}`,
     ];
-    if (originalBranch && originalBranch.startsWith('opencode/')) {
+    const originalBranch = (meta?.branch || session.branch || '').replace(/^refs\/heads\//, '').trim();
+    if (meta?.kind === 'pr' && originalBranch && originalBranch.startsWith('opencode/')) {
       commands.push(`git -C ${JSON.stringify(projectDirectory)} branch -D ${JSON.stringify(originalBranch)}`);
     }
 
@@ -394,6 +396,7 @@ export function GitHubPullRequestPickerDialog({
       branch: preferredBranch,
       label: preferredBranch,
       createdFromBranch: pr.base,
+      kind: 'pr' as const,
     });
 
     return { id: session.id };
@@ -643,8 +646,8 @@ Nice-to-have:
           {directNumber && projectDirectory && github && connected ? (
             <div
               className={cn(
-                'group flex items-center gap-2 py-1.5 hover:bg-muted/30 rounded transition-colors cursor-pointer',
-                startingNumber === directNumber && 'bg-muted/30'
+                'group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer',
+                startingNumber === directNumber && 'bg-interactive-selection/30'
               )}
               onClick={() => void startSession(directNumber)}
             >
@@ -672,10 +675,10 @@ Nice-to-have:
                 key={pr.number}
                 className={cn(
                   'group flex items-start gap-2 py-1.5 rounded transition-colors',
-                  startingNumber === pr.number && 'bg-muted/30',
+                  startingNumber === pr.number && 'bg-interactive-selection/30',
                   disabledByWorktree
                     ? 'opacity-50 cursor-not-allowed'
-                    : 'hover:bg-muted/30 cursor-pointer'
+                    : 'hover:bg-interactive-hover/30 cursor-pointer'
                 )}
                 onClick={() => {
                   if (disabledByWorktree) return;

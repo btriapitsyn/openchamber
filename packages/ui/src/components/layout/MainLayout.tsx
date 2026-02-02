@@ -15,7 +15,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { useEdgeSwipe } from '@/hooks/useEdgeSwipe';
 import { cn } from '@/lib/utils';
 
-import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView } from '@/components/views';
+import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
 
 export const MainLayout: React.FC = () => {
     const {
@@ -301,7 +301,6 @@ export const MainLayout: React.FC = () => {
     }, [activeMainTab]);
 
     const isChatActive = activeMainTab === 'chat';
-    const isSettingsActive = isSettingsDialogOpen && !isMobile;
 
     return (
         <DiffWorkerProvider>
@@ -371,7 +370,7 @@ export const MainLayout: React.FC = () => {
                     {/* Desktop: Header always on top, then Sidebar + Content below */}
                     <div className="flex flex-1 flex-col overflow-hidden relative">
                         {/* Normal view: Header above Sidebar + content (like SettingsView) */}
-                        <div className={cn('absolute inset-0 flex flex-col', (isSettingsActive || isMultiRunLauncherOpen) && 'invisible')}>
+                        <div className={cn('absolute inset-0 flex flex-col', isMultiRunLauncherOpen && 'invisible')}>
                             <Header />
                             <div className="flex flex-1 overflow-hidden">
                                 <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
@@ -404,12 +403,11 @@ export const MainLayout: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Settings view: full screen overlay */}
-                    {isSettingsActive && (
-                        <div className={cn('absolute inset-0 z-10 bg-background')}>
-                            <ErrorBoundary><SettingsView onClose={() => setSettingsDialogOpen(false)} /></ErrorBoundary>
-                        </div>
-                    )}
+                    {/* Desktop settings: windowed dialog with blur */}
+                    <SettingsWindow
+                        open={isSettingsDialogOpen}
+                        onOpenChange={setSettingsDialogOpen}
+                    />
                 </>
             )}
 

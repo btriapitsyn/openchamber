@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, time::Duration};
+use std::{collections::{HashMap, HashSet}, path::PathBuf, time::Duration};
 
 use anyhow::Result;
 use futures_util::TryStreamExt;
@@ -45,6 +45,7 @@ pub fn spawn_assistant_notifications(
         let mut shutdown_rx = runtime.subscribe_shutdown();
         let notified_messages = Mutex::new(HashSet::<String>::new());
         let notified_questions = Mutex::new(HashSet::<String>::new());
+        let session_parent_cache = Mutex::new(HashMap::<String, Option<String>>::new());
 
         loop {
             tokio::select! {
@@ -53,7 +54,14 @@ pub fn spawn_assistant_notifications(
                     break;
                 }
                 _ = async {
-                    if let Err(err) = run_once(&app, &runtime, &client, &notified_messages, &notified_questions).await {
+                    if let Err(err) = run_once(
+                        &app,
+                        &runtime,
+                        &client,
+                        &notified_messages,
+                        &notified_questions,
+                        &session_parent_cache,
+                    ).await {
                         warn!("[desktop:notify] SSE loop error: {err:?}");
                     }
                     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -69,6 +77,7 @@ async fn run_once(
     client: &Client,
     notified_messages: &Mutex<HashSet<String>>,
     notified_questions: &Mutex<HashSet<String>>,
+    session_parent_cache: &Mutex<HashMap<String, Option<String>>>,
 ) -> Result<()> {
     let opencode = runtime.opencode_manager();
 
@@ -121,7 +130,19 @@ async fn run_once(
             data_lines.clear();
 
             match parse_event_envelope(&raw) {
-                Ok(event) => handle_event(app, event, notified_messages, notified_questions).await,
+                Ok(event) => {
+                    handle_event(
+                        app,
+                        runtime,
+                        client,
+                        &base,
+                        event,
+                        notified_messages,
+                        notified_questions,
+                        session_parent_cache,
+                    )
+                    .await
+                }
                 Err(err) => {
                     warn!("[desktop:notify] Failed to parse SSE data: {err}; raw={raw}");
                 }
@@ -244,13 +265,26 @@ async fn try_connect_sse(
 
 async fn handle_event(
     app: &AppHandle,
+    runtime: &DesktopRuntime,
+    client: &Client,
+    base: &str,
     event: EventEnvelope,
     notified_messages: &Mutex<HashSet<String>>,
     notified_questions: &Mutex<HashSet<String>>,
+    session_parent_cache: &Mutex<HashMap<String, Option<String>>>,
 ) {
     match event.event_type.as_str() {
         "message.updated" => {
-            handle_message_updated(app, &event.properties, notified_messages).await;
+            handle_message_updated(
+                app,
+                runtime,
+                client,
+                base,
+                &event.properties,
+                notified_messages,
+                session_parent_cache,
+            )
+            .await;
         }
         "question.asked" => {
             handle_question_asked(app, &event.properties, notified_questions).await;
@@ -260,6 +294,61 @@ async fn handle_event(
         }
         _ => {}
     }
+}
+
+async fn resolve_session_parent_id(
+    client: &Client,
+    base: &str,
+    session_id: &str,
+    cache: &Mutex<HashMap<String, Option<String>>>,
+) -> Option<Option<String>> {
+    {
+        let locked = cache.lock().await;
+        if let Some(existing) = locked.get(session_id) {
+            return Some(existing.clone());
+        }
+    }
+
+    // Fail open: on any error, return None (unknown)
+    let sessions_url = format!("{base}/session");
+    let response = match tokio::time::timeout(
+        Duration::from_secs(2),
+        client.get(&sessions_url).header("accept", "application/json").send(),
+    )
+    .await
+    {
+        Ok(Ok(resp)) => resp,
+        _ => return None,
+    };
+
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let data: Value = match response.json().await {
+        Ok(v) => v,
+        Err(_) => return None,
+    };
+
+    let parent = data
+        .as_array()
+        .and_then(|arr| {
+            arr.iter().find_map(|entry| {
+                let id = entry.get("id").and_then(Value::as_str)?;
+                if id != session_id {
+                    return None;
+                }
+                let parent = entry.get("parentID").and_then(Value::as_str);
+                Some(parent.filter(|s| !s.is_empty()).map(|s| s.to_string()))
+            })
+        })
+        .flatten();
+
+    {
+        let mut locked = cache.lock().await;
+        locked.insert(session_id.to_string(), parent.clone());
+    }
+    Some(parent)
 }
 
 async fn handle_question_asked(
@@ -396,8 +485,12 @@ async fn handle_permission_asked(
 
 async fn handle_message_updated(
     app: &AppHandle,
+    runtime: &DesktopRuntime,
+    client: &Client,
+    base: &str,
     properties: &Value,
     notified_messages: &Mutex<HashSet<String>>,
+    session_parent_cache: &Mutex<HashMap<String, Option<String>>>,
 ) {
     let Some(info) = properties.get("info") else {
         return;
@@ -417,6 +510,31 @@ async fn handle_message_updated(
         Some(id) => id.to_string(),
         None => return,
     };
+
+    // Subtask filtering (fail open)
+    let notify_on_subtasks = runtime
+        .settings()
+        .load()
+        .await
+        .ok()
+        .and_then(|settings| settings.get("notifyOnSubtasks").and_then(Value::as_bool))
+        .unwrap_or(true);
+
+    if !notify_on_subtasks {
+        let session_id = info
+            .get("sessionID")
+            .and_then(Value::as_str)
+            .or_else(|| properties.get("sessionID").and_then(Value::as_str))
+            .or_else(|| properties.get("sessionId").and_then(Value::as_str));
+
+        if let Some(session_id) = session_id {
+            if let Some(parent) = resolve_session_parent_id(client, base, session_id, session_parent_cache).await {
+                if parent.is_some() {
+                    return;
+                }
+            }
+        }
+    }
 
     {
         let mut notified = notified_messages.lock().await;

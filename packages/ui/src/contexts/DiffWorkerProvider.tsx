@@ -1,177 +1,45 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { WorkerPoolContextProvider, useWorkerPool } from '@pierre/diffs/react';
-import { parseDiffFromFile, type FileContents } from '@pierre/diffs';
 import type { SupportedLanguages } from '@pierre/diffs';
 
 import { useOptionalThemeSystem } from './useThemeSystem';
 import { workerFactory } from '@/lib/diff/workerFactory';
-import { ensureFlexokiThemesRegistered } from '@/lib/shiki/registerFlexokiThemes';
-import { flexokiThemeNames } from '@/lib/shiki/flexokiThemes';
-import { useGitStore } from '@/stores/useGitStore';
-import { getLanguageFromExtension } from '@/lib/toolHelpers';
+import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
+import { getDefaultTheme } from '@/lib/theme/themes';
+// NOTE: keep provider lightweight; avoid main-thread diff parsing here.
 
 // Preload common languages for faster initial diff rendering
 const PRELOAD_LANGS: SupportedLanguages[] = [
+  // Keep small; workers load others on-demand.
   'typescript',
   'javascript',
   'tsx',
   'jsx',
   'json',
-  'html',
-  'css',
   'markdown',
-  'yaml',
-  'python',
-  'rust',
-  'go',
-  'bash',
 ];
-
-// Limit warmup to prevent memory bloat with many modified files
-const WARMUP_MAX_FILES = 10;
-
-// Matches cache key logic in `packages/ui/src/components/views/PierreDiffViewer.tsx`
-function getPierreCacheKey(fileName: string, original: string, modified: string): string {
-  const sampleOriginal = original.length > 100
-    ? `${original.slice(0, 50)}${original.slice(-50)}`
-    : original;
-  const sampleModified = modified.length > 100
-    ? `${modified.slice(0, 50)}${modified.slice(-50)}`
-    : modified;
-  return `${fileName}:${original.length}:${modified.length}:${sampleOriginal.length}:${sampleModified.length}`;
-}
 
 interface DiffWorkerProviderProps {
   children: React.ReactNode;
 }
 
-type IdleDeadlineLike = { timeRemaining(): number; didTimeout: boolean };
-
-function scheduleWarmupWork(cb: (deadline?: IdleDeadlineLike) => void): () => void {
-  if (typeof window === 'undefined') {
-    return () => {};
-  }
-
-  const id = window.setTimeout(() => cb(undefined), 0);
-  return () => window.clearTimeout(id);
-}
-
 // Component that warms up the worker pool and precomputes diff ASTs
-const WorkerPoolWarmup: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const WorkerPoolWarmup: React.FC<{
+  children: React.ReactNode;
+  renderTheme: { light: string; dark: string };
+}> = ({ children, renderTheme }) => {
   const workerPool = useWorkerPool();
-  const activeDirectory = useGitStore((state) => state.activeDirectory);
-  const lastStatusChange = useGitStore((state) => {
-    if (!activeDirectory) return 0;
-    return state.directories.get(activeDirectory)?.lastStatusChange ?? 0;
-  });
-  const diffCacheSize = useGitStore((state) => {
-    if (!activeDirectory) return 0;
-    return state.directories.get(activeDirectory)?.diffCache.size ?? 0;
-  });
-
-  const didDummyWarmupRef = useRef(false);
-  const warmedStatusRef = useRef(new Map<string, number>());
 
   useEffect(() => {
-    if (!workerPool || didDummyWarmupRef.current) return;
-
-    didDummyWarmupRef.current = true;
-
-    const dummyFile: FileContents = {
-      name: 'warmup.ts',
-      contents: 'const x = 1;',
-      lang: 'typescript',
-      cacheKey: 'warmup-file',
-    };
-
-    const dummyDiff = parseDiffFromFile(dummyFile, { ...dummyFile, contents: 'const x = 2;', cacheKey: 'warmup-file-2' });
-
-    const dummyInstance = {
-      onHighlightSuccess: () => {},
-      onHighlightError: () => {},
-    };
-
-    workerPool.highlightDiffAST(dummyInstance, dummyDiff);
-  }, [workerPool]);
-
-  useEffect(() => {
-    if (!workerPool || !activeDirectory) return;
-    if (!lastStatusChange || diffCacheSize === 0) return;
-
-    const dirState = useGitStore.getState().directories.get(activeDirectory);
-    if (!dirState || dirState.diffCache.size === 0) return;
-
-    const alreadyWarmedAt = warmedStatusRef.current.get(activeDirectory) ?? 0;
-    if (alreadyWarmedAt >= dirState.lastStatusChange) return;
-
-    // Only warm once per status-change tick
-    warmedStatusRef.current.set(activeDirectory, dirState.lastStatusChange);
-
-    let cancelled = false;
-    let cancelScheduled: (() => void) | null = null;
-
-    // Limit entries to prevent memory bloat with many modified files
-    const allEntries = Array.from(dirState.diffCache.entries());
-    const entries = allEntries.slice(0, WARMUP_MAX_FILES);
-
-    let index = 0;
-
-    const processChunk = (deadline?: IdleDeadlineLike) => {
-      if (cancelled) return;
-
-      const chunkStart = Date.now();
-      while (index < entries.length) {
-        if (deadline && deadline.timeRemaining() < 8) break;
-        if (!deadline && Date.now() - chunkStart > 8) break;
-
-        const [filePath, diff] = entries[index];
-        index += 1;
-
-        const language = getLanguageFromExtension(filePath) || 'text';
-        const cacheKey = getPierreCacheKey(filePath, diff.original, diff.modified);
-
-        const oldFile: FileContents = {
-          name: filePath,
-          contents: diff.original,
-          lang: language as FileContents['lang'],
-          cacheKey: `old-${cacheKey}`,
-        };
-
-        const newFile: FileContents = {
-          name: filePath,
-          contents: diff.modified,
-          lang: language as FileContents['lang'],
-          cacheKey: `new-${cacheKey}`,
-        };
-
-        const fileDiff = parseDiffFromFile(oldFile, newFile);
-
-        // Use a unique instance per request so Pierre doesn't ignore earlier results.
-        const instance = {
-          onHighlightSuccess: () => {},
-          onHighlightError: () => {},
-        };
-
-        workerPool.highlightDiffAST(instance, fileDiff);
-      }
-
-      if (index < entries.length) {
-        cancelScheduled = scheduleWarmupWork(processChunk);
-      }
-    };
-
-    // Kick off immediately, then continue in chunks.
-    processChunk(undefined);
-
-    if (index < entries.length) {
-      cancelScheduled = scheduleWarmupWork(processChunk);
+    if (!workerPool) {
+      return;
     }
 
-    return () => {
-      cancelled = true;
-      cancelScheduled?.();
-    };
-  }, [workerPool, activeDirectory, lastStatusChange, diffCacheSize]);
+    // Important: WorkerPoolContextProvider uses a singleton and does not react to
+    // prop changes. Update the worker pool render options explicitly.
+    // Force-disable intra-line diff globally (word-level/char-level).
+    void workerPool.setRenderOptions({ theme: renderTheme, lineDiffType: 'none' });
+  }, [renderTheme, workerPool]);
 
   return <>{children}</>;
 };
@@ -180,16 +48,38 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   const themeSystem = useOptionalThemeSystem();
   const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
 
-  ensureFlexokiThemesRegistered();
+  const fallbackLight = getDefaultTheme(false);
+  const fallbackDark = getDefaultTheme(true);
+
+  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id;
+  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id;
+
+  const lightTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ??
+    fallbackLight;
+  const darkTheme =
+    themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
+    fallbackDark;
+
+  ensurePierreThemeRegistered(lightTheme);
+  ensurePierreThemeRegistered(darkTheme);
 
   const highlighterOptions = useMemo(() => ({
     theme: {
-      dark: flexokiThemeNames.dark,
-      light: flexokiThemeNames.light,
+      dark: darkTheme.metadata.id,
+      light: lightTheme.metadata.id,
     },
     themeType: isDark ? ('dark' as const) : ('light' as const),
     langs: PRELOAD_LANGS,
-  }), [isDark]);
+  }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id]);
+
+  const renderTheme = useMemo(
+    () => ({
+      light: lightTheme.metadata.id,
+      dark: darkTheme.metadata.id,
+    }),
+    [darkTheme.metadata.id, lightTheme.metadata.id],
+  );
 
   return (
     <WorkerPoolContextProvider
@@ -200,7 +90,9 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
       }}
       highlighterOptions={highlighterOptions}
     >
-      <WorkerPoolWarmup>
+      <WorkerPoolWarmup
+        renderTheme={renderTheme}
+      >
         {children}
       </WorkerPoolWarmup>
     </WorkerPoolContextProvider>

@@ -1752,7 +1752,10 @@ class OpencodeService {
   }
 
   // File System Operations
-  async createDirectory(dirPath: string): Promise<{ success: boolean; path: string }> {
+  async createDirectory(
+    dirPath: string,
+    options?: { allowOutsideWorkspace?: boolean }
+  ): Promise<{ success: boolean; path: string }> {
     const desktopFiles = getDesktopFilesApi();
     if (desktopFiles?.createDirectory) {
       try {
@@ -1763,12 +1766,17 @@ class OpencodeService {
       }
     }
 
+    const payload = {
+      path: dirPath,
+      ...(options?.allowOutsideWorkspace ? { allowOutsideWorkspace: true } : {}),
+    };
+
     const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ path: dirPath }),
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {

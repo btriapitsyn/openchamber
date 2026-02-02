@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import { execSync } from 'child_process';
-import { createOpencodeServer } from '@opencode-ai/sdk/server';
+import { createOpencodeServer } from '@opencode-ai/sdk/v2/server';
 
 const READY_CHECK_TIMEOUT_MS = 30000;
 
@@ -28,6 +28,7 @@ export type OpenCodeDebugInfo = {
   lastReadyElapsedMs: number | null;
   lastReadyAttempts: number | null;
   lastStartAttempts: number | null;
+  version: string | null;
 };
 
 export interface OpenCodeManager {
@@ -53,8 +54,8 @@ function resolvePortFromUrl(url: string): number | null {
 }
 
 type ReadyResult =
-  | { ok: true; baseUrl: string; elapsedMs: number; attempts: number }
-  | { ok: false; elapsedMs: number; attempts: number };
+  | { ok: true; baseUrl: string; elapsedMs: number; attempts: number; version: string | null }
+  | { ok: false; elapsedMs: number; attempts: number; version: null };
 
 function normalizeBaseUrl(value: string): string {
   return value.replace(/\/+$/, '');
@@ -86,6 +87,7 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
 }
 
 async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<ReadyResult> {
+  const outputChannel = vscode.window.createOutputChannel('OpenChamberManager');
   const start = Date.now();
   const candidates = getCandidateBaseUrls(serverUrl);
   let attempts = 0;
@@ -98,16 +100,27 @@ async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<Ready
         const timeout = setTimeout(() => controller.abort(), 3000);
 
         // Keep using /config since the UI proxies to it (via /api -> strip prefix).
-        const url = new URL(`${baseUrl}/config`);
+        const url = new URL(`${baseUrl}/global/health`);
         const res = await fetch(url.toString(), {
           method: 'GET',
           headers: { Accept: 'application/json' },
           signal: controller.signal,
         });
 
+        let body: { healthy?: boolean, version?: string } | null = null;
+        try {
+          body = (await res.json()) as { healthy?: boolean, version?: string };
+        } catch {
+          body = null;
+        }
+
         clearTimeout(timeout);
-        if (res.ok) {
-          return { ok: true, baseUrl, elapsedMs: Date.now() - start, attempts };
+        outputChannel?.appendLine(
+          `Health check to ${url.toString()} returned ${res.status} with body: ${JSON.stringify(body)}`
+        );
+
+        if (res.ok && body?.healthy === true) {
+          return { ok: true, baseUrl, elapsedMs: Date.now() - start, attempts, version: body?.version ?? null };
         }
       } catch {
         // ignore
@@ -117,7 +130,7 @@ async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<Ready
     await new Promise(r => setTimeout(r, 100));
   }
 
-  return { ok: false, elapsedMs: Date.now() - start, attempts };
+  return { ok: false, elapsedMs: Date.now() - start, attempts, version: null };
 }
 
 export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCodeManager {
@@ -139,6 +152,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   let lastReadyElapsedMs: number | null = null;
   let lastReadyAttempts: number | null = null;
   let lastStartAttempts: number | null = null;
+  let version: string | null = null;
 
   let detectedPort: number | null = null;
   let cliMissing = false;
@@ -244,12 +258,13 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
       if (server && server.url) {
         // Validate readiness for the current workspace context.
-        const ready = await waitForReady(server.url, 10000);
+        const ready = await waitForReady(server.url, READY_CHECK_TIMEOUT_MS);
         lastReadyElapsedMs = ready.elapsedMs;
         lastReadyAttempts = ready.attempts;
         if (ready.ok) {
           managedApiUrlOverride = ready.baseUrl;
           detectedPort = resolvePortFromUrl(ready.baseUrl);
+          version = ready.version;
           setStatus('connected');
         } else {
           try {
@@ -275,7 +290,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
           'More Info'
         ).then(selection => {
           if (selection === 'More Info') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/opencode-ai/opencode'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/anomalyco/opencode'));
           }
         });
       } else {
@@ -322,6 +337,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
     managedApiUrlOverride = null;
     detectedPort = null;
+    version = null;
     setStatus('disconnected');
   }
 
@@ -425,6 +441,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       lastReadyElapsedMs,
       lastReadyAttempts,
       lastStartAttempts,
+      version,
     }),
     onStatusChange(callback) {
       listeners.add(callback);

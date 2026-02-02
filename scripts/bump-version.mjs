@@ -16,6 +16,7 @@ const PACKAGES = [
 
 const TAURI_CONF = 'packages/desktop/src-tauri/tauri.conf.json';
 const CARGO_TOML = 'packages/desktop/src-tauri/Cargo.toml';
+const CARGO_LOCK = 'packages/desktop/src-tauri/Cargo.lock';
 
 const newVersion = process.argv[2];
 if (!newVersion || !/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(newVersion)) {
@@ -56,6 +57,37 @@ cargoContent = cargoContent.replace(
 );
 fs.writeFileSync(cargoPath, cargoContent);
 console.log(`  ${CARGO_TOML}: ${oldCargoVersion} -> ${newVersion}`);
+
+// Update Cargo.lock for openchamber-desktop, if present
+const cargoLockPath = path.join(ROOT, CARGO_LOCK);
+if (fs.existsSync(cargoLockPath)) {
+  try {
+    let lockContent = fs.readFileSync(cargoLockPath, 'utf8');
+    const anchor = 'name = "openchamber-desktop"';
+    const anchorIndex = lockContent.indexOf(anchor);
+    if (anchorIndex !== -1) {
+      // find the next version line after the anchor
+      const verIndex = lockContent.indexOf('version', anchorIndex);
+      if (verIndex !== -1) {
+        const q1 = lockContent.indexOf('"', verIndex);
+        const q2 = lockContent.indexOf('"', q1 + 1);
+        const oldLockVersion = lockContent.substring(q1 + 1, q2);
+        lockContent = lockContent.substring(0, q1 + 1) + newVersion + lockContent.substring(q2);
+        fs.writeFileSync(cargoLockPath, lockContent);
+        console.log(`  ${CARGO_LOCK}: ${oldLockVersion} -> ${newVersion}`);
+      } else {
+        console.warn(`Warning: could not locate version line in ${CARGO_LOCK}`);
+      }
+    } else {
+      console.warn(`Warning: could not find openchamber-desktop entry in ${CARGO_LOCK}`);
+    }
+  } catch (e) {
+    console.error(`Failed to update ${CARGO_LOCK}:`, e);
+  }
+} else {
+  // No lock file to update; ignore gracefully
+  console.log(`Cargo.lock not found at ${CARGO_LOCK}, skipping lock update`);
+}
 
 console.log(`\nVersion bumped to ${newVersion}`);
 console.log('\nNext steps:');

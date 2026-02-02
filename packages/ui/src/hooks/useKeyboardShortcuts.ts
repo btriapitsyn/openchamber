@@ -226,6 +226,8 @@ export const useKeyboardShortcuts = () => {
           isHelpDialogOpen,
           isSessionSwitcherOpen,
           isAboutDialogOpen,
+          isMultiRunLauncherOpen,
+          isImagePreviewOpen,
           activeMainTab,
         } = useUIStore.getState();
 
@@ -238,7 +240,7 @@ export const useKeyboardShortcuts = () => {
         }
 
         // Check if any overlay is open or not on chat tab - don't process abort
-        const hasOverlay = isCommandPaletteOpen || isHelpDialogOpen || isSessionSwitcherOpen || isAboutDialogOpen;
+        const hasOverlay = isCommandPaletteOpen || isHelpDialogOpen || isSessionSwitcherOpen || isAboutDialogOpen || isMultiRunLauncherOpen || isImagePreviewOpen;
         const isChatActive = activeMainTab === 'chat';
 
         if (hasOverlay || !isChatActive) {

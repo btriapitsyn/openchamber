@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/desktop",
-  "version": "1.6.0",
+  "version": "1.6.2",
   "private": true,
   "type": "module",
   "desktopPrerequisites": [

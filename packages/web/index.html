@@ -105,6 +105,17 @@
           document.documentElement.classList.add(isDark ? 'dark' : 'light');
           document.documentElement.setAttribute('data-splash-variant', isDark ? 'dark' : 'light');
           document.documentElement.style.setProperty('color-scheme', isDark ? 'dark' : 'light');
+
+          // Splash colors persisted by the app theme system
+          var splashBgLight = localStorage.getItem('splashBgLight');
+          var splashFgLight = localStorage.getItem('splashFgLight');
+          var splashBgDark = localStorage.getItem('splashBgDark');
+          var splashFgDark = localStorage.getItem('splashFgDark');
+
+          if (splashBgLight) document.documentElement.style.setProperty('--splash-background-light', splashBgLight);
+          if (splashFgLight) document.documentElement.style.setProperty('--splash-stroke-light', splashFgLight);
+          if (splashBgDark) document.documentElement.style.setProperty('--splash-background-dark', splashBgDark);
+          if (splashFgDark) document.documentElement.style.setProperty('--splash-stroke-dark', splashFgDark);
         } catch (error) {
           console.warn('Failed to apply theme:', error);
         }
@@ -153,18 +164,39 @@
       }
 
       :root {
-        --splash-background: #151313;
-        --splash-stroke: white;
+        --splash-background-dark: #151313;
+        --splash-stroke-dark: white;
+        --splash-background-light: #F6F4EF;
+        --splash-stroke-light: black;
+
+        --splash-background: var(--splash-background-dark);
+        --splash-stroke: var(--splash-stroke-dark);
+
+        /* Fallback fills (overridden below when supported) */
         --splash-face-fill: rgba(255, 255, 255, 0.15);
         --splash-cell-fill: rgba(255, 255, 255, 0.35);
-        --splash-logo-fill: white;
+        --splash-logo-fill: var(--splash-stroke);
       }
+
       html[data-splash-variant='light'] {
-        --splash-background: #F6F4EF;
-        --splash-stroke: black;
+        --splash-background: var(--splash-background-light);
+        --splash-stroke: var(--splash-stroke-light);
         --splash-face-fill: rgba(0, 0, 0, 0.15);
         --splash-cell-fill: rgba(0, 0, 0, 0.4);
-        --splash-logo-fill: black;
+        --splash-logo-fill: var(--splash-stroke);
+      }
+
+      html[data-splash-variant='dark'] {
+        --splash-background: var(--splash-background-dark);
+        --splash-stroke: var(--splash-stroke-dark);
+        --splash-logo-fill: var(--splash-stroke);
+      }
+
+      @supports (color: color-mix(in srgb, white 50%, transparent)) {
+        :root {
+          --splash-face-fill: color-mix(in srgb, var(--splash-stroke) 15%, transparent);
+          --splash-cell-fill: color-mix(in srgb, var(--splash-stroke) 35%, transparent);
+        }
       }
       @keyframes logo-pulse {
         0%, 100% { opacity: 1; }

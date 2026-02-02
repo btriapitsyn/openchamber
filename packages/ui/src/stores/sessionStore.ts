@@ -157,6 +157,16 @@ const archiveSessionWorktree = async (
     );
 };
 
+const deleteSessionOnServer = async (sessionId: string, directory?: string | null): Promise<boolean> => {
+    const apiClient = opencodeClient.getApiClient();
+    const normalizedDirectory = normalizePath(directory ?? null);
+    const response = await apiClient.session.delete({
+        sessionID: sessionId,
+        ...(normalizedDirectory ? { directory: normalizedDirectory } : {}),
+    });
+    return Boolean(response.data);
+};
+
 const normalizePath = (value?: string | null): string | null => {
     if (typeof value !== "string") {
         return null;
@@ -913,36 +923,36 @@ export const useSessionStore = create<SessionStore>()(
                 deleteSession: async (id: string, options) => {
                     set({ isLoading: true, error: null });
                     const metadata = get().worktreeMetadata.get(id);
+                    const metadataPath = typeof metadata?.path === 'string' ? metadata.path : null;
+                    const metadataProjectDirectory = typeof metadata?.projectDirectory === 'string' ? metadata.projectDirectory : null;
                     const sessionDirectory = getSessionDirectory(get().sessions, id);
-                    const overrideDirectory = metadata?.path ?? sessionDirectory;
-                    let archivedMetadata: WorktreeMetadata | null = null;
-                    try {
-                        if (metadata && options?.archiveWorktree) {
-                            await archiveSessionWorktree(metadata, {
-                                deleteRemoteBranch: options?.deleteRemoteBranch,
-                                remoteName: options?.remoteName,
-                            });
-                            archivedMetadata = metadata;
-                        }
+                    const requestDirectory = normalizePath(metadataProjectDirectory)
+                        ?? normalizePath(sessionDirectory)
+                        ?? normalizePath(opencodeClient.getDirectory() ?? null)
+                        ?? null;
 
-                        const deleteRequest = () => opencodeClient.deleteSession(id);
-                        const success = overrideDirectory
-                            ? await opencodeClient.withDirectory(overrideDirectory, deleteRequest)
-                            : await deleteRequest();
+                    let archiveSucceeded = false;
+                    try {
+                        const success = await deleteSessionOnServer(id, requestDirectory);
                         if (!success) {
-                            set((state) => {
-                                const update: Partial<SessionStore> = {
-                                    isLoading: false,
-                                    error: "Failed to delete session",
-                                };
-                                if (archivedMetadata) {
-                                    const nextMetadata = new Map(state.worktreeMetadata);
-                                    nextMetadata.delete(id);
-                                    update.worktreeMetadata = nextMetadata;
-                                }
-                                return update;
+                            set({
+                                isLoading: false,
+                                error: "Failed to delete session",
                             });
                             return false;
+                        }
+
+                        if (metadata && options?.archiveWorktree) {
+                            try {
+                                await archiveSessionWorktree(metadata, {
+                                    deleteRemoteBranch: options?.deleteRemoteBranch,
+                                    remoteName: options?.remoteName,
+                                });
+                                archiveSucceeded = true;
+                            } catch (error) {
+                                const message = error instanceof Error ? error.message : "Failed to delete worktree";
+                                set({ error: message });
+                            }
                         }
 
                         let nextCurrentId: string | null = null;
@@ -951,16 +961,17 @@ export const useSessionStore = create<SessionStore>()(
                             nextCurrentId = state.currentSessionId === id ? null : state.currentSessionId;
                             const nextMetadata = new Map(state.worktreeMetadata);
                             nextMetadata.delete(id);
-                            const nextAvailableWorktrees = options?.archiveWorktree && metadata
-                                ? state.availableWorktrees.filter((entry) => normalizePath(entry.path) !== normalizePath(metadata.path))
+                            const shouldRemoveWorktreeFromLists = Boolean(metadataPath && options?.archiveWorktree && archiveSucceeded);
+                            const nextAvailableWorktrees = shouldRemoveWorktreeFromLists
+                                ? state.availableWorktrees.filter((entry) => normalizePath(entry.path) !== normalizePath(metadataPath))
                                 : state.availableWorktrees;
                             const nextAvailableWorktreesByProject = new Map(state.availableWorktreesByProject);
-                            if (options?.archiveWorktree && metadata) {
-                                const projectKey = normalizePath(metadata.projectDirectory) ?? metadata.projectDirectory;
+                            if (shouldRemoveWorktreeFromLists && metadataProjectDirectory) {
+                                const projectKey = normalizePath(metadataProjectDirectory) ?? metadataProjectDirectory;
                                 const projectWorktrees = nextAvailableWorktreesByProject.get(projectKey) ?? [];
                                 nextAvailableWorktreesByProject.set(
                                     projectKey,
-                                    projectWorktrees.filter((entry) => normalizePath(entry.path) !== normalizePath(metadata.path))
+                                    projectWorktrees.filter((entry) => normalizePath(entry.path) !== normalizePath(metadataPath))
                                 );
                             }
                             return {
@@ -974,28 +985,18 @@ export const useSessionStore = create<SessionStore>()(
                             };
                         });
 
-                        const directoryToStore = overrideDirectory ?? opencodeClient.getDirectory() ?? null;
+                        const directoryToStore = normalizePath(sessionDirectory)
+                            ?? normalizePath(opencodeClient.getDirectory() ?? null)
+                            ?? null;
                         storeSessionForDirectory(directoryToStore, nextCurrentId);
 
                         return true;
                     } catch (error) {
                         const message = error instanceof Error ? error.message : "Failed to delete session";
-                        if (archivedMetadata) {
-                            set((state) => {
-                                const nextMetadata = new Map(state.worktreeMetadata);
-                                nextMetadata.delete(id);
-                                return {
-                                    worktreeMetadata: nextMetadata,
-                                    error: message,
-                                    isLoading: false,
-                                };
-                            });
-                        } else {
-                            set({
-                                error: message,
-                                isLoading: false,
-                            });
-                        }
+                        set({
+                            error: message,
+                            isLoading: false,
+                        });
                         return false;
                     }
                 },
@@ -1015,35 +1016,29 @@ export const useSessionStore = create<SessionStore>()(
                     }
                     const deletedIds: string[] = [];
                     const failedIds: string[] = [];
-                    const archivedIds = new Set<string>();
-
-                    const removedWorktrees: Array<{ path: string; projectDirectory: string }> = [];
+                    const worktreesToArchive = new Map<string, WorktreeMetadata>();
                     const archivedWorktreePaths = new Set<string>();
 
                     for (const id of uniqueIds) {
                         try {
                             const metadata = get().worktreeMetadata.get(id);
                             const sessionDirectory = getSessionDirectory(get().sessions, id);
-                            const overrideDirectory = metadata?.path ?? sessionDirectory;
-                            if (metadata && options?.archiveWorktree && !archivedWorktreePaths.has(metadata.path)) {
-                                await archiveSessionWorktree(metadata, {
-                                    deleteRemoteBranch: options?.deleteRemoteBranch,
-                                    remoteName: options?.remoteName,
-                                });
-                                archivedIds.add(id);
-                                removedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
-                                archivedWorktreePaths.add(metadata.path);
+                            const requestDirectory = normalizePath(metadata?.projectDirectory ?? null)
+                                ?? normalizePath(sessionDirectory)
+                                ?? normalizePath(opencodeClient.getDirectory() ?? null)
+                                ?? null;
+
+                            if (metadata && options?.archiveWorktree) {
+                                const key = normalizePath(metadata.path) ?? metadata.path;
+                                if (!archivedWorktreePaths.has(key)) {
+                                    archivedWorktreePaths.add(key);
+                                    worktreesToArchive.set(key, metadata);
+                                }
                             }
 
-                            const deleteRequest = () => opencodeClient.deleteSession(id);
-                            const success = overrideDirectory
-                                ? await opencodeClient.withDirectory(overrideDirectory, deleteRequest)
-                                : await deleteRequest();
+                            const success = await deleteSessionOnServer(id, requestDirectory);
                             if (success) {
                                 deletedIds.push(id);
-                                if (metadata?.path && !removedWorktrees.some((entry) => entry.path === metadata.path)) {
-                                    removedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
-                                }
                             } else {
                                 failedIds.push(id);
                             }
@@ -1052,8 +1047,30 @@ export const useSessionStore = create<SessionStore>()(
                         }
                     }
 
+                    const archivedWorktrees: Array<{ path: string; projectDirectory: string }> = [];
+                    const archiveFailures: string[] = [];
+
+                    if (options?.archiveWorktree && worktreesToArchive.size > 0) {
+                        for (const metadata of worktreesToArchive.values()) {
+                            try {
+                                await archiveSessionWorktree(metadata, {
+                                    deleteRemoteBranch: options?.deleteRemoteBranch,
+                                    remoteName: options?.remoteName,
+                                });
+                                archivedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
+                            } catch (error) {
+                                const message = error instanceof Error ? error.message : "Failed to delete worktree";
+                                archiveFailures.push(message);
+                            }
+                        }
+                    }
+
+                    if (archiveFailures.length > 0) {
+                        set({ error: archiveFailures[0] });
+                    }
+
                     const directoryStore = useDirectoryStore.getState();
-                    removedWorktrees.forEach(({ path, projectDirectory }) => {
+                    archivedWorktrees.forEach(({ path, projectDirectory }) => {
                         if (directoryStore.currentDirectory === path) {
                             directoryStore.setDirectory(projectDirectory, { showOverlay: false });
                         }
@@ -1077,25 +1094,19 @@ export const useSessionStore = create<SessionStore>()(
                         for (const removedId of deletedSet) {
                             nextMetadata.delete(removedId);
                         }
-                        for (const archivedId of archivedIds) {
-                            nextMetadata.delete(archivedId);
-                        }
 
                         const removedPaths = new Set(
-                            removedWorktrees
+                            archivedWorktrees
                                 .map((entry) => normalizePath(entry.path))
                                 .filter((p): p is string => Boolean(p))
                         );
-                        const nextAvailableWorktrees =
-                            removedPaths.size > 0
-                                ? state.availableWorktrees.filter(
-                                      (entry) => !removedPaths.has(normalizePath(entry.path) ?? entry.path)
-                                  )
-                                : state.availableWorktrees;
+                        const nextAvailableWorktrees = removedPaths.size > 0
+                            ? state.availableWorktrees.filter((entry) => !removedPaths.has(normalizePath(entry.path) ?? entry.path))
+                            : state.availableWorktrees;
 
                         const nextAvailableWorktreesByProject = new Map(state.availableWorktreesByProject);
-                        if (removedWorktrees.length > 0) {
-                            const removedPathsByProject = removedWorktrees.reduce<Map<string, Set<string>>>((accumulator, entry) => {
+                        if (archivedWorktrees.length > 0) {
+                            const removedPathsByProject = archivedWorktrees.reduce<Map<string, Set<string>>>((accumulator, entry) => {
                                 const projectKey = normalizePath(entry.projectDirectory) ?? entry.projectDirectory;
                                 const pathKey = normalizePath(entry.path) ?? entry.path;
                                 if (!accumulator.has(projectKey)) {

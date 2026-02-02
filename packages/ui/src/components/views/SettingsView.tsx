@@ -25,6 +25,8 @@ import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
 import { ProvidersSidebar } from '@/components/sections/providers/ProvidersSidebar';
 import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
+import { UsageSidebar } from '@/components/sections/usage/UsageSidebar';
+import { UsagePage } from '@/components/sections/usage/UsagePage';
 import { GitIdentitiesSidebar } from '@/components/sections/git-identities/GitIdentitiesSidebar';
 import { GitIdentitiesPage } from '@/components/sections/git-identities/GitIdentitiesPage';
 import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPage';
@@ -50,15 +52,17 @@ const SETTINGS_SIDEBAR_MAX_WIDTH = 500;
 const SETTINGS_SIDEBAR_DEFAULT_WIDTH = 264;
 
 // Width threshold for hiding tab labels (show icons only)
-const TAB_LABELS_MIN_WIDTH = 940;
+const TAB_LABELS_MIN_WIDTH = 1024;
 
 interface SettingsViewProps {
   onClose?: () => void;
   /** Force mobile layout regardless of device detection */
   forceMobile?: boolean;
+  /** Rendered inside a window/dialog (skip traffic light padding) */
+  isWindowed?: boolean;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, isWindowed }) => {
   const deviceInfo = useDeviceInfo();
   const isMobile = forceMobile ?? deviceInfo.isMobile;
 
@@ -305,6 +309,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <SkillsSidebar onItemSelect={handleMobileSidebarClick} />;
       case 'providers':
         return <ProvidersSidebar onItemSelect={handleMobileSidebarClick} />;
+      case 'usage':
+        return <UsageSidebar onItemSelect={handleMobileSidebarClick} />;
       case 'git-identities':
         return <GitIdentitiesSidebar onItemSelect={handleMobileSidebarClick} />;
       default:
@@ -324,6 +330,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <SkillsPage />;
       case 'providers':
         return <ProvidersPage />;
+      case 'usage':
+        return <UsagePage />;
       case 'git-identities':
         return <GitIdentitiesPage />;
       case 'settings':
@@ -336,13 +344,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   // Keyboard shortcut display based on platform
   const shortcutKey = getModifierLabel();
 
-  // Desktop padding for Mac titlebar area
+  // Desktop padding for Mac titlebar area (only when full-screen, not windowed)
   const desktopPaddingClass = React.useMemo(() => {
+    if (isWindowed) {
+      return 'pl-1.5'; // Balanced padding for windowed mode
+    }
     if (isDesktopApp && isMacPlatform) {
       return 'pl-[5.75rem]'; // Space for traffic lights
     }
     return '';
-  }, [isDesktopApp, isMacPlatform]);
+  }, [isDesktopApp, isMacPlatform, isWindowed]);
 
 
   return (
@@ -389,7 +400,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                         className={cn(
                           'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
                           'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                          isActive ? 'bg-secondary text-foreground shadow-sm' : 'text-muted-foreground'
+                          isActive ? 'bg-interactive-selection text-interactive-selection-foreground shadow-sm' : 'text-muted-foreground hover:bg-interactive-hover/50'
                         )}
                         aria-pressed={isActive}
                         aria-label={label}
@@ -412,7 +423,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   onMouseDown={isActive ? handleActiveTabDragStart : undefined}
                   className={cn(
                     'relative flex h-8 items-center gap-2 px-3 rounded-md typography-ui-label font-medium transition-colors',
-                    isActive ? 'app-region-drag bg-secondary text-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-secondary/50 hover:text-foreground',
+                    isActive ? 'app-region-drag bg-interactive-selection text-interactive-selection-foreground shadow-sm' : 'app-region-no-drag text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
                   )}
                   aria-pressed={isActive}
@@ -436,7 +447,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       type="button"
                       aria-label="Switch project"
                       title={activeProjectLabel}
-                      className="inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      className="inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary border border-[var(--interactive-border)]"
                     >
                       <RiFolderLine className="h-5 w-5" />
                     </button>
@@ -446,7 +457,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       aria-label="Switch project"
                       title={activeProjectLabel}
                       className={cn(
-                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 text-foreground outline-none hover:text-foreground/80 focus-visible:ring-2 focus-visible:ring-ring',
+                        'flex h-9 max-w-[18rem] items-center gap-1.5 bg-transparent px-2 rounded-lg text-foreground outline-none hover:bg-interactive-hover/50 focus-visible:ring-2 focus-visible:ring-ring border border-[var(--interactive-border)]',
                         !isMobile && 'app-region-no-drag'
                       )}
                     >
@@ -487,7 +498,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                     onClick={onClose}
                     aria-label="Close settings"
                     className={cn(
-                      'inline-flex h-9 w-9 items-center justify-center p-2 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                      'inline-flex h-9 w-9 items-center justify-center p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                       !isMobile && 'app-region-no-drag'
                     )}
                   >

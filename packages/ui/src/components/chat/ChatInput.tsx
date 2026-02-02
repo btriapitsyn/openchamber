@@ -4,7 +4,6 @@ import {
     RiAddCircleLine,
     RiAiAgentLine,
     RiAttachment2,
-    RiCloseCircleLine,
     RiFileUploadLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
@@ -12,8 +11,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore, type QueuedMessage } from '@/stores/messageQueueStore';
-import type { AttachedFile, EditPermissionMode } from '@/stores/types/sessionTypes';
-import { getEditModeColors } from '@/lib/permissions/editModeColors';
+import type { AttachedFile } from '@/stores/types/sessionTypes';
 import { AttachedFilesList } from './FileAttachment';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
@@ -23,6 +21,8 @@ import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomp
 import { cn } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
+import { StatusChip } from './StatusChip';
+import { UnifiedControlsDrawer } from './UnifiedControlsDrawer';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
@@ -31,13 +31,15 @@ import { toast } from '@/components/ui';
 import { useFileStore } from '@/stores/fileStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
+import { StopIcon } from '@/components/icons/StopIcon';
+import type { MobileControlsPanel } from './mobileControlsUtils';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useContextStore } from '@/stores/contextStore';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -48,53 +50,6 @@ interface ChatInputProps {
 }
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
-type PermissionAction = 'allow' | 'ask' | 'deny';
-type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
-
-const asPermissionRuleset = (value: unknown): PermissionRule[] | null => {
-    if (!Array.isArray(value)) {
-        return null;
-    }
-    const rules: PermissionRule[] = [];
-    for (const entry of value) {
-        if (!entry || typeof entry !== 'object') {
-            continue;
-        }
-        const candidate = entry as Partial<PermissionRule>;
-        if (typeof candidate.permission !== 'string' || typeof candidate.pattern !== 'string' || typeof candidate.action !== 'string') {
-            continue;
-        }
-        if (candidate.action !== 'allow' && candidate.action !== 'ask' && candidate.action !== 'deny') {
-            continue;
-        }
-        rules.push({ permission: candidate.permission, pattern: candidate.pattern, action: candidate.action });
-    }
-    return rules;
-};
-
-const resolveWildcardPermissionAction = (ruleset: unknown, permission: string): PermissionAction | undefined => {
-    const rules = asPermissionRuleset(ruleset);
-    if (!rules || rules.length === 0) {
-        return undefined;
-    }
-
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.permission === permission && rule.pattern === '*') {
-            return rule.action;
-        }
-    }
-
-    for (let i = rules.length - 1; i >= 0; i -= 1) {
-        const rule = rules[i];
-        if (rule.permission === '*' && rule.pattern === '*') {
-            return rule.action;
-        }
-    }
-
-    return undefined;
-};
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
     const [message, setMessage] = React.useState('');
@@ -108,6 +63,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [showSkillAutocomplete, setShowSkillAutocomplete] = React.useState(false);
     const [skillQuery, setSkillQuery] = React.useState('');
     const [textareaSize, setTextareaSize] = React.useState<{ height: number; maxHeight: number } | null>(null);
+    const [mobileControlsOpen, setMobileControlsOpen] = React.useState(false);
+    const [mobileControlsPanel, setMobileControlsPanel] = React.useState<MobileControlsPanel>(null);
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const mentionRef = React.useRef<FileMentionHandle>(null);
@@ -121,7 +78,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const abortCurrentOperation = useSessionStore((state) => state.abortCurrentOperation);
     const acknowledgeSessionAbort = useSessionStore((state) => state.acknowledgeSessionAbort);
     const abortPromptSessionId = useSessionStore((state) => state.abortPromptSessionId);
-    const abortPromptExpiresAt = useSessionStore((state) => state.abortPromptExpiresAt);
     const clearAbortPrompt = useSessionStore((state) => state.clearAbortPrompt);
     const sessionAbortFlags = useSessionStore((state) => state.sessionAbortFlags);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
@@ -136,6 +92,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const agents = getVisibleAgents();
     const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius } = useUIStore();
     const { working } = useAssistantStatus();
+    const { currentTheme } = useThemeSystem();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const prevWasAbortedRef = React.useRef(false);
@@ -204,6 +161,54 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [isMobile]);
 
+    const handleOpenMobileControls = React.useCallback(() => {
+        if (!isMobile) {
+            return;
+        }
+
+        if (mobileControlsOpen) {
+            setMobileControlsOpen(false);
+            return;
+        }
+
+        setMobileControlsPanel(null);
+
+        if (isKeyboardOpen) {
+            textareaRef.current?.blur();
+            requestAnimationFrame(() => {
+                setMobileControlsOpen(true);
+            });
+            return;
+        }
+
+        setMobileControlsOpen(true);
+    }, [isMobile, isKeyboardOpen, mobileControlsOpen]);
+
+    const handleCloseMobileControls = React.useCallback(() => {
+        setMobileControlsOpen(false);
+    }, []);
+
+    const handleOpenMobilePanel = React.useCallback((panel: MobileControlsPanel) => {
+        if (!isMobile) {
+            return;
+        }
+        setMobileControlsOpen(false);
+        textareaRef.current?.blur();
+        requestAnimationFrame(() => {
+            setMobileControlsPanel(panel);
+        });
+    }, [isMobile]);
+
+    const handleReturnToUnifiedControls = React.useCallback(() => {
+        if (!isMobile) {
+            return;
+        }
+        setMobileControlsPanel(null);
+        requestAnimationFrame(() => {
+            setMobileControlsOpen(true);
+        });
+    }, [isMobile]);
+
     // Consume pending input text (e.g., from revert action)
     React.useEffect(() => {
         if (pendingInputText !== null) {
@@ -218,89 +223,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [pendingInputText, consumePendingInputText]);
 
-    const currentAgent = React.useMemo(() => {
-        const selectedName = currentSessionId
-            ? (useContextStore.getState().getSessionAgentSelection(currentSessionId) || currentAgentName)
-            : currentAgentName;
-        if (!selectedName) {
-            return undefined;
-        }
-        return agents.find((agent) => agent.name === selectedName);
-    }, [agents, currentAgentName, currentSessionId]);
-
-    const agentEditAction = React.useMemo<EditPermissionMode>(() => {
-        if (!currentAgent) {
-            return 'deny';
-        }
-
-        return resolveWildcardPermissionAction(currentAgent.permission, 'edit') ?? 'allow';
-    }, [currentAgent]);
-
-    const sessionEditMode = useContextStore(
-        React.useCallback((state) => {
-            if (!currentAgentName) {
-                return undefined;
-            }
-            const sessionId = currentSessionId ?? '__global__';
-            return state.getSessionAgentEditMode(sessionId, currentAgentName, 'ask');
-        }, [currentAgentName, currentSessionId])
-    );
-
-    const selectionContextReady = Boolean(currentSessionId && currentAgentName);
-
-    const effectiveEditPermission = React.useMemo<EditPermissionMode>(() => {
-        // Only show accent when edits are effectively allowed.
-        if (agentEditAction === 'allow') {
-            return 'allow';
-        }
-        if (agentEditAction !== 'ask') {
-            return 'ask';
-        }
-
-        const sessionMode = selectionContextReady ? (sessionEditMode ?? 'ask') : 'ask';
-        return (sessionMode === 'allow' || sessionMode === 'full') ? 'allow' : 'ask';
-    }, [agentEditAction, selectionContextReady, sessionEditMode]);
-
-    const chatInputAccent = React.useMemo(() => getEditModeColors(effectiveEditPermission), [effectiveEditPermission]);
-
-    // VS Code webviews tend to have stronger status border colors; in web/desktop themes the same
-    // border tokens can already be subtle, so avoid double-softening there.
-    const softenBorderColor = React.useCallback((color: string) => (
-        isVSCodeRuntime()
-            ? `color-mix(in srgb, ${color} 55%, transparent)`
-            : color
-    ), []);
-
-    const chatInputWrapperStyle = React.useMemo<React.CSSProperties | undefined>(() => {
-        // Keep border width stable so toggling modes doesn't shift layout.
-        const baseBorderWidth = isVSCodeRuntime() ? 1 : 2;
-
-        const baseStyle: React.CSSProperties = {
-            borderRadius: cornerRadius,
-        };
-
-        if (!chatInputAccent) {
-            return { ...baseStyle, borderWidth: baseBorderWidth };
-        }
-
-        const borderColor = chatInputAccent.border ?? chatInputAccent.text;
-        return {
-            ...baseStyle,
-            borderColor: softenBorderColor(borderColor),
-            borderWidth: baseBorderWidth,
-        };
-    }, [chatInputAccent, softenBorderColor, cornerRadius]);
-
     const hasContent = message.trim() || attachedFiles.length > 0;
     const hasQueuedMessages = queuedMessages.length > 0;
     const canSend = hasContent || hasQueuedMessages;
 
     const canAbort = working.isWorking;
-
-    const isAbortPromptActive = React.useMemo(() => {
-        if (!currentSessionId) return false;
-        return abortPromptSessionId === currentSessionId && Boolean(abortPromptExpiresAt);
-    }, [abortPromptSessionId, abortPromptExpiresAt, currentSessionId]);
 
     // Add message to queue instead of sending
     const handleQueueMessage = React.useCallback(() => {
@@ -517,6 +444,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             textareaRef.current?.focus();
         }
     };
+
+    // Primary action for send button - respects queue mode setting
+    const handlePrimaryAction = React.useCallback(() => {
+        const canQueue = hasContent && currentSessionId && sessionPhase !== 'idle';
+        if (queueModeEnabled && canQueue) {
+            handleQueueMessage();
+        } else {
+            void handleSubmit();
+        }
+    }, [hasContent, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage, handleSubmit]);
 
     // Keep a ref to handleSubmit for auto-send effect
     const handleSubmitRef = React.useRef(handleSubmit);
@@ -981,6 +918,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [currentSessionId, isMobile]);
 
     React.useEffect(() => {
+        if (!isMobile) {
+            setMobileControlsOpen(false);
+            setMobileControlsPanel(null);
+        }
+    }, [isMobile]);
+
+    React.useEffect(() => {
         if (abortPromptSessionId && abortPromptSessionId !== currentSessionId) {
             clearAbortPrompt();
         }
@@ -1141,30 +1085,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const footerGapClass = 'gap-x-1.5 gap-y-0';
     const isVSCode = isVSCodeRuntime();
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
-    const footerHeightClass = isMobile ? 'h-9 w-9' : (isVSCode ? 'h-[22px] w-[22px]' : 'h-7 w-7');
+    const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
+    const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
+    const stopIconSizeClass = isMobile ? 'h-6 w-6' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
     const iconSizeClass = isMobile ? 'h-5 w-5' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
 
-    const iconButtonBaseClass = cn(
-        footerHeightClass,
-        'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0'
-    );
+    const iconButtonBaseClass = 'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0';
 
-    // Desktop and VSCode: show abort button in footer when Esc triggered
-    const showAbortInFooter = !isMobile && isAbortPromptActive && canAbort;
-
-    const actionButton = showAbortInFooter ? (
-        <button
-            type='button'
-            onClick={handleAbort}
-            className={cn(
-                iconButtonBaseClass,
-                'text-[var(--status-error)] hover:text-[var(--status-error)]'
-            )}
-            aria-label='Stop generating'
-        >
-            <RiCloseCircleLine className={cn(iconSizeClass)} />
-        </button>
-    ) : (
+    // Send button - respects queue mode setting
+    const sendButton = (
         <button
             type={isMobile ? 'button' : 'submit'}
             disabled={!canSend || (!currentSessionId && !newSessionDraftOpen)}
@@ -1180,7 +1109,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 sendTriggeredByPointerDownRef.current = true;
                 event.preventDefault();
                 event.stopPropagation();
-                void handleSubmit();
+                handlePrimaryAction();
             }}
             onClick={(event) => {
                 if (!isMobile) {
@@ -1193,18 +1122,88 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 }
 
                 event.preventDefault();
-                void handleSubmit();
+                handlePrimaryAction();
             }}
             className={cn(
                 iconButtonBaseClass,
+                buttonSizeClass,
                 canSend && (currentSessionId || newSessionDraftOpen)
                     ? 'text-primary hover:text-primary'
                     : 'opacity-30'
             )}
-            aria-label='Send message'
+            aria-label="Send message"
         >
-            <RiSendPlane2Line className={cn(iconSizeClass)} />
+            <RiSendPlane2Line className={cn(sendIconSizeClass)} />
         </button>
+    );
+
+    // Queue button for adding message to queue while working
+    const queueButton = (
+        <button
+            type="button"
+            disabled={!hasContent || !currentSessionId}
+            onPointerDownCapture={(event) => {
+                if (!isMobile || event.pointerType !== 'touch') {
+                    return;
+                }
+
+                if (!hasContent || !currentSessionId) {
+                    return;
+                }
+
+                sendTriggeredByPointerDownRef.current = true;
+                event.preventDefault();
+                event.stopPropagation();
+                handleQueueMessage();
+            }}
+            onClick={(event) => {
+                if (isMobile) {
+                    if (sendTriggeredByPointerDownRef.current) {
+                        sendTriggeredByPointerDownRef.current = false;
+                        return;
+                    }
+                    event.preventDefault();
+                }
+                handleQueueMessage();
+            }}
+            className={cn(
+                iconButtonBaseClass,
+                buttonSizeClass,
+                'absolute bottom-full left-1/2 -translate-x-1/2 mb-1',
+                hasContent && currentSessionId
+                    ? 'text-primary hover:text-primary'
+                    : 'opacity-30'
+            )}
+            aria-label="Queue message"
+        >
+            <RiSendPlane2Line className={cn(sendIconSizeClass, '-rotate-90')} />
+        </button>
+    );
+
+    // Stop button replaces send button when working
+    const stopButton = (
+        <button
+            type="button"
+            onClick={handleAbort}
+            className={cn(
+                iconButtonBaseClass,
+                buttonSizeClass,
+                'text-[var(--status-error)] hover:text-[var(--status-error)]'
+            )}
+            aria-label="Stop generating"
+        >
+            <StopIcon className={cn(stopIconSizeClass)} />
+        </button>
+    );
+
+    // Action buttons area: either send button, or stop (+ optional queue button floating above)
+    const actionButtons = canAbort ? (
+        <div className="relative">
+            {hasContent && queueButton}
+            {stopButton}
+        </div>
+    ) : (
+        sendButton
     );
 
     const attachmentMenu = (
@@ -1319,15 +1318,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         };
     }, []);
 
-    // For mobile only, show abort in StatusRow; desktop and vscode show in footer (Esc-triggered)
-    const showAbortInStatusRow = isMobile && canAbort;
-
     return (
 
         <form
-            onSubmit={handleSubmit}
+            onSubmit={(e) => { e.preventDefault(); handlePrimaryAction(); }}
             className={cn(
-                "relative pt-0 pb-2 md:pb-4",
+                "relative pt-0 pb-4",
                 isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
             )}
             data-keyboard-avoid="true"
@@ -1344,8 +1340,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     abortActive={working.abortActive}
                     completionId={working.lastCompletionId}
                     isComplete={working.isComplete}
-                    showAbort={showAbortInStatusRow}
-                    onAbort={handleAbort}
                     showAbortStatus={showAbortStatus}
                 />
             </div>
@@ -1389,12 +1383,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 />
                 <div
                     className={cn(
-                        "border border-border/80 bg-input/10 dark:bg-input/30",
-                        "flex flex-col relative overflow-visible"
+                        "flex flex-col relative overflow-visible",
+                        "border border-border/80",
+                        "focus-within:ring-1 focus-within:ring-primary/50"
                     )}
-                    style={chatInputWrapperStyle}
+                    style={{
+                        borderRadius: cornerRadius,
+                        backgroundColor: currentTheme?.colors?.surface?.subtle,
+                    }}
                 >
-                        {}
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
                             ref={commandRef}
@@ -1443,11 +1440,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 ? "# for agents; @ for files; / for commands"
                                 : "Select or create a session to start chatting"}
                             disabled={!currentSessionId && !newSessionDraftOpen}
-
+                            outerClassName="focus-within:ring-0"
                         className={cn(
-                            'min-h-[52px] resize-none border-0 px-3 shadow-none rounded-b-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent',
-                            isMobile ? "py-2.5" : "pt-4 pb-2",
-                            "focus-visible:outline-none focus-visible:ring-0"
+                            'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent',
+                            isMobile ? "py-2.5" : "pt-4 pb-2"
                         )}
                         style={{
                             flex: 'none',
@@ -1471,17 +1467,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         data-chat-input-footer="true"
                     >
                         {isMobile ? (
-                            <div className="flex w-full items-center gap-x-1.5">
-                                <div className="flex items-center flex-shrink-0 gap-x-1">
-                                    {attachmentsControls}
-                                </div>
-                                <div className="flex flex-1 items-center justify-end gap-x-1 min-w-0">
-                                    <div className="flex flex-1 min-w-0 justify-end overflow-hidden">
-                                        <ModelControls className={cn('w-full flex items-center justify-end min-w-0')} />
+                            <>
+                                <div className="flex w-full items-center gap-x-1.5">
+                                    <div className="flex items-center flex-shrink-0 gap-x-1">
+                                        {attachmentsControls}
                                     </div>
-                                    {actionButton}
+                                    <div className="flex flex-1 items-center justify-center min-w-0">
+                                        <StatusChip onClick={handleOpenMobileControls} className="min-w-0" />
+                                    </div>
+                                    <div className="flex-shrink-0">
+                                        {actionButtons}
+                                    </div>
                                 </div>
-                            </div>
+                                <ModelControls
+                                    className="hidden"
+                                    mobilePanel={mobileControlsPanel}
+                                    onMobilePanelChange={setMobileControlsPanel}
+                                    onMobilePanelSelection={handleReturnToUnifiedControls}
+                                />
+                                <UnifiedControlsDrawer
+                                    open={mobileControlsOpen}
+                                    onClose={handleCloseMobileControls}
+                                    onOpenAgent={() => handleOpenMobilePanel('agent')}
+                                    onOpenModel={() => handleOpenMobilePanel('model')}
+                                    onOpenEffort={() => handleOpenMobilePanel('variant')}
+                                />
+                            </>
                         ) : (
                             <>
                                 <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
@@ -1489,7 +1500,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 </div>
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
                                     <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
-                                    {actionButton}
+                                    {actionButtons}
                                 </div>
                             </>
                         )}

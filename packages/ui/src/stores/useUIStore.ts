@@ -27,6 +27,7 @@ interface UIStore {
   isSessionSwitcherOpen: boolean;
   activeMainTab: MainTab;
   mainTabGuard: MainTabGuard | null;
+  sidebarOpenBeforeFullscreenTab: boolean | null;
   pendingDiffFile: string | null;
   isMobile: boolean;
   isKeyboardOpen: boolean;
@@ -56,14 +57,20 @@ interface UIStore {
 
   favoriteModels: Array<{ providerID: string; modelID: string }>;
   recentModels: Array<{ providerID: string; modelID: string }>;
+  recentAgents: string[];
+  recentEfforts: Record<string, string[]>;
 
   diffLayoutPreference: 'dynamic' | 'inline' | 'side-by-side';
   diffFileLayout: Record<string, 'inline' | 'side-by-side'>;
   diffWrapLines: boolean;
   diffViewMode: 'single' | 'stacked';
   isTimelineDialogOpen: boolean;
+  isImagePreviewOpen: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
+  notifyOnSubtasks: boolean;
+
+  showTerminalQuickKeysOnDesktop: boolean;
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
@@ -107,14 +114,19 @@ interface UIStore {
   toggleFavoriteModel: (providerID: string, modelID: string) => void;
   isFavoriteModel: (providerID: string, modelID: string) => boolean;
   addRecentModel: (providerID: string, modelID: string) => void;
+  addRecentAgent: (agentName: string) => void;
+  addRecentEffort: (providerID: string, modelID: string, variant: string | undefined) => void;
   setDiffLayoutPreference: (mode: 'dynamic' | 'inline' | 'side-by-side') => void;
   setDiffFileLayout: (filePath: string, mode: 'inline' | 'side-by-side') => void;
   setDiffWrapLines: (wrap: boolean) => void;
   setDiffViewMode: (mode: 'single' | 'stacked') => void;
   setMultiRunLauncherOpen: (open: boolean) => void;
   setTimelineDialogOpen: (open: boolean) => void;
+  setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
+  setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
+  setNotifyOnSubtasks: (value: boolean) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 }
@@ -133,6 +145,7 @@ export const useUIStore = create<UIStore>()(
         isSessionSwitcherOpen: false,
         activeMainTab: 'chat',
         mainTabGuard: null,
+        sidebarOpenBeforeFullscreenTab: null,
         pendingDiffFile: null,
         isMobile: false,
         isKeyboardOpen: false,
@@ -160,13 +173,19 @@ export const useUIStore = create<UIStore>()(
         inputBarOffset: 0,
         favoriteModels: [],
         recentModels: [],
+        recentAgents: [],
+        recentEfforts: {},
         diffLayoutPreference: 'inline',
         diffFileLayout: {},
         diffWrapLines: false,
         diffViewMode: 'stacked',
         isTimelineDialogOpen: false,
+        isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
+        notifyOnSubtasks: true,
+
+        showTerminalQuickKeysOnDesktop: false,
 
         setTheme: (theme) => {
           set({ theme });
@@ -213,6 +232,9 @@ export const useUIStore = create<UIStore>()(
         },
 
         setMainTabGuard: (guard) => {
+          if (get().mainTabGuard === guard) {
+            return;
+          }
           set({ mainTabGuard: guard });
         },
 
@@ -221,7 +243,36 @@ export const useUIStore = create<UIStore>()(
           if (guard && !guard(tab)) {
             return;
           }
-          set({ activeMainTab: tab });
+          const state = get();
+          const currentTab = state.activeMainTab;
+          const fullscreenTabs: MainTab[] = ['files', 'diff'];
+          const isEnteringFullscreen = fullscreenTabs.includes(tab) && !fullscreenTabs.includes(currentTab);
+          const isLeavingFullscreen = !fullscreenTabs.includes(tab) && fullscreenTabs.includes(currentTab);
+
+          if (isEnteringFullscreen) {
+            // Save current sidebar state and close it
+            set({
+              activeMainTab: tab,
+              sidebarOpenBeforeFullscreenTab: state.isSidebarOpen,
+              isSidebarOpen: false,
+            });
+          } else if (isLeavingFullscreen) {
+            // Restore sidebar state if it was open before
+            const shouldRestore = state.sidebarOpenBeforeFullscreenTab === true;
+            set({
+              activeMainTab: tab,
+              sidebarOpenBeforeFullscreenTab: null,
+              ...(shouldRestore && typeof window !== 'undefined'
+                ? {
+                    isSidebarOpen: true,
+                    sidebarWidth: Math.floor(window.innerWidth * 0.2),
+                    hasManuallyResizedLeftSidebar: false,
+                  }
+                : {}),
+            });
+          } else {
+            set({ activeMainTab: tab });
+          }
         },
 
         setPendingDiffFile: (filePath) => {
@@ -233,7 +284,21 @@ export const useUIStore = create<UIStore>()(
           if (guard && !guard('diff')) {
             return;
           }
-          set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
+          const state = get();
+          const currentTab = state.activeMainTab;
+          const fullscreenTabs: MainTab[] = ['files', 'diff'];
+          const isEnteringFullscreen = !fullscreenTabs.includes(currentTab);
+
+          if (isEnteringFullscreen) {
+            set({
+              pendingDiffFile: filePath,
+              activeMainTab: 'diff',
+              sidebarOpenBeforeFullscreenTab: state.isSidebarOpen,
+              isSidebarOpen: false,
+            });
+          } else {
+            set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
+          }
         },
 
         consumePendingDiffFile: () => {
@@ -477,6 +542,45 @@ export const useUIStore = create<UIStore>()(
           });
         },
 
+        addRecentAgent: (agentName) => {
+          const normalized = typeof agentName === 'string' ? agentName.trim() : '';
+          if (!normalized) {
+            return;
+          }
+          set((state) => {
+            if (state.recentAgents.includes(normalized)) {
+              return state;
+            }
+            const filtered = state.recentAgents;
+            return {
+              recentAgents: [normalized, ...filtered].slice(0, 5),
+            };
+          });
+        },
+
+        addRecentEffort: (providerID, modelID, variant) => {
+          const provider = typeof providerID === 'string' ? providerID.trim() : '';
+          const model = typeof modelID === 'string' ? modelID.trim() : '';
+          if (!provider || !model) {
+            return;
+          }
+          const key = `${provider}/${model}`;
+          const normalizedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant.trim() : 'default';
+          set((state) => {
+            const current = state.recentEfforts[key] ?? [];
+            if (current.includes(normalizedVariant)) {
+              return state;
+            }
+            const filtered = current;
+            return {
+              recentEfforts: {
+                ...state.recentEfforts,
+                [key]: [normalizedVariant, ...filtered].slice(0, 5),
+              },
+            };
+          });
+        },
+
         updateProportionalSidebarWidths: () => {
           if (typeof window === 'undefined') {
             return;
@@ -534,12 +638,24 @@ export const useUIStore = create<UIStore>()(
           set({ isTimelineDialogOpen: open });
         },
 
+        setImagePreviewOpen: (open) => {
+          set({ isImagePreviewOpen: open });
+        },
+
         setNativeNotificationsEnabled: (value) => {
           set({ nativeNotificationsEnabled: value });
         },
 
         setNotificationMode: (mode) => {
           set({ notificationMode: mode });
+        },
+
+        setShowTerminalQuickKeysOnDesktop: (value) => {
+          set({ showTerminalQuickKeysOnDesktop: value });
+        },
+
+        setNotifyOnSubtasks: (value) => {
+          set({ notifyOnSubtasks: value });
         },
       }),
       {
@@ -553,7 +669,7 @@ export const useUIStore = create<UIStore>()(
           activeMainTab: state.activeMainTab,
           sidebarSection: state.sidebarSection,
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
-          isSettingsDialogOpen: state.isSettingsDialogOpen,
+          // Note: isSettingsDialogOpen intentionally NOT persisted
           showReasoningTraces: state.showReasoningTraces,
           showTextJustificationActivity: state.showTextJustificationActivity,
           autoDeleteEnabled: state.autoDeleteEnabled,
@@ -568,11 +684,15 @@ export const useUIStore = create<UIStore>()(
           cornerRadius: state.cornerRadius,
           favoriteModels: state.favoriteModels,
           recentModels: state.recentModels,
+          recentAgents: state.recentAgents,
+          recentEfforts: state.recentEfforts,
           diffLayoutPreference: state.diffLayoutPreference,
           diffWrapLines: state.diffWrapLines,
           diffViewMode: state.diffViewMode,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
           notificationMode: state.notificationMode,
+          showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
+          notifyOnSubtasks: state.notifyOnSubtasks,
         })
       }
     ),

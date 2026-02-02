@@ -247,7 +247,8 @@ export const WorktreeSectionContent: React.FC = () => {
 
   // Delete worktree handler
   const handleDeleteWorktree = React.useCallback((worktree: WorktreeMetadata) => {
-    const normalizedWorktreePath = worktree.path.replace(/\\/g, '/').replace(/\/+$/, '');
+    const normalize = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/, '');
+    const normalizedWorktreePath = normalize(worktree.path);
 
     // Find sessions linked to this worktree by:
     // 1. Worktree metadata path match
@@ -255,14 +256,14 @@ export const WorktreeSectionContent: React.FC = () => {
     const directSessions = sessions.filter((session) => {
       // Check worktree metadata
       const metadata = getWorktreeMetadata(session.id);
-      if (metadata?.path === worktree.path) {
+      if (metadata?.path && normalize(metadata.path) === normalizedWorktreePath) {
         return true;
       }
 
       // Check session directory
       const sessionDir = (session as { directory?: string }).directory;
       if (sessionDir) {
-        const normalizedSessionDir = sessionDir.replace(/\\/g, '/').replace(/\/+$/, '');
+        const normalizedSessionDir = normalize(sessionDir);
         if (normalizedSessionDir === normalizedWorktreePath) {
           return true;
         }

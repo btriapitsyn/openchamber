@@ -99,6 +99,7 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
     const createdMetadata = {
       ...metadata,
       createdFromBranch: startPoint ?? 'HEAD',
+      kind: 'standard' as const,
     };
 
     // Get worktree status
@@ -271,6 +272,7 @@ export async function createWorktreeSessionForBranch(
     const createdMetadata = {
       ...metadata,
       createdFromBranch: branchName,
+      kind: 'standard' as const,
     };
 
     // Get worktree status
@@ -394,7 +396,7 @@ export async function createWorktreeSessionForNewBranch(
   projectDirectory: string,
   preferredBranchName: string,
   startPoint: string,
-  options?: { allowSuffix?: boolean }
+  options?: { allowSuffix?: boolean; kind?: 'pr' | 'standard' }
 ): Promise<{ id: string; branch: string } | null> {
   if (isCreatingWorktreeSession) {
     return null;
@@ -425,6 +427,7 @@ export async function createWorktreeSessionForNewBranch(
     }
 
     const allowSuffix = options?.allowSuffix !== false;
+    const kind = options?.kind ?? 'standard';
 
     const projectRef = resolveProjectRef(projectDirectory);
     if (!projectRef) {
@@ -444,6 +447,7 @@ export async function createWorktreeSessionForNewBranch(
       const createdMetadata = {
         ...metadata,
         createdFromBranch: start,
+        kind,
       };
 
         const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
@@ -543,7 +547,11 @@ export async function createWorktreeSessionForNewBranch(
 export async function createWorktreeSessionForNewBranchExact(
   projectDirectory: string,
   branchName: string,
-  startPoint: string
+  startPoint: string,
+  options?: { kind?: 'pr' | 'standard' }
 ): Promise<{ id: string; branch: string } | null> {
-  return createWorktreeSessionForNewBranch(projectDirectory, branchName, startPoint, { allowSuffix: false });
+  return createWorktreeSessionForNewBranch(projectDirectory, branchName, startPoint, {
+    allowSuffix: false,
+    kind: options?.kind,
+  });
 }

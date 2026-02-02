@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { type OpenCodeManager } from './opencode';
 import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE, getProviderSources, removeProviderConfig } from './opencodeConfig';
 import { getProviderAuth, removeProviderAuth } from './opencodeAuth';
+import { fetchQuotaForProvider, listConfiguredQuotaProviders } from './quotaProviders';
 import * as gitService from './gitService';
 import {
   getSkillsCatalog,
@@ -178,6 +179,16 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
     if (typeof value === 'string' && value.trim().length === 0) {
       delete restChanges[key];
     }
+  }
+
+  if (typeof restChanges.usageAutoRefresh !== 'boolean') {
+    delete restChanges.usageAutoRefresh;
+  }
+
+  if (typeof restChanges.usageRefreshIntervalMs === 'number' && Number.isFinite(restChanges.usageRefreshIntervalMs)) {
+    restChanges.usageRefreshIntervalMs = Math.max(30000, Math.min(300000, Math.round(restChanges.usageRefreshIntervalMs)));
+  } else {
+    delete restChanges.usageRefreshIntervalMs;
   }
 
   const merged = { ...current, ...restChanges, lastDirectory: current.lastDirectory };
@@ -1908,6 +1919,30 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           const auth = getProviderAuth(providerId);
           sources.auth.exists = Boolean(auth);
           return { id, type, success: true, data: { providerId, sources } };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
+        }
+      }
+
+      case 'api:quota:providers': {
+        try {
+          const providers = listConfiguredQuotaProviders();
+          return { id, type, success: true, data: { providers } };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
+        }
+      }
+
+      case 'api:quota:get': {
+        const { providerId } = (payload || {}) as { providerId?: string };
+        if (!providerId) {
+          return { id, type, success: false, error: 'Provider ID is required' };
+        }
+        try {
+          const result = await fetchQuotaForProvider(providerId);
+          return { id, type, success: true, data: result };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
           return { id, type, success: false, error: errorMessage };

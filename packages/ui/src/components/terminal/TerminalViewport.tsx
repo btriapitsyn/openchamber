@@ -827,6 +827,12 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         ref={containerRef}
         className={cn('relative h-full w-full terminal-viewport-container', className)}
         style={{ backgroundColor: theme.background }}
+        onTouchStart={(event) => {
+          if (enableTouchScroll) {
+            const touch = event.touches?.[0];
+            focusHiddenInput(touch?.clientX, touch?.clientY);
+          }
+        }}
         onClick={(event) => {
           if (enableTouchScroll) {
             focusHiddenInput(event.clientX, event.clientY);
@@ -870,13 +876,37 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
               margin: 0,
               outline: 'none',
             }}
+            onBeforeInput={(event) => {
+              const nativeEvent = event.nativeEvent as unknown as InputEvent | undefined;
+              const inputType = nativeEvent?.inputType ?? '';
+              const data = typeof nativeEvent?.data === 'string' ? nativeEvent.data : '';
+
+              // Android Chrome sometimes never commits text into the DOM value
+              // for invisible inputs. Use beforeinput as the primary path.
+              if (inputType === 'insertText' && data) {
+                event.preventDefault();
+                inputHandlerRef.current(data);
+                return;
+              }
+
+              if (inputType === 'insertLineBreak') {
+                event.preventDefault();
+                inputHandlerRef.current('\r');
+                return;
+              }
+
+              if (inputType === 'deleteContentBackward') {
+                event.preventDefault();
+                inputHandlerRef.current('\x7f');
+              }
+            }}
             onInput={(event) => {
               const raw = String(event.currentTarget.value || '');
               if (!raw) {
                 return;
               }
 
-              // iOS often inserts `\n` for Enter; the PTY expects CR.
+              // Some mobile keyboards (iOS esp.) insert `\n` for Enter; PTY expects CR.
               const value = raw.replace(/\r\n|\r|\n/g, '\r');
               inputHandlerRef.current(value);
               event.currentTarget.value = '';
