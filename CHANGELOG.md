@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-02-2
+
+- Web: improved server readiness check to use the `/global/health` endpoint for more reliable startup detection.
+- Web: added login rate limit protection to prevent brute-force attempts on the authentication endpoint (thanks to @Jovines).
+- VSCode: improved server health check with the proper health API endpoint and increased timeout for steadier startup (thanks to @wienans).
+- Settings: dialog no longer persists open/closed state across app restarts.
+
+
 ## [1.6.2] - 2026-02-1
 
 - Usage: new multi-provider quota dashboard to monitor API usage across OpenAI, Google, and z.ai (thanks to @nelsonPires5).

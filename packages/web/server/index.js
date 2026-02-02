@@ -1959,13 +1959,19 @@ async function waitForReady(url, timeoutMs = 10000) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`${url.replace(/\/+$/, '')}/config`, {
+      const res = await fetch(`${url.replace(/\/+$/, '')}/global/health`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller.signal
       });
       clearTimeout(timeout);
-      if (res.ok) return true;
+
+      if (res.ok) {
+        const body = await res.json().catch(() => null);
+        if (body?.healthy === true) {
+          return true;
+        }
+      }
     } catch {
       // ignore
     }

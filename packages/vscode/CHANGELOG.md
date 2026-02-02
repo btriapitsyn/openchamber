@@ -1,3 +1,9 @@
+## [1.6.3] - 2026-02-2
+
+- Improved server health check with the proper health API endpoint and increased timeout for steadier startup (thanks to @wienans).
+- Settings dialog no longer persists open/closed state across extension restarts.
+
+
 ## [1.6.2] - 2026-02-1
 
 - Added multi-provider quota dashboard in settings to monitor API usage across OpenAI, Google, and z.ai with auto-refresh support (thanks to @nelsonPires5).
