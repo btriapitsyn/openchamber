@@ -62,27 +62,42 @@ const LoadingScreen: React.FC<{ message?: string }> = ({ message = 'Preparing wo
   </AuthShell>
 );
 
-const ErrorScreen: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
-  <AuthShell>
-    <div className="flex flex-col items-center gap-6 text-center">
-      <div className="space-y-2">
-        <h1 className="typography-ui-header font-semibold text-destructive">Unable to reach server</h1>
-        <p className="typography-meta text-muted-foreground max-w-xs">
-          We couldn't verify the UI session. Check that the service is running and try again.
-        </p>
+const ErrorScreen: React.FC<ErrorScreenProps> = ({ onRetry, errorType = 'network', retryAfter }) => {
+  const isRateLimit = errorType === 'rate-limit';
+  const minutes = retryAfter ? Math.ceil(retryAfter / 60) : 1;
+
+  return (
+    <AuthShell>
+      <div className="flex flex-col items-center gap-6 text-center">
+        <div className="space-y-2">
+          <h1 className="typography-ui-header font-semibold text-destructive">
+            {isRateLimit ? 'Too many attempts' : 'Unable to reach server'}
+          </h1>
+          <p className="typography-meta text-muted-foreground max-w-xs">
+            {isRateLimit
+              ? `Please wait ${minutes} minute${minutes > 1 ? 's' : ''} before trying again.`
+              : "We couldn't verify the UI session. Check that the service is running and try again."}
+          </p>
+        </div>
+        <Button type="button" onClick={onRetry} className="w-full max-w-xs">
+          Retry
+        </Button>
       </div>
-      <Button type="button" onClick={onRetry} className="w-full max-w-xs">
-        Retry
-      </Button>
-    </div>
-  </AuthShell>
-);
+    </AuthShell>
+  );
+};
 
 interface SessionAuthGateProps {
   children: React.ReactNode;
 }
 
-type GateState = 'pending' | 'authenticated' | 'locked' | 'error';
+type GateState = 'pending' | 'authenticated' | 'locked' | 'error' | 'rate-limited';
+
+interface ErrorScreenProps {
+  onRetry: () => void;
+  errorType?: 'network' | 'rate-limit';
+  retryAfter?: number;
+}
 
 const getTokenFromUrl = (): string | null => {
   try {
@@ -111,6 +126,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   const [password, setPassword] = React.useState('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
+  const [retryAfter, setRetryAfter] = React.useState<number | undefined>(undefined);
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
   const hasResyncedRef = React.useRef(skipAuth);
   const hasTriedUrlTokenRef = React.useRef(false);
@@ -127,10 +143,18 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
       if (response.ok) {
         setState('authenticated');
         setErrorMessage('');
+        setRetryAfter(undefined);
         return;
       }
       if (response.status === 401) {
         setState('locked');
+        setRetryAfter(undefined);
+        return;
+      }
+      if (response.status === 429) {
+        const data = await response.json().catch(() => ({}));
+        setRetryAfter(data.retryAfter);
+        setState('rate-limited');
         return;
       }
       setState('error');
@@ -240,6 +264,13 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
         return;
       }
 
+      if (response.status === 429) {
+        const data = await response.json().catch(() => ({}));
+        setRetryAfter(data.retryAfter);
+        setState('rate-limited');
+        return;
+      }
+
       setErrorMessage('Unexpected response from server.');
       setState('error');
     } catch (error) {
@@ -256,7 +287,11 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   }
 
   if (state === 'error') {
-    return <ErrorScreen onRetry={() => void checkStatus()} />;
+    return <ErrorScreen onRetry={() => void checkStatus()} errorType="network" />;
+  }
+
+  if (state === 'rate-limited') {
+    return <ErrorScreen onRetry={() => void checkStatus()} errorType="rate-limit" retryAfter={retryAfter} />;
   }
 
   if (state === 'locked') {
