@@ -239,7 +239,7 @@ export const PlanView: React.FC = () => {
     setLineSelection(null);
 
     toast.success('Comment saved');
-  }, [lineSelection, commentText, content, displayPath, resolvedPath, addDraft, getSessionKey]);
+  }, [lineSelection, commentText, content, displayPath, resolvedPath, addDraft, getSessionKey, extractSelectedCode]);
 
   const editorExtensions = React.useMemo(() => {
     const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];

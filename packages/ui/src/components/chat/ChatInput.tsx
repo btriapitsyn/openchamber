@@ -245,6 +245,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const canAbort = working.isWorking;
 
+    // Keep a ref to handleSubmit so callbacks don't depend on it.
+    const handleSubmitRef = React.useRef<(e?: React.FormEvent) => Promise<void>>(async () => {});
+
     // Add message to queue instead of sending
     const handleQueueMessage = React.useCallback(() => {
         if (!hasContent || !currentSessionId) return;
@@ -492,19 +495,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     };
 
+    handleSubmitRef.current = handleSubmit;
+
     // Primary action for send button - respects queue mode setting
     const handlePrimaryAction = React.useCallback(() => {
         const canQueue = hasContent && currentSessionId && sessionPhase !== 'idle';
         if (queueModeEnabled && canQueue) {
             handleQueueMessage();
         } else {
-            void handleSubmit();
+            void handleSubmitRef.current();
         }
-    }, [hasContent, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage, handleSubmit]);
-
-    // Keep a ref to handleSubmit for auto-send effect
-    const handleSubmitRef = React.useRef(handleSubmit);
-    handleSubmitRef.current = handleSubmit;
+    }, [hasContent, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage]);
 
     // Auto-send queued messages when session becomes idle (but not after abort)
     React.useEffect(() => {
