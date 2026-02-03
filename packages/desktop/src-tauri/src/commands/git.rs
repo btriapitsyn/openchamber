@@ -369,6 +369,7 @@ async fn run_gpgconf(args: &[&str]) -> Option<Vec<u8>> {
 }
 
 async fn resolve_ssh_auth_sock() -> Option<String> {
+    let mut launchd_fallback: Option<String> = None;
     if let Ok(value) = std::env::var("SSH_AUTH_SOCK") {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
@@ -379,6 +380,7 @@ async fn resolve_ssh_auth_sock() -> Option<String> {
                             "git: SSH_AUTH_SOCK points to launchd listeners: {}",
                             trimmed
                         );
+                        launchd_fallback = Some(trimmed.to_string());
                     } else {
                         info!("git: using SSH_AUTH_SOCK from environment: {}", trimmed);
                         return Some(trimmed.to_string());
@@ -432,6 +434,11 @@ async fn resolve_ssh_auth_sock() -> Option<String> {
                 }
             }
         }
+    }
+
+    if let Some(fallback) = launchd_fallback {
+        info!("git: falling back to launchd SSH_AUTH_SOCK: {}", fallback);
+        return Some(fallback);
     }
 
     warn!("git: no SSH_AUTH_SOCK resolved");
