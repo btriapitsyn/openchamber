@@ -122,6 +122,11 @@ export const listConfiguredQuotaProviders = () => {
     configured.add('zai-coding-plan');
   }
 
+  const githubCopilotAuth = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot']));
+  if (githubCopilotAuth?.access || githubCopilotAuth?.token) {
+    configured.add('github-copilot');
+  }
+
   for (const filePath of ANTIGRAVITY_ACCOUNTS_PATHS) {
     const data = readJsonFile(filePath);
     if (Array.isArray(data?.accounts) && data.accounts.length > 0) {
@@ -487,6 +492,107 @@ export const fetchZaiQuota = async () => {
   }
 };
 
+export const fetchGitHubCopilotQuota = async () => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot']));
+  const accessToken = entry?.access ?? entry?.token;
+
+  if (!accessToken) {
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: false,
+      configured: false,
+      error: 'Not configured'
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.github.com/copilot_internal/user', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'OpenChamber'
+      }
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'github-copilot',
+        providerName: 'GitHub Copilot',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`
+      });
+    }
+
+    const payload = await response.json();
+    const snapshots = payload?.quota_snapshots ?? {};
+    const premiumInteractions = snapshots?.premium_interactions ?? null;
+    
+    // Parse reset date
+    let resetAt = null;
+    const resetDateUtc = payload?.quota_reset_date_utc;
+    const resetDate = payload?.quota_reset_date;
+    
+    if (resetDateUtc) {
+      resetAt = new Date(resetDateUtc).getTime();
+    } else if (resetDate) {
+      // Use the date as UTC midnight
+      resetAt = new Date(`${resetDate}T00:00:00Z`).getTime();
+    }
+
+    const windows = {};
+    
+    if (premiumInteractions) {
+      let usedPercent = null;
+      
+      if (premiumInteractions.unlimited === true) {
+        usedPercent = null;
+      } else if (typeof premiumInteractions.percent_remaining === 'number') {
+        usedPercent = 100 - premiumInteractions.percent_remaining;
+      } else if (
+        typeof premiumInteractions.entitlement === 'number' &&
+        premiumInteractions.entitlement > 0
+      ) {
+        const remaining =
+          typeof premiumInteractions.remaining === 'number'
+            ? premiumInteractions.remaining
+            : typeof premiumInteractions.quota_remaining === 'number'
+              ? premiumInteractions.quota_remaining
+              : null;
+        
+        if (remaining !== null) {
+          usedPercent = ((premiumInteractions.entitlement - remaining) / premiumInteractions.entitlement) * 100;
+        }
+      }
+      
+      windows['premium_interactions'] = toUsageWindow({
+        usedPercent,
+        windowSeconds: null,
+        resetAt
+      });
+    }
+
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: true,
+      configured: true,
+      usage: { windows }
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed'
+    });
+  }
+};
+
 export const fetchQuotaForProvider = async (providerId) => {
   switch (providerId) {
     case 'openai':
@@ -495,6 +601,8 @@ export const fetchQuotaForProvider = async (providerId) => {
       return fetchGoogleQuota();
     case 'zai-coding-plan':
       return fetchZaiQuota();
+    case 'github-copilot':
+      return fetchGitHubCopilotQuota();
     default:
       return buildResult({
         providerId,
