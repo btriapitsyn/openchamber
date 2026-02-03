@@ -327,6 +327,59 @@ static DELETIONS_REGEX: LazyLock<Regex> =
 
 // --- Helpers ---
 
+fn metadata_is_socket(metadata: &std::fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+        return metadata.file_type().is_socket();
+    }
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
+async fn resolve_ssh_auth_sock() -> Option<String> {
+    if let Ok(value) = std::env::var("SSH_AUTH_SOCK") {
+        let trimmed = value.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+
+    let home_dir = dirs::home_dir()?;
+    let gpg_agent_sock = home_dir.join(".gnupg").join("S.gpg-agent.ssh");
+    if let Ok(metadata) = fs::metadata(&gpg_agent_sock).await {
+        if metadata_is_socket(&metadata) {
+            return Some(gpg_agent_sock.to_string_lossy().to_string());
+        }
+    }
+
+    let output = Command::new("gpgconf")
+        .args(["--list-dirs", "agent-ssh-socket"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .await;
+
+    if let Ok(result) = output {
+        if result.status.success() {
+            let candidate = String::from_utf8_lossy(&result.stdout).trim().to_string();
+            if !candidate.is_empty() {
+                let path = PathBuf::from(candidate);
+                if let Ok(metadata) = fs::metadata(&path).await {
+                    if metadata_is_socket(&metadata) {
+                        return Some(path.to_string_lossy().to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 async fn run_git(args: &[&str], cwd: &Path) -> Result<String> {
     run_git_with_allowed_exit(args, cwd, &[]).await
 }
@@ -336,7 +389,9 @@ async fn run_git_with_allowed_exit(
     cwd: &Path,
     allowed_codes: &[i32],
 ) -> Result<String> {
-    let output = Command::new("git")
+    let ssh_auth_sock = resolve_ssh_auth_sock().await;
+    let mut command = Command::new("git");
+    command
         .args(args)
         .current_dir(cwd)
         .stdin(Stdio::null())
@@ -344,7 +399,11 @@ async fn run_git_with_allowed_exit(
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GCM_INTERACTIVE", "Never")
-        .env("LC_ALL", "C")
+        .env("LC_ALL", "C");
+    if let Some(sock) = ssh_auth_sock.as_deref() {
+        command.env("SSH_AUTH_SOCK", sock);
+    }
+    let output = command
         .output()
         .await
         .context("Failed to execute git command")?;
@@ -368,18 +427,23 @@ async fn run_git_bytes_with_allowed_exit_timeout(
     allowed_codes: &[i32],
     timeout_ms: u64,
 ) -> Result<Vec<u8>> {
+    let ssh_auth_sock = resolve_ssh_auth_sock().await;
+    let mut command = Command::new("git");
+    command
+        .args(args)
+        .current_dir(cwd)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GCM_INTERACTIVE", "Never")
+        .env("LC_ALL", "C")
+        .stdin(Stdio::null())
+        .kill_on_drop(true);
+    if let Some(sock) = ssh_auth_sock.as_deref() {
+        command.env("SSH_AUTH_SOCK", sock);
+    }
     let output = tokio::time::timeout(
         std::time::Duration::from_millis(timeout_ms),
-        Command::new("git")
-            .args(args)
-            .current_dir(cwd)
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .env("GCM_INTERACTIVE", "Never")
-            .env("LC_ALL", "C")
-            .stdin(Stdio::null())
-            .kill_on_drop(true)
-            .output(),
+        command.output(),
     )
     .await
     .map_err(|_| anyhow!("Git command timed out after {}ms", timeout_ms))?

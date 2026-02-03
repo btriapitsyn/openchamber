@@ -7,11 +7,66 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
-import { spawn } from 'child_process';
+import * as fs from 'fs';
+import { spawn, execFile } from 'child_process';
+import { promisify } from 'util';
 import type { API as GitAPI, Repository, GitExtension, Status } from './git.d';
 
 let gitApi: GitAPI | null = null;
 let gitExtensionEnabled = false;
+
+const execFileAsync = promisify(execFile);
+
+async function isSocketPath(candidate: string): Promise<boolean> {
+  if (!candidate) {
+    return false;
+  }
+  try {
+    const stat = await fs.promises.stat(candidate);
+    return typeof stat.isSocket === 'function' && stat.isSocket();
+  } catch {
+    return false;
+  }
+}
+
+async function resolveSshAuthSock(): Promise<string | undefined> {
+  const existing = (process.env.SSH_AUTH_SOCK || '').trim();
+  if (existing) {
+    return existing;
+  }
+
+  if (process.platform === 'win32') {
+    return undefined;
+  }
+
+  const gpgSock = path.join(os.homedir(), '.gnupg', 'S.gpg-agent.ssh');
+  if (await isSocketPath(gpgSock)) {
+    return gpgSock;
+  }
+
+  try {
+    const { stdout } = await execFileAsync('gpgconf', ['--list-dirs', 'agent-ssh-socket']);
+    const candidate = String(stdout || '').trim();
+    if (candidate && await isSocketPath(candidate)) {
+      return candidate;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+async function buildGitEnv(): Promise<NodeJS.ProcessEnv> {
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  if (!env.SSH_AUTH_SOCK || !env.SSH_AUTH_SOCK.trim()) {
+    const resolved = await resolveSshAuthSock();
+    if (resolved) {
+      env.SSH_AUTH_SOCK = resolved;
+    }
+  }
+  return env;
+}
 
 /**
  * Initialize the git extension API
@@ -106,32 +161,33 @@ async function execGit(args: string[], cwd: string): Promise<{ stdout: string; s
   return new Promise((resolve) => {
     const normalizedCwd = normalizePath(cwd);
     const gitPath = gitApi?.git.path || 'git';
-    
-    const proc = spawn(gitPath, args, {
-      cwd: normalizedCwd,
-      // Note: shell: true is intentionally omitted. Node.js spawn can find
-      // executables in PATH on Windows without shell mode, and using shell mode
-      // can cause issues when the git path contains spaces (e.g., "C:\Program Files\Git\...")
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
-    });
 
-    let stdout = '';
-    let stderr = '';
+    buildGitEnv().then((env) => {
+      const proc = spawn(gitPath, args, {
+        cwd: normalizedCwd,
+        env,
+      });
 
-    proc.stdout?.on('data', (data) => {
-      stdout += data.toString();
-    });
+      let stdout = '';
+      let stderr = '';
 
-    proc.stderr?.on('data', (data) => {
-      stderr += data.toString();
-    });
+      proc.stdout?.on('data', (data) => {
+        stdout += data.toString();
+      });
 
-    proc.on('close', (exitCode) => {
-      resolve({ stdout, stderr, exitCode: exitCode ?? 0 });
-    });
+      proc.stderr?.on('data', (data) => {
+        stderr += data.toString();
+      });
 
-    proc.on('error', (error) => {
-      resolve({ stdout: '', stderr: error.message, exitCode: 1 });
+      proc.on('close', (exitCode) => {
+        resolve({ stdout, stderr, exitCode: exitCode ?? 0 });
+      });
+
+      proc.on('error', (error) => {
+        resolve({ stdout: '', stderr: error.message, exitCode: 1 });
+      });
+    }).catch((error) => {
+      resolve({ stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 });
     });
   });
 }

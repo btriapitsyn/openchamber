@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn } from 'child_process';
+import * as fs from 'fs';
+import { spawn, execFile } from 'child_process';
+import { promisify } from 'util';
 import { type OpenCodeManager } from './opencode';
 import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE, getProviderSources, removeProviderConfig } from './opencodeConfig';
 import { getProviderAuth, removeProviderAuth } from './opencodeAuth';
@@ -88,6 +90,7 @@ export interface BridgeContext {
 
 const SETTINGS_KEY = 'openchamber.settings';
 const CLIENT_RELOAD_DELAY_MS = 800;
+const execFileAsync = promisify(execFile);
 
 const readSettings = (ctx?: BridgeContext) => {
   const stored = ctx?.context?.globalState.get<Record<string, unknown>>(SETTINGS_KEY) || {};
@@ -198,12 +201,64 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
 
 const normalizeFsPath = (value: string) => value.replace(/\\/g, '/');
 
-const execGit = async (args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> => (
-  new Promise((resolve) => {
+const isSocketPath = async (candidate: string): Promise<boolean> => {
+  if (!candidate) {
+    return false;
+  }
+  try {
+    const stat = await fs.promises.stat(candidate);
+    return typeof stat.isSocket === 'function' && stat.isSocket();
+  } catch {
+    return false;
+  }
+};
+
+const resolveSshAuthSock = async (): Promise<string | undefined> => {
+  const existing = (process.env.SSH_AUTH_SOCK || '').trim();
+  if (existing) {
+    return existing;
+  }
+
+  if (process.platform === 'win32') {
+    return undefined;
+  }
+
+  const gpgSock = path.join(os.homedir(), '.gnupg', 'S.gpg-agent.ssh');
+  if (await isSocketPath(gpgSock)) {
+    return gpgSock;
+  }
+
+  try {
+    const { stdout } = await execFileAsync('gpgconf', ['--list-dirs', 'agent-ssh-socket']);
+    const candidate = String(stdout || '').trim();
+    if (candidate && await isSocketPath(candidate)) {
+      return candidate;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+};
+
+const buildGitEnv = async (): Promise<NodeJS.ProcessEnv> => {
+  const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+  if (!env.SSH_AUTH_SOCK || !env.SSH_AUTH_SOCK.trim()) {
+    const resolved = await resolveSshAuthSock();
+    if (resolved) {
+      env.SSH_AUTH_SOCK = resolved;
+    }
+  }
+  return env;
+};
+
+const execGit = async (args: string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> => {
+  const env = await buildGitEnv();
+  return new Promise((resolve) => {
     const proc = spawn('git', args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+      env,
     });
 
     let stdout = '';
@@ -224,8 +279,8 @@ const execGit = async (args: string[], cwd: string): Promise<{ stdout: string; s
     proc.on('error', (error) => {
       resolve({ stdout: '', stderr: error instanceof Error ? error.message : String(error), exitCode: 1 });
     });
-  })
-);
+  });
+};
 
 const gitCheckIgnoreNames = async (cwd: string, names: string[]): Promise<Set<string>> => {
   if (names.length === 0) {
