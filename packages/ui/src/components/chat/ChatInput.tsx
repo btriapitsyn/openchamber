@@ -12,6 +12,8 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore, type QueuedMessage } from '@/stores/messageQueueStore';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
+import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
+import { appendInlineComments } from '@/lib/messages/inlineComments';
 import { AttachedFilesList } from './FileAttachment';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
@@ -111,6 +113,20 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     );
     const addToQueue = useMessageQueueStore((state) => state.addToQueue);
     const clearQueue = useMessageQueueStore((state) => state.clearQueue);
+
+    // Inline comment drafts
+    const draftCount = useInlineCommentDraftStore(
+        React.useCallback(
+            (state) => {
+                const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : '');
+                if (!sessionKey) return 0;
+                return (state.drafts[sessionKey] ?? []).length;
+            },
+            [currentSessionId, newSessionDraftOpen]
+        )
+    );
+    const consumeDrafts = useInlineCommentDraftStore((state) => state.consumeDrafts);
+    const hasDrafts = draftCount > 0;
 
     // Session activity for auto-send on idle
     const { phase: sessionPhase } = useCurrentSessionActivity();
@@ -223,7 +239,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [pendingInputText, consumePendingInputText]);
 
-    const hasContent = message.trim() || attachedFiles.length > 0;
+    const hasContent = message.trim() || attachedFiles.length > 0 || hasDrafts;
     const hasQueuedMessages = queuedMessages.length > 0;
     const canSend = hasContent || hasQueuedMessages;
 
@@ -233,7 +249,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const handleQueueMessage = React.useCallback(() => {
         if (!hasContent || !currentSessionId) return;
 
-        const messageToQueue = message.replace(/^\n+|\n+$/g, '');
+        // Get and consume drafts for this session
+        const sessionKey = currentSessionId;
+        const drafts = consumeDrafts(sessionKey);
+
+        // Build message with appended drafts
+        let messageToQueue = message.replace(/^\n+|\n+$/g, '');
+        if (drafts.length > 0) {
+            messageToQueue = appendInlineComments(messageToQueue, drafts);
+        }
+
         const attachmentsToQueue = attachedFiles.map((file) => ({ ...file }));
 
         addToQueue(currentSessionId, {
@@ -250,7 +275,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (!isMobile) {
             textareaRef.current?.focus();
         }
-    }, [hasContent, currentSessionId, message, attachedFiles, addToQueue, clearAttachedFiles, isMobile]);
+    }, [hasContent, currentSessionId, message, attachedFiles, addToQueue, clearAttachedFiles, isMobile, consumeDrafts]);
 
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault();
@@ -314,6 +339,28 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     text: sanitizedText,
                     attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
                 });
+            }
+        }
+
+        // Get session key for drafts (use currentSessionId or 'draft' for new sessions)
+        const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
+        let drafts: import('@/stores/useInlineCommentDraftStore').InlineCommentDraft[] = [];
+        if (sessionKey) {
+            drafts = consumeDrafts(sessionKey);
+        }
+
+        // Append drafts to the message if any exist
+        if (drafts.length > 0) {
+            if (queuedMessages.length === 0) {
+                // No queue - append to primary text
+                primaryText = appendInlineComments(primaryText, drafts);
+            } else if (additionalParts.length > 0) {
+                // Has queue with additional parts - append to the last part (current input)
+                const lastPart = additionalParts[additionalParts.length - 1];
+                lastPart.text = appendInlineComments(lastPart.text, drafts);
+            } else {
+                // Has queue but no additional parts yet (shouldn't happen with hasContent check, but handle it)
+                primaryText = appendInlineComments(primaryText, drafts);
             }
         }
 
@@ -1373,14 +1420,34 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     </div>
                 )}
                 <AttachedFilesList />
-                <QueuedMessageChips 
+                <QueuedMessageChips
                     onEditMessage={(content) => {
                         setMessage(content);
                         setTimeout(() => {
                             textareaRef.current?.focus();
                         }, 0);
-                    }} 
+                    }}
                 />
+                {/* Review comments chip */}
+                {hasDrafts && (
+                    <div className="pb-2">
+                        <div
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border"
+                            style={{
+                                backgroundColor: currentTheme?.colors?.surface?.elevated,
+                                borderColor: currentTheme?.colors?.interactive?.border,
+                            }}
+                        >
+                            <span className="text-xs font-medium text-muted-foreground">Review comments:</span>
+                            <span
+                                className="text-xs font-semibold"
+                                style={{ color: currentTheme?.colors?.status?.info }}
+                            >
+                                {draftCount}
+                            </span>
+                        </div>
+                    </div>
+                )}
                 <div
                     className={cn(
                         "flex flex-col relative overflow-visible",

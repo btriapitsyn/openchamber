@@ -473,9 +473,9 @@ export function getLanguageFromExtension(filePath: string): string | null {
     // Elixir/Erlang
     'ex': 'elixir',
     'exs': 'elixir',
-    'eex': 'elixir',
-    'heex': 'elixir',
-    'leex': 'elixir',
+    'eex': 'html',
+    'heex': 'html',
+    'leex': 'html',
     'erl': 'erlang',
     'hrl': 'erlang',
 

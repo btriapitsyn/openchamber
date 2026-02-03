@@ -6,8 +6,6 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn, getModifierLabel } from '@/lib/utils';
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
@@ -16,11 +14,19 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
-import { RiCheckLine, RiClipboardLine, RiFileCopy2Line, RiSendPlane2Line } from '@remixicon/react';
+import { RiCheckLine, RiClipboardLine, RiFileCopy2Line, RiMoreLine, RiDeleteBinLine } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
+import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
+import { toast } from '@/components/ui';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -85,16 +91,21 @@ export const PlanView: React.FC = () => {
   const sessions = useSessionStore((state) => state.sessions);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const runtimeApis = useRuntimeAPIs();
-  const sendMessage = useSessionStore((state) => state.sendMessage);
-  const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore();
-  const getSessionAgentSelection = useContextStore((state) => state.getSessionAgentSelection);
-  const getAgentModelForSession = useContextStore((state) => state.getAgentModelForSession);
-  const getAgentModelVariantForSession = useContextStore((state) => state.getAgentModelVariantForSession);
-  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const newSessionDraftOpen = useSessionStore((state) => state.newSessionDraft?.open);
   const { inputBarOffset, isKeyboardOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
+
+  // Inline comment drafts
+  const addDraft = useInlineCommentDraftStore((state) => state.addDraft);
+  const removeDraft = useInlineCommentDraftStore((state) => state.removeDraft);
+  const allDrafts = useInlineCommentDraftStore((state) => state.drafts);
+
+  // Get session key for drafts
+  const getSessionKey = React.useCallback(() => {
+    return currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
+  }, [currentSessionId, newSessionDraftOpen]);
 
   const session = React.useMemo(() => {
     if (!currentSessionId) return null;
@@ -195,65 +206,40 @@ export const PlanView: React.FC = () => {
     return lines.slice(startLine - 1, endLine).join('\n');
   }, []);
 
-  const handleSendComment = React.useCallback(async () => {
+  const handleCancelComment = React.useCallback(() => {
+    setCommentText('');
+    setLineSelection(null);
+  }, []);
+
+  const handleSaveComment = React.useCallback(() => {
     if (!lineSelection || !commentText.trim()) return;
-    if (!currentSessionId) return;
 
-    const sessionAgent = getSessionAgentSelection(currentSessionId) || currentAgentName;
-    const sessionModel = sessionAgent ? getAgentModelForSession(currentSessionId, sessionAgent) : null;
-    const effectiveProviderId = sessionModel?.providerId || currentProviderId;
-    const effectiveModelId = sessionModel?.modelId || currentModelId;
-
-    if (!effectiveProviderId || !effectiveModelId) {
+    const sessionKey = getSessionKey();
+    if (!sessionKey) {
+      toast.error('Select a session to save comment');
       return;
     }
 
-    const effectiveVariant = sessionAgent && effectiveProviderId && effectiveModelId
-      ? getAgentModelVariantForSession(currentSessionId, sessionAgent, effectiveProviderId, effectiveModelId) ?? currentVariant
-      : currentVariant;
-
-    const startLine = lineSelection.start;
-    const endLine = lineSelection.end;
     const code = extractSelectedCode(content, lineSelection);
     const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
     const language = resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown';
 
-    const message = `Comment on \`${fileLabel}\` lines ${startLine}-${endLine}:\n\n\`\`\`${language}\n${code}\n\`\`\`\n\n${commentText}`;
+    addDraft({
+      sessionKey,
+      source: 'plan',
+      fileLabel,
+      startLine: lineSelection.start,
+      endLine: lineSelection.end,
+      code,
+      language,
+      text: commentText.trim(),
+    });
 
     setCommentText('');
     setLineSelection(null);
-    setActiveMainTab('chat');
 
-    void sendMessage(
-      message,
-      effectiveProviderId,
-      effectiveModelId,
-      sessionAgent,
-      undefined,
-      undefined,
-      undefined,
-      effectiveVariant
-    ).catch(() => {
-      // ignore
-    });
-  }, [
-    lineSelection,
-    commentText,
-    currentSessionId,
-    currentProviderId,
-    currentModelId,
-    currentAgentName,
-    currentVariant,
-    content,
-    resolvedPath,
-    displayPath,
-    extractSelectedCode,
-    sendMessage,
-    setActiveMainTab,
-    getSessionAgentSelection,
-    getAgentModelForSession,
-    getAgentModelVariantForSession,
-  ]);
+    toast.success('Comment saved');
+  }, [lineSelection, commentText, content, displayPath, resolvedPath, addDraft, getSessionKey]);
 
   const editorExtensions = React.useMemo(() => {
     const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];
@@ -388,50 +374,124 @@ export const PlanView: React.FC = () => {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
-                handleSendComment();
+                handleSaveComment();
               }
               if (e.key === 'Escape') {
                 e.preventDefault();
-                setLineSelection(null);
-                setCommentText('');
+                handleCancelComment();
               }
             }}
           />
-          <div className="px-2.5 py-1 flex items-center justify-between gap-x-1.5">
+          {/* Footer with Cancel and Comment buttons */}
+          <div className="px-2.5 py-1 flex items-center justify-between gap-x-2">
             <span className="text-xs text-muted-foreground">
               Plan:{lineSelection.start}-{lineSelection.end}
             </span>
-            <div className="flex items-center gap-x-1.5">
+            <div className="flex items-center gap-x-2">
               {!isMobile && (
                 <span className="text-xs text-muted-foreground">
                   {getModifierLabel()}+⏎
                 </span>
               )}
-              <button
+              <Button
                 type="button"
-                onTouchEnd={(e) => {
-                  if (commentText.trim()) {
-                    e.preventDefault();
-                    handleSendComment();
-                  }
-                }}
-                onClick={() => {
-                  if (!isMobile) {
-                    handleSendComment();
-                  }
-                }}
-                disabled={!commentText.trim()}
-                className={cn(
-                  "h-7 w-7 flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0",
-                  commentText.trim() ? "text-primary hover:text-primary" : "opacity-30"
-                )}
-                aria-label="Send comment"
+                variant="outline"
+                size="sm"
+                onClick={handleCancelComment}
+                className="h-7 px-2 text-xs"
               >
-                <RiSendPlane2Line className="h-[18px] w-[18px]" />
-              </button>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                onClick={handleSaveComment}
+                disabled={!commentText.trim()}
+                className="h-7 px-2 text-xs"
+                style={{
+                  backgroundColor: currentTheme?.colors?.status?.success,
+                  color: currentTheme?.colors?.status?.successForeground,
+                }}
+              >
+                Comment
+              </Button>
             </div>
           </div>
         </div>
+      </div>
+    );
+  };
+
+  // Render saved comment cards
+  const renderSavedComments = () => {
+    if (mdViewMode === 'preview') return null;
+
+    const sessionKey = getSessionKey();
+    if (!sessionKey) return null;
+
+    const sessionDrafts = allDrafts[sessionKey] ?? [];
+    const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
+    const fileDrafts = sessionDrafts.filter((d) => d.source === 'plan' && d.fileLabel === fileLabel);
+
+    if (fileDrafts.length === 0) return null;
+
+    return (
+      <div className="absolute inset-0 pointer-events-none z-40">
+        {fileDrafts.map((draft) => {
+          // For CodeMirror, we need to position based on line
+          // This is a simplified version - in production, you'd query the editor's DOM
+          const lineHeight = 24; // Approximate line height in pixels
+          const top = (draft.startLine - 1) * lineHeight;
+
+          return (
+            <div
+              key={draft.id}
+              className="absolute pointer-events-auto"
+              style={{
+                top: `${top}px`,
+                right: '8px',
+                maxWidth: '300px',
+              }}
+            >
+              <div
+                className="rounded-lg border p-2 shadow-md"
+                style={{
+                  backgroundColor: currentTheme?.colors?.surface?.elevated,
+                  borderColor: currentTheme?.colors?.interactive?.border,
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium text-muted-foreground mb-1">
+                      {draft.fileLabel}:{draft.startLine}-{draft.endLine}
+                    </div>
+                    <div className="text-sm line-clamp-3">{draft.text}</div>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex-shrink-0 p-1 rounded hover:bg-[var(--interactive-hover)] text-muted-foreground"
+                      >
+                        <RiMoreLine className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => removeDraft(draft.sessionKey, draft.id)}
+                        className="text-destructive"
+                      >
+                        <RiDeleteBinLine className="h-4 w-4 mr-2" />
+                        Delete comment
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   };
@@ -544,54 +604,55 @@ export const PlanView: React.FC = () => {
                       </ErrorBoundary>
                     </div>
                   ) : (
-                    <CodeMirrorEditor
-                      value={content}
-                      onChange={() => {
-                        // read-only
-                      }}
-                      readOnly={true}
-                      className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)]"
-                      extensions={editorExtensions}
-                      highlightLines={lineSelection
-                        ? {
-                          start: Math.min(lineSelection.start, lineSelection.end),
-                          end: Math.max(lineSelection.start, lineSelection.end),
-                        }
-                        : undefined}
-                      lineNumbersConfig={{
-                        domEventHandlers: {
-                          mousedown: (view, line, event) => {
-                            if (!(event instanceof MouseEvent)) return false;
-                            if (event.button !== 0) return false;
-                            event.preventDefault();
-                            const lineNumber = view.state.doc.lineAt(line.from).number;
+                    <div className="relative h-full">
+                      <CodeMirrorEditor
+                        value={content}
+                        onChange={() => {
+                          // read-only
+                        }}
+                        readOnly={true}
+                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)]"
+                        extensions={editorExtensions}
+                        highlightLines={lineSelection
+                          ? {
+                            start: Math.min(lineSelection.start, lineSelection.end),
+                            end: Math.max(lineSelection.start, lineSelection.end),
+                          }
+                          : undefined}
+                        lineNumbersConfig={{
+                          domEventHandlers: {
+                            mousedown: (view, line, event) => {
+                              if (!(event instanceof MouseEvent)) return false;
+                              if (event.button !== 0) return false;
+                              event.preventDefault();
+                              const lineNumber = view.state.doc.lineAt(line.from).number;
 
-                            if (isMobile && lineSelection && !event.shiftKey) {
-                              const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
-                              const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
-                              setLineSelection({ start, end });
-                              isSelectingRef.current = false;
-                              selectionStartRef.current = null;
+                              if (isMobile && lineSelection && !event.shiftKey) {
+                                const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
+                                const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
+                                setLineSelection({ start, end });
+                                isSelectingRef.current = false;
+                                selectionStartRef.current = null;
+                                return true;
+                              }
+
+                              isSelectingRef.current = true;
+                              selectionStartRef.current = lineNumber;
+
+                              if (lineSelection && event.shiftKey) {
+                                const start = Math.min(lineSelection.start, lineNumber);
+                                const end = Math.max(lineSelection.end, lineNumber);
+                                setLineSelection({ start, end });
+                              } else {
+                                setLineSelection({ start: lineNumber, end: lineNumber });
+                              }
+
                               return true;
-                            }
-
-                            isSelectingRef.current = true;
-                            selectionStartRef.current = lineNumber;
-
-                            if (lineSelection && event.shiftKey) {
-                              const start = Math.min(lineSelection.start, lineNumber);
-                              const end = Math.max(lineSelection.end, lineNumber);
-                              setLineSelection({ start, end });
-                            } else {
-                              setLineSelection({ start: lineNumber, end: lineNumber });
-                            }
-
-                            return true;
-                          },
-                          mouseover: (view, line, event) => {
-                            if (!(event instanceof MouseEvent)) return false;
-                            if (event.buttons !== 1) return false;
-                            if (!isSelectingRef.current || selectionStartRef.current === null) return false;
+                            },
+                            mouseover: (view, line, event) => {
+                              if (!(event instanceof MouseEvent)) return false;
+                              if (event.buttons !== 1) return false;
+                              if (!isSelectingRef.current || selectionStartRef.current === null) return false;
                             const lineNumber = view.state.doc.lineAt(line.from).number;
                             const start = Math.min(selectionStartRef.current, lineNumber);
                             const end = Math.max(selectionStartRef.current, lineNumber);
@@ -606,6 +667,8 @@ export const PlanView: React.FC = () => {
                         },
                       }}
                     />
+                    {renderSavedComments()}
+                  </div>
                   )}
                 </div>
               </div>
