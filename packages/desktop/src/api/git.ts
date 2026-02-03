@@ -111,13 +111,17 @@ export const createDesktopGitAPI = (): GitAPI => ({
 
   async generatePullRequestDescription(
     directory: string,
-    payload: { base: string; head: string }
+    payload: { base: string; head: string; context?: string }
   ): Promise<GeneratedPullRequestDescription> {
-    return safeGitInvoke<GeneratedPullRequestDescription>('generate_pr_description', {
+    const params: { directory: string; base: string; head: string; context?: string } = {
       directory,
       base: payload.base,
       head: payload.head,
-    });
+    };
+    if (payload.context?.trim()) {
+      params.context = payload.context.trim();
+    }
+    return safeGitInvoke<GeneratedPullRequestDescription>('generate_pr_description', params);
   },
 
   async listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]> {
