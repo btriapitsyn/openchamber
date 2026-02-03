@@ -287,7 +287,7 @@ export interface GitAPI {
   generateCommitMessage(directory: string, files: string[]): Promise<{ message: GeneratedCommitMessage }>;
   generatePullRequestDescription(
     directory: string,
-    payload: { base: string; head: string }
+    payload: { base: string; head: string; context?: string }
   ): Promise<GeneratedPullRequestDescription>;
   listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
   addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }>;
