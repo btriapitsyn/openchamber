@@ -1,4 +1,4 @@
-export type QuotaProviderId = 'openai' | 'google' | 'zai-coding-plan';
+export type QuotaProviderId = 'openai' | 'google' | 'zai-coding-plan' | 'github-copilot';
 
 export interface UsageWindow {
   usedPercent: number | null;
