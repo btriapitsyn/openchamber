@@ -11,6 +11,7 @@ import { sql } from '@codemirror/lang-sql';
 import { xml } from '@codemirror/lang-xml';
 import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
 import { rust } from '@codemirror/lang-rust';
+import { elixir } from 'codemirror-lang-elixir';
 
 import { Language, LanguageDescription, StreamLanguage, HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
@@ -28,6 +29,8 @@ const diffLanguage = StreamLanguage.define(diff);
 const dockerfileLanguage = StreamLanguage.define(dockerFile);
 const rubyLanguage = StreamLanguage.define(ruby);
 const propertiesLanguage = StreamLanguage.define(properties);
+const elixirSupport = elixir();
+const elixirLanguage = elixirSupport.language;
 const erlangLanguage = StreamLanguage.define(erlang);
 
 function codeBlockLanguageResolver(info: string): Language | LanguageDescription | null {
@@ -81,7 +84,7 @@ function codeBlockLanguageResolver(info: string): Language | LanguageDescription
     case 'ex':
     case 'exs':
     case 'elixir':
-      return erlangLanguage;
+      return elixirLanguage;
     case 'erl':
     case 'hrl':
     case 'erlang':
@@ -217,7 +220,7 @@ export function languageByExtension(filePath: string): Extension | null {
 
     case 'ex':
     case 'exs':
-      return erlangLanguage;
+      return elixirSupport;
     case 'erl':
     case 'hrl':
       return erlangLanguage;
