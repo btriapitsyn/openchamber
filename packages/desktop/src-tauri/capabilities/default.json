@@ -5,7 +5,11 @@
   "remote": {
     "urls": [
       "http://127.0.0.1:*/*",
-      "http://localhost:*/*"
+      "http://localhost:*/*",
+      "http://*",
+      "http://*/*",
+      "https://*",
+      "https://*/*"
     ]
   },
   "windows": ["main"],

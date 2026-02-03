@@ -98,6 +98,16 @@ export const isTauriShell = (): boolean => {
   return typeof tauri?.core?.invoke === 'function';
 };
 
+// Desktop shell detection that doesn't require Tauri IPC availability.
+// (Remote pages can temporarily lose window.__TAURI__ if URL doesn't match remote allowlist.)
+export const isDesktopShell = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.__OPENCHAMBER_LOCAL_ORIGIN__ === 'string' && window.__OPENCHAMBER_LOCAL_ORIGIN__.length > 0) {
+    return true;
+  }
+  return isTauriShell();
+};
+
 export const isVSCodeRuntime = (): boolean => {
   if (typeof window === "undefined") return false;
   const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { isVSCode?: boolean } } }).__OPENCHAMBER_RUNTIME_APIS__;

@@ -372,10 +372,17 @@ const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(20);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
+const LOCAL_HOST_ID: &str = "local";
+
 #[derive(Default)]
 struct SidecarState {
     child: Mutex<Option<CommandChild>>,
     url: Mutex<Option<String>>,
+}
+
+#[derive(Default)]
+struct DesktopUiInjectionState {
+    script: Mutex<Option<String>>,
 }
 
 struct WindowFocusState {
@@ -393,6 +400,201 @@ impl Default for WindowFocusState {
 #[derive(Default)]
 struct MenuRuntimeState {
     auto_worktree: Mutex<bool>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopHost {
+    id: String,
+    label: String,
+    url: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopHostsConfig {
+    hosts: Vec<DesktopHost>,
+    default_host_id: Option<String>,
+}
+
+fn normalize_host_url(raw: &str) -> Option<String> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let parsed = url::Url::parse(trimmed).ok()?;
+    let scheme = parsed.scheme();
+    if scheme != "http" && scheme != "https" {
+        return None;
+    }
+    let host = parsed.host_str()?;
+    let mut normalized = format!("{}://{}", scheme, host);
+    if let Some(port) = parsed.port() {
+        normalized.push(':');
+        normalized.push_str(&port.to_string());
+    }
+    Some(normalized)
+}
+
+fn settings_file_path() -> PathBuf {
+    if let Ok(dir) = env::var("OPENCHAMBER_DATA_DIR") {
+        if !dir.trim().is_empty() {
+            return PathBuf::from(dir.trim()).join("settings.json");
+        }
+    }
+    let home = env::var("HOME").unwrap_or_default();
+    PathBuf::from(home)
+        .join(".config")
+        .join("openchamber")
+        .join("settings.json")
+}
+
+fn read_desktop_hosts_config_from_disk() -> DesktopHostsConfig {
+    let path = settings_file_path();
+    let raw = fs::read_to_string(path).ok();
+    let parsed = raw
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+
+    let hosts_value = parsed
+        .as_ref()
+        .and_then(|v| v.get("desktopHosts"))
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    let default_value = parsed
+        .as_ref()
+        .and_then(|v| v.get("desktopDefaultHostId"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let mut hosts: Vec<DesktopHost> = Vec::new();
+    if let serde_json::Value::Array(items) = hosts_value {
+        for item in items {
+            if let Ok(host) = serde_json::from_value::<DesktopHost>(item) {
+                if host.id.trim().is_empty() || host.id == LOCAL_HOST_ID {
+                    continue;
+                }
+                if let Some(url) = normalize_host_url(&host.url) {
+                    hosts.push(DesktopHost {
+                        id: host.id,
+                        label: if host.label.trim().is_empty() {
+                            url.clone()
+                        } else {
+                            host.label
+                        },
+                        url,
+                    });
+                }
+            }
+        }
+    }
+
+    DesktopHostsConfig {
+        hosts,
+        default_host_id: default_value,
+    }
+}
+
+fn write_desktop_hosts_config_to_disk(config: &DesktopHostsConfig) -> Result<()> {
+    let path = settings_file_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
+        serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+
+    let hosts: Vec<DesktopHost> = config
+        .hosts
+        .iter()
+        .filter_map(|h| {
+            let id = h.id.trim();
+            if id.is_empty() || id == LOCAL_HOST_ID {
+                return None;
+            }
+            let url = normalize_host_url(&h.url)?;
+            Some(DesktopHost {
+                id: id.to_string(),
+                label: if h.label.trim().is_empty() {
+                    url.clone()
+                } else {
+                    h.label.trim().to_string()
+                },
+                url,
+            })
+        })
+        .collect();
+
+    root["desktopHosts"] = serde_json::to_value(hosts).unwrap_or(serde_json::Value::Array(vec![]));
+    root["desktopDefaultHostId"] = match &config.default_host_id {
+        Some(id) if !id.trim().is_empty() => serde_json::Value::String(id.trim().to_string()),
+        _ => serde_json::Value::Null,
+    };
+
+    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn desktop_hosts_get() -> Result<DesktopHostsConfig, String> {
+    Ok(read_desktop_hosts_config_from_disk())
+}
+
+#[tauri::command]
+fn desktop_hosts_set(config: DesktopHostsConfig) -> Result<(), String> {
+    write_desktop_hosts_config_to_disk(&config).map_err(|err| err.to_string())
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HostProbeResult {
+    status: String,
+    latency_ms: u64,
+}
+
+#[tauri::command]
+async fn desktop_host_probe(url: String) -> Result<HostProbeResult, String> {
+    let normalized = normalize_host_url(&url).ok_or_else(|| "Invalid URL".to_string())?;
+    let health = format!("{}/health", normalized.trim_end_matches('/'));
+    let client = reqwest::Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(2))
+        .build()
+        .map_err(|err| err.to_string())?;
+    let started = std::time::Instant::now();
+    match client.get(&health).send().await {
+        Ok(resp) => {
+            let status = resp.status();
+            let latency_ms = started.elapsed().as_millis() as u64;
+            if status.is_success() {
+                Ok(HostProbeResult {
+                    status: "ok".to_string(),
+                    latency_ms,
+                })
+            } else if status.as_u16() == 401 || status.as_u16() == 403 {
+                Ok(HostProbeResult {
+                    status: "auth".to_string(),
+                    latency_ms,
+                })
+            } else {
+                Ok(HostProbeResult {
+                    status: "unreachable".to_string(),
+                    latency_ms,
+                })
+            }
+        }
+        Err(_) => Ok(HostProbeResult {
+            status: "unreachable".to_string(),
+            latency_ms: started.elapsed().as_millis() as u64,
+        }),
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -755,16 +957,10 @@ fn desktop_restart(app: tauri::AppHandle) {
     app.restart();
 }
 
-fn create_main_window(app: &tauri::AppHandle, url: &str) -> Result<()> {
+fn create_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Result<()> {
     let parsed = url::Url::parse(url).map_err(|err| anyhow!("Invalid URL: {err}"))?;
 
-    let home =
-        std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
-    let home_escaped = home
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r");
+    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
     #[cfg(target_os = "macos")]
     fn macos_major_version() -> Option<u32> {
         fn cmd_stdout(cmd: &str, args: &[&str]) -> Option<String> {
@@ -790,10 +986,21 @@ fn create_main_window(app: &tauri::AppHandle, url: &str) -> Result<()> {
     }
 
     let macos_major = macos_major_version().unwrap_or(0);
-    let init_script = format!(
-        "window.__OPENCHAMBER_HOME__ = \"{}\"; window.__OPENCHAMBER_MACOS_MAJOR__ = {};",
-        home_escaped, macos_major
+
+    let home_json = serde_json::to_string(&home).unwrap_or_else(|_| "\"\"".into());
+    let local_json = serde_json::to_string(local_origin).unwrap_or_else(|_| "\"\"".into());
+
+    let mut init_script = format!(
+        "(function(){{try{{window.__OPENCHAMBER_HOME__={home_json};window.__OPENCHAMBER_MACOS_MAJOR__={macos_major};window.__OPENCHAMBER_LOCAL_ORIGIN__={local_json};}}catch(_e){{}}}})();"
     );
+
+    // Cleanup: older builds injected a native-ish Instance switcher button into pages.
+    // Remove it if present so the UI-owned host switcher is the only one.
+    init_script.push_str("\ntry{var old=document.getElementById('__oc-instance-switcher');if(old)old.remove();}catch(_e){}");
+
+    if let Some(state) = app.try_state::<DesktopUiInjectionState>() {
+        *state.script.lock().expect("desktop ui injection mutex") = Some(init_script.clone());
+    }
 
     let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
         .title("OpenChamber")
@@ -830,6 +1037,7 @@ fn main() {
 
     let builder = tauri::Builder::default()
         .manage(SidecarState::default())
+        .manage(DesktopUiInjectionState::default())
         .manage(WindowFocusState::default())
         .manage(MenuRuntimeState::default())
         .manage(PendingUpdate(Mutex::new(None)))
@@ -839,6 +1047,15 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(log_builder.build())
+        .on_page_load(|window, _payload| {
+            if let Some(state) = window.app_handle().try_state::<DesktopUiInjectionState>() {
+                if let Ok(guard) = state.script.lock() {
+                    if let Some(script) = guard.as_ref() {
+                        let _ = window.eval(script);
+                    }
+                }
+            }
+        })
         .menu(|app| {
             #[cfg(target_os = "macos")]
             {
@@ -984,32 +1201,18 @@ fn main() {
             desktop_download_and_install_update,
             desktop_restart,
             desktop_set_auto_worktree_menu,
+            desktop_hosts_get,
+            desktop_hosts_set,
+            desktop_host_probe,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let target_url = std::env::var("OPENCHAMBER_SERVER_URL")
-                    .ok()
-                    .and_then(|raw| normalize_server_url(&raw));
-
-                let url = if let Some(remote) = target_url {
-                    remote
-                } else {
-                    // In dev, prefer the CLI-managed devUrl server (tauri.conf.json) to avoid
-                    // starting another instance on a random port.
-                    if cfg!(debug_assertions) {
-                        let dev_url = "http://127.0.0.1:3001";
-                        if wait_for_health(dev_url).await {
-                            dev_url.to_string()
-                        } else {
-                            match spawn_local_server(&handle).await {
-                                Ok(local) => local,
-                                Err(err) => {
-                                    log::error!("[desktop] failed to start local server: {err}");
-                                    return;
-                                }
-                            }
-                        }
+                // Always ensure local server is running for escape hatch.
+                let local_url = if cfg!(debug_assertions) {
+                    let dev_url = "http://127.0.0.1:3001";
+                    if wait_for_health(dev_url).await {
+                        dev_url.to_string()
                     } else {
                         match spawn_local_server(&handle).await {
                             Ok(local) => local,
@@ -1019,9 +1222,46 @@ fn main() {
                             }
                         }
                     }
+                } else {
+                    match spawn_local_server(&handle).await {
+                        Ok(local) => local,
+                        Err(err) => {
+                            log::error!("[desktop] failed to start local server: {err}");
+                            return;
+                        }
+                    }
                 };
 
-                if let Err(err) = create_main_window(&handle, &url) {
+                // Ensure local URL is always available to desktop commands,
+                // even when we are using the Vite dev server (no sidecar child).
+                if let Some(state) = handle.try_state::<SidecarState>() {
+                    *state.url.lock().expect("sidecar url mutex") = Some(local_url.clone());
+                }
+
+                let local_origin = url::Url::parse(&local_url)
+                    .ok()
+                    .map(|u| u.origin().ascii_serialization())
+                    .unwrap_or_else(|| local_url.clone());
+
+                // Selected host: env override first, then desktop default host, else local.
+                let env_target = std::env::var("OPENCHAMBER_SERVER_URL")
+                    .ok()
+                    .and_then(|raw| normalize_server_url(&raw));
+
+                let mut initial_url = env_target.unwrap_or_else(|| local_url.clone());
+
+                if initial_url == local_url {
+                    let cfg = read_desktop_hosts_config_from_disk();
+                    if let Some(default_id) = cfg.default_host_id {
+                        if default_id == LOCAL_HOST_ID {
+                            initial_url = local_url.clone();
+                        } else if let Some(host) = cfg.hosts.into_iter().find(|h| h.id == default_id) {
+                            initial_url = host.url;
+                        }
+                    }
+                }
+
+                if let Err(err) = create_main_window(&handle, &initial_url, &local_origin) {
                     log::error!("[desktop] failed to create window: {err}");
                 }
             });

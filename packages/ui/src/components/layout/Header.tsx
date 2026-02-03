@@ -28,6 +28,8 @@ import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
 import type { GitHubAuthStatus } from '@/lib/api/types';
+import { DesktopHostSwitcherButton } from '@/components/desktop/DesktopHostSwitcher';
+import { isDesktopShell } from '@/lib/desktop';
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -98,7 +100,7 @@ export const Header: React.FC = () => {
     if (typeof window === 'undefined') {
       return false;
     }
-    return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+    return isDesktopShell();
   });
 
   const isMacPlatform = React.useMemo(() => {
@@ -138,7 +140,7 @@ export const Header: React.FC = () => {
     if (typeof window === 'undefined') {
       return;
     }
-    setIsDesktopApp(Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__));
+    setIsDesktopApp(isDesktopShell());
   }, []);
 
   const currentModel = getCurrentModel();
@@ -564,23 +566,26 @@ export const Header: React.FC = () => {
       <div className="flex-1" />
 
        <div className="flex items-center gap-1 pr-3">
-         <Tooltip delayDuration={500}>
-           <TooltipTrigger asChild>
-             <button
-               type="button"
-               onClick={toggleCommandPalette}
-               aria-label="Open command palette"
-               className={headerIconButtonClass}
-             >
-               <RiCommandLine className="h-5 w-5" />
-             </button>
-           </TooltipTrigger>
-           <TooltipContent>
-             <p>Command Palette ({getModifierLabel()}+K)</p>
-           </TooltipContent>
-         </Tooltip>
+          {isDesktopApp && (
+            <DesktopHostSwitcherButton headerIconButtonClass={headerIconButtonClass} />
+          )}
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleCommandPalette}
+                aria-label="Open command palette"
+                className={headerIconButtonClass}
+              >
+                <RiCommandLine className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Command Palette ({getModifierLabel()}+K)</p>
+            </TooltipContent>
+          </Tooltip>
 
-         <McpDropdown headerIconButtonClass={headerIconButtonClass} />
+        <McpDropdown headerIconButtonClass={headerIconButtonClass} />
 
         <Tooltip delayDuration={500}>
           <TooltipTrigger asChild>
