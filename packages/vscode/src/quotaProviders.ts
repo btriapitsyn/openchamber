@@ -235,6 +235,11 @@ export const listConfiguredQuotaProviders = () => {
     configured.add('zai-coding-plan');
   }
 
+  const githubCopilotAuth = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot']));
+  if (githubCopilotAuth && ((githubCopilotAuth as Record<string, unknown>).access || (githubCopilotAuth as Record<string, unknown>).token)) {
+    configured.add('github-copilot');
+  }
+
   for (const filePath of ANTIGRAVITY_ACCOUNTS_PATHS) {
     const data = readJsonFile(filePath);
     const accounts = data?.accounts;
@@ -590,6 +595,123 @@ export const fetchZaiQuota = async (): Promise<ProviderResult> => {
   }
 };
 
+type CopilotSnapshot = {
+  unlimited?: boolean;
+  percent_remaining?: number;
+  entitlement?: number;
+  remaining?: number;
+  quota_remaining?: number;
+};
+
+type CopilotPayload = {
+  quota_snapshots?: {
+    premium_interactions?: CopilotSnapshot;
+  };
+  quota_reset_date_utc?: string;
+  quota_reset_date?: string;
+};
+
+export const fetchGitHubCopilotQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot'])) as Record<string, unknown> | null;
+  const accessToken = (entry?.access as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!accessToken) {
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.github.com/copilot_internal/user', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/vnd.github+json',
+        'User-Agent': 'OpenChamber',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'github-copilot',
+        providerName: 'GitHub Copilot',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as CopilotPayload;
+    const snapshots = payload?.quota_snapshots ?? {};
+    const premiumInteractions = snapshots?.premium_interactions ?? null;
+
+    // Parse reset date
+    let resetAt: number | null = null;
+    const resetDateUtc = payload?.quota_reset_date_utc;
+    const resetDate = payload?.quota_reset_date;
+
+    if (resetDateUtc) {
+      resetAt = new Date(resetDateUtc).getTime();
+    } else if (resetDate) {
+      // Use the date as UTC midnight
+      resetAt = new Date(`${resetDate}T00:00:00Z`).getTime();
+    }
+
+    const windows: Record<string, UsageWindow> = {};
+
+    if (premiumInteractions) {
+      let usedPercent: number | null = null;
+
+      if (premiumInteractions.unlimited === true) {
+        usedPercent = null;
+      } else if (typeof premiumInteractions.percent_remaining === 'number') {
+        usedPercent = 100 - premiumInteractions.percent_remaining;
+      } else if (
+        typeof premiumInteractions.entitlement === 'number' &&
+        premiumInteractions.entitlement > 0
+      ) {
+        const remaining =
+          typeof premiumInteractions.remaining === 'number'
+            ? premiumInteractions.remaining
+            : typeof premiumInteractions.quota_remaining === 'number'
+              ? premiumInteractions.quota_remaining
+              : null;
+
+        if (remaining !== null) {
+          usedPercent = ((premiumInteractions.entitlement - remaining) / premiumInteractions.entitlement) * 100;
+        }
+      }
+
+      windows['premium_interactions'] = toUsageWindow({
+        usedPercent,
+        windowSeconds: null,
+        resetAt,
+      });
+    }
+
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: true,
+      configured: true,
+      usage: { windows },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'github-copilot',
+      providerName: 'GitHub Copilot',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
 export const fetchQuotaForProvider = async (providerId: string): Promise<ProviderResult> => {
   switch (providerId) {
     case 'openai':
@@ -598,6 +720,8 @@ export const fetchQuotaForProvider = async (providerId: string): Promise<Provide
       return fetchGoogleQuota();
     case 'zai-coding-plan':
       return fetchZaiQuota();
+    case 'github-copilot':
+      return fetchGitHubCopilotQuota();
     default:
       return buildResult({
         providerId,
