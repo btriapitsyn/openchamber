@@ -20,6 +20,7 @@ import { diff } from '@codemirror/legacy-modes/mode/diff';
 import { dockerFile } from '@codemirror/legacy-modes/mode/dockerfile';
 import { ruby } from '@codemirror/legacy-modes/mode/ruby';
 import { properties } from '@codemirror/legacy-modes/mode/properties';
+import { erlang } from '@codemirror/legacy-modes/mode/erlang';
 
 const shellLanguage = StreamLanguage.define(shell);
 const tomlLanguage = StreamLanguage.define(toml);
@@ -27,6 +28,7 @@ const diffLanguage = StreamLanguage.define(diff);
 const dockerfileLanguage = StreamLanguage.define(dockerFile);
 const rubyLanguage = StreamLanguage.define(ruby);
 const propertiesLanguage = StreamLanguage.define(properties);
+const erlangLanguage = StreamLanguage.define(erlang);
 
 function codeBlockLanguageResolver(info: string): Language | LanguageDescription | null {
   const normalized = info.trim().toLowerCase();
@@ -76,6 +78,18 @@ function codeBlockLanguageResolver(info: string): Language | LanguageDescription
     case 'rs':
     case 'rust':
       return rust().language;
+    case 'ex':
+    case 'exs':
+    case 'elixir':
+      return erlangLanguage;
+    case 'erl':
+    case 'hrl':
+    case 'erlang':
+      return erlangLanguage;
+    case 'heex':
+    case 'eex':
+    case 'leex':
+      return html().language;
     default:
       return LanguageDescription.matchLanguageName(languages, normalized, true);
   }
@@ -200,6 +214,18 @@ export function languageByExtension(filePath: string): Extension | null {
     case 'rake':
     case 'gemspec':
       return rubyLanguage;
+
+    case 'ex':
+    case 'exs':
+      return erlangLanguage;
+    case 'erl':
+    case 'hrl':
+      return erlangLanguage;
+
+    case 'eex':
+    case 'leex':
+    case 'heex':
+      return html();
 
     default:
       return null;
