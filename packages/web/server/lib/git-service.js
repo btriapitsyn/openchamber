@@ -7,6 +7,7 @@ import { promisify } from 'util';
 
 const fsp = fs.promises;
 const execFileAsync = promisify(execFile);
+const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
 const isSocketPath = async (candidate) => {
   if (!candidate || typeof candidate !== 'string') {
@@ -35,14 +36,29 @@ const resolveSshAuthSock = async () => {
     return gpgSock;
   }
 
-  try {
-    const { stdout } = await execFileAsync('gpgconf', ['--list-dirs', 'agent-ssh-socket']);
-    const candidate = String(stdout || '').trim();
-    if (candidate && await isSocketPath(candidate)) {
-      return candidate;
+  const runGpgconf = async (args) => {
+    for (const candidate of gpgconfCandidates) {
+      try {
+        const { stdout } = await execFileAsync(candidate, args);
+        return String(stdout || '');
+      } catch {
+        continue;
+      }
     }
-  } catch {
-    return null;
+    return '';
+  };
+
+  const candidate = (await runGpgconf(['--list-dirs', 'agent-ssh-socket'])).trim();
+  if (candidate && await isSocketPath(candidate)) {
+    return candidate;
+  }
+
+  if (candidate) {
+    await runGpgconf(['--launch', 'gpg-agent']);
+    const retried = (await runGpgconf(['--list-dirs', 'agent-ssh-socket'])).trim();
+    if (retried && await isSocketPath(retried)) {
+      return retried;
+    }
   }
 
   return null;

@@ -91,6 +91,7 @@ export interface BridgeContext {
 const SETTINGS_KEY = 'openchamber.settings';
 const CLIENT_RELOAD_DELAY_MS = 800;
 const execFileAsync = promisify(execFile);
+const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
 const readSettings = (ctx?: BridgeContext) => {
   const stored = ctx?.context?.globalState.get<Record<string, unknown>>(SETTINGS_KEY) || {};
@@ -228,14 +229,29 @@ const resolveSshAuthSock = async (): Promise<string | undefined> => {
     return gpgSock;
   }
 
-  try {
-    const { stdout } = await execFileAsync('gpgconf', ['--list-dirs', 'agent-ssh-socket']);
-    const candidate = String(stdout || '').trim();
-    if (candidate && await isSocketPath(candidate)) {
-      return candidate;
+  const runGpgconf = async (args: string[]): Promise<string> => {
+    for (const candidate of gpgconfCandidates) {
+      try {
+        const { stdout } = await execFileAsync(candidate, args);
+        return String(stdout || '');
+      } catch {
+        continue;
+      }
     }
-  } catch {
-    return undefined;
+    return '';
+  };
+
+  const candidate = (await runGpgconf(['--list-dirs', 'agent-ssh-socket'])).trim();
+  if (candidate && await isSocketPath(candidate)) {
+    return candidate;
+  }
+
+  if (candidate) {
+    await runGpgconf(['--launch', 'gpg-agent']);
+    const retried = (await runGpgconf(['--list-dirs', 'agent-ssh-socket'])).trim();
+    if (retried && await isSocketPath(retried)) {
+      return retried;
+    }
   }
 
   return undefined;

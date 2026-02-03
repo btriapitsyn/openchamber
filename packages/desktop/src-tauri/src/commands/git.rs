@@ -339,11 +339,52 @@ fn metadata_is_socket(metadata: &std::fs::Metadata) -> bool {
     }
 }
 
+fn is_launchd_listeners_socket(path: &str) -> bool {
+    path.contains("/com.apple.launchd.") && path.ends_with("/Listeners")
+}
+
+async fn run_gpgconf(args: &[&str]) -> Option<Vec<u8>> {
+    let candidates = [
+        "gpgconf",
+        "/opt/homebrew/bin/gpgconf",
+        "/usr/local/bin/gpgconf",
+    ];
+    for candidate in candidates {
+        info!("git: trying gpgconf at {}", candidate);
+        let output = Command::new(candidate)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .output()
+            .await;
+        if let Ok(result) = output {
+            if result.status.success() {
+                info!("git: gpgconf succeeded at {}", candidate);
+                return Some(result.stdout);
+            }
+        }
+    }
+    None
+}
+
 async fn resolve_ssh_auth_sock() -> Option<String> {
     if let Ok(value) = std::env::var("SSH_AUTH_SOCK") {
         let trimmed = value.trim();
         if !trimmed.is_empty() {
-            return Some(trimmed.to_string());
+            if let Ok(metadata) = fs::metadata(trimmed).await {
+                if metadata_is_socket(&metadata) {
+                    if is_launchd_listeners_socket(trimmed) {
+                        info!(
+                            "git: SSH_AUTH_SOCK points to launchd listeners: {}",
+                            trimmed
+                        );
+                    } else {
+                        info!("git: using SSH_AUTH_SOCK from environment: {}", trimmed);
+                        return Some(trimmed.to_string());
+                    }
+                }
+            }
         }
     }
 
@@ -351,25 +392,41 @@ async fn resolve_ssh_auth_sock() -> Option<String> {
     let gpg_agent_sock = home_dir.join(".gnupg").join("S.gpg-agent.ssh");
     if let Ok(metadata) = fs::metadata(&gpg_agent_sock).await {
         if metadata_is_socket(&metadata) {
+            info!(
+                "git: using gpg-agent SSH socket: {}",
+                gpg_agent_sock.to_string_lossy()
+            );
             return Some(gpg_agent_sock.to_string_lossy().to_string());
         }
     }
 
-    let output = Command::new("gpgconf")
-        .args(["--list-dirs", "agent-ssh-socket"])
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .await;
+    let mut gpgconf_path: Option<PathBuf> = None;
+    if let Some(stdout) = run_gpgconf(&["--list-dirs", "agent-ssh-socket"]).await {
+        let candidate = String::from_utf8_lossy(&stdout).trim().to_string();
+        if !candidate.is_empty() {
+            let path = PathBuf::from(candidate);
+            info!("git: gpgconf reported SSH socket at {}", path.to_string_lossy());
+            if let Ok(metadata) = fs::metadata(&path).await {
+                if metadata_is_socket(&metadata) {
+                    info!("git: gpgconf socket exists and is a socket");
+                    return Some(path.to_string_lossy().to_string());
+                }
+            }
+            gpgconf_path = Some(path);
+        }
+    }
 
-    if let Ok(result) = output {
-        if result.status.success() {
-            let candidate = String::from_utf8_lossy(&result.stdout).trim().to_string();
+    if gpgconf_path.is_some() {
+        info!("git: launching gpg-agent via gpgconf");
+        let _ = run_gpgconf(&["--launch", "gpg-agent"]).await;
+        if let Some(stdout) = run_gpgconf(&["--list-dirs", "agent-ssh-socket"]).await {
+            let candidate = String::from_utf8_lossy(&stdout).trim().to_string();
             if !candidate.is_empty() {
                 let path = PathBuf::from(candidate);
+                info!("git: gpgconf retried SSH socket at {}", path.to_string_lossy());
                 if let Ok(metadata) = fs::metadata(&path).await {
                     if metadata_is_socket(&metadata) {
+                        info!("git: gpgconf socket exists and is a socket after launch");
                         return Some(path.to_string_lossy().to_string());
                     }
                 }
@@ -377,6 +434,7 @@ async fn resolve_ssh_auth_sock() -> Option<String> {
         }
     }
 
+    warn!("git: no SSH_AUTH_SOCK resolved");
     None
 }
 
@@ -389,6 +447,7 @@ async fn run_git_with_allowed_exit(
     cwd: &Path,
     allowed_codes: &[i32],
 ) -> Result<String> {
+    info!("git: running command {:?}", args);
     let ssh_auth_sock = resolve_ssh_auth_sock().await;
     let mut command = Command::new("git");
     command
@@ -401,6 +460,7 @@ async fn run_git_with_allowed_exit(
         .env("GCM_INTERACTIVE", "Never")
         .env("LC_ALL", "C");
     if let Some(sock) = ssh_auth_sock.as_deref() {
+        info!("git: setting SSH_AUTH_SOCK for command: {}", sock);
         command.env("SSH_AUTH_SOCK", sock);
     }
     let output = command
@@ -427,6 +487,7 @@ async fn run_git_bytes_with_allowed_exit_timeout(
     allowed_codes: &[i32],
     timeout_ms: u64,
 ) -> Result<Vec<u8>> {
+    info!("git: running command {:?}", args);
     let ssh_auth_sock = resolve_ssh_auth_sock().await;
     let mut command = Command::new("git");
     command
@@ -439,6 +500,7 @@ async fn run_git_bytes_with_allowed_exit_timeout(
         .stdin(Stdio::null())
         .kill_on_drop(true);
     if let Some(sock) = ssh_auth_sock.as_deref() {
+        info!("git: setting SSH_AUTH_SOCK for command: {}", sock);
         command.env("SSH_AUTH_SOCK", sock);
     }
     let output = tokio::time::timeout(

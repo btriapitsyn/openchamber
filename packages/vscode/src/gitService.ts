@@ -16,6 +16,7 @@ let gitApi: GitAPI | null = null;
 let gitExtensionEnabled = false;
 
 const execFileAsync = promisify(execFile);
+const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
 async function isSocketPath(candidate: string): Promise<boolean> {
   if (!candidate) {
@@ -44,14 +45,29 @@ async function resolveSshAuthSock(): Promise<string | undefined> {
     return gpgSock;
   }
 
-  try {
-    const { stdout } = await execFileAsync('gpgconf', ['--list-dirs', 'agent-ssh-socket']);
-    const candidate = String(stdout || '').trim();
-    if (candidate && await isSocketPath(candidate)) {
-      return candidate;
+  const runGpgconf = async (args: string[]): Promise<string> => {
+    for (const candidate of gpgconfCandidates) {
+      try {
+        const { stdout } = await execFileAsync(candidate, args);
+        return String(stdout || '');
+      } catch {
+        continue;
+      }
     }
-  } catch {
-    return undefined;
+    return '';
+  };
+
+  const candidate = (await runGpgconf(['--list-dirs', 'agent-ssh-socket'])).trim();
+  if (candidate && await isSocketPath(candidate)) {
+    return candidate;
+  }
+
+  if (candidate) {
+    await runGpgconf(['--launch', 'gpg-agent']);
+    const retried = (await runGpgconf(['--list-dirs', 'agent-ssh-socket'])).trim();
+    if (retried && await isSocketPath(retried)) {
+      return retried;
+    }
   }
 
   return undefined;
