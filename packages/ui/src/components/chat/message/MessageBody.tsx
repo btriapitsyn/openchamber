@@ -23,6 +23,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT } from '@/lib/messages/executionMeta';
+import { TextSelectionMenu } from './TextSelectionMenu';
 
 const formatTurnDuration = (durationMs: number): string => {
     const totalSeconds = durationMs / 1000;
@@ -287,6 +288,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     void _allowAnimation;
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
+    const messageContentRef = React.useRef<HTMLDivElement>(null);
 
     const canCopyMessage = Boolean(onCopyMessage);
     const isMessageCopied = Boolean(copiedMessage);
@@ -886,22 +888,24 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
          </>
      );
  
-     return (
+      return (
 
-        <div
-            className={cn(
-                'relative w-full group/message'
-            )}
-            style={{
-                contain: 'layout',
-                transform: 'translateZ(0)',
-            }}
-            onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
-        >
-            <div>
-                <div
-                    className="leading-relaxed overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
-                >
+         <div
+             ref={messageContentRef}
+             className={cn(
+                 'relative w-full group/message'
+             )}
+             style={{
+                 contain: 'layout',
+                 transform: 'translateZ(0)',
+             }}
+             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
+         >
+             <TextSelectionMenu containerRef={messageContentRef} />
+             <div>
+                 <div
+                     className="message-content-text leading-relaxed overflow-hidden text-foreground/90 [&_p:last-child]:mb-0 [&_ul:last-child]:mb-0 [&_ol:last-child]:mb-0"
+                 >
                     {renderedParts}
                     {showErrorMessage && (
                         <FadeInOnReveal key="assistant-error">

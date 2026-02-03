@@ -119,6 +119,18 @@
     pointer-events: auto;
   }
 
+  /* Prevent system context menu on message content when using custom selection menu */
+  :root.mobile-pointer:not(.desktop-runtime) .message-content-text {
+    -webkit-touch-callout: none;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Allow system context menu only when explicitly requested via the "More" button */
+  :root.mobile-pointer:not(.desktop-runtime) .message-content-text.show-system-menu {
+    -webkit-touch-callout: default;
+  }
+
   /* Improve mobile spacing */
   :root.mobile-pointer:not(.desktop-runtime) .px-4 {
     padding-left: 1rem !important;
