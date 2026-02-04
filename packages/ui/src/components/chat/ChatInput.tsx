@@ -1363,7 +1363,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     <DropdownMenuTrigger asChild>
                         <button
                             type="button"
-                            className={iconButtonBaseClass}
+                            className={cn(iconButtonBaseClass, isMobile && 'h-7 w-7')}
                             title="Add attachment"
                             aria-label="Add attachment"
                         >
@@ -1399,7 +1399,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         <button
             type='button'
             onClick={onOpenSettings}
-            className={iconButtonBaseClass}
+            className={cn(iconButtonBaseClass, isMobile && 'h-7 w-7')}
             title='Model and agent settings'
             aria-label='Model and agent settings'
         >
@@ -1408,15 +1408,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     ) : null;
 
     const attachmentsControls = (
-        <>
+        <div className="flex items-center gap-x-1">
             {isMobile ? (
                 <button
                     type="button"
                     className={cn(
                         iconButtonBaseClass,
-                        'h-7 w-7 rounded-md border border-transparent typography-ui-label font-semibold text-muted-foreground',
+                        'h-7 w-7 rounded-md text-muted-foreground',
                         'hover:bg-interactive-hover/40 hover:text-foreground'
                     )}
+                    onPointerDownCapture={(event) => {
+                        if (event.pointerType === 'touch') {
+                            event.preventDefault();
+                            event.stopPropagation();
+                        }
+                    }}
                     onClick={handleOpenCommandMenu}
                     title="Commands"
                     aria-label="Commands"
@@ -1426,7 +1432,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             ) : null}
             {attachmentMenu}
             {settingsButton}
-        </>
+        </div>
     );
 
     const workingStatusText = working.statusText;
@@ -1624,12 +1630,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                     <div className="flex items-center gap-x-1">
                                         {attachmentsControls}
                                     </div>
-                                    <div className="flex items-center gap-x-1 min-w-0 flex-1 justify-center">
-                                        <MobileAgentButton onCycleAgent={handleCycleAgent} onOpenAgentPanel={() => setMobileControlsPanel('agent')} />
-                                        <span className="text-muted-foreground/50">·</span>
+                                    <div className="flex items-center flex-shrink-0 gap-x-1">
                                         <MobileModelButton onOpenModel={handleOpenMobileControls} />
-                                    </div>
-                                    <div className="flex items-center flex-shrink-0 gap-x-0.5">
+                                        <MobileAgentButton onCycleAgent={handleCycleAgent} onOpenAgentPanel={() => setMobileControlsPanel('agent')} />
                                         {actionButtons}
                                     </div>
                                 </div>
