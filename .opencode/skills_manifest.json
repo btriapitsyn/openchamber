@@ -1,0 +1,324 @@
+[
+  {
+    "id": "agent-architect",
+    "name": "agent-architect",
+    "description": "df",
+    "path": ".opencode\\skills\\agent-architect\\SKILL.md",
+    "vibe": "Strategic, Precise, Methodical"
+  },
+  {
+    "id": "agentic-self-evolution",
+    "name": "agentic-self-evolution",
+    "description": "Skill for agents to reflect on their performance and propose improvements to their own system instructions.",
+    "path": ".opencode\\skills\\agentic-self-evolution\\SKILL.md",
+    "vibe": "Reflective, Analytical, Improving"
+  },
+  {
+    "id": "antigravity-integration",
+    "name": "antigravity-integration",
+    "description": "Deep integration with the Antigravity workspace. Optimizes context management and tool usage for Antigravity-specific workflows.",
+    "path": ".opencode\\skills\\antigravity-integration\\SKILL.md",
+    "vibe": "Integrated, Synergistic, Seamless"
+  },
+  {
+    "id": "api-governance",
+    "name": "api-governance",
+    "description": "Skill for enforcing strict API contracts, schema-first design, and breaking change prevention.",
+    "path": ".opencode\\skills\\api-governance\\SKILL.md",
+    "vibe": "Strict, Contractual, Reliable"
+  },
+  {
+    "id": "artifact-consensus",
+    "name": "artifact-consensus",
+    "description": "Collaborative skill for agents to co-author and review Antigravity artifacts (plans, walkthroughs).",
+    "path": ".opencode\\skills\\artifact-consensus\\SKILL.md",
+    "vibe": "Architected, Planned, Co-Authored"
+  },
+  {
+    "id": "artifact-lifecycle-pipeline",
+    "name": "artifact-lifecycle-pipeline",
+    "description": "Advanced skill for managing the Antigravity Artifact lifecycle. Transitions tasks from Planning to Verification with zero friction.",
+    "path": ".opencode\\skills\\artifact-lifecycle-pipeline\\SKILL.md",
+    "vibe": "Orchestrated, Precise, Atomic"
+  },
+  {
+    "id": "auto-docs-sync",
+    "name": "auto-docs-sync",
+    "description": "Expert skill for keeping project documentation in perfect sync with the codebase.",
+    "path": ".opencode\\skills\\auto-docs-sync\\SKILL.md",
+    "vibe": "Thorough, Professional, Up-to-Date"
+  },
+  {
+    "id": "checkpoint-sync",
+    "name": "checkpoint-sync",
+    "description": "Skill for using Antigravity checkpoints as state-transition markers for collaborative agents.",
+    "path": ".opencode\\skills\\checkpoint-sync\\SKILL.md",
+    "vibe": "Reliable, Stable, Checkpointed"
+  },
+  {
+    "id": "cloud-architect",
+    "name": "cloud-architect",
+    "description": "Skill for managing cloud infrastructure, deployments, and environment configurations.",
+    "path": ".opencode\\skills\\cloud-architect\\SKILL.md",
+    "vibe": "Scalable, Secure, Operational"
+  },
+  {
+    "id": "cockpit-context-bridge",
+    "name": "cockpit-context-bridge",
+    "description": "Skill for synchronizing the Agent's focus with the User's IDE state (Open Tabs, Cursor Position).",
+    "path": ".opencode\\skills\\cockpit-context-bridge\\SKILL.md",
+    "vibe": "Responsive, Attentive, Synchronized"
+  },
+  {
+    "id": "cockpit-intent-parser",
+    "name": "cockpit-intent-parser",
+    "description": "Skill for decoding ambiguous or multi-modal user instructions coming from the Cockpit.",
+    "path": ".opencode\\skills\\cockpit-intent-parser\\SKILL.md",
+    "vibe": "Intuitive, Sharp, Proactive"
+  },
+  {
+    "id": "cockpit-liaison",
+    "name": "cockpit-liaison",
+    "description": "Skill for seamless bidirectional communication and task synchronization with the Antigravity Cockpit Agent.",
+    "path": ".opencode\\skills\\cockpit-liaison\\SKILL.md",
+    "vibe": "Connected, Subordinate, Integrated"
+  },
+  {
+    "id": "cockpit-telemetry-link",
+    "name": "cockpit-telemetry-link",
+    "description": "Skill for streaming high-fidelity, real-time agent metrics and health data to the Antigravity Cockpit.",
+    "path": ".opencode\\skills\\cockpit-telemetry-link\\SKILL.md",
+    "vibe": "Data-Driven, Transparent, Real-Time"
+  },
+  {
+    "id": "collaborative-vibe",
+    "name": "collaborative-vibe",
+    "description": "Skill for fostering a seamless, high-velocity collaborative coding environment between multiple AI agents and humans.",
+    "path": ".opencode\\skills\\collaborative-vibe\\SKILL.md",
+    "vibe": "Harmonious, Synchronized, High-Fidelity, Collective"
+  },
+  {
+    "id": "collective-reasoning",
+    "name": "collective-reasoning",
+    "description": "Skill for synthesizing multiple agent perspectives into a single cohesive architectural or logical plan.",
+    "path": ".opencode\\skills\\collective-reasoning\\SKILL.md",
+    "vibe": "Intellectual, Balanced, Multi-Perspective"
+  },
+  {
+    "id": "context-distiller",
+    "name": "context-distiller",
+    "description": "Advanced skill for managing long conversation context and token economy.",
+    "path": ".opencode\\skills\\context-distiller\\SKILL.md",
+    "vibe": "Clean, Concise, Long-Term"
+  },
+  {
+    "id": "context-economy-master",
+    "name": "context-economy-master",
+    "description": "Advanced skill for managing the Antigravity Context Economy and optimizing token usage.",
+    "path": ".opencode\\skills\\context-economy-master\\SKILL.md",
+    "vibe": "Economical, Efficient, Sharp"
+  },
+  {
+    "id": "context-handover",
+    "name": "context-handover",
+    "description": "Skill for efficiently passing task state and logic between different agents in a swarm.",
+    "path": ".opencode\\skills\\context-handover\\SKILL.md",
+    "vibe": "Seamless, Atomic, Reliable"
+  },
+  {
+    "id": "dependency-aegis",
+    "name": "dependency-aegis",
+    "description": "Skill for secure and conflict-free dependency management.",
+    "path": ".opencode\\skills\\dependency-aegis\\SKILL.md",
+    "vibe": "Secure, Cautious, Stable"
+  },
+  {
+    "id": "gitmoji-master",
+    "name": "gitmoji-master",
+    "description": "Standardized Guide for high-vibe commit messages using emojis.",
+    "path": ".opencode\\skills\\gitmoji-master\\SKILL.md",
+    "vibe": "Organized, Visual, Professional"
+  },
+  {
+    "id": "hive-mind-sync",
+    "name": "hive-mind-sync",
+    "description": "Skill for maintaining a shared, real-time 'mental model' of the project state across all active agents.",
+    "path": ".opencode\\skills\\hive-mind-sync\\SKILL.md",
+    "vibe": "Synchronized, Aware, Telepathic"
+  },
+  {
+    "id": "knowledge-graph-mapper",
+    "name": "knowledge-graph-mapper",
+    "description": "Skill for maintaining a conceptual map of the codebase to speed up agent onboarding and context retrieval.",
+    "path": ".opencode\\skills\\knowledge-graph-mapper\\SKILL.md",
+    "vibe": "Connected, Structured, Logical"
+  },
+  {
+    "id": "legacy-modernizer",
+    "name": "legacy-modernizer",
+    "description": "Skill for identifying technical debt and refactoring old code into modern, high-vibe patterns.",
+    "path": ".opencode\\skills\\legacy-modernizer\\SKILL.md",
+    "vibe": "Modern, Clean, Transformative"
+  },
+  {
+    "id": "model-consensus",
+    "name": "model-consensus",
+    "description": "Skill for validating critical logic across multiple LLM providers.",
+    "path": ".opencode\\skills\\model-consensus\\SKILL.md",
+    "vibe": "Precise, Scientific, Double-Checked"
+  },
+  {
+    "id": "observability-sentinel",
+    "name": "observability-sentinel",
+    "description": "Skill for instrumenting code with OpenTelemetry, structured logging, and distributed tracing from day one.",
+    "path": ".opencode\\skills\\observability-sentinel\\SKILL.md",
+    "vibe": "Transparent, Observable, Loud"
+  },
+  {
+    "id": "performance-guru",
+    "name": "performance-guru",
+    "description": "Expert skill for performance auditing, bundle size optimization, and O-notation analysis.",
+    "path": ".opencode\\skills\\performance-guru\\SKILL.md",
+    "vibe": "Lean, Fast, Optimized"
+  },
+  {
+    "id": "polyglot-translator",
+    "name": "polyglot-translator",
+    "description": "Skill for seamlessly integrating multiple programming languages and paradigms within a single codebase.",
+    "path": ".opencode\\skills\\polyglot-translator\\SKILL.md",
+    "vibe": "Fluent, Versatile, Integrated"
+  },
+  {
+    "id": "red-teaming",
+    "name": "red-teaming",
+    "description": "Skill for adversarial testing, finding edge cases, and security auditing.",
+    "path": ".opencode\\skills\\red-teaming\\SKILL.md",
+    "vibe": "Critical, Sharp, Adversarial"
+  },
+  {
+    "id": "requirement-traceability",
+    "name": "requirement-traceability",
+    "description": "Skill for ensuring every line of code maps back to a documented project requirement.",
+    "path": ".opencode\\skills\\requirement-traceability\\SKILL.md",
+    "vibe": "Organized, Accountable, Documented"
+  },
+  {
+    "id": "security-fortress",
+    "name": "security-fortress",
+    "description": "Skill for implementing \"Zero Trust\" architecture, advanced threat modeling, and supply chain security.",
+    "path": ".opencode\\skills\\security-fortress\\SKILL.md",
+    "vibe": "Impenetrable, Paranoid, Secure"
+  },
+  {
+    "id": "self-healing-loop",
+    "name": "self-healing-loop",
+    "description": "Autonomous error detection and correction cycle for build and test failures.",
+    "path": ".opencode\\skills\\self-healing-loop\\SKILL.md",
+    "vibe": "Resilient, Relentless, Debug-First"
+  },
+  {
+    "id": "strategic-foresight",
+    "name": "strategic-foresight",
+    "description": "Skill for predicting future technical debt, scalability bottlenecks, and architectural risks before they happen.",
+    "path": ".opencode\\skills\\strategic-foresight\\SKILL.md",
+    "vibe": "Visionary, Long-Term, Wise"
+  },
+  {
+    "id": "swarm-diplomat",
+    "name": "swarm-diplomat",
+    "description": "Skill for resolving conflicts and breaking stalemates between autonomous agents with opposing goals.",
+    "path": ".opencode\\skills\\swarm-diplomat\\SKILL.md",
+    "vibe": "Diplomatic, Fair, Decisive"
+  },
+  {
+    "id": "swarm-mentorship",
+    "name": "swarm-mentorship",
+    "description": "Skill for senior agents to instruct and upgrade the capabilities of junior agents during execution.",
+    "path": ".opencode\\skills\\swarm-mentorship\\SKILL.md",
+    "vibe": "Educational, Supportive, Evolving"
+  },
+  {
+    "id": "swarm-observability-sentinel",
+    "name": "swarm-observability-sentinel",
+    "description": "Skill for real-time telemetry, heartbeat monitoring, and distributed tracing across multiple agent worktrees.",
+    "path": ".opencode\\skills\\swarm-observability-sentinel\\SKILL.md",
+    "vibe": "Vigilant, Data-Driven, Real-Time"
+  },
+  {
+    "id": "swarm-orchestration",
+    "name": "swarm-orchestration",
+    "description": "Directives for managing multiple subagents across parallel worktrees.",
+    "path": ".opencode\\skills\\swarm-orchestration\\SKILL.md",
+    "vibe": "Command & Control, Parallelized, Scalable"
+  },
+  {
+    "id": "technical-storyteller",
+    "name": "technical-storyteller",
+    "description": "Skill for writing engaging, educational, and clear communication (PRs, Docs, Walkthroughs).",
+    "path": ".opencode\\skills\\technical-storyteller\\SKILL.md",
+    "vibe": "Engaging, Articulate, Educational"
+  },
+  {
+    "id": "terminal-guardian",
+    "name": "terminal-guardian",
+    "description": "Expert skill for managing terminal processes, fixing port conflicts, and detecting hung builds.",
+    "path": ".opencode\\skills\\terminal-guardian\\SKILL.md",
+    "vibe": "Protective, Janitorial, Robust"
+  },
+  {
+    "id": "test-grid-generator",
+    "name": "test-grid-generator",
+    "description": "Skill for automatically architecting and generating robust testing suites (Unit, E2E, Integration).",
+    "path": ".opencode\\skills\\test-grid-generator\\SKILL.md",
+    "vibe": "Thorough, Confident, Robust"
+  },
+  {
+    "id": "theme-system",
+    "name": "theme-system",
+    "description": "Use when creating or modifying UI components, styling, or visual elements in OpenChamber. All UI colors must use theme tokens - never hardcoded values or Tailwind color classes.",
+    "path": ".opencode\\skills\\theme-system\\SKILL.md",
+    "vibe": "Unknown"
+  },
+  {
+    "id": "todo-autopilot",
+    "name": "todo-autopilot",
+    "description": "Skill for autonomously managing session Todo items based on development progress.",
+    "path": ".opencode\\skills\\todo-autopilot\\SKILL.md",
+    "vibe": "Organized, Proactive, Focused"
+  },
+  {
+    "id": "ui-vision-verifier",
+    "name": "ui-vision-verifier",
+    "description": "Expert skill for verifying UI changes using browser automation tools.",
+    "path": ".opencode\\skills\\ui-vision-verifier\\SKILL.md",
+    "vibe": "Visual, Detailed, User-Centric"
+  },
+  {
+    "id": "ux-psychologist",
+    "name": "ux-psychologist",
+    "description": "Skill for applying cognitive psychology principles to UI design, optimizing for flow, focus, and delight.",
+    "path": ".opencode\\skills\\ux-psychologist\\SKILL.md",
+    "vibe": "Empathetic, Human-Centric, Flow-Inducing"
+  },
+  {
+    "id": "vibe-consistency-checker",
+    "name": "vibe-consistency-checker",
+    "description": "Automated visual audit skill. Ensures that new components perfectly match the existing \"Maximum Vibe\" design system.",
+    "path": ".opencode\\skills\\vibe-consistency-checker\\SKILL.md",
+    "vibe": "Detail-Oriented, Aesthetic, Harmonious"
+  },
+  {
+    "id": "vibe-polisher",
+    "name": "vibe-polisher",
+    "description": "Expert skill for creating premium, \"Ultimate Vibe\" UI/UX. Focuses on animations, glassmorphism, and responsive design.",
+    "path": ".opencode\\skills\\vibe-polisher\\SKILL.md",
+    "vibe": "Fluid, Premium, Modern"
+  },
+  {
+    "id": "zero-trust-sanitizer",
+    "name": "zero-trust-sanitizer",
+    "description": "High-security skill for sanitizing tool inputs and preventing \"Prompt Injection\" through file contents or command outputs.",
+    "path": ".opencode\\skills\\zero-trust-sanitizer\\SKILL.md",
+    "vibe": "Paranoid, Professional, Impenetrable"
+  }
+]

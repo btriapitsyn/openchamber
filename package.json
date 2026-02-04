@@ -52,6 +52,7 @@
     "vscode:package": "bun run --cwd packages/vscode package",
     "vscode:type-check": "bun run --cwd packages/vscode type-check",
     "version:bump": "node scripts/bump-version.mjs",
+    "skills:sync": "bun scripts/generate-skills-manifest.js",
     "release:prepare": "bun run build && bun run type-check && bun run lint",
     "release:test": "./scripts/test-release-build.sh",
     "release:test:intel": "./scripts/test-release-build.sh x86_64",

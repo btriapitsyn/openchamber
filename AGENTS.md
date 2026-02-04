@@ -1,9 +1,11 @@
 # OpenChamber - AI Agent Reference (verified)
 
 ## Core purpose
+
 OpenChamber provides UI runtimes (web/desktop/VS Code) for interacting with an OpenCode server (local auto-start or remote URL). UI uses HTTP + SSE via `@opencode-ai/sdk`.
 
 ## Tech stack (source of truth: `package.json`, resolved: `bun.lock`)
+
 - Runtime/tooling: Bun (`package.json` `packageManager`), Node >=20 (`package.json` `engines`)
 - UI: React, TypeScript, Vite, Tailwind v4
 - State: Zustand (`packages/ui/src/stores/`)
@@ -13,14 +15,18 @@ OpenChamber provides UI runtimes (web/desktop/VS Code) for interacting with an O
 - VS Code: extension + webview (`packages/vscode/`)
 
 ## Monorepo layout
+
 Workspaces are `packages/*` (see `package.json`).
+
 - Shared UI: `packages/ui`
 - Web app + server + CLI: `packages/web`
 - Desktop app (Tauri): `packages/desktop`
 - VS Code extension: `packages/vscode`
 
 ## Build / dev commands (verified)
+
 All scripts are in `package.json`.
+
 - Validate: `bun run type-check`, `bun run lint`
 - Build all: `bun run build`
 - Desktop build: `bun run desktop:build`
@@ -28,6 +34,7 @@ All scripts are in `package.json`.
 - Release smoke build: `bun run release:test` (shell script: `scripts/test-release-build.sh`)
 
 ## Runtime entry points
+
 - Web bootstrap: `packages/web/src/main.tsx`
 - Web server: `packages/web/server/index.js`
 - Web CLI: `packages/web/bin/cli.js` (package bin: `packages/web/package.json`)
@@ -37,6 +44,7 @@ All scripts are in `package.json`.
 - VS Code webview bootstrap: `packages/vscode/webview/main.tsx`
 
 ## OpenCode integration
+
 - UI client wrapper: `packages/ui/src/lib/opencode/client.ts` (imports `@opencode-ai/sdk/v2`)
 - SSE hookup: `packages/ui/src/hooks/useEventStream.ts`
 - Web server embeds/starts OpenCode server: `packages/web/server/index.js` (`createOpencodeServer`)
@@ -44,6 +52,7 @@ All scripts are in `package.json`.
 - External server support: Set `OPENCODE_PORT` and `OPENCODE_SKIP_START=true` to connect to existing OpenCode instance
 
 ## Key UI patterns (reference files)
+
 - Settings shell: `packages/ui/src/components/views/SettingsView.tsx`
 - Settings shared primitives: `packages/ui/src/components/sections/shared/`
 - Settings sections: `packages/ui/src/components/sections/` (incl `skills/`)
@@ -52,16 +61,19 @@ All scripts are in `package.json`.
 - Terminal UI: `packages/ui/src/components/terminal/` (uses `ghostty-web`)
 
 ## External / system integrations (active)
+
 - Git: `packages/ui/src/lib/gitApi.ts`, `packages/web/server/index.js` (`simple-git`)
 - Terminal PTY: `packages/web/server/index.js` (`bun-pty`/`node-pty`)
 - Skills catalog: `packages/web/server/lib/skills-catalog/`, UI: `packages/ui/src/components/sections/skills/`
 
 ## Agent constraints
+
 - Do not modify `../opencode` (separate repo).
 - Do not run git/GitHub commands unless explicitly asked.
 - Keep baseline green (run `bun run type-check`, `bun run lint`, `bun run build` before finalizing changes).
 
 ## Development rules
+
 - Keep diffs tight; avoid drive-by refactors.
 - Backend changes: keep web/desktop/vscode runtimes consistent (if relevant).
 - Follow local precedent; search nearby code first.
@@ -77,12 +89,37 @@ All scripts are in `package.json`.
 When working on any UI components, styling, or visual changes, agents **MUST** study the theme system skill first.
 
 **Before starting any UI work:**
-```
+
+```bash
 skill({ name: "theme-system" })
 ```
 
 This skill contains all color tokens, semantic logic, decision tree, and usage patterns. All UI colors must use theme tokens - never hardcoded values or Tailwind color classes.
 
+## Automated Skills & Workflows (MANDATORY)
+
+The OpenChamber swarm uses specialized skills to maintain the "Maximum Vibe" and project integrity.
+
+### 🔄 Critical Skills
+
+- **`self-healing-loop`**: Use for ANY build/test failure.
+- **`security-fortress`**: Use before finalizing any PR or new feature.
+- **`auto-docs-sync`**: Use whenever documentation needs to be updated.
+- **`context-economy-master`**: Use to manage token budget for large tasks.
+
+### 🚦 Triggerable Workflows
+
+Agents MUST use the following workflows for their respective tasks:
+
+- `/self-heal`: Trigger manually if build errors persist.
+- `/security-audit`: Trigger before deep integration or deployment.
+- `/sync-docs`: Trigger after feature completion.
+
+### 🗃️ Skills Index
+
+All available skills are indexed in `.opencode/skills_manifest.json`.
+
 ## Recent changes
+
 - Releases + high-level changes: `CHANGELOG.md`
 - Recent commits: `git log --oneline` (latest tags: `v1.4.6`, `v1.4.5`)
