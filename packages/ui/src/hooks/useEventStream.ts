@@ -15,6 +15,7 @@ import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
 import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { isDesktopLocalOriginActive } from '@/lib/desktop';
 
 interface EventData {
   type: string;
@@ -1484,6 +1485,12 @@ export const useEventStream = () => {
         const requireHidden = Boolean((props as { requireHidden?: unknown }).requireHidden);
 
         if (requireHidden && visibilityStateRef.current !== 'hidden') {
+          break;
+        }
+
+        // Desktop local instance uses native notifications via sidecar stdout.
+        // Avoid duplicating via UI runtime notifications.
+        if (isDesktopLocalOriginActive()) {
           break;
         }
 
