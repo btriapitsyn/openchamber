@@ -5,7 +5,7 @@ import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { AboutSettings } from './AboutSettings';
 import { cn } from '@/lib/utils';
 
-export type OpenChamberSection = 'visual' | 'chat' | 'sessions' | 'git' | 'github' | 'notifications';
+export type OpenChamberSection = 'visual' | 'chat' | 'sessions' | 'git' | 'github' | 'notifications' | 'voice';
 
 interface OpenChamberSidebarProps {
   selectedSection: OpenChamberSection;
@@ -52,6 +52,11 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     id: 'notifications',
     label: 'Notifications',
     items: ['Native'],
+  },
+  {
+    id: 'voice',
+    label: 'Voice',
+    items: ['Language', 'Continuous Mode'],
   },
 ];
 

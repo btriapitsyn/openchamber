@@ -72,6 +72,7 @@
     "strip-json-comments": "^5.0.3",
     "tailwind-merge": "^3.3.1",
     "yaml": "^2.8.1",
+    "zod": "^4.3.6",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
