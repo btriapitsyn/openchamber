@@ -134,7 +134,12 @@ export interface SessionStore {
 
     sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
 
-    sessionActivityPhase?: Map<string, 'idle' | 'busy' | 'cooldown'>;
+    // Server-owned session status (mirrors OpenCode SessionStatus: busy|retry|idle).
+    // Use as the single source of truth for "assistant working" UI.
+    sessionStatus?: Map<
+        string,
+        { type: 'idle' | 'busy' | 'retry'; attempt?: number; message?: string; next?: number }
+    >;
 
     userSummaryTitles: Map<string, { title: string; createdAt: number | null }>;
 

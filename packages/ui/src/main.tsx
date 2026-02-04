@@ -11,6 +11,7 @@ import { syncDesktopSettings, initializeAppearancePreferences } from './lib/pers
 import { startAppearanceAutoSave } from './lib/appearanceAutoSave'
 import { applyPersistedDirectoryPreferences } from './lib/directoryPersistence'
 import { startTypographyWatcher } from './lib/typographyWatcher'
+import { startModelPrefsAutoSave } from './lib/modelPrefsAutoSave'
 import type { RuntimeAPIs } from './lib/api/types'
 
 declare global {
@@ -26,6 +27,7 @@ const runtimeAPIs = (typeof window !== 'undefined' && window.__OPENCHAMBER_RUNTI
 await syncDesktopSettings();
 await initializeAppearancePreferences();
 startAppearanceAutoSave();
+startModelPrefsAutoSave();
 startTypographyWatcher();
 await applyPersistedDirectoryPreferences();
 

@@ -121,7 +121,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
         }))
     );
 
-    const { phase: activityPhase, isWorking: isPhaseWorking, isCooldown: isPhaseCooldown } = useCurrentSessionActivity();
+    const { phase: activityPhase, isWorking: isPhaseWorking } = useCurrentSessionActivity();
 
     const sessionMessages = React.useMemo<Array<{ info: Message; parts: Part[] }>>(() => {
         if (!currentSessionId) {
@@ -298,7 +298,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
 
         const isWorking = isPhaseWorking;
         const isStreaming = activityPhase === 'busy';
-        const isCooldown = isPhaseCooldown;
+        const isCooldown = false;
 
         let activity: AssistantActivity = 'idle';
         if (isWorking) {
@@ -327,9 +327,9 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             wasAborted: false,
             abortActive: false,
             lastCompletionId: null,
-            isComplete: isCooldown,
+            isComplete: false,
         };
-    }, [activityPhase, isPhaseWorking, isPhaseCooldown, parsedStatus, abortState]);
+    }, [activityPhase, isPhaseWorking, parsedStatus, abortState]);
 
     const forming = React.useMemo<FormingSummary>(() => {
 

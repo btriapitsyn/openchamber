@@ -3,7 +3,8 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 
-export type SessionActivityPhase = 'idle' | 'busy' | 'cooldown';
+// Mirrors OpenCode SessionStatus: busy|retry|idle.
+export type SessionActivityPhase = 'idle' | 'busy' | 'retry';
 
 export interface SessionActivityResult {
 
@@ -13,6 +14,7 @@ export interface SessionActivityResult {
 
   isBusy: boolean;
 
+  // Kept for backward compatibility; always false with server session.status.
   isCooldown: boolean;
 }
 
@@ -26,10 +28,11 @@ const IDLE_RESULT: SessionActivityResult = {
 export function useSessionActivity(sessionId: string | null | undefined): SessionActivityResult {
 
   const phase = useSessionStore((state) => {
-    if (!sessionId || !state.sessionActivityPhase) {
+    if (!sessionId || !state.sessionStatus) {
       return 'idle' as SessionActivityPhase;
     }
-    return state.sessionActivityPhase.get(sessionId) ?? ('idle' as SessionActivityPhase);
+    const status = state.sessionStatus.get(sessionId);
+    return (status?.type ?? 'idle') as SessionActivityPhase;
   });
 
   return React.useMemo<SessionActivityResult>(() => {
@@ -37,10 +40,11 @@ export function useSessionActivity(sessionId: string | null | undefined): Sessio
       return IDLE_RESULT;
     }
     const isBusy = phase === 'busy';
-    const isCooldown = phase === 'cooldown';
+    // No cooldown in server session.status; treat retry as working.
+    const isCooldown = false;
     return {
       phase,
-      isWorking: isBusy || isCooldown,
+      isWorking: phase === 'busy' || phase === 'retry',
       isBusy,
       isCooldown,
     };

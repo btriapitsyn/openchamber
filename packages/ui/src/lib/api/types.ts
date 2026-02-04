@@ -378,6 +378,7 @@ export interface ProjectEntry {
   addedAt?: number;
   lastOpenedAt?: number;
   worktreeDefaults?: WorktreeDefaults;
+  sidebarCollapsed?: boolean;
 }
 
 export interface SettingsPayload {

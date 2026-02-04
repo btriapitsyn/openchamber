@@ -121,6 +121,9 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     if (typeof candidate.lastOpenedAt === 'number' && Number.isFinite(candidate.lastOpenedAt) && candidate.lastOpenedAt >= 0) {
       project.lastOpenedAt = candidate.lastOpenedAt;
     }
+    if (typeof candidate.sidebarCollapsed === 'boolean') {
+      project.sidebarCollapsed = candidate.sidebarCollapsed;
+    }
     if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
       const wt = candidate.worktreeDefaults as Record<string, unknown>;
       const defaults: WorktreeDefaults = {};

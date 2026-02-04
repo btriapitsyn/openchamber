@@ -53,8 +53,6 @@ interface StatusRowProps {
   isWaitingForPermission?: boolean;
   wasAborted?: boolean;
   abortActive?: boolean;
-  completionId?: string | null;
-  isComplete?: boolean;
   // Abort state (for mobile/vscode)
   showAbort?: boolean;
   onAbort?: () => void;
@@ -69,8 +67,6 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   isWaitingForPermission,
   wasAborted,
   abortActive,
-  completionId,
-  isComplete,
   showAbort,
   onAbort,
   showAbortStatus,
@@ -124,17 +120,16 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   const hasActiveTodos = visibleTodos.some((t) => t.status === "in_progress" || t.status === "pending");
   // Original logic from ChatInput
   const shouldRenderPlaceholder = !showAbortStatus && (wasAborted || !abortActive);
-  
-  // Track if placeholder is showing result (done/aborted) to keep StatusRow mounted
-  const [placeholderShowingResult, setPlaceholderShowingResult] = React.useState(false);
-  
+
   // Keep StatusRow rendered while:
   // - isWorking (active session)
-  // - isComplete (showing "Done" result)
-  // - wasAborted (showing "Aborted" result)
-  // - placeholderShowingResult (placeholder still displaying result)
-  // - hasActiveTodos or showAbortStatus
-  const hasContent = isWorking || isComplete || wasAborted || placeholderShowingResult || hasActiveTodos || showAbortStatus;
+  // - wasAborted / showAbortStatus
+  // - hasActiveTodos
+  const hasContent =
+    isWorking ||
+    Boolean(wasAborted) ||
+    Boolean(showAbortStatus) ||
+    hasActiveTodos;
 
   // Close popover when clicking outside
   const popoverRef = React.useRef<HTMLDivElement>(null);
@@ -212,13 +207,10 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           ) : shouldRenderPlaceholder ? (
             <WorkingPlaceholder
               key={currentSessionId ?? "no-session"}
+              isWorking={isWorking}
               statusText={statusText}
               isGenericStatus={isGenericStatus}
               isWaitingForPermission={isWaitingForPermission}
-              wasAborted={wasAborted}
-              completionId={completionId ?? null}
-              isComplete={isComplete}
-              onResultVisibilityChange={setPlaceholderShowingResult}
             />
           ) : null}
         </div>

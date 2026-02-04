@@ -98,7 +98,7 @@ export const useSessionStore = create<SessionStore>()(
             sessionAgentEditModes: new Map(),
             abortPromptSessionId: null,
             abortPromptExpiresAt: null,
-            sessionActivityPhase: new Map(),
+            sessionStatus: new Map(),
             userSummaryTitles: new Map(),
             pendingInputText: null,
             newSessionDraft: { open: true, directoryOverride: null, parentID: null },
@@ -315,19 +315,11 @@ export const useSessionStore = create<SessionStore>()(
                     const draft = get().newSessionDraft;
                     const trimmedAgent = typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined;
 
-                    const setBusyPhase = (sessionId: string) => {
+                    const setStatus = (sessionId: string, type: 'idle' | 'busy') => {
                         set((state) => {
-                            const next = new Map(state.sessionActivityPhase ?? new Map());
-                            next.set(sessionId, 'busy');
-                            return { sessionActivityPhase: next };
-                        });
-                    };
-
-                    const setIdlePhase = (sessionId: string) => {
-                        set((state) => {
-                            const next = new Map(state.sessionActivityPhase ?? new Map());
-                            next.set(sessionId, 'idle');
-                            return { sessionActivityPhase: next };
+                            const next = new Map(state.sessionStatus ?? new Map());
+                            next.set(sessionId, { type });
+                            return { sessionStatus: next };
                         });
                     };
 
@@ -391,14 +383,14 @@ export const useSessionStore = create<SessionStore>()(
                         }
 
                         get().closeNewSessionDraft();
-                        setBusyPhase(created.id);
+                        setStatus(created.id, 'busy');
 
                         try {
                             return await useMessageStore
                                 .getState()
                                 .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, additionalParts, variant);
                         } catch (error) {
-                            setIdlePhase(created.id);
+                            setStatus(created.id, 'idle');
                             throw error;
                         }
                     }
@@ -429,14 +421,14 @@ export const useSessionStore = create<SessionStore>()(
                     }
  
                     if (currentSessionId) {
-                        setBusyPhase(currentSessionId);
+                        setStatus(currentSessionId, 'busy');
                     }
 
                     try {
                         return await useMessageStore.getState().sendMessage(content, providerID, modelID, effectiveAgent, currentSessionId || undefined, attachments, agentMentionName, additionalParts, variant);
                     } catch (error) {
                         if (currentSessionId) {
-                            setIdlePhase(currentSessionId);
+                            setStatus(currentSessionId, 'idle');
                         }
                         throw error;
                     }
@@ -504,9 +496,9 @@ export const useSessionStore = create<SessionStore>()(
                 updateViewportAnchor: (sessionId: string, anchor: number) => useMessageStore.getState().updateViewportAnchor(sessionId, anchor),
                 trimToViewportWindow: (sessionId: string, targetSize?: number) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
-                    // Skip trimming for sessions in active phase (busy/cooldown)
-                    const phase = get().sessionActivityPhase?.get(sessionId);
-                    if (phase === 'busy' || phase === 'cooldown') {
+                    // Skip trimming while session is working (busy/retry)
+                    const status = get().sessionStatus?.get(sessionId);
+                    if (status?.type === 'busy' || status?.type === 'retry') {
                         return;
                     }
                     return useMessageStore.getState().trimToViewportWindow(sessionId, targetSize, currentSessionId || undefined);

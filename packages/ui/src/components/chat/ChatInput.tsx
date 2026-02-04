@@ -464,7 +464,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     // Auto-send queued messages when session becomes idle (but not after abort)
     React.useEffect(() => {
-        const wasWorking = prevSessionPhaseRef.current === 'busy' || prevSessionPhaseRef.current === 'cooldown';
+        const wasWorking = prevSessionPhaseRef.current === 'busy' || prevSessionPhaseRef.current === 'retry';
         const isNowIdle = sessionPhase === 'idle';
 
         // Check if session was recently aborted (within last 2 seconds)
@@ -1479,8 +1479,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     isWaitingForPermission={working.isWaitingForPermission}
                     wasAborted={working.wasAborted}
                     abortActive={working.abortActive}
-                    completionId={working.lastCompletionId}
-                    isComplete={working.isComplete}
                     showAbortStatus={showAbortStatus}
                 />
             </div>

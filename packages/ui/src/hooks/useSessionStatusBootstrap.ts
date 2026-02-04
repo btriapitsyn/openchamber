@@ -20,17 +20,15 @@ export const useSessionStatusBootstrap = () => {
         const statusMap = await opencodeClient.getGlobalSessionStatus();
         if (cancelled || !statusMap) return;
 
-        const phases = new Map<string, 'idle' | 'busy' | 'cooldown'>();
+        const nextStatus = new Map<string, SessionStatusPayload>();
         Object.entries(statusMap).forEach(([sessionId, raw]) => {
           if (!sessionId || !raw) return;
           const status = raw as SessionStatusPayload;
-          const phase: 'idle' | 'busy' | 'cooldown' =
-            status.type === 'busy' || status.type === 'retry' ? 'busy' : 'idle';
-          phases.set(sessionId, phase);
+          nextStatus.set(sessionId, status);
         });
 
-        if (phases.size > 0) {
-          useSessionStore.setState({ sessionActivityPhase: phases });
+        if (nextStatus.size > 0) {
+          useSessionStore.setState({ sessionStatus: nextStatus });
         }
       } catch { /* ignored */ }
     };
@@ -42,4 +40,3 @@ export const useSessionStatusBootstrap = () => {
     };
   }, []);
 };
-

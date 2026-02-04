@@ -30,7 +30,7 @@ export const ChatContainer: React.FC = () => {
         isSyncing,
         messageStreamStates,
         trimToViewportWindow,
-        sessionActivityPhase,
+        sessionStatus,
         newSessionDraft,
     } = useSessionStore();
 
@@ -161,8 +161,8 @@ export const ChatContainer: React.FC = () => {
             try {
                 await loadMessages(currentSessionId);
             } finally {
-                const currentPhase = sessionActivityPhase?.get(currentSessionId) ?? 'idle';
-                const isActivePhase = currentPhase === 'busy' || currentPhase === 'cooldown';
+                const statusType = sessionStatus?.get(currentSessionId)?.type ?? 'idle';
+                const isActivePhase = statusType === 'busy' || statusType === 'retry';
                 // When pinned and active, scroll is already maintained automatically
                 const shouldSkipScroll = isActivePhase && isPinned;
 
@@ -179,7 +179,7 @@ export const ChatContainer: React.FC = () => {
         };
 
         void load();
-    }, [currentSessionId, isPinned, loadMessages, messages, scrollToBottom, sessionActivityPhase]);
+    }, [currentSessionId, isPinned, loadMessages, messages, scrollToBottom, sessionStatus]);
 
     if (!currentSessionId && !draftOpen) {
         return (

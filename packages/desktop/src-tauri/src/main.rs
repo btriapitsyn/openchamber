@@ -372,6 +372,8 @@ const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(20);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
+const DEFAULT_DESKTOP_PORT: u16 = 57123;
+
 const LOCAL_HOST_ID: &str = "local";
 
 #[derive(Default)]
@@ -448,6 +450,41 @@ fn settings_file_path() -> PathBuf {
         .join("openchamber")
         .join("settings.json")
 }
+
+fn read_desktop_local_port_from_disk() -> Option<u16> {
+    let path = settings_file_path();
+    let raw = fs::read_to_string(path).ok();
+    let parsed = raw
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+    parsed
+        .as_ref()
+        .and_then(|v| v.get("desktopLocalPort"))
+        .and_then(|v| v.as_u64())
+        .and_then(|v| if v > 0 && v <= u16::MAX as u64 { Some(v as u16) } else { None })
+}
+
+fn write_desktop_local_port_to_disk(port: u16) -> Result<()> {
+    let path = settings_file_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
+        serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+
+    root["desktopLocalPort"] = serde_json::Value::Number(serde_json::Number::from(port));
+    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    Ok(())
+}
+
 
 fn read_desktop_hosts_config_from_disk() -> DesktopHostsConfig {
     let path = settings_file_path();
@@ -551,6 +588,7 @@ fn desktop_hosts_get() -> Result<DesktopHostsConfig, String> {
 fn desktop_hosts_set(config: DesktopHostsConfig) -> Result<(), String> {
     write_desktop_hosts_config_to_disk(&config).map_err(|err| err.to_string())
 }
+
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -709,11 +747,15 @@ fn build_local_url(port: u16) -> String {
 }
 
 async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
-    let port = pick_unused_port()?;
-    let url = build_local_url(port);
+    let stored_port = read_desktop_local_port_from_disk();
+    let mut candidates: Vec<Option<u16>> = Vec::new();
+    if let Some(port) = stored_port {
+        candidates.push(Some(port));
+    }
+    candidates.push(Some(DEFAULT_DESKTOP_PORT));
+    candidates.push(None);
 
     let dist_dir = resolve_web_dist_dir(app)?;
-
     let no_proxy = "localhost,127.0.0.1";
 
     // macOS app launch env often lacks Homebrew/user bins.
@@ -738,64 +780,79 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     }
     let augmented_path = path_segments.join(":");
 
-    let cmd = app
-        .shell()
-        .sidecar(SIDECAR_NAME)
-        .map_err(|err| anyhow!("Failed to resolve sidecar '{SIDECAR_NAME}': {err}"))?
-        .args(["--port", &port.to_string()])
-        .env("OPENCHAMBER_HOST", "127.0.0.1")
-        .env("OPENCHAMBER_DIST_DIR", dist_dir)
-        .env("OPENCHAMBER_DESKTOP_NOTIFY", "true")
-        .env("PATH", augmented_path)
-        .env("NO_PROXY", no_proxy)
-        .env("no_proxy", no_proxy);
+    for candidate in candidates {
+        let port = match candidate {
+            Some(p) => p,
+            None => pick_unused_port()?,
+        };
+        let url = build_local_url(port);
 
-    let (rx, child) = cmd
-        .spawn()
-        .map_err(|err| anyhow!("Failed to spawn sidecar '{SIDECAR_NAME}': {err}"))?;
+        let cmd = app
+            .shell()
+            .sidecar(SIDECAR_NAME)
+            .map_err(|err| anyhow!("Failed to resolve sidecar '{SIDECAR_NAME}': {err}"))?
+            .args(["--port", &port.to_string()])
+            .env("OPENCHAMBER_HOST", "127.0.0.1")
+            .env("OPENCHAMBER_DIST_DIR", dist_dir.clone())
+            .env("OPENCHAMBER_DESKTOP_NOTIFY", "true")
+            .env("PATH", augmented_path.clone())
+            .env("NO_PROXY", no_proxy)
+            .env("no_proxy", no_proxy);
 
-    let app_handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let mut rx = rx;
-        while let Some(event) = rx.recv().await {
-            match event {
-                CommandEvent::Stdout(bytes) => {
-                    let line = String::from_utf8_lossy(&bytes);
-                    if let Some(rest) = line.strip_prefix(SIDECAR_NOTIFY_PREFIX) {
-                        if let Ok(parsed) =
-                            serde_json::from_str::<SidecarNotifyPayload>(rest.trim())
-                        {
-                            maybe_show_sidecar_notification(&app_handle, parsed);
+        let (rx, child) = match cmd.spawn() {
+            Ok(v) => v,
+            Err(err) => {
+                log::warn!("[sidecar] spawn failed on port {port}: {err}");
+                continue;
+            }
+        };
+
+        let app_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let mut rx = rx;
+            while let Some(event) = rx.recv().await {
+                match event {
+                    CommandEvent::Stdout(bytes) => {
+                        let line = String::from_utf8_lossy(&bytes);
+                        if let Some(rest) = line.strip_prefix(SIDECAR_NOTIFY_PREFIX) {
+                            if let Ok(parsed) =
+                                serde_json::from_str::<SidecarNotifyPayload>(rest.trim())
+                            {
+                                maybe_show_sidecar_notification(&app_handle, parsed);
+                            }
                         }
                     }
+                    CommandEvent::Error(error) => {
+                        log::warn!("[sidecar] error: {error}");
+                    }
+                    CommandEvent::Terminated(payload) => {
+                        log::warn!(
+                            "[sidecar] terminated code={:?} signal={:?}",
+                            payload.code,
+                            payload.signal
+                        );
+                        break;
+                    }
+                    _ => {}
                 }
-                CommandEvent::Error(error) => {
-                    log::warn!("[sidecar] error: {error}");
-                }
-                CommandEvent::Terminated(payload) => {
-                    log::warn!(
-                        "[sidecar] terminated code={:?} signal={:?}",
-                        payload.code,
-                        payload.signal
-                    );
-                    break;
-                }
-                _ => {}
             }
+        });
+
+        if let Some(state) = app.try_state::<SidecarState>() {
+            *state.child.lock().expect("sidecar mutex") = Some(child);
+            *state.url.lock().expect("sidecar url mutex") = Some(url.clone());
         }
-    });
 
-    if let Some(state) = app.try_state::<SidecarState>() {
-        *state.child.lock().expect("sidecar mutex") = Some(child);
-        *state.url.lock().expect("sidecar url mutex") = Some(url.clone());
+        if !wait_for_health(&url).await {
+            kill_sidecar(app.clone());
+            continue;
+        }
+
+        let _ = write_desktop_local_port_to_disk(port);
+        return Ok(url);
     }
 
-    if !wait_for_health(&url).await {
-        kill_sidecar(app.clone());
-        return Err(anyhow!("Sidecar health check failed"));
-    }
-
-    Ok(url)
+    Err(anyhow!("Sidecar health check failed"))
 }
 
 fn resolve_web_dist_dir(app: &tauri::AppHandle) -> Result<PathBuf> {

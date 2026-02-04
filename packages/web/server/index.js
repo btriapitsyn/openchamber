@@ -798,6 +798,29 @@ const normalizeStringArray = (input) => {
   );
 };
 
+const sanitizeModelRefs = (input, limit) => {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+
+  const result = [];
+  const seen = new Set();
+
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') continue;
+    const providerID = typeof entry.providerID === 'string' ? entry.providerID.trim() : '';
+    const modelID = typeof entry.modelID === 'string' ? entry.modelID.trim() : '';
+    if (!providerID || !modelID) continue;
+    const key = `${providerID}/${modelID}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push({ providerID, modelID });
+    if (result.length >= limit) break;
+  }
+
+  return result;
+};
+
 const sanitizeSkillCatalogs = (input) => {
   if (!Array.isArray(input)) {
     return undefined;
@@ -886,6 +909,10 @@ const sanitizeProjects = (input) => {
       }
     }
 
+    if (typeof candidate.sidebarCollapsed === 'boolean') {
+      project.sidebarCollapsed = candidate.sidebarCollapsed;
+    }
+
     result.push(project);
   }
 
@@ -940,6 +967,7 @@ const sanitizeSettingsUpdate = (payload) => {
   if (Array.isArray(candidate.pinnedDirectories)) {
     result.pinnedDirectories = normalizeStringArray(candidate.pinnedDirectories);
   }
+
 
   if (typeof candidate.uiFont === 'string' && candidate.uiFont.length > 0) {
     result.uiFont = candidate.uiFont;
@@ -1044,6 +1072,16 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.inputBarOffset === 'number' && Number.isFinite(candidate.inputBarOffset)) {
     result.inputBarOffset = Math.max(0, Math.min(100, Math.round(candidate.inputBarOffset)));
+  }
+
+  const favoriteModels = sanitizeModelRefs(candidate.favoriteModels, 64);
+  if (favoriteModels) {
+    result.favoriteModels = favoriteModels;
+  }
+
+  const recentModels = sanitizeModelRefs(candidate.recentModels, 16);
+  if (recentModels) {
+    result.recentModels = recentModels;
   }
   if (typeof candidate.diffLayoutPreference === 'string') {
     const mode = candidate.diffLayoutPreference.trim();
@@ -1304,14 +1342,59 @@ const migrateSettingsFromLegacyThemePreferences = async (current) => {
   return { settings: merged, changed: true };
 };
 
+const migrateSettingsFromLegacyCollapsedProjects = async (current) => {
+  const settings = current && typeof current === 'object' ? current : {};
+  const collapsed = Array.isArray(settings.collapsedProjects)
+    ? normalizeStringArray(settings.collapsedProjects)
+    : [];
+
+  if (collapsed.length === 0 || !Array.isArray(settings.projects)) {
+    if (collapsed.length === 0) {
+      return { settings, changed: false };
+    }
+    // Nothing to apply to; drop legacy key.
+    const next = { ...settings };
+    delete next.collapsedProjects;
+    return { settings: next, changed: true };
+  }
+
+  const set = new Set(collapsed);
+  const projects = sanitizeProjects(settings.projects) || [];
+  let changed = false;
+
+  const nextProjects = projects.map((project) => {
+    const shouldCollapse = set.has(project.id);
+    if (project.sidebarCollapsed !== shouldCollapse) {
+      changed = true;
+      return { ...project, sidebarCollapsed: shouldCollapse };
+    }
+    return project;
+  });
+
+  if (!changed) {
+    // Still drop legacy key if present.
+    if (Object.prototype.hasOwnProperty.call(settings, 'collapsedProjects')) {
+      const next = { ...settings };
+      delete next.collapsedProjects;
+      return { settings: next, changed: true };
+    }
+    return { settings, changed: false };
+  }
+
+  const next = { ...settings, projects: nextProjects };
+  delete next.collapsedProjects;
+  return { settings: next, changed: true };
+};
+
 const readSettingsFromDiskMigrated = async () => {
   const current = await readSettingsFromDisk();
   const migration1 = await migrateSettingsFromLegacyLastDirectory(current);
   const migration2 = await migrateSettingsFromLegacyThemePreferences(migration1.settings);
-  if (migration1.changed || migration2.changed) {
-    await writeSettingsToDisk(migration2.settings);
+  const migration3 = await migrateSettingsFromLegacyCollapsedProjects(migration2.settings);
+  if (migration1.changed || migration2.changed || migration3.changed) {
+    await writeSettingsToDisk(migration3.settings);
   }
-  return migration2.settings;
+  return migration3.settings;
 };
 
 const getOrCreateVapidKeys = async () => {
