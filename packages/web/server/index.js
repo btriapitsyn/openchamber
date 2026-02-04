@@ -1680,14 +1680,24 @@ const resolveVapidSubject = async () => {
 
   const originEnv = process.env.OPENCHAMBER_PUBLIC_ORIGIN;
   if (typeof originEnv === 'string' && originEnv.trim().length > 0) {
-    return originEnv.trim();
+    const trimmed = originEnv.trim();
+    // Convert http://localhost to mailto for VAPID compatibility
+    if (trimmed.startsWith('http://localhost')) {
+      return 'mailto:openchamber@localhost';
+    }
+    return trimmed;
   }
 
   try {
     const settings = await readSettingsFromDiskMigrated();
     const stored = settings?.publicOrigin;
     if (typeof stored === 'string' && stored.trim().length > 0) {
-      return stored.trim();
+      const trimmed = stored.trim();
+      // Convert http://localhost to mailto for VAPID compatibility
+      if (trimmed.startsWith('http://localhost')) {
+        return 'mailto:openchamber@localhost';
+      }
+      return trimmed;
     }
   } catch {
     // ignore
