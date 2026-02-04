@@ -1121,6 +1121,10 @@ fn create_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> 
     // Remove it if present so the UI-owned host switcher is the only one.
     init_script.push_str("\ntry{var old=document.getElementById('__oc-instance-switcher');if(old)old.remove();}catch(_e){}");
 
+    if !cfg!(debug_assertions) {
+        init_script.push_str("\ntry{document.addEventListener('contextmenu',function(e){e.preventDefault();},true);}catch(_e){}");
+    }
+
     if let Some(state) = app.try_state::<DesktopUiInjectionState>() {
         *state.script.lock().expect("desktop ui injection mutex") = Some(init_script.clone());
     }
