@@ -169,6 +169,18 @@ export const VSCodeLayout: React.FC = () => {
         if (!configInitialized) {
           await initializeConfig();
         }
+        const configStore = useConfigStore.getState();
+
+        // Keep trying to fetch core datasets on cold starts.
+        if (configStore.isConnected) {
+          if (configStore.providers.length === 0) {
+            await configStore.loadProviders();
+          }
+          if (configStore.agents.length === 0) {
+            await configStore.loadAgents();
+          }
+        }
+
         const configState = useConfigStore.getState();
         // If OpenCode is still warming up, the initial provider/agent loads can fail and be swallowed by retries.
         // Only mark bootstrap complete when core datasets are present so we keep retrying on cold starts.

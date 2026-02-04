@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
+import * as path from 'path';
+import * as fs from 'fs';
 import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { createOpencodeServer } from '@opencode-ai/sdk/v2/server';
 
 const READY_CHECK_TIMEOUT_MS = 30000;
@@ -53,6 +56,127 @@ function resolvePortFromUrl(url: string): number | null {
   }
 }
 
+function isExecutable(filePath: string): boolean {
+  if (!filePath) return false;
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return false;
+    // Windows executability is extension-based.
+    if (process.platform === 'win32') {
+      const ext = path.extname(filePath).toLowerCase();
+      if (!ext) return true;
+      return ['.exe', '.cmd', '.bat', '.com'].includes(ext);
+    }
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function appendToPath(dir: string) {
+  const trimmed = (dir || '').trim();
+  if (!trimmed) return;
+  const current = process.env.PATH || '';
+  const parts = current.split(path.delimiter).filter(Boolean);
+  if (parts.includes(trimmed)) return;
+  process.env.PATH = [trimmed, ...parts].join(path.delimiter);
+}
+
+function resolveOpencodeCliPath(): string | null {
+  const explicit = [
+    process.env.OPENCODE_BINARY,
+    process.env.OPENCODE_PATH,
+    process.env.OPENCHAMBER_OPENCODE_PATH,
+    process.env.OPENCHAMBER_OPENCODE_BIN,
+  ]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean);
+
+  for (const candidate of explicit) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  const home = os.homedir();
+  const unixFallbacks = [
+    path.join(home, '.opencode', 'bin', 'opencode'),
+    path.join(home, '.local', 'bin', 'opencode'),
+    path.join(home, 'bin', 'opencode'),
+  ];
+
+  const winFallbacks = (() => {
+    const userProfile = process.env.USERPROFILE || home;
+    const appData = process.env.APPDATA || '';
+    const localAppData = process.env.LOCALAPPDATA || '';
+    const programData = process.env.ProgramData || 'C:\\ProgramData';
+
+    return [
+      path.join(userProfile, '.opencode', 'bin', 'opencode.exe'),
+      path.join(userProfile, '.opencode', 'bin', 'opencode.cmd'),
+      path.join(appData, 'npm', 'opencode.cmd'),
+      path.join(userProfile, 'scoop', 'shims', 'opencode.cmd'),
+      path.join(programData, 'chocolatey', 'bin', 'opencode.exe'),
+      path.join(programData, 'chocolatey', 'bin', 'opencode.cmd'),
+      // Bun global install
+      path.join(userProfile, '.bun', 'bin', 'opencode.exe'),
+      path.join(userProfile, '.bun', 'bin', 'opencode.cmd'),
+      // Some installers use LocalAppData
+      localAppData ? path.join(localAppData, 'Programs', 'opencode', 'opencode.exe') : '',
+    ].filter(Boolean);
+  })();
+
+  const fallbacks = process.platform === 'win32' ? winFallbacks : unixFallbacks;
+  for (const candidate of fallbacks) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const result = spawnSync('where', ['opencode'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const lines = (result.stdout || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const found = lines.find((line) => isExecutable(line));
+        if (found) return found;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  // Non-Windows: try a login shell PATH lookup.
+  const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean) as string[];
+  for (const shell of shells) {
+    if (!isExecutable(shell)) continue;
+    try {
+      const result = spawnSync(shell, ['-lic', 'command -v opencode'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const found = (result.stdout || '').trim().split(/\s+/).pop() || '';
+        if (found && isExecutable(found)) {
+          return found;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
 type ReadyResult =
   | { ok: true; baseUrl: string; elapsedMs: number; attempts: number; version: string | null }
   | { ok: false; elapsedMs: number; attempts: number; version: null };
@@ -99,7 +223,7 @@ async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<Ready
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 3000);
 
-        // Keep using /config since the UI proxies to it (via /api -> strip prefix).
+        // OpenCode readiness check.
         const url = new URL(`${baseUrl}/global/health`);
         const res = await fetch(url.toString(), {
           method: 'GET',
@@ -156,6 +280,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
   let detectedPort: number | null = null;
   let cliMissing = false;
+  let cliPath: string | null = null;
 
   let pendingOperation: Promise<void> | null = null;
 
@@ -230,12 +355,20 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
     setStatus('connecting');
     cliMissing = false;
+    cliPath = null;
 
     detectedPort = null;
     lastExitCode = null;
     managedApiUrlOverride = null;
 
     try {
+      // Best-effort: locate CLI even when VS Code PATH is stale.
+      const resolvedCli = resolveOpencodeCliPath();
+      if (resolvedCli) {
+        cliPath = resolvedCli;
+        appendToPath(path.dirname(resolvedCli));
+      }
+
       // SDK spawns `opencode serve` in current process cwd.
       // Some OpenCode endpoints behave differently based on server process cwd,
       // so ensure we start it from the workspace directory.
@@ -284,6 +417,9 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       // Check for ENOENT or generic spawn failure which implies CLI missing
       if (message.includes('ENOENT') || message.includes('spawn opencode')) {
         cliMissing = true;
+        if (!cliPath) {
+          cliPath = resolveOpencodeCliPath();
+        }
         setStatus('error', 'OpenCode CLI not found. Install it and ensure it\'s in PATH.');
         vscode.window.showErrorMessage(
           'OpenCode CLI not found. Please install it and ensure it\'s in PATH.',
@@ -426,7 +562,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       lastError,
       workingDirectory,
       cliAvailable: !cliMissing,
-      cliPath: null,
+      cliPath,
       configuredApiUrl: useConfiguredUrl && configuredApiUrl ? configuredApiUrl.replace(/\/+$/, '') : null,
       configuredPort,
       detectedPort,
