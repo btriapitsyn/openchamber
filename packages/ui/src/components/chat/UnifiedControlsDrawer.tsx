@@ -9,13 +9,9 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
 import {
     formatEffortLabel,
-    getAgentDisplayName,
     getQuickEffortOptions,
-    isPrimaryMode,
     parseEffortVariant,
 } from './mobileControlsUtils';
-
-const MAX_QUICK_AGENTS = 3;
 
 const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
     notation: 'compact',
@@ -36,7 +32,6 @@ const formatTokens = (value?: number | null) => {
 interface UnifiedControlsDrawerProps {
     open: boolean;
     onClose: () => void;
-    onOpenAgent: () => void;
     onOpenModel: () => void;
     onOpenEffort: () => void;
 }
@@ -44,7 +39,6 @@ interface UnifiedControlsDrawerProps {
 export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
     open,
     onClose,
-    onOpenAgent,
     onOpenModel,
     onOpenEffort,
 }) => {
@@ -53,20 +47,16 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
         currentProviderId,
         currentModelId,
         currentVariant,
-        currentAgentName,
-        setAgent,
         setProvider,
         setModel,
         setCurrentVariant,
         getCurrentModelVariants,
-        getVisibleAgents,
         getModelMetadata,
     } = useConfigStore();
-    const { addRecentModel, addRecentAgent, addRecentEffort, recentAgents, recentEfforts } = useUIStore();
+    const { addRecentModel, addRecentEffort, recentEfforts } = useUIStore();
     const { recentModelsList } = useModelLists();
     const {
         currentSessionId,
-        saveSessionAgentSelection,
         saveAgentModelForSession,
         saveAgentModelVariantForSession,
     } = useSessionStore();
@@ -74,39 +64,7 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
         currentSessionId ? state.getSessionAgentSelection(currentSessionId) : null
     );
 
-    const agents = getVisibleAgents();
-    const uiAgentName = currentSessionId ? (sessionAgentName || currentAgentName) : currentAgentName;
-    const primaryAgents = agents.filter((agent) => isPrimaryMode(agent.mode));
-    const recentAgentNames = React.useMemo(() => {
-        if (recentAgents.length === 0) {
-            return [];
-        }
-        const visibleAgents = new Set(agents.map((agent) => agent.name));
-        return recentAgents.filter((name) => visibleAgents.has(name));
-    }, [recentAgents, agents]);
-
-    const quickAgentNames = React.useMemo(() => {
-        const fallback = primaryAgents.length > 0 ? primaryAgents.map((agent) => agent.name) : agents.map((agent) => agent.name);
-        const base = fallback.slice(0, MAX_QUICK_AGENTS);
-        const orderedRecents = recentAgentNames.slice().reverse();
-        for (const recent of orderedRecents) {
-            if (!recent || base.includes(recent)) {
-                continue;
-            }
-            base.unshift(recent);
-            base.splice(MAX_QUICK_AGENTS);
-        }
-        if (uiAgentName && !base.includes(uiAgentName)) {
-            if (base.length > 0) {
-                base[0] = uiAgentName;
-            } else {
-                base.push(uiAgentName);
-            }
-        }
-        return base;
-    }, [agents, primaryAgents, recentAgentNames, uiAgentName]);
-
-    const hasAgentOverflow = agents.some((agent) => !quickAgentNames.includes(agent.name));
+    const uiAgentName = currentSessionId ? (sessionAgentName || null) : null;
 
     const recentModelsBase = recentModelsList.slice(0, 4);
     const hasCurrentInRecents = recentModelsBase.some(
@@ -162,14 +120,6 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
     }, [baseEfforts, currentVariant, recentEffortOptions]);
     const effortHasMore = variants.length + 1 > quickEfforts.length;
 
-    const handleAgentSelect = (agentName: string) => {
-        setAgent(agentName);
-        addRecentAgent(agentName);
-        if (currentSessionId) {
-            saveSessionAgentSelection(currentSessionId, agentName);
-        }
-    };
-
     const handleModelSelect = (providerId: string, modelId: string) => {
         const provider = providers.find((entry) => entry.id === providerId);
         if (!provider) {
@@ -209,50 +159,6 @@ export const UnifiedControlsDrawer: React.FC<UnifiedControlsDrawerProps> = ({
     return (
         <MobileOverlayPanel open={open} onClose={onClose} title="Controls">
             <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-2">
-                    <div className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground">
-                        Agent
-                    </div>
-                    <div className="rounded-xl border border-border/40 overflow-hidden">
-                        {agents.length === 0 ? (
-                            <div className="px-3 py-2 typography-meta text-muted-foreground">
-                                No agents configured
-                            </div>
-                        ) : (
-                            quickAgentNames.map((agentName) => {
-                                const displayName = getAgentDisplayName(agents, agentName);
-                                const isSelected = agentName === uiAgentName;
-                                return (
-                                    <button
-                                        key={agentName}
-                                        type="button"
-                                        onClick={() => handleAgentSelect(agentName)}
-                                        className={cn(
-                                            'flex min-h-[44px] w-full items-center border-b border-border/30 px-3 py-2 text-left last:border-b-0',
-                                            isSelected ? 'bg-primary/10' : ''
-                                        )}
-                                        aria-pressed={isSelected}
-                                    >
-                                        <span className="typography-meta font-medium text-foreground truncate">
-                                            {displayName}
-                                        </span>
-                                    </button>
-                                );
-                            })
-                        )}
-                        {hasAgentOverflow && (
-                            <button
-                                type="button"
-                                onClick={onOpenAgent}
-                                className="flex min-h-[44px] w-full items-center justify-center border-t border-border/30 px-3 py-2 typography-meta font-medium text-muted-foreground"
-                                aria-label="More agents"
-                            >
-                                ...
-                            </button>
-                        )}
-                    </div>
-                </div>
-
                 <div className="flex flex-col gap-2">
                     <div className="typography-meta font-semibold uppercase tracking-wide text-muted-foreground">
                         Model

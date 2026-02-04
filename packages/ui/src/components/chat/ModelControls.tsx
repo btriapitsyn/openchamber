@@ -256,6 +256,7 @@ interface ModelControlsProps {
     mobilePanel?: MobileControlsPanel;
     onMobilePanelChange?: (panel: MobileControlsPanel) => void;
     onMobilePanelSelection?: () => void;
+    onAgentPanelSelection?: () => void;
 }
 
 export const ModelControls: React.FC<ModelControlsProps> = ({
@@ -263,6 +264,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     mobilePanel,
     onMobilePanelChange,
     onMobilePanelSelection,
+    onAgentPanelSelection,
 }) => {
     const {
         providers,
@@ -1032,9 +1034,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             }
             if (isCompact) {
                 closeMobilePanel();
-                if (onMobilePanelSelection) {
+                const callback = onAgentPanelSelection || onMobilePanelSelection;
+                if (callback) {
                     requestAnimationFrame(() => {
-                        onMobilePanelSelection();
+                        callback();
                     });
                 }
             }
@@ -1739,6 +1742,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 className={cn(
                                     'flex w-full flex-col gap-1 rounded-xl border px-2 py-1.5 text-left',
                                     'focus:outline-none focus-visible:ring-1 focus-visible:ring-primary agent-list-item',
+                                    'touch-manipulation cursor-pointer',
                                     agentColor.class,
                                     isSelected ? 'active' : 'border-border/40'
                                 )}
