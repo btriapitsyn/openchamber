@@ -3246,22 +3246,16 @@ async function main(options = {}) {
       // Optionally summarize long text before speaking using zen API
       if (summarize && textToSpeak.length > threshold) {
         try {
-          console.log('[TTS/speak] Summarizing before speak:', { textLength: textToSpeak.length, threshold, maxLength });
           const { summarizeText } = await import('./lib/summarization-service.js');
           const result = await summarizeText({ text: textToSpeak, threshold, maxLength });
           
           if (result.summarized && result.summary) {
-            console.log('[TTS/speak] Summarized:', { originalLength: textToSpeak.length, summaryLength: result.summary.length });
             textToSpeak = result.summary;
-          } else {
-            console.log('[TTS/speak] Summarization returned unsummarized:', result.reason);
           }
         } catch (summarizeError) {
           console.error('[TTS/speak] Summarization failed:', summarizeError);
           // Continue with original text if summarization fails
         }
-      } else {
-        console.log('[TTS/speak] Skipping summarization:', { summarize, textLength: textToSpeak.length, threshold });
       }
 
       const result = await ttsService.generateSpeechStream({

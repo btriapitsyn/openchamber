@@ -57,29 +57,11 @@ export function useMessageTTS(): UseMessageTTSReturn {
         try {
             // Summarize text if enabled and over threshold
             let textToSpeak = text;
-            console.log('[useMessageTTS] Play called:', { 
-                textLength: text.length, 
-                summarizeMessageTTS, 
-                threshold: summarizeCharacterThreshold,
-                shouldSummarize: shouldSummarize(text, 'message'),
-                voiceProvider,
-            });
             if (summarizeMessageTTS && shouldSummarize(text, 'message')) {
-                console.log('[useMessageTTS] Summarizing text before playback...');
                 textToSpeak = await summarizeText(text, {
                     threshold: summarizeCharacterThreshold,
                 });
-                console.log('[useMessageTTS] After summarize:', { 
-                    originalLength: text.length, 
-                    resultLength: textToSpeak.length,
-                    wasSummarized: textToSpeak !== text,
-                });
             } else {
-                console.log('[useMessageTTS] Skipping summarization:', {
-                    summarizeMessageTTS,
-                    textLength: text.length,
-                    threshold: summarizeCharacterThreshold,
-                });
                 // Still sanitize for TTS even when not summarizing
                 textToSpeak = sanitizeForTTS(text);
             }

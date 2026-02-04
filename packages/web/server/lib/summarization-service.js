@@ -57,33 +57,17 @@ export function sanitizeForTTS(text) {
  * Extract text from zen API response
  */
 function extractZenOutputText(data) {
-  if (!data || typeof data !== 'object') {
-    console.error('[Summarize] extractZenOutputText: data is not an object:', typeof data);
-    return null;
-  }
+  if (!data || typeof data !== 'object') return null;
   const output = data.output;
-  if (!Array.isArray(output)) {
-    console.error('[Summarize] extractZenOutputText: output is not an array:', typeof output, JSON.stringify(data).slice(0, 500));
-    return null;
-  }
-
-  console.log('[Summarize] extractZenOutputText: output items:', output.map(item => ({ type: item?.type, id: item?.id })));
+  if (!Array.isArray(output)) return null;
 
   const messageItem = output.find(
     (item) => item && typeof item === 'object' && item.type === 'message'
   );
-  if (!messageItem) {
-    console.error('[Summarize] extractZenOutputText: no message item found in output types:', output.map(item => item?.type));
-    return null;
-  }
+  if (!messageItem) return null;
 
   const content = messageItem.content;
-  if (!Array.isArray(content)) {
-    console.error('[Summarize] extractZenOutputText: content is not an array:', typeof content);
-    return null;
-  }
-
-  console.log('[Summarize] extractZenOutputText: content items:', content.map(item => ({ type: item?.type, textLength: item?.text?.length })));
+  if (!Array.isArray(content)) return null;
 
   const textItem = content.find(
     (item) => item && typeof item === 'object' && item.type === 'output_text'
@@ -107,11 +91,8 @@ export async function summarizeText({
   threshold = 200,
   maxLength = 500,
 }) {
-  console.log('[Summarize] Called with:', { textLength: text?.length, threshold, maxLength });
-
   // Don't summarize if text is under threshold
   if (!text || text.length <= threshold) {
-    console.log('[Summarize] Skipping — text length', text?.length, '<= threshold', threshold);
     return {
       summary: sanitizeForTTS(text || ''),
       summarized: false,
@@ -124,8 +105,6 @@ export async function summarizeText({
 
   try {
     const prompt = buildSummarizationPrompt(maxLength);
-
-    console.log('[Summarize] Calling zen API with maxLength:', maxLength);
 
     const response = await fetch('https://opencode.ai/zen/v1/responses', {
       method: 'POST',
@@ -154,12 +133,6 @@ export async function summarizeText({
     const data = await response.json();
     const summary = extractZenOutputText(data);
 
-    console.log('[Summarize] zen API response:', { 
-      hasSummary: !!summary, 
-      summaryLength: summary?.length,
-      originalLength: text.length 
-    });
-
     if (summary) {
       const sanitized = sanitizeForTTS(summary);
       return {
@@ -177,7 +150,7 @@ export async function summarizeText({
     };
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.error('[Summarize] Request timed out after', SUMMARIZE_TIMEOUT_MS, 'ms');
+      console.error('[Summarize] Request timed out');
       return {
         summary: sanitizeForTTS(text),
         summarized: false,

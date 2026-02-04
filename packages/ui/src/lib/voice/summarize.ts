@@ -27,16 +27,12 @@ export async function summarizeText(
     const threshold = options?.threshold ?? store.summarizeCharacterThreshold;
     const maxLength = options?.maxLength ?? store.summarizeMaxLength;
     
-    console.log('[summarize] Called:', { textLength: text.length, threshold, maxLength });
-    
     // Don't summarize if text is under threshold
     if (text.length <= threshold) {
-        console.log('[summarize] Skipping — text length', text.length, '<= threshold', threshold);
         return text;
     }
     
     try {
-        console.log('[summarize] Calling /api/tts/summarize...');
         const response = await fetch('/api/tts/summarize', {
             method: 'POST',
             headers: {
@@ -58,13 +54,6 @@ export async function summarizeText(
             originalLength?: number;
             summaryLength?: number;
         };
-        
-        console.log('[summarize] Response:', { 
-            summarized: data.summarized, 
-            summaryLength: data.summary?.length,
-            reason: data.reason,
-            originalLength: data.originalLength,
-        });
         
         if (data.summarized && data.summary) {
             return data.summary;
