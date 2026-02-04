@@ -6,7 +6,7 @@
 :3443 {
     bind 0.0.0.0
     tls /tmp/localhost.crt /tmp/localhost.key
-    reverse_proxy [::1]:5001 {
+    reverse_proxy [::1]:3001 {
         transport http {
             read_timeout 120s
             write_timeout 120s

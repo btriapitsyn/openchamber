@@ -1,5 +1,5 @@
 /**
- * Voice session interface - minimal subset of ElevenLabs conversation
+ * Voice session interface
  * Used for type safety without importing ReturnType from SDK
  */
 interface VoiceSession {

@@ -94,14 +94,14 @@ export const VoiceSettings: React.FC = () => {
             setBrowserVoices(voices);
         };
         loadVoices();
-        
+
         // Also listen for voice changes (Chrome loads voices asynchronously)
         if ('speechSynthesis' in window) {
             window.speechSynthesis.onvoiceschanged = () => {
                 setBrowserVoices(window.speechSynthesis.getVoices());
             };
         }
-        
+
         return () => {
             if ('speechSynthesis' in window) {
                 window.speechSynthesis.onvoiceschanged = null;
@@ -216,7 +216,7 @@ export const VoiceSettings: React.FC = () => {
                 if (data.voices) {
                     // Filter to unique voice names and sort alphabetically
                     const uniqueVoices = data.voices
-                        .filter((v: { name: string; locale: string }, i: number, arr: Array<{ name: string; locale: string }>) => 
+                        .filter((v: { name: string; locale: string }, i: number, arr: Array<{ name: string; locale: string }>) =>
                             arr.findIndex((x: { name: string }) => x.name === v.name) === i
                         )
                         .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
@@ -257,7 +257,7 @@ export const VoiceSettings: React.FC = () => {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
-            
+
             audio.onended = () => {
                 URL.revokeObjectURL(url);
                 setPreviewAudio(null);
@@ -319,7 +319,7 @@ export const VoiceSettings: React.FC = () => {
             const blob = await response.blob();
             const url = URL.createObjectURL(blob);
             const audio = new Audio(url);
-            
+
             audio.onended = () => {
                 URL.revokeObjectURL(url);
                 setOpenaiPreviewAudio(null);
@@ -393,66 +393,65 @@ export const VoiceSettings: React.FC = () => {
 
                 {/* Voice provider selection - only show when voice mode is enabled */}
                 {voiceModeEnabled && (
-                <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1 flex-1">
-                        <div className="flex items-center gap-2">
-                            <RiVolumeUpLine className="w-4 h-4 text-muted-foreground" />
-                            <span className="typography-ui-label text-foreground">
-                                Voice Provider
-                            </span>
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1 flex-1">
+                            <div className="flex items-center gap-2">
+                                <RiVolumeUpLine className="w-4 h-4 text-muted-foreground" />
+                                <span className="typography-ui-label text-foreground">
+                                    Voice Provider
+                                </span>
+                            </div>
+                            <p className="typography-meta text-muted-foreground">
+                                Choose your preferred text-to-speech provider
+                            </p>
                         </div>
-                        <p className="typography-meta text-muted-foreground">
-                            Choose your preferred text-to-speech provider
-                        </p>
-                    </div>
-                    <div className="flex gap-2 flex-wrap justify-end">
-                        <Button
-                            variant={voiceProvider === 'browser' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setVoiceProvider('browser')}
-                            className="min-w-[80px]"
-                        >
-                            Browser
-                        </Button>
-                        <Button
-                            variant={voiceProvider === 'openai' ? 'default' : 'outline'}
-                            size="sm"
-                            onClick={() => setVoiceProvider('openai')}
-                            disabled={!isOpenAIAvailable}
-                            className="min-w-[80px]"
-                            title={isOpenAIAvailable ? 'OpenAI voice' : 'OpenAI voice unavailable - API key not configured'}
-                        >
-                            OpenAI
-                        </Button>
-                        {isSayAvailable && (
+                        <div className="flex gap-2 flex-wrap justify-end">
                             <Button
-                                variant={voiceProvider === 'say' ? 'default' : 'outline'}
+                                variant={voiceProvider === 'browser' ? 'default' : 'outline'}
                                 size="sm"
-                                onClick={() => setVoiceProvider('say')}
+                                onClick={() => setVoiceProvider('browser')}
                                 className="min-w-[80px]"
                             >
-                                <RiAppleLine className="w-4 h-4 mr-1" />
-                                Say
+                                Browser
                             </Button>
-                        )}
+                            <Button
+                                variant={voiceProvider === 'openai' ? 'default' : 'outline'}
+                                size="sm"
+                                onClick={() => setVoiceProvider('openai')}
+                                className="min-w-[80px]"
+                                title={isOpenAIAvailable ? 'OpenAI voice' : 'OpenAI voice unavailable - API key not configured'}
+                            >
+                                OpenAI
+                            </Button>
+                            {isSayAvailable && (
+                                <Button
+                                    variant={voiceProvider === 'say' ? 'default' : 'outline'}
+                                    size="sm"
+                                    onClick={() => setVoiceProvider('say')}
+                                    className="min-w-[80px]"
+                                >
+                                    <RiAppleLine className="w-4 h-4 mr-1" />
+                                    Say
+                                </Button>
+                            )}
+                        </div>
                     </div>
-                </div>
                 )}
 
                 {/* Provider description */}
                 {voiceModeEnabled && (
-                <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
-                    <p className="typography-micro text-muted-foreground">
-                        <span className="font-medium text-foreground">
-                            {voiceProvider === 'browser' ? 'Browser Voice:' : voiceProvider === 'openai' ? 'OpenAI:' : 'macOS Say:'}
-                        </span>{' '}
-                        {voiceProvider === 'browser'
-                            ? 'Free, works offline, but has limited mobile support. Best for desktop use.'
-                            : voiceProvider === 'openai'
-                            ? 'Higher quality voice synthesis that works reliably on mobile. Requires OpenAI API key.'
-                            : 'Native macOS speech synthesis. Free, fast, and works offline. Desktop only.'}
-                    </p>
-                </div>
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+                        <p className="typography-micro text-muted-foreground">
+                            <span className="font-medium text-foreground">
+                                {voiceProvider === 'browser' ? 'Browser Voice:' : voiceProvider === 'openai' ? 'OpenAI:' : 'macOS Say:'}
+                            </span>{' '}
+                            {voiceProvider === 'browser'
+                                ? 'Free, works offline, but has limited mobile support. Best for desktop use.'
+                                : voiceProvider === 'openai'
+                                    ? 'Higher quality voice synthesis that works reliably on mobile. Requires OpenAI API key.'
+                                    : 'Native macOS speech synthesis. Free, fast, and works offline. Desktop only.'}
+                        </p>
+                    </div>
                 )}
 
                 {/* OpenAI unavailable warning */}
@@ -464,7 +463,7 @@ export const VoiceSettings: React.FC = () => {
                                 OpenAI voice unavailable
                             </p>
                             <p className="typography-micro text-destructive/80">
-                                OpenAI voice requires an OpenAI API key to be configured. Please set the OPENAI_API_KEY environment variable or switch to Browser voice.
+                                OpenAI voice requires an OpenAI API key to be configured. Please set the OpenAI API key or switch to Browser voice.
                             </p>
                         </div>
                     </div>
@@ -648,35 +647,35 @@ export const VoiceSettings: React.FC = () => {
 
                 {/* Language selection */}
                 {voiceModeEnabled && (
-                <div className="flex items-start justify-between gap-4">
-                    <div className="space-y-1 flex-1">
-                        <div className="flex items-center gap-2">
-                            <RiMicLine className="w-4 h-4 text-muted-foreground" />
-                            <span className="typography-ui-label text-foreground">
-                                Language
-                            </span>
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1 flex-1">
+                            <div className="flex items-center gap-2">
+                                <RiMicLine className="w-4 h-4 text-muted-foreground" />
+                                <span className="typography-ui-label text-foreground">
+                                    Language
+                                </span>
+                            </div>
+                            <p className="typography-meta text-muted-foreground">
+                                Language for speech recognition and synthesis
+                            </p>
                         </div>
-                        <p className="typography-meta text-muted-foreground">
-                            Language for speech recognition and synthesis
-                        </p>
+                        <Select
+                            value={language}
+                            onValueChange={setLanguage}
+                            disabled={!isSupported}
+                        >
+                            <SelectTrigger className="w-[180px]" aria-label="Select language">
+                                <SelectValue placeholder="Select language" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {LANGUAGE_OPTIONS.map((lang) => (
+                                    <SelectItem key={lang.value} value={lang.value}>
+                                        {lang.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <Select
-                        value={language}
-                        onValueChange={setLanguage}
-                        disabled={!isSupported}
-                    >
-                        <SelectTrigger className="w-[180px]" aria-label="Select language">
-                            <SelectValue placeholder="Select language" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {LANGUAGE_OPTIONS.map((lang) => (
-                                <SelectItem key={lang.value} value={lang.value}>
-                                    {lang.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
                 )}
 
                 {/* Show TTS buttons on messages */}
@@ -727,76 +726,76 @@ export const VoiceSettings: React.FC = () => {
 
                     {/* Summarize Voice Conversation */}
                     {voiceModeEnabled && (
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1 flex-1">
-                            <span className="typography-ui-label text-foreground">
-                                Summarize Voice Responses
-                            </span>
-                            <p className="typography-meta text-muted-foreground">
-                                Summarize long AI responses during voice conversations
-                            </p>
+                        <div className="flex items-start justify-between gap-4">
+                            <div className="space-y-1 flex-1">
+                                <span className="typography-ui-label text-foreground">
+                                    Summarize Voice Responses
+                                </span>
+                                <p className="typography-meta text-muted-foreground">
+                                    Summarize long AI responses during voice conversations
+                                </p>
+                            </div>
+                            <Switch
+                                checked={summarizeVoiceConversation}
+                                onCheckedChange={setSummarizeVoiceConversation}
+                                aria-label="Toggle voice conversation summarization"
+                            />
                         </div>
-                        <Switch
-                            checked={summarizeVoiceConversation}
-                            onCheckedChange={setSummarizeVoiceConversation}
-                            aria-label="Toggle voice conversation summarization"
-                        />
-                    </div>
                     )}
 
                     {/* Character Threshold - only show if either summarization is enabled */}
                     {(summarizeMessageTTS || summarizeVoiceConversation) && (
-                    <>
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1 flex-1">
-                            <span className="typography-ui-label text-foreground">
-                                Character Threshold
-                            </span>
-                            <p className="typography-meta text-muted-foreground">
-                                Summarize text longer than this ({summarizeCharacterThreshold} chars)
-                            </p>
-                        </div>
-                        <div className="w-[180px]">
-                            <Slider
-                                value={summarizeCharacterThreshold}
-                                onChange={setSummarizeCharacterThreshold}
-                                min={50}
-                                max={2000}
-                                step={50}
-                                label="Character threshold"
-                                valueFormatter={(v: number) => `${v}`}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Model Selection - uses same component as chat */}
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1 flex-1">
-                            <div className="flex items-center gap-2">
-                                <RiRobot2Line className="w-4 h-4 text-muted-foreground" />
-                                <span className="typography-ui-label text-foreground">
-                                    Summarization Model
-                                </span>
+                        <>
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-1 flex-1">
+                                    <span className="typography-ui-label text-foreground">
+                                        Character Threshold
+                                    </span>
+                                    <p className="typography-meta text-muted-foreground">
+                                        Summarize text longer than this ({summarizeCharacterThreshold} chars)
+                                    </p>
+                                </div>
+                                <div className="w-[180px]">
+                                    <Slider
+                                        value={summarizeCharacterThreshold}
+                                        onChange={setSummarizeCharacterThreshold}
+                                        min={50}
+                                        max={2000}
+                                        step={50}
+                                        label="Character threshold"
+                                        valueFormatter={(v: number) => `${v}`}
+                                    />
+                                </div>
                             </div>
-                            <p className="typography-meta text-muted-foreground">
-                                Model used to summarize long text for TTS. Uses current chat model by default.
-                            </p>
-                        </div>
-                        <ModelSelector
-                            providerId={summarizeModel ? summarizeModel.split(':')[0] : ''}
-                            modelId={summarizeModel ? summarizeModel.split(':')[1] : ''}
-                            onChange={(providerId, modelId) => {
-                                if (providerId && modelId) {
-                                    setSummarizeModel(`${providerId}:${modelId}`);
-                                } else {
-                                    setSummarizeModel('');
-                                }
-                            }}
-                            className="w-[200px]"
-                            placeholder="Use current model from session"
-                        />
-                    </div>
-                    </>
+
+                            {/* Model Selection - uses same component as chat */}
+                            <div className="flex items-start justify-between gap-4">
+                                <div className="space-y-1 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <RiRobot2Line className="w-4 h-4 text-muted-foreground" />
+                                        <span className="typography-ui-label text-foreground">
+                                            Summarization Model
+                                        </span>
+                                    </div>
+                                    <p className="typography-meta text-muted-foreground">
+                                        Model used to summarize long text for TTS. Uses current chat model by default.
+                                    </p>
+                                </div>
+                                <ModelSelector
+                                    providerId={summarizeModel ? summarizeModel.split(':')[0] : ''}
+                                    modelId={summarizeModel ? summarizeModel.split(':')[1] : ''}
+                                    onChange={(providerId, modelId) => {
+                                        if (providerId && modelId) {
+                                            setSummarizeModel(`${providerId}:${modelId}`);
+                                        } else {
+                                            setSummarizeModel('');
+                                        }
+                                    }}
+                                    className="w-[200px]"
+                                    placeholder="Use current model from session"
+                                />
+                            </div>
+                        </>
                     )}
                 </div>
 
