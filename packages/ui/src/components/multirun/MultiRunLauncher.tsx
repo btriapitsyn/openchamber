@@ -17,6 +17,7 @@ import type { CreateMultiRunParams, MultiRunModelSelection } from '@/types/multi
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from './ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from './BranchSelector';
 import { AgentSelector } from './AgentSelector';
+import { isDesktopShell } from '@/lib/desktop';
 
 /** Max file size in bytes (10MB) */
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -95,7 +96,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     if (typeof window === 'undefined') {
       return false;
     }
-    return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+    return isDesktopShell();
   });
 
   const isMacPlatform = React.useMemo(() => {
@@ -109,7 +110,33 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     if (typeof window === 'undefined') {
       return;
     }
-    setIsDesktopApp(Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__));
+    setIsDesktopApp(isDesktopShell());
+  }, []);
+
+  const macosMajorVersion = React.useMemo(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const injected = (window as unknown as { __OPENCHAMBER_MACOS_MAJOR__?: unknown }).__OPENCHAMBER_MACOS_MAJOR__;
+    if (typeof injected === 'number' && Number.isFinite(injected) && injected > 0) {
+      return injected;
+    }
+
+    // Fallback: WebKit reports "Mac OS X 10_15_7" format where 10 is legacy prefix
+    if (typeof navigator === 'undefined') {
+      return null;
+    }
+    const match = (navigator.userAgent || '').match(/Mac OS X (\d+)[._](\d+)/);
+    if (!match) {
+      return null;
+    }
+    const first = Number.parseInt(match[1], 10);
+    const second = Number.parseInt(match[2], 10);
+    if (Number.isNaN(first)) {
+      return null;
+    }
+    return first === 10 ? second : first;
   }, []);
 
   const desktopHeaderPaddingClass = React.useMemo(() => {
@@ -119,6 +146,19 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     }
     return 'pl-3';
   }, [isDesktopApp, isMacPlatform]);
+
+  const macosHeaderSizeClass = React.useMemo(() => {
+    if (!isDesktopApp || !isMacPlatform || macosMajorVersion === null) {
+      return '';
+    }
+    if (macosMajorVersion >= 26) {
+      return 'h-12';
+    }
+    if (macosMajorVersion <= 15) {
+      return 'h-14';
+    }
+    return '';
+  }, [isDesktopApp, isMacPlatform, macosMajorVersion]);
 
   const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
@@ -320,7 +360,8 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
         onMouseDown={handleDragStart}
         className={cn(
           'relative flex h-12 items-center justify-center border-b app-region-drag select-none',
-          desktopHeaderPaddingClass
+          desktopHeaderPaddingClass,
+          macosHeaderSizeClass,
         )}
         style={{ borderColor: 'var(--interactive-border)' }}
       >

@@ -1067,13 +1067,27 @@ fn create_main_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> 
             String::from_utf8(output.stdout).ok()
         }
 
-        // We want Darwin major (kern.osrelease major), not marketing version.
-        // Example: kern.osrelease="26.0.0".
-        let raw = cmd_stdout("sysctl", &["-n", "kern.osrelease"]).or_else(|| cmd_stdout("uname", &["-r"]))?;
+        // Use marketing version (sw_vers), but map legacy 10.x to minor (10.15 -> 15).
+        // This matches WebKit UA fallback logic in the UI.
+        if let Some(raw) = cmd_stdout("sw_vers", &["-productVersion"]) {
+            let raw = raw.trim();
+            let mut parts = raw.split('.');
+            let major = parts.next().and_then(|v| v.parse::<u32>().ok())?;
+            let minor = parts.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+            return Some(if major == 10 { minor } else { major });
+        }
 
+        // Fallback: derive from Darwin major (kern.osrelease major).
+        let raw = cmd_stdout("sysctl", &["-n", "kern.osrelease"]).or_else(|| cmd_stdout("uname", &["-r"]))?;
         let raw = raw.trim();
-        let major = raw.split('.').next()?;
-        major.parse::<u32>().ok()
+        let major = raw.split('.').next()?.parse::<u32>().ok()?;
+        if major >= 20 {
+            return Some(major - 9);
+        }
+        if major >= 15 {
+            return Some(major - 4);
+        }
+        Some(major)
     }
 
     #[cfg(not(target_os = "macos"))]
