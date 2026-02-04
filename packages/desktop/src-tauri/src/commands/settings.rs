@@ -350,16 +350,6 @@ fn sanitize_settings_update(payload: &Value) -> Value {
                 result_obj.insert("fontSize".to_string(), json!(clamped));
             }
         }
-        if let Some(Value::Number(n)) = obj.get("terminalFontSize") {
-            let parsed = n
-                .as_u64()
-                .or_else(|| n.as_i64().and_then(|v| if v >= 0 { Some(v as u64) } else { None }))
-                .or_else(|| n.as_f64().map(|v| v.round().max(0.0) as u64));
-            if let Some(value) = parsed {
-                let clamped = value.max(9).min(52);
-                result_obj.insert("terminalFontSize".to_string(), json!(clamped));
-            }
-        }
         if let Some(Value::Number(n)) = obj.get("padding") {
             let parsed = n
                 .as_u64()
