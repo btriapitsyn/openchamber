@@ -57,17 +57,33 @@ export function sanitizeForTTS(text) {
  * Extract text from zen API response
  */
 function extractZenOutputText(data) {
-  if (!data || typeof data !== 'object') return null;
+  if (!data || typeof data !== 'object') {
+    console.error('[Summarize] extractZenOutputText: data is not an object:', typeof data);
+    return null;
+  }
   const output = data.output;
-  if (!Array.isArray(output)) return null;
+  if (!Array.isArray(output)) {
+    console.error('[Summarize] extractZenOutputText: output is not an array:', typeof output, JSON.stringify(data).slice(0, 500));
+    return null;
+  }
+
+  console.log('[Summarize] extractZenOutputText: output items:', output.map(item => ({ type: item?.type, id: item?.id })));
 
   const messageItem = output.find(
     (item) => item && typeof item === 'object' && item.type === 'message'
   );
-  if (!messageItem) return null;
+  if (!messageItem) {
+    console.error('[Summarize] extractZenOutputText: no message item found in output types:', output.map(item => item?.type));
+    return null;
+  }
 
   const content = messageItem.content;
-  if (!Array.isArray(content)) return null;
+  if (!Array.isArray(content)) {
+    console.error('[Summarize] extractZenOutputText: content is not an array:', typeof content);
+    return null;
+  }
+
+  console.log('[Summarize] extractZenOutputText: content items:', content.map(item => ({ type: item?.type, textLength: item?.text?.length })));
 
   const textItem = content.find(
     (item) => item && typeof item === 'object' && item.type === 'output_text'
@@ -107,11 +123,9 @@ export async function summarizeText({
   const timer = setTimeout(() => controller.abort(), SUMMARIZE_TIMEOUT_MS);
 
   try {
-    // Scale token budget: ~4 chars per token, with some headroom
-    const tokenBudget = Math.max(100, Math.ceil(maxLength / 3));
     const prompt = buildSummarizationPrompt(maxLength);
 
-    console.log('[Summarize] Calling zen API with tokenBudget:', tokenBudget);
+    console.log('[Summarize] Calling zen API with maxLength:', maxLength);
 
     const response = await fetch('https://opencode.ai/zen/v1/responses', {
       method: 'POST',
@@ -121,7 +135,6 @@ export async function summarizeText({
         input: [
           { role: 'user', content: `${prompt}\n\nText to summarize:\n${text}` },
         ],
-        max_output_tokens: tokenBudget,
         stream: false,
         reasoning: { effort: 'low' },
       }),
