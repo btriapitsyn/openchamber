@@ -353,22 +353,6 @@ export const VoiceSettings: React.FC = () => {
             description="Configure voice conversation settings"
         >
             <div className="space-y-6">
-                {/* Browser support notice */}
-                {!isSupported && (
-                    <div className="flex items-start gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-                        <RiAlertLine className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-                        <div className="space-y-1">
-                            <p className="typography-ui text-destructive font-medium">
-                                Voice not supported in this browser
-                            </p>
-                            <p className="typography-micro text-destructive/80">
-                                Browser voice requires Chrome, Edge, or Safari with SpeechRecognition support.
-                                Firefox does not support this feature.
-                            </p>
-                        </div>
-                    </div>
-                )}
-
                 {/* Voice Mode Enable/Disable */}
                 <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1 flex-1">
