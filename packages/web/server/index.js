@@ -1034,6 +1034,9 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.fontSize === 'number' && Number.isFinite(candidate.fontSize)) {
     result.fontSize = Math.max(50, Math.min(200, Math.round(candidate.fontSize)));
   }
+  if (typeof candidate.terminalFontSize === 'number' && Number.isFinite(candidate.terminalFontSize)) {
+    result.terminalFontSize = Math.max(9, Math.min(52, Math.round(candidate.terminalFontSize)));
+  }
   if (typeof candidate.padding === 'number' && Number.isFinite(candidate.padding)) {
     result.padding = Math.max(50, Math.min(200, Math.round(candidate.padding)));
   }

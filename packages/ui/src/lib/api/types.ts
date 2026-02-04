@@ -403,6 +403,7 @@ export interface SettingsPayload {
   gitmojiEnabled?: boolean;
   toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
   fontSize?: number;
+  terminalFontSize?: number;
   padding?: number;
   cornerRadius?: number;
   inputBarOffset?: number;

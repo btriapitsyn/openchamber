@@ -12,6 +12,7 @@ type AppearanceSlice = {
   autoDeleteAfterDays: number;
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
   fontSize: number;
+  terminalFontSize: number;
   padding: number;
   cornerRadius: number;
   inputBarOffset: number;
@@ -38,6 +39,7 @@ export const startAppearanceAutoSave = (): void => {
     autoDeleteAfterDays: useUIStore.getState().autoDeleteAfterDays,
     toolCallExpansion: useUIStore.getState().toolCallExpansion,
     fontSize: useUIStore.getState().fontSize,
+    terminalFontSize: useUIStore.getState().terminalFontSize,
     padding: useUIStore.getState().padding,
     cornerRadius: useUIStore.getState().cornerRadius,
     inputBarOffset: useUIStore.getState().inputBarOffset,
@@ -76,6 +78,7 @@ export const startAppearanceAutoSave = (): void => {
       autoDeleteAfterDays: state.autoDeleteAfterDays,
       toolCallExpansion: state.toolCallExpansion,
       fontSize: state.fontSize,
+      terminalFontSize: state.terminalFontSize,
       padding: state.padding,
       cornerRadius: state.cornerRadius,
       inputBarOffset: state.inputBarOffset,
@@ -111,6 +114,9 @@ export const startAppearanceAutoSave = (): void => {
     }
     if (current.fontSize !== previous.fontSize) {
       diff.fontSize = current.fontSize;
+    }
+    if (current.terminalFontSize !== previous.terminalFontSize) {
+      diff.terminalFontSize = current.terminalFontSize;
     }
     if (current.padding !== previous.padding) {
       diff.padding = current.padding;

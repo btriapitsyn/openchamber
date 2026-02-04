@@ -19,8 +19,6 @@ import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { isDesktopRuntime, isWebRuntime } from '@/lib/desktop';
 
-const TERMINAL_FONT_SIZE = 13;
-
 type Modifier = 'ctrl' | 'cmd';
 type MobileKey =
     | 'esc'
@@ -79,6 +77,7 @@ export const TerminalView: React.FC = () => {
     const { terminal } = useRuntimeAPIs();
     const { currentTheme } = useThemeSystem();
     const { monoFont } = useFontPreferences();
+    const terminalFontSize = useUIStore(state => state.terminalFontSize);
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const enableTabs = !isMobile && (isWebRuntime() || isDesktopRuntime());
     const showTerminalQuickKeysOnDesktop = useUIStore((state) => state.showTerminalQuickKeysOnDesktop);
@@ -973,7 +972,7 @@ export const TerminalView: React.FC = () => {
                                 onResize={handleViewportResize}
                                 theme={xtermTheme}
                                 fontFamily={resolvedFontStack}
-                                fontSize={TERMINAL_FONT_SIZE}
+                                fontSize={terminalFontSize}
                                 enableTouchScroll={hasTouchInput}
                             />
                         ) : (
@@ -989,7 +988,7 @@ export const TerminalView: React.FC = () => {
                                     onResize={handleViewportResize}
                                     theme={xtermTheme}
                                     fontFamily={resolvedFontStack}
-                                    fontSize={TERMINAL_FONT_SIZE}
+                                    fontSize={terminalFontSize}
                                     enableTouchScroll={hasTouchInput}
                                 />
                             </ScrollableOverlay>

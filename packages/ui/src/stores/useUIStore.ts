@@ -51,6 +51,7 @@ interface UIStore {
 
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
   fontSize: number;
+  terminalFontSize: number;
   padding: number;
   cornerRadius: number;
   inputBarOffset: number;
@@ -104,6 +105,7 @@ interface UIStore {
   setMemoryLimitActiveSession: (value: number) => void;
   setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed') => void;
   setFontSize: (size: number) => void;
+  setTerminalFontSize: (size: number) => void;
   setPadding: (size: number) => void;
   setCornerRadius: (radius: number) => void;
   setInputBarOffset: (offset: number) => void;
@@ -168,6 +170,7 @@ export const useUIStore = create<UIStore>()(
         memoryLimitActiveSession: 180,
         toolCallExpansion: 'collapsed',
         fontSize: 100,
+        terminalFontSize: 13,
         padding: 100,
         cornerRadius: 12,
         inputBarOffset: 0,
@@ -401,6 +404,12 @@ export const useUIStore = create<UIStore>()(
           const clampedSize = Math.max(50, Math.min(200, size));
           set({ fontSize: clampedSize });
           get().applyTypography();
+        },
+
+        setTerminalFontSize: (size) => {
+          const rounded = Math.round(size);
+          const clamped = Math.max(9, Math.min(52, rounded));
+          set({ terminalFontSize: clamped });
         },
 
         setPadding: (size) => {
@@ -680,6 +689,7 @@ export const useUIStore = create<UIStore>()(
           memoryLimitActiveSession: state.memoryLimitActiveSession,
           toolCallExpansion: state.toolCallExpansion,
           fontSize: state.fontSize,
+          terminalFontSize: state.terminalFontSize,
           padding: state.padding,
           cornerRadius: state.cornerRadius,
           favoriteModels: state.favoriteModels,
