@@ -26,6 +26,7 @@ interface ModelSelectorProps {
     onChange: (providerId: string, modelId: string) => void;
     className?: string;
     allowedProviderIds?: string[];
+    placeholder?: string;
 }
 
 const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
@@ -51,7 +52,8 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     modelId,
     onChange,
     className,
-    allowedProviderIds
+    allowedProviderIds,
+    placeholder
 }) => {
     const { providers, modelsMetadata } = useConfigStore();
     const isMobile = useUIStore(state => state.isMobile);
@@ -460,7 +462,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                             closeMobilePanel();
                         }}
                     >
-                        <span className="typography-meta text-muted-foreground">No model (optional)</span>
+                        <span className="typography-meta text-muted-foreground">{placeholder || 'No model (optional)'}</span>
                     </button>
                 </div>
             </MobileOverlayPanel>
@@ -488,7 +490,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                             <RiPencilAiLine className="h-3 w-3 text-muted-foreground" />
                         )}
                         <span className="typography-meta font-medium text-foreground">
-                            {providerId && modelId ? `${providerId}/${modelId}` : 'Select model...'}
+                            {providerId && modelId ? `${providerId}/${modelId}` : (placeholder || 'Select model...')}
                         </span>
                     </div>
                     <RiArrowDownSLine className="h-3 w-3 text-muted-foreground" />
@@ -512,7 +514,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                 <RiPencilAiLine className="h-3 w-3 text-muted-foreground" />
                             )}
                             <span className="typography-micro font-medium whitespace-nowrap">
-                                {providerId && modelId ? `${providerId}/${modelId}` : 'Not selected'}
+                                {providerId && modelId ? `${providerId}/${modelId}` : (placeholder || 'Not selected')}
                             </span>
                             <RiArrowDownSLine className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                         </div>
@@ -601,7 +603,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                                 onClick={() => handleProviderAndModelChange('', '')}
                                             >
                                                 <RiCloseLine className="h-3.5 w-3.5 text-muted-foreground" />
-                                                <span className="text-muted-foreground">Not selected</span>
+                                                <span className="text-muted-foreground">{placeholder || 'Not selected'}</span>
                                                 {!providerId && !modelId && (
                                                     <RiCheckLine className="h-4 w-4 text-primary ml-auto" />
                                                 )}

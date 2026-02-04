@@ -676,8 +676,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         </span>
                     </label>
                     <p className="typography-meta text-muted-foreground pl-5">
-                        {queueModeEnabled 
-                            ? `Enter queues messages, ${getModifierLabel()}+Enter sends immediately.` 
+                        {queueModeEnabled
+                            ? `Enter queues messages, ${getModifierLabel()}+Enter sends immediately.`
                             : `Enter sends immediately, ${getModifierLabel()}+Enter queues messages.`}
                     </p>
                 </div>

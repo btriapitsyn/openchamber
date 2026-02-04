@@ -2966,7 +2966,36 @@ async function main(options = {}) {
 
   console.log(`Starting OpenChamber on port ${port === 0 ? 'auto' : port}`);
 
+  // Check macOS Say TTS availability once at startup
+  let sayTTSCapability = { available: false, voices: [], reason: 'Not checked' };
+  if (process.platform === 'darwin') {
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      const { stdout } = await execAsync('say -v "?"');
+      const voices = stdout.split('\n')
+        .filter(line => line.trim())
+        .map(line => {
+          const match = line.match(/^(.+?)\s+([a-zA-Z]{2}_[a-zA-Z]{2,3})\s+#/);
+          if (match) {
+            return { name: match[1].trim(), locale: match[2] };
+          }
+          return null;
+        })
+        .filter(Boolean);
+      sayTTSCapability = { available: true, voices };
+      console.log(`macOS Say TTS available with ${voices.length} voices`);
+    } catch (error) {
+      sayTTSCapability = { available: false, voices: [], reason: 'say command not available' };
+      console.log('macOS Say TTS not available:', error.message);
+    }
+  } else {
+    sayTTSCapability = { available: false, voices: [], reason: 'Not macOS' };
+  }
+
   const app = express();
+  app.set('trust proxy', true);
   expressApp = app;
   server = http.createServer(app);
 
@@ -2994,7 +3023,9 @@ async function main(options = {}) {
       req.path.startsWith('/api/prompts') ||
       req.path.startsWith('/api/terminal') ||
       req.path.startsWith('/api/opencode') ||
-      req.path.startsWith('/api/push')
+      req.path.startsWith('/api/push') ||
+      req.path.startsWith('/api/voice') ||
+      req.path.startsWith('/api/tts')
     ) {
 
       express.json({ limit: '50mb' })(req, res, next);
@@ -3155,6 +3186,247 @@ async function main(options = {}) {
   // Used by UI on visibility restore to get accurate status without waiting for SSE
   app.get('/api/session-activity', (_req, res) => {
     res.json(getSessionActivitySnapshot());
+  });
+
+  // Voice token endpoint - returns OpenAI TTS availability status
+  app.post('/api/voice/token', async (req, res) => {
+    console.log('[Voice] Token request received:', { body: req.body, headers: req.headers['content-type'] });
+    try {
+      const openaiApiKey = process.env.OPENAI_API_KEY;
+      console.log('[Voice] OpenAI API Key present:', !!openaiApiKey);
+
+      if (!openaiApiKey) {
+        return res.status(503).json({
+          allowed: false,
+          error: 'OpenAI voice service not configured. Set OPENAI_API_KEY environment variable.'
+        });
+      }
+
+      // Return success - OpenAI TTS is available
+      res.json({
+        allowed: true,
+        provider: 'openai',
+        message: 'OpenAI TTS is available'
+      });
+    } catch (error) {
+      console.error('[Voice] Token generation error:', error);
+      res.status(500).json({
+        allowed: false,
+        error: 'Voice service error'
+      });
+    }
+  });
+
+  // Server-side TTS endpoint - streams audio from OpenAI TTS API
+  app.post('/api/tts/speak', async (req, res) => {
+    try {
+      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, summarize = false, providerId, modelId, threshold = 200, apiKey } = req.body || {};
+
+      console.log('[TTS] Request received:', { voice, model, speed, textLength: text?.length, hasApiKey: !!apiKey });
+
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      // Dynamically import the TTS service (ESM)
+      const { ttsService } = await import('./lib/tts-service.js');
+
+      // Check availability - either server-configured or client-provided API key
+      const hasServerKey = ttsService.isAvailable();
+      const hasClientKey = apiKey && typeof apiKey === 'string' && apiKey.trim().length > 0;
+      
+      if (!hasServerKey && !hasClientKey) {
+        return res.status(503).json({ 
+          error: 'TTS service not available. Please configure OpenAI in OpenCode or provide an API key in settings.' 
+        });
+      }
+
+      let textToSpeak = text.trim();
+
+      // Optionally summarize long text before speaking using OpenCode
+      if (summarize && textToSpeak.length > threshold && openCodePort) {
+        try {
+          // Use provided provider/model, or pass null to let summarization service handle it
+          // The summarization service will return unsummarized text if no model is specified
+          // Use the summarization service
+          const { summarizeText } = await import('./lib/summarization-service.js');
+          const result = await summarizeText({
+            text: textToSpeak,
+            providerId,
+            modelId,
+            threshold,
+            openCodePort
+          });
+          
+          if (result.summarized && result.summary) {
+            textToSpeak = result.summary;
+          }
+        } catch (summarizeError) {
+          // Continue with original text if summarization fails
+        }
+      }
+
+      const result = await ttsService.generateSpeechStream({
+        text: textToSpeak,
+        voice,
+        model,
+        speed,
+        instructions,
+        apiKey: hasClientKey ? apiKey.trim() : undefined
+      });
+
+      // Set headers for audio streaming
+      // Note: Don't set Transfer-Encoding manually - Express handles it automatically
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Cache-Control', 'no-cache');
+
+      // Collect the full audio buffer and send it
+      // This avoids chunked encoding issues with proxies
+      const reader = result.stream.getReader();
+      const chunks = [];
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(Buffer.from(value));
+        }
+        const audioBuffer = Buffer.concat(chunks);
+        res.setHeader('Content-Length', audioBuffer.length);
+        res.send(audioBuffer);
+      } catch (streamError) {
+        console.error('[TTS] Stream error:', streamError);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Stream error' });
+        } else {
+          res.end();
+        }
+      }
+    } catch (error) {
+      console.error('[TTS] Error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: error instanceof Error ? error.message : 'TTS generation failed' 
+        });
+      }
+    }
+  });
+
+  // Import summarization service
+  const { summarizeText, sanitizeForTTS } = await import('./lib/summarization-service.js');
+
+  app.post('/api/tts/summarize', async (req, res) => {
+    try {
+      const { text, providerId, modelId, threshold = 200 } = req.body || {};
+
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+
+      // Parse provider and model from selection
+      // Format can be "providerId:modelId" or separate providerId and modelId
+      let targetProviderId = providerId;
+      let targetModelId = modelId;
+
+      if (providerId && providerId.includes(':')) {
+        const parts = providerId.split(':');
+        targetProviderId = parts[0];
+        targetModelId = parts[1];
+      }
+
+      // Use the summarization service
+      // If no model is specified, the service will return the text unsummarized
+      const result = await summarizeText({
+        text,
+        providerId: targetProviderId,
+        modelId: targetModelId,
+        threshold,
+        openCodePort
+      });
+
+      return res.json(result);
+    } catch (error) {
+      console.error('[Summarize] Error:', error);
+      const sanitized = sanitizeForTTS(req.body?.text || '');
+      return res.json({ summary: sanitized, summarized: false, reason: error.message });
+    }
+  });
+
+       
+  // TTS status endpoint
+  app.get('/api/tts/status', async (_req, res) => {
+    try {
+      const { ttsService } = await import('./lib/tts-service.js');
+      res.json({
+        available: ttsService.isAvailable(),
+        voices: [
+          'alloy', 'ash', 'ballad', 'coral', 'echo', 'fable',
+          'nova', 'onyx', 'sage', 'shimmer', 'verse', 'marin', 'cedar'
+        ]
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Failed to check TTS status' });
+    }
+  });
+
+  // macOS 'say' command TTS status endpoint - returns cached capability from startup
+  app.get('/api/tts/say/status', (_req, res) => {
+    res.json(sayTTSCapability);
+  });
+
+  // macOS 'say' command TTS speak endpoint
+  app.post('/api/tts/say/speak', async (req, res) => {
+    try {
+      const { text, voice = 'Samantha', rate = 200 } = req.body || {};
+      
+      if (!text || typeof text !== 'string' || !text.trim()) {
+        return res.status(400).json({ error: 'Text is required' });
+      }
+      
+      // Check if we're on macOS
+      if (process.platform !== 'darwin') {
+        return res.status(503).json({ error: 'macOS say command not available on this platform' });
+      }
+      
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const fs = await import('fs');
+      const os = await import('os');
+      const path = await import('path');
+      const execAsync = promisify(exec);
+      
+      // Create temp file for audio output (use m4a for browser compatibility)
+      const tempDir = os.tmpdir();
+      const tempFile = path.join(tempDir, `say-${Date.now()}.m4a`);
+      
+      // Escape text for shell - escape both single quotes and double quotes
+      const escapedText = text.trim().replace(/'/g, "'\\''").replace(/"/g, '\\"');
+      
+      // Generate audio file using 'say' command
+      // -o outputs to file, -r sets rate (words per minute)
+      // --data-format=aac outputs as m4a which browsers can decode
+      const cmd = `say -v "${voice}" -r ${rate} -o "${tempFile}" --data-format=aac '${escapedText}'`;
+      console.log('[TTS-Say] Generating speech:', { textLength: text.length, voice, rate });
+      
+      await execAsync(cmd);
+      
+      // Read the generated audio file
+      const audioBuffer = await fs.promises.readFile(tempFile);
+      
+      // Clean up temp file
+      fs.promises.unlink(tempFile).catch(() => {});
+      
+      // Send audio response
+      res.setHeader('Content-Type', 'audio/mp4');
+      res.setHeader('Content-Length', audioBuffer.length);
+      res.send(audioBuffer);
+      
+    } catch (error) {
+      console.error('[TTS-Say] Error:', error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : 'Say command failed'
+      });
+    }
   });
 
   app.get('/api/openchamber/update-check', async (_req, res) => {
@@ -5983,7 +6255,6 @@ async function main(options = {}) {
 
       const base = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
       const head = typeof req.body?.head === 'string' ? req.body.head.trim() : '';
-      const context = typeof req.body?.context === 'string' ? req.body.context.trim() : '';
       if (!base || !head) {
         return res.status(400).json({ error: 'base and head are required' });
       }
@@ -6003,22 +6274,7 @@ async function main(options = {}) {
 
       const diffSummaries = diffs.map(({ path, diff }) => `FILE: ${path}\n${diff}`).join('\n\n');
 
-      let prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:
-- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")
-- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes
-- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names
-- Testing: bullet list ("- Not tested" allowed)
-- Notes: bullet list; include breaking/rollout notes only when relevant
-
-Context:
-- base branch: ${base}
-- head branch: ${head}`;
-
-      if (context) {
-        prompt += `\n\nAdditional context provided by user:\n${context}`;
-      }
-
-      prompt += `\n\nDiff summary:\n${diffSummaries}`;
+      const prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:\n- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")\n- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes\n- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names\n- Testing: bullet list ("- Not tested" allowed)\n- Notes: bullet list; include breaking/rollout notes only when relevant\n\nContext:\n- base branch: ${base}\n- head branch: ${head}\n\nDiff summary:\n${diffSummaries}`;
 
       const model = 'gpt-5-nano';
 

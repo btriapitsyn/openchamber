@@ -7,6 +7,7 @@ import {
     RiFileUploadLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
+import { BrowserVoiceButton } from '@/components/voice';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -1539,10 +1540,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                     <div className="flex items-center flex-shrink-0 gap-x-1">
                                         {attachmentsControls}
                                     </div>
-                                    <div className="flex flex-1 items-center justify-center min-w-0">
-                                        <StatusChip onClick={handleOpenMobileControls} className="min-w-0" />
+                                    <div className="flex flex-1 items-center min-w-0">
+                                        <StatusChip onClick={handleOpenMobileControls} className="min-w-0 max-w-full" />
                                     </div>
-                                    <div className="flex-shrink-0">
+                                    <div className="flex items-center flex-shrink-0 gap-x-0.5">
+                                        <BrowserVoiceButton />
                                         {actionButtons}
                                     </div>
                                 </div>
@@ -1567,6 +1569,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 </div>
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
                                     <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
+                                    <BrowserVoiceButton />
                                     {actionButtons}
                                 </div>
                             </>

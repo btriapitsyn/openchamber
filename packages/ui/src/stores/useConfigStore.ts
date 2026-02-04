@@ -379,6 +379,37 @@ interface ConfigStore {
     settingsDefaultAgent: string | undefined;
     settingsAutoCreateWorktree: boolean;
     settingsGitmojiEnabled: boolean;
+    // Voice provider preference ('browser', 'openai', or 'say' for macOS)
+    voiceProvider: 'browser' | 'openai' | 'say';
+    setVoiceProvider: (provider: 'browser' | 'openai' | 'say') => void;
+    // TTS settings
+    speechRate: number;
+    speechPitch: number;
+    speechVolume: number;
+    sayVoice: string;
+    browserVoice: string;
+    openaiVoice: string;
+    openaiApiKey: string;
+    showMessageTTSButtons: boolean;
+    voiceModeEnabled: boolean;
+    // Summarization settings
+    summarizeMessageTTS: boolean;
+    summarizeVoiceConversation: boolean;
+    summarizeCharacterThreshold: number;
+    summarizeModel: string;
+    setSpeechRate: (rate: number) => void;
+    setSpeechPitch: (pitch: number) => void;
+    setSpeechVolume: (volume: number) => void;
+    setSayVoice: (voice: string) => void;
+    setBrowserVoice: (voice: string) => void;
+    setOpenaiVoice: (voice: string) => void;
+    setOpenaiApiKey: (apiKey: string) => void;
+    setShowMessageTTSButtons: (show: boolean) => void;
+    setVoiceModeEnabled: (enabled: boolean) => void;
+    setSummarizeMessageTTS: (enabled: boolean) => void;
+    setSummarizeVoiceConversation: (enabled: boolean) => void;
+    setSummarizeCharacterThreshold: (threshold: number) => void;
+    setSummarizeModel: (model: string) => void;
 
     activateDirectory: (directory: string | null | undefined) => Promise<void>;
 
@@ -440,6 +471,125 @@ export const useConfigStore = create<ConfigStore>()(
                 settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
                 settingsGitmojiEnabled: false,
+                // Voice provider preference - load from localStorage or default to 'browser'
+                voiceProvider: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('voiceProvider');
+                        if (saved === 'openai' || saved === 'browser' || saved === 'say') return saved;
+                    }
+                    return 'browser';
+                })(),
+                // TTS settings - load from localStorage with defaults
+                speechRate: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('speechRate');
+                        if (saved) {
+                            const parsed = parseFloat(saved);
+                            if (!isNaN(parsed) && parsed >= 0.5 && parsed <= 2) return parsed;
+                        }
+                    }
+                    return 1;
+                })(),
+                speechPitch: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('speechPitch');
+                        if (saved) {
+                            const parsed = parseFloat(saved);
+                            if (!isNaN(parsed) && parsed >= 0.5 && parsed <= 2) return parsed;
+                        }
+                    }
+                    return 1;
+                })(),
+                speechVolume: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('speechVolume');
+                        if (saved) {
+                            const parsed = parseFloat(saved);
+                            if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) return parsed;
+                        }
+                    }
+                    return 1;
+                })(),
+                // macOS Say voice - load from localStorage or default to 'Samantha'
+                sayVoice: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sayVoice');
+                        if (saved) return saved;
+                    }
+                    return 'Samantha';
+                })(),
+                // Browser voice - load from localStorage or default to empty (auto-select)
+                browserVoice: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('browserVoice');
+                        if (saved) return saved;
+                    }
+                    return '';
+                })(),
+                // OpenAI voice - load from localStorage or default to 'nova'
+                openaiVoice: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('openaiVoice');
+                        if (saved) return saved;
+                    }
+                    return 'nova';
+                })(),
+                // OpenAI API key for TTS - load from localStorage or default to empty
+                openaiApiKey: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('openaiApiKey');
+                        if (saved) return saved;
+                    }
+                    return '';
+                })(),
+                // Show TTS buttons on messages - load from localStorage or default to true
+                showMessageTTSButtons: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('showMessageTTSButtons');
+                        if (saved === 'false') return false;
+                    }
+                    return true;
+                })(),
+                // Voice mode enabled - load from localStorage or default to true
+                voiceModeEnabled: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('voiceModeEnabled');
+                        if (saved === 'false') return false;
+                    }
+                    return true;
+                })(),
+                // Summarization settings
+                summarizeMessageTTS: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('summarizeMessageTTS');
+                        if (saved === 'true') return true;
+                    }
+                    return false;
+                })(),
+                summarizeVoiceConversation: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('summarizeVoiceConversation');
+                        if (saved === 'true') return true;
+                    }
+                    return false;
+                })(),
+                summarizeCharacterThreshold: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('summarizeCharacterThreshold');
+                        if (saved) {
+                            const parsed = parseInt(saved, 10);
+                            if (!isNaN(parsed) && parsed >= 50 && parsed <= 2000) return parsed;
+                        }
+                    }
+                    return 200;
+                })(),
+                summarizeModel: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('summarizeModel');
+                        if (saved) return saved;
+                    }
+                    return '';
+                })(),
 
                 activateDirectory: async (directory) => {
                     const directoryKey = toDirectoryKey(directory);
@@ -1308,6 +1458,108 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ settingsGitmojiEnabled: enabled });
                 },
 
+                setVoiceProvider: (provider: 'browser' | 'openai' | 'say') => {
+                    set({ voiceProvider: provider });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('voiceProvider', provider);
+                    }
+                },
+
+                setSpeechRate: (rate: number) => {
+                    const clampedRate = Math.max(0.5, Math.min(2, rate));
+                    set({ speechRate: clampedRate });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('speechRate', String(clampedRate));
+                    }
+                },
+
+                setSpeechPitch: (pitch: number) => {
+                    const clampedPitch = Math.max(0.5, Math.min(2, pitch));
+                    set({ speechPitch: clampedPitch });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('speechPitch', String(clampedPitch));
+                    }
+                },
+
+                setSpeechVolume: (volume: number) => {
+                    const clampedVolume = Math.max(0, Math.min(1, volume));
+                    set({ speechVolume: clampedVolume });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('speechVolume', String(clampedVolume));
+                    }
+                },
+
+                setSayVoice: (voice: string) => {
+                    set({ sayVoice: voice });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sayVoice', voice);
+                    }
+                },
+
+                setBrowserVoice: (voice: string) => {
+                    set({ browserVoice: voice });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('browserVoice', voice);
+                    }
+                },
+
+                setOpenaiVoice: (voice: string) => {
+                    set({ openaiVoice: voice });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('openaiVoice', voice);
+                    }
+                },
+
+                setOpenaiApiKey: (apiKey: string) => {
+                    set({ openaiApiKey: apiKey });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('openaiApiKey', apiKey);
+                    }
+                },
+
+                setShowMessageTTSButtons: (show: boolean) => {
+                    set({ showMessageTTSButtons: show });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('showMessageTTSButtons', String(show));
+                    }
+                },
+
+                setVoiceModeEnabled: (enabled: boolean) => {
+                    set({ voiceModeEnabled: enabled });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('voiceModeEnabled', String(enabled));
+                    }
+                },
+
+                setSummarizeMessageTTS: (enabled: boolean) => {
+                    set({ summarizeMessageTTS: enabled });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('summarizeMessageTTS', String(enabled));
+                    }
+                },
+
+                setSummarizeVoiceConversation: (enabled: boolean) => {
+                    set({ summarizeVoiceConversation: enabled });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('summarizeVoiceConversation', String(enabled));
+                    }
+                },
+
+                setSummarizeCharacterThreshold: (threshold: number) => {
+                    const clamped = Math.max(50, Math.min(2000, threshold));
+                    set({ summarizeCharacterThreshold: clamped });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('summarizeCharacterThreshold', String(clamped));
+                    }
+                },
+
+                setSummarizeModel: (model: string) => {
+                    set({ summarizeModel: model });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('summarizeModel', model);
+                    }
+                },
+
                 checkConnection: async () => {
                     const maxAttempts = 5;
                     let attempt = 0;
@@ -1414,6 +1666,9 @@ export const useConfigStore = create<ConfigStore>()(
                     settingsDefaultAgent: state.settingsDefaultAgent,
                     settingsAutoCreateWorktree: state.settingsAutoCreateWorktree,
                     settingsGitmojiEnabled: state.settingsGitmojiEnabled,
+                    speechRate: state.speechRate,
+                    speechPitch: state.speechPitch,
+                    speechVolume: state.speechVolume,
                 }),
              },
          ),

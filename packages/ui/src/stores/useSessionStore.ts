@@ -103,6 +103,18 @@ export const useSessionStore = create<SessionStore>()(
             pendingInputText: null,
             newSessionDraft: { open: true, directoryOverride: null, parentID: null },
 
+            // Voice state (initialized to disconnected/idle)
+            voiceStatus: 'disconnected',
+            voiceMode: 'idle',
+
+            // Voice actions
+            setVoiceStatus: (status: import("./types/sessionTypes").VoiceStatus) => {
+                set({ voiceStatus: status });
+            },
+            setVoiceMode: (mode: import("./types/sessionTypes").VoiceMode) => {
+                set({ voiceMode: mode });
+            },
+
                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => {
                     return useContextStore.getState().getSessionAgentEditMode(sessionId, agentName, defaultMode);
                 },
