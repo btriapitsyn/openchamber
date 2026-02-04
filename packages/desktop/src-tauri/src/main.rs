@@ -758,26 +758,65 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     let dist_dir = resolve_web_dist_dir(app)?;
     let no_proxy = "localhost,127.0.0.1";
 
-    // macOS app launch env often lacks Homebrew/user bins.
-    let mut path_segments: Vec<String> = vec![
-        "/opt/homebrew/bin".to_string(),
-        "/usr/local/bin".to_string(),
-        "/usr/bin".to_string(),
-        "/bin".to_string(),
-        "/usr/sbin".to_string(),
-        "/sbin".to_string(),
-    ];
+    // macOS app launch env often lacks user PATH entries.
+    let mut path_segments: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::<String>::new();
+
+    let mut push_unique = |value: String| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return;
+        }
+        if seen.insert(trimmed.to_string()) {
+            path_segments.push(trimmed.to_string());
+        }
+    };
+
+    // Respect explicit binary overrides by adding their parent dir first.
+    for var in [
+        "OPENCHAMBER_OPENCODE_PATH",
+        "OPENCHAMBER_OPENCODE_BIN",
+        "OPENCODE_PATH",
+        "OPENCODE_BINARY",
+    ] {
+        if let Ok(val) = env::var(var) {
+            let trimmed = val.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let path = std::path::Path::new(trimmed);
+            if let Some(parent) = path.parent() {
+                push_unique(parent.to_string_lossy().to_string());
+            }
+        }
+    }
+
+    // Common locations.
+    push_unique("/opt/homebrew/bin".to_string());
+    push_unique("/usr/local/bin".to_string());
+    push_unique("/usr/bin".to_string());
+    push_unique("/bin".to_string());
+    push_unique("/usr/sbin".to_string());
+    push_unique("/sbin".to_string());
+
     if let Ok(home) = env::var("HOME") {
+        let home = home.trim();
         if !home.is_empty() {
-            path_segments.push(format!("{home}/.local/bin"));
-            path_segments.push(format!("{home}/.bun/bin"));
+            // OpenCode installer default.
+            push_unique(format!("{home}/.opencode/bin"));
+            push_unique(format!("{home}/.local/bin"));
+            push_unique(format!("{home}/.bun/bin"));
+            push_unique(format!("{home}/.cargo/bin"));
+            push_unique(format!("{home}/bin"));
         }
     }
+
     if let Ok(existing) = env::var("PATH") {
-        if !existing.is_empty() {
-            path_segments.push(existing);
+        for segment in existing.split(':') {
+            push_unique(segment.to_string());
         }
     }
+
     let augmented_path = path_segments.join(":");
 
     for candidate in candidates {

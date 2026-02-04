@@ -42,6 +42,7 @@ const sidecarBaseName = process.platform === 'win32'
   : `openchamber-server-${targetTriple}`;
 const sidecarOutPath = path.join(sidecarsDir, sidecarBaseName);
 
+
 const run = (cmd, args, cwd) => {
   const result = spawnSync(cmd, args, { cwd, stdio: 'inherit' });
   if (result.error) throw result.error;
@@ -65,6 +66,7 @@ const resolveBun = () => {
 };
 
 const bunExe = resolveBun();
+
 
 const copyDir = async (src, dst) => {
   await fs.mkdir(dst, { recursive: true });
