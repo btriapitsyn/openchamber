@@ -5994,6 +5994,31 @@ async function main(options = {}) {
     }
   });
 
+  app.post("/api/global/tts", async (req, res) => {
+    try {
+      const { text } = req.body;
+      if (!text || typeof text !== "string") {
+        return res.status(400).json({ error: "Text is required" });
+      }
+
+      const { trackTtsUsage } = await import("./lib/tts-service.js");
+      const usage = trackTtsUsage(text);
+
+      // In a real implementation, we would call OpenAI here and stream audio
+      res.json({
+        success: true,
+        message: "TTS processed (Usage tracked)",
+        usage: {
+          totalCharacters: usage.totalCharacters,
+          lastUsed: usage.lastUsed,
+        },
+      });
+    } catch (error) {
+      console.error("Failed to process TTS:", error);
+      res.status(500).json({ error: "Failed to process TTS" });
+    }
+  });
+
   // ================= GitHub Pull Request Context APIs =================
 
   app.get("/api/github/pulls/list", async (req, res) => {

@@ -1,13 +1,14 @@
 export type QuotaProviderId =
-  | 'openai'
-  | 'codex'
-  | 'claude'
-  | 'github-copilot'
-  | 'github-copilot-addon'
-  | 'google'
-  | 'kimi-for-coding'
-  | 'openrouter'
-  | 'zai-coding-plan';
+  | "openai"
+  | "codex"
+  | "claude"
+  | "github-copilot"
+  | "github-copilot-addon"
+  | "google"
+  | "kimi-for-coding"
+  | "openrouter"
+  | "zai-coding-plan"
+  | "openai-tts";
 
 export interface UsageWindow {
   usedPercent: number | null;

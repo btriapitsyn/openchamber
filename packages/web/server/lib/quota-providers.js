@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { readAuthFile } from "./opencode-auth.js";
+import { getTtsMetadata } from "./tts-service.js";
 
 const OPENCODE_CONFIG_DIR = path.join(os.homedir(), ".config", "opencode");
 const OPENCODE_DATA_DIR = path.join(
@@ -1130,6 +1131,8 @@ export const fetchQuotaForProvider = async (providerId) => {
       return fetchZaiQuota();
     case "openai":
       return fetchOpenaiQuota();
+    case "openai-tts":
+      return getTtsMetadata();
     default:
       return buildResult({
         providerId,
