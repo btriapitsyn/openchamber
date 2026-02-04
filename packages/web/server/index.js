@@ -5961,15 +5961,18 @@ async function main(options = {}) {
 
   app.get("/api/global/intelligence", async (req, res) => {
     try {
+      const resolved = await resolveProjectDirectory(req);
+
+      if (!resolved.directory) {
+        return res
+          .status(400)
+          .json({ error: resolved.error || "Directory is required" });
+      }
+
       const { getIntelligenceMetadata } =
         await import("./lib/intelligence-service.js");
-      const directory =
-        typeof req.query?.directory === "string"
-          ? req.query.directory.trim()
-          : "";
 
-      const projectRoot = directory || path.resolve(__dirname, "../../..");
-      const metadata = await getIntelligenceMetadata(projectRoot);
+      const metadata = await getIntelligenceMetadata(resolved.directory);
       res.json(metadata);
     } catch (error) {
       console.error("Failed to get intelligence metadata:", error);
