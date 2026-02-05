@@ -73,7 +73,6 @@ export function BrowserVoiceButton() {
     // Refs for touch handling
     const touchHandledRef = useRef(false);
     const isIOSSafariRef = useRef(false);
-    const permissionRequestedRef = useRef(false);
     const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
     const longPressTriggeredRef = useRef(false);
     
@@ -82,30 +81,9 @@ export function BrowserVoiceButton() {
         isIOSSafariRef.current = isIOSSafari();
     }, []);
 
-    // Pre-request microphone permission on mobile when component mounts
-    // This helps ensure permission is ready when user taps
-    // Only request if voice mode is enabled AND permission not already granted
-    useEffect(() => {
-        if (voiceModeEnabled && isMobile && isSupported && !permissionRequestedRef.current) {
-            // First check if permission is already granted (doesn't activate mic)
-            browserVoiceService.checkMicrophonePermission().then((alreadyGranted) => {
-                if (alreadyGranted) {
-                    // Permission already granted, no need to request again
-                    permissionRequestedRef.current = true;
-                    console.log('[BrowserVoiceButton] Permission already granted');
-                } else {
-                    // Permission not granted yet, request it (this will show mic indicator briefly)
-                    prepareVoice().then((granted) => {
-                        permissionRequestedRef.current = true;
-                        console.log('[BrowserVoiceButton] Permission pre-request result:', granted);
-                    }).catch(() => {
-                        // Permission denied or error - will be handled when user tries to use voice
-                        permissionRequestedRef.current = true;
-                    });
-                }
-            });
-        }
-    }, [voiceModeEnabled, isMobile, isSupported, prepareVoice]);
+    // NOTE: Do NOT pre-request microphone permission on mount.
+    // Permission is requested when the user explicitly taps the mic button.
+    // Pre-requesting causes an unwanted permission prompt on mobile page load.
 
     // Determine active states
     const isActive = status === 'listening' || status === 'speaking' || status === 'processing';
