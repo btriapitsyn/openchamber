@@ -73,6 +73,24 @@ interface UIStore {
   notificationMode: 'always' | 'hidden-only';
   notifyOnSubtasks: boolean;
 
+  // Event toggles (which events trigger notifications)
+  notifyOnCompletion: boolean;
+  notifyOnError: boolean;
+  notifyOnQuestion: boolean;
+
+  // Per-event notification templates
+  notificationTemplates: {
+    completion: { title: string; message: string };
+    error: { title: string; message: string };
+    question: { title: string; message: string };
+    subtask: { title: string; message: string };
+  };
+
+  // Summarization settings
+  summarizeLastMessage: boolean;
+  summaryThreshold: number;   // chars — messages longer than this get summarized
+  summaryLength: number;      // chars — target length for summary
+
   showTerminalQuickKeysOnDesktop: boolean;
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -133,6 +151,13 @@ interface UIStore {
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
   setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
   setNotifyOnSubtasks: (value: boolean) => void;
+  setNotifyOnCompletion: (value: boolean) => void;
+  setNotifyOnError: (value: boolean) => void;
+  setNotifyOnQuestion: (value: boolean) => void;
+  setNotificationTemplates: (templates: UIStore['notificationTemplates']) => void;
+  setSummarizeLastMessage: (value: boolean) => void;
+  setSummaryThreshold: (value: number) => void;
+  setSummaryLength: (value: number) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 }
@@ -194,6 +219,22 @@ export const useUIStore = create<UIStore>()(
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
         notifyOnSubtasks: true,
+
+        // Event toggles (which events trigger notifications)
+        notifyOnCompletion: true,
+        notifyOnError: true,
+        notifyOnQuestion: true,
+        notificationTemplates: {
+          completion: { title: '{agent_name} is ready', message: '{last_message}' },
+          error: { title: 'Tool error', message: '{last_message}' },
+          question: { title: '{agent_name} needs input', message: '{last_message}' },
+          subtask: { title: 'Subtask complete', message: '{last_message}' },
+        },
+
+        // Summarization settings
+        summarizeLastMessage: false,
+        summaryThreshold: 200,
+        summaryLength: 100,
 
         showTerminalQuickKeysOnDesktop: false,
 
@@ -681,6 +722,14 @@ export const useUIStore = create<UIStore>()(
         setNotifyOnSubtasks: (value) => {
           set({ notifyOnSubtasks: value });
         },
+
+        setNotifyOnCompletion: (value) => { set({ notifyOnCompletion: value }); },
+        setNotifyOnError: (value) => { set({ notifyOnError: value }); },
+        setNotifyOnQuestion: (value) => { set({ notifyOnQuestion: value }); },
+        setNotificationTemplates: (templates) => { set({ notificationTemplates: templates }); },
+        setSummarizeLastMessage: (value) => { set({ summarizeLastMessage: value }); },
+        setSummaryThreshold: (value) => { set({ summaryThreshold: value }); },
+        setSummaryLength: (value) => { set({ summaryLength: value }); },
       }),
       {
         name: 'ui-store',
@@ -718,6 +767,13 @@ export const useUIStore = create<UIStore>()(
           notificationMode: state.notificationMode,
           showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
           notifyOnSubtasks: state.notifyOnSubtasks,
+          notifyOnCompletion: state.notifyOnCompletion,
+          notifyOnError: state.notifyOnError,
+          notifyOnQuestion: state.notifyOnQuestion,
+          notificationTemplates: state.notificationTemplates,
+          summarizeLastMessage: state.summarizeLastMessage,
+          summaryThreshold: state.summaryThreshold,
+          summaryLength: state.summaryLength,
         })
       }
     ),

@@ -47,6 +47,25 @@ export type DesktopSettings = {
   nativeNotificationsEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
   notifyOnSubtasks?: boolean;
+
+  // Event toggles (which events trigger notifications)
+  notifyOnCompletion?: boolean;
+  notifyOnError?: boolean;
+  notifyOnQuestion?: boolean;
+
+  // Per-event notification templates
+  notificationTemplates?: {
+    completion: { title: string; message: string };
+    error: { title: string; message: string };
+    question: { title: string; message: string };
+    subtask: { title: string; message: string };
+  };
+
+  // Summarization settings
+  summarizeLastMessage?: boolean;
+  summaryThreshold?: number;
+  summaryLength?: number;
+
   usageAutoRefresh?: boolean;
   usageRefreshIntervalMs?: number;
   usageDisplayMode?: 'usage' | 'remaining';
