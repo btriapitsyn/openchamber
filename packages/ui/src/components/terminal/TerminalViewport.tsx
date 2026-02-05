@@ -99,11 +99,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     inputHandlerRef.current = onInput;
     resizeHandlerRef.current = onResize;
 
-    const logTerminalDebug = React.useCallback((message: string, details?: Record<string, unknown>) => {
-      void message;
-      void details;
-    }, []);
-
     const disableTerminalTextareas = React.useCallback(() => {
       if (!enableTouchScroll) {
         return;
@@ -131,12 +126,8 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         textarea.style.height = '0px';
         textarea.style.pointerEvents = 'none';
         textarea.style.zIndex = '-1';
-        logTerminalDebug('disableTextarea', {
-          id: textarea.id || null,
-          className: textarea.className || null,
-        });
       });
-    }, [enableTouchScroll, logTerminalDebug]);
+    }, [enableTouchScroll]);
 
     const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
     const useTextInput = enableTouchScroll && isAndroid;
@@ -171,17 +162,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         input.removeAttribute('readonly');
       }
 
-      logTerminalDebug('focusHiddenInput', {
-        left: input.style.left,
-        top: input.style.top,
-        disabled: input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement
-          ? input.disabled
-          : null,
-        readOnly: input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement
-          ? input.readOnly
-          : null,
-      });
-
       try {
         input.focus({ preventScroll: true });
       } catch {
@@ -189,7 +169,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
           input.focus();
         } catch { /* ignored */ }
       }
-    }, [logTerminalDebug, useTextInput]);
+    }, [useTextInput]);
 
     const readEditableValue = React.useCallback((target: HTMLElement) => {
       if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
@@ -206,7 +186,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       target.textContent = '';
     }, []);
 
-    const scheduleKeyProbe = React.useCallback((target: HTMLElement, phase: 'keydown' | 'keyup') => {
+    const scheduleKeyProbe = React.useCallback((target: HTMLElement) => {
       if (typeof window === 'undefined') {
         return;
       }
@@ -232,12 +212,10 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
               runProbe();
               return;
             }
-            logTerminalDebug('keydown-probe-empty', { phase });
             return;
           }
           const previous = lastObservedValueRef.current;
           lastObservedValueRef.current = value;
-          logTerminalDebug('keydown-probe', { phase, valueLength: value.length });
           const delta = value.startsWith(previous) ? value.slice(previous.length) : value;
           if (delta) {
             inputHandlerRef.current(delta.replace(/\r\n|\r|\n/g, '\r'));
@@ -248,7 +226,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       };
 
       runProbe();
-    }, [clearEditableValue, logTerminalDebug, readEditableValue, useTextInput]);
+    }, [clearEditableValue, readEditableValue, useTextInput]);
 
     React.useEffect(() => {
       const container = containerRef.current;
@@ -267,10 +245,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         if (!container.contains(target)) {
           return;
         }
-        logTerminalDebug('redirectFocus', {
-          tag: target.tagName,
-          className: target.className || null,
-        });
         try {
           target.blur();
         } catch { /* ignored */ }
@@ -281,7 +255,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       return () => {
         container.removeEventListener('focusin', handleContainerFocusIn, true);
       };
-    }, [enableTouchScroll, focusHiddenInput, logTerminalDebug]);
+    }, [enableTouchScroll, focusHiddenInput]);
 
     const copySelectionToClipboard = React.useCallback(async () => {
       if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -296,10 +270,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         return;
       }
 
-      logTerminalDebug('copySelection', {
-        textLength: text.length,
-        hasClipboard: Boolean(navigator.clipboard?.writeText),
-      });
       const container = containerRef.current;
       if (!container) {
         return;
@@ -313,13 +283,14 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         return;
       }
 
-      try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(text);
+      if (navigator.clipboard?.writeText) {
+        const copied = await navigator.clipboard
+          .writeText(text)
+          .then(() => true)
+          .catch(() => false);
+        if (copied) {
           return;
         }
-      } catch {
-        return;
       }
 
       try {
@@ -335,7 +306,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       } catch {
         return;
       }
-    }, [logTerminalDebug]);
+    }, []);
 
     const resetWriteState = React.useCallback(() => {
       pendingWriteRef.current = '';
@@ -840,7 +811,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
             return;
           }
 
-           const options = getGhosttyTerminalOptions(fontFamily, fontSize, theme, ghostty, Boolean(enableTouchScroll));
+          const options = getGhosttyTerminalOptions(fontFamily, fontSize, theme, ghostty, Boolean(enableTouchScroll));
 
           const terminal = new GhosttyTerminal(options);
 
@@ -1000,6 +971,266 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       [enableTouchScroll, focusHiddenInput, fitTerminal, resetWriteState]
     );
 
+    const handleHiddenInputBlur = React.useCallback(
+      (event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        if (!enableTouchScroll) {
+          return;
+        }
+
+        const related = event.relatedTarget as HTMLElement | null;
+        const relatedTag = related?.tagName;
+        const isInput = relatedTag === 'INPUT' || relatedTag === 'TEXTAREA' || related?.isContentEditable;
+        const isHiddenInput = related?.getAttribute('data-terminal-hidden-input') === 'true';
+        if (isInput && !isHiddenInput) {
+          if (refocusTimeoutRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(refocusTimeoutRef.current);
+          }
+          if (typeof window !== 'undefined') {
+            refocusTimeoutRef.current = window.setTimeout(() => {
+              refocusTimeoutRef.current = null;
+              focusHiddenInput();
+            }, 0);
+          }
+        }
+      },
+      [enableTouchScroll, focusHiddenInput]
+    );
+
+    const handleHiddenBeforeInput = React.useCallback(
+      (event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const nativeEvent = event.nativeEvent as InputEvent | undefined;
+        const inputType = nativeEvent?.inputType ?? '';
+        const data = typeof nativeEvent?.data === 'string' ? nativeEvent.data : '';
+
+        lastInputEventAtRef.current = typeof performance !== 'undefined'
+          ? performance.now()
+          : Date.now();
+
+        if (inputType === 'insertCompositionText') {
+          isComposingRef.current = true;
+          return;
+        }
+
+        if (!inputType && data) {
+          if (isComposingRef.current) {
+            return;
+          }
+          event.preventDefault();
+          inputHandlerRef.current(data);
+          lastBeforeInputRef.current = {
+            type: 'insertText',
+            at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+          };
+          ignoreNextInputRef.current = true;
+          return;
+        }
+
+        if (inputType === 'insertText' && data) {
+          if (isComposingRef.current) {
+            return;
+          }
+          event.preventDefault();
+          inputHandlerRef.current(data);
+          lastBeforeInputRef.current = {
+            type: inputType,
+            at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+          };
+          ignoreNextInputRef.current = true;
+          return;
+        }
+
+        if (inputType === 'insertLineBreak') {
+          if (isComposingRef.current) {
+            return;
+          }
+          event.preventDefault();
+          inputHandlerRef.current('\r');
+          lastBeforeInputRef.current = {
+            type: inputType,
+            at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+          };
+          ignoreNextInputRef.current = true;
+          return;
+        }
+
+        if (inputType === 'deleteContentBackward') {
+          if (isComposingRef.current) {
+            return;
+          }
+          event.preventDefault();
+          inputHandlerRef.current('\x7f');
+          lastBeforeInputRef.current = {
+            type: inputType,
+            at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+          };
+          ignoreNextInputRef.current = true;
+        }
+      },
+      []
+    );
+
+    const handleHiddenInput = React.useCallback(
+      (event: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const target = event.currentTarget as HTMLElement;
+        lastInputEventAtRef.current = typeof performance !== 'undefined'
+          ? performance.now()
+          : Date.now();
+        if (isComposingRef.current) {
+          return;
+        }
+        if (ignoreNextInputRef.current) {
+          const lastBeforeInput = lastBeforeInputRef.current;
+          const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          if (lastBeforeInput && now - lastBeforeInput.at < 50) {
+            ignoreNextInputRef.current = false;
+            clearEditableValue(target);
+            return;
+          }
+          ignoreNextInputRef.current = false;
+        }
+        const raw = readEditableValue(target);
+        if (!raw) {
+          return;
+        }
+
+        lastObservedValueRef.current = raw;
+
+        const value = raw.replace(/\r\n|\r|\n/g, '\r');
+        inputHandlerRef.current(value);
+        clearEditableValue(target);
+        lastObservedValueRef.current = '';
+      },
+      [clearEditableValue, readEditableValue]
+    );
+
+    const handleHiddenKeyDown = React.useCallback(
+      (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        event.stopPropagation();
+        const target = event.currentTarget as HTMLElement;
+        const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
+        if (nativeEvent?.isComposing) {
+          return;
+        }
+        const lastBeforeInput = lastBeforeInputRef.current;
+        const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        const recent = Boolean(lastBeforeInput && now - lastBeforeInput.at < 50);
+        if (event.key === 'Enter') {
+          if (recent && lastBeforeInput?.type === 'insertLineBreak') {
+            return;
+          }
+          event.preventDefault();
+          inputHandlerRef.current('\r');
+          clearEditableValue(target);
+          return;
+        }
+        if (event.key === 'Backspace') {
+          event.preventDefault();
+          if (recent && lastBeforeInput?.type === 'deleteContentBackward') {
+            return;
+          }
+          if (!readEditableValue(target)) {
+            inputHandlerRef.current('\x7f');
+          }
+        }
+
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          const lastInputAt = lastInputEventAtRef.current;
+          const sawInputRecently = Boolean(lastInputAt && now - lastInputAt < 50);
+          if (!sawInputRecently) {
+            event.preventDefault();
+            inputHandlerRef.current(event.key);
+            ignoreNextInputRef.current = true;
+            lastBeforeInputRef.current = {
+              type: 'keydown-text',
+              at: now,
+            };
+          }
+        }
+
+        scheduleKeyProbe(target);
+      },
+      [clearEditableValue, readEditableValue, scheduleKeyProbe]
+    );
+
+    const handleHiddenKeyUp = React.useCallback(
+      (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        event.stopPropagation();
+        const target = event.currentTarget as HTMLElement;
+        const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
+        if (nativeEvent?.isComposing) {
+          return;
+        }
+        scheduleKeyProbe(target);
+      },
+      [scheduleKeyProbe]
+    );
+
+    const handleHiddenCompositionEnd = React.useCallback(
+      (event: React.CompositionEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const target = event.currentTarget as HTMLElement;
+        isComposingRef.current = false;
+        const data = event.data || readEditableValue(target);
+        lastInputEventAtRef.current = typeof performance !== 'undefined'
+          ? performance.now()
+          : Date.now();
+        if (!data) {
+          return;
+        }
+        const value = data.replace(/\r\n|\r|\n/g, '\r');
+        inputHandlerRef.current(value);
+        clearEditableValue(target);
+        lastBeforeInputRef.current = {
+          type: 'compositionend',
+          at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
+        };
+        ignoreNextInputRef.current = true;
+      },
+      [clearEditableValue, readEditableValue]
+    );
+
+    const handleHiddenPaste = React.useCallback(
+      (event: React.ClipboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        event.stopPropagation();
+        const text = event.clipboardData?.getData('text') ?? '';
+        if (!text) {
+          return;
+        }
+        event.preventDefault();
+        const terminal = terminalRef.current;
+        const payload = terminal?.hasBracketedPaste?.()
+          ? `\x1b[200~${text}\x1b[201~`
+          : text;
+        inputHandlerRef.current(payload);
+      },
+      []
+    );
+
+    const hiddenInputStyle: React.CSSProperties = {
+      position: 'fixed',
+      left: 0,
+      top: 0,
+      width: 1,
+      height: 1,
+      opacity: 0,
+      zIndex: -1,
+      background: 'transparent',
+      color: 'transparent',
+      caretColor: 'transparent',
+      resize: 'none',
+      overflow: 'hidden',
+      whiteSpace: 'nowrap',
+      border: '0',
+      padding: 0,
+      margin: 0,
+      outline: 'none',
+      outlineOffset: 0,
+      fontSize: 16,
+      fontWeight: 400,
+      pointerEvents: 'none',
+      WebkitUserSelect: 'none',
+      userSelect: 'none',
+    };
+
     return (
       <div
         ref={containerRef}
@@ -1029,861 +1260,66 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
           }
         }}
       >
-        {enableTouchScroll ? (typeof document !== 'undefined' ? createPortal(
-          <>
-            <input
-              ref={textInputRef}
-              type="text"
-              inputMode="text"
-              autoCapitalize="off"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              tabIndex={0}
-              enterKeyHint="send"
-              data-terminal-hidden-input="true"
-              placeholder="Terminal input"
-              style={{
-                position: 'fixed',
-                left: 0,
-                top: 0,
-                width: 1,
-                height: 1,
-                display: useTextInput ? 'block' : 'none',
-                opacity: 0,
-                zIndex: -1,
-                background: 'transparent',
-                color: 'transparent',
-                caretColor: 'transparent',
-                resize: 'none',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                border: '0',
-                padding: 0,
-                margin: 0,
-                outline: 'none',
-                outlineOffset: 0,
-                fontSize: 16,
-                fontWeight: 400,
-                pointerEvents: 'none',
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-              }}
-              onFocus={() => {
-                logTerminalDebug('hiddenInput focus');
-              }}
-              onBlur={(event) => {
-                logTerminalDebug('hiddenInput blur', {
-                  relatedTag: (event.relatedTarget as HTMLElement | null)?.tagName ?? null,
-                  activeTag: (typeof document !== 'undefined'
-                    ? (document.activeElement as HTMLElement | null)?.tagName
-                    : null),
-                });
-
-                if (!enableTouchScroll) {
-                  return;
-                }
-
-                const related = event.relatedTarget as HTMLElement | null;
-                const relatedTag = related?.tagName;
-                const isInput = relatedTag === 'INPUT' || relatedTag === 'TEXTAREA' || related?.isContentEditable;
-                const isHiddenInput = related?.getAttribute('data-terminal-hidden-input') === 'true';
-                if (isInput && !isHiddenInput) {
-                  if (refocusTimeoutRef.current !== null && typeof window !== 'undefined') {
-                    window.clearTimeout(refocusTimeoutRef.current);
-                  }
-                  if (typeof window !== 'undefined') {
-                    refocusTimeoutRef.current = window.setTimeout(() => {
-                      refocusTimeoutRef.current = null;
-                      focusHiddenInput();
-                    }, 0);
-                  }
-                }
-              }}
-              onBeforeInput={(event) => {
-                const nativeEvent = event.nativeEvent as unknown as InputEvent | undefined;
-                const inputType = nativeEvent?.inputType ?? '';
-                const data = typeof nativeEvent?.data === 'string' ? nativeEvent.data : '';
-
-                logTerminalDebug('beforeinput', {
-                  inputType,
-                  dataLength: data.length,
-                  isComposing: isComposingRef.current,
-                });
-
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-
-                if (inputType === 'insertCompositionText') {
+        {enableTouchScroll && typeof document !== 'undefined'
+          ? createPortal(
+            <>
+              <input
+                ref={textInputRef}
+                type="text"
+                inputMode="text"
+                autoCapitalize="off"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                tabIndex={0}
+                enterKeyHint="send"
+                data-terminal-hidden-input="true"
+                placeholder="Terminal input"
+                style={{
+                  ...hiddenInputStyle,
+                  display: useTextInput ? 'block' : 'none',
+                }}
+                onBlur={handleHiddenInputBlur}
+                onBeforeInput={handleHiddenBeforeInput}
+                onCompositionStart={() => {
                   isComposingRef.current = true;
-                  return;
-                }
-
-                if (!inputType && data) {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current(data);
-                  lastBeforeInputRef.current = {
-                    type: 'insertText',
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'insertText' && data) {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current(data);
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'insertLineBreak') {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\r');
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'deleteContentBackward') {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\x7f');
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                }
-              }}
-              onCompositionStart={() => {
-                isComposingRef.current = true;
-                logTerminalDebug('compositionstart');
-              }}
-              onInput={(event) => {
-                const target = event.currentTarget as HTMLElement;
-                logTerminalDebug('input', {
-                  valueLength: readEditableValue(target).length,
-                  isComposing: isComposingRef.current,
-                });
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-                if (isComposingRef.current) {
-                  return;
-                }
-                if (ignoreNextInputRef.current) {
-                  const lastBeforeInput = lastBeforeInputRef.current;
-                  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                  if (lastBeforeInput && now - lastBeforeInput.at < 50) {
-                    ignoreNextInputRef.current = false;
-                    clearEditableValue(target);
-                    return;
-                  }
-                  ignoreNextInputRef.current = false;
-                }
-                const raw = readEditableValue(target);
-                if (!raw) {
-                  return;
-                }
-
-                lastObservedValueRef.current = raw;
-
-                const value = raw.replace(/\r\n|\r|\n/g, '\r');
-                inputHandlerRef.current(value);
-                clearEditableValue(target);
-                lastObservedValueRef.current = '';
-              }}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                const target = event.currentTarget as HTMLElement;
-                const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
-                logTerminalDebug('keydown', {
-                  key: event.key,
-                  isComposing: nativeEvent?.isComposing ?? false,
-                  valueLength: readEditableValue(target).length,
-                });
-                if (nativeEvent?.isComposing) {
-                  return;
-                }
-                const lastBeforeInput = lastBeforeInputRef.current;
-                const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                const recent = Boolean(lastBeforeInput && now - lastBeforeInput.at < 50);
-                if (event.key === 'Enter') {
-                  if (recent && lastBeforeInput?.type === 'insertLineBreak') {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\r');
-                  clearEditableValue(target);
-                  return;
-                }
-                if (event.key === 'Backspace') {
-                  event.preventDefault();
-                  if (recent && lastBeforeInput?.type === 'deleteContentBackward') {
-                    return;
-                  }
-                  if (!readEditableValue(target)) {
-                    inputHandlerRef.current('\x7f');
-                  }
-                }
-
-                if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                  const lastInputAt = lastInputEventAtRef.current;
-                  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                  const sawInputRecently = Boolean(lastInputAt && now - lastInputAt < 50);
-                  if (!sawInputRecently) {
-                    event.preventDefault();
-                    inputHandlerRef.current(event.key);
-                    ignoreNextInputRef.current = true;
-                    lastBeforeInputRef.current = {
-                      type: 'keydown-text',
-                      at: now,
-                    };
-                    logTerminalDebug('keydown-text-fallback', { key: event.key });
-                  }
-                }
-
-                scheduleKeyProbe(target, 'keydown');
-              }}
-              onKeyUp={(event) => {
-                event.stopPropagation();
-                const target = event.currentTarget as HTMLElement;
-                const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
-                logTerminalDebug('keyup', {
-                  key: event.key,
-                  isComposing: nativeEvent?.isComposing ?? false,
-                  valueLength: readEditableValue(target).length,
-                });
-                if (nativeEvent?.isComposing) {
-                  return;
-                }
-                scheduleKeyProbe(target, 'keyup');
-              }}
-              onCompositionEnd={(event) => {
-                const target = event.currentTarget as HTMLElement;
-                isComposingRef.current = false;
-                const data = event.data || readEditableValue(target);
-                logTerminalDebug('compositionend', {
-                  dataLength: String(data || '').length,
-                });
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-                if (!data) {
-                  return;
-                }
-                const value = data.replace(/\r\n|\r|\n/g, '\r');
-                inputHandlerRef.current(value);
-                clearEditableValue(target);
-                lastBeforeInputRef.current = {
-                  type: 'compositionend',
-                  at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                };
-                ignoreNextInputRef.current = true;
-              }}
-              onPaste={(event) => {
-                event.stopPropagation();
-                const text = event.clipboardData?.getData('text') ?? '';
-                if (!text) {
-                  return;
-                }
-                event.preventDefault();
-                const terminal = terminalRef.current;
-                const payload = terminal?.hasBracketedPaste?.()
-                  ? `\x1b[200~${text}\x1b[201~`
-                  : text;
-                inputHandlerRef.current(payload);
-              }}
-            />
-            <textarea
-              ref={hiddenInputRef}
-              inputMode="text"
-              autoCapitalize="off"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              tabIndex={0}
-              enterKeyHint="send"
-              data-terminal-hidden-input="true"
-              placeholder="Terminal input"
-              style={{
-                position: 'fixed',
-                left: 0,
-                top: 0,
-                width: 1,
-                height: 1,
-                display: useTextInput ? 'none' : 'block',
-                opacity: 0,
-                zIndex: -1,
-                background: 'transparent',
-                color: 'transparent',
-                caretColor: 'transparent',
-                resize: 'none',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                border: '0',
-                padding: 0,
-                margin: 0,
-                outline: 'none',
-                outlineOffset: 0,
-                fontSize: 16,
-                fontWeight: 400,
-                pointerEvents: 'none',
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-              }}
-              onFocus={() => {
-                logTerminalDebug('hiddenInput focus');
-              }}
-              onBlur={(event) => {
-                logTerminalDebug('hiddenInput blur', {
-                  relatedTag: (event.relatedTarget as HTMLElement | null)?.tagName ?? null,
-                  activeTag: (typeof document !== 'undefined'
-                    ? (document.activeElement as HTMLElement | null)?.tagName
-                    : null),
-                });
-
-                if (!enableTouchScroll) {
-                  return;
-                }
-
-                const related = event.relatedTarget as HTMLElement | null;
-                const relatedTag = related?.tagName;
-                const isInput = relatedTag === 'INPUT' || relatedTag === 'TEXTAREA' || related?.isContentEditable;
-                const isHiddenInput = related?.getAttribute('data-terminal-hidden-input') === 'true';
-                if (isInput && !isHiddenInput) {
-                  if (refocusTimeoutRef.current !== null && typeof window !== 'undefined') {
-                    window.clearTimeout(refocusTimeoutRef.current);
-                  }
-                  if (typeof window !== 'undefined') {
-                    refocusTimeoutRef.current = window.setTimeout(() => {
-                      refocusTimeoutRef.current = null;
-                      focusHiddenInput();
-                    }, 0);
-                  }
-                }
-              }}
-              onBeforeInput={(event) => {
-                const nativeEvent = event.nativeEvent as unknown as InputEvent | undefined;
-                const inputType = nativeEvent?.inputType ?? '';
-                const data = typeof nativeEvent?.data === 'string' ? nativeEvent.data : '';
-
-                logTerminalDebug('beforeinput', {
-                  inputType,
-                  dataLength: data.length,
-                  isComposing: isComposingRef.current,
-                });
-
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-
-                if (inputType === 'insertCompositionText') {
+                }}
+                onInput={handleHiddenInput}
+                onKeyDown={handleHiddenKeyDown}
+                onKeyUp={handleHiddenKeyUp}
+                onCompositionEnd={handleHiddenCompositionEnd}
+                onPaste={handleHiddenPaste}
+              />
+              <textarea
+                ref={hiddenInputRef}
+                inputMode="text"
+                autoCapitalize="off"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
+                tabIndex={0}
+                enterKeyHint="send"
+                data-terminal-hidden-input="true"
+                placeholder="Terminal input"
+                style={{
+                  ...hiddenInputStyle,
+                  display: useTextInput ? 'none' : 'block',
+                }}
+                onBlur={handleHiddenInputBlur}
+                onBeforeInput={handleHiddenBeforeInput}
+                onCompositionStart={() => {
                   isComposingRef.current = true;
-                  return;
-                }
-
-                if (!inputType && data) {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current(data);
-                  lastBeforeInputRef.current = {
-                    type: 'insertText',
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'insertText' && data) {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current(data);
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'insertLineBreak') {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\r');
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'deleteContentBackward') {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\x7f');
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                }
-              }}
-              onCompositionStart={() => {
-                isComposingRef.current = true;
-                logTerminalDebug('compositionstart');
-              }}
-              onInput={(event) => {
-                const target = event.currentTarget as HTMLElement;
-                logTerminalDebug('input', {
-                  valueLength: readEditableValue(target).length,
-                  isComposing: isComposingRef.current,
-                });
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-                if (isComposingRef.current) {
-                  return;
-                }
-                if (ignoreNextInputRef.current) {
-                  const lastBeforeInput = lastBeforeInputRef.current;
-                  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                  if (lastBeforeInput && now - lastBeforeInput.at < 50) {
-                    ignoreNextInputRef.current = false;
-                    clearEditableValue(target);
-                    return;
-                  }
-                  ignoreNextInputRef.current = false;
-                }
-                const raw = readEditableValue(target);
-                if (!raw) {
-                  return;
-                }
-
-                lastObservedValueRef.current = raw;
-
-                const value = raw.replace(/\r\n|\r|\n/g, '\r');
-                inputHandlerRef.current(value);
-                clearEditableValue(target);
-                lastObservedValueRef.current = '';
-              }}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                const target = event.currentTarget as HTMLElement;
-                const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
-                logTerminalDebug('keydown', {
-                  key: event.key,
-                  isComposing: nativeEvent?.isComposing ?? false,
-                  valueLength: readEditableValue(target).length,
-                });
-                if (nativeEvent?.isComposing) {
-                  return;
-                }
-                const lastBeforeInput = lastBeforeInputRef.current;
-                const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                const recent = Boolean(lastBeforeInput && now - lastBeforeInput.at < 50);
-                if (event.key === 'Enter') {
-                  if (recent && lastBeforeInput?.type === 'insertLineBreak') {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\r');
-                  clearEditableValue(target);
-                  return;
-                }
-                if (event.key === 'Backspace') {
-                  event.preventDefault();
-                  if (recent && lastBeforeInput?.type === 'deleteContentBackward') {
-                    return;
-                  }
-                  if (!readEditableValue(target)) {
-                    inputHandlerRef.current('\x7f');
-                  }
-                }
-
-                if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                  const lastInputAt = lastInputEventAtRef.current;
-                  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                  const sawInputRecently = Boolean(lastInputAt && now - lastInputAt < 50);
-                  if (!sawInputRecently) {
-                    event.preventDefault();
-                    inputHandlerRef.current(event.key);
-                    ignoreNextInputRef.current = true;
-                    lastBeforeInputRef.current = {
-                      type: 'keydown-text',
-                      at: now,
-                    };
-                    logTerminalDebug('keydown-text-fallback', { key: event.key });
-                  }
-                }
-
-                scheduleKeyProbe(target, 'keydown');
-              }}
-              onKeyUp={(event) => {
-                event.stopPropagation();
-                const target = event.currentTarget as HTMLElement;
-                const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
-                logTerminalDebug('keyup', {
-                  key: event.key,
-                  isComposing: nativeEvent?.isComposing ?? false,
-                  valueLength: readEditableValue(target).length,
-                });
-                if (nativeEvent?.isComposing) {
-                  return;
-                }
-                scheduleKeyProbe(target, 'keyup');
-              }}
-              onCompositionEnd={(event) => {
-                const target = event.currentTarget as HTMLElement;
-                isComposingRef.current = false;
-                const data = event.data || readEditableValue(target);
-                logTerminalDebug('compositionend', {
-                  dataLength: String(data || '').length,
-                });
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-                if (!data) {
-                  return;
-                }
-                const value = data.replace(/\r\n|\r|\n/g, '\r');
-                inputHandlerRef.current(value);
-                clearEditableValue(target);
-                lastBeforeInputRef.current = {
-                  type: 'compositionend',
-                  at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                };
-                ignoreNextInputRef.current = true;
-              }}
-              onPaste={(event) => {
-                event.stopPropagation();
-                const text = event.clipboardData?.getData('text') ?? '';
-                if (!text) {
-                  return;
-                }
-                event.preventDefault();
-                const terminal = terminalRef.current;
-                const payload = terminal?.hasBracketedPaste?.()
-                  ? `\x1b[200~${text}\x1b[201~`
-                  : text;
-                inputHandlerRef.current(payload);
-              }}
-            />
-          </>,
-          document.body
-        ) : null) : (
-            <textarea
-              ref={hiddenInputRef}
-              inputMode="text"
-              autoCapitalize="off"
-              autoComplete="off"
-              autoCorrect="off"
-              spellCheck={false}
-              tabIndex={0}
-              enterKeyHint="send"
-              data-terminal-hidden-input="true"
-              placeholder="Terminal input"
-              style={{
-                position: 'fixed',
-                left: 0,
-                top: 0,
-                width: 1,
-                height: 1,
-                opacity: 0,
-                zIndex: -1,
-                background: 'transparent',
-                color: 'transparent',
-                caretColor: 'transparent',
-                resize: 'none',
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                border: '0',
-                padding: 0,
-                margin: 0,
-                outline: 'none',
-                outlineOffset: 0,
-                fontSize: 16,
-                fontWeight: 400,
-                pointerEvents: 'none',
-                WebkitUserSelect: 'none',
-                userSelect: 'none',
-              }}
-              onFocus={() => {
-                logTerminalDebug('hiddenInput focus');
-              }}
-              onBlur={(event) => {
-                logTerminalDebug('hiddenInput blur', {
-                  relatedTag: (event.relatedTarget as HTMLElement | null)?.tagName ?? null,
-                  activeTag: (typeof document !== 'undefined'
-                    ? (document.activeElement as HTMLElement | null)?.tagName
-                    : null),
-                });
-
-                if (!enableTouchScroll) {
-                  return;
-                }
-
-                const related = event.relatedTarget as HTMLElement | null;
-                const relatedTag = related?.tagName;
-                const isInput = relatedTag === 'INPUT' || relatedTag === 'TEXTAREA' || related?.isContentEditable;
-                const isHiddenInput = related?.getAttribute('data-terminal-hidden-input') === 'true';
-                if (isInput && !isHiddenInput) {
-                  if (refocusTimeoutRef.current !== null && typeof window !== 'undefined') {
-                    window.clearTimeout(refocusTimeoutRef.current);
-                  }
-                  if (typeof window !== 'undefined') {
-                    refocusTimeoutRef.current = window.setTimeout(() => {
-                      refocusTimeoutRef.current = null;
-                      focusHiddenInput();
-                    }, 0);
-                  }
-                }
-              }}
-              onBeforeInput={(event) => {
-                const nativeEvent = event.nativeEvent as unknown as InputEvent | undefined;
-                const inputType = nativeEvent?.inputType ?? '';
-                const data = typeof nativeEvent?.data === 'string' ? nativeEvent.data : '';
-
-                logTerminalDebug('beforeinput', {
-                  inputType,
-                  dataLength: data.length,
-                  isComposing: isComposingRef.current,
-                });
-
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-
-                if (inputType === 'insertCompositionText') {
-                  isComposingRef.current = true;
-                  return;
-                }
-
-                if (!inputType && data) {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current(data);
-                  lastBeforeInputRef.current = {
-                    type: 'insertText',
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'insertText' && data) {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current(data);
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'insertLineBreak') {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\r');
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                  return;
-                }
-
-                if (inputType === 'deleteContentBackward') {
-                  if (isComposingRef.current) {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\x7f');
-                  lastBeforeInputRef.current = {
-                    type: inputType,
-                    at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                  };
-                  ignoreNextInputRef.current = true;
-                }
-              }}
-              onCompositionStart={() => {
-                isComposingRef.current = true;
-                logTerminalDebug('compositionstart');
-              }}
-              onInput={(event) => {
-                const target = event.currentTarget as HTMLElement;
-                logTerminalDebug('input', {
-                  valueLength: readEditableValue(target).length,
-                  isComposing: isComposingRef.current,
-                });
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-                if (isComposingRef.current) {
-                  return;
-                }
-                if (ignoreNextInputRef.current) {
-                  const lastBeforeInput = lastBeforeInputRef.current;
-                  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                  if (lastBeforeInput && now - lastBeforeInput.at < 50) {
-                    ignoreNextInputRef.current = false;
-                    clearEditableValue(target);
-                    return;
-                  }
-                  ignoreNextInputRef.current = false;
-                }
-                const raw = readEditableValue(target);
-                if (!raw) {
-                  return;
-                }
-
-                lastObservedValueRef.current = raw;
-
-                const value = raw.replace(/\r\n|\r|\n/g, '\r');
-                inputHandlerRef.current(value);
-                clearEditableValue(target);
-                lastObservedValueRef.current = '';
-              }}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                const target = event.currentTarget as HTMLElement;
-                const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
-                logTerminalDebug('keydown', {
-                  key: event.key,
-                  isComposing: nativeEvent?.isComposing ?? false,
-                  valueLength: readEditableValue(target).length,
-                });
-                if (nativeEvent?.isComposing) {
-                  return;
-                }
-                const lastBeforeInput = lastBeforeInputRef.current;
-                const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                const recent = Boolean(lastBeforeInput && now - lastBeforeInput.at < 50);
-                if (event.key === 'Enter') {
-                  if (recent && lastBeforeInput?.type === 'insertLineBreak') {
-                    return;
-                  }
-                  event.preventDefault();
-                  inputHandlerRef.current('\r');
-                  clearEditableValue(target);
-                  return;
-                }
-                if (event.key === 'Backspace') {
-                  event.preventDefault();
-                  if (recent && lastBeforeInput?.type === 'deleteContentBackward') {
-                    return;
-                  }
-                  if (!readEditableValue(target)) {
-                    inputHandlerRef.current('\x7f');
-                  }
-                }
-
-                if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-                  const lastInputAt = lastInputEventAtRef.current;
-                  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
-                  const sawInputRecently = Boolean(lastInputAt && now - lastInputAt < 50);
-                  if (!sawInputRecently) {
-                    event.preventDefault();
-                    inputHandlerRef.current(event.key);
-                    ignoreNextInputRef.current = true;
-                    lastBeforeInputRef.current = {
-                      type: 'keydown-text',
-                      at: now,
-                    };
-                    logTerminalDebug('keydown-text-fallback', { key: event.key });
-                  }
-                }
-
-                scheduleKeyProbe(target, 'keydown');
-              }}
-              onKeyUp={(event) => {
-                event.stopPropagation();
-                const target = event.currentTarget as HTMLElement;
-                const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
-                logTerminalDebug('keyup', {
-                  key: event.key,
-                  isComposing: nativeEvent?.isComposing ?? false,
-                  valueLength: readEditableValue(target).length,
-                });
-                if (nativeEvent?.isComposing) {
-                  return;
-                }
-                scheduleKeyProbe(target, 'keyup');
-              }}
-              onCompositionEnd={(event) => {
-                const target = event.currentTarget as HTMLElement;
-                isComposingRef.current = false;
-                const data = event.data || readEditableValue(target);
-                logTerminalDebug('compositionend', {
-                  dataLength: String(data || '').length,
-                });
-                lastInputEventAtRef.current = typeof performance !== 'undefined'
-                  ? performance.now()
-                  : Date.now();
-                if (!data) {
-                  return;
-                }
-                const value = data.replace(/\r\n|\r|\n/g, '\r');
-                inputHandlerRef.current(value);
-                clearEditableValue(target);
-                lastBeforeInputRef.current = {
-                  type: 'compositionend',
-                  at: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-                };
-                ignoreNextInputRef.current = true;
-              }}
-              onPaste={(event) => {
-                event.stopPropagation();
-                const text = event.clipboardData?.getData('text') ?? '';
-                if (!text) {
-                  return;
-                }
-                event.preventDefault();
-                const terminal = terminalRef.current;
-                const payload = terminal?.hasBracketedPaste?.()
-                  ? `\x1b[200~${text}\x1b[201~`
-                  : text;
-                inputHandlerRef.current(payload);
-              }}
-            />
-        )}
+                }}
+                onInput={handleHiddenInput}
+                onKeyDown={handleHiddenKeyDown}
+                onKeyUp={handleHiddenKeyUp}
+                onCompositionEnd={handleHiddenCompositionEnd}
+                onPaste={handleHiddenPaste}
+              />
+            </>,
+            document.body
+            )
+          : null}
         {viewportRef.current && !enableTouchScroll ? (
           <OverlayScrollbar
             containerRef={viewportRef}
