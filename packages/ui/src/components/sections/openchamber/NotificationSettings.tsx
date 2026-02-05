@@ -17,6 +17,12 @@ export const NotificationSettings: React.FC = () => {
   const setNotificationMode = useUIStore(state => state.setNotificationMode);
   const notifyOnSubtasks = useUIStore(state => state.notifyOnSubtasks);
   const setNotifyOnSubtasks = useUIStore(state => state.setNotifyOnSubtasks);
+  const notifyOnCompletion = useUIStore(state => state.notifyOnCompletion);
+  const setNotifyOnCompletion = useUIStore(state => state.setNotifyOnCompletion);
+  const notifyOnError = useUIStore(state => state.notifyOnError);
+  const setNotifyOnError = useUIStore(state => state.setNotifyOnError);
+  const notifyOnQuestion = useUIStore(state => state.notifyOnQuestion);
+  const setNotifyOnQuestion = useUIStore(state => state.setNotifyOnQuestion);
 
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission>('default');
   const [pushSupported, setPushSupported] = React.useState(false);
@@ -416,7 +422,7 @@ export const NotificationSettings: React.FC = () => {
           </div>
           <Switch
             checked={notifyOnSubtasks}
-            onCheckedChange={(checked) => setNotifyOnSubtasks(checked)}
+            onCheckedChange={(checked: boolean) => setNotifyOnSubtasks(checked)}
             className="data-[state=checked]:bg-status-info"
           />
         </div>
@@ -434,9 +440,58 @@ export const NotificationSettings: React.FC = () => {
           </div>
           <Switch
             checked={notificationMode === 'always'}
-            onCheckedChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
+            onCheckedChange={(checked: boolean) => setNotificationMode(checked ? 'always' : 'hidden-only')}
             className="data-[state=checked]:bg-status-info"
           />
+        </div>
+      )}
+
+      {nativeNotificationsEnabled && canShowNotifications && (
+        <div className="space-y-3 pt-2">
+          <div className="space-y-0.5">
+            <span className="typography-ui text-foreground font-medium">
+              Events
+            </span>
+            <p className="typography-micro text-muted-foreground">
+              Choose which events trigger notifications.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">Completion</span>
+              <p className="typography-micro text-muted-foreground">Agent finished its task.</p>
+            </div>
+            <Switch
+              checked={notifyOnCompletion}
+              onCheckedChange={setNotifyOnCompletion}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">Errors</span>
+              <p className="typography-micro text-muted-foreground">A tool call failed.</p>
+            </div>
+            <Switch
+              checked={notifyOnError}
+              onCheckedChange={setNotifyOnError}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">Questions</span>
+              <p className="typography-micro text-muted-foreground">Agent is asking for input or permission.</p>
+            </div>
+            <Switch
+              checked={notifyOnQuestion}
+              onCheckedChange={setNotifyOnQuestion}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
         </div>
       )}
 
@@ -494,7 +549,7 @@ export const NotificationSettings: React.FC = () => {
                 <Switch
                   checked={pushSubscribed}
                   disabled={pushBusy}
-                  onCheckedChange={(checked) => {
+                  onCheckedChange={(checked: boolean) => {
                     if (checked) {
                       void handleEnableBackgroundNotifications();
                     } else {
