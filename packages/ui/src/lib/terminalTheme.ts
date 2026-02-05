@@ -98,7 +98,8 @@ export function getGhosttyTerminalOptions(
   fontFamily: string,
   fontSize: number,
   theme: TerminalTheme,
-  ghostty: Ghostty
+  ghostty: Ghostty,
+  disableStdin = false
 ) {
   const powerlineFallbacks =
     '"JetBrainsMonoNL Nerd Font", "FiraCode Nerd Font", "Cascadia Code PL", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace';
@@ -136,5 +137,6 @@ export function getGhosttyTerminalOptions(
     },
     scrollback: 50_000,
     ghostty,
+    disableStdin,
   };
 }
