@@ -16,6 +16,8 @@ type CodeMirrorEditorProps = {
   readOnly?: boolean;
   lineNumbersConfig?: Parameters<typeof lineNumbers>[0];
   highlightLines?: { start: number; end: number };
+  onViewReady?: (view: EditorView) => void;
+  onViewDestroy?: () => void;
 };
 
 const lineNumbersCompartment = new Compartment();
@@ -55,11 +57,23 @@ const createHighlightLinesExtension = (range?: { start: number; end: number }): 
   }, { decorations: (v) => v.decorations });
 };
 
-export function CodeMirrorEditor({ value, onChange, extensions, className, readOnly, lineNumbersConfig, highlightLines }: CodeMirrorEditorProps) {
+export function CodeMirrorEditor({
+  value,
+  onChange,
+  extensions,
+  className,
+  readOnly,
+  lineNumbersConfig,
+  highlightLines,
+  onViewReady,
+  onViewDestroy,
+}: CodeMirrorEditorProps) {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const viewRef = React.useRef<EditorView | null>(null);
   const valueRef = React.useRef(value);
   const onChangeRef = React.useRef(onChange);
+  const onViewReadyRef = React.useRef(onViewReady);
+  const onViewDestroyRef = React.useRef(onViewDestroy);
 
   React.useEffect(() => {
     valueRef.current = value;
@@ -68,6 +82,11 @@ export function CodeMirrorEditor({ value, onChange, extensions, className, readO
   React.useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  React.useEffect(() => {
+    onViewReadyRef.current = onViewReady;
+    onViewDestroyRef.current = onViewDestroy;
+  }, [onViewReady, onViewDestroy]);
 
   React.useEffect(() => {
     if (!hostRef.current) {
@@ -101,7 +120,12 @@ export function CodeMirrorEditor({ value, onChange, extensions, className, readO
       parent: hostRef.current,
     });
 
+    if (viewRef.current) {
+      onViewReadyRef.current?.(viewRef.current);
+    }
+
     return () => {
+      onViewDestroyRef.current?.();
       viewRef.current?.destroy();
       viewRef.current = null;
     };
