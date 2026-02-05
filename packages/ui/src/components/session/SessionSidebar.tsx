@@ -149,6 +149,12 @@ interface SortableProjectItemProps {
   onNewSessionFromGitHubIssue?: () => void;
   onNewSessionFromGitHubPR?: () => void;
   onOpenMultiRunLauncher: () => void;
+  onRenameStart: () => void;
+  onRenameSave: () => void;
+  onRenameCancel: () => void;
+  onRenameValueChange: (value: string) => void;
+  renameValue: string;
+  isRenaming: boolean;
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
   children?: React.ReactNode;
@@ -175,6 +181,12 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onNewSessionFromGitHubIssue,
   onNewSessionFromGitHubPR,
   onOpenMultiRunLauncher,
+  onRenameStart,
+  onRenameSave,
+  onRenameCancel,
+  onRenameValueChange,
+  renameValue,
+  isRenaming,
   onClose,
   sentinelRef,
   children,
@@ -221,98 +233,141 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
         onMouseLeave={() => onHoverChange(false)}
         onContextMenu={(event) => {
           event.preventDefault();
-          setIsMenuOpen(true);
+          if (!isRenaming) {
+            setIsMenuOpen(true);
+          }
         }}
       >
         <div className="relative flex items-center gap-1 px-1" {...attributes}>
-          {/* Project name with tooltip for path - draggable */}
-          <Tooltip delayDuration={1500}>
-            <TooltipTrigger asChild>
+          {isRenaming ? (
+            <form
+              className="flex min-w-0 flex-1 items-center gap-2"
+              data-keyboard-avoid="true"
+              onSubmit={(event) => {
+                event.preventDefault();
+                onRenameSave();
+              }}
+            >
+              <input
+                value={renameValue}
+                onChange={(event) => onRenameValueChange(event.target.value)}
+                className="flex-1 min-w-0 bg-transparent typography-ui-label outline-none placeholder:text-muted-foreground"
+                autoFocus
+                placeholder="Rename project"
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    onRenameCancel();
+                  }
+                }}
+              />
               <button
-                type="button"
-                onClick={onToggle}
-                {...listeners}
-                className="flex-1 min-w-0 flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm cursor-grab active:cursor-grabbing"
+                type="submit"
+                className="shrink-0 text-muted-foreground hover:text-foreground"
               >
-                <span className={cn(
-                  "typography-ui font-semibold truncate",
-                  isActiveProject ? "text-primary" : "text-foreground group-hover/project:text-foreground"
-                )}>
-                  {projectLabel}
-                </span>
+                <RiCheckLine className="size-4" />
               </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              {projectDescription}
-            </TooltipContent>
-          </Tooltip>
-
-          {/* Project menu */}
-          <DropdownMenu
-            open={isMenuOpen}
-            onOpenChange={setIsMenuOpen}
-          >
-            <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className={cn(
-                  'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
-                  mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
+                onClick={onRenameCancel}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <RiCloseLine className="size-4" />
+              </button>
+            </form>
+          ) : (
+            <Tooltip delayDuration={1500}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={onToggle}
+                  {...listeners}
+                  className="flex-1 min-w-0 flex items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-sm cursor-grab active:cursor-grabbing"
+                >
+                  <span className={cn(
+                    "typography-ui font-semibold truncate",
+                    isActiveProject ? "text-primary" : "text-foreground group-hover/project:text-foreground"
+                  )}>
+                    {projectLabel}
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {projectDescription}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {!isRenaming ? (
+            <DropdownMenu
+              open={isMenuOpen}
+              onOpenChange={setIsMenuOpen}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-opacity focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 hover:text-foreground',
+                    mobileVariant ? 'opacity-70' : 'opacity-0 group-hover/project:opacity-100',
+                  )}
+                  aria-label="Project menu"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <RiMore2Line className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                {isRepo && !hideDirectoryControls && settingsAutoCreateWorktree && onNewSession && (
+                  <DropdownMenuItem onClick={onNewSession}>
+                    <RiAddLine className="mr-1.5 h-4 w-4" />
+                    New Session
+                  </DropdownMenuItem>
                 )}
-                aria-label="Project menu"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <RiMore2Line className="h-3.5 w-3.5" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[180px]">
-              {isRepo && !hideDirectoryControls && settingsAutoCreateWorktree && onNewSession && (
-                <DropdownMenuItem onClick={onNewSession}>
-                  <RiAddLine className="mr-1.5 h-4 w-4" />
-                  New Session
+                {isRepo && !hideDirectoryControls && !settingsAutoCreateWorktree && onNewWorktreeSession && (
+                  <DropdownMenuItem onClick={onNewWorktreeSession}>
+                    <RiGitBranchLine className="mr-1.5 h-4 w-4" />
+                    New Session in Worktree
+                  </DropdownMenuItem>
+                )}
+                {isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
+                  <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
+                    <RiGithubLine className="mr-1.5 h-4 w-4" />
+                    New session from GitHub issue
+                  </DropdownMenuItem>
+                )}
+                {isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
+                  <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
+                    <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
+                    New session from GitHub PR
+                  </DropdownMenuItem>
+                )}
+                {isRepo && !hideDirectoryControls && (
+                  <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
+                    <ArrowsMerge className="mr-1.5 h-4 w-4" />
+                    New Multi-Run
+                  </DropdownMenuItem>
+                )}
+                {isRepo && !hideDirectoryControls && onOpenBranchPicker && (
+                  <DropdownMenuItem onClick={onOpenBranchPicker}>
+                    <RiGitRepositoryLine className="mr-1.5 h-4 w-4" />
+                    Manage Branches
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={onRenameStart}>
+                  <RiPencilAiLine className="mr-1.5 h-4 w-4" />
+                  Rename
                 </DropdownMenuItem>
-              )}
-              {isRepo && !hideDirectoryControls && !settingsAutoCreateWorktree && onNewWorktreeSession && (
-                <DropdownMenuItem onClick={onNewWorktreeSession}>
-                  <RiGitBranchLine className="mr-1.5 h-4 w-4" />
-                  New Session in Worktree
+                <DropdownMenuItem
+                  onClick={onClose}
+                  className="text-destructive focus:text-destructive"
+                >
+                  <RiCloseLine className="mr-1.5 h-4 w-4" />
+                  Close Project
                 </DropdownMenuItem>
-              )}
-              {isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
-                <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
-                  <RiGithubLine className="mr-1.5 h-4 w-4" />
-                  New session from GitHub issue
-                </DropdownMenuItem>
-              )}
-              {isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
-                <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
-                  <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
-                  New session from GitHub PR
-                </DropdownMenuItem>
-              )}
-              {isRepo && !hideDirectoryControls && (
-                <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
-                  <ArrowsMerge className="mr-1.5 h-4 w-4" />
-                  New Multi-Run
-                </DropdownMenuItem>
-              )}
-              {isRepo && !hideDirectoryControls && onOpenBranchPicker && (
-                <DropdownMenuItem onClick={onOpenBranchPicker}>
-                  <RiGitRepositoryLine className="mr-1.5 h-4 w-4" />
-                  Manage Branches
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem
-                onClick={onClose}
-                className="text-destructive focus:text-destructive"
-              >
-                <RiCloseLine className="mr-1.5 h-4 w-4" />
-                Close Project
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
 
-          {isRepo && !hideDirectoryControls && onNewWorktreeSession && settingsAutoCreateWorktree && (
+          {isRepo && !hideDirectoryControls && onNewWorktreeSession && settingsAutoCreateWorktree && !isRenaming && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -335,7 +390,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               </TooltipContent>
             </Tooltip>
           )}
-          {(!settingsAutoCreateWorktree || !isRepo) && (
+          {(!settingsAutoCreateWorktree || !isRepo) && !isRenaming && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -408,6 +463,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 }) => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
+  const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
+  const [editProjectTitle, setEditProjectTitle] = React.useState('');
   const [copiedSessionId, setCopiedSessionId] = React.useState<string | null>(null);
   const copyTimeout = React.useRef<number | null>(null);
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
@@ -443,6 +500,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const removeProject = useProjectsStore((state) => state.removeProject);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
+  const renameProject = useProjectsStore((state) => state.renameProject);
   const reorderProjects = useProjectsStore((state) => state.reorderProjects);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
@@ -766,6 +824,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const handleCancelEdit = React.useCallback(() => {
     setEditingId(null);
     setEditTitle('');
+  }, []);
+
+  const handleSaveProjectEdit = React.useCallback(() => {
+    if (editingProjectId && editProjectTitle.trim()) {
+      renameProject(editingProjectId, editProjectTitle.trim());
+      setEditingProjectId(null);
+      setEditProjectTitle('');
+    }
+  }, [editingProjectId, editProjectTitle, renameProject]);
+
+  const handleCancelProjectEdit = React.useCallback(() => {
+    setEditingProjectId(null);
+    setEditProjectTitle('');
   }, []);
 
   const handleShareSession = React.useCallback(
@@ -1751,6 +1822,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       }
                       openMultiRunLauncher();
                     }}
+                    onRenameStart={() => {
+                      setEditingProjectId(projectKey);
+                      setEditProjectTitle(project.label?.trim() || formatDirectoryName(project.normalizedPath, homeDirectory) || project.normalizedPath);
+                    }}
+                    onRenameSave={handleSaveProjectEdit}
+                    onRenameCancel={handleCancelProjectEdit}
+                    onRenameValueChange={setEditProjectTitle}
+                    renameValue={editingProjectId === projectKey ? editProjectTitle : ''}
+                    isRenaming={editingProjectId === projectKey}
                     onClose={() => removeProject(projectKey)}
                     sentinelRef={(el) => { projectHeaderSentinelRefs.current.set(projectKey, el); }}
                     settingsAutoCreateWorktree={settingsAutoCreateWorktree}
