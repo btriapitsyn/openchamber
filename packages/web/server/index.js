@@ -544,6 +544,142 @@ const createTimeoutSignal = (timeoutMs) => {
   };
 };
 
+const resolveNotificationTemplate = (template, variables) => {
+  if (!template || typeof template !== 'string') return '';
+  return template.replace(/\{(\w+)\}/g, (match, key) => {
+    const value = variables[key];
+    return value !== undefined && value !== null && value !== '' ? String(value) : match;
+  });
+};
+
+const summarizeText = async (text, targetLength) => {
+  if (!text || typeof text !== 'string' || text.trim().length === 0) return text;
+
+  try {
+    const prompt = `Summarize the following text in approximately ${targetLength} characters. Be concise and capture the key point. Output ONLY the summary text, nothing else.\n\nText:\n${text}`;
+
+    const completionTimeout = createTimeoutSignal(15000);
+    let response;
+    try {
+      response = await fetch('https://opencode.ai/zen/v1/responses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-5-nano',
+          input: [{ role: 'user', content: prompt }],
+          max_output_tokens: 1000,
+          stream: false,
+          reasoning: { effort: 'low' },
+        }),
+        signal: completionTimeout.signal,
+      });
+    } finally {
+      completionTimeout.cleanup();
+    }
+
+    if (!response.ok) return text;
+
+    const data = await response.json();
+    const summary = data?.output?.find((item) => item?.type === 'message')
+      ?.content?.find((item) => item?.type === 'output_text')?.text?.trim();
+
+    return summary || text;
+  } catch {
+    return text;
+  }
+};
+
+const extractLastMessageText = (payload) => {
+  const info = payload?.properties?.info;
+  if (!info) return '';
+
+  // Try to get text from message parts
+  const parts = info.parts || payload?.properties?.parts;
+  if (Array.isArray(parts)) {
+    const textParts = parts
+      .filter((p) => p && (p.type === 'text' || typeof p.text === 'string' || typeof p.content === 'string'))
+      .map((p) => p.text || p.content || '')
+      .filter(Boolean);
+    if (textParts.length > 0) {
+      return textParts.join('\n').trim();
+    }
+  }
+
+  // Fallback: try content array
+  const content = info.content;
+  if (Array.isArray(content)) {
+    const textContent = content
+      .filter((c) => c && (c.type === 'text' || typeof c.text === 'string'))
+      .map((c) => c.text || '')
+      .filter(Boolean);
+    if (textContent.length > 0) {
+      return textContent.join('\n').trim();
+    }
+  }
+
+  return '';
+};
+
+const buildTemplateVariables = async (payload, sessionId) => {
+  const info = payload?.properties?.info || {};
+  const sessionTitle = payload?.properties?.sessionTitle ||
+    payload?.properties?.session?.title || '';
+
+  // Agent name from mode
+  const agentName = (() => {
+    const mode = typeof info.mode === 'string' ? info.mode.trim() : '';
+    if (!mode) return 'Agent';
+    return mode.split(/[-_\s]+/).filter(Boolean)
+      .map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(' ');
+  })();
+
+  // Model name
+  const modelName = (() => {
+    const raw = typeof info.modelID === 'string' ? info.modelID.trim() : '';
+    if (!raw) return 'Assistant';
+    return raw.split(/[-_]+/).filter(Boolean)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  })();
+
+  // Project name and branch — read from stored active project settings
+  let projectName = '';
+  let branch = '';
+  let worktree = '';
+  try {
+    const settings = await readSettingsFromDisk();
+    const projects = settings.projects || [];
+    const activeId = settings.activeProjectId;
+    const activeProject = activeId ? projects.find((p) => p.id === activeId) : projects[0];
+    if (activeProject) {
+      projectName = activeProject.name || activeProject.directory?.split('/').pop() || '';
+      worktree = activeProject.directory || '';
+    }
+    // Try to get branch from git for the active directory
+    if (worktree) {
+      try {
+        const { simpleGit } = await import('simple-git');
+        const git = simpleGit(worktree);
+        branch = await git.revparse(['--abbrev-ref', 'HEAD']).catch(() => '');
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return {
+    project_name: projectName,
+    worktree,
+    branch,
+    session_name: sessionTitle,
+    agent_name: agentName,
+    model_name: modelName,
+    last_message: '', // Populated by caller
+    session_id: sessionId || '',
+  };
+};
+
 const stripJsonMarkdownWrapper = (value) => {
   if (typeof value !== 'string') {
     return '';
@@ -2441,6 +2577,11 @@ const maybeSendPushForTrigger = async (payload) => {
         }
       }
 
+      // Check if completion notifications are enabled
+      if (settings.notifyOnCompletion === false) {
+        return;
+      }
+
       const now = Date.now();
       const lastAt = lastReadyNotificationAt.get(sessionId) ?? 0;
       if (now - lastAt < PUSH_READY_COOLDOWN_MS) {
@@ -2448,11 +2589,27 @@ const maybeSendPushForTrigger = async (payload) => {
       }
       lastReadyNotificationAt.set(sessionId, now);
 
-      const title = `${formatMode(info?.mode)} agent is ready`;
-      const body = `${formatModelId(info?.modelID)} completed the task`;
+      // Get templates and build variables
+      const templates = settings.notificationTemplates || {};
+      const isSubtask = await fetchSessionParentId(sessionId);
+      const completionTemplate = isSubtask && settings.notifyOnSubtasks !== false
+        ? (templates.subtask || templates.completion || { title: '{agent_name} is ready', message: '{model_name} completed the task' })
+        : (templates.completion || { title: '{agent_name} is ready', message: '{model_name} completed the task' });
+
+      const variables = await buildTemplateVariables(payload, sessionId);
+      let lastMessage = extractLastMessageText(payload);
+
+      // Summarize if enabled and above threshold
+      if (settings.summarizeLastMessage && lastMessage.length > (settings.summaryThreshold || 200)) {
+        lastMessage = await summarizeText(lastMessage, settings.summaryLength || 100);
+      }
+      variables.last_message = lastMessage;
+
+      const title = resolveNotificationTemplate(completionTemplate.title, variables) || `${formatMode(info?.mode)} agent is ready`;
+      const body = resolveNotificationTemplate(completionTemplate.message, variables) || `${formatModelId(info?.modelID)} completed the task`;
 
       if (settings.nativeNotificationsEnabled) {
-        const payload = {
+        const notificationPayload = {
           title,
           body,
           tag: `ready-${sessionId}`,
@@ -2460,8 +2617,8 @@ const maybeSendPushForTrigger = async (payload) => {
           sessionId,
           requireHidden: settings.notificationMode !== 'always',
         };
-        emitDesktopNotification(payload);
-        broadcastUiNotification(payload);
+        emitDesktopNotification(notificationPayload);
+        broadcastUiNotification(notificationPayload);
       }
 
       await sendPushToAllUiSessions(
@@ -2479,6 +2636,50 @@ const maybeSendPushForTrigger = async (payload) => {
       );
     }
 
+    // Check for error finish
+    if (info?.role === 'assistant' && info?.finish === 'error' && sessionId) {
+      const settings = await readSettingsFromDisk();
+      if (settings.notifyOnError === false) return;
+
+      const variables = await buildTemplateVariables(payload, sessionId);
+      let lastMessage = extractLastMessageText(payload);
+      if (settings.summarizeLastMessage && lastMessage.length > (settings.summaryThreshold || 200)) {
+        lastMessage = await summarizeText(lastMessage, settings.summaryLength || 100);
+      }
+      variables.last_message = lastMessage;
+
+      const errorTemplate = (settings.notificationTemplates || {}).error || { title: 'Tool error', message: '{last_message}' };
+      const title = resolveNotificationTemplate(errorTemplate.title, variables) || 'Tool error';
+      const body = resolveNotificationTemplate(errorTemplate.message, variables) || lastMessage || 'An error occurred';
+
+      if (settings.nativeNotificationsEnabled) {
+        const notificationPayload = {
+          title,
+          body,
+          tag: `error-${sessionId}`,
+          kind: 'error',
+          sessionId,
+          requireHidden: settings.notificationMode !== 'always',
+        };
+        emitDesktopNotification(notificationPayload);
+        broadcastUiNotification(notificationPayload);
+      }
+
+      await sendPushToAllUiSessions(
+        {
+          title,
+          body,
+          tag: `error-${sessionId}`,
+          data: {
+            url: buildSessionDeepLinkUrl(sessionId),
+            sessionId,
+            type: 'error',
+          }
+        },
+        { requireNoSse: true }
+      );
+    }
+
     return;
   }
 
@@ -2489,24 +2690,45 @@ const maybeSendPushForTrigger = async (payload) => {
       clearTimeout(existingTimer);
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       pushQuestionDebounceTimers.delete(sessionId);
 
-      void readSettingsFromDisk().then((settings) => {
-        if (!settings.nativeNotificationsEnabled) {
-          return;
-        }
+      const settings = await readSettingsFromDisk();
 
-        const firstQuestion = payload.properties?.questions?.[0];
-        const header = typeof firstQuestion?.header === 'string' ? firstQuestion.header.trim() : '';
-        const questionText = typeof firstQuestion?.question === 'string' ? firstQuestion.question.trim() : '';
-        const title = /plan\s*mode/i.test(header)
-          ? 'Switch to plan mode'
-          : /build\s*agent/i.test(header)
-            ? 'Switch to build mode'
-            : header || 'Input needed';
-        const body = questionText || 'Agent is waiting for your response';
+      // Check if question notifications are enabled
+      if (settings.notifyOnQuestion === false) {
+        return;
+      }
 
+      if (!settings.nativeNotificationsEnabled) {
+        // Still send push even if native notifications are disabled
+      }
+
+      const firstQuestion = payload.properties?.questions?.[0];
+      const header = typeof firstQuestion?.header === 'string' ? firstQuestion.header.trim() : '';
+      const questionText = typeof firstQuestion?.question === 'string' ? firstQuestion.question.trim() : '';
+
+      // Build template variables
+      const variables = await buildTemplateVariables(payload, sessionId);
+      variables.last_message = questionText || header || '';
+
+      // Get question template
+      const templates = settings.notificationTemplates || {};
+      const questionTemplate = templates.question || { title: 'Input needed', message: '{last_message}' };
+
+      // Resolve templates with fallback to legacy behavior
+      const rawTitle = resolveNotificationTemplate(questionTemplate.title, variables);
+      const rawBody = resolveNotificationTemplate(questionTemplate.message, variables);
+
+      // Fallback to legacy behavior if templates don't resolve
+      const title = rawTitle || (/plan\s*mode/i.test(header)
+        ? 'Switch to plan mode'
+        : /build\s*agent/i.test(header)
+          ? 'Switch to build mode'
+          : header || 'Input needed');
+      const body = rawBody || questionText || 'Agent is waiting for your response';
+
+      if (settings.nativeNotificationsEnabled) {
         emitDesktopNotification({
           kind: 'question',
           title,
@@ -2524,17 +2746,7 @@ const maybeSendPushForTrigger = async (payload) => {
           sessionId,
           requireHidden: settings.notificationMode !== 'always',
         });
-      });
-
-      const firstQuestion = payload.properties?.questions?.[0];
-      const header = typeof firstQuestion?.header === 'string' ? firstQuestion.header.trim() : '';
-      const questionText = typeof firstQuestion?.question === 'string' ? firstQuestion.question.trim() : '';
-      const title = /plan\s*mode/i.test(header)
-        ? 'Switch to plan mode'
-        : /build\s*agent/i.test(header)
-          ? 'Switch to build mode'
-          : header || 'Input needed';
-      const body = questionText || 'Agent is waiting for your response';
+      }
 
       void sendPushToAllUiSessions(
         {
@@ -2568,19 +2780,36 @@ const maybeSendPushForTrigger = async (payload) => {
       clearTimeout(existingTimer);
     }
 
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       pushPermissionDebounceTimers.delete(sessionId);
-      void readSettingsFromDisk().then((settings) => {
-        if (!settings.nativeNotificationsEnabled) {
-          return;
-        }
+      const settings = await readSettingsFromDisk();
 
-        const title = 'Permission required';
-        const sessionTitle = payload.properties?.sessionTitle;
-        const body = typeof sessionTitle === 'string' && sessionTitle.trim().length > 0
-          ? sessionTitle.trim()
-          : 'Agent is waiting for your approval';
+      // Permission requests use the question event toggle (since permission requests are a type of "agent needs input")
+      if (settings.notifyOnQuestion === false) {
+        return;
+      }
 
+      if (!settings.nativeNotificationsEnabled) {
+        // Still send push even if native notifications are disabled
+      }
+
+      // Build template variables
+      const variables = await buildTemplateVariables(payload, sessionId);
+      const sessionTitle = payload.properties?.sessionTitle;
+      const permissionText = typeof permission === 'string' && permission.length > 0 ? permission : '';
+      variables.last_message = typeof sessionTitle === 'string' && sessionTitle.trim().length > 0
+        ? sessionTitle.trim()
+        : permissionText || 'Agent is waiting for your approval';
+
+      // Get question template (permission uses question template since it's an input request)
+      const templates = settings.notificationTemplates || {};
+      const questionTemplate = templates.question || { title: 'Permission required', message: '{last_message}' };
+
+      // Resolve templates with fallback to legacy behavior
+      const title = resolveNotificationTemplate(questionTemplate.title, variables) || 'Permission required';
+      const body = resolveNotificationTemplate(questionTemplate.message, variables) || variables.last_message;
+
+      if (settings.nativeNotificationsEnabled) {
         emitDesktopNotification({
           kind: 'permission',
           title,
@@ -2598,7 +2827,7 @@ const maybeSendPushForTrigger = async (payload) => {
           sessionId,
           requireHidden: settings.notificationMode !== 'always',
         });
-      });
+      }
 
       if (requestKey) {
         notifiedPermissionRequests.add(requestKey);
@@ -2606,8 +2835,8 @@ const maybeSendPushForTrigger = async (payload) => {
 
       void sendPushToAllUiSessions(
         {
-          title: 'Permission required',
-          body: typeof permission === 'string' && permission.length > 0 ? permission : 'Agent requested permission',
+          title,
+          body,
           tag: `permission-${sessionId}`,
           data: {
             url: buildSessionDeepLinkUrl(sessionId),
