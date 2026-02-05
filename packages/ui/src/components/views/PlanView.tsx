@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { createPortal } from 'react-dom';
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -96,6 +97,7 @@ export const PlanView: React.FC = () => {
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
+  const [editorView, setEditorView] = React.useState<EditorView | null>(null);
 
   // Inline comment drafts
   const addDraft = useInlineCommentDraftStore((state) => state.addDraft);
@@ -426,6 +428,7 @@ export const PlanView: React.FC = () => {
   // Render saved comment cards
   const renderSavedComments = () => {
     if (mdViewMode === 'preview') return null;
+    if (!editorView) return null;
 
     const sessionKey = getSessionKey();
     if (!sessionKey) return null;
@@ -436,13 +439,13 @@ export const PlanView: React.FC = () => {
 
     if (fileDrafts.length === 0) return null;
 
-    return (
+    return createPortal(
       <div className="absolute inset-0 pointer-events-none z-40">
         {fileDrafts.map((draft) => {
-          // For CodeMirror, we need to position based on line
-          // This is a simplified version - in production, you'd query the editor's DOM
-          const lineHeight = 24; // Approximate line height in pixels
-          const top = (draft.startLine - 1) * lineHeight;
+          const maxLine = editorView.state.doc.lines;
+          const safeLine = Math.min(Math.max(1, draft.startLine), maxLine);
+          const line = editorView.state.doc.line(safeLine);
+          const top = editorView.lineBlockAt(line.from).top;
 
           return (
             <div
@@ -492,7 +495,8 @@ export const PlanView: React.FC = () => {
             </div>
           );
         })}
-      </div>
+      </div>,
+      editorView.scrollDOM
     );
   };
 
@@ -611,8 +615,10 @@ export const PlanView: React.FC = () => {
                           // read-only
                         }}
                         readOnly={true}
-                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)]"
+                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)] [&_.cm-scroller]:relative"
                         extensions={editorExtensions}
+                        onViewReady={setEditorView}
+                        onViewDestroy={() => setEditorView(null)}
                         highlightLines={lineSelection
                           ? {
                             start: Math.min(lineSelection.start, lineSelection.end),
