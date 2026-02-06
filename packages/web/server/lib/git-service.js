@@ -1218,3 +1218,99 @@ export async function getRemotes(directory) {
     throw error;
   }
 }
+
+export async function rebase(directory, options = {}) {
+  const git = await createGit(directory);
+
+  try {
+    const { onto } = options;
+    if (!onto) {
+      throw new Error('onto parameter is required for rebase');
+    }
+
+    await git.rebase([onto]);
+
+    return {
+      success: true,
+      conflict: false
+    };
+  } catch (error) {
+    const errorMessage = String(error?.message || error || '').toLowerCase();
+    const isConflict = errorMessage.includes('conflict') || 
+                       errorMessage.includes('could not apply') ||
+                       errorMessage.includes('merge conflict');
+
+    if (isConflict) {
+      // Get list of conflicted files
+      const status = await git.status().catch(() => ({ conflicted: [] }));
+      return {
+        success: false,
+        conflict: true,
+        conflictFiles: status.conflicted || []
+      };
+    }
+
+    console.error('Failed to rebase:', error);
+    throw error;
+  }
+}
+
+export async function abortRebase(directory) {
+  const git = await createGit(directory);
+
+  try {
+    await git.rebase(['--abort']);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to abort rebase:', error);
+    throw error;
+  }
+}
+
+export async function merge(directory, options = {}) {
+  const git = await createGit(directory);
+
+  try {
+    const { branch } = options;
+    if (!branch) {
+      throw new Error('branch parameter is required for merge');
+    }
+
+    await git.merge([branch]);
+
+    return {
+      success: true,
+      conflict: false
+    };
+  } catch (error) {
+    const errorMessage = String(error?.message || error || '').toLowerCase();
+    const isConflict = errorMessage.includes('conflict') || 
+                       errorMessage.includes('merge conflict') ||
+                       errorMessage.includes('automatic merge failed');
+
+    if (isConflict) {
+      // Get list of conflicted files
+      const status = await git.status().catch(() => ({ conflicted: [] }));
+      return {
+        success: false,
+        conflict: true,
+        conflictFiles: status.conflicted || []
+      };
+    }
+
+    console.error('Failed to merge:', error);
+    throw error;
+  }
+}
+
+export async function abortMerge(directory) {
+  const git = await createGit(directory);
+
+  try {
+    await git.merge(['--abort']);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to abort merge:', error);
+    throw error;
+  }
+}

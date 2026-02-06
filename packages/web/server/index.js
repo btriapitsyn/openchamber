@@ -7308,6 +7308,70 @@ Context:
     }
   });
 
+  app.post('/api/git/rebase', async (req, res) => {
+    const { rebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await rebase(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to rebase' });
+    }
+  });
+
+  app.post('/api/git/rebase/abort', async (req, res) => {
+    const { abortRebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await abortRebase(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to abort rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to abort rebase' });
+    }
+  });
+
+  app.post('/api/git/merge', async (req, res) => {
+    const { merge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await merge(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to merge' });
+    }
+  });
+
+  app.post('/api/git/merge/abort', async (req, res) => {
+    const { abortMerge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await abortMerge(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to abort merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to abort merge' });
+    }
+  });
+
   app.post('/api/git/commit', async (req, res) => {
     const { commit } = await getGitLibraries();
     try {
