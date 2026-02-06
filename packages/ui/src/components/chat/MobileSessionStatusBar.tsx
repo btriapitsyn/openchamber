@@ -18,7 +18,11 @@ interface SessionWithStatus extends Session {
   _childIndicators?: Array<{ session: Session; isRunning: boolean }>;
 }
 
-function useSessionGrouping(sessions: Session[], sessionStatus: Map<string, { type: string }> | undefined) {
+function useSessionGrouping(
+  sessions: Session[],
+  sessionStatus: Map<string, { type: string }> | undefined,
+  sessionAttentionStates: Map<string, { needsAttention: boolean }> | undefined
+) {
   const parentChildMap = React.useMemo(() => {
     const map = new Map<string, Session[]>();
     const allIds = new Set(sessions.map((s) => s.id));
@@ -68,6 +72,7 @@ function useSessionGrouping(sessions: Session[], sessionStatus: Map<string, { ty
     topLevel.forEach((session) => {
       const statusType = getStatusType(session.id);
       const hasRunning = hasRunningChildren(session.id);
+      const attention = sessionAttentionStates?.get(session.id)?.needsAttention ?? false;
 
       const enriched: SessionWithStatus = {
         ...session,
@@ -78,6 +83,8 @@ function useSessionGrouping(sessions: Session[], sessionStatus: Map<string, { ty
       };
 
       if (statusType !== 'idle' || hasRunning) {
+        running.push(enriched);
+      } else if (attention) {
         running.push(enriched);
       } else {
         viewed.push(enriched);
@@ -94,14 +101,16 @@ function useSessionGrouping(sessions: Session[], sessionStatus: Map<string, { ty
     viewed.sort(sortByUpdated);
 
     return [...running, ...viewed];
-  }, [sessions, getStatusType, hasRunningChildren, getRunningChildrenCount, getChildIndicators]);
+  }, [sessions, getStatusType, hasRunningChildren, getRunningChildrenCount, getChildIndicators, sessionAttentionStates]);
 
   const totalRunning = processedSessions.reduce((sum, s) => {
     const selfRunning = s._statusType !== 'idle' ? 1 : 0;
     return sum + selfRunning + (s._runningChildrenCount ?? 0);
   }, 0);
 
-  return { sessions: processedSessions, totalRunning, totalCount: processedSessions.length };
+  const totalUnread = processedSessions.filter((s) => sessionAttentionStates?.get(s.id)?.needsAttention ?? false).length;
+
+  return { sessions: processedSessions, totalRunning, totalUnread, totalCount: processedSessions.length };
 }
 
 function useSessionHelpers(
@@ -154,6 +163,16 @@ function RunningIndicator({ count }: { count: number }) {
     <span className="flex items-center gap-0.5 text-xs text-[var(--status-info)]">
       <RiLoader4Line className="h-3 w-3 animate-spin" />
       {count} running
+    </span>
+  );
+}
+
+function UnreadIndicator({ count }: { count: number }) {
+  if (count === 0) return null;
+  return (
+    <span className="flex items-center gap-0.5 text-xs text-[var(--status-error)]">
+      <div className="h-1.5 w-1.5 rounded-full bg-[var(--status-error)]" />
+      {count} unread
     </span>
   );
 }
@@ -235,35 +254,44 @@ function SessionItem({
 }
 
 function CollapsedView({
-  totalCount,
   runningCount,
+  unreadCount,
+  currentSessionTitle,
   onToggle,
   onNewSession
 }: {
-  totalCount: number;
   runningCount: number;
+  unreadCount: number;
+  currentSessionTitle: string;
   onToggle: () => void;
   onNewSession: () => void;
 }) {
+  const hasActivity = runningCount > 0 || unreadCount > 0;
+
   return (
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between px-2 py-0.5 border-b border-[var(--surface-subtle)] bg-[var(--surface-muted)] order-first text-left transition-colors hover:bg-[var(--interactive-hover)]"
+        className="w-full flex items-center justify-between px-2 py-0 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left transition-colors hover:bg-[var(--interactive-hover)]"
       >
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs text-[var(--surface-foreground)] font-medium">
-          {totalCount} sessions
-        </span>
-        <RunningIndicator count={runningCount} />
-      </div>
+        <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
+          <span className="text-[10px] text-[var(--surface-foreground)] truncate flex-1 leading-tight">
+            {currentSessionTitle}
+          </span>
+          {hasActivity && (
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <RunningIndicator count={runningCount} />
+              <UnreadIndicator count={unreadCount} />
+            </div>
+          )}
+        </div>
         <button
           type="button"
           onClick={(e) => {
             e.stopPropagation();
             onNewSession();
           }}
-          className="flex items-center gap-0.5 px-1.5 text-[11px] leading-none rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)]"
+          className="flex items-center gap-0.5 px-1.5 py-1 text-[11px] leading-tight !min-h-0 rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] flex-shrink-0 self-center"
         >
           New
         </button>
@@ -274,8 +302,9 @@ function CollapsedView({
 function ExpandedView({
   sessions,
   currentSessionId,
-  totalCount,
   runningCount,
+  unreadCount,
+  currentSessionTitle,
   isExpanded,
   onToggleCollapse,
   onToggleExpand,
@@ -287,8 +316,9 @@ function ExpandedView({
 }: {
   sessions: SessionWithStatus[];
   currentSessionId: string;
-  totalCount: number;
   runningCount: number;
+  unreadCount: number;
+  currentSessionTitle: string;
   isExpanded: boolean;
   onToggleCollapse: () => void;
   onToggleExpand: () => void;
@@ -299,28 +329,34 @@ function ExpandedView({
   needsAttention: (sessionId: string) => boolean;
 }) {
   const displaySessions = isExpanded ? sessions : sessions.slice(0, 3);
+  const hasActivity = runningCount > 0 || unreadCount > 0;
 
   return (
-    <div className="w-full border-b border-[var(--surface-subtle)] bg-[var(--surface-muted)] order-first">
+    <div className="w-full border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first">
       <button
         type="button"
         onClick={onToggleCollapse}
         className="w-full flex items-center justify-between px-2 py-0.5 text-left transition-colors hover:bg-[var(--interactive-hover)]"
       >
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-[var(--surface-foreground)] font-medium">
-            {totalCount} sessions
+        <div className="flex items-center gap-1.5 flex-1 min-w-0 mr-2">
+          <span className="text-xs text-[var(--surface-foreground)] truncate flex-1">
+            {currentSessionTitle}
           </span>
-          <RunningIndicator count={runningCount} />
+          {hasActivity && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <RunningIndicator count={runningCount} />
+              <UnreadIndicator count={unreadCount} />
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-shrink-0">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onNewSession();
             }}
-            className="flex items-center gap-0.5 px-1.5 text-[11px] leading-none rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)]"
+            className="flex items-center gap-0.5 px-1.5 py-1 text-[11px] leading-tight !min-h-0 rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] self-start"
           >
             New
           </button>
@@ -330,7 +366,7 @@ function ExpandedView({
               e.stopPropagation();
               onToggleExpand();
             }}
-            className="text-[11px] leading-none px-1.5 rounded border border-border/50 text-[var(--surface-mutedForeground)] hover:text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)]"
+            className="text-[11px] leading-tight px-1.5 py-1 !min-h-0 rounded border border-border/50 text-[var(--surface-mutedForeground)] hover:text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] self-start"
           >
             {isExpanded ? 'Less' : 'More'}
           </button>
@@ -370,8 +406,11 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const { isMobile, isMobileSessionStatusBarCollapsed, setIsMobileSessionStatusBarCollapsed } = useUIStore();
   const [isExpanded, setIsExpanded] = React.useState(false);
 
-  const { sessions: sortedSessions, totalRunning, totalCount } = useSessionGrouping(sessions, sessionStatus);
+  const { sessions: sortedSessions, totalRunning, totalUnread, totalCount } = useSessionGrouping(sessions, sessionStatus, sessionAttentionStates);
   const { getSessionAgentName, getSessionTitle, needsAttention } = useSessionHelpers(agents, sessionStatus, sessionAttentionStates);
+
+  const currentSession = sessions.find((s) => s.id === currentSessionId);
+  const currentSessionTitle = currentSession ? getSessionTitle(currentSession) : 'New session';
 
   if (!isMobile || totalCount === 0) {
     return null;
@@ -394,8 +433,9 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   if (isMobileSessionStatusBarCollapsed) {
     return (
       <CollapsedView
-        totalCount={totalCount}
         runningCount={totalRunning}
+        unreadCount={totalUnread}
+        currentSessionTitle={currentSessionTitle}
         onToggle={() => setIsMobileSessionStatusBarCollapsed(false)}
         onNewSession={handleCreateSession}
       />
@@ -406,8 +446,9 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     <ExpandedView
       sessions={sortedSessions}
       currentSessionId={currentSessionId ?? ''}
-      totalCount={totalCount}
       runningCount={totalRunning}
+      unreadCount={totalUnread}
+      currentSessionTitle={currentSessionTitle}
       isExpanded={isExpanded}
       onToggleCollapse={() => {
         setIsMobileSessionStatusBarCollapsed(true);
