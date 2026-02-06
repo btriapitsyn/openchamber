@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { FileDiff as PierreFileDiff, type FileContents, type FileDiffOptions, type SelectedLineRange } from '@pierre/diffs';
-import { RiMoreLine, RiDeleteBinLine } from '@remixicon/react';
+import { RiMoreLine, RiDeleteBinLine, RiEditLine } from '@remixicon/react';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -173,7 +173,10 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   const [selection, setSelection] = useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [pendingFocus, setPendingFocus] = useState(false);
   const commentContainerRef = useRef<HTMLDivElement>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Refs to prevent infinite loops when syncing selection with diff instance
   const selectionRef = useRef<SelectedLineRange | null>(null);
@@ -208,6 +211,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   // Inline comment drafts
   const addDraft = useInlineCommentDraftStore(state => state.addDraft);
+  const updateDraft = useInlineCommentDraftStore(state => state.updateDraft);
   const removeDraft = useInlineCommentDraftStore(state => state.removeDraft);
   const allDrafts = useInlineCommentDraftStore(state => state.drafts);
 
@@ -281,6 +285,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     setSelection(range);
     if (!range) {
       setCommentText('');
+      setEditingDraftId(null);
+      setPendingFocus(false);
     }
   }, [isMobile]);
 
@@ -309,6 +315,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       if (!isLineNumber) {
         setSelection(null);
         setCommentText('');
+        setEditingDraftId(null);
+        setPendingFocus(false);
       }
     };
 
@@ -326,7 +334,24 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const handleCancelComment = useCallback(() => {
     setCommentText('');
     setSelection(null);
+    setEditingDraftId(null);
+    setPendingFocus(false);
   }, []);
+
+  useEffect(() => {
+    if (!pendingFocus || !selection || isMobile) return;
+    if (typeof window === 'undefined') return;
+    const frame = window.requestAnimationFrame(() => {
+      const input = commentInputRef.current;
+      input?.focus();
+      if (input) {
+        const length = input.value.length;
+        input.setSelectionRange(length, length);
+      }
+      setPendingFocus(false);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingFocus, selection, isMobile]);
 
   const handleSaveComment = useCallback(() => {
     if (!selection || !commentText.trim()) return;
@@ -340,24 +365,52 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     const code = extractSelectedCode(original, modified, selection);
     const side = selection.side === 'deletions' ? 'original' : 'modified';
 
-    addDraft({
-      sessionKey,
-      source: 'diff',
-      fileLabel: fileName,
-      startLine: selection.start,
-      endLine: selection.end,
-      side,
-      code,
-      language,
-      text: commentText.trim(),
-    });
+    if (editingDraftId) {
+      updateDraft(sessionKey, editingDraftId, {
+        fileLabel: fileName,
+        startLine: selection.start,
+        endLine: selection.end,
+        side,
+        code,
+        language,
+        text: commentText.trim(),
+      });
+    } else {
+      addDraft({
+        sessionKey,
+        source: 'diff',
+        fileLabel: fileName,
+        startLine: selection.start,
+        endLine: selection.end,
+        side,
+        code,
+        language,
+        text: commentText.trim(),
+      });
+    }
 
     // Clear selection and comment text
     setCommentText('');
     setSelection(null);
+    setEditingDraftId(null);
 
-    toast.success('Comment saved');
-  }, [selection, commentText, original, modified, fileName, language, addDraft, getSessionKey]);
+    toast.success(editingDraftId ? 'Comment updated' : 'Comment saved');
+  }, [selection, commentText, original, modified, fileName, language, addDraft, updateDraft, getSessionKey, editingDraftId]);
+
+  const applySelection = useCallback((range: SelectedLineRange) => {
+    setSelection(range);
+    const instance = diffInstanceRef.current;
+    if (!instance) return;
+    try {
+      isApplyingSelectionRef.current = true;
+      instance.setSelectedLines(range);
+      lastAppliedSelectionRef.current = range;
+    } catch {
+      // ignore
+    } finally {
+      isApplyingSelectionRef.current = false;
+    }
+  }, []);
 
   ensurePierreThemeRegistered(lightTheme);
   ensurePierreThemeRegistered(darkTheme);
@@ -558,6 +611,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         >
           {/* Textarea - auto-grows from 1 line to max 5 lines */}
           <Textarea
+            ref={commentInputRef}
             value={commentText}
             onChange={(e) => {
               setCommentText(e.target.value);
@@ -616,7 +670,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
                   color: currentTheme?.colors?.status?.successForeground,
                 }}
               >
-                Comment
+                {editingDraftId ? 'Save' : 'Comment'}
               </Button>
             </div>
           </div>
@@ -670,7 +724,26 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
                         <RiMoreLine className="h-4 w-4" />
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent
+                      align="end"
+                      onCloseAutoFocus={(event) => event.preventDefault()}
+                    >
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const selectionSide = draft.side === 'original' ? 'deletions' : 'additions';
+                          applySelection({
+                            start: draft.startLine,
+                            end: draft.endLine,
+                            side: selectionSide,
+                          });
+                          setCommentText(draft.text);
+                          setEditingDraftId(draft.id);
+                          setPendingFocus(true);
+                        }}
+                      >
+                        <RiEditLine className="h-4 w-4 mr-2" />
+                        Edit comment
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => removeDraft(draft.sessionKey, draft.id)}
                         className="text-destructive"
