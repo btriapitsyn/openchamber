@@ -1488,9 +1488,11 @@ export const useEventStream = () => {
           break;
         }
 
-        // Desktop local instance uses native notifications via sidecar stdout.
-        // Avoid duplicating via UI runtime notifications.
-        if (isDesktopLocalOriginActive()) {
+        // When the sidecar stdout notification channel is active (production desktop builds),
+        // skip this SSE notification to avoid duplicating the native notification already
+        // shown by the Tauri process. In dev mode the stdout channel is not available,
+        // so we fall through and let the UI handle it via Tauri IPC.
+        if (isDesktopLocalOriginActive() && Boolean((props as { desktopStdoutActive?: unknown }).desktopStdoutActive)) {
           break;
         }
 
