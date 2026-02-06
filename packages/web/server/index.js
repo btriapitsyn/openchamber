@@ -7292,6 +7292,22 @@ Context:
     }
   });
 
+  app.get('/api/git/remotes', async (req, res) => {
+    const { getRemotes } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const remotes = await getRemotes(directory);
+      res.json(remotes);
+    } catch (error) {
+      console.error('Failed to get remotes:', error);
+      res.status(500).json({ error: error.message || 'Failed to get remotes' });
+    }
+  });
+
   app.post('/api/git/commit', async (req, res) => {
     const { commit } = await getGitLibraries();
     try {

@@ -1201,3 +1201,20 @@ export async function renameBranch(directory, oldName, newName) {
     throw error;
   }
 }
+
+export async function getRemotes(directory) {
+  const git = await createGit(directory);
+
+  try {
+    const remotes = await git.getRemotes(true);
+    
+    return remotes.map((remote) => ({
+      name: remote.name,
+      fetchUrl: remote.refs.fetch,
+      pushUrl: remote.refs.push
+    }));
+  } catch (error) {
+    console.error('Failed to get remotes:', error);
+    throw error;
+  }
+}
