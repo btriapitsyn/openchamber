@@ -893,7 +893,7 @@ export const Header: React.FC = () => {
 
   const renderMobile = () => (
     <div className="app-region-drag relative flex items-center justify-between gap-2 px-3 py-2 select-none">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Show back button when sessions sidebar is open, otherwise show sessions toggle */}
         {isSessionSwitcherOpen ? (
           <button
@@ -929,212 +929,216 @@ export const Header: React.FC = () => {
 
       {/* Hide tabs and right-side buttons when sessions sidebar is open */}
       {!isSessionSwitcherOpen && (
-        <div className="app-region-no-drag flex items-center gap-1">
-          <div className="flex items-center gap-0.5" role="tablist" aria-label="Main navigation">
-            {tabs.map((tab) => {
-              const isActive = activeMainTab === tab.id;
-              const isDiffTab = tab.icon === 'diff';
-              const Icon = isDiffTab ? null : (tab.icon as RemixiconComponentType);
-              return (
-                <Tooltip key={tab.id} delayDuration={500}>
-                  <TooltipTrigger asChild>
+        <div className="app-region-no-drag flex min-w-0 flex-1 items-center">
+          <div className="flex min-w-0 flex-1 overflow-x-auto overflow-y-hidden scrollbar-hidden touch-pan-x overscroll-x-contain">
+            <div className="flex w-max items-center gap-1 pr-1">
+            <div className="flex items-center gap-0.5" role="tablist" aria-label="Main navigation">
+              {tabs.map((tab) => {
+                const isActive = activeMainTab === tab.id;
+                const isDiffTab = tab.icon === 'diff';
+                const Icon = isDiffTab ? null : (tab.icon as RemixiconComponentType);
+                return (
+                  <Tooltip key={tab.id} delayDuration={500}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isMobile) {
+                            blurActiveElement();
+                          }
+                          setActiveMainTab(tab.id);
+                        }}
+                        aria-label={tab.label}
+                        aria-selected={isActive}
+                        role="tab"
+                        className={cn(
+                          headerIconButtonClass,
+                          'relative',
+                          isActive && 'bg-interactive-selection text-interactive-selection-foreground'
+                        )}
+                      >
+                        {isDiffTab ? (
+                          <DiffIcon className="h-5 w-5" />
+                        ) : Icon ? (
+                          <Icon className="h-5 w-5" />
+                        ) : null}
+                        {tab.badge !== undefined && tab.badge > 0 && (
+                          <span className="absolute -top-1 -right-1 text-[10px] font-semibold text-primary">
+                            {tab.badge}
+                          </span>
+                        )}
+                        {tab.showDot && (
+                          <span
+                            className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
+                            aria-label="Changes available"
+                          />
+                        )}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{tab.label}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+
+            <McpDropdown headerIconButtonClass={headerIconButtonClass} />
+
+            <DropdownMenu
+              open={isMobileRateLimitsOpen}
+              onOpenChange={(open) => {
+                setIsMobileRateLimitsOpen(open);
+                if (open && quotaResults.length === 0) {
+                  fetchAllQuotas();
+                }
+              }}
+            >
+              <Tooltip delayDuration={500}>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (isMobile) {
-                          blurActiveElement();
-                        }
-                        setActiveMainTab(tab.id);
-                      }}
-                      aria-label={tab.label}
-                      aria-selected={isActive}
-                      role="tab"
-                      className={cn(
-                        headerIconButtonClass,
-                        'relative',
-                        isActive && 'bg-interactive-selection text-interactive-selection-foreground'
-                      )}
+                      aria-label="View rate limits"
+                      className={headerIconButtonClass}
+                      disabled={isQuotaLoading}
                     >
-                      {isDiffTab ? (
-                        <DiffIcon className="h-5 w-5" />
-                      ) : Icon ? (
-                        <Icon className="h-5 w-5" />
-                      ) : null}
-                      {tab.badge !== undefined && tab.badge > 0 && (
-                        <span className="absolute -top-1 -right-1 text-[10px] font-semibold text-primary">
-                          {tab.badge}
-                        </span>
-                      )}
-                      {tab.showDot && (
-                        <span
-                          className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-                          aria-label="Changes available"
-                        />
-                      )}
+                      <RiTimerLine className="h-5 w-5" />
                     </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{tab.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
-          </div>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Rate limits</p>
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent
+                align="end"
+                sideOffset={0}
+                className="h-[100vh] w-[100vw] max-h-none rounded-none border-0 p-0"
+              >
+                <div className="flex h-full flex-col bg-[var(--surface-elevated)]">
+                  <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)]">
+                    <div className="flex items-center justify-between gap-2 px-3 py-3">
+                      <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center rounded-md border border-[var(--interactive-border)] p-0.5">
+                          <button
+                            type="button"
+                            className={cn(
+                              'px-1.5 py-0.5 rounded-sm typography-micro text-[9px] transition-colors',
+                              quotaDisplayMode === 'usage'
+                                ? 'bg-interactive-selection text-interactive-selection-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
+                            )}
+                            onClick={() => handleDisplayModeChange('usage')}
+                            aria-label="Show used quota"
+                          >
+                            Used
+                          </button>
+                          <button
+                            type="button"
+                            className={cn(
+                              'px-1.5 py-0.5 rounded-sm typography-micro text-[9px] transition-colors',
+                              quotaDisplayMode === 'remaining'
+                                ? 'bg-interactive-selection text-interactive-selection-foreground'
+                                : 'text-muted-foreground hover:text-foreground'
+                            )}
+                            onClick={() => handleDisplayModeChange('remaining')}
+                            aria-label="Show remaining quota"
+                          >
+                            Remaining
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          className={cn(
+                            'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors',
+                            'hover:text-foreground hover:bg-interactive-hover',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                          )}
+                          onClick={() => fetchAllQuotas()}
+                          disabled={isQuotaLoading}
+                          aria-label="Refresh rate limits"
+                        >
+                          <RiRefreshLine className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsMobileRateLimitsOpen(false)}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover"
+                          aria-label="Close rate limits"
+                        >
+                          <RiCloseLine className="h-5 w-5" />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="px-3 pb-3 typography-micro text-muted-foreground text-[10px]">
+                      Last updated {formatTime(quotaLastUpdated)}
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                    {!hasRateLimits && (
+                      <div className="px-3 py-4 typography-ui-label text-muted-foreground">
+                        No rate limits available.
+                      </div>
+                    )}
+                    {rateLimitGroups.map((group) => (
+                      <React.Fragment key={group.providerId}>
+                        <div className="sticky top-0 z-10 flex items-center gap-2 bg-[var(--surface-elevated)] px-3 py-2">
+                          <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
+                          <span className="typography-ui-label text-foreground">{group.providerName}</span>
+                        </div>
+                        {group.entries.map(([label, window]) => {
+                          const displayPercent = quotaDisplayMode === 'remaining'
+                            ? window.remainingPercent
+                            : window.usedPercent;
+                          return (
+                            <div key={`${group.providerId}-${label}`} className="px-3 py-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="truncate typography-micro text-muted-foreground">
+                                  {formatWindowLabel(label)}
+                                </span>
+                                <span className="typography-ui-label text-foreground tabular-nums">
+                                  {formatPercent(displayPercent)}
+                                </span>
+                              </div>
+                              <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="mt-2 h-1" />
+                              <div className="mt-1 typography-micro text-muted-foreground text-[10px]">
+                                {window.resetAfterFormatted ?? window.resetAtFormatted ?? ''}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-          <McpDropdown headerIconButtonClass={headerIconButtonClass} />
-
-          <DropdownMenu
-            open={isMobileRateLimitsOpen}
-            onOpenChange={(open) => {
-              setIsMobileRateLimitsOpen(open);
-              if (open && quotaResults.length === 0) {
-                fetchAllQuotas();
-              }
-            }}
-          >
             <Tooltip delayDuration={500}>
               <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="View rate limits"
-                    className={headerIconButtonClass}
-                    disabled={isQuotaLoading}
-                  >
-                    <RiTimerLine className="h-5 w-5" />
-                  </button>
-                </DropdownMenuTrigger>
+                <button
+                  type="button"
+                  onClick={handleOpenSettings}
+                  aria-label="Open settings"
+                  className={cn(headerIconButtonClass, 'relative')}
+                >
+                  <RiSettings3Line className="h-5 w-5" />
+                  {updateAvailable && (
+                    <span
+                      className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
+                      aria-label="Update available"
+                    />
+                  )}
+                </button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Rate limits</p>
+                <p>{updateAvailable ? 'Settings (Update available)' : 'Settings'}</p>
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent
-              align="end"
-              sideOffset={0}
-              className="h-[100vh] w-[100vw] max-h-none rounded-none border-0 p-0"
-            >
-              <div className="flex h-full flex-col bg-[var(--surface-elevated)]">
-                <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)]">
-                  <div className="flex items-center justify-between gap-2 px-3 py-3">
-                    <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center rounded-md border border-[var(--interactive-border)] p-0.5">
-                        <button
-                          type="button"
-                          className={cn(
-                            'px-1.5 py-0.5 rounded-sm typography-micro text-[9px] transition-colors',
-                            quotaDisplayMode === 'usage'
-                              ? 'bg-interactive-selection text-interactive-selection-foreground'
-                              : 'text-muted-foreground hover:text-foreground'
-                          )}
-                          onClick={() => handleDisplayModeChange('usage')}
-                          aria-label="Show used quota"
-                        >
-                          Used
-                        </button>
-                        <button
-                          type="button"
-                          className={cn(
-                            'px-1.5 py-0.5 rounded-sm typography-micro text-[9px] transition-colors',
-                            quotaDisplayMode === 'remaining'
-                              ? 'bg-interactive-selection text-interactive-selection-foreground'
-                              : 'text-muted-foreground hover:text-foreground'
-                          )}
-                          onClick={() => handleDisplayModeChange('remaining')}
-                          aria-label="Show remaining quota"
-                        >
-                          Remaining
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className={cn(
-                          'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors',
-                          'hover:text-foreground hover:bg-interactive-hover',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-                        )}
-                        onClick={() => fetchAllQuotas()}
-                        disabled={isQuotaLoading}
-                        aria-label="Refresh rate limits"
-                      >
-                        <RiRefreshLine className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsMobileRateLimitsOpen(false)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover"
-                        aria-label="Close rate limits"
-                      >
-                        <RiCloseLine className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="px-3 pb-3 typography-micro text-muted-foreground text-[10px]">
-                    Last updated {formatTime(quotaLastUpdated)}
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto overflow-x-hidden">
-                  {!hasRateLimits && (
-                    <div className="px-3 py-4 typography-ui-label text-muted-foreground">
-                      No rate limits available.
-                    </div>
-                  )}
-                  {rateLimitGroups.map((group) => (
-                    <React.Fragment key={group.providerId}>
-                      <div className="sticky top-0 z-10 flex items-center gap-2 bg-[var(--surface-elevated)] px-3 py-2">
-                        <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
-                        <span className="typography-ui-label text-foreground">{group.providerName}</span>
-                      </div>
-                      {group.entries.map(([label, window]) => {
-                        const displayPercent = quotaDisplayMode === 'remaining'
-                          ? window.remainingPercent
-                          : window.usedPercent;
-                        return (
-                          <div key={`${group.providerId}-${label}`} className="px-3 py-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <span className="truncate typography-micro text-muted-foreground">
-                                {formatWindowLabel(label)}
-                              </span>
-                              <span className="typography-ui-label text-foreground tabular-nums">
-                                {formatPercent(displayPercent)}
-                              </span>
-                            </div>
-                            <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="mt-2 h-1" />
-                            <div className="mt-1 typography-micro text-muted-foreground text-[10px]">
-                              {window.resetAfterFormatted ?? window.resetAtFormatted ?? ''}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={handleOpenSettings}
-                aria-label="Open settings"
-                className={cn(headerIconButtonClass, 'relative')}
-              >
-                <RiSettings3Line className="h-5 w-5" />
-                {updateAvailable && (
-                  <span
-                    className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-                    aria-label="Update available"
-                  />
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{updateAvailable ? 'Settings (Update available)' : 'Settings'}</p>
-            </TooltipContent>
-          </Tooltip>
+            </div>
+          </div>
         </div>
       )}
     </div>
