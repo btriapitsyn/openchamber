@@ -10,6 +10,7 @@ import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useMenuActions } from '@/hooks/useMenuActions';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
+import { useServerSessionStatus } from '@/hooks/useServerSessionStatus';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
@@ -157,6 +158,10 @@ function App({ apis }: AppProps) {
   }, [currentDirectory, isSwitchingDirectory, loadSessions, isConnected, isVSCodeRuntime]);
 
   useEventStream();
+
+  // Server-authoritative session status polling
+  // Replaces SSE-dependent status updates with reliable HTTP polling
+  useServerSessionStatus();
 
   usePushVisibilityBeacon();
 

@@ -99,6 +99,8 @@ export const useSessionStore = create<SessionStore>()(
             abortPromptSessionId: null,
             abortPromptExpiresAt: null,
             sessionStatus: new Map(),
+            sessionActivityState: new Map(),
+            sessionAttentionStates: new Map(),
             userSummaryTitles: new Map(),
             pendingInputText: null,
             pendingInputMode: 'replace',
@@ -423,6 +425,26 @@ export const useSessionStore = create<SessionStore>()(
  
                     if (currentSessionId) {
                         setStatus(currentSessionId, 'busy');
+
+                        const memoryState = get().sessionMemoryState.get(currentSessionId);
+                        if (!memoryState || !memoryState.lastUserMessageAt) {
+                            const currentMemoryState = get().sessionMemoryState;
+                            const newMemoryState = new Map(currentMemoryState);
+                            newMemoryState.set(currentSessionId, {
+                                viewportAnchor: memoryState?.viewportAnchor ?? 0,
+                                isStreaming: memoryState?.isStreaming ?? false,
+                                lastAccessedAt: Date.now(),
+                                backgroundMessageCount: memoryState?.backgroundMessageCount ?? 0,
+                                lastUserMessageAt: Date.now(),
+                            });
+                            set({ sessionMemoryState: newMemoryState });
+                        }
+                    }
+
+                    // Notify server that user sent a message in this session
+                    if (currentSessionId) {
+                        fetch(`/api/sessions/${currentSessionId}/message-sent`, { method: 'POST' })
+                            .catch(() => { /* ignore */ });
                     }
 
                     try {
@@ -455,6 +477,18 @@ export const useSessionStore = create<SessionStore>()(
                         return;
                     }
                     useMessageStore.getState().acknowledgeSessionAbort(sessionId);
+                },
+                updateSessionActivityState: (sessionId: string, state: 'viewed' | 'entered' | 'message_sent' | 'needs_attention') => {
+                    useSessionManagementStore.getState().updateSessionActivityState(sessionId, state);
+                },
+                markAllSessionsAsViewed: () => {
+                    useSessionManagementStore.getState().markAllSessionsAsViewed();
+                },
+                getSessionActivityState: (sessionId: string) => {
+                    return useSessionManagementStore.getState().getSessionActivityState(sessionId);
+                },
+                isSessionNeedsAttention: (sessionId: string) => {
+                    return useSessionManagementStore.getState().isSessionNeedsAttention(sessionId);
                 },
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
@@ -779,7 +813,8 @@ useSessionManagementStore.subscribe((state, prevState) => {
         state.webUICreatedSessions === prevState.webUICreatedSessions &&
         state.worktreeMetadata === prevState.worktreeMetadata &&
         state.availableWorktrees === prevState.availableWorktrees &&
-        state.availableWorktreesByProject === prevState.availableWorktreesByProject
+        state.availableWorktreesByProject === prevState.availableWorktreesByProject &&
+        state.sessionActivityState === prevState.sessionActivityState
     ) {
         return;
     }
@@ -797,6 +832,7 @@ useSessionManagementStore.subscribe((state, prevState) => {
         worktreeMetadata: state.worktreeMetadata,
         availableWorktrees: state.availableWorktrees,
         availableWorktreesByProject: state.availableWorktreesByProject,
+        sessionActivityState: state.sessionActivityState,
     });
 });
 

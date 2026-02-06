@@ -75,6 +75,7 @@ interface UIStore {
 
   showTerminalQuickKeysOnDesktop: boolean;
   persistChatDraft: boolean;
+  isMobileSessionStatusBarCollapsed: boolean;
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
@@ -135,6 +136,7 @@ interface UIStore {
   setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
   setNotifyOnSubtasks: (value: boolean) => void;
   setPersistChatDraft: (value: boolean) => void;
+  setIsMobileSessionStatusBarCollapsed: (value: boolean) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
 }
@@ -199,6 +201,7 @@ export const useUIStore = create<UIStore>()(
 
         showTerminalQuickKeysOnDesktop: false,
         persistChatDraft: true,
+        isMobileSessionStatusBarCollapsed: false,
 
         setTheme: (theme) => {
           set({ theme });
@@ -688,6 +691,9 @@ export const useUIStore = create<UIStore>()(
         setPersistChatDraft: (value) => {
           set({ persistChatDraft: value });
         },
+        setIsMobileSessionStatusBarCollapsed: (value) => {
+          set({ isMobileSessionStatusBarCollapsed: value });
+        },
       }),
       {
         name: 'ui-store',
@@ -726,6 +732,7 @@ export const useUIStore = create<UIStore>()(
           showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
           notifyOnSubtasks: state.notifyOnSubtasks,
           persistChatDraft: state.persistChatDraft,
+          isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
         })
       }
     ),

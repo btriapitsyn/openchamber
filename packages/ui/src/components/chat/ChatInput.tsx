@@ -29,6 +29,7 @@ import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
+import { MobileSessionStatusBar } from './MobileSessionStatusBar';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
@@ -1750,7 +1751,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 )}
                 <div
                     className={cn(
-                        "flex flex-col relative overflow-visible",
+                        "flex flex-col relative overflow-visible overflow-hidden",
                         "border border-border/80",
                         "focus-within:ring-1 focus-within:ring-primary/50"
                     )}
@@ -1884,8 +1885,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             </>
                         )}
                     </div>
-                </div>
 
+                    {/* Mobile Session Status Bar - 在输入框上方 */}
+                    {isMobile && <MobileSessionStatusBar />}
+                </div>
             </div>
         </form>
     );
