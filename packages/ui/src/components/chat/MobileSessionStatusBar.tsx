@@ -201,7 +201,7 @@ function SessionItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-0.5 px-1.5 py-0 text-left transition-colors",
+        "flex items-center gap-0.5 px-1.5 py-px text-left transition-colors",
         "hover:bg-[var(--interactive-hover)] active:bg-[var(--interactive-selection)]",
         isCurrent && "bg-[var(--interactive-selection)]/30"
       )}
@@ -253,6 +253,40 @@ function SessionItem({
   );
 }
 
+function SessionStatusHeader({
+  currentSessionTitle,
+  runningCount,
+  unreadCount,
+  onToggle
+}: {
+  currentSessionTitle: string;
+  runningCount: number;
+  unreadCount: number;
+  onToggle: () => void;
+}) {
+  const hasActivity = runningCount > 0 || unreadCount > 0;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex items-center justify-between px-2 py-0 text-left transition-colors hover:bg-[var(--interactive-hover)]"
+    >
+      <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
+        <span className="text-[13px] text-[var(--surface-foreground)] truncate flex-1 leading-tight">
+          {currentSessionTitle}
+        </span>
+        {hasActivity && (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <RunningIndicator count={runningCount} />
+            <UnreadIndicator count={unreadCount} />
+          </div>
+        )}
+      </div>
+    </button>
+  );
+}
+
 function CollapsedView({
   runningCount,
   unreadCount,
@@ -266,36 +300,27 @@ function CollapsedView({
   onToggle: () => void;
   onNewSession: () => void;
 }) {
-  const hasActivity = runningCount > 0 || unreadCount > 0;
-
   return (
+    <div className="w-full flex items-center justify-between px-2 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left">
+      <div className="flex-1 min-w-0 mr-2">
+        <SessionStatusHeader
+          currentSessionTitle={currentSessionTitle}
+          runningCount={runningCount}
+          unreadCount={unreadCount}
+          onToggle={onToggle}
+        />
+      </div>
       <button
         type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-2 py-0 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left transition-colors hover:bg-[var(--interactive-hover)]"
+        onClick={(e) => {
+          e.stopPropagation();
+          onNewSession();
+        }}
+        className="flex items-center gap-0.5 px-1.5 py-1 text-[11px] leading-tight !min-h-0 rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] flex-shrink-0 self-center"
       >
-        <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
-          <span className="text-[10px] text-[var(--surface-foreground)] truncate flex-1 leading-tight">
-            {currentSessionTitle}
-          </span>
-          {hasActivity && (
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <RunningIndicator count={runningCount} />
-              <UnreadIndicator count={unreadCount} />
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onNewSession();
-          }}
-          className="flex items-center gap-0.5 px-1.5 py-1 text-[11px] leading-tight !min-h-0 rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] flex-shrink-0 self-center"
-        >
-          New
-        </button>
-    </button>
+        New
+      </button>
+    </div>
   );
 }
 
@@ -329,25 +354,17 @@ function ExpandedView({
   needsAttention: (sessionId: string) => boolean;
 }) {
   const displaySessions = isExpanded ? sessions : sessions.slice(0, 3);
-  const hasActivity = runningCount > 0 || unreadCount > 0;
 
   return (
     <div className="w-full border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first">
-      <button
-        type="button"
-        onClick={onToggleCollapse}
-        className="w-full flex items-center justify-between px-2 py-0.5 text-left transition-colors hover:bg-[var(--interactive-hover)]"
-      >
-        <div className="flex items-center gap-1.5 flex-1 min-w-0 mr-2">
-          <span className="text-xs text-[var(--surface-foreground)] truncate flex-1">
-            {currentSessionTitle}
-          </span>
-          {hasActivity && (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <RunningIndicator count={runningCount} />
-              <UnreadIndicator count={unreadCount} />
-            </div>
-          )}
+      <div className="flex items-center justify-between px-2 py-0">
+        <div className="flex-1 min-w-0 mr-2">
+          <SessionStatusHeader
+            currentSessionTitle={currentSessionTitle}
+            runningCount={runningCount}
+            unreadCount={unreadCount}
+            onToggle={onToggleCollapse}
+          />
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
@@ -371,12 +388,9 @@ function ExpandedView({
             {isExpanded ? 'Less' : 'More'}
           </button>
         </div>
-      </button>
+      </div>
 
-      <div className={cn(
-        "flex flex-col",
-        isExpanded ? "max-h-[60vh] overflow-y-auto" : ""
-      )}>
+      <div className="flex flex-col max-h-[60vh] overflow-y-auto">
         {displaySessions.map((session) => (
           <SessionItem
             key={session.id}
