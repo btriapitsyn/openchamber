@@ -2672,6 +2672,7 @@ name = "openchamber-desktop"
 version = "1.6.5"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
  "log",
  "reqwest",
  "serde",

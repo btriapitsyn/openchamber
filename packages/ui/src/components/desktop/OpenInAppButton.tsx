@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { cn } from '@/lib/utils';
-import { filterInstalledDesktopApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings } from '@/lib/desktop';
+import { fetchDesktopAppIcons, filterInstalledDesktopApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings } from '@/lib/desktop';
 import { RiArrowDownSLine, RiCheckLine, RiFileCopyLine } from '@remixicon/react';
 
 type OpenInAppOption = {
@@ -17,6 +17,7 @@ type OpenInAppOption = {
   label: string;
   appName: string;
   iconUrl: string;
+  iconDataUrl?: string;
 };
 
 const OPEN_IN_APPS: OpenInAppOption[] = [
@@ -215,6 +216,8 @@ const OPEN_IN_APPS: OpenInAppOption[] = [
 ];
 
 const DEFAULT_APP_ID = 'vscode';
+const ALWAYS_AVAILABLE_APP_IDS = new Set(['finder', 'terminal']);
+const getAlwaysAvailableApps = () => OPEN_IN_APPS.filter((app) => ALWAYS_AVAILABLE_APP_IDS.has(app.id));
 
 const getStoredAppId = (): string => {
   if (typeof window === 'undefined') {
@@ -227,14 +230,16 @@ const getStoredAppId = (): string => {
   return DEFAULT_APP_ID;
 };
 
-const AppIcon = ({ label, iconUrl }: { label: string; iconUrl: string }) => {
+const AppIcon = ({ label, iconUrl, iconDataUrl }: { label: string; iconUrl: string; iconDataUrl?: string }) => {
   const [failed, setFailed] = React.useState(false);
   const initial = label.trim().slice(0, 1).toUpperCase() || '?';
 
-  if (iconUrl && !failed) {
+  const src = iconDataUrl || iconUrl;
+
+  if (src && !failed) {
     return (
       <img
-        src={iconUrl}
+        src={src}
         alt=""
         className="h-4 w-4 rounded-sm"
         onError={() => setFailed(true)}
@@ -261,7 +266,7 @@ type OpenInAppButtonProps = {
 
 export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) => {
   const [selectedAppId, setSelectedAppId] = React.useState(getStoredAppId);
-  const [availableApps, setAvailableApps] = React.useState<OpenInAppOption[]>([]);
+  const [availableApps, setAvailableApps] = React.useState<OpenInAppOption[]>(getAlwaysAvailableApps);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -285,12 +290,20 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
       const installed = await filterInstalledDesktopApps(appNames);
       if (cancelled) return;
       if (installed.length === 0) {
-        setAvailableApps([]);
+        setAvailableApps(getAlwaysAvailableApps());
         return;
       }
       const allowed = new Set(installed);
-      const filtered = OPEN_IN_APPS.filter((app) => allowed.has(app.appName));
-      setAvailableApps(filtered);
+      const filtered = OPEN_IN_APPS.filter(
+        (app) => allowed.has(app.appName) || ALWAYS_AVAILABLE_APP_IDS.has(app.id)
+      );
+      const iconMap = await fetchDesktopAppIcons(installed);
+      if (cancelled) return;
+      const withIcons = filtered.map((app) => ({
+        ...app,
+        iconDataUrl: iconMap[app.appName],
+      }));
+      setAvailableApps(withIcons);
     };
 
     void loadInstalledApps();
@@ -366,7 +379,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
         )}
         aria-label={`Open in ${selectedApp.label}`}
       >
-        <AppIcon label={selectedApp.label} iconUrl={selectedApp.iconUrl} />
+        <AppIcon label={selectedApp.label} iconUrl={selectedApp.iconUrl} iconDataUrl={selectedApp.iconDataUrl} />
         <span>Open</span>
       </button>
       <DropdownMenu>
@@ -393,7 +406,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
               className="flex items-center gap-2"
               onClick={() => void handleSelect(app)}
             >
-              <AppIcon label={app.label} iconUrl={app.iconUrl} />
+              <AppIcon label={app.label} iconUrl={app.iconUrl} iconDataUrl={app.iconDataUrl} />
               <span className="typography-ui-label text-foreground">{app.label}</span>
               {selectedApp.id === app.id ? (
                 <RiCheckLine className="ml-auto h-4 w-4 text-primary" />

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{
     net::TcpListener,
@@ -422,6 +423,186 @@ fn desktop_filter_installed_apps(apps: Vec<String>) -> Result<Vec<String>, Strin
         let _ = apps;
         Err("desktop_filter_installed_apps is only supported on macOS".to_string())
     }
+}
+
+#[derive(Serialize)]
+struct AppIconPayload {
+    app: String,
+    data_url: String,
+}
+
+#[tauri::command]
+fn desktop_fetch_app_icons(apps: Vec<String>) -> Result<Vec<AppIconPayload>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut results: Vec<AppIconPayload> = Vec::new();
+
+        for raw in apps {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let Some(app_path) = resolve_app_bundle_path(trimmed) else {
+                continue;
+            };
+
+            let Some(icon_path) = resolve_app_icon_path(&app_path) else {
+                continue;
+            };
+
+            let Some(data_url) = icon_to_data_url(&icon_path, trimmed) else {
+                continue;
+            };
+
+            results.push(AppIconPayload {
+                app: trimmed.to_string(),
+                data_url,
+            });
+        }
+
+        return Ok(results);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = apps;
+        Err("desktop_fetch_app_icons is only supported on macOS".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_app_bundle_path(app_name: &str) -> Option<PathBuf> {
+    if app_name.trim().is_empty() {
+        return None;
+    }
+
+    let bundle_name = if app_name.ends_with(".app") {
+        app_name.to_string()
+    } else {
+        format!("{app_name}.app")
+    };
+
+    let candidates = [
+        format!("/Applications/{bundle_name}"),
+        format!("/System/Applications/{bundle_name}"),
+        format!("/System/Applications/Utilities/{bundle_name}"),
+    ];
+
+    for candidate in candidates {
+        let path = PathBuf::from(&candidate);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    if let Some(home) = env::var_os("HOME") {
+        let user_app_path = PathBuf::from(home).join("Applications").join(&bundle_name);
+        if user_app_path.exists() {
+            return Some(user_app_path);
+        }
+    }
+
+    if let Ok(output) = Command::new("mdfind").args(["-name", &bundle_name]).output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let path = PathBuf::from(trimmed);
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_app_icon_path(app_path: &Path) -> Option<PathBuf> {
+    if !app_path.exists() {
+        return None;
+    }
+
+    if let Ok(output) = Command::new("mdls")
+        .args(["-name", "kMDItemIconFile", "-raw", &app_path.to_string_lossy()])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let icon_name = stdout.trim();
+            if !icon_name.is_empty() && icon_name != "(null)" {
+                let icon_file = if icon_name.ends_with(".icns") {
+                    icon_name.to_string()
+                } else {
+                    format!("{icon_name}.icns")
+                };
+                let icon_path = app_path
+                    .join("Contents")
+                    .join("Resources")
+                    .join(icon_file);
+                if icon_path.exists() {
+                    return Some(icon_path);
+                }
+            }
+        }
+    }
+
+    let resources_path = app_path.join("Contents").join("Resources");
+    if let Ok(entries) = fs::read_dir(resources_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(ext) = path.extension().and_then(|value| value.to_str()) {
+                if ext.eq_ignore_ascii_case("icns") {
+                    return Some(path);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn icon_to_data_url(icon_path: &Path, app_name: &str) -> Option<String> {
+    if !icon_path.exists() {
+        return None;
+    }
+
+    let sanitized: String = app_name
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect();
+    let tmp_path = env::temp_dir().join(format!("openchamber-icon-{sanitized}.png"));
+
+    let status = Command::new("sips")
+        .args([
+            "-s",
+            "format",
+            "png",
+            &icon_path.to_string_lossy(),
+            "--out",
+            &tmp_path.to_string_lossy(),
+        ])
+        .status()
+        .ok()?;
+
+    if !status.success() {
+        return None;
+    }
+
+    let bytes = fs::read(&tmp_path).ok()?;
+    let _ = fs::remove_file(&tmp_path);
+    if bytes.is_empty() {
+        return None;
+    }
+
+    let encoded = general_purpose::STANDARD.encode(bytes);
+    Some(format!("data:image/png;base64,{encoded}"))
 }
 
 #[cfg(target_os = "macos")]
@@ -1589,6 +1770,7 @@ fn main() {
             desktop_set_auto_worktree_menu,
             desktop_open_path,
             desktop_filter_installed_apps,
+            desktop_fetch_app_icons,
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,
