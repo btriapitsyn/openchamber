@@ -7372,6 +7372,22 @@ Context:
     }
   });
 
+  app.get('/api/git/conflict-details', async (req, res) => {
+    const { getConflictDetails } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await getConflictDetails(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to get conflict details:', error);
+      res.status(500).json({ error: error.message || 'Failed to get conflict details' });
+    }
+  });
+
   app.post('/api/git/stash', async (req, res) => {
     const { stash } = await getGitLibraries();
     try {
