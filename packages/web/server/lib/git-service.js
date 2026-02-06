@@ -1315,6 +1315,68 @@ export async function abortMerge(directory) {
   }
 }
 
+export async function getConflictDetails(directory) {
+  const directoryPath = normalizeDirectoryPath(directory);
+  const git = await createGit(directoryPath);
+
+  try {
+    // Get git status --porcelain
+    const statusPorcelain = await git.raw(['status', '--porcelain']).catch(() => '');
+
+    // Get unmerged files
+    const unmergedFilesRaw = await git.raw(['diff', '--name-only', '--diff-filter=U']).catch(() => '');
+    const unmergedFiles = unmergedFilesRaw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    // Get current diff
+    const diff = await git.raw(['diff']).catch(() => '');
+
+    // Detect operation type and get head info
+    let operation = 'merge';
+    let headInfo = '';
+
+    // Check for MERGE_HEAD (merge in progress)
+    const mergeHeadExists = await git
+      .raw(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])
+      .then(() => true)
+      .catch(() => false);
+
+    if (mergeHeadExists) {
+      operation = 'merge';
+      const mergeHead = await git.raw(['rev-parse', 'MERGE_HEAD']).catch(() => '');
+      const mergeMsg = await fsp
+        .readFile(path.join(directoryPath, '.git', 'MERGE_MSG'), 'utf8')
+        .catch(() => '');
+      headInfo = `MERGE_HEAD: ${mergeHead.trim()}\n${mergeMsg}`;
+    } else {
+      // Check for REBASE_HEAD (rebase in progress)
+      const rebaseHeadExists = await git
+        .raw(['rev-parse', '--verify', '--quiet', 'REBASE_HEAD'])
+        .then(() => true)
+        .catch(() => false);
+
+      if (rebaseHeadExists) {
+        operation = 'rebase';
+        const rebaseHead = await git.raw(['rev-parse', 'REBASE_HEAD']).catch(() => '');
+        headInfo = `REBASE_HEAD: ${rebaseHead.trim()}`;
+      }
+    }
+
+    return {
+      statusPorcelain: statusPorcelain.trim(),
+      unmergedFiles,
+      diff: diff.trim(),
+      headInfo: headInfo.trim(),
+      operation,
+    };
+  } catch (error) {
+    console.error('Failed to get conflict details:', error);
+    throw error;
+  }
+}
+
 // ============== Stash Operations ==============
 
 export async function stash(directory, options = {}) {
