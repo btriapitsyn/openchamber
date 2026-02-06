@@ -54,8 +54,6 @@ interface ChatInputProps {
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
 }
 
-const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
 const CHAT_INPUT_DRAFT_KEY = 'openchamber_chat_input_draft';
 
 // Helper to safely read from localStorage
@@ -118,6 +116,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
+    const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
     const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius, persistChatDraft } = useUIStore();
     const { working } = useAssistantStatus();
     const { currentTheme } = useThemeSystem();
@@ -799,7 +798,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [abortCurrentOperation, clearAbortPrompt, startAbortIndicator]);
 
     const handleCycleAgent = React.useCallback(() => {
-        const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
         if (primaryAgents.length <= 1) return;
 
         const currentIndex = primaryAgents.findIndex(agent => agent.name === currentAgentName);
@@ -811,7 +809,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (currentSessionId) {
             saveSessionAgentSelection(currentSessionId, nextAgent.name);
         }
-    }, [agents, currentAgentName, currentSessionId, setAgent, saveSessionAgentSelection]);
+    }, [primaryAgents, currentAgentName, currentSessionId, setAgent, saveSessionAgentSelection]);
 
     const adjustTextareaHeight = React.useCallback(() => {
         const textarea = textareaRef.current;

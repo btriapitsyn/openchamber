@@ -18,6 +18,11 @@ export interface AgentMentionAutocompleteHandle {
 
 type AutocompleteTab = 'commands' | 'agents' | 'files';
 
+const isMentionableAgentMode = (mode?: string | null): boolean => {
+  if (!mode) return false;
+  return mode !== 'primary';
+};
+
 interface AgentMentionAutocompleteProps {
   searchQuery: string;
   onAgentSelect: (agentName: string) => void;
@@ -27,14 +32,7 @@ interface AgentMentionAutocompleteProps {
   onTabSelect?: (tab: AutocompleteTab) => void;
 }
 
-const isMentionable = (mode?: string | null): boolean => {
-  if (!mode) {
-    return false;
-  }
-  return mode !== 'primary';
-};
-
-export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocompleteHandle, AgentMentionAutocompleteProps>(({
+export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocompleteHandle, AgentMentionAutocompleteProps>(({ 
   searchQuery,
   onAgentSelect,
   onClose,
@@ -59,7 +57,7 @@ export const AgentMentionAutocomplete = React.forwardRef<AgentMentionAutocomplet
   React.useEffect(() => {
     const visibleAgents = getVisibleAgents();
     const filtered = visibleAgents
-      .filter((agent) => isMentionable(agent.mode))
+      .filter((agent) => isMentionableAgentMode(agent.mode))
       .map((agent) => {
         const metadata = agentsWithMetadata.find(a => a.name === agent.name) as (AgentWithExtras & { scope?: string }) | undefined;
         return {
