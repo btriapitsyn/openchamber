@@ -35,6 +35,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import type { UsageWindow } from '@/types';
 import type { GitHubAuthStatus } from '@/lib/api/types';
 import { DesktopHostSwitcherButton } from '@/components/desktop/DesktopHostSwitcher';
+import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { isDesktopShell } from '@/lib/desktop';
 
 const formatTime = (timestamp: number | null) => {
@@ -222,10 +223,23 @@ export const Header: React.FC = () => {
     return sessions.find((s) => s.id === currentSessionId) ?? null;
   }, [currentSessionId, sessions]);
 
+  const worktreePath = useSessionStore((state) => {
+    if (!currentSessionId) return '';
+    return state.worktreeMetadata.get(currentSessionId)?.path ?? '';
+  });
+
+  const worktreeDirectory = React.useMemo(() => {
+    return normalize(worktreePath || '');
+  }, [worktreePath]);
+
   const sessionDirectory = React.useMemo(() => {
     const raw = typeof currentSession?.directory === 'string' ? currentSession.directory : '';
     return normalize(raw || '');
   }, [currentSession?.directory]);
+
+  const openDirectory = React.useMemo(() => {
+    return worktreeDirectory || sessionDirectory;
+  }, [sessionDirectory, worktreeDirectory]);
 
 
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
@@ -627,6 +641,7 @@ export const Header: React.FC = () => {
       <div className="flex-1" />
 
       <div className="flex items-center gap-1 pr-3">
+        <OpenInAppButton directory={openDirectory} className="mr-1" />
         {isDesktopApp && (
           <DesktopHostSwitcherButton headerIconButtonClass={headerIconButtonClass} />
         )}

@@ -96,7 +96,7 @@
     },
     "packages/desktop": {
       "name": "@openchamber/desktop",
-      "version": "1.6.4",
+      "version": "1.6.5",
       "devDependencies": {
         "@tauri-apps/cli": "^2",
         "@types/node": "^24.3.1",
@@ -105,7 +105,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.6.4",
+      "version": "1.6.5",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.0",
         "@codemirror/commands": "^6.10.1",
@@ -152,6 +152,7 @@
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "cmdk": "^1.1.1",
+        "codemirror-lang-elixir": "^4.0.0",
         "express": "^5.1.0",
         "fuse.js": "^7.1.0",
         "ghostty-web": "^0.4.0",
@@ -199,7 +200,7 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.6.4",
+      "version": "1.6.5",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@opencode-ai/sdk": "^1.1.53",
@@ -222,7 +223,7 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.6.4",
+      "version": "1.6.5",
       "bin": {
         "openchamber": "./bin/cli.js",
       },

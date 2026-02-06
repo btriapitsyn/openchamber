@@ -392,6 +392,7 @@ export interface SettingsPayload {
   diffViewMode?: 'single' | 'stacked';
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
+  openInAppId?: string;
 
   [key: string]: unknown;
 }

@@ -367,6 +367,30 @@ fn desktop_set_auto_worktree_menu(app: tauri::AppHandle, enabled: bool) -> Resul
     Ok(())
 }
 
+#[tauri::command]
+fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = Command::new("open");
+        if let Some(app_name) = app.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+            command.arg("-a").arg(app_name);
+        }
+        command.arg(trimmed);
+        command.spawn().map_err(|err| err.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("desktop_open_path is only supported on macOS".to_string())
+    }
+}
+
 const SIDECAR_NAME: &str = "openchamber-server";
 const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(20);
@@ -1497,6 +1521,7 @@ fn main() {
             desktop_download_and_install_update,
             desktop_restart,
             desktop_set_auto_worktree_menu,
+            desktop_open_path,
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,

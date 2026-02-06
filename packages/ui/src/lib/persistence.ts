@@ -71,6 +71,11 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
   if (typeof settings.filesViewShowGitignored === 'boolean') {
     localStorage.setItem('filesViewShowGitignored', settings.filesViewShowGitignored ? 'true' : 'false');
   }
+  if (typeof settings.openInAppId === 'string' && settings.openInAppId.length > 0) {
+    localStorage.setItem('openInAppId', settings.openInAppId);
+  } else {
+    localStorage.removeItem('openInAppId');
+  }
 };
 
 type PersistApi = {
@@ -470,6 +475,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.filesViewShowGitignored === 'boolean') {
     result.filesViewShowGitignored = candidate.filesViewShowGitignored;
+  }
+  if (typeof candidate.openInAppId === 'string' && candidate.openInAppId.length > 0) {
+    result.openInAppId = candidate.openInAppId;
   }
 
   if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {

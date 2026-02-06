@@ -59,6 +59,7 @@ export type DesktopSettings = {
   defaultVariant?: string;
   defaultAgent?: string;
   defaultGitIdentityId?: string; // ''/undefined = unset, 'global' or profile id
+  openInAppId?: string;
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
@@ -319,6 +320,29 @@ export const restartToApplyUpdate = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.warn('Failed to restart for update (tauri)', error);
+    return false;
+  }
+};
+
+export const openDesktopPath = async (path: string, app?: string | null): Promise<boolean> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return false;
+  }
+
+  const trimmed = path?.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    await tauri?.core?.invoke?.('desktop_open_path', {
+      path: trimmed,
+      app: typeof app === 'string' && app.trim().length > 0 ? app.trim() : undefined,
+    });
+    return true;
+  } catch (error) {
+    console.warn('Failed to open path (tauri)', error);
     return false;
   }
 };
