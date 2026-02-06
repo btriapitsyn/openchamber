@@ -56,8 +56,27 @@ interface ChatInputProps {
 
 const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
 
+const CHAT_INPUT_DRAFT_KEY = 'openchamber_chat_input_draft';
+
+// Helper to safely read from localStorage
+const getStoredDraft = (): string => {
+    try {
+        return localStorage.getItem(CHAT_INPUT_DRAFT_KEY) ?? '';
+    } catch {
+        return '';
+    }
+};
+
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
-    const [message, setMessage] = React.useState('');
+    // Track if we restored a draft on mount (for text selection)
+    const initialDraftRef = React.useRef<string | null>(null);
+    const [message, setMessage] = React.useState(() => {
+        const draft = getStoredDraft();
+        if (draft) {
+            initialDraftRef.current = draft;
+        }
+        return draft;
+    });
     const [isDragging, setIsDragging] = React.useState(false);
     const [showFileMention, setShowFileMention] = React.useState(false);
     const [mentionQuery, setMentionQuery] = React.useState('');
@@ -99,7 +118,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
-    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius } = useUIStore();
+    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius, persistChatDraft } = useUIStore();
     const { working } = useAssistantStatus();
     const { currentTheme } = useThemeSystem();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
@@ -158,6 +177,71 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             .filter((text) => text.length > 0)
             .reverse(); // Most recent first
     }, [sessionMessages]);
+
+    // Handle initial draft restoration and text selection
+    const hasHandledInitialDraftRef = React.useRef(false);
+    React.useEffect(() => {
+        if (hasHandledInitialDraftRef.current) return;
+        hasHandledInitialDraftRef.current = true;
+
+        const draft = initialDraftRef.current;
+        if (!draft) return;
+
+        if (!persistChatDraft) {
+            // Setting disabled - clear the restored draft
+            setMessage('');
+            try {
+                localStorage.removeItem(CHAT_INPUT_DRAFT_KEY);
+            } catch {
+                // Ignore
+            }
+        } else {
+            // Setting enabled - select all text
+            requestAnimationFrame(() => {
+                textareaRef.current?.select();
+            });
+        }
+    }, [persistChatDraft]);
+
+    // Handle session switching: clear draft if persist disabled, select if enabled
+    const prevSessionIdRef = React.useRef(currentSessionId);
+    React.useEffect(() => {
+        if (prevSessionIdRef.current !== currentSessionId) {
+            prevSessionIdRef.current = currentSessionId;
+            
+            if (!persistChatDraft) {
+                // Clear draft when switching sessions if persist is disabled
+                setMessage('');
+            } else if (message) {
+                // Select text if there's any draft when switching sessions
+                requestAnimationFrame(() => {
+                    textareaRef.current?.select();
+                });
+            }
+        }
+    }, [currentSessionId, persistChatDraft, message]);
+
+    // Persist chat input draft to localStorage (only if setting enabled)
+    React.useEffect(() => {
+        if (!persistChatDraft) {
+            // Clear stored draft when setting is disabled
+            try {
+                localStorage.removeItem(CHAT_INPUT_DRAFT_KEY);
+            } catch {
+                // Ignore
+            }
+            return;
+        }
+        try {
+            if (message) {
+                localStorage.setItem(CHAT_INPUT_DRAFT_KEY, message);
+            } else {
+                localStorage.removeItem(CHAT_INPUT_DRAFT_KEY);
+            }
+        } catch {
+            // Ignore localStorage errors
+        }
+    }, [message, persistChatDraft]);
 
     // Session activity for auto-send on idle
     const { phase: sessionPhase } = useCurrentSessionActivity();
@@ -648,9 +732,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (e.key === 'ArrowDown' && canNavigateHistoryDown && historyIndex >= 0) {
             e.preventDefault();
             if (historyIndex === 0) {
-                // Exit history mode - clear to empty input
+                // Exit history mode - restore draft
                 setHistoryIndex(-1);
-                setMessage('');
+                setMessage(draftMessage);
                 setDraftMessage('');
             } else {
                 // Navigate to newer message
