@@ -8,7 +8,7 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use std::{fs, path::PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 use std::env;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -389,6 +389,72 @@ fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
     {
         Err("desktop_open_path is only supported on macOS".to_string())
     }
+}
+
+#[tauri::command]
+fn desktop_filter_installed_apps(apps: Vec<String>) -> Result<Vec<String>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut installed: Vec<String> = Vec::new();
+
+        for raw in apps {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let bundle_name = if trimmed.ends_with(".app") {
+                trimmed.to_string()
+            } else {
+                format!("{trimmed}.app")
+            };
+
+            if is_app_bundle_installed(&bundle_name) {
+                installed.push(trimmed.to_string());
+            }
+        }
+
+        return Ok(installed);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = apps;
+        Err("desktop_filter_installed_apps is only supported on macOS".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn is_app_bundle_installed(bundle_name: &str) -> bool {
+    if bundle_name.trim().is_empty() {
+        return false;
+    }
+
+    if let Ok(output) = Command::new("mdfind").args(["-name", bundle_name]).output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if !stdout.trim().is_empty() {
+                return true;
+            }
+        }
+    }
+
+    let app_path = format!("/Applications/{bundle_name}");
+    let system_app_path = format!("/System/Applications/{bundle_name}");
+    let utilities_path = format!("/System/Applications/Utilities/{bundle_name}");
+
+    if Path::new(&app_path).exists() || Path::new(&system_app_path).exists() || Path::new(&utilities_path).exists() {
+        return true;
+    }
+
+    if let Some(home) = env::var_os("HOME") {
+        let user_app_path = PathBuf::from(home).join("Applications").join(bundle_name);
+        if user_app_path.exists() {
+            return true;
+        }
+    }
+
+    false
 }
 
 const SIDECAR_NAME: &str = "openchamber-server";
@@ -1522,6 +1588,7 @@ fn main() {
             desktop_restart,
             desktop_set_auto_worktree_menu,
             desktop_open_path,
+            desktop_filter_installed_apps,
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,

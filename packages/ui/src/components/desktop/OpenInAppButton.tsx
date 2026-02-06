@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { cn } from '@/lib/utils';
-import { isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings } from '@/lib/desktop';
+import { filterInstalledDesktopApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings } from '@/lib/desktop';
 import { RiArrowDownSLine, RiCheckLine, RiFileCopyLine } from '@remixicon/react';
 
 type OpenInAppOption = {
@@ -261,6 +261,7 @@ type OpenInAppButtonProps = {
 
 export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) => {
   const [selectedAppId, setSelectedAppId] = React.useState(getStoredAppId);
+  const [availableApps, setAvailableApps] = React.useState<OpenInAppOption[]>([]);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -275,11 +276,46 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
   }, []);
 
   const isDesktopLocal = isTauriShell() && isDesktopLocalOriginActive();
+  React.useEffect(() => {
+    if (!isDesktopLocal) return;
+    let cancelled = false;
+
+    const loadInstalledApps = async () => {
+      const appNames = OPEN_IN_APPS.map((app) => app.appName);
+      const installed = await filterInstalledDesktopApps(appNames);
+      if (cancelled) return;
+      if (installed.length === 0) {
+        setAvailableApps([]);
+        return;
+      }
+      const allowed = new Set(installed);
+      const filtered = OPEN_IN_APPS.filter((app) => allowed.has(app.appName));
+      setAvailableApps(filtered);
+    };
+
+    void loadInstalledApps();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDesktopLocal]);
+
+  const selectedApp = availableApps.find((app) => app.id === selectedAppId) ?? availableApps[0];
+
+  React.useEffect(() => {
+    if (!selectedApp) return;
+    if (selectedAppId !== selectedApp.id) {
+      setSelectedAppId(selectedApp.id);
+      void updateDesktopSettings({ openInAppId: selectedApp.id });
+    }
+  }, [selectedApp, selectedAppId]);
+
   if (!isDesktopLocal || !directory) {
     return null;
   }
 
-  const selectedApp = OPEN_IN_APPS.find((app) => app.id === selectedAppId) ?? OPEN_IN_APPS[0];
+  if (availableApps.length === 0) {
+    return null;
+  }
 
   const handleOpen = async (app: OpenInAppOption) => {
     await openDesktopPath(directory, app.appName);
@@ -351,7 +387,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
           <DropdownMenuLabel className="typography-ui-label text-muted-foreground">
             Open in
           </DropdownMenuLabel>
-          {OPEN_IN_APPS.map((app) => (
+          {availableApps.map((app) => (
             <DropdownMenuItem
               key={app.id}
               className="flex items-center gap-2"

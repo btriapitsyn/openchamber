@@ -346,3 +346,25 @@ export const openDesktopPath = async (path: string, app?: string | null): Promis
     return false;
   }
 };
+
+export const filterInstalledDesktopApps = async (apps: string[]): Promise<string[]> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return [];
+  }
+
+  const candidate = Array.isArray(apps) ? apps.filter((value) => typeof value === 'string') : [];
+  if (candidate.length === 0) {
+    return [];
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_filter_installed_apps', {
+      apps: candidate,
+    });
+    return Array.isArray(result) ? result.filter((value) => typeof value === 'string') : [];
+  } catch (error) {
+    console.warn('Failed to check installed apps (tauri)', error);
+    return [];
+  }
+};
