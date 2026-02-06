@@ -225,28 +225,32 @@ function SessionItem({
         {getSessionTitle(session)}
       </span>
 
-      {(session._childIndicators?.length || 0) > 0 && extraCount > 0 && (
-        <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-[var(--surface-muted)] border border-border/50">
-          {session._childIndicators!.map(({ session: child }) => {
-            const childColor = getAgentColor(getSessionAgentName(child));
-            return (
-              <div
-                key={child.id}
-                className="flex-shrink-0"
-                title={`Sub-session: ${getSessionTitle(child)}`}
-              >
-                <RiLoader4Line
-                  className="h-2.5 w-2.5 animate-spin"
-                  style={{ color: `var(${childColor.var})` }}
-                />
-              </div>
-            );
-          })}
-          {extraCount > 0 && (
-            <span className="text-[10px] text-[var(--surface-mutedForeground)]">
-              +{extraCount}
-            </span>
-          )}
+      {(session._childIndicators?.length || 0) > 0 && (
+        <div className="flex items-center gap-0.5 text-[var(--surface-mutedForeground)]">
+          <span className="text-[10px]">[</span>
+          <div className="flex items-center gap-0.5">
+            {session._childIndicators!.map(({ session: child }) => {
+              const childColor = getAgentColor(getSessionAgentName(child));
+              return (
+                <div
+                  key={child.id}
+                  className="flex-shrink-0"
+                  title={`Sub-session: ${getSessionTitle(child)}`}
+                >
+                  <RiLoader4Line
+                    className="h-2.5 w-2.5 animate-spin"
+                    style={{ color: `var(${childColor.var})` }}
+                  />
+                </div>
+              );
+            })}
+            {extraCount > 0 && (
+              <span className="text-[10px] text-[var(--surface-mutedForeground)]">
+                +{extraCount}
+              </span>
+            )}
+          </div>
+          <span className="text-[10px]">]</span>
         </div>
       )}
     </button>
@@ -273,7 +277,7 @@ function SessionStatusHeader({
       className="w-full flex items-center justify-between px-2 py-0 text-left transition-colors hover:bg-[var(--interactive-hover)]"
     >
       <div className="flex items-center gap-1 flex-1 min-w-0 mr-2">
-        <span className="text-[13px] text-[var(--surface-foreground)] truncate flex-1 leading-tight">
+        <span className="text-xs text-[var(--surface-foreground)] truncate flex-1 leading-tight">
           {currentSessionTitle}
         </span>
         {hasActivity && (
@@ -353,7 +357,19 @@ function ExpandedView({
   getSessionTitle: (s: Session) => string;
   needsAttention: (sessionId: string) => boolean;
 }) {
-  const displaySessions = isExpanded ? sessions : sessions.slice(0, 3);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [collapsedHeight, setCollapsedHeight] = React.useState<number | null>(null);
+  const [hasMeasured, setHasMeasured] = React.useState(false);
+
+  React.useEffect(() => {
+    if (containerRef.current && !hasMeasured && !isExpanded) {
+      setCollapsedHeight(containerRef.current.offsetHeight);
+      setHasMeasured(true);
+    }
+  }, [hasMeasured, isExpanded]);
+
+  const previewHeight = collapsedHeight ?? undefined;
+  const displaySessions = hasMeasured || isExpanded ? sessions : sessions.slice(0, 3);
 
   return (
     <div className="w-full border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first">
@@ -390,7 +406,11 @@ function ExpandedView({
         </div>
       </div>
 
-      <div className="flex flex-col max-h-[60vh] overflow-y-auto">
+      <div
+        ref={containerRef}
+        className="flex flex-col overflow-y-auto"
+        style={{ maxHeight: isExpanded ? '60vh' : previewHeight }}
+      >
         {displaySessions.map((session) => (
           <SessionItem
             key={session.id}
