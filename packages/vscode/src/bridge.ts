@@ -2269,6 +2269,57 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: result };
       }
 
+      case 'api:git/remotes': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.getRemotes(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase': {
+        const { directory, onto } = (payload || {}) as { directory?: string; onto?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        if (!onto) {
+          return { id, type, success: false, error: 'onto is required' };
+        }
+        const result = await gitService.rebase(directory, { onto });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase/abort': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.abortRebase(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge': {
+        const { directory, branch } = (payload || {}) as { directory?: string; branch?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        if (!branch) {
+          return { id, type, success: false, error: 'branch is required' };
+        }
+        const result = await gitService.merge(directory, { branch });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge/abort': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.abortMerge(directory);
+        return { id, type, success: true, data: result };
+      }
+
       case 'api:git/log': {
         const { directory, maxCount, from, to, file } = (payload || {}) as { 
           directory?: string; 

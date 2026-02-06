@@ -34,7 +34,8 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   onPush,
   disabled,
 }) => {
-  const isDisabled = disabled || syncAction !== null;
+  const hasNoRemotes = remotes.length === 0;
+  const isDisabled = disabled || syncAction !== null || hasNoRemotes;
   const hasMultipleRemotes = remotes.length > 1;
 
   const handleFetch = () => {

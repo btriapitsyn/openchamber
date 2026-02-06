@@ -1319,3 +1319,136 @@ export async function setGitIdentity(
 
   return { success: true };
 }
+
+// ============== Remote Operations ==============
+
+export interface GitRemote {
+  name: string;
+  fetchUrl: string;
+  pushUrl: string;
+}
+
+/**
+ * Get list of remotes
+ */
+export async function getRemotes(directory: string): Promise<GitRemote[]> {
+  const result = await execGit(['remote', '-v'], directory);
+  if (result.exitCode !== 0) {
+    return [];
+  }
+
+  const remoteMap = new Map<string, GitRemote>();
+  const lines = result.stdout.split('\n').filter(Boolean);
+
+  for (const line of lines) {
+    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+    if (match) {
+      const [, name, url, type] = match;
+      if (!remoteMap.has(name)) {
+        remoteMap.set(name, { name, fetchUrl: '', pushUrl: '' });
+      }
+      const remote = remoteMap.get(name)!;
+      if (type === 'fetch') {
+        remote.fetchUrl = url;
+      } else {
+        remote.pushUrl = url;
+      }
+    }
+  }
+
+  return Array.from(remoteMap.values());
+}
+
+// ============== Merge & Rebase Operations ==============
+
+export interface GitMergeResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface GitRebaseResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+/**
+ * Rebase current branch onto target
+ */
+export async function rebase(
+  directory: string,
+  options: { onto: string }
+): Promise<GitRebaseResult> {
+  const result = await execGit(['rebase', options.onto], directory);
+
+  if (result.exitCode === 0) {
+    return { success: true, conflict: false };
+  }
+
+  const output = (result.stdout + result.stderr).toLowerCase();
+  const isConflict =
+    output.includes('conflict') ||
+    output.includes('could not apply') ||
+    output.includes('merge conflict');
+
+  if (isConflict) {
+    const statusResult = await execGit(['status', '--porcelain'], directory);
+    const conflictFiles = statusResult.stdout
+      .split('\n')
+      .filter((line) => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
+      .map((line) => line.slice(3).trim());
+
+    return { success: false, conflict: true, conflictFiles };
+  }
+
+  throw new Error(result.stderr || 'Rebase failed');
+}
+
+/**
+ * Abort an in-progress rebase
+ */
+export async function abortRebase(directory: string): Promise<{ success: boolean }> {
+  const result = await execGit(['rebase', '--abort'], directory);
+  return { success: result.exitCode === 0 };
+}
+
+/**
+ * Merge branch into current
+ */
+export async function merge(
+  directory: string,
+  options: { branch: string }
+): Promise<GitMergeResult> {
+  const result = await execGit(['merge', options.branch], directory);
+
+  if (result.exitCode === 0) {
+    return { success: true, conflict: false };
+  }
+
+  const output = (result.stdout + result.stderr).toLowerCase();
+  const isConflict =
+    output.includes('conflict') ||
+    output.includes('merge conflict') ||
+    output.includes('automatic merge failed');
+
+  if (isConflict) {
+    const statusResult = await execGit(['status', '--porcelain'], directory);
+    const conflictFiles = statusResult.stdout
+      .split('\n')
+      .filter((line) => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
+      .map((line) => line.slice(3).trim());
+
+    return { success: false, conflict: true, conflictFiles };
+  }
+
+  throw new Error(result.stderr || 'Merge failed');
+}
+
+/**
+ * Abort an in-progress merge
+ */
+export async function abortMerge(directory: string): Promise<{ success: boolean }> {
+  const result = await execGit(['merge', '--abort'], directory);
+  return { success: result.exitCode === 0 };
+}
