@@ -38,4 +38,9 @@ export const createWebGitAPI = (): GitAPI => ({
   createGitIdentity: gitApiHttp.createGitIdentity,
   updateGitIdentity: gitApiHttp.updateGitIdentity,
   deleteGitIdentity: gitApiHttp.deleteGitIdentity,
+  getRemotes: gitApiHttp.getRemotes,
+  rebase: gitApiHttp.rebase,
+  abortRebase: gitApiHttp.abortRebase,
+  merge: gitApiHttp.merge,
+  abortMerge: gitApiHttp.abortMerge,
 });

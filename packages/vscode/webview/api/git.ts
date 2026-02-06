@@ -26,6 +26,9 @@ import type {
   GitCommitFilesResponse,
   GitIdentitySummary,
   GitIdentityProfile,
+  GitRemote,
+  GitRebaseResult,
+  GitMergeResult,
 } from '@openchamber/ui/lib/api/types';
 
 export const createVSCodeGitAPI = (): GitAPI => ({
@@ -219,5 +222,31 @@ export const createVSCodeGitAPI = (): GitAPI => ({
 
   deleteGitIdentity: async (id: string): Promise<void> => {
     void id; // Unused for now
+  },
+
+  getRemotes: async (directory: string): Promise<GitRemote[]> => {
+    return sendBridgeMessage<GitRemote[]>('api:git/remotes', { directory });
+  },
+
+  rebase: async (directory: string, options: { onto: string }): Promise<GitRebaseResult> => {
+    return sendBridgeMessage<GitRebaseResult>('api:git/rebase', {
+      directory,
+      onto: options.onto,
+    });
+  },
+
+  abortRebase: async (directory: string): Promise<{ success: boolean }> => {
+    return sendBridgeMessage<{ success: boolean }>('api:git/rebase/abort', { directory });
+  },
+
+  merge: async (directory: string, options: { branch: string }): Promise<GitMergeResult> => {
+    return sendBridgeMessage<GitMergeResult>('api:git/merge', {
+      directory,
+      branch: options.branch,
+    });
+  },
+
+  abortMerge: async (directory: string): Promise<{ success: boolean }> => {
+    return sendBridgeMessage<{ success: boolean }>('api:git/merge/abort', { directory });
   },
 });
