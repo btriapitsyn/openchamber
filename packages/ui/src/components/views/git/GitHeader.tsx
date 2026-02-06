@@ -24,7 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { BranchSelector } from './BranchSelector';
 import { WorktreeBranchDisplay } from './WorktreeBranchDisplay';
 import { SyncActions } from './SyncActions';
-import type { GitStatus, GitIdentityProfile } from '@/lib/api/types';
+import type { GitStatus, GitIdentityProfile, GitRemote } from '@/lib/api/types';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 
@@ -34,9 +34,10 @@ interface GitHeaderProps {
   remoteBranches: string[];
   branchInfo: Record<string, { ahead?: number; behind?: number }> | undefined;
   syncAction: SyncAction;
-  onFetch: () => void;
-  onPull: () => void;
-  onPush: () => void;
+  remotes: GitRemote[];
+  onFetch: (remote: GitRemote) => void;
+  onPull: (remote: GitRemote) => void;
+  onPush: (remote: GitRemote) => void;
   onCheckoutBranch: (branch: string) => void;
   onCreateBranch: (name: string) => Promise<void>;
   onRenameBranch?: (oldName: string, newName: string) => Promise<void>;
@@ -186,6 +187,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   remoteBranches,
   branchInfo,
   syncAction,
+  remotes,
   onFetch,
   onPull,
   onPush,
@@ -247,6 +249,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
 
       <SyncActions
         syncAction={syncAction}
+        remotes={remotes}
         onFetch={onFetch}
         onPull={onPull}
         onPush={onPush}
