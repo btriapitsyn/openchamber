@@ -1117,6 +1117,7 @@ export const GitView: React.FC = () => {
           setConflictDialogOpen(true);
           persistConflictState(currentDirectory, result.conflictFiles ?? [], 'merge');
         } else {
+          clearConflictState();
           toast.success(`Merged ${branch} into ${currentBranch}`);
           await refreshStatusAndBranches();
           await refreshLog();
@@ -1134,7 +1135,7 @@ export const GitView: React.FC = () => {
         setBranchOperation(null);
       }
     },
-    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState]
+    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState]
   );
 
   const handleRebase = React.useCallback(
@@ -1153,6 +1154,7 @@ export const GitView: React.FC = () => {
           setConflictDialogOpen(true);
           persistConflictState(currentDirectory, result.conflictFiles ?? [], 'rebase');
         } else {
+          clearConflictState();
           toast.success(`Rebased ${currentBranch} onto ${branch}`);
           await refreshStatusAndBranches();
           await refreshLog();
@@ -1170,7 +1172,7 @@ export const GitView: React.FC = () => {
         setBranchOperation(null);
       }
     },
-    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState]
+    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState]
   );
 
   const handleAbortConflict = React.useCallback(async () => {

@@ -135,9 +135,12 @@ export const useSessionStore = create<SessionStore>()(
                             directoryOverride: directory,
                             parentID: options?.parentID ?? null,
                             title: options?.title,
+                            initialPrompt: options?.initialPrompt,
                         },
                         currentSessionId: null,
                         error: null,
+                        // Set pending input text if initialPrompt is provided
+                        ...(options?.initialPrompt ? { pendingInputText: options.initialPrompt, pendingInputMode: 'replace' as const } : {}),
                     });
 
                     try {
@@ -169,7 +172,7 @@ export const useSessionStore = create<SessionStore>()(
                 closeNewSessionDraft: () => {
                     const realCurrentSessionId = useSessionManagementStore.getState().currentSessionId;
                     set({
-                        newSessionDraft: { open: false, directoryOverride: null, parentID: null, title: undefined },
+                        newSessionDraft: { open: false, directoryOverride: null, parentID: null, title: undefined, initialPrompt: undefined },
                         currentSessionId: realCurrentSessionId,
                     });
                 },

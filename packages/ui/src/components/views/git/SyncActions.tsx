@@ -39,20 +39,23 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   const hasMultipleRemotes = remotes.length > 1;
 
   const handleFetch = () => {
-    if (remotes.length === 1) {
-      onFetch(remotes[0]);
+    const remote = remotes[0];
+    if (remotes.length === 1 && remote) {
+      onFetch(remote);
     }
   };
 
   const handlePull = () => {
-    if (remotes.length === 1) {
-      onPull(remotes[0]);
+    const remote = remotes[0];
+    if (remotes.length === 1 && remote) {
+      onPull(remote);
     }
   };
 
   const handlePush = () => {
-    if (remotes.length === 1) {
-      onPush(remotes[0]);
+    const remote = remotes[0];
+    if (remotes.length === 1 && remote) {
+      onPush(remote);
     }
   };
 

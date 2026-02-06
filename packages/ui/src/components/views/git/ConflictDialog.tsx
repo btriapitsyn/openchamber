@@ -8,8 +8,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-import { RiAlertLine, RiTerminalBoxLine, RiLoader4Line } from '@remixicon/react';
+import { RiAlertLine, RiSparklingLine, RiLoader4Line, RiArrowDownSLine, RiChat1Line, RiAddLine } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useMessageStore } from '@/stores/messageStore';
@@ -104,13 +110,6 @@ Goal:
     return { visibleText, instructionsText, payloadText };
   }, [conflictDetails, directory, operation]);
 
-  const handleResolveInNewSession = () => {
-    // Open new session in the directory with conflicts
-    openNewSessionDraft({ directoryOverride: directory });
-    onClearState?.();
-    onOpenChange(false);
-  };
-
   const handleAbort = () => {
     onAbort();
     onOpenChange(false);
@@ -121,15 +120,27 @@ Goal:
     onOpenChange(false);
   };
 
-  const handleResolveWithAI = async () => {
-    if (!currentSessionId) {
-      toast.error('No active session', { description: 'Open a chat session first.' });
-      return;
-    }
-
+  const handleResolveWithAI = async (useNewSession: boolean) => {
     const context = buildConflictContext();
     if (!context) {
       toast.error('No conflict details available');
+      return;
+    }
+
+    if (useNewSession) {
+      // Open new session with the conflict context as initial prompt
+      openNewSessionDraft({
+        directoryOverride: directory,
+        initialPrompt: context.visibleText,
+      });
+      onClearState?.();
+      onOpenChange(false);
+      return;
+    }
+
+    // Use current session
+    if (!currentSessionId) {
+      toast.error('No active session', { description: 'Open a chat session first or use "New Session".' });
       return;
     }
 
@@ -239,29 +250,41 @@ Goal:
           <Button variant="outline" size="sm" onClick={handleAbort}>
             Abort {operationLabel}
           </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleResolveInNewSession}
-            className="gap-1.5"
-          >
-            <RiTerminalBoxLine className="size-4" />
-            Resolve in New Session
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleResolveWithAI}
-            disabled={isLoading || !conflictDetails}
-            className="gap-1.5"
-          >
-            {isLoading ? (
-              <RiLoader4Line className="size-4 animate-spin" />
-            ) : (
-              <RiTerminalBoxLine className="size-4" />
-            )}
-            Resolve with AI
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="default"
+                size="sm"
+                disabled={isLoading || !conflictDetails}
+                className="gap-1.5"
+              >
+                {isLoading ? (
+                  <RiLoader4Line className="size-4 animate-spin" />
+                ) : (
+                  <RiSparklingLine className="size-4" />
+                )}
+                Resolve with AI
+                <RiArrowDownSLine className="size-4 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => void handleResolveWithAI(false)}
+                disabled={!currentSessionId}
+                className="gap-2"
+              >
+                <RiChat1Line className="size-4" />
+                Use Current Session
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => void handleResolveWithAI(true)}
+                className="gap-2"
+              >
+                <RiAddLine className="size-4" />
+                Start New Session
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </DialogFooter>
       </DialogContent>
     </Dialog>

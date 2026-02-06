@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { RiArrowDownSLine, RiLoader4Line, RiSplitCellsHorizontal } from '@remixicon/react';
+import { RiArrowDownSLine, RiLoader4Line, RiSplitCellsHorizontal, RiSparklingLine, RiChat1Line, RiAddLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import {
   Collapsible,
@@ -9,6 +9,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -171,21 +172,9 @@ export const IntegrateCommitsSection: React.FC<{
     [currentSessionId, worktreeMetadata]
   );
 
-  const handleResolveWithAi = React.useCallback(async (payload: { state: IntegrateInProgress; details: IntegrateConflictDetails }) => {
-    setActiveMainTab('chat');
-    if (!currentSessionId) {
-      toast.error('No active session', { description: 'Open a chat session first.' });
-      return;
-    }
-    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
-    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
-    const providerID = currentProviderId || lastUsedProvider?.providerID;
-    const modelID = currentModelId || lastUsedProvider?.modelID;
-    if (!providerID || !modelID) {
-      toast.error('No model selected');
-      return;
-    }
+  const openNewSessionDraft = useSessionStore((s) => s.openNewSessionDraft);
 
+  const buildConflictContext = React.useCallback((payload: { state: IntegrateInProgress; details: IntegrateConflictDetails }) => {
     const visibleText = `Resolve cherry-pick conflicts and keep intent of commit ${payload.state.currentCommit} onto branch ${payload.state.targetBranch}. After edits, report if I can continue process.`;
     const instructionsText = `Worktree commit integration is in progress.
 - Repo root: ${payload.state.repoRoot}
@@ -212,8 +201,41 @@ Goal:
       diff: payload.details.diff,
     }, null, 2)}`;
 
+    return { visibleText, instructionsText, payloadText };
+  }, []);
+
+  const handleResolveWithAi = React.useCallback(async (
+    payload: { state: IntegrateInProgress; details: IntegrateConflictDetails },
+    useNewSession: boolean
+  ) => {
+    const context = buildConflictContext(payload);
+
+    if (useNewSession) {
+      // Open new session with the conflict context as initial prompt
+      openNewSessionDraft({
+        directoryOverride: payload.state.tempWorktreePath,
+        initialPrompt: context.visibleText,
+      });
+      return;
+    }
+
+    // Use current session
+    setActiveMainTab('chat');
+    if (!currentSessionId) {
+      toast.error('No active session', { description: 'Open a chat session first or use "New Session".' });
+      return;
+    }
+    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
+    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
+    const providerID = currentProviderId || lastUsedProvider?.providerID;
+    const modelID = currentModelId || lastUsedProvider?.modelID;
+    if (!providerID || !modelID) {
+      toast.error('No model selected');
+      return;
+    }
+
     void useMessageStore.getState().sendMessage(
-      visibleText,
+      context.visibleText,
       providerID,
       modelID,
       currentAgentName ?? undefined,
@@ -221,15 +243,15 @@ Goal:
       undefined,
       null,
       [
-        { text: instructionsText, synthetic: true },
-        { text: payloadText, synthetic: true },
+        { text: context.instructionsText, synthetic: true },
+        { text: context.payloadText, synthetic: true },
       ],
       currentVariant
     ).catch((e) => {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to send message', { description: message });
     });
-  }, [currentSessionId, setActiveMainTab]);
+  }, [currentSessionId, setActiveMainTab, buildConflictContext, openNewSessionDraft]);
 
   const handleMove = React.useCallback(async () => {
     if (ui.kind !== 'ready') return;
@@ -462,14 +484,36 @@ Goal:
                 <Button size="sm" variant="ghost" className="h-7 px-2 py-0 typography-meta" onClick={() => void handleAbort()}>
                   Abort
                 </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-7 px-2 py-0 typography-meta"
-                  onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details })}
-                >
-                  Resolve with AI
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="h-7 px-2 py-0 typography-meta gap-1"
+                    >
+                      <RiSparklingLine className="size-3.5" />
+                      Resolve with AI
+                      <RiArrowDownSLine className="size-3.5 opacity-60" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    <DropdownMenuItem
+                      onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details }, false)}
+                      disabled={!currentSessionId}
+                      className="gap-2"
+                    >
+                      <RiChat1Line className="size-4" />
+                      Use Current Session
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details }, true)}
+                      className="gap-2"
+                    >
+                      <RiAddLine className="size-4" />
+                      Start New Session
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button size="sm" className="h-7 px-2 py-0 typography-meta" onClick={() => void handleContinue()}>
                   Continue
                 </Button>

@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { toast } from '@/components/ui';
 import { RiAlertLine, RiLoader4Line } from '@remixicon/react';
 
 interface StashDialogProps {
@@ -36,8 +37,10 @@ export const StashDialog: React.FC<StashDialogProps> = ({
     try {
       await onConfirm(restoreAfter);
       onOpenChange(false);
-    } catch {
-      // Error handling is done by the parent
+    } catch (err) {
+      // Show error to user - parent may also handle it but user should see feedback
+      const message = err instanceof Error ? err.message : `Failed to ${operation}`;
+      toast.error(message);
     } finally {
       setIsProcessing(false);
     }

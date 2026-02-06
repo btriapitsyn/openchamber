@@ -94,6 +94,7 @@ export type NewSessionDraftState = {
     directoryOverride: string | null;
     parentID: string | null;
     title?: string;
+    initialPrompt?: string;
 };
 
 export interface SessionStore {
@@ -165,7 +166,7 @@ export interface SessionStore {
     setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => void;
     loadSessions: () => Promise<void>;
 
-    openNewSessionDraft: (options?: { directoryOverride?: string | null; parentID?: string | null; title?: string }) => void;
+    openNewSessionDraft: (options?: { directoryOverride?: string | null; parentID?: string | null; title?: string; initialPrompt?: string }) => void;
     closeNewSessionDraft: () => void;
 
     createSession: (title?: string, directoryOverride?: string | null, parentID?: string | null) => Promise<Session | null>;

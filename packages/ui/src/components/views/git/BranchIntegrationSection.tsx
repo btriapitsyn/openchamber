@@ -99,6 +99,9 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
   };
 
   const handleCancel = () => {
+    setSelectedBranch(null);
+    setOperation('merge');
+    setBranchSearch('');
     setDialogOpen(false);
   };
 

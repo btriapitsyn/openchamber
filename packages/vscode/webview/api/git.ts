@@ -263,4 +263,14 @@ export const createVSCodeGitAPI = (): GitAPI => ({
   stashPop: async (directory: string): Promise<{ success: boolean }> => {
     return sendBridgeMessage<{ success: boolean }>('api:git/stash/pop', { directory });
   },
+
+  getConflictDetails: async (directory: string) => {
+    return sendBridgeMessage<{
+      statusPorcelain: string;
+      unmergedFiles: string[];
+      diff: string;
+      headInfo: string;
+      operation: 'merge' | 'rebase';
+    }>('api:git/conflict-details', { directory });
+  },
 });

@@ -45,4 +45,5 @@ export const createWebGitAPI = (): GitAPI => ({
   abortMerge: gitApiHttp.abortMerge,
   stash: gitApiHttp.stash,
   stashPop: gitApiHttp.stashPop,
+  getConflictDetails: gitApiHttp.getConflictDetails,
 });
