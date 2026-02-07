@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { cn } from '@/lib/utils';
-import { fetchDesktopAppIcons, filterInstalledDesktopApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings } from '@/lib/desktop';
+import { fetchDesktopInstalledApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings, type InstalledDesktopAppInfo } from '@/lib/desktop';
 import { RiArrowDownSLine, RiCheckLine, RiFileCopyLine } from '@remixicon/react';
 
 type OpenInAppOption = {
@@ -267,6 +267,8 @@ type OpenInAppButtonProps = {
 export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) => {
   const [selectedAppId, setSelectedAppId] = React.useState(getStoredAppId);
   const [availableApps, setAvailableApps] = React.useState<OpenInAppOption[]>(getAlwaysAvailableApps);
+  const [hasLoadedApps, setHasLoadedApps] = React.useState(false);
+  const isMountedRef = React.useRef(true);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -280,37 +282,65 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
     return () => window.removeEventListener('openchamber:settings-synced', handler);
   }, []);
 
+  React.useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const isDesktopLocal = isTauriShell() && isDesktopLocalOriginActive();
+
+  const applyInstalledApps = React.useCallback((installed: InstalledDesktopAppInfo[]) => {
+    if (installed.length === 0) {
+      setAvailableApps(getAlwaysAvailableApps());
+      setHasLoadedApps(true);
+      return;
+    }
+
+    const allowed = new Set(installed.map((app) => app.name));
+    const iconMap = new Map(installed.map((app) => [app.name, app.iconDataUrl ?? undefined]));
+    const filtered = OPEN_IN_APPS.filter(
+      (app) => allowed.has(app.appName) || ALWAYS_AVAILABLE_APP_IDS.has(app.id)
+    );
+    const withIcons = filtered.map((app) => ({
+      ...app,
+      iconDataUrl: iconMap.get(app.appName),
+    }));
+    setAvailableApps(withIcons);
+    setHasLoadedApps(true);
+  }, []);
+
+  const loadInstalledApps = React.useCallback(async () => {
+    if (hasLoadedApps) return;
+    const appNames = OPEN_IN_APPS.map((app) => app.appName);
+    const installed = await fetchDesktopInstalledApps(appNames);
+    if (!isMountedRef.current) return;
+    applyInstalledApps(installed);
+  }, [applyInstalledApps, hasLoadedApps]);
+
   React.useEffect(() => {
     if (!isDesktopLocal) return;
-    let cancelled = false;
-
-    const loadInstalledApps = async () => {
-      const appNames = OPEN_IN_APPS.map((app) => app.appName);
-      const installed = await filterInstalledDesktopApps(appNames);
-      if (cancelled) return;
-      if (installed.length === 0) {
-        setAvailableApps(getAlwaysAvailableApps());
-        return;
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      void loadInstalledApps();
+    };
+    window.addEventListener('openchamber:app-ready', handler);
+    const updateHandler = (event: Event) => {
+      const detail = (event as CustomEvent<InstalledDesktopAppInfo[]>).detail;
+      if (Array.isArray(detail)) {
+        applyInstalledApps(detail);
       }
-      const allowed = new Set(installed);
-      const filtered = OPEN_IN_APPS.filter(
-        (app) => allowed.has(app.appName) || ALWAYS_AVAILABLE_APP_IDS.has(app.id)
-      );
-      const iconMap = await fetchDesktopAppIcons(installed);
-      if (cancelled) return;
-      const withIcons = filtered.map((app) => ({
-        ...app,
-        iconDataUrl: iconMap[app.appName],
-      }));
-      setAvailableApps(withIcons);
     };
-
-    void loadInstalledApps();
+    window.addEventListener('openchamber:installed-apps-updated', updateHandler);
+    const flag = (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady;
+    if (flag) {
+      void loadInstalledApps();
+    }
     return () => {
-      cancelled = true;
+      window.removeEventListener('openchamber:app-ready', handler);
+      window.removeEventListener('openchamber:installed-apps-updated', updateHandler);
     };
-  }, [isDesktopLocal]);
+  }, [applyInstalledApps, isDesktopLocal, loadInstalledApps]);
 
   const selectedApp = availableApps.find((app) => app.id === selectedAppId) ?? availableApps[0];
 

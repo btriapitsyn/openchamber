@@ -400,3 +400,42 @@ export const fetchDesktopAppIcons = async (apps: string[]): Promise<Record<strin
     return {};
   }
 };
+
+export type InstalledDesktopAppInfo = {
+  name: string;
+  iconDataUrl?: string | null;
+};
+
+export const fetchDesktopInstalledApps = async (apps: string[]): Promise<InstalledDesktopAppInfo[]> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return [];
+  }
+
+  const candidate = Array.isArray(apps) ? apps.filter((value) => typeof value === 'string') : [];
+  if (candidate.length === 0) {
+    return [];
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_get_installed_apps', {
+      apps: candidate,
+    });
+    if (!Array.isArray(result)) {
+      return [];
+    }
+    return result
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => {
+        const record = entry as { name?: unknown; iconDataUrl?: unknown };
+        return {
+          name: typeof record.name === 'string' ? record.name : '',
+          iconDataUrl: typeof record.iconDataUrl === 'string' ? record.iconDataUrl : null,
+        };
+      })
+      .filter((entry) => entry.name.length > 0);
+  } catch (error) {
+    console.warn('Failed to fetch installed apps (tauri)', error);
+    return [];
+  }
+};
