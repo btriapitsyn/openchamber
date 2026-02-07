@@ -17,6 +17,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { primeTerminalInputTransport } from '@/lib/terminalApi';
 
 type Modifier = 'ctrl' | 'cmd';
 type MobileKey =
@@ -177,6 +178,14 @@ export const TerminalView: React.FC = () => {
 
     const activeMainTab = useUIStore((state) => state.activeMainTab);
     const isTerminalActive = activeMainTab === 'terminal';
+
+    React.useEffect(() => {
+        if (!isTerminalActive || runtime.platform === 'vscode') {
+            return;
+        }
+
+        primeTerminalInputTransport();
+    }, [isTerminalActive, runtime.platform]);
 
     React.useEffect(() => {
         terminalIdRef.current = terminalSessionId;

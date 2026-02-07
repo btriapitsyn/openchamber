@@ -4,6 +4,19 @@ export interface TerminalSession {
   sessionId: string;
   cols: number;
   rows: number;
+  capabilities?: {
+    input?: TerminalInputCapability;
+  };
+}
+
+export interface TerminalInputCapability {
+  preferred?: 'ws' | 'http';
+  transports?: Array<'ws' | 'http'>;
+  ws?: {
+    path: string;
+    v?: number;
+    enc?: string;
+  };
 }
 
 export interface TerminalStreamEvent {
@@ -28,6 +41,594 @@ export interface ConnectStreamOptions {
   connectionTimeout?: number;
 }
 
+type TerminalInputControlMessage = {
+  t: string;
+  s?: string;
+  c?: string;
+  f?: boolean;
+  v?: number;
+};
+
+const CONTROL_TAG_JSON = 0x01;
+const WS_READY_STATE_OPEN = 1;
+const DEFAULT_TERMINAL_INPUT_WS_PATH = '/api/terminal/input-ws';
+const WS_SEND_WAIT_MS = 1200;
+const WS_RECONNECT_INITIAL_DELAY_MS = 1000;
+const WS_RECONNECT_MAX_DELAY_MS = 30000;
+const WS_RECONNECT_JITTER_MS = 250;
+const WS_KEEPALIVE_INTERVAL_MS = 20000;
+const WS_CONNECT_TIMEOUT_MS = 5000;
+const GLOBAL_TERMINAL_INPUT_STATE_KEY = '__openchamberTerminalInputWsState';
+const TERMINAL_INPUT_WS_DEBUG_FLAG_KEY = '__OPENCHAMBER_TERMINAL_INPUT_WS_DEBUG__';
+const TERMINAL_INPUT_WS_DEBUG_STORAGE_KEY = 'openchamber.terminalInputWs.debug';
+
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+const isTerminalInputWsDebugEnabled = (): boolean => {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  const scopedWindow = window as Window & {
+    [TERMINAL_INPUT_WS_DEBUG_FLAG_KEY]?: unknown;
+  };
+
+  if (scopedWindow[TERMINAL_INPUT_WS_DEBUG_FLAG_KEY] === true) {
+    return true;
+  }
+
+  try {
+    return window.localStorage.getItem(TERMINAL_INPUT_WS_DEBUG_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const terminalInputWsDebugLog = (event: string, details?: Record<string, unknown>): void => {
+  if (!isTerminalInputWsDebugEnabled()) {
+    return;
+  }
+
+  if (details) {
+    console.debug(`[terminal-input-ws] ${event}`, details);
+    return;
+  }
+
+  console.debug(`[terminal-input-ws] ${event}`);
+};
+
+const getDebugCaller = (): string | null => {
+  if (!isTerminalInputWsDebugEnabled()) {
+    return null;
+  }
+
+  const stack = new Error().stack;
+  if (!stack) {
+    return null;
+  }
+
+  const frames = stack
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  if (frames.length <= 2) {
+    return null;
+  }
+
+  return frames.slice(2, 6).join(' | ');
+};
+
+const normalizeWebSocketPath = (pathValue: string): string => {
+  if (/^wss?:\/\//i.test(pathValue)) {
+    return pathValue;
+  }
+
+  if (/^https?:\/\//i.test(pathValue)) {
+    const url = new URL(pathValue);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    return url.toString();
+  }
+
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  const normalizedPath = pathValue.startsWith('/') ? pathValue : `/${pathValue}`;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}${normalizedPath}`;
+};
+
+const encodeControlFrame = (payload: TerminalInputControlMessage): Uint8Array => {
+  const jsonBytes = textEncoder.encode(JSON.stringify(payload));
+  const bytes = new Uint8Array(jsonBytes.length + 1);
+  bytes[0] = CONTROL_TAG_JSON;
+  bytes.set(jsonBytes, 1);
+  return bytes;
+};
+
+const isWsInputSupported = (capability: TerminalInputCapability | null): boolean => {
+  if (!capability) return false;
+  const transports = capability.transports ?? [];
+  const supportsTransport = transports.includes('ws') || capability.preferred === 'ws';
+  return supportsTransport && typeof capability.ws?.path === 'string' && capability.ws.path.length > 0;
+};
+
+class TerminalInputWsManager {
+  private socket: WebSocket | null = null;
+  private socketUrl = '';
+  private boundSessionId: string | null = null;
+  private openPromise: Promise<WebSocket | null> | null = null;
+  private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
+  private keepaliveInterval: ReturnType<typeof setInterval> | null = null;
+  private closed = false;
+  private readonly managerId = Math.random().toString(36).slice(2, 10);
+  private connectionSequence = 0;
+
+  configure(socketUrl: string, reason = 'configure'): void {
+    if (!socketUrl) return;
+
+    if (this.socketUrl === socketUrl) {
+      this.closed = false;
+      if (this.isConnectedOrConnecting()) {
+        terminalInputWsDebugLog('configure:already-connected', {
+          managerId: this.managerId,
+          socketUrl,
+          reason,
+        });
+        return;
+      }
+
+      this.ensureConnected(`${reason}:same-url`);
+      return;
+    }
+
+    terminalInputWsDebugLog('configure:url-change', {
+      managerId: this.managerId,
+      previousSocketUrl: this.socketUrl,
+      socketUrl,
+      reason,
+    });
+
+    this.socketUrl = socketUrl;
+    this.closed = false;
+    this.resetConnection();
+    this.ensureConnected(`${reason}:url-change`);
+  }
+
+  async sendInput(sessionId: string, data: string): Promise<boolean> {
+    if (!sessionId || !data || this.closed || !this.socketUrl) {
+      return false;
+    }
+
+    const socket = await this.getOpenSocket(WS_SEND_WAIT_MS);
+    if (!socket || socket.readyState !== WS_READY_STATE_OPEN) {
+      return false;
+    }
+
+    try {
+      if (this.boundSessionId !== sessionId) {
+        socket.send(encodeControlFrame({ t: 'b', s: sessionId, v: 1 }));
+        this.boundSessionId = sessionId;
+      }
+      socket.send(data);
+      return true;
+    } catch {
+      this.handleSocketFailure();
+      return false;
+    }
+  }
+
+  unbindSession(sessionId: string): void {
+    if (!sessionId) return;
+    if (this.boundSessionId === sessionId) {
+      this.boundSessionId = null;
+    }
+  }
+
+  close(): void {
+    terminalInputWsDebugLog('close', {
+      managerId: this.managerId,
+      socketUrl: this.socketUrl,
+    });
+
+    this.closed = true;
+    this.clearReconnectTimeout();
+    this.resetConnection();
+    this.socketUrl = '';
+  }
+
+  prime(reason = 'prime'): void {
+    if (this.closed || !this.socketUrl) {
+      return;
+    }
+
+    if (this.isConnectedOrConnecting()) {
+      terminalInputWsDebugLog('prime:already-connected', {
+        managerId: this.managerId,
+        socketUrl: this.socketUrl,
+        reason,
+      });
+      return;
+    }
+
+    this.ensureConnected(reason);
+  }
+
+  isConnectedOrConnecting(socketUrl?: string): boolean {
+    if (this.closed) {
+      return false;
+    }
+
+    if (socketUrl && this.socketUrl !== socketUrl) {
+      return false;
+    }
+
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      return true;
+    }
+
+    return this.openPromise !== null;
+  }
+
+  private sendControl(payload: TerminalInputControlMessage): boolean {
+    if (!this.socket || this.socket.readyState !== WS_READY_STATE_OPEN) {
+      return false;
+    }
+
+    try {
+      this.socket.send(encodeControlFrame(payload));
+      return true;
+    } catch {
+      this.handleSocketFailure();
+      return false;
+    }
+  }
+
+  private startKeepalive(): void {
+    this.stopKeepalive();
+    this.keepaliveInterval = setInterval(() => {
+      if (this.closed) {
+        return;
+      }
+
+      this.sendControl({ t: 'p', v: 1 });
+    }, WS_KEEPALIVE_INTERVAL_MS);
+  }
+
+  private stopKeepalive(): void {
+    if (!this.keepaliveInterval) {
+      return;
+    }
+
+    clearInterval(this.keepaliveInterval);
+    this.keepaliveInterval = null;
+  }
+
+  private scheduleReconnect(reason = 'unknown'): void {
+    if (this.closed || !this.socketUrl || this.reconnectTimeout) {
+      return;
+    }
+
+    const baseDelay = Math.min(
+      WS_RECONNECT_INITIAL_DELAY_MS * Math.pow(2, this.reconnectAttempt),
+      WS_RECONNECT_MAX_DELAY_MS
+    );
+    const jitter = Math.floor(Math.random() * WS_RECONNECT_JITTER_MS);
+    const delay = baseDelay + jitter;
+
+    terminalInputWsDebugLog('reconnect:scheduled', {
+      managerId: this.managerId,
+      socketUrl: this.socketUrl,
+      reason,
+      reconnectAttempt: this.reconnectAttempt,
+      delay,
+    });
+
+    this.reconnectTimeout = setTimeout(() => {
+      this.reconnectTimeout = null;
+      this.reconnectAttempt += 1;
+      this.ensureConnected(`reconnect:${reason}`);
+    }, delay);
+  }
+
+  private clearReconnectTimeout(): void {
+    if (!this.reconnectTimeout) {
+      return;
+    }
+
+    clearTimeout(this.reconnectTimeout);
+    this.reconnectTimeout = null;
+  }
+
+  private async getOpenSocket(waitMs: number): Promise<WebSocket | null> {
+    if (this.socket && this.socket.readyState === WS_READY_STATE_OPEN) {
+      return this.socket;
+    }
+
+    this.ensureConnected('get-open-socket');
+
+    if (this.socket && this.socket.readyState === WS_READY_STATE_OPEN) {
+      return this.socket;
+    }
+
+    const opened = await Promise.race([
+      this.openPromise ?? Promise.resolve(null),
+      new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), waitMs);
+      }),
+    ]);
+
+    if (opened && opened.readyState === WS_READY_STATE_OPEN) {
+      return opened;
+    }
+
+    if (this.socket && this.socket.readyState === WS_READY_STATE_OPEN) {
+      return this.socket;
+    }
+
+    return null;
+  }
+
+  private ensureConnected(reason = 'ensure-connected'): void {
+    if (this.closed || !this.socketUrl) {
+      return;
+    }
+
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    if (this.openPromise) {
+      return;
+    }
+
+    this.clearReconnectTimeout();
+
+    const connectionId = ++this.connectionSequence;
+    terminalInputWsDebugLog('connect:start', {
+      managerId: this.managerId,
+      connectionId,
+      socketUrl: this.socketUrl,
+      reason,
+      caller: getDebugCaller(),
+    });
+
+    this.openPromise = new Promise<WebSocket | null>((resolve) => {
+      let settled = false;
+      let connectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      const settle = (value: WebSocket | null) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        if (connectTimeout) {
+          clearTimeout(connectTimeout);
+          connectTimeout = null;
+        }
+        this.openPromise = null;
+        resolve(value);
+      };
+
+      try {
+        const socket = new WebSocket(this.socketUrl);
+        socket.binaryType = 'arraybuffer';
+
+        socket.onopen = () => {
+          this.socket = socket;
+          this.reconnectAttempt = 0;
+          this.startKeepalive();
+          terminalInputWsDebugLog('connect:open', {
+            managerId: this.managerId,
+            connectionId,
+            socketUrl: this.socketUrl,
+          });
+          settle(socket);
+        };
+
+        socket.onmessage = (event) => {
+          void this.handleSocketMessage(event.data);
+        };
+
+        socket.onclose = (event) => {
+          terminalInputWsDebugLog('connect:close', {
+            managerId: this.managerId,
+            connectionId,
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean,
+            readyState: socket.readyState,
+          });
+
+          if (this.socket === socket) {
+            this.socket = null;
+            this.boundSessionId = null;
+            this.stopKeepalive();
+            if (!this.closed) {
+              this.scheduleReconnect(`close:${event.code}`);
+            }
+          }
+          settle(null);
+        };
+
+        socket.onerror = () => {
+          terminalInputWsDebugLog('connect:error', {
+            managerId: this.managerId,
+            connectionId,
+            readyState: socket.readyState,
+          });
+        };
+
+        this.socket = socket;
+
+        connectTimeout = setTimeout(() => {
+          if (socket.readyState === WebSocket.CONNECTING) {
+            try {
+              socket.close();
+            } catch {
+              return;
+            }
+            terminalInputWsDebugLog('connect:timeout', {
+              managerId: this.managerId,
+              connectionId,
+              timeoutMs: WS_CONNECT_TIMEOUT_MS,
+            });
+            settle(null);
+          }
+        }, WS_CONNECT_TIMEOUT_MS);
+      } catch {
+        terminalInputWsDebugLog('connect:create-failed', {
+          managerId: this.managerId,
+          connectionId,
+          socketUrl: this.socketUrl,
+        });
+        settle(null);
+        if (!this.closed) {
+          this.scheduleReconnect('create-failed');
+        }
+      }
+    });
+  }
+
+  private async handleSocketMessage(messageData: unknown): Promise<void> {
+    const bytes = await this.asUint8Array(messageData);
+    if (!bytes || bytes.length < 2) {
+      return;
+    }
+
+    if (bytes[0] !== CONTROL_TAG_JSON) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(textDecoder.decode(bytes.subarray(1))) as TerminalInputControlMessage;
+      if (payload.t === 'po') {
+        return;
+      }
+
+        if (payload.t === 'e') {
+          if (payload.c === 'NOT_BOUND' || payload.c === 'SESSION_NOT_FOUND') {
+            this.boundSessionId = null;
+          }
+          if (payload.f === true) {
+            this.handleSocketFailure(`fatal-control:${payload.c ?? 'unknown'}`);
+          }
+        }
+      } catch {
+      this.handleSocketFailure('bad-control-frame');
+    }
+  }
+
+  private async asUint8Array(messageData: unknown): Promise<Uint8Array | null> {
+    if (messageData instanceof ArrayBuffer) {
+      return new Uint8Array(messageData);
+    }
+
+    if (messageData instanceof Uint8Array) {
+      return messageData;
+    }
+
+    if (typeof Blob !== 'undefined' && messageData instanceof Blob) {
+      const buffer = await messageData.arrayBuffer();
+      return new Uint8Array(buffer);
+    }
+
+    return null;
+  }
+
+  private handleSocketFailure(reason = 'socket-failure'): void {
+    terminalInputWsDebugLog('socket:failure', {
+      managerId: this.managerId,
+      reason,
+      socketUrl: this.socketUrl,
+    });
+
+    this.boundSessionId = null;
+    this.resetConnection();
+    this.scheduleReconnect(reason);
+  }
+
+  private resetConnection(): void {
+    this.openPromise = null;
+    this.stopKeepalive();
+    if (this.socket) {
+      const socket = this.socket;
+      this.socket = null;
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+      }
+    }
+    this.boundSessionId = null;
+  }
+}
+
+type TerminalInputWsGlobalState = {
+  capability: TerminalInputCapability | null;
+  manager: TerminalInputWsManager | null;
+};
+
+const getTerminalInputWsGlobalState = (): TerminalInputWsGlobalState => {
+  const globalScope = globalThis as typeof globalThis & {
+    [GLOBAL_TERMINAL_INPUT_STATE_KEY]?: TerminalInputWsGlobalState;
+  };
+
+  if (!globalScope[GLOBAL_TERMINAL_INPUT_STATE_KEY]) {
+    globalScope[GLOBAL_TERMINAL_INPUT_STATE_KEY] = {
+      capability: null,
+      manager: null,
+    };
+  }
+
+  return globalScope[GLOBAL_TERMINAL_INPUT_STATE_KEY];
+};
+
+const applyTerminalInputCapability = (capability: TerminalInputCapability | undefined): void => {
+  const globalState = getTerminalInputWsGlobalState();
+  globalState.capability = capability ?? null;
+
+  if (!isWsInputSupported(globalState.capability)) {
+    globalState.manager?.close();
+    globalState.manager = null;
+    return;
+  }
+
+  const wsPath = globalState.capability?.ws?.path;
+  if (!wsPath) {
+    return;
+  }
+
+  const socketUrl = normalizeWebSocketPath(wsPath);
+  if (!socketUrl) {
+    return;
+  }
+
+  if (!globalState.manager) {
+    globalState.manager = new TerminalInputWsManager();
+  }
+
+  globalState.manager.configure(socketUrl, 'capability-update');
+};
+
+const sendTerminalInputHttp = async (sessionId: string, data: string): Promise<void> => {
+  const response = await fetch(`/api/terminal/${sessionId}/input`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: data,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to send input' }));
+    throw new Error(error.error || 'Failed to send terminal input');
+  }
+};
+
 export async function createTerminalSession(
   options: CreateTerminalOptions
 ): Promise<TerminalSession> {
@@ -46,7 +647,9 @@ export async function createTerminalSession(
     throw new Error(error.error || 'Failed to create terminal session');
   }
 
-  return response.json();
+  const session = await response.json() as TerminalSession;
+  applyTerminalInputCapability(session.capabilities?.input);
+  return session;
 }
 
 export function connectTerminalStream(
@@ -127,6 +730,7 @@ export function connectTerminalStream(
         const data = JSON.parse(event.data) as TerminalStreamEvent;
 
         if (data.type === 'exit') {
+          getTerminalInputWsGlobalState().manager?.unbindSession(sessionId);
           terminalExited = true;
           cleanup();
         }
@@ -192,16 +796,12 @@ export async function sendTerminalInput(
   sessionId: string,
   data: string
 ): Promise<void> {
-  const response = await fetch(`/api/terminal/${sessionId}/input`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: data,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Failed to send input' }));
-    throw new Error(error.error || 'Failed to send terminal input');
+  const globalState = getTerminalInputWsGlobalState();
+  if (globalState.manager && await globalState.manager.sendInput(sessionId, data)) {
+    return;
   }
+
+  await sendTerminalInputHttp(sessionId, data);
 }
 
 export async function resizeTerminal(
@@ -222,6 +822,8 @@ export async function resizeTerminal(
 }
 
 export async function closeTerminal(sessionId: string): Promise<void> {
+  getTerminalInputWsGlobalState().manager?.unbindSession(sessionId);
+
   const response = await fetch(`/api/terminal/${sessionId}`, {
     method: 'DELETE',
   });
@@ -236,6 +838,8 @@ export async function restartTerminalSession(
   currentSessionId: string,
   options: { cwd: string; cols?: number; rows?: number }
 ): Promise<TerminalSession> {
+  getTerminalInputWsGlobalState().manager?.unbindSession(currentSessionId);
+
   const response = await fetch(`/api/terminal/${currentSessionId}/restart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -251,7 +855,9 @@ export async function restartTerminalSession(
     throw new Error(error.error || 'Failed to restart terminal');
   }
 
-  return response.json();
+  const session = await response.json() as TerminalSession;
+  applyTerminalInputCapability(session.capabilities?.input);
+  return session;
 }
 
 export async function forceKillTerminal(options: {
@@ -268,4 +874,56 @@ export async function forceKillTerminal(options: {
     const error = await response.json().catch(() => ({ error: 'Failed to force kill terminal' }));
     throw new Error(error.error || 'Failed to force kill terminal');
   }
+
+  if (options.sessionId) {
+    getTerminalInputWsGlobalState().manager?.unbindSession(options.sessionId);
+  }
+}
+
+export function disposeTerminalInputTransport(): void {
+  const globalState = getTerminalInputWsGlobalState();
+  globalState.manager?.close();
+  globalState.manager = null;
+  globalState.capability = null;
+}
+
+export function primeTerminalInputTransport(): void {
+  const globalState = getTerminalInputWsGlobalState();
+  if (globalState.capability && !isWsInputSupported(globalState.capability)) {
+    return;
+  }
+
+  const wsPath = globalState.capability?.ws?.path ?? DEFAULT_TERMINAL_INPUT_WS_PATH;
+  const socketUrl = normalizeWebSocketPath(wsPath);
+  if (!socketUrl) {
+    return;
+  }
+
+  if (!globalState.manager) {
+    globalState.manager = new TerminalInputWsManager();
+  }
+
+  const caller = getDebugCaller();
+  if (globalState.manager.isConnectedOrConnecting(socketUrl)) {
+    terminalInputWsDebugLog('prime:skip-healthy', {
+      socketUrl,
+      caller,
+    });
+    return;
+  }
+
+  globalState.manager.configure(socketUrl, 'prime-transport');
+  globalState.manager.prime(`prime-transport${caller ? `:${caller}` : ''}`);
+}
+
+const hotModule = (import.meta as ImportMeta & {
+  hot?: {
+    dispose: (callback: () => void) => void;
+  };
+}).hot;
+
+if (hotModule) {
+  hotModule.dispose(() => {
+    disposeTerminalInputTransport();
+  });
 }
