@@ -27,7 +27,9 @@ export const MobileModelButton: React.FC<MobileModelButtonProps> = ({ onOpenMode
             style={{ height: '26px', maxHeight: '26px', minHeight: '26px' }}
             title={modelLabel}
         >
-            <span className="min-w-0 truncate">{modelLabel}</span>
+            <span className="min-w-0 max-w-full overflow-x-auto whitespace-nowrap scrollbar-hidden">
+                {modelLabel}
+            </span>
         </button>
     );
 };
