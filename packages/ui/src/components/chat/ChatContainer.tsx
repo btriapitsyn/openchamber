@@ -101,7 +101,7 @@ export const ChatContainer: React.FC = () => {
     const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
     React.useEffect(() => {
         setIsLoadingOlder(false);
-    }, [currentSessionId]);
+    }, []);
 
     const handleLoadOlder = React.useCallback(async () => {
         if (!currentSessionId || isLoadingOlder) {
@@ -196,6 +196,7 @@ export const ChatContainer: React.FC = () => {
         return (
             <div
                 className="flex flex-col h-full bg-background transform-gpu"
+                data-keyboard-avoid="true"
                 style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
             >
                 <div className="flex-1 flex items-center justify-center">
@@ -218,6 +219,7 @@ export const ChatContainer: React.FC = () => {
             return (
                 <div
                     className="flex flex-col h-full bg-background gap-0"
+                    data-keyboard-avoid="true"
                     style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
                 >
                     <div className="flex-1 overflow-y-auto p-4 bg-background">
@@ -243,6 +245,7 @@ export const ChatContainer: React.FC = () => {
         return (
             <div
                 className="flex flex-col h-full bg-background transform-gpu"
+                data-keyboard-avoid="true"
                 style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
             >
                 <div className="flex-1 flex items-center justify-center">
