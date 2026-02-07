@@ -472,9 +472,21 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64 max-h-[70vh] overflow-y-auto">
-          <DropdownMenuLabel className="typography-ui-label text-muted-foreground">
-            Open in
+          <DropdownMenuLabel className="flex items-center justify-between gap-2 typography-ui-label text-muted-foreground">
+            <span>Open in</span>
+            <button
+              type="button"
+              onClick={() => void handleCopyPath()}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5',
+                'text-muted-foreground hover:text-foreground hover:bg-interactive-hover'
+              )}
+            >
+              <RiFileCopyLine className="h-3.5 w-3.5" />
+              <span>Copy Path</span>
+            </button>
           </DropdownMenuLabel>
+          <DropdownMenuSeparator />
           {availableApps.map((app) => (
             <DropdownMenuItem
               key={app.id}
@@ -488,11 +500,6 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
               ) : null}
             </DropdownMenuItem>
           ))}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="flex items-center gap-2" onClick={() => void handleCopyPath()}>
-            <RiFileCopyLine className="h-4 w-4" />
-            <span className="typography-ui-label text-foreground">Copy Path</span>
-          </DropdownMenuItem>
           <DropdownMenuItem
             className="flex items-center gap-2"
             onClick={() => void loadInstalledApps(true)}
