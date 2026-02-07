@@ -8,17 +8,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
-import { RiAlertLine, RiSparklingLine, RiLoader4Line, RiArrowDownSLine, RiChat1Line, RiAddLine } from '@remixicon/react';
+import { RiAlertLine, RiLoader4Line, RiChat1Line, RiAddLine } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useMessageStore } from '@/stores/messageStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { toast } from '@/components/ui';
 import { getConflictDetails, type MergeConflictDetails } from '@/lib/gitApi';
@@ -44,6 +36,8 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
 }) => {
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const setPendingInputText = useSessionStore((state) => state.setPendingInputText);
+  const setPendingSyntheticParts = useSessionStore((state) => state.setPendingSyntheticParts);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
 
   const [isLoading, setIsLoading] = React.useState(false);
@@ -80,18 +74,26 @@ export const ConflictDialog: React.FC<ConflictDialogProps> = ({
 
     const operationLabel = operation === 'merge' ? 'merge' : 'rebase';
     const headRef = conflictDetails.headInfo || (operation === 'merge' ? 'MERGE_HEAD' : 'REBASE_HEAD');
+    const continueCmd = operation === 'merge' ? 'git commit --no-edit' : 'git rebase --continue';
 
-    const visibleText = `Resolve ${operationLabel} conflicts while preserving the intent of changes from ${headRef}. After resolving, report whether the ${operationLabel} can be completed.`;
+    const visibleText = `Resolve ${operationLabel} conflicts, stage the resolved files, and complete the ${operationLabel}. Preserve the intent of changes from ${headRef}.`;
 
     const instructionsText = `Git ${operationLabel} operation is in progress with conflicts.
 - Directory: ${directory}
 - Operation: ${operation}
 - Head Info: ${conflictDetails.headInfo || 'N/A'}
 
-Goal:
-- Resolve all conflicts in the working directory.
-- Preserve the intent of changes from both sides.
-- After edits, indicate whether I can complete the ${operationLabel} (e.g., git merge --continue or git rebase --continue).
+Required steps:
+1. Read each conflicted file to understand the conflict markers (<<<<<<< HEAD, =======, >>>>>>> ...)
+2. Edit each file to resolve conflicts by choosing the correct code or merging both changes appropriately
+3. Stage all resolved files with: git add <file>
+4. Complete the ${operationLabel} with: ${continueCmd}
+
+Important:
+- Remove ALL conflict markers from files (<<<<<<< HEAD, =======, >>>>>>>)
+- Make sure the final code is syntactically correct and preserves intent from both sides
+- Do not leave any files with unresolved conflict markers
+- After completing all steps, confirm the ${operationLabel} was successful
 `;
 
     const payloadText = `${operationLabel} conflict context (JSON)\n${JSON.stringify(
@@ -120,63 +122,48 @@ Goal:
     onOpenChange(false);
   };
 
-  const handleResolveWithAI = async (useNewSession: boolean) => {
+  const handleResolveInCurrentSession = () => {
     const context = buildConflictContext();
     if (!context) {
       toast.error('No conflict details available');
       return;
     }
 
-    if (useNewSession) {
-      // Open new session with the conflict context as initial prompt
-      openNewSessionDraft({
-        directoryOverride: directory,
-        initialPrompt: context.visibleText,
-      });
-      onClearState?.();
-      onOpenChange(false);
-      return;
-    }
-
-    // Use current session
     if (!currentSessionId) {
       toast.error('No active session', { description: 'Open a chat session first or use "New Session".' });
       return;
     }
 
-    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
-    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
-    const providerID = currentProviderId || lastUsedProvider?.providerID;
-    const modelID = currentModelId || lastUsedProvider?.modelID;
+    // Set the visible text in the input and the synthetic parts for when user sends
+    setPendingInputText(context.visibleText, 'replace');
+    setPendingSyntheticParts([
+      { text: context.instructionsText, synthetic: true },
+      { text: context.payloadText, synthetic: true },
+    ]);
 
-    if (!providerID || !modelID) {
-      toast.error('No model selected');
+    setActiveMainTab('chat');
+    onClearState?.();
+    onOpenChange(false);
+  };
+
+  const handleResolveInNewSession = () => {
+    const context = buildConflictContext();
+    if (!context) {
+      toast.error('No conflict details available');
       return;
     }
 
+    // Open new session with the conflict context as initial prompt + synthetic parts
+    openNewSessionDraft({
+      directoryOverride: directory,
+      initialPrompt: context.visibleText,
+      syntheticParts: [
+        { text: context.instructionsText, synthetic: true },
+        { text: context.payloadText, synthetic: true },
+      ],
+    });
+    // Navigate to chat tab so user sees the new session
     setActiveMainTab('chat');
-
-    void useMessageStore
-      .getState()
-      .sendMessage(
-        context.visibleText,
-        providerID,
-        modelID,
-        currentAgentName ?? undefined,
-        currentSessionId,
-        undefined,
-        null,
-        [
-          { text: context.instructionsText, synthetic: true },
-          { text: context.payloadText, synthetic: true },
-        ],
-        currentVariant
-      )
-      .catch((e) => {
-        const message = e instanceof Error ? e.message : String(e);
-        toast.error('Failed to send message', { description: message });
-      });
-
     onClearState?.();
     onOpenChange(false);
   };
@@ -186,106 +173,101 @@ Goal:
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <div className="flex items-center gap-2">
-            <RiAlertLine className="size-5 text-[var(--status-warning)]" />
-            <DialogTitle>{operationLabel} Conflicts Detected</DialogTitle>
-          </div>
-          <DialogDescription>
-            The {operation} operation resulted in conflicts that need to be resolved.
-          </DialogDescription>
-        </DialogHeader>
-
-        {isLoading && (
-          <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
-            <RiLoader4Line className="size-4 animate-spin" />
-            <span className="typography-meta">Loading conflict details...</span>
-          </div>
-        )}
-
-        {loadError && (
-          <div className="rounded-lg bg-[var(--status-error-bg)] p-3 text-[var(--status-error)] typography-meta">
-            Error loading details: {loadError}
-          </div>
-        )}
-
-        {displayFiles.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <p className="typography-meta text-muted-foreground">Conflicted files:</p>
-              <span className="typography-micro px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-muted-foreground">
-                {displayFiles.length}
-              </span>
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
+        <div className="flex flex-col gap-4 overflow-hidden">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <RiAlertLine className="size-5 shrink-0 text-[var(--status-warning)]" />
+              <DialogTitle>{operationLabel} Conflicts Detected</DialogTitle>
             </div>
-            <div className="bg-[var(--surface-elevated)] rounded-lg p-3 max-h-40 overflow-y-auto">
-              <ul className="space-y-1">
-                {displayFiles.map((file, index) => (
-                  <li
-                    key={index}
-                    className="typography-micro text-foreground font-mono truncate"
-                    title={file}
-                  >
-                    {file}
-                  </li>
-                ))}
-              </ul>
+            <DialogDescription>
+              The {operation} operation resulted in conflicts that need to be resolved.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoading && (
+            <div className="flex items-center justify-center gap-2 py-4 text-muted-foreground">
+              <RiLoader4Line className="size-4 animate-spin" />
+              <span className="typography-meta">Loading conflict details...</span>
             </div>
-          </div>
-        )}
+          )}
 
-        {conflictDetails?.headInfo && (
-          <div className="space-y-1">
-            <p className="typography-meta text-muted-foreground">Head information:</p>
-            <p className="typography-micro text-foreground font-mono bg-[var(--surface-elevated)] rounded px-2 py-1 truncate">
-              {conflictDetails.headInfo}
-            </p>
-          </div>
-        )}
+          {loadError && (
+            <div className="rounded-lg bg-[var(--status-error-bg)] p-3 text-[var(--status-error)] typography-meta break-words">
+              Error loading details: {loadError}
+            </div>
+          )}
 
-        <DialogFooter className="gap-2">
-          <Button variant="ghost" size="sm" onClick={handleContinueLater}>
-            Continue Later
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleAbort}>
-            Abort {operationLabel}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="default"
-                size="sm"
-                disabled={isLoading || !conflictDetails}
-                className="gap-1.5"
-              >
-                {isLoading ? (
-                  <RiLoader4Line className="size-4 animate-spin" />
-                ) : (
-                  <RiSparklingLine className="size-4" />
-                )}
-                Resolve with AI
-                <RiArrowDownSLine className="size-4 opacity-60" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => void handleResolveWithAI(false)}
-                disabled={!currentSessionId}
-                className="gap-2"
-              >
-                <RiChat1Line className="size-4" />
-                Use Current Session
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => void handleResolveWithAI(true)}
-                className="gap-2"
-              >
+          {displayFiles.length > 0 && (
+            <div className="space-y-2 overflow-hidden">
+              <div className="flex items-center justify-between">
+                <p className="typography-meta text-muted-foreground">Conflicted files:</p>
+                <span className="typography-micro px-1.5 py-0.5 rounded bg-[var(--surface-elevated)] text-muted-foreground">
+                  {displayFiles.length}
+                </span>
+              </div>
+              <div className="bg-[var(--surface-elevated)] rounded-lg p-3 max-h-40 overflow-y-auto overflow-x-hidden">
+                <ul className="space-y-1">
+                  {displayFiles.map((file, index) => (
+                    <li
+                      key={index}
+                      className="typography-micro text-foreground font-mono truncate block"
+                      title={file}
+                    >
+                      {file}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {conflictDetails?.headInfo && (
+            <div className="space-y-1 overflow-hidden">
+              <p className="typography-meta text-muted-foreground">Head information:</p>
+              <div className="typography-micro text-foreground font-mono bg-[var(--surface-elevated)] rounded-lg p-3 max-h-24 overflow-y-auto break-words whitespace-pre-wrap">
+                {conflictDetails.headInfo}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex-col gap-2 sm:gap-3">
+            <Button
+              variant="default"
+              onClick={handleResolveInNewSession}
+              disabled={isLoading || !conflictDetails}
+              className="w-full gap-2"
+            >
+              {isLoading ? (
+                <RiLoader4Line className="size-4 animate-spin" />
+              ) : (
                 <RiAddLine className="size-4" />
-                Start New Session
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </DialogFooter>
+              )}
+              Resolve in New Session
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleResolveInCurrentSession()}
+              disabled={isLoading || !conflictDetails || !currentSessionId}
+              className="w-full gap-2"
+            >
+              {isLoading ? (
+                <RiLoader4Line className="size-4 animate-spin" />
+              ) : (
+                <RiChat1Line className="size-4" />
+              )}
+              Resolve in Current Session
+            </Button>
+            <div className="flex gap-2 pt-1">
+              <Button variant="ghost" size="sm" onClick={handleContinueLater} className="flex-1">
+                Continue Later
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleAbort} className="flex-1 text-[var(--status-error)]">
+                Abort {operationLabel}
+              </Button>
+            </div>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

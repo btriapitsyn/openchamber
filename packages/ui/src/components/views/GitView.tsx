@@ -36,6 +36,7 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
 import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
+import { BranchIntegrationSection } from './git/BranchIntegrationSection';
 
 import { GitHeader } from './git/GitHeader';
 import { GitEmptyState } from './git/GitEmptyState';
@@ -45,7 +46,10 @@ import { HistorySection } from './git/HistorySection';
 import { PullRequestSection } from './git/PullRequestSection';
 import { ConflictDialog } from './git/ConflictDialog';
 import { StashDialog } from './git/StashDialog';
+import { InProgressOperationBanner } from './git/InProgressOperationBanner';
+import type { OperationLogEntry } from './git/BranchIntegrationSection';
 import type { GitRemote } from '@/lib/gitApi';
+import * as gitApi from '@/lib/gitApi';
 import { BranchPickerDialog } from '@/components/session/BranchPickerDialog';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 
@@ -363,6 +367,7 @@ export const GitView: React.FC = () => {
   const [gitmojiSearch, setGitmojiSearch] = React.useState('');
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
   const [branchOperation, setBranchOperation] = React.useState<BranchOperation>(null);
+  const [operationLogs, setOperationLogs] = React.useState<OperationLogEntry[]>([]);
   const [conflictDialogOpen, setConflictDialogOpen] = React.useState(false);
   const [conflictFiles, setConflictFiles] = React.useState<string[]>([]);
   const [conflictOperation, setConflictOperation] = React.useState<'merge' | 'rebase'>('merge');
@@ -1101,78 +1106,137 @@ export const GitView: React.FC = () => {
     );
   }, []);
 
+  // Helper to add/update operation logs
+  const addOperationLog = React.useCallback((message: string, status: OperationLogEntry['status']) => {
+    setOperationLogs(prev => [...prev, { message, status, timestamp: Date.now() }]);
+  }, []);
+
+  const updateLastLog = React.useCallback((status: OperationLogEntry['status'], message?: string) => {
+    setOperationLogs(prev => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      updated[updated.length - 1] = {
+        ...updated[updated.length - 1],
+        status,
+        ...(message ? { message } : {}),
+      };
+      return updated;
+    });
+  }, []);
+
+  // Called at start of operation to reset logs
+  const resetOperationLogs = React.useCallback(() => {
+    setOperationLogs([]);
+  }, []);
+
+  // Called when dialog is closed to fully reset state
+  const handleOperationComplete = React.useCallback(() => {
+    setOperationLogs([]);
+    setBranchOperation(null);
+  }, []);
+
   const handleMerge = React.useCallback(
     async (branch: string) => {
       if (!currentDirectory) return;
       setBranchOperation('merge');
+      resetOperationLogs();
 
       const currentBranch = status?.current;
 
       try {
+        // If it's a remote branch (contains '/'), fetch latest first
+        const slashIndex = branch.indexOf('/');
+        if (slashIndex > 0) {
+          const remote = branch.substring(0, slashIndex);
+          const remoteBranch = branch.substring(slashIndex + 1);
+          addOperationLog(`Fetching ${remote}/${remoteBranch}...`, 'running');
+          await git.gitFetch(currentDirectory, { remote, branch: remoteBranch });
+          updateLastLog('done', `Fetched ${remote}/${remoteBranch}`);
+        }
+
+        addOperationLog(`Merging ${branch} into ${currentBranch}...`, 'running');
         const result = await git.merge(currentDirectory, { branch });
 
         if (result.conflict) {
+          updateLastLog('error', `Merge conflicts detected`);
           setConflictFiles(result.conflictFiles ?? []);
           setConflictOperation('merge');
           setConflictDialogOpen(true);
           persistConflictState(currentDirectory, result.conflictFiles ?? [], 'merge');
         } else {
+          updateLastLog('done', `Merged ${branch} into ${currentBranch}`);
           clearConflictState();
-          toast.success(`Merged ${branch} into ${currentBranch}`);
+          addOperationLog('Refreshing repository status...', 'running');
           await refreshStatusAndBranches();
           await refreshLog();
+          updateLastLog('done', 'Repository status updated');
         }
       } catch (err) {
         if (isUncommittedChangesError(err)) {
+          updateLastLog('error', 'Uncommitted changes detected');
           setStashDialogOperation('merge');
           setStashDialogBranch(branch);
           setStashDialogOpen(true);
         } else {
           const message = err instanceof Error ? err.message : `Failed to merge ${branch}`;
-          toast.error(message);
+          updateLastLog('error', message);
         }
-      } finally {
-        setBranchOperation(null);
       }
+      // Note: branchOperation is cleared when dialog closes via handleOperationComplete
     },
-    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState]
+    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
   );
 
   const handleRebase = React.useCallback(
     async (branch: string) => {
       if (!currentDirectory) return;
       setBranchOperation('rebase');
+      resetOperationLogs();
 
       const currentBranch = status?.current;
 
       try {
+        // If it's a remote branch (contains '/'), fetch latest first
+        const slashIndex = branch.indexOf('/');
+        if (slashIndex > 0) {
+          const remote = branch.substring(0, slashIndex);
+          const remoteBranch = branch.substring(slashIndex + 1);
+          addOperationLog(`Fetching ${remote}/${remoteBranch}...`, 'running');
+          await git.gitFetch(currentDirectory, { remote, branch: remoteBranch });
+          updateLastLog('done', `Fetched ${remote}/${remoteBranch}`);
+        }
+
+        addOperationLog(`Rebasing ${currentBranch} onto ${branch}...`, 'running');
         const result = await git.rebase(currentDirectory, { onto: branch });
 
         if (result.conflict) {
+          updateLastLog('error', `Rebase conflicts detected`);
           setConflictFiles(result.conflictFiles ?? []);
           setConflictOperation('rebase');
           setConflictDialogOpen(true);
           persistConflictState(currentDirectory, result.conflictFiles ?? [], 'rebase');
         } else {
+          updateLastLog('done', `Rebased ${currentBranch} onto ${branch}`);
           clearConflictState();
-          toast.success(`Rebased ${currentBranch} onto ${branch}`);
+          addOperationLog('Refreshing repository status...', 'running');
           await refreshStatusAndBranches();
           await refreshLog();
+          updateLastLog('done', 'Repository status updated');
         }
       } catch (err) {
         if (isUncommittedChangesError(err)) {
+          updateLastLog('error', 'Uncommitted changes detected');
           setStashDialogOperation('rebase');
           setStashDialogBranch(branch);
           setStashDialogOpen(true);
         } else {
           const message = err instanceof Error ? err.message : `Failed to rebase onto ${branch}`;
-          toast.error(message);
+          updateLastLog('error', message);
         }
-      } finally {
-        setBranchOperation(null);
       }
+      // Note: branchOperation is cleared when dialog closes via handleOperationComplete
     },
-    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState]
+    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
   );
 
   const handleAbortConflict = React.useCallback(async () => {
@@ -1194,6 +1258,80 @@ export const GitView: React.FC = () => {
       toast.error(message);
     }
   }, [currentDirectory, git, conflictOperation, refreshStatusAndBranches, refreshLog, clearConflictState]);
+
+  const handleContinueOperation = React.useCallback(async () => {
+    if (!currentDirectory) return;
+
+    try {
+      const isMerge = !!status?.mergeInProgress?.head;
+      const isRebase = !!(status?.rebaseInProgress?.headName || status?.rebaseInProgress?.onto);
+
+      if (isMerge) {
+        const result = await git.continueMerge(currentDirectory);
+        if (result.conflict) {
+          setConflictFiles(result.conflictFiles ?? []);
+          setConflictOperation('merge');
+          setConflictDialogOpen(true);
+          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'merge');
+          toast.error('Merge conflicts detected');
+        } else {
+          clearConflictState();
+          toast.success('Merge completed');
+          await refreshStatusAndBranches();
+          await refreshLog();
+        }
+      } else if (isRebase) {
+        const result = await git.continueRebase(currentDirectory);
+        if (result.conflict) {
+          setConflictFiles(result.conflictFiles ?? []);
+          setConflictOperation('rebase');
+          setConflictDialogOpen(true);
+          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'rebase');
+          toast.error('Rebase conflicts detected');
+        } else {
+          clearConflictState();
+          toast.success('Rebase step completed');
+          await refreshStatusAndBranches();
+          await refreshLog();
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to continue operation';
+      toast.error(message);
+    }
+  }, [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, persistConflictState, clearConflictState]);
+
+  const handleAbortOperation = React.useCallback(async () => {
+    if (!currentDirectory) return;
+
+    try {
+      const isMerge = !!status?.mergeInProgress?.head;
+      if (isMerge) {
+        await git.abortMerge(currentDirectory);
+        toast.success('Merge aborted');
+      } else {
+        await git.abortRebase(currentDirectory);
+        toast.success('Rebase aborted');
+      }
+      clearConflictState();
+      await refreshStatusAndBranches();
+      await refreshLog();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to abort operation';
+      toast.error(message);
+    }
+  }, [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, clearConflictState]);
+
+  const handleResolveWithAIFromBanner = React.useCallback(() => {
+    // Open the conflict dialog which has AI resolution capabilities
+    if (conflictFiles.length > 0) {
+      setConflictDialogOpen(true);
+    }
+  }, [conflictFiles]);
+
+  const hasUnresolvedConflicts = React.useMemo(() => {
+    return conflictFiles.length > 0;
+  }, [conflictFiles]);
 
   const handleStashAndRetry = React.useCallback(
     async (restoreAfter: boolean) => {
@@ -1326,9 +1464,27 @@ export const GitView: React.FC = () => {
         onMerge={handleMerge}
         onRebase={handleRebase}
         branchOperation={branchOperation}
+        operationLogs={operationLogs}
+        onOperationComplete={handleOperationComplete}
         isBusy={isBusy}
         onOpenBranchPicker={branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
       />
+
+      {/* In-progress operation banner */}
+      {currentDirectory && (
+        (status?.mergeInProgress?.head) ||
+        (status?.rebaseInProgress?.headName || status?.rebaseInProgress?.onto)
+      ) && (
+          <InProgressOperationBanner
+            mergeInProgress={status?.mergeInProgress}
+            rebaseInProgress={status?.rebaseInProgress}
+            onContinue={handleContinueOperation}
+            onAbort={handleAbortOperation}
+            onResolveWithAI={handleResolveWithAIFromBanner}
+            hasUnresolvedConflicts={hasUnresolvedConflicts}
+            isLoading={isLoading}
+          />
+        )}
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-3">
         <div className="flex flex-col gap-3">

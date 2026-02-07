@@ -626,6 +626,28 @@ export async function abortMerge(directory: string): Promise<{ success: boolean 
   return response.json();
 }
 
+export async function continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const response = await fetch(buildUrl(`${API_BASE}/rebase/continue`, directory), {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to continue rebase');
+  }
+  return response.json();
+}
+
+export async function continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const response = await fetch(buildUrl(`${API_BASE}/merge/continue`, directory), {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to continue merge');
+  }
+  return response.json();
+}
+
 export async function stash(
   directory: string,
   options?: { message?: string; includeUntracked?: boolean }

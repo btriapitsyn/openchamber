@@ -2320,6 +2320,24 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: result };
       }
 
+      case 'api:git/rebase/continue': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.continueRebase(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge/continue': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.continueMerge(directory);
+        return { id, type, success: true, data: result };
+      }
+
       case 'api:git/stash': {
         const { directory, message, includeUntracked } = (payload || {}) as {
           directory?: string;

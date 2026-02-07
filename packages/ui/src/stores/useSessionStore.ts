@@ -4,7 +4,7 @@ import { devtools } from "zustand/middleware";
 import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest, PermissionResponse } from "@/types/permission";
 import type { QuestionRequest } from "@/types/question";
-import type { SessionStore, AttachedFile, EditPermissionMode } from "./types/sessionTypes";
+import type { SessionStore, AttachedFile, EditPermissionMode, SyntheticContextPart } from "./types/sessionTypes";
 import { getActiveSessionWindow, getMemoryLimits } from "./types/sessionTypes";
 
 import { useSessionStore as useSessionManagementStore } from "./sessionStore";
@@ -103,6 +103,7 @@ export const useSessionStore = create<SessionStore>()(
             userSummaryTitles: new Map(),
             pendingInputText: null,
             pendingInputMode: 'replace',
+            pendingSyntheticParts: null,
             newSessionDraft: { open: true, directoryOverride: null, parentID: null },
 
                 getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => {
@@ -136,6 +137,7 @@ export const useSessionStore = create<SessionStore>()(
                             parentID: options?.parentID ?? null,
                             title: options?.title,
                             initialPrompt: options?.initialPrompt,
+                            syntheticParts: options?.syntheticParts,
                         },
                         currentSessionId: null,
                         error: null,
@@ -172,7 +174,7 @@ export const useSessionStore = create<SessionStore>()(
                 closeNewSessionDraft: () => {
                     const realCurrentSessionId = useSessionManagementStore.getState().currentSessionId;
                     set({
-                        newSessionDraft: { open: false, directoryOverride: null, parentID: null, title: undefined, initialPrompt: undefined },
+                        newSessionDraft: { open: false, directoryOverride: null, parentID: null, title: undefined, initialPrompt: undefined, syntheticParts: undefined },
                         currentSessionId: realCurrentSessionId,
                     });
                 },
@@ -316,7 +318,7 @@ export const useSessionStore = create<SessionStore>()(
                     get().evictLeastRecentlyUsed();
                 },
                 loadMessages: (sessionId: string, limit?: number) => useMessageStore.getState().loadMessages(sessionId, limit),
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string) => {
                     const draft = get().newSessionDraft;
                     const trimmedAgent = typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined;
 
@@ -387,13 +389,21 @@ export const useSessionStore = create<SessionStore>()(
                             // ignored
                         }
 
+                        // Capture synthetic parts before clearing draft
+                        const draftSyntheticParts = draft.syntheticParts;
+
                         get().closeNewSessionDraft();
                         setStatus(created.id, 'busy');
+
+                        // Merge draft synthetic parts with any additional parts passed to sendMessage
+                        const mergedAdditionalParts = draftSyntheticParts?.length
+                            ? [...(additionalParts || []), ...draftSyntheticParts]
+                            : additionalParts;
 
                         try {
                             return await useMessageStore
                                 .getState()
-                                .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, additionalParts, variant);
+                                .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, mergedAdditionalParts, variant);
                         } catch (error) {
                             setStatus(created.id, 'idle');
                             throw error;
@@ -783,6 +793,18 @@ export const useSessionStore = create<SessionStore>()(
                         return null;
                     }
                     return { text, mode };
+                },
+
+                setPendingSyntheticParts: (parts: SyntheticContextPart[] | null) => {
+                    set({ pendingSyntheticParts: parts });
+                },
+
+                consumePendingSyntheticParts: () => {
+                    const parts = get().pendingSyntheticParts;
+                    if (parts !== null) {
+                        set({ pendingSyntheticParts: null });
+                    }
+                    return parts;
                 },
             }),
         {

@@ -4,6 +4,8 @@ import {
   RiGitBranchLine,
   RiLoader4Line,
   RiArrowDownSLine,
+  RiCheckLine,
+  RiCloseLine,
 } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +35,12 @@ import { cn } from '@/lib/utils';
 
 type OperationType = 'merge' | 'rebase';
 
+export interface OperationLogEntry {
+  message: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+  timestamp: number;
+}
+
 interface BranchIntegrationSectionProps {
   currentBranch: string | null | undefined;
   localBranches: string[];
@@ -41,6 +49,8 @@ interface BranchIntegrationSectionProps {
   onRebase: (branch: string) => void;
   disabled?: boolean;
   isOperating?: boolean;
+  operationLogs?: OperationLogEntry[];
+  onOperationComplete?: () => void;
 }
 
 export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> = ({
@@ -51,6 +61,8 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
   onRebase,
   disabled = false,
   isOperating = false,
+  operationLogs = [],
+  onOperationComplete,
 }) => {
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [operation, setOperation] = React.useState<OperationType>('merge');
@@ -58,8 +70,21 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
   const [branchDropdownOpen, setBranchDropdownOpen] = React.useState(false);
   const [branchSearch, setBranchSearch] = React.useState('');
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const logContainerRef = React.useRef<HTMLDivElement>(null);
 
   const isDisabled = disabled || isOperating;
+  
+  // Check if operation completed (all logs are done or error)
+  const operationCompleted = operationLogs.length > 0 && 
+    operationLogs.every(log => log.status === 'done' || log.status === 'error');
+  const hasError = operationLogs.some(log => log.status === 'error');
+
+  // Auto-scroll log container when new entries are added
+  React.useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [operationLogs]);
 
   // Filter branches based on search
   const filteredLocal = React.useMemo(() => {
@@ -91,15 +116,31 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
   const handleConfirm = () => {
     if (!selectedBranch) return;
     
+    // Don't close dialog - keep it open to show progress
     if (operation === 'merge') {
       onMerge(selectedBranch);
     } else {
       onRebase(selectedBranch);
     }
-    setDialogOpen(false);
   };
 
   const handleCancel = () => {
+    // Don't allow cancel during operation
+    if (isOperating) return;
+    
+    setSelectedBranch(null);
+    setOperation('merge');
+    setBranchSearch('');
+    setDialogOpen(false);
+  };
+
+  const handleClose = () => {
+    // Only allow closing when operation is complete or not started
+    if (isOperating && !operationCompleted) return;
+    
+    if (operationCompleted) {
+      onOperationComplete?.();
+    }
     setSelectedBranch(null);
     setOperation('merge');
     setBranchSearch('');
@@ -142,197 +183,267 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
         </TooltipContent>
       </Tooltip>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          handleClose();
+        } else {
+          setDialogOpen(true);
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Integrate Branch</DialogTitle>
             <DialogDescription>
-              Choose how to integrate changes from another branch into{' '}
-              <span className="font-mono text-foreground">{currentBranch || 'current branch'}</span>
+              {isOperating ? (
+                operationCompleted ? (
+                  hasError ? 'Operation failed' : 'Operation completed'
+                ) : (
+                  `${operation === 'merge' ? 'Merging' : 'Rebasing'} in progress...`
+                )
+              ) : (
+                <>
+                  Choose how to integrate changes from another branch into{' '}
+                  <span className="font-mono text-foreground">{currentBranch || 'current branch'}</span>
+                </>
+              )}
             </DialogDescription>
           </DialogHeader>
 
-          {/* Operation Selection */}
-          <div className="space-y-3">
-            <p className="typography-meta text-muted-foreground">Operation</p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setOperation('merge')}
-                className={cn(
-                  'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors',
-                  operation === 'merge'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-border/80 hover:bg-muted/50'
-                )}
+          {/* Show operation log when operating */}
+          {isOperating ? (
+            <div className="space-y-3">
+              <div 
+                ref={logContainerRef}
+                className="rounded-lg border border-border bg-muted/30 p-3 max-h-48 overflow-y-auto"
               >
-                <div className="flex items-center gap-2">
-                  <RiGitMergeLine className={cn(
-                    'size-4',
-                    operation === 'merge' ? 'text-primary' : 'text-muted-foreground'
-                  )} />
-                  <span className={cn(
-                    'typography-ui-label',
-                    operation === 'merge' ? 'text-foreground' : 'text-muted-foreground'
-                  )}>
-                    Merge
-                  </span>
+                <div className="space-y-2">
+                  {operationLogs.map((log, index) => (
+                    <div key={index} className="flex items-start gap-2">
+                      <div className="mt-0.5 shrink-0">
+                        {log.status === 'running' && (
+                          <RiLoader4Line className="size-3.5 animate-spin text-primary" />
+                        )}
+                        {log.status === 'done' && (
+                          <RiCheckLine className="size-3.5 text-success" />
+                        )}
+                        {log.status === 'error' && (
+                          <RiCloseLine className="size-3.5 text-destructive" />
+                        )}
+                        {log.status === 'pending' && (
+                          <div className="size-3.5 rounded-full border border-muted-foreground/30" />
+                        )}
+                      </div>
+                      <span className={cn(
+                        'typography-micro',
+                        log.status === 'error' && 'text-destructive',
+                        log.status === 'done' && 'text-muted-foreground',
+                        log.status === 'running' && 'text-foreground',
+                        log.status === 'pending' && 'text-muted-foreground/60'
+                      )}>
+                        {log.message}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <p className="typography-micro text-muted-foreground">
-                  Combines branches with a merge commit. Preserves history.
-                </p>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setOperation('rebase')}
-                className={cn(
-                  'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors',
-                  operation === 'rebase'
-                    ? 'border-primary bg-primary/5'
-                    : 'border-border hover:border-border/80 hover:bg-muted/50'
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <RiGitBranchLine className={cn(
-                    'size-4',
-                    operation === 'rebase' ? 'text-primary' : 'text-muted-foreground'
-                  )} />
-                  <span className={cn(
-                    'typography-ui-label',
-                    operation === 'rebase' ? 'text-foreground' : 'text-muted-foreground'
-                  )}>
-                    Rebase
-                  </span>
-                </div>
-                <p className="typography-micro text-muted-foreground">
-                  Replays commits on top. Creates linear history.
-                </p>
-              </button>
-            </div>
-          </div>
-
-          {/* Branch Selection */}
-          <div className="space-y-3">
-            <p className="typography-meta text-muted-foreground">
-              {operation === 'merge' ? 'Branch to merge' : 'Branch to rebase onto'}
-            </p>
-            <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between h-10"
-                >
-                  <span className={cn(
-                    'truncate',
-                    !selectedBranch && 'text-muted-foreground'
-                  )}>
-                    {selectedBranch || 'Select a branch...'}
-                  </span>
-                  <RiArrowDownSLine className="size-4 opacity-60 shrink-0" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width] p-0 max-h-[300px]">
-                <Command>
-                  <CommandInput
-                    ref={searchInputRef}
-                    placeholder="Search branches..."
-                    value={branchSearch}
-                    onValueChange={setBranchSearch}
-                  />
-                  <CommandList>
-                    <CommandEmpty>No branches found.</CommandEmpty>
-
-                    {filteredLocal.length > 0 && (
-                      <CommandGroup heading="Local branches">
-                        {filteredLocal.map((branch) => (
-                          <CommandItem
-                            key={`local-${branch}`}
-                            onSelect={() => handleSelectBranch(branch)}
-                          >
-                            <span className="typography-ui-label text-foreground truncate">
-                              {branch}
-                            </span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-
-                    {filteredLocal.length > 0 && filteredRemote.length > 0 && (
-                      <CommandSeparator />
-                    )}
-
-                    {filteredRemote.length > 0 && (
-                      <CommandGroup heading="Remote branches">
-                        {filteredRemote.map((branch) => (
-                          <CommandItem
-                            key={`remote-${branch}`}
-                            onSelect={() => handleSelectBranch(branch)}
-                          >
-                            <span className="typography-ui-label text-foreground truncate">
-                              {branch}
-                            </span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    )}
-                  </CommandList>
-                </Command>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
-          {/* Summary */}
-          {selectedBranch && (
-            <div className="rounded-lg bg-muted/50 p-3">
-              <p className="typography-meta text-muted-foreground">
-                {operation === 'merge' ? (
-                  <>
-                    This will merge{' '}
-                    <span className="font-mono text-foreground">{selectedBranch}</span>
-                    {' '}into{' '}
-                    <span className="font-mono text-foreground">{currentBranch}</span>
-                  </>
-                ) : (
-                  <>
-                    This will rebase{' '}
-                    <span className="font-mono text-foreground">{currentBranch}</span>
-                    {' '}onto{' '}
-                    <span className="font-mono text-foreground">{selectedBranch}</span>
-                  </>
-                )}
-              </p>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCancel}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleConfirm}
-              disabled={!selectedBranch}
-              className="gap-1.5"
-            >
-              {operation === 'merge' ? (
-                <>
-                  <RiGitMergeLine className="size-4" />
-                  Merge
-                </>
-              ) : (
-                <>
-                  <RiGitBranchLine className="size-4" />
-                  Rebase
-                </>
+              </div>
+              
+              {operationCompleted && (
+                <DialogFooter>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleClose}
+                  >
+                    {hasError ? 'Close' : 'Done'}
+                  </Button>
+                </DialogFooter>
               )}
-            </Button>
-          </DialogFooter>
+            </div>
+          ) : (
+            <>
+              {/* Operation Selection */}
+              <div className="space-y-3">
+                <p className="typography-meta text-muted-foreground">Operation</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setOperation('merge')}
+                    className={cn(
+                      'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors',
+                      operation === 'merge'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-border/80 hover:bg-muted/50'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <RiGitMergeLine className={cn(
+                        'size-4',
+                        operation === 'merge' ? 'text-primary' : 'text-muted-foreground'
+                      )} />
+                      <span className={cn(
+                        'typography-ui-label',
+                        operation === 'merge' ? 'text-foreground' : 'text-muted-foreground'
+                      )}>
+                        Merge
+                      </span>
+                    </div>
+                    <p className="typography-micro text-muted-foreground">
+                      Combines branches with a merge commit. Preserves history.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setOperation('rebase')}
+                    className={cn(
+                      'flex flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors',
+                      operation === 'rebase'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-border/80 hover:bg-muted/50'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <RiGitBranchLine className={cn(
+                        'size-4',
+                        operation === 'rebase' ? 'text-primary' : 'text-muted-foreground'
+                      )} />
+                      <span className={cn(
+                        'typography-ui-label',
+                        operation === 'rebase' ? 'text-foreground' : 'text-muted-foreground'
+                      )}>
+                        Rebase
+                      </span>
+                    </div>
+                    <p className="typography-micro text-muted-foreground">
+                      Replays commits on top. Creates linear history.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Branch Selection */}
+              <div className="space-y-3">
+                <p className="typography-meta text-muted-foreground">
+                  {operation === 'merge' ? 'Branch to merge' : 'Branch to rebase onto'}
+                </p>
+                <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between h-10"
+                    >
+                      <span className={cn(
+                        'truncate',
+                        !selectedBranch && 'text-muted-foreground'
+                      )}>
+                        {selectedBranch || 'Select a branch...'}
+                      </span>
+                      <RiArrowDownSLine className="size-4 opacity-60 shrink-0" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width] p-0 max-h-[300px]">
+                    <Command>
+                      <CommandInput
+                        ref={searchInputRef}
+                        placeholder="Search branches..."
+                        value={branchSearch}
+                        onValueChange={setBranchSearch}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No branches found.</CommandEmpty>
+
+                        {filteredLocal.length > 0 && (
+                          <CommandGroup heading="Local branches">
+                            {filteredLocal.map((branch) => (
+                              <CommandItem
+                                key={`local-${branch}`}
+                                onSelect={() => handleSelectBranch(branch)}
+                              >
+                                <span className="typography-ui-label text-foreground truncate">
+                                  {branch}
+                                </span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
+
+                        {filteredLocal.length > 0 && filteredRemote.length > 0 && (
+                          <CommandSeparator />
+                        )}
+
+                        {filteredRemote.length > 0 && (
+                          <CommandGroup heading="Remote branches">
+                            {filteredRemote.map((branch) => (
+                              <CommandItem
+                                key={`remote-${branch}`}
+                                onSelect={() => handleSelectBranch(branch)}
+                              >
+                                <span className="typography-ui-label text-foreground truncate">
+                                  {branch}
+                                </span>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Summary */}
+              {selectedBranch && (
+                <div className="rounded-lg bg-muted/50 p-3">
+                  <p className="typography-meta text-muted-foreground">
+                    {operation === 'merge' ? (
+                      <>
+                        This will merge{' '}
+                        <span className="font-mono text-foreground">{selectedBranch}</span>
+                        {' '}into{' '}
+                        <span className="font-mono text-foreground">{currentBranch}</span>
+                      </>
+                    ) : (
+                      <>
+                        This will rebase{' '}
+                        <span className="font-mono text-foreground">{currentBranch}</span>
+                        {' '}onto{' '}
+                        <span className="font-mono text-foreground">{selectedBranch}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancel}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleConfirm}
+                  disabled={!selectedBranch}
+                  className="gap-1.5"
+                >
+                  {operation === 'merge' ? (
+                    <>
+                      <RiGitMergeLine className="size-4" />
+                      Merge
+                    </>
+                  ) : (
+                    <>
+                      <RiGitBranchLine className="size-4" />
+                      Rebase
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
     </>

@@ -114,6 +114,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const saveSessionAgentSelection = useSessionStore((state) => state.saveSessionAgentSelection);
     const consumePendingInputText = useSessionStore((state) => state.consumePendingInputText);
     const pendingInputText = useSessionStore((state) => state.pendingInputText);
+    const consumePendingSyntheticParts = useSessionStore((state) => state.consumePendingSyntheticParts);
 
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
@@ -418,7 +419,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         let primaryText = '';
         let primaryAttachments: AttachedFile[] = [];
         let agentMentionName: string | undefined;
-        const additionalParts: Array<{ text: string; attachments?: AttachedFile[] }> = [];
+        const additionalParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [];
+
+        // Consume any pending synthetic parts (from conflict resolution, etc.)
+        const syntheticParts = consumePendingSyntheticParts();
 
         // Process queued messages first
         for (let i = 0; i < queuedMessages.length; i++) {
@@ -480,6 +484,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 lastPart.text = appendInlineComments(lastPart.text, drafts);
             } else {
                 primaryText = appendInlineComments(primaryText, drafts);
+            }
+        }
+
+        // Add synthetic parts (from conflict resolution, etc.)
+        if (syntheticParts && syntheticParts.length > 0) {
+            for (const part of syntheticParts) {
+                additionalParts.push({
+                    text: part.text,
+                    synthetic: true,
+                });
             }
         }
 

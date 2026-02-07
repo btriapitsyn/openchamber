@@ -90,6 +90,20 @@ export interface GitStatusFile {
   working_dir: string;
 }
 
+export interface GitMergeInProgress {
+  /** Short SHA of MERGE_HEAD */
+  head: string;
+  /** First line of MERGE_MSG */
+  message: string;
+}
+
+export interface GitRebaseInProgress {
+  /** Branch name being rebased */
+  headName: string;
+  /** Short SHA of the onto commit */
+  onto: string;
+}
+
 export interface GitStatus {
   current: string;
   tracking: string | null;
@@ -98,6 +112,10 @@ export interface GitStatus {
   files: GitStatusFile[];
   isClean: boolean;
   diffStats?: Record<string, { insertions: number; deletions: number }>;
+  /** Present when a merge is in progress with conflicts */
+  mergeInProgress?: GitMergeInProgress | null;
+  /** Present when a rebase is in progress */
+  rebaseInProgress?: GitRebaseInProgress | null;
 }
 
 export interface GitDiffResponse {
@@ -331,8 +349,10 @@ export interface GitAPI {
   getRemotes(directory: string): Promise<GitRemote[]>;
   rebase(directory: string, options: { onto: string }): Promise<GitRebaseResult>;
   abortRebase(directory: string): Promise<{ success: boolean }>;
+  continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
   merge(directory: string, options: { branch: string }): Promise<GitMergeResult>;
   abortMerge(directory: string): Promise<{ success: boolean }>;
+  continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
   stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
   stashPop(directory: string): Promise<{ success: boolean }>;
   getConflictDetails(directory: string): Promise<MergeConflictDetails>;

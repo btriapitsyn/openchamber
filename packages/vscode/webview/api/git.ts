@@ -250,6 +250,14 @@ export const createVSCodeGitAPI = (): GitAPI => ({
     return sendBridgeMessage<{ success: boolean }>('api:git/merge/abort', { directory });
   },
 
+  continueRebase: async (directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> => {
+    return sendBridgeMessage<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>('api:git/rebase/continue', { directory });
+  },
+
+  continueMerge: async (directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> => {
+    return sendBridgeMessage<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>('api:git/merge/continue', { directory });
+  },
+
   stash: async (
     directory: string,
     options?: { message?: string; includeUntracked?: boolean }

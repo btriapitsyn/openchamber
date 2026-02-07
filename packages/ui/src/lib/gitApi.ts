@@ -303,6 +303,18 @@ export async function abortMerge(directory: string): Promise<{ success: boolean 
   return gitHttp.abortMerge(directory);
 }
 
+export async function continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.continueRebase(directory);
+  return gitHttp.continueRebase(directory);
+}
+
+export async function continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.continueMerge(directory);
+  return gitHttp.continueMerge(directory);
+}
+
 export async function stash(
   directory: string,
   options?: { message?: string; includeUntracked?: boolean }

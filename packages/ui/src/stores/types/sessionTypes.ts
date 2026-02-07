@@ -89,12 +89,20 @@ export const getActiveSessionWindow = () => {
 export const MEMORY_LIMITS = DEFAULT_MEMORY_LIMITS;
 export const ACTIVE_SESSION_WINDOW = DEFAULT_ACTIVE_SESSION_WINDOW;
 
+/** Synthetic context parts to attach when sending initial message */
+export interface SyntheticContextPart {
+    text: string;
+    synthetic: true;
+}
+
 export type NewSessionDraftState = {
     open: boolean;
     directoryOverride: string | null;
     parentID: string | null;
     title?: string;
     initialPrompt?: string;
+    /** Synthetic context parts to include with the initial message */
+    syntheticParts?: SyntheticContextPart[];
 };
 
 export interface SessionStore {
@@ -158,6 +166,8 @@ export interface SessionStore {
 
     pendingInputText: string | null;
     pendingInputMode: 'replace' | 'append';
+    /** Synthetic context parts to include with the next message sent */
+    pendingSyntheticParts: SyntheticContextPart[] | null;
 
     newSessionDraft: NewSessionDraftState;
 
@@ -166,7 +176,7 @@ export interface SessionStore {
     setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => void;
     loadSessions: () => Promise<void>;
 
-    openNewSessionDraft: (options?: { directoryOverride?: string | null; parentID?: string | null; title?: string; initialPrompt?: string }) => void;
+    openNewSessionDraft: (options?: { directoryOverride?: string | null; parentID?: string | null; title?: string; initialPrompt?: string; syntheticParts?: SyntheticContextPart[] }) => void;
     closeNewSessionDraft: () => void;
 
     createSession: (title?: string, directoryOverride?: string | null, parentID?: string | null) => Promise<Session | null>;
@@ -179,7 +189,7 @@ export interface SessionStore {
     unshareSession: (id: string) => Promise<Session | null>;
     setCurrentSession: (id: string | null) => void;
     loadMessages: (sessionId: string, limit?: number) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[] }>, variant?: string) => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string) => Promise<void>;
     abortCurrentOperation: () => Promise<void>;
     acknowledgeSessionAbort: (sessionId: string) => void;
     armAbortPrompt: (durationMs?: number) => number | null;
@@ -257,4 +267,6 @@ export interface SessionStore {
       forkFromMessage: (sessionId: string, messageId: string) => Promise<void>;
       setPendingInputText: (text: string | null, mode?: 'replace' | 'append') => void;
       consumePendingInputText: () => { text: string; mode: 'replace' | 'append' } | null;
+      setPendingSyntheticParts: (parts: SyntheticContextPart[] | null) => void;
+     consumePendingSyntheticParts: () => SyntheticContextPart[] | null;
    }

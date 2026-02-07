@@ -7372,6 +7372,38 @@ Context:
     }
   });
 
+  app.post('/api/git/rebase/continue', async (req, res) => {
+    const { continueRebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await continueRebase(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to continue rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to continue rebase' });
+    }
+  });
+
+  app.post('/api/git/merge/continue', async (req, res) => {
+    const { continueMerge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await continueMerge(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to continue merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to continue merge' });
+    }
+  });
+
   app.get('/api/git/conflict-details', async (req, res) => {
     const { getConflictDetails } = await getGitLibraries();
     try {
