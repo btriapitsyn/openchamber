@@ -1457,6 +1457,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
     [activeProjectForHeader, projectRepoStatus],
   );
+  const activeProjectRepoState = React.useMemo(
+    () => (activeProjectForHeader ? projectRepoStatus.get(activeProjectForHeader.id) : undefined),
+    [activeProjectForHeader, projectRepoStatus],
+  );
+  const reserveHeaderActionsSpace = activeProjectRepoState !== false;
 
   const worktreePrInFlight = React.useRef<Set<string>>(new Set());
   const visibleWorktreeGroups = React.useMemo(() => {
@@ -2575,8 +2580,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               <RiFolderAddLine className="h-4.5 w-4.5" />
             </button>
           </div>
-          {activeProjectIsRepo ? (
-            <div className="mt-1 pl-1">
+          {reserveHeaderActionsSpace ? (
+            <div className="mt-1 h-8 pl-1">
+              {activeProjectIsRepo ? (
               <div className="inline-flex h-8 items-center gap-1.5 rounded-md pl-0 pr-1">
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2647,6 +2653,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
               </Tooltip>
               </div>
+              ) : null}
             </div>
           ) : null}
         </div>
