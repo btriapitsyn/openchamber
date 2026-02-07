@@ -2086,6 +2086,24 @@ const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
                                     process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
 const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
 
+// OpenCode server authentication (Basic Auth with username "opencode")
+const ENV_OPENCODE_SERVER_PASSWORD = (() => {
+  const pwd = process.env.OPENCODE_SERVER_PASSWORD;
+  return typeof pwd === 'string' && pwd.length > 0 ? pwd : null;
+})();
+
+/**
+ * Returns auth headers for OpenCode server requests if OPENCODE_SERVER_PASSWORD is set.
+ * Uses Basic Auth with username "opencode" and the password from the env variable.
+ */
+function getOpenCodeAuthHeaders() {
+  if (!ENV_OPENCODE_SERVER_PASSWORD) {
+    return {};
+  }
+  const credentials = Buffer.from(`opencode:${ENV_OPENCODE_SERVER_PASSWORD}`).toString('base64');
+  return { Authorization: `Basic ${credentials}` };
+}
+
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
@@ -2591,6 +2609,7 @@ const startGlobalEventWatcher = async () => {
             Accept: 'text/event-stream',
             'Cache-Control': 'no-cache',
             Connection: 'keep-alive',
+            ...getOpenCodeAuthHeaders(),
           },
           signal,
         });
@@ -2789,7 +2808,10 @@ async function waitForReady(url, timeoutMs = 10000) {
       const timeout = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(`${url.replace(/\/+$/, '')}/global/health`, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          ...getOpenCodeAuthHeaders(),
+        },
         signal: controller.signal
       });
       clearTimeout(timeout);
@@ -3042,7 +3064,10 @@ const fetchSessionParentId = async (sessionId) => {
   try {
     const response = await fetch(buildOpenCodeUrl('/session', ''), {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...getOpenCodeAuthHeaders(),
+       },
       signal: AbortSignal.timeout(2000),
     });
     if (!response.ok) {
@@ -3564,11 +3589,11 @@ async function waitForOpenCodeReady(timeoutMs = 20000, intervalMs = 400) {
       const [configResult, agentResult] = await Promise.all([
         fetch(buildOpenCodeUrl('/config', ''), {
           method: 'GET',
-          headers: { Accept: 'application/json' }
+          headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
         }).catch((error) => error),
         fetch(buildOpenCodeUrl('/agent', ''), {
           method: 'GET',
-          headers: { Accept: 'application/json' }
+          headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
         }).catch((error) => error)
       ]);
 
@@ -3631,7 +3656,7 @@ async function waitForAgentPresence(agentName, timeoutMs = 15000, intervalMs = 3
     try {
       const response = await fetch(buildOpenCodeUrl('/agent'), {
         method: 'GET',
-        headers: { Accept: 'application/json' }
+        headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
       });
 
       if (response.ok) {
@@ -3657,7 +3682,7 @@ async function fetchAgentsSnapshot() {
 
   const response = await fetch(buildOpenCodeUrl('/agent'), {
     method: 'GET',
-    headers: { Accept: 'application/json' }
+    headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
   });
 
   if (!response.ok) {
@@ -3678,7 +3703,7 @@ async function fetchProvidersSnapshot() {
 
   const response = await fetch(buildOpenCodeUrl('/provider'), {
     method: 'GET',
-    headers: { Accept: 'application/json' }
+    headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
   });
 
   if (!response.ok) {
@@ -3699,7 +3724,7 @@ async function fetchModelsSnapshot() {
 
   const response = await fetch(buildOpenCodeUrl('/model'), {
     method: 'GET',
-    headers: { Accept: 'application/json' }
+    headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
   });
 
   if (!response.ok) {
@@ -3834,6 +3859,11 @@ function setupProxy(app) {
     onProxyReq: (proxyReq, req, res) => {
       console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
 
+      const authHeaders = getOpenCodeAuthHeaders();
+      if (authHeaders.Authorization) {
+        proxyReq.setHeader('Authorization', authHeaders.Authorization);
+      }
+
       if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
         console.log(`[SSE] Setting up SSE proxy for ${req.method} ${req.path}`);
         proxyReq.setHeader('Accept', 'text/event-stream');
@@ -3849,7 +3879,6 @@ function setupProxy(app) {
         proxyRes.headers['Content-Type'] = 'text/event-stream';
         proxyRes.headers['Cache-Control'] = 'no-cache';
         proxyRes.headers['Connection'] = 'keep-alive';
-
         proxyRes.headers['X-Accel-Buffering'] = 'no';
         proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
       }
@@ -4426,7 +4455,8 @@ async function main(options = {}) {
     const headers = {
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
-      Connection: 'keep-alive'
+      Connection: 'keep-alive',
+      ...getOpenCodeAuthHeaders(),
     };
 
     const lastEventId = req.header('Last-Event-ID');
@@ -4558,7 +4588,8 @@ async function main(options = {}) {
     const headers = {
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
-      Connection: 'keep-alive'
+      Connection: 'keep-alive',
+      ...getOpenCodeAuthHeaders(),
     };
 
     const lastEventId = req.header('Last-Event-ID');
