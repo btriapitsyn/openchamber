@@ -4,11 +4,22 @@ import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
+import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
 import { createUiAuth } from './lib/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
+import {
+  TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
+  TERMINAL_INPUT_WS_PATH,
+  createTerminalInputWsControlFrame,
+  isRebindRateLimited,
+  normalizeTerminalInputWsMessageToText,
+  parseRequestPathname,
+  pruneRebindTimestamps,
+  readTerminalInputWsControlFrame,
+} from './lib/terminal-input-ws-protocol.js';
 import { createOpencodeServer } from '@opencode-ai/sdk/server';
 import webPush from 'web-push';
 
@@ -1431,6 +1442,111 @@ const getUiSessionTokenFromRequest = (req) => {
   return null;
 };
 
+const TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW = 128;
+const TERMINAL_INPUT_WS_REBIND_WINDOW_MS = 60 * 1000;
+const TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS = 15 * 1000;
+const TERMINAL_INPUT_WS_DEBUG_ENABLED = process.env.TERMINAL_INPUT_WS_DEBUG === '1';
+
+const logTerminalInputWsDebug = (event, details) => {
+  if (!TERMINAL_INPUT_WS_DEBUG_ENABLED) {
+    return;
+  }
+
+  if (details) {
+    console.log(`[terminal-input-ws] ${event}`, details);
+    return;
+  }
+
+  console.log(`[terminal-input-ws] ${event}`);
+};
+
+const rejectWebSocketUpgrade = (socket, statusCode, reason) => {
+  if (!socket || socket.destroyed) {
+    return;
+  }
+
+  const message = typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : 'Bad Request';
+  logTerminalInputWsDebug('upgrade:rejected', { statusCode, reason: message });
+  const body = Buffer.from(message, 'utf8');
+  const statusText = {
+    400: 'Bad Request',
+    401: 'Unauthorized',
+    403: 'Forbidden',
+    404: 'Not Found',
+    500: 'Internal Server Error',
+  }[statusCode] || 'Bad Request';
+
+  try {
+    socket.write(
+      `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
+      'Connection: close\r\n' +
+      'Content-Type: text/plain; charset=utf-8\r\n' +
+      `Content-Length: ${body.length}\r\n\r\n`
+    );
+    socket.write(body);
+  } catch {
+  }
+
+  try {
+    socket.destroy();
+  } catch {
+  }
+};
+
+
+const getRequestOriginCandidates = async (req) => {
+  const origins = new Set();
+  const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string'
+    ? req.headers['x-forwarded-proto'].split(',')[0].trim().toLowerCase()
+    : '';
+  const protocol = forwardedProto || (req.socket?.encrypted ? 'https' : 'http');
+
+  const forwardedHost = typeof req.headers['x-forwarded-host'] === 'string'
+    ? req.headers['x-forwarded-host'].split(',')[0].trim()
+    : '';
+  const host = forwardedHost || (typeof req.headers.host === 'string' ? req.headers.host.trim() : '');
+
+  if (host) {
+    origins.add(`${protocol}://${host}`);
+    const [hostname, port] = host.split(':');
+    const normalizedHost = typeof hostname === 'string' ? hostname.toLowerCase() : '';
+    const portSuffix = typeof port === 'string' && port.length > 0 ? `:${port}` : '';
+    if (normalizedHost === 'localhost') {
+      origins.add(`${protocol}://127.0.0.1${portSuffix}`);
+      origins.add(`${protocol}://[::1]${portSuffix}`);
+    } else if (normalizedHost === '127.0.0.1' || normalizedHost === '[::1]') {
+      origins.add(`${protocol}://localhost${portSuffix}`);
+    }
+  }
+
+  try {
+    const settings = await readSettingsFromDiskMigrated();
+    if (typeof settings?.publicOrigin === 'string' && settings.publicOrigin.trim().length > 0) {
+      origins.add(new URL(settings.publicOrigin.trim()).origin);
+    }
+  } catch {
+  }
+
+  return origins;
+};
+
+const isRequestOriginAllowed = async (req) => {
+  const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : '';
+  if (!originHeader) {
+    return false;
+  }
+
+  let normalizedOrigin = '';
+  try {
+    normalizedOrigin = new URL(originHeader).origin;
+  } catch {
+    return false;
+  }
+
+  const allowedOrigins = await getRequestOriginCandidates(req);
+  return allowedOrigins.has(normalizedOrigin);
+};
+
 const normalizePushSubscriptions = (record) => {
   if (!Array.isArray(record)) return [];
   return record
@@ -1782,6 +1898,7 @@ let openCodeNotReadySince = 0;
 let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
+let terminalInputWsServer = null;
 
 // Sync helper - call after modifying any HMR state variable
 const syncToHmrState = () => {
@@ -3568,7 +3685,7 @@ function setupProxy(app) {
 
       return suffix;
     },
-    ws: true,
+    ws: false,
     onError: (err, req, res) => {
       console.error(`Proxy error: ${err.message}`);
       if (!res.headersSent) {
@@ -3637,6 +3754,24 @@ async function gracefulShutdown(options = {}) {
 
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
+  }
+
+  if (terminalInputWsServer) {
+    try {
+      for (const client of terminalInputWsServer.clients) {
+        try {
+          client.terminate();
+        } catch {
+        }
+      }
+
+      await new Promise((resolve) => {
+        terminalInputWsServer.close(() => resolve());
+      });
+    } catch {
+    } finally {
+      terminalInputWsServer = null;
+    }
   }
 
   // Only stop OpenCode if we started it ourselves (not when using external server)
@@ -7843,6 +7978,221 @@ Context:
   const terminalSessions = new Map();
   const MAX_TERMINAL_SESSIONS = 20;
   const TERMINAL_IDLE_TIMEOUT = 30 * 60 * 1000;
+  const terminalInputCapabilities = {
+    input: {
+      preferred: 'ws',
+      transports: ['http', 'ws'],
+      ws: {
+        path: TERMINAL_INPUT_WS_PATH,
+        v: 1,
+        enc: 'text+json-bin-control',
+      },
+    },
+  };
+
+  const sendTerminalInputWsControl = (socket, payload) => {
+    if (!socket || socket.readyState !== 1) {
+      return;
+    }
+
+    try {
+      socket.send(createTerminalInputWsControlFrame(payload), { binary: true });
+    } catch {
+    }
+  };
+
+  terminalInputWsServer = new WebSocketServer({
+    noServer: true,
+    maxPayload: TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
+  });
+
+  let terminalInputWsConnectionSequence = 0;
+
+  terminalInputWsServer.on('connection', (socket) => {
+    const connectionId = ++terminalInputWsConnectionSequence;
+    const connectionState = {
+      boundSessionId: null,
+      invalidFrames: 0,
+      rebindTimestamps: [],
+      lastActivityAt: Date.now(),
+    };
+
+    logTerminalInputWsDebug('connection:open', {
+      connectionId,
+      remoteAddress: socket?._socket?.remoteAddress,
+    });
+
+    sendTerminalInputWsControl(socket, { t: 'ok', v: 1 });
+
+    const heartbeatInterval = setInterval(() => {
+      if (socket.readyState !== 1) {
+        return;
+      }
+
+      try {
+        socket.ping();
+      } catch {
+      }
+    }, TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS);
+
+    socket.on('pong', () => {
+      connectionState.lastActivityAt = Date.now();
+    });
+
+    socket.on('message', (message, isBinary) => {
+      connectionState.lastActivityAt = Date.now();
+
+      if (isBinary) {
+        const controlMessage = readTerminalInputWsControlFrame(message);
+        if (!controlMessage || typeof controlMessage.t !== 'string') {
+          connectionState.invalidFrames += 1;
+          sendTerminalInputWsControl(socket, {
+            t: 'e',
+            c: 'BAD_FRAME',
+            f: connectionState.invalidFrames >= 10,
+          });
+          if (connectionState.invalidFrames >= 10) {
+            socket.close(1008, 'protocol violation');
+          }
+          return;
+        }
+
+        if (controlMessage.t === 'p') {
+          sendTerminalInputWsControl(socket, { t: 'po', v: 1 });
+          return;
+        }
+
+        if (controlMessage.t !== 'b' || typeof controlMessage.s !== 'string') {
+          connectionState.invalidFrames += 1;
+          sendTerminalInputWsControl(socket, {
+            t: 'e',
+            c: 'BAD_FRAME',
+            f: connectionState.invalidFrames >= 10,
+          });
+          if (connectionState.invalidFrames >= 10) {
+            socket.close(1008, 'protocol violation');
+          }
+          return;
+        }
+
+        const now = Date.now();
+        connectionState.rebindTimestamps = pruneRebindTimestamps(
+          connectionState.rebindTimestamps,
+          now,
+          TERMINAL_INPUT_WS_REBIND_WINDOW_MS
+        );
+
+        if (isRebindRateLimited(connectionState.rebindTimestamps, TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW)) {
+          sendTerminalInputWsControl(socket, { t: 'e', c: 'RATE_LIMIT', f: false });
+          return;
+        }
+
+        const nextSessionId = controlMessage.s.trim();
+        const targetSession = terminalSessions.get(nextSessionId);
+        if (!targetSession) {
+          connectionState.boundSessionId = null;
+          sendTerminalInputWsControl(socket, { t: 'e', c: 'SESSION_NOT_FOUND', f: false });
+          return;
+        }
+
+        connectionState.rebindTimestamps.push(now);
+        connectionState.boundSessionId = nextSessionId;
+        sendTerminalInputWsControl(socket, { t: 'bok', v: 1 });
+        return;
+      }
+
+      const payload = normalizeTerminalInputWsMessageToText(message);
+      if (payload.length === 0) {
+        return;
+      }
+
+      if (!connectionState.boundSessionId) {
+        sendTerminalInputWsControl(socket, { t: 'e', c: 'NOT_BOUND', f: false });
+        return;
+      }
+
+      const session = terminalSessions.get(connectionState.boundSessionId);
+      if (!session) {
+        connectionState.boundSessionId = null;
+        sendTerminalInputWsControl(socket, { t: 'e', c: 'SESSION_NOT_FOUND', f: false });
+        return;
+      }
+
+      try {
+        session.ptyProcess.write(payload);
+        session.lastActivity = Date.now();
+      } catch {
+        sendTerminalInputWsControl(socket, { t: 'e', c: 'WRITE_FAIL', f: false });
+      }
+    });
+
+    socket.on('close', (code, reasonBuffer) => {
+      const reason = Buffer.isBuffer(reasonBuffer) ? reasonBuffer.toString('utf8') : '';
+      logTerminalInputWsDebug('connection:close', {
+        connectionId,
+        code,
+        reason,
+        boundSessionId: connectionState.boundSessionId,
+      });
+      clearInterval(heartbeatInterval);
+    });
+
+    socket.on('error', (error) => {
+      logTerminalInputWsDebug('connection:error', {
+        connectionId,
+        error: error?.message || String(error),
+      });
+    });
+  });
+
+  server.on('upgrade', (req, socket, head) => {
+    const pathname = parseRequestPathname(req.url);
+    if (pathname !== TERMINAL_INPUT_WS_PATH) {
+      return;
+    }
+
+    logTerminalInputWsDebug('upgrade:request', {
+      pathname,
+      origin: req.headers.origin,
+      host: req.headers.host,
+      remoteAddress: req.socket?.remoteAddress,
+    });
+
+    const handleUpgrade = async () => {
+      try {
+        if (uiAuthController?.enabled) {
+          const sessionToken = uiAuthController?.ensureSessionToken?.(req, null);
+          if (!sessionToken) {
+            rejectWebSocketUpgrade(socket, 401, 'UI authentication required');
+            return;
+          }
+
+          const originAllowed = await isRequestOriginAllowed(req);
+          if (!originAllowed) {
+            rejectWebSocketUpgrade(socket, 403, 'Invalid origin');
+            return;
+          }
+        }
+
+        if (!terminalInputWsServer) {
+          rejectWebSocketUpgrade(socket, 500, 'Terminal WebSocket unavailable');
+          return;
+        }
+
+        terminalInputWsServer.handleUpgrade(req, socket, head, (ws) => {
+          terminalInputWsServer.emit('connection', ws, req);
+        });
+      } catch {
+        logTerminalInputWsDebug('upgrade:failed', {
+          pathname,
+          host: req.headers.host,
+        });
+        rejectWebSocketUpgrade(socket, 500, 'Upgrade failed');
+      }
+    };
+
+    void handleUpgrade();
+  });
 
   setInterval(() => {
     const now = Date.now();
@@ -7913,7 +8263,7 @@ Context:
       });
 
       console.log(`Created terminal session: ${sessionId} in ${cwd}`);
-      res.json({ sessionId, cols: cols || 80, rows: rows || 24 });
+      res.json({ sessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalInputCapabilities });
     } catch (error) {
       console.error('Failed to create terminal session:', error);
       res.status(500).json({ error: error.message || 'Failed to create terminal session' });
@@ -8134,7 +8484,7 @@ Context:
       });
 
       console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd}`);
-      res.json({ sessionId: newSessionId, cols: cols || 80, rows: rows || 24 });
+      res.json({ sessionId: newSessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalInputCapabilities });
     } catch (error) {
       console.error('Failed to restart terminal session:', error);
       res.status(500).json({ error: error.message || 'Failed to restart terminal session' });
