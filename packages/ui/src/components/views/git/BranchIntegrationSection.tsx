@@ -57,6 +57,7 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
   const [selectedBranch, setSelectedBranch] = React.useState<string | null>(null);
   const [branchDropdownOpen, setBranchDropdownOpen] = React.useState(false);
   const [branchSearch, setBranchSearch] = React.useState('');
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   const isDisabled = disabled || isOperating;
 
@@ -108,6 +109,12 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
   React.useEffect(() => {
     if (!branchDropdownOpen) {
       setBranchSearch('');
+    } else {
+      // Focus the search input when dropdown opens
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [branchDropdownOpen]);
 
@@ -228,6 +235,7 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
               <DropdownMenuContent align="start" className="w-[--radix-dropdown-menu-trigger-width] p-0 max-h-[300px]">
                 <Command>
                   <CommandInput
+                    ref={searchInputRef}
                     placeholder="Search branches..."
                     value={branchSearch}
                     onValueChange={setBranchSearch}

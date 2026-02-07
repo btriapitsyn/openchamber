@@ -66,11 +66,23 @@ export const IntegrateCommitsSection: React.FC<{
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const setActiveMainTab = useUIStore((s) => s.setActiveMainTab);
   const [isOpen, setIsOpen] = React.useState(true);
+  const [branchDropdownOpen, setBranchDropdownOpen] = React.useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   const [targetBranch, setTargetBranch] = React.useState<string>(defaultTargetBranch);
   React.useEffect(() => {
     setTargetBranch(defaultTargetBranch);
   }, [defaultTargetBranch]);
+
+  // Focus search input when branch dropdown opens
+  React.useEffect(() => {
+    if (branchDropdownOpen) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [branchDropdownOpen]);
 
   const isEligible = Boolean(
     repoRoot && sourceBranch && targetBranch && targetBranch !== 'HEAD' && sourceBranch !== targetBranch
@@ -367,7 +379,7 @@ Goal:
 
             <div className="flex-1" />
 
-            <DropdownMenu>
+            <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   Target
@@ -380,7 +392,7 @@ Goal:
                 className="w-72 p-0 max-h-(--radix-dropdown-menu-content-available-height) flex flex-col overflow-hidden"
               >
                 <Command className="h-full min-h-0">
-                  <CommandInput placeholder="Search branches..." />
+                  <CommandInput ref={searchInputRef} placeholder="Search branches..." />
                   <CommandList
                     className="h-full min-h-0"
                     scrollbarClassName="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
@@ -395,6 +407,7 @@ Goal:
                           onSelect={() => {
                             setTargetBranch(branch);
                             persistTarget(branch);
+                            setBranchDropdownOpen(false);
                           }}
                         >
                           {branch}
