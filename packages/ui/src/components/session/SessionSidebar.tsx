@@ -75,6 +75,12 @@ import type { GitHubPullRequestStatus } from '@/lib/api/types';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
 
+const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
+
+const getAttentionDiamondDelay = (index: number): string => {
+  return index === 4 ? '0ms' : '130ms';
+};
+
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
 const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
@@ -674,6 +680,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const unshareSession = useSessionStore((state) => state.unshareSession);
   const sessionMemoryState = useSessionStore((state) => state.sessionMemoryState);
   const sessionStatus = useSessionStore((state) => state.sessionStatus);
+  const sessionAttentionStates = useSessionStore((state) => state.sessionAttentionStates);
   const permissions = useSessionStore((state) => state.permissions);
   const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
   const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
@@ -1877,6 +1884,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const sessionTitle = session.title || 'Untitled Session';
       const hasChildren = node.children.length > 0;
       const isExpanded = expandedParents.has(session.id);
+      const needsAttention = sessionAttentionStates.get(session.id)?.needsAttention === true;
       const sessionSummary = session.summary as
         | {
           additions?: number | string | null;
@@ -1973,6 +1981,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const statusType = sessionStatus?.get(session.id)?.type ?? 'idle';
       const isStreaming = statusType === 'busy' || statusType === 'retry';
       const pendingPermissionCount = permissions.get(session.id)?.length ?? 0;
+      const showUnreadStatus = !isStreaming && needsAttention && !isActive;
+      const showStatusMarker = isStreaming || showUnreadStatus;
 
       const streamingIndicator = (() => {
         if (!memoryState) return null;
@@ -2007,8 +2017,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               >
                 {}
                 <div className="flex w-full items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                  {isStreaming ? (
-                    <GridLoader size="xs" className="text-primary flex-shrink-0" />
+                  {showStatusMarker ? (
+                    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
+                      {isStreaming ? (
+                        <GridLoader size="xs" className="text-primary" />
+                      ) : (
+                        <span className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]" aria-label="Unread updates" title="Unread updates">
+                          {Array.from({ length: 9 }, (_, i) => (
+                            ATTENTION_DIAMOND_INDICES.has(i) ? (
+                              <span
+                                key={i}
+                                className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse"
+                                style={{ animationDelay: getAttentionDiamondDelay(i) }}
+                              />
+                            ) : (
+                              <span key={i} className="h-[3px] w-[3px]" />
+                            )
+                          ))}
+                        </span>
+                      )}
+                    </span>
                   ) : null}
                   <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">
                     {sessionTitle}
@@ -2166,6 +2194,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       directoryStatus,
       sessionMemoryState,
       sessionStatus,
+      sessionAttentionStates,
       permissions,
       currentSessionId,
       expandedParents,

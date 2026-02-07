@@ -802,6 +802,19 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
   animation: grid-pulse 1.2s ease-in-out infinite;
 }
 
+@keyframes attention-diamond-pulse {
+  0%, 100% {
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+.animate-attention-diamond-pulse {
+  animation: attention-diamond-pulse 2.3s ease-in-out infinite;
+}
+
 @keyframes marquee-scroll {
   0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
@@ -826,6 +839,11 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
   .marquee-text--auto,
   .group:hover .marquee-text--active,
   .marquee-text--active:hover {
+    animation: none;
+  }
+
+  .animate-grid-pulse,
+  .animate-attention-diamond-pulse {
     animation: none;
   }
 }
