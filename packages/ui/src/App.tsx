@@ -159,12 +159,12 @@ function App({ apis }: AppProps) {
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!isInitialized || !isConnected || isSwitchingDirectory) return;
+    if (!isInitialized || isSwitchingDirectory) return;
     if (appReadyDispatchedRef.current) return;
     appReadyDispatchedRef.current = true;
     (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady = true;
     window.dispatchEvent(new Event('openchamber:app-ready'));
-  }, [isInitialized, isConnected, isSwitchingDirectory]);
+  }, [isInitialized, isSwitchingDirectory]);
 
   useEventStream();
 

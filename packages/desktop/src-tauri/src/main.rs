@@ -444,7 +444,11 @@ fn desktop_filter_installed_apps(apps: Vec<String>) -> Result<Vec<String>, Strin
 }
 
 #[tauri::command]
-fn desktop_get_installed_apps(app: tauri::AppHandle, apps: Vec<String>) -> Result<Vec<InstalledAppInfo>, String> {
+fn desktop_get_installed_apps(
+    app: tauri::AppHandle,
+    apps: Vec<String>,
+    force: Option<bool>,
+) -> Result<Vec<InstalledAppInfo>, String> {
     #[cfg(target_os = "macos")]
     {
         let cache_path = installed_apps_cache_path(&app);
@@ -458,16 +462,44 @@ fn desktop_get_installed_apps(app: tauri::AppHandle, apps: Vec<String>) -> Resul
             .as_ref()
             .map(|entry| filter_cached_installed_apps(entry, &apps))
             .unwrap_or_default();
-        let is_fresh = cache
+        let mut is_fresh = cache
             .as_ref()
             .map(|entry| now.saturating_sub(entry.updated_at) <= INSTALLED_APPS_CACHE_TTL_SECS)
             .unwrap_or(false);
+        if force.unwrap_or(false) {
+            is_fresh = false;
+        }
+        if is_fresh {
+            let has_missing_icons = cached_apps.iter().any(|entry| entry.icon_data_url.is_none());
+            if has_missing_icons {
+                is_fresh = false;
+            }
+        }
+        if is_fresh && cached_apps.is_empty() {
+            is_fresh = false;
+        }
+
+        if is_fresh {
+            log::info!("[open-in] cache hit: {} apps", cached_apps.len());
+            if log::log_enabled!(log::Level::Info) {
+                let names: Vec<String> = cached_apps.iter().map(|app| app.name.clone()).collect();
+                log::info!("[open-in] cache apps: {:?}", names);
+            }
+        } else {
+            log::info!("[open-in] cache miss: refreshing app list");
+        }
 
         if !is_fresh {
             let app_handle = app.clone();
             let app_names = apps.clone();
             tauri::async_runtime::spawn_blocking(move || {
+                log::info!("[open-in] scan start: {} candidates", app_names.len());
                 let refreshed = build_installed_apps(&app_names);
+                if log::log_enabled!(log::Level::Info) {
+                    let names: Vec<String> = refreshed.iter().map(|app| app.name.clone()).collect();
+                    log::info!("[open-in] scan apps: {:?}", names);
+                }
+                log::info!("[open-in] scan done: {} installed", refreshed.len());
                 let cache_entry = InstalledAppsCache {
                     updated_at: SystemTime::now()
                         .duration_since(UNIX_EPOCH)
@@ -673,6 +705,16 @@ fn resolve_app_icon_path(app_path: &Path) -> Option<PathBuf> {
         return None;
     }
 
+    if let Some(icon_file) = read_bundle_icon_file(app_path) {
+        let icon_path = app_path
+            .join("Contents")
+            .join("Resources")
+            .join(&icon_file);
+        if icon_path.exists() {
+            return Some(icon_path);
+        }
+    }
+
     if let Ok(output) = Command::new("mdls")
         .args(["-name", "kMDItemIconFile", "-raw", &app_path.to_string_lossy()])
         .output()
@@ -710,6 +752,37 @@ fn resolve_app_icon_path(app_path: &Path) -> Option<PathBuf> {
     }
 
     None
+}
+
+#[cfg(target_os = "macos")]
+fn read_bundle_icon_file(app_path: &Path) -> Option<String> {
+    let plist_path = app_path.join("Contents").join("Info.plist");
+    if !plist_path.exists() {
+        return None;
+    }
+
+    let output = Command::new("defaults")
+        .args(["read", &plist_path.to_string_lossy(), "CFBundleIconFile"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let icon_name = stdout.trim();
+    if icon_name.is_empty() {
+        return None;
+    }
+
+    let icon_file = if icon_name.ends_with(".icns") {
+        icon_name.to_string()
+    } else {
+        format!("{icon_name}.icns")
+    };
+
+    Some(icon_file)
 }
 
 #[cfg(target_os = "macos")]

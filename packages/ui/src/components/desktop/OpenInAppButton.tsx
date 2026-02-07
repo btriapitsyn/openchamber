@@ -10,7 +10,7 @@ import {
 import { updateDesktopSettings } from '@/lib/persistence';
 import { cn } from '@/lib/utils';
 import { fetchDesktopInstalledApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings, type InstalledDesktopAppInfo } from '@/lib/desktop';
-import { RiArrowDownSLine, RiCheckLine, RiFileCopyLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from '@remixicon/react';
 
 type OpenInAppOption = {
   id: string;
@@ -269,6 +269,9 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
   const [availableApps, setAvailableApps] = React.useState<OpenInAppOption[]>(getAlwaysAvailableApps);
   const [hasLoadedApps, setHasLoadedApps] = React.useState(false);
   const isMountedRef = React.useRef(true);
+  const hasLoadedAppsRef = React.useRef(false);
+  const retryTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryAttemptRef = React.useRef(0);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -285,7 +288,15 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
   React.useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
     };
+  }, []);
+
+  const setLoadedState = React.useCallback((value: boolean) => {
+    hasLoadedAppsRef.current = value;
+    setHasLoadedApps(value);
   }, []);
 
   const isDesktopLocal = isTauriShell() && isDesktopLocalOriginActive();
@@ -293,7 +304,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
   const applyInstalledApps = React.useCallback((installed: InstalledDesktopAppInfo[]) => {
     if (installed.length === 0) {
       setAvailableApps(getAlwaysAvailableApps());
-      setHasLoadedApps(true);
+      setLoadedState(false);
       return;
     }
 
@@ -307,40 +318,74 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
       iconDataUrl: iconMap.get(app.appName),
     }));
     setAvailableApps(withIcons);
-    setHasLoadedApps(true);
-  }, []);
+    setLoadedState(true);
+  }, [setLoadedState]);
 
-  const loadInstalledApps = React.useCallback(async () => {
-    if (hasLoadedApps) return;
+  const loadInstalledApps = React.useCallback(async (force?: boolean) => {
+    if (hasLoadedApps && !force) return;
     const appNames = OPEN_IN_APPS.map((app) => app.appName);
-    const installed = await fetchDesktopInstalledApps(appNames);
+    if (force) {
+      console.info('[open-in] manual refresh requested');
+      setLoadedState(false);
+    } else {
+      console.info('[open-in] load installed apps');
+    }
+    const installed = await fetchDesktopInstalledApps(appNames, force);
     if (!isMountedRef.current) return;
+    console.info('[open-in] installed apps returned', installed.map((app) => app.name));
     applyInstalledApps(installed);
-  }, [applyInstalledApps, hasLoadedApps]);
+    if (installed.length === 0 && retryAttemptRef.current < 3) {
+      const delays = [1000, 3000, 7000];
+      const delay = delays[retryAttemptRef.current] ?? 7000;
+      retryAttemptRef.current += 1;
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+      retryTimeoutRef.current = setTimeout(() => {
+        void loadInstalledApps();
+      }, delay);
+    }
+  }, [applyInstalledApps, hasLoadedApps, setLoadedState]);
 
   React.useEffect(() => {
     if (!isDesktopLocal) return;
     if (typeof window === 'undefined') return;
     const handler = () => {
-      void loadInstalledApps();
+      console.info('[open-in] app ready, starting installed app scan');
+      void loadInstalledApps(true);
     };
     window.addEventListener('openchamber:app-ready', handler);
     const updateHandler = (event: Event) => {
       const detail = (event as CustomEvent<InstalledDesktopAppInfo[]>).detail;
       if (Array.isArray(detail)) {
+        console.info('[open-in] received installed app update', detail.length);
+        retryAttemptRef.current = 3;
         applyInstalledApps(detail);
       }
     };
     window.addEventListener('openchamber:installed-apps-updated', updateHandler);
     const flag = (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady;
     if (flag) {
-      void loadInstalledApps();
+      console.info('[open-in] app ready flag already set');
+      void loadInstalledApps(true);
     }
     return () => {
       window.removeEventListener('openchamber:app-ready', handler);
       window.removeEventListener('openchamber:installed-apps-updated', updateHandler);
     };
   }, [applyInstalledApps, isDesktopLocal, loadInstalledApps]);
+
+  React.useEffect(() => {
+    if (!isDesktopLocal) return;
+    if (typeof window === 'undefined') return;
+    const fallbackTimer = window.setTimeout(() => {
+      if (!hasLoadedAppsRef.current) {
+        console.info('[open-in] fallback scan triggered');
+        void loadInstalledApps(true);
+      }
+    }, 5000);
+    return () => window.clearTimeout(fallbackTimer);
+  }, [isDesktopLocal, loadInstalledApps]);
 
   const selectedApp = availableApps.find((app) => app.id === selectedAppId) ?? availableApps[0];
 
@@ -447,6 +492,13 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
           <DropdownMenuItem className="flex items-center gap-2" onClick={() => void handleCopyPath()}>
             <RiFileCopyLine className="h-4 w-4" />
             <span className="typography-ui-label text-foreground">Copy Path</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="flex items-center gap-2"
+            onClick={() => void loadInstalledApps(true)}
+          >
+            <RiRefreshLine className="h-4 w-4" />
+            <span className="typography-ui-label text-foreground">Refresh Apps</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

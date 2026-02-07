@@ -406,7 +406,10 @@ export type InstalledDesktopAppInfo = {
   iconDataUrl?: string | null;
 };
 
-export const fetchDesktopInstalledApps = async (apps: string[]): Promise<InstalledDesktopAppInfo[]> => {
+export const fetchDesktopInstalledApps = async (
+  apps: string[],
+  force?: boolean
+): Promise<InstalledDesktopAppInfo[]> => {
   if (!isTauriShell() || !isDesktopLocalOriginActive()) {
     return [];
   }
@@ -420,6 +423,7 @@ export const fetchDesktopInstalledApps = async (apps: string[]): Promise<Install
     const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
     const result = await tauri?.core?.invoke?.('desktop_get_installed_apps', {
       apps: candidate,
+      force: force === true ? true : undefined,
     });
     if (!Array.isArray(result)) {
       return [];
