@@ -3,7 +3,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -231,7 +230,7 @@ Important:
             </div>
           )}
 
-          <DialogFooter className="flex-col gap-2 sm:gap-3">
+          <div className="flex flex-col gap-2 pt-2">
             <Button
               variant="default"
               onClick={handleResolveInNewSession}
@@ -266,7 +265,7 @@ Important:
                 Abort {operationLabel}
               </Button>
             </div>
-          </DialogFooter>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
