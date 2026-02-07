@@ -24,7 +24,6 @@ interface SessionState {
     worktreeMetadata: Map<string, WorktreeMetadata>;
     availableWorktrees: WorktreeMetadata[];
     availableWorktreesByProject: Map<string, WorktreeMetadata[]>;
-    sessionActivityState: Map<string, 'viewed' | 'entered' | 'message_sent' | 'needs_attention'>;
 }
 
 interface SessionActions {
@@ -48,10 +47,6 @@ interface SessionActions {
     setSessionDirectory: (sessionId: string, directory: string | null) => void;
     updateSession: (session: Session) => void;
     removeSessionFromStore: (sessionId: string) => void;
-    updateSessionActivityState: (sessionId: string, state: 'viewed' | 'entered' | 'message_sent' | 'needs_attention') => void;
-    markAllSessionsAsViewed: () => void;
-    getSessionActivityState: (sessionId: string) => 'viewed' | 'entered' | 'message_sent' | 'needs_attention' | undefined;
-    isSessionNeedsAttention: (sessionId: string) => boolean;
 }
 
 type SessionStore = SessionState & SessionActions;
@@ -380,7 +375,6 @@ export const useSessionStore = create<SessionStore>()(
                 worktreeMetadata: new Map(),
                 availableWorktrees: [],
                 availableWorktreesByProject: new Map(),
-                sessionActivityState: new Map(),
 
                 loadSessions: async () => {
                     set({ isLoading: true, error: null });
@@ -1253,13 +1247,11 @@ export const useSessionStore = create<SessionStore>()(
                         // Leaving previous session
                         fetch(`/api/sessions/${prevSessionId}/unview`, { method: 'POST' })
                             .catch(() => { /* ignore */ });
-                        get().updateSessionActivityState(prevSessionId, 'entered');
                     }
                     if (id) {
                         // Entering new session
                         fetch(`/api/sessions/${id}/view`, { method: 'POST' })
                             .catch(() => { /* ignore */ });
-                        get().updateSessionActivityState(id, 'viewed');
                     }
 
                     // Trigger immediate poll to get latest attention states
@@ -1268,32 +1260,6 @@ export const useSessionStore = create<SessionStore>()(
 
                     const directory = opencodeClient.getDirectory() ?? null;
                     storeSessionForDirectory(directory, id);
-                },
-
-                updateSessionActivityState: (sessionId: string, state: 'viewed' | 'entered' | 'message_sent' | 'needs_attention') => {
-                    set((prev) => {
-                        const nextActivityState = new Map(prev.sessionActivityState);
-                        nextActivityState.set(sessionId, state);
-                        return { sessionActivityState: nextActivityState };
-                    });
-                },
-
-                markAllSessionsAsViewed: () => {
-                    set((state) => {
-                        const nextActivityState = new Map(state.sessionActivityState);
-                        state.sessions.forEach((session) => {
-                            nextActivityState.set(session.id, 'viewed');
-                        });
-                        return { sessionActivityState: nextActivityState };
-                    });
-                },
-
-                getSessionActivityState: (sessionId: string): 'viewed' | 'entered' | 'message_sent' | 'needs_attention' | undefined => {
-                    return get().sessionActivityState.get(sessionId);
-                },
-
-                isSessionNeedsAttention: (sessionId: string): boolean => {
-                    return get().sessionActivityState.get(sessionId) === 'needs_attention';
                 },
 
                 clearError: () => {
@@ -1525,7 +1491,6 @@ export const useSessionStore = create<SessionStore>()(
         worktreeMetadata: Array.from(state.worktreeMetadata.entries()),
         availableWorktrees: state.availableWorktrees,
         availableWorktreesByProject: Array.from(state.availableWorktreesByProject.entries()),
-        sessionActivityState: Array.from(state.sessionActivityState.entries()),
     }),
     merge: (persistedState, currentState) => {
         const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -1568,36 +1533,6 @@ export const useSessionStore = create<SessionStore>()(
 
         const mergedSessions = dedupeSessionsById(persistedSessions);
 
-        // Handle sessionActivityState migration or initialization
-        const persistedActivityEntries = Array.isArray(persistedState.sessionActivityState)
-            ? (persistedState.sessionActivityState as Array<[string, 'viewed' | 'entered' | 'message_sent' | 'needs_attention']>)
-            : [];
-
-        let mergedActivityState: Map<string, 'viewed' | 'entered' | 'message_sent' | 'needs_attention'>;
-
-        if (persistedActivityEntries.length > 0) {
-            // Migrate from old viewedSessionIds format or use persisted data
-            const migratedState = new Map(persistedActivityEntries);
-            // Also migrate from old viewedSessionIds if it exists
-            const oldViewedIds = Array.isArray(persistedState.viewedSessionIds)
-                ? (persistedState.viewedSessionIds as string[])
-                : [];
-            if (oldViewedIds.length > 0) {
-                oldViewedIds.forEach((id) => {
-                    if (!migratedState.has(id)) {
-                        migratedState.set(id, 'viewed');
-                    }
-                });
-            }
-            mergedActivityState = migratedState;
-        } else {
-            // First time: mark all existing sessions as 'viewed' (default state)
-            mergedActivityState = new Map();
-            mergedSessions.forEach((session) => {
-                mergedActivityState.set(session.id, 'viewed');
-            });
-        }
-
         const mergedResult = {
             ...currentState,
             ...persistedState,
@@ -1611,7 +1546,6 @@ export const useSessionStore = create<SessionStore>()(
                 ? persistedWorktreesByProject
                 : currentState.availableWorktreesByProject,
             lastLoadedDirectory,
-            sessionActivityState: mergedActivityState,
         };
         return mergedResult;
     },

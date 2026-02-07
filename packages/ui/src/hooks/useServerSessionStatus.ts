@@ -4,7 +4,6 @@ import { useSessionStore } from '@/stores/useSessionStore';
 interface SessionState {
   status: 'idle' | 'busy' | 'retry';
   lastUpdateAt: number;
-  lastEventId: string;
   metadata?: {
     attempt?: number;
     message?: string;
@@ -20,17 +19,12 @@ interface SessionAttentionState {
   isViewed: boolean;
 }
 
-interface ServerStatusResponse {
-  sessions: Record<string, SessionState>;
+interface ServerSnapshotResponse {
+  statusSessions: Record<string, SessionState>;
+  attentionSessions: Record<string, SessionAttentionState>;
   serverTime: number;
 }
 
-interface ServerAttentionResponse {
-  sessions: Record<string, SessionAttentionState>;
-  serverTime: number;
-}
-
-const POLL_INTERVAL_MS = 10000; // 10 seconds
 const IMMEDIATE_POLL_DELAY_MS = 500; // 500ms for immediate poll after notification
 
 // Ref to be accessed from outside (e.g., useEventStream) for triggering immediate poll
@@ -46,61 +40,66 @@ export const triggerSessionStatusPoll = () => {
 /**
  * Hook to synchronize session status and attention state from server.
  *
- * Architecture: Server maintains authoritative state, client only queries.
- * This eliminates dependency on SSE event delivery for status updates.
+ * Architecture: server maintains authoritative state, client applies snapshots.
+ * SSE remains the primary transport; snapshots repair missed updates.
  */
 export function useServerSessionStatus() {
-  const isPollingRef = React.useRef(false);
-  const lastPollTimeRef = React.useRef(0);
+  const isSyncingRef = React.useRef(false);
+  const lastSyncAtRef = React.useRef(0);
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const fetchSessionStatus = React.useCallback(async (immediate = false) => {
     const now = Date.now();
-    if (!immediate && now - lastPollTimeRef.current < 1000) {
+    if (!immediate && now - lastSyncAtRef.current < 1000) {
       return;
     }
 
-    // Prevent concurrent polls
-    if (isPollingRef.current) {
+    // Prevent concurrent syncs
+    if (isSyncingRef.current) {
       return;
     }
 
-    isPollingRef.current = true;
-    lastPollTimeRef.current = now;
+    isSyncingRef.current = true;
+    lastSyncAtRef.current = now;
 
     try {
-      // Fetch both status and attention state in parallel
-      const [statusResponse, attentionResponse] = await Promise.all([
-        fetch('/api/sessions/status', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        }),
-        fetch('/api/sessions/attention', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        }),
-      ]);
+      const snapshotResponse = await fetch('/api/sessions/snapshot', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
 
-      if (!statusResponse.ok) {
-        console.warn('[useServerSessionStatus] Failed to fetch session status:', statusResponse.status);
+      if (!snapshotResponse.ok) {
+        console.warn('[useServerSessionStatus] Failed to fetch session snapshot:', snapshotResponse.status);
         return;
       }
 
-      const statusData: ServerStatusResponse = await statusResponse.json();
-      const attentionData: ServerAttentionResponse = attentionResponse.ok 
-        ? await attentionResponse.json() 
-        : { sessions: {}, serverTime: Date.now() };
+      const snapshotData: ServerSnapshotResponse = await snapshotResponse.json();
+      const statusSessions = snapshotData.statusSessions ?? {};
+      const attentionSessions = snapshotData.attentionSessions ?? {};
 
       // Update the session store with server state
       const currentStatuses = useSessionStore.getState().sessionStatus || new Map();
-      const newStatuses = new Map(currentStatuses);
+      let newStatuses: Map<string, { type: 'idle' | 'busy' | 'retry'; confirmedAt?: number; attempt?: number; message?: string; next?: number }> | null = null;
+      const ensureStatusesMap = () => {
+        if (!newStatuses) {
+          newStatuses = new Map(currentStatuses);
+        }
+        return newStatuses;
+      };
 
-      for (const [sessionId, state] of Object.entries(statusData.sessions)) {
-        const existing = newStatuses.get(sessionId);
+      for (const [sessionId, state] of Object.entries(statusSessions)) {
+        const existing = currentStatuses.get(sessionId);
+        const hasChanged =
+          !existing ||
+          existing.type !== state.status ||
+          existing.attempt !== state.metadata?.attempt ||
+          existing.message !== state.metadata?.message ||
+          existing.next !== state.metadata?.next ||
+          existing.confirmedAt !== state.lastUpdateAt;
 
-        // Only update if server state is newer or different
-        if (!existing || existing.status !== state.status) {
-          newStatuses.set(sessionId, {
+        // Only update if server state is different
+        if (hasChanged) {
+          ensureStatusesMap().set(sessionId, {
             type: state.status,
             confirmedAt: state.lastUpdateAt,
             attempt: state.metadata?.attempt,
@@ -111,11 +110,11 @@ export function useServerSessionStatus() {
       }
 
       // Check for sessions that are no longer in server state (treat as idle)
-      for (const [sessionId, currentStatus] of newStatuses) {
+      for (const [sessionId, currentStatus] of (newStatuses ?? currentStatuses)) {
         if ((currentStatus.type === 'busy' || currentStatus.type === 'retry') &&
-            !statusData.sessions[sessionId]) {
+            !statusSessions[sessionId]) {
           // Session was busy but not in server state anymore -> mark as idle
-          newStatuses.set(sessionId, {
+          ensureStatusesMap().set(sessionId, {
             type: 'idle',
             confirmedAt: Date.now(),
           });
@@ -124,71 +123,77 @@ export function useServerSessionStatus() {
 
       // Update attention state from server
       const currentAttentionStates = useSessionStore.getState().sessionAttentionStates || new Map();
-      const newAttentionStates = new Map(currentAttentionStates);
+      let newAttentionStates: Map<string, SessionAttentionState> | null = null;
+      const ensureAttentionMap = () => {
+        if (!newAttentionStates) {
+          newAttentionStates = new Map(currentAttentionStates);
+        }
+        return newAttentionStates;
+      };
       let attentionStatesChanged = false;
 
-      for (const [sessionId, attentionState] of Object.entries(attentionData.sessions)) {
-        const existing = newAttentionStates.get(sessionId);
+      for (const [sessionId, attentionState] of Object.entries(attentionSessions)) {
+        const existing = currentAttentionStates.get(sessionId);
         const serverState = attentionState as SessionAttentionState;
+        const hasChanged =
+          !existing ||
+          existing.needsAttention !== serverState.needsAttention ||
+          existing.lastUserMessageAt !== serverState.lastUserMessageAt ||
+          existing.lastStatusChangeAt !== serverState.lastStatusChangeAt ||
+          existing.status !== serverState.status ||
+          existing.isViewed !== serverState.isViewed;
 
-        if (!existing || serverState.lastStatusChangeAt >= existing.lastStatusChangeAt) {
-          newAttentionStates.set(sessionId, serverState);
+        if (hasChanged) {
+          ensureAttentionMap().set(sessionId, serverState);
           attentionStatesChanged = true;
         }
       }
 
       // Remove attention states for sessions that no longer exist
-      for (const sessionId of newAttentionStates.keys()) {
-        const inStatus = !!statusData.sessions[sessionId];
-        const inAttention = !!attentionData.sessions[sessionId];
+      for (const sessionId of (newAttentionStates ?? currentAttentionStates).keys()) {
+        const inStatus = !!statusSessions[sessionId];
+        const inAttention = !!attentionSessions[sessionId];
         if (!inStatus && !inAttention) {
-          newAttentionStates.delete(sessionId);
+          ensureAttentionMap().delete(sessionId);
           attentionStatesChanged = true;
         }
       }
 
       // Only update store if something actually changed
-      const statusChanged = newStatuses !== currentStatuses;
+      const statusChanged = newStatuses !== null;
       if (statusChanged || attentionStatesChanged) {
         useSessionStore.setState({
-          sessionStatus: statusChanged ? newStatuses : undefined,
-          sessionAttentionStates: attentionStatesChanged ? new Map(newAttentionStates) : undefined,
+          ...(statusChanged && newStatuses ? { sessionStatus: newStatuses } : {}),
+          ...(attentionStatesChanged && newAttentionStates ? { sessionAttentionStates: newAttentionStates } : {}),
         });
       }
 
       if (process.env.NODE_ENV === 'development') {
         console.debug('[useServerSessionStatus] Updated session statuses from server:', {
-          statusCount: Object.keys(statusData.sessions).length,
-          attentionCount: Object.keys(attentionData.sessions).length,
-          serverTime: statusData.serverTime,
+          statusCount: Object.keys(statusSessions).length,
+          attentionCount: Object.keys(attentionSessions).length,
+          serverTime: snapshotData.serverTime,
         });
       }
     } catch (error) {
       console.warn('[useServerSessionStatus] Error fetching session status:', error);
     } finally {
-      isPollingRef.current = false;
+      isSyncingRef.current = false;
     }
   }, []);
 
-  // Start polling when component mounts
+  // Initial snapshot sync on mount
   React.useEffect(() => {
-    // Initial fetch
     void fetchSessionStatus(true);
 
-    // Set up interval polling
-    const intervalId = setInterval(() => {
-      void fetchSessionStatus();
-    }, POLL_INTERVAL_MS);
-
     return () => {
-      clearInterval(intervalId);
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
     };
   }, [fetchSessionStatus]);
 
-  // Handle visibility change: poll immediately when tab becomes visible
+  // Sync snapshot when tab becomes visible
   React.useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
@@ -205,14 +210,14 @@ export function useServerSessionStatus() {
     };
   }, [fetchSessionStatus]);
 
-  // Function to trigger immediate poll (e.g., after receiving notification)
+  // Function to trigger immediate snapshot sync from external modules
   const triggerImmediatePoll = React.useCallback(() => {
     // Clear any pending timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
 
-    // Schedule immediate poll with small delay to batch rapid calls
+    // Schedule immediate sync with small delay to batch rapid calls
     timeoutRef.current = setTimeout(() => {
       void fetchSessionStatus(true);
     }, IMMEDIATE_POLL_DELAY_MS);

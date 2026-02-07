@@ -17,6 +17,7 @@ import { useMcpStore } from '@/stores/useMcpStore';
 import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { isDesktopLocalOriginActive } from '@/lib/desktop';
+import { triggerSessionStatusPoll } from '@/hooks/useServerSessionStatus';
 
 interface EventData {
   type: string;
@@ -1581,6 +1582,7 @@ export const useEventStream = () => {
       lastEventTimestampRef.current = Date.now();
       publishStatus('connected', null);
       checkConnection();
+      triggerSessionStatusPoll();
 
       // Always refresh session status on connect to detect any
       // already-running sessions (e.g., started via CLI before UI opened)
@@ -1755,6 +1757,7 @@ export const useEventStream = () => {
         }
 
         // Removed: void refreshSessionStatus();
+        triggerSessionStatusPoll();
         publishStatus('connecting', 'Resuming stream');
         startStream({ resetAttempts: true });
       }
@@ -1780,6 +1783,7 @@ export const useEventStream = () => {
              scheduleSoftResync(sessionId, 'window_focus', getActiveSessionWindow());
            }
            // Removed: void refreshSessionStatus();
+           triggerSessionStatusPoll();
 
           publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
@@ -1791,6 +1795,7 @@ export const useEventStream = () => {
         onlineStatusRef.current = true;
         maybeBootstrapIfStale('network_restored');
         if (pendingResumeRef.current || !unsubscribeRef.current) {
+          triggerSessionStatusPoll();
           publishStatus('connecting', 'Network restored');
           startStream({ resetAttempts: true });
         }
@@ -1820,6 +1825,7 @@ export const useEventStream = () => {
             requestSessionMetadataRefresh(sessionId);
           }
           // Removed: void refreshSessionStatus();
+          triggerSessionStatusPoll();
           startStream({ resetAttempts: true });
         }
       };

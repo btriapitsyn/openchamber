@@ -143,10 +143,6 @@ export interface SessionStore {
         { type: 'idle' | 'busy' | 'retry'; attempt?: number; message?: string; next?: number; confirmedAt?: number }
     >;
 
-    // Session activity state tracking for unread status
-    // States: 'viewed' (default for historical sessions), 'entered' (entered but no message), 'message_sent' (message sent), 'needs_attention' (message sent + running completed + user left)
-    sessionActivityState: Map<string, 'viewed' | 'entered' | 'message_sent' | 'needs_attention'>;
-
     // Server-authoritative session attention state
     // Tracks which sessions need user attention based on server-side logic
     sessionAttentionStates: Map<string, {
@@ -260,10 +256,4 @@ export interface SessionStore {
       forkFromMessage: (sessionId: string, messageId: string) => Promise<void>;
       setPendingInputText: (text: string | null, mode?: 'replace' | 'append') => void;
       consumePendingInputText: () => { text: string; mode: 'replace' | 'append' } | null;
-
-       // Session activity state tracking
-       updateSessionActivityState: (sessionId: string, state: 'viewed' | 'entered' | 'message_sent' | 'needs_attention') => void;
-       markAllSessionsAsViewed: () => void;
-       getSessionActivityState: (sessionId: string) => 'viewed' | 'entered' | 'message_sent' | 'needs_attention' | undefined;
-       isSessionNeedsAttention: (sessionId: string) => boolean;
    }

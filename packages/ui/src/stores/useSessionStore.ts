@@ -99,7 +99,6 @@ export const useSessionStore = create<SessionStore>()(
             abortPromptSessionId: null,
             abortPromptExpiresAt: null,
             sessionStatus: new Map(),
-            sessionActivityState: new Map(),
             sessionAttentionStates: new Map(),
             userSummaryTitles: new Map(),
             pendingInputText: null,
@@ -478,18 +477,6 @@ export const useSessionStore = create<SessionStore>()(
                     }
                     useMessageStore.getState().acknowledgeSessionAbort(sessionId);
                 },
-                updateSessionActivityState: (sessionId: string, state: 'viewed' | 'entered' | 'message_sent' | 'needs_attention') => {
-                    useSessionManagementStore.getState().updateSessionActivityState(sessionId, state);
-                },
-                markAllSessionsAsViewed: () => {
-                    useSessionManagementStore.getState().markAllSessionsAsViewed();
-                },
-                getSessionActivityState: (sessionId: string) => {
-                    return useSessionManagementStore.getState().getSessionActivityState(sessionId);
-                },
-                isSessionNeedsAttention: (sessionId: string) => {
-                    return useSessionManagementStore.getState().isSessionNeedsAttention(sessionId);
-                },
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => {
                     const currentSessionId = useSessionManagementStore.getState().currentSessionId;
 
@@ -813,8 +800,7 @@ useSessionManagementStore.subscribe((state, prevState) => {
         state.webUICreatedSessions === prevState.webUICreatedSessions &&
         state.worktreeMetadata === prevState.worktreeMetadata &&
         state.availableWorktrees === prevState.availableWorktrees &&
-        state.availableWorktreesByProject === prevState.availableWorktreesByProject &&
-        state.sessionActivityState === prevState.sessionActivityState
+        state.availableWorktreesByProject === prevState.availableWorktreesByProject
     ) {
         return;
     }
@@ -832,7 +818,6 @@ useSessionManagementStore.subscribe((state, prevState) => {
         worktreeMetadata: state.worktreeMetadata,
         availableWorktrees: state.availableWorktrees,
         availableWorktreesByProject: state.availableWorktreesByProject,
-        sessionActivityState: state.sessionActivityState,
     });
 });
 

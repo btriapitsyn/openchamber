@@ -4158,6 +4158,15 @@ async function main(options = {}) {
   // New authoritative session status endpoints
   // Server maintains the source of truth, clients only query
 
+  // GET /api/sessions/snapshot - Combined status + attention snapshot
+  app.get('/api/sessions/snapshot', (_req, res) => {
+    res.json({
+      statusSessions: getSessionStateSnapshot(),
+      attentionSessions: getSessionAttentionSnapshot(),
+      serverTime: Date.now()
+    });
+  });
+
   // GET /api/sessions/status - Get status for all sessions
   app.get('/api/sessions/status', (_req, res) => {
     const snapshot = getSessionStateSnapshot();
