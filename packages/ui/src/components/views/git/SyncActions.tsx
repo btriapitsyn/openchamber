@@ -28,7 +28,7 @@ interface SyncActionsProps {
 
 export const SyncActions: React.FC<SyncActionsProps> = ({
   syncAction,
-  remotes,
+  remotes = [],
   onFetch,
   onPull,
   onPush,
