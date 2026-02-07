@@ -99,6 +99,7 @@ export const useSessionStore = create<SessionStore>()(
             abortPromptSessionId: null,
             abortPromptExpiresAt: null,
             sessionStatus: new Map(),
+            sessionAttentionStates: new Map(),
             userSummaryTitles: new Map(),
             pendingInputText: null,
             pendingInputMode: 'replace',
@@ -423,6 +424,26 @@ export const useSessionStore = create<SessionStore>()(
  
                     if (currentSessionId) {
                         setStatus(currentSessionId, 'busy');
+
+                        const memoryState = get().sessionMemoryState.get(currentSessionId);
+                        if (!memoryState || !memoryState.lastUserMessageAt) {
+                            const currentMemoryState = get().sessionMemoryState;
+                            const newMemoryState = new Map(currentMemoryState);
+                            newMemoryState.set(currentSessionId, {
+                                viewportAnchor: memoryState?.viewportAnchor ?? 0,
+                                isStreaming: memoryState?.isStreaming ?? false,
+                                lastAccessedAt: Date.now(),
+                                backgroundMessageCount: memoryState?.backgroundMessageCount ?? 0,
+                                lastUserMessageAt: Date.now(),
+                            });
+                            set({ sessionMemoryState: newMemoryState });
+                        }
+                    }
+
+                    // Notify server that user sent a message in this session
+                    if (currentSessionId) {
+                        fetch(`/api/sessions/${currentSessionId}/message-sent`, { method: 'POST' })
+                            .catch(() => { /* ignore */ });
                     }
 
                     try {

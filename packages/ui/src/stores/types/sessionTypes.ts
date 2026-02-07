@@ -35,6 +35,7 @@ export interface SessionMemoryState {
     hasMoreAbove?: boolean;
     trimmedHeadMaxId?: string;
     streamingCooldownUntil?: number;
+    lastUserMessageAt?: number; // Timestamp when user last sent a message
 }
 
 export interface SessionContextUsage {
@@ -136,10 +137,21 @@ export interface SessionStore {
 
     // Server-owned session status (mirrors OpenCode SessionStatus: busy|retry|idle).
     // Use as the single source of truth for "assistant working" UI.
+    // confirmedAt: timestamp when idle was confirmed locally (prevents race with server polling)
     sessionStatus?: Map<
         string,
-        { type: 'idle' | 'busy' | 'retry'; attempt?: number; message?: string; next?: number }
+        { type: 'idle' | 'busy' | 'retry'; attempt?: number; message?: string; next?: number; confirmedAt?: number }
     >;
+
+    // Server-authoritative session attention state
+    // Tracks which sessions need user attention based on server-side logic
+    sessionAttentionStates: Map<string, {
+        needsAttention: boolean;
+        lastUserMessageAt: number | null;
+        lastStatusChangeAt: number;
+        status: 'idle' | 'busy' | 'retry';
+        isViewed: boolean;
+    }>;
 
     userSummaryTitles: Map<string, { title: string; createdAt: number | null }>;
 
@@ -238,10 +250,10 @@ export interface SessionStore {
      updateSession: (session: Session) => void;
      removeSessionFromStore: (sessionId: string) => void;
 
-     revertToMessage: (sessionId: string, messageId: string) => Promise<void>;
-     handleSlashUndo: (sessionId: string) => Promise<void>;
-     handleSlashRedo: (sessionId: string) => Promise<void>;
-     forkFromMessage: (sessionId: string, messageId: string) => Promise<void>;
-     setPendingInputText: (text: string | null, mode?: 'replace' | 'append') => void;
-     consumePendingInputText: () => { text: string; mode: 'replace' | 'append' } | null;
-  }
+      revertToMessage: (sessionId: string, messageId: string) => Promise<void>;
+      handleSlashUndo: (sessionId: string) => Promise<void>;
+      handleSlashRedo: (sessionId: string) => Promise<void>;
+      forkFromMessage: (sessionId: string, messageId: string) => Promise<void>;
+      setPendingInputText: (text: string | null, mode?: 'replace' | 'append') => void;
+      consumePendingInputText: () => { text: string; mode: 'replace' | 'append' } | null;
+   }

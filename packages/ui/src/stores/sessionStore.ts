@@ -8,6 +8,7 @@ import { getWorktreeStatus } from "@/lib/worktrees/worktreeStatus";
 import { listProjectWorktrees, removeProjectWorktree } from "@/lib/worktrees/worktreeManager";
 import { useDirectoryStore } from "./useDirectoryStore";
 import { useProjectsStore } from "./useProjectsStore";
+import { triggerSessionStatusPoll } from "@/hooks/useServerSessionStatus";
 import type { ProjectEntry } from "@/lib/api/types";
 import { checkIsGitRepository } from "@/lib/gitApi";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
@@ -1237,7 +1238,26 @@ export const useSessionStore = create<SessionStore>()(
                 },
 
                 setCurrentSession: (id: string | null) => {
+                    const prevSessionId = get().currentSessionId;
                     set({ currentSessionId: id, error: null });
+
+                    // Notify server of view state changes
+                    // This enables server-side needs_attention tracking
+                    if (prevSessionId && prevSessionId !== id) {
+                        // Leaving previous session
+                        fetch(`/api/sessions/${prevSessionId}/unview`, { method: 'POST' })
+                            .catch(() => { /* ignore */ });
+                    }
+                    if (id) {
+                        // Entering new session
+                        fetch(`/api/sessions/${id}/view`, { method: 'POST' })
+                            .catch(() => { /* ignore */ });
+                    }
+
+                    // Trigger immediate poll to get latest attention states
+                    // This prevents stale state when switching sessions
+                    triggerSessionStatusPoll();
+
                     const directory = opencodeClient.getDirectory() ?? null;
                     storeSessionForDirectory(directory, id);
                 },
@@ -1513,7 +1533,7 @@ export const useSessionStore = create<SessionStore>()(
 
         const mergedSessions = dedupeSessionsById(persistedSessions);
 
-        return {
+        const mergedResult = {
             ...currentState,
             ...persistedState,
             sessions: mergedSessions,
@@ -1527,6 +1547,7 @@ export const useSessionStore = create<SessionStore>()(
                 : currentState.availableWorktreesByProject,
             lastLoadedDirectory,
         };
+        return mergedResult;
     },
             }
         ),

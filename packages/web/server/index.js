@@ -1608,6 +1608,246 @@ const sessionActivityPhases = new Map(); // sessionId -> { phase: 'idle'|'busy'|
 const sessionActivityCooldowns = new Map(); // sessionId -> timeoutId
 const SESSION_COOLDOWN_DURATION_MS = 2000;
 
+// Complete session status tracking - source of truth for web clients
+// This maintains the authoritative state, clients only cache it
+const sessionStates = new Map(); // sessionId -> {
+//   status: 'idle'|'busy'|'retry',
+//   lastUpdateAt: number,
+//   lastEventId: string,
+//   metadata: { attempt?: number, message?: string, next?: number }
+// }
+const SESSION_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_STATE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+const updateSessionState = (sessionId, status, eventId, metadata = {}) => {
+  if (!sessionId || typeof sessionId !== 'string') return;
+
+  const now = Date.now();
+  const existing = sessionStates.get(sessionId);
+
+  // Only update if this is a newer event (simple ordering protection)
+  if (existing && existing.lastUpdateAt > now - 5000 && status === existing.status) {
+    // Same status within 5 seconds, skip to reduce noise
+    return;
+  }
+
+  sessionStates.set(sessionId, {
+    status,
+    lastUpdateAt: now,
+    lastEventId: eventId || `server-${now}`,
+    metadata: { ...existing?.metadata, ...metadata }
+  });
+
+  // Update attention tracking state (must be called before broadcasting)
+  updateSessionAttentionStatus(sessionId, status, eventId);
+
+  // Broadcast status change to connected web clients via SSE
+  // This enables real-time updates without polling
+  // Include needsAttention in the same event to ensure atomic updates
+  if (uiNotificationClients.size > 0 && (!existing || existing.status !== status)) {
+    const state = sessionStates.get(sessionId);
+    const attentionState = sessionAttentionStates.get(sessionId);
+    for (const res of uiNotificationClients) {
+      try {
+        writeSseEvent(res, {
+          type: 'openchamber:session-status',
+          properties: {
+            sessionId,
+            status: state.status,
+            timestamp: state.lastUpdateAt,
+            metadata: state.metadata,
+            needsAttention: attentionState?.needsAttention ?? false
+          }
+        });
+      } catch {
+        // Client disconnected, will be cleaned up by close handler
+      }
+    }
+  }
+
+  // Also update activity phases for backward compatibility
+  const phase = status === 'busy' || status === 'retry' ? 'busy' : 'idle';
+  setSessionActivityPhase(sessionId, phase);
+};
+
+const getSessionStateSnapshot = () => {
+  const result = {};
+  const now = Date.now();
+
+  for (const [sessionId, data] of sessionStates) {
+    // Skip very old states (session likely gone)
+    if (now - data.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) continue;
+
+    result[sessionId] = {
+      status: data.status,
+      lastUpdateAt: data.lastUpdateAt,
+      metadata: data.metadata
+    };
+  }
+
+  return result;
+};
+
+const getSessionState = (sessionId) => {
+  if (!sessionId) return null;
+  return sessionStates.get(sessionId) || null;
+};
+
+// Session attention tracking - authoritative source for unread/needs-attention state
+// Tracks which sessions need user attention based on activity and view state
+const sessionAttentionStates = new Map(); // sessionId -> {
+//   needsAttention: boolean,
+//   lastUserMessageAt: number | null,
+//   lastStatusChangeAt: number,
+//   viewedByClients: Set<clientId>,
+//   status: 'idle' | 'busy' | 'retry'
+// }
+const SESSION_ATTENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const getOrCreateAttentionState = (sessionId) => {
+  if (!sessionId || typeof sessionId !== 'string') return null;
+
+  let state = sessionAttentionStates.get(sessionId);
+  if (!state) {
+    state = {
+      needsAttention: false,
+      lastUserMessageAt: null,
+      lastStatusChangeAt: Date.now(),
+      viewedByClients: new Set(),
+      status: 'idle'
+    };
+    sessionAttentionStates.set(sessionId, state);
+  }
+  return state;
+};
+
+const updateSessionAttentionStatus = (sessionId, status, eventId) => {
+  const state = getOrCreateAttentionState(sessionId);
+  if (!state) return;
+
+  const prevStatus = state.status;
+  state.status = status;
+  state.lastStatusChangeAt = Date.now();
+
+  // Check if we need to mark as needsAttention
+  // Condition: transitioning from busy/retry to idle + user sent message + not currently viewed
+  // Note: The actual broadcast with needsAttention is done in updateSessionState
+  // to ensure both status and attention are sent in a single event
+  if ((prevStatus === 'busy' || prevStatus === 'retry') && status === 'idle') {
+    if (state.lastUserMessageAt && state.viewedByClients.size === 0) {
+      state.needsAttention = true;
+    }
+  }
+};
+
+const markSessionViewed = (sessionId, clientId) => {
+  const state = getOrCreateAttentionState(sessionId);
+  if (!state) return;
+
+  const wasNeedsAttention = state.needsAttention;
+  state.viewedByClients.add(clientId);
+
+  // Clear needsAttention when viewed
+  if (wasNeedsAttention) {
+    state.needsAttention = false;
+
+    // Broadcast attention cleared event
+    if (uiNotificationClients.size > 0) {
+      for (const res of uiNotificationClients) {
+        try {
+          writeSseEvent(res, {
+            type: 'openchamber:session-status',
+            properties: {
+              sessionId,
+              status: state.status,
+              timestamp: Date.now(),
+              metadata: {},
+              needsAttention: false
+            }
+          });
+        } catch {
+          // Client disconnected
+        }
+      }
+    }
+  }
+};
+
+const markSessionUnviewed = (sessionId, clientId) => {
+  const state = sessionAttentionStates.get(sessionId);
+  if (!state) return;
+
+  state.viewedByClients.delete(clientId);
+};
+
+const markUserMessageSent = (sessionId) => {
+  const state = getOrCreateAttentionState(sessionId);
+  if (!state) return;
+
+  state.lastUserMessageAt = Date.now();
+};
+
+const getSessionAttentionSnapshot = () => {
+  const result = {};
+  const now = Date.now();
+
+  for (const [sessionId, state] of sessionAttentionStates) {
+    // Skip very old states
+    if (now - state.lastStatusChangeAt > SESSION_ATTENTION_MAX_AGE_MS) continue;
+
+    result[sessionId] = {
+      needsAttention: state.needsAttention,
+      lastUserMessageAt: state.lastUserMessageAt,
+      lastStatusChangeAt: state.lastStatusChangeAt,
+      status: state.status,
+      isViewed: state.viewedByClients.size > 0
+    };
+  }
+
+  return result;
+};
+
+const getSessionAttentionState = (sessionId) => {
+  if (!sessionId) return null;
+  const state = sessionAttentionStates.get(sessionId);
+  if (!state) return null;
+
+  return {
+    needsAttention: state.needsAttention,
+    lastUserMessageAt: state.lastUserMessageAt,
+    lastStatusChangeAt: state.lastStatusChangeAt,
+    status: state.status,
+    isViewed: state.viewedByClients.size > 0
+  };
+};
+
+const cleanupOldSessionStates = () => {
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const [sessionId, data] of sessionStates) {
+    if (now - data.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) {
+      sessionStates.delete(sessionId);
+      cleaned++;
+    }
+  }
+
+  // Also cleanup attention states
+  for (const [sessionId, state] of sessionAttentionStates) {
+    if (now - state.lastStatusChangeAt > SESSION_ATTENTION_MAX_AGE_MS) {
+      sessionAttentionStates.delete(sessionId);
+      cleaned++;
+    }
+  }
+
+  if (cleaned > 0) {
+    console.info(`[SessionState] Cleaned up ${cleaned} old session states`);
+  }
+};
+
+// Start periodic cleanup
+setInterval(cleanupOldSessionStates, SESSION_STATE_CLEANUP_INTERVAL_MS);
+
 const setSessionActivityPhase = (sessionId, phase) => {
   if (!sessionId || typeof sessionId !== 'string') return false;
 
@@ -2373,10 +2613,11 @@ const startGlobalEventWatcher = async () => {
 
           buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
-          let separatorIndex;
-          while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+          let separatorIndex = buffer.indexOf('\n\n');
+          while (separatorIndex !== -1) {
             const block = buffer.slice(0, separatorIndex);
             buffer = buffer.slice(separatorIndex + 2);
+            separatorIndex = buffer.indexOf('\n\n');
             const payload = parseSseDataPayload(block);
             void maybeSendPushForTrigger(payload);
             // Track session activity independently of UI (mirrors Tauri desktop behavior)
@@ -2384,6 +2625,21 @@ const startGlobalEventWatcher = async () => {
             if (transitions && transitions.length > 0) {
               for (const activity of transitions) {
                 setSessionActivityPhase(activity.sessionId, activity.phase);
+              }
+            }
+
+            // Update authoritative session state from OpenCode events
+            if (payload && payload.type === 'session.status') {
+              const status = payload.properties?.status;
+              const sessionId = payload.properties?.sessionID ?? payload.properties?.sessionId;
+              const eventId = payload.properties?.eventId || `sse-${Date.now()}`;
+
+              if (typeof sessionId === 'string' && status?.type) {
+                updateSessionState(sessionId, status.type, eventId, {
+                  attempt: status.attempt,
+                  message: status.message,
+                  next: status.next
+                });
               }
             }
           }
@@ -3899,6 +4155,114 @@ async function main(options = {}) {
     res.json(getSessionActivitySnapshot());
   });
 
+  // New authoritative session status endpoints
+  // Server maintains the source of truth, clients only query
+
+  // GET /api/sessions/snapshot - Combined status + attention snapshot
+  app.get('/api/sessions/snapshot', (_req, res) => {
+    res.json({
+      statusSessions: getSessionStateSnapshot(),
+      attentionSessions: getSessionAttentionSnapshot(),
+      serverTime: Date.now()
+    });
+  });
+
+  // GET /api/sessions/status - Get status for all sessions
+  app.get('/api/sessions/status', (_req, res) => {
+    const snapshot = getSessionStateSnapshot();
+    res.json({
+      sessions: snapshot,
+      serverTime: Date.now()
+    });
+  });
+
+  // GET /api/sessions/:id/status - Get status for a specific session
+  app.get('/api/sessions/:id/status', (req, res) => {
+    const sessionId = req.params.id;
+    const state = getSessionState(sessionId);
+
+    if (!state) {
+      return res.status(404).json({
+        error: 'Session not found or no state available',
+        sessionId
+      });
+    }
+
+    res.json({
+      sessionId,
+      ...state
+    });
+  });
+
+  // Session attention tracking endpoints
+  // GET /api/sessions/attention - Get attention state for all sessions
+  app.get('/api/sessions/attention', (_req, res) => {
+    const snapshot = getSessionAttentionSnapshot();
+    res.json({
+      sessions: snapshot,
+      serverTime: Date.now()
+    });
+  });
+
+  // GET /api/sessions/:id/attention - Get attention state for a specific session
+  app.get('/api/sessions/:id/attention', (req, res) => {
+    const sessionId = req.params.id;
+    const state = getSessionAttentionState(sessionId);
+
+    if (!state) {
+      return res.status(404).json({
+        error: 'Session not found or no attention state available',
+        sessionId
+      });
+    }
+
+    res.json({
+      sessionId,
+      ...state
+    });
+  });
+
+  // POST /api/sessions/:id/view - Client reports viewing this session
+  app.post('/api/sessions/:id/view', (req, res) => {
+    const sessionId = req.params.id;
+    const clientId = req.headers['x-client-id'] || req.ip || 'anonymous';
+
+    markSessionViewed(sessionId, clientId);
+
+    res.json({
+      success: true,
+      sessionId,
+      viewed: true
+    });
+  });
+
+  // POST /api/sessions/:id/unview - Client reports leaving this session
+  app.post('/api/sessions/:id/unview', (req, res) => {
+    const sessionId = req.params.id;
+    const clientId = req.headers['x-client-id'] || req.ip || 'anonymous';
+
+    markSessionUnviewed(sessionId, clientId);
+
+    res.json({
+      success: true,
+      sessionId,
+      viewed: false
+    });
+  });
+
+  // POST /api/sessions/:id/message-sent - User sent a message in this session
+  app.post('/api/sessions/:id/message-sent', (req, res) => {
+    const sessionId = req.params.id;
+
+    markUserMessageSent(sessionId);
+
+    res.json({
+      success: true,
+      sessionId,
+      messageSent: true
+    });
+  });
+
   app.get('/api/openchamber/update-check', async (_req, res) => {
     try {
       const { checkForUpdates } = await import('./lib/package-manager.js');
@@ -4146,11 +4510,12 @@ async function main(options = {}) {
         if (done) break;
         buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
-        let separatorIndex;
-        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+        let separatorIndex = buffer.indexOf('\n\n');
+        while (separatorIndex !== -1) {
           const block = buffer.slice(0, separatorIndex);
           buffer = buffer.slice(separatorIndex + 2);
           forwardBlock(block);
+          separatorIndex = buffer.indexOf('\n\n');
         }
       }
 
@@ -4270,11 +4635,12 @@ async function main(options = {}) {
         if (done) break;
         buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
-        let separatorIndex;
-        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+        let separatorIndex = buffer.indexOf('\n\n');
+        while (separatorIndex !== -1) {
           const block = buffer.slice(0, separatorIndex);
           buffer = buffer.slice(separatorIndex + 2);
           forwardBlock(block);
+          separatorIndex = buffer.indexOf('\n\n');
         }
       }
 
