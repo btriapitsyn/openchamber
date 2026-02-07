@@ -1,4 +1,5 @@
 import type { Theme } from '@/types/theme';
+import { withPrColors } from './prColors';
 
 import aura_dark_Raw from './aura-dark.json';
 import aura_light_Raw from './aura-light.json';
@@ -70,4 +71,4 @@ export const presetThemes: Theme[] = [
   mono_light_Raw as Theme,
   vitesse_dark_dark_Raw as Theme,
   vitesse_light_light_Raw as Theme,
-];
+].map((theme) => withPrColors(theme));

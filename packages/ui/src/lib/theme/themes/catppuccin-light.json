@@ -56,6 +56,13 @@
       "infoBackground": "#04A5E520",
       "infoBorder": "#04A5E550"
     },
+    "pr": {
+      "open": "#40A02B",
+      "draft": "#6C6F85",
+      "blocked": "#DF8E1D",
+      "merged": "#9572fd",
+      "closed": "#D20F39"
+    },
     "syntax": {
       "base": {
         "background": "#F2D8D4",
