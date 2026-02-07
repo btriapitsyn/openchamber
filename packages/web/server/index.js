@@ -1445,20 +1445,6 @@ const getUiSessionTokenFromRequest = (req) => {
 const TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW = 128;
 const TERMINAL_INPUT_WS_REBIND_WINDOW_MS = 60 * 1000;
 const TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS = 15 * 1000;
-const TERMINAL_INPUT_WS_DEBUG_ENABLED = process.env.TERMINAL_INPUT_WS_DEBUG === '1';
-
-const logTerminalInputWsDebug = (event, details) => {
-  if (!TERMINAL_INPUT_WS_DEBUG_ENABLED) {
-    return;
-  }
-
-  if (details) {
-    console.log(`[terminal-input-ws] ${event}`, details);
-    return;
-  }
-
-  console.log(`[terminal-input-ws] ${event}`);
-};
 
 const rejectWebSocketUpgrade = (socket, statusCode, reason) => {
   if (!socket || socket.destroyed) {
@@ -1466,7 +1452,6 @@ const rejectWebSocketUpgrade = (socket, statusCode, reason) => {
   }
 
   const message = typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : 'Bad Request';
-  logTerminalInputWsDebug('upgrade:rejected', { statusCode, reason: message });
   const body = Buffer.from(message, 'utf8');
   const statusText = {
     400: 'Bad Request',
@@ -8006,21 +7991,13 @@ Context:
     maxPayload: TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
   });
 
-  let terminalInputWsConnectionSequence = 0;
-
   terminalInputWsServer.on('connection', (socket) => {
-    const connectionId = ++terminalInputWsConnectionSequence;
     const connectionState = {
       boundSessionId: null,
       invalidFrames: 0,
       rebindTimestamps: [],
       lastActivityAt: Date.now(),
     };
-
-    logTerminalInputWsDebug('connection:open', {
-      connectionId,
-      remoteAddress: socket?._socket?.remoteAddress,
-    });
 
     sendTerminalInputWsControl(socket, { t: 'ok', v: 1 });
 
@@ -8126,22 +8103,12 @@ Context:
       }
     });
 
-    socket.on('close', (code, reasonBuffer) => {
-      const reason = Buffer.isBuffer(reasonBuffer) ? reasonBuffer.toString('utf8') : '';
-      logTerminalInputWsDebug('connection:close', {
-        connectionId,
-        code,
-        reason,
-        boundSessionId: connectionState.boundSessionId,
-      });
+    socket.on('close', () => {
       clearInterval(heartbeatInterval);
     });
 
     socket.on('error', (error) => {
-      logTerminalInputWsDebug('connection:error', {
-        connectionId,
-        error: error?.message || String(error),
-      });
+      void error;
     });
   });
 
@@ -8150,13 +8117,6 @@ Context:
     if (pathname !== TERMINAL_INPUT_WS_PATH) {
       return;
     }
-
-    logTerminalInputWsDebug('upgrade:request', {
-      pathname,
-      origin: req.headers.origin,
-      host: req.headers.host,
-      remoteAddress: req.socket?.remoteAddress,
-    });
 
     const handleUpgrade = async () => {
       try {
@@ -8183,10 +8143,6 @@ Context:
           terminalInputWsServer.emit('connection', ws, req);
         });
       } catch {
-        logTerminalInputWsDebug('upgrade:failed', {
-          pathname,
-          host: req.headers.host,
-        });
         rejectWebSocketUpgrade(socket, 500, 'Upgrade failed');
       }
     };

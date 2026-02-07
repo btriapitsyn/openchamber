@@ -59,66 +59,9 @@ const WS_RECONNECT_JITTER_MS = 250;
 const WS_KEEPALIVE_INTERVAL_MS = 20000;
 const WS_CONNECT_TIMEOUT_MS = 5000;
 const GLOBAL_TERMINAL_INPUT_STATE_KEY = '__openchamberTerminalInputWsState';
-const TERMINAL_INPUT_WS_DEBUG_FLAG_KEY = '__OPENCHAMBER_TERMINAL_INPUT_WS_DEBUG__';
-const TERMINAL_INPUT_WS_DEBUG_STORAGE_KEY = 'openchamber.terminalInputWs.debug';
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-
-const isTerminalInputWsDebugEnabled = (): boolean => {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  const scopedWindow = window as Window & {
-    [TERMINAL_INPUT_WS_DEBUG_FLAG_KEY]?: unknown;
-  };
-
-  if (scopedWindow[TERMINAL_INPUT_WS_DEBUG_FLAG_KEY] === true) {
-    return true;
-  }
-
-  try {
-    return window.localStorage.getItem(TERMINAL_INPUT_WS_DEBUG_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-};
-
-const terminalInputWsDebugLog = (event: string, details?: Record<string, unknown>): void => {
-  if (!isTerminalInputWsDebugEnabled()) {
-    return;
-  }
-
-  if (details) {
-    console.debug(`[terminal-input-ws] ${event}`, details);
-    return;
-  }
-
-  console.debug(`[terminal-input-ws] ${event}`);
-};
-
-const getDebugCaller = (): string | null => {
-  if (!isTerminalInputWsDebugEnabled()) {
-    return null;
-  }
-
-  const stack = new Error().stack;
-  if (!stack) {
-    return null;
-  }
-
-  const frames = stack
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-
-  if (frames.length <= 2) {
-    return null;
-  }
-
-  return frames.slice(2, 6).join(' | ');
-};
 
 const normalizeWebSocketPath = (pathValue: string): string => {
   if (/^wss?:\/\//i.test(pathValue)) {
@@ -164,38 +107,24 @@ class TerminalInputWsManager {
   private reconnectAttempt = 0;
   private keepaliveInterval: ReturnType<typeof setInterval> | null = null;
   private closed = false;
-  private readonly managerId = Math.random().toString(36).slice(2, 10);
-  private connectionSequence = 0;
 
-  configure(socketUrl: string, reason = 'configure'): void {
+  configure(socketUrl: string): void {
     if (!socketUrl) return;
 
     if (this.socketUrl === socketUrl) {
       this.closed = false;
       if (this.isConnectedOrConnecting()) {
-        terminalInputWsDebugLog('configure:already-connected', {
-          managerId: this.managerId,
-          socketUrl,
-          reason,
-        });
         return;
       }
 
-      this.ensureConnected(`${reason}:same-url`);
+      this.ensureConnected();
       return;
     }
-
-    terminalInputWsDebugLog('configure:url-change', {
-      managerId: this.managerId,
-      previousSocketUrl: this.socketUrl,
-      socketUrl,
-      reason,
-    });
 
     this.socketUrl = socketUrl;
     this.closed = false;
     this.resetConnection();
-    this.ensureConnected(`${reason}:url-change`);
+    this.ensureConnected();
   }
 
   async sendInput(sessionId: string, data: string): Promise<boolean> {
@@ -229,32 +158,22 @@ class TerminalInputWsManager {
   }
 
   close(): void {
-    terminalInputWsDebugLog('close', {
-      managerId: this.managerId,
-      socketUrl: this.socketUrl,
-    });
-
     this.closed = true;
     this.clearReconnectTimeout();
     this.resetConnection();
     this.socketUrl = '';
   }
 
-  prime(reason = 'prime'): void {
+  prime(): void {
     if (this.closed || !this.socketUrl) {
       return;
     }
 
     if (this.isConnectedOrConnecting()) {
-      terminalInputWsDebugLog('prime:already-connected', {
-        managerId: this.managerId,
-        socketUrl: this.socketUrl,
-        reason,
-      });
       return;
     }
 
-    this.ensureConnected(reason);
+    this.ensureConnected();
   }
 
   isConnectedOrConnecting(socketUrl?: string): boolean {
@@ -307,7 +226,7 @@ class TerminalInputWsManager {
     this.keepaliveInterval = null;
   }
 
-  private scheduleReconnect(reason = 'unknown'): void {
+  private scheduleReconnect(): void {
     if (this.closed || !this.socketUrl || this.reconnectTimeout) {
       return;
     }
@@ -319,18 +238,10 @@ class TerminalInputWsManager {
     const jitter = Math.floor(Math.random() * WS_RECONNECT_JITTER_MS);
     const delay = baseDelay + jitter;
 
-    terminalInputWsDebugLog('reconnect:scheduled', {
-      managerId: this.managerId,
-      socketUrl: this.socketUrl,
-      reason,
-      reconnectAttempt: this.reconnectAttempt,
-      delay,
-    });
-
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
       this.reconnectAttempt += 1;
-      this.ensureConnected(`reconnect:${reason}`);
+      this.ensureConnected();
     }, delay);
   }
 
@@ -348,7 +259,7 @@ class TerminalInputWsManager {
       return this.socket;
     }
 
-    this.ensureConnected('get-open-socket');
+    this.ensureConnected();
 
     if (this.socket && this.socket.readyState === WS_READY_STATE_OPEN) {
       return this.socket;
@@ -372,7 +283,7 @@ class TerminalInputWsManager {
     return null;
   }
 
-  private ensureConnected(reason = 'ensure-connected'): void {
+  private ensureConnected(): void {
     if (this.closed || !this.socketUrl) {
       return;
     }
@@ -386,15 +297,6 @@ class TerminalInputWsManager {
     }
 
     this.clearReconnectTimeout();
-
-    const connectionId = ++this.connectionSequence;
-    terminalInputWsDebugLog('connect:start', {
-      managerId: this.managerId,
-      connectionId,
-      socketUrl: this.socketUrl,
-      reason,
-      caller: getDebugCaller(),
-    });
 
     this.openPromise = new Promise<WebSocket | null>((resolve) => {
       let settled = false;
@@ -421,11 +323,6 @@ class TerminalInputWsManager {
           this.socket = socket;
           this.reconnectAttempt = 0;
           this.startKeepalive();
-          terminalInputWsDebugLog('connect:open', {
-            managerId: this.managerId,
-            connectionId,
-            socketUrl: this.socketUrl,
-          });
           settle(socket);
         };
 
@@ -433,61 +330,30 @@ class TerminalInputWsManager {
           void this.handleSocketMessage(event.data);
         };
 
-        socket.onclose = (event) => {
-          terminalInputWsDebugLog('connect:close', {
-            managerId: this.managerId,
-            connectionId,
-            code: event.code,
-            reason: event.reason,
-            wasClean: event.wasClean,
-            readyState: socket.readyState,
-          });
-
+        socket.onclose = () => {
           if (this.socket === socket) {
             this.socket = null;
             this.boundSessionId = null;
             this.stopKeepalive();
             if (!this.closed) {
-              this.scheduleReconnect(`close:${event.code}`);
+              this.scheduleReconnect();
             }
           }
           settle(null);
-        };
-
-        socket.onerror = () => {
-          terminalInputWsDebugLog('connect:error', {
-            managerId: this.managerId,
-            connectionId,
-            readyState: socket.readyState,
-          });
         };
 
         this.socket = socket;
 
         connectTimeout = setTimeout(() => {
           if (socket.readyState === WebSocket.CONNECTING) {
-            try {
-              socket.close();
-            } catch {
-              return;
-            }
-            terminalInputWsDebugLog('connect:timeout', {
-              managerId: this.managerId,
-              connectionId,
-              timeoutMs: WS_CONNECT_TIMEOUT_MS,
-            });
+            socket.close();
             settle(null);
           }
         }, WS_CONNECT_TIMEOUT_MS);
       } catch {
-        terminalInputWsDebugLog('connect:create-failed', {
-          managerId: this.managerId,
-          connectionId,
-          socketUrl: this.socketUrl,
-        });
         settle(null);
         if (!this.closed) {
-          this.scheduleReconnect('create-failed');
+          this.scheduleReconnect();
         }
       }
     });
@@ -509,16 +375,16 @@ class TerminalInputWsManager {
         return;
       }
 
-        if (payload.t === 'e') {
-          if (payload.c === 'NOT_BOUND' || payload.c === 'SESSION_NOT_FOUND') {
-            this.boundSessionId = null;
-          }
-          if (payload.f === true) {
-            this.handleSocketFailure(`fatal-control:${payload.c ?? 'unknown'}`);
-          }
+      if (payload.t === 'e') {
+        if (payload.c === 'NOT_BOUND' || payload.c === 'SESSION_NOT_FOUND') {
+          this.boundSessionId = null;
         }
-      } catch {
-      this.handleSocketFailure('bad-control-frame');
+        if (payload.f === true) {
+          this.handleSocketFailure();
+        }
+      }
+    } catch {
+      this.handleSocketFailure();
     }
   }
 
@@ -539,16 +405,10 @@ class TerminalInputWsManager {
     return null;
   }
 
-  private handleSocketFailure(reason = 'socket-failure'): void {
-    terminalInputWsDebugLog('socket:failure', {
-      managerId: this.managerId,
-      reason,
-      socketUrl: this.socketUrl,
-    });
-
+  private handleSocketFailure(): void {
     this.boundSessionId = null;
     this.resetConnection();
-    this.scheduleReconnect(reason);
+    this.scheduleReconnect();
   }
 
   private resetConnection(): void {
@@ -613,7 +473,7 @@ const applyTerminalInputCapability = (capability: TerminalInputCapability | unde
     globalState.manager = new TerminalInputWsManager();
   }
 
-  globalState.manager.configure(socketUrl, 'capability-update');
+  globalState.manager.configure(socketUrl);
 };
 
 const sendTerminalInputHttp = async (sessionId: string, data: string): Promise<void> => {
@@ -903,17 +763,12 @@ export function primeTerminalInputTransport(): void {
     globalState.manager = new TerminalInputWsManager();
   }
 
-  const caller = getDebugCaller();
   if (globalState.manager.isConnectedOrConnecting(socketUrl)) {
-    terminalInputWsDebugLog('prime:skip-healthy', {
-      socketUrl,
-      caller,
-    });
     return;
   }
 
-  globalState.manager.configure(socketUrl, 'prime-transport');
-  globalState.manager.prime(`prime-transport${caller ? `:${caller}` : ''}`);
+  globalState.manager.configure(socketUrl);
+  globalState.manager.prime();
 }
 
 const hotModule = (import.meta as ImportMeta & {
