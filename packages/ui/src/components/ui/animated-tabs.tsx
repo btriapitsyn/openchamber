@@ -15,6 +15,7 @@ interface AnimatedTabsProps<T extends string> {
   isInteractive?: boolean;
   animate?: boolean;
   collapseLabelsOnSmall?: boolean;
+  size?: 'default' | 'sm';
 }
 
 export function AnimatedTabs<T extends string>({
@@ -25,9 +26,11 @@ export function AnimatedTabs<T extends string>({
   isInteractive = true,
   animate = true,
   collapseLabelsOnSmall = false,
+  size = 'default',
 }: AnimatedTabsProps<T>) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const activeTabRef = React.useRef<HTMLButtonElement>(null);
+  const [isReadyToAnimate, setIsReadyToAnimate] = React.useState(false);
 
   const updateClipPath = React.useCallback(() => {
     const container = containerRef.current;
@@ -47,7 +50,10 @@ export function AnimatedTabs<T extends string>({
 
   React.useLayoutEffect(() => {
     updateClipPath();
-  }, [updateClipPath, value, tabs.length]);
+    if (!isReadyToAnimate) {
+      setIsReadyToAnimate(true);
+    }
+  }, [isReadyToAnimate, updateClipPath, value, tabs.length]);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -66,21 +72,27 @@ export function AnimatedTabs<T extends string>({
         aria-hidden
         className={cn(
           'pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-lg [clip-path:inset(0_75%_0_0_round_8px)]',
-          animate ? '[transition:clip-path_200ms_ease]' : null
+          animate && isReadyToAnimate ? '[transition:clip-path_200ms_ease]' : null
         )}
-      >
-        <div className="flex h-9 items-center gap-1 rounded-lg bg-interactive-selection px-1.5 text-interactive-selection-foreground">
+        >
+        <div
+          className={cn(
+            'flex items-center gap-1 bg-interactive-selection text-interactive-selection-foreground',
+            size === 'sm' ? 'h-7 rounded-md px-1' : 'h-9 rounded-lg px-1.5'
+          )}
+        >
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <div
                 key={tab.value}
                 className={cn(
-                  'flex h-7 flex-1 items-center justify-center rounded-lg px-2.5 text-sm font-semibold',
+                  'flex flex-1 items-center justify-center font-semibold',
+                  size === 'sm' ? 'h-5 rounded-md px-2 text-xs' : 'h-7 rounded-lg px-2.5 text-sm',
                   collapseLabelsOnSmall ? 'gap-0 sm:gap-1.25' : 'gap-1.25'
                 )}
               >
-                {Icon ? <Icon className="h-4 w-4" /> : null}
+                {Icon ? <Icon className={cn(size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4')} /> : null}
                 <span className={cn('truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
                   {tab.label}
                 </span>
@@ -91,7 +103,12 @@ export function AnimatedTabs<T extends string>({
         </div>
       </div>
 
-      <div className="relative z-20 flex h-9 items-center gap-1 rounded-lg bg-muted/20 px-1.5">
+      <div
+        className={cn(
+          'relative z-20 flex items-center gap-1 bg-muted/20',
+          size === 'sm' ? 'h-7 rounded-md px-1' : 'h-9 rounded-lg px-1.5'
+        )}
+      >
         {tabs.map((tab) => {
           const isActive = value === tab.value;
           const Icon = tab.icon;
@@ -106,7 +123,8 @@ export function AnimatedTabs<T extends string>({
                 onValueChange(tab.value);
               }}
               className={cn(
-                'flex h-7 flex-1 items-center justify-center rounded-lg px-2.5 text-sm font-semibold transition-colors duration-150',
+                'flex flex-1 items-center justify-center font-semibold transition-colors duration-150',
+                size === 'sm' ? 'h-5 rounded-md px-2 text-xs' : 'h-7 rounded-lg px-2.5 text-sm',
                 collapseLabelsOnSmall ? 'gap-0 sm:gap-1.25' : 'gap-1.25',
                 isActive ? 'text-accent-foreground' : 'text-muted-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
@@ -118,7 +136,10 @@ export function AnimatedTabs<T extends string>({
             >
                 {Icon ? (
                   <Icon
-                    className={cn('h-4 w-4', isActive ? 'text-accent-foreground' : 'text-muted-foreground')}
+                    className={cn(
+                      size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4',
+                      isActive ? 'text-accent-foreground' : 'text-muted-foreground'
+                    )}
                   />
                 ) : null}
               <span className={cn('truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>

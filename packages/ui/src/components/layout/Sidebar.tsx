@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiDownloadLine, RiInformationLine, RiSettings3Line } from '@remixicon/react';
+import { RiDownloadLine, RiInformationLine, RiQuestionLine, RiSettings3Line } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
@@ -20,7 +20,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) => {
-    const { sidebarWidth, setSidebarWidth, setSettingsDialogOpen, setAboutDialogOpen } = useUIStore();
+    const { sidebarWidth, setSidebarWidth, setSettingsDialogOpen, setAboutDialogOpen, toggleHelpDialog } = useUIStore();
     const [isResizing, setIsResizing] = React.useState(false);
     const startXRef = React.useRef(0);
     const startWidthRef = React.useRef(sidebarWidth || SIDEBAR_CONTENT_WIDTH);
@@ -193,39 +193,58 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                             <RiSettings3Line className="h-4 w-4" />
                             <span>Settings</span>
                         </button>
-                        {(available || downloaded) ? (
-                                <button
-                                    onClick={() => setUpdateDialogOpen(true)}
-                                    className={cn(
-                                        'flex items-center gap-1.5 rounded-md px-2 py-1',
-                                        'text-xs font-semibold',
-                                        'bg-primary/10 text-primary',
-                                        'hover:bg-primary/20',
-                                        'transition-colors'
-                                    )}
-                                >
-                                    <RiDownloadLine className="h-3.5 w-3.5" />
-                                    <span>Update</span>
-                                </button>
+                        <div className="flex items-center gap-1">
+                            {(available || downloaded) ? (
+                                    <button
+                                        onClick={() => setUpdateDialogOpen(true)}
+                                        className={cn(
+                                            'flex items-center gap-1.5 rounded-md px-2 py-1',
+                                            'text-xs font-semibold',
+                                            'bg-primary/10 text-primary',
+                                            'hover:bg-primary/20',
+                                            'transition-colors'
+                                        )}
+                                    >
+                                        <RiDownloadLine className="h-3.5 w-3.5" />
+                                        <span>Update</span>
+                                    </button>
 
-                        ) : !isDesktopApp && (
+                            ) : !isDesktopApp && (
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            onClick={() => setAboutDialogOpen(true)}
+                                            className={cn(
+                                                'flex h-8 w-8 items-center justify-center rounded-md',
+                                                'text-sidebar-foreground/70',
+                                                'hover:text-sidebar-foreground hover:bg-interactive-hover',
+                                                'transition-all duration-200'
+                                            )}
+                                        >
+                                            <RiInformationLine className="h-4 w-4" />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">About OpenChamber</TooltipContent>
+                                </Tooltip>
+                            )}
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <button
-                                        onClick={() => setAboutDialogOpen(true)}
+                                        onClick={toggleHelpDialog}
                                         className={cn(
                                             'flex h-8 w-8 items-center justify-center rounded-md',
                                             'text-sidebar-foreground/70',
                                             'hover:text-sidebar-foreground hover:bg-interactive-hover',
                                             'transition-all duration-200'
                                         )}
+                                        aria-label="Keyboard shortcuts"
                                     >
-                                        <RiInformationLine className="h-4 w-4" />
+                                        <RiQuestionLine className="h-4 w-4" />
                                     </button>
                                 </TooltipTrigger>
-                                <TooltipContent side="top">About OpenChamber</TooltipContent>
+                                <TooltipContent side="top">Keyboard shortcuts</TooltipContent>
                             </Tooltip>
-                        )}
+                        </div>
                     </div>
                 </div>
                 <UpdateDialog
