@@ -105,11 +105,33 @@ const branchToTitle = (branch: string): string => {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
+const getPullRequestSnapshotKey = (directory: string, branch: string): string => `${directory}::${branch}`;
+
 type PullRequestDraftSnapshot = {
   title: string;
   body: string;
   draft: boolean;
   additionalContext: string;
+};
+
+type TimelineCommentItem = {
+  id: string;
+  body: string;
+  authorName: string;
+  authorLogin: string | null;
+  avatarUrl: string | null;
+  createdAt?: string;
+  context: string;
+  path: string | null;
+  line: number | null;
+};
+
+type ChatDispatchTarget = {
+  sessionId: string;
+  providerID: string;
+  modelID: string;
+  currentAgentName: string | null;
+  currentVariant: string | null;
 };
 
 const pullRequestDraftSnapshots = new Map<string, PullRequestDraftSnapshot>();
@@ -162,7 +184,7 @@ export const PullRequestSection: React.FC<{
     setSettingsDialogOpen(true);
   }, [setSettingsDialogOpen, setSidebarSection]);
 
-  const snapshotKey = React.useMemo(() => `${directory}::${branch}`, [directory, branch]);
+  const snapshotKey = React.useMemo(() => getPullRequestSnapshotKey(directory, branch), [directory, branch]);
   const initialSnapshot = React.useMemo(
     () => pullRequestDraftSnapshots.get(snapshotKey) ?? null,
     [snapshotKey]
@@ -371,7 +393,7 @@ export const PullRequestSection: React.FC<{
     });
   }, [connectedGitHubLogin]);
 
-  const timelineComments = React.useMemo(() => {
+  const timelineComments = React.useMemo<TimelineCommentItem[]>(() => {
     const issue = (commentsDetails?.issueComments ?? []).map((comment) => ({
       id: `issue-${comment.id}`,
       body: comment.body || '',
@@ -406,6 +428,55 @@ export const PullRequestSection: React.FC<{
     });
     return all;
   }, [commentsDetails]);
+
+  const resolveChatDispatchTarget = React.useCallback((): ChatDispatchTarget | null => {
+    if (!currentSessionId) {
+      toast.error('No active session', { description: 'Open a chat session first.' });
+      return null;
+    }
+
+    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
+    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
+    const providerID = currentProviderId || lastUsedProvider?.providerID;
+    const modelID = currentModelId || lastUsedProvider?.modelID;
+    if (!providerID || !modelID) {
+      toast.error('No model selected');
+      return null;
+    }
+
+    return {
+      sessionId: currentSessionId,
+      providerID,
+      modelID,
+      currentAgentName: currentAgentName ?? null,
+      currentVariant: currentVariant ?? null,
+    };
+  }, [currentSessionId]);
+
+  const dispatchSyntheticPrompt = React.useCallback((
+    target: ChatDispatchTarget,
+    visibleText: string,
+    instructionsText: string,
+    payloadText: string,
+  ) => {
+    void useMessageStore.getState().sendMessage(
+      visibleText,
+      target.providerID,
+      target.modelID,
+      target.currentAgentName ?? undefined,
+      target.sessionId,
+      undefined,
+      null,
+      [
+        { text: instructionsText, synthetic: true },
+        { text: payloadText, synthetic: true },
+      ],
+      target.currentVariant ?? undefined,
+    ).catch((e) => {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error('Failed to send message', { description: message });
+    });
+  }, []);
 
   const renderCheckRunSummary = React.useCallback((run: GitHubCheckRun) => {
     const status = run.status || 'unknown';
@@ -545,17 +616,8 @@ export const PullRequestSection: React.FC<{
       return;
     }
     if (!directory || !pr) return;
-    if (!currentSessionId) {
-      toast.error('No active session', { description: 'Open a chat session first.' });
-      return;
-    }
-
-    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
-    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
-    const providerID = currentProviderId || lastUsedProvider?.providerID;
-    const modelID = currentModelId || lastUsedProvider?.modelID;
-    if (!providerID || !modelID) {
-      toast.error('No model selected');
+    const target = resolveChatDispatchTarget();
+    if (!target) {
       return;
     }
 
@@ -600,28 +662,12 @@ export const PullRequestSection: React.FC<{
         failedAnnotations,
       }, null, 2)}`;
 
-      void useMessageStore.getState().sendMessage(
-        visibleText,
-        providerID,
-        modelID,
-        currentAgentName ?? undefined,
-        currentSessionId,
-        undefined,
-        null,
-        [
-          { text: instructionsText, synthetic: true },
-          { text: payloadText, synthetic: true },
-        ],
-        currentVariant
-      ).catch((e) => {
-        const message = e instanceof Error ? e.message : String(e);
-        toast.error('Failed to send message', { description: message });
-      });
+      dispatchSyntheticPrompt(target, visibleText, instructionsText, payloadText);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to load checks', { description: message });
     }
-  }, [currentSessionId, directory, github, pr, setActiveMainTab]);
+  }, [directory, dispatchSyntheticPrompt, github, pr, resolveChatDispatchTarget, setActiveMainTab]);
 
   const sendCommentsToChat = React.useCallback(async () => {
     setActiveMainTab('chat');
@@ -631,17 +677,8 @@ export const PullRequestSection: React.FC<{
       return;
     }
     if (!directory || !pr) return;
-    if (!currentSessionId) {
-      toast.error('No active session', { description: 'Open a chat session first.' });
-      return;
-    }
-
-    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
-    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
-    const providerID = currentProviderId || lastUsedProvider?.providerID;
-    const modelID = currentModelId || lastUsedProvider?.modelID;
-    if (!providerID || !modelID) {
-      toast.error('No model selected');
+    const target = resolveChatDispatchTarget();
+    if (!target) {
       return;
     }
 
@@ -668,28 +705,36 @@ export const PullRequestSection: React.FC<{
         reviewComments,
       }, null, 2)}`;
 
-      void useMessageStore.getState().sendMessage(
-        visibleText,
-        providerID,
-        modelID,
-        currentAgentName ?? undefined,
-        currentSessionId,
-        undefined,
-        null,
-        [
-          { text: instructionsText, synthetic: true },
-          { text: payloadText, synthetic: true },
-        ],
-        currentVariant
-      ).catch((e) => {
-        const message = e instanceof Error ? e.message : String(e);
-        toast.error('Failed to send message', { description: message });
-      });
+      dispatchSyntheticPrompt(target, visibleText, instructionsText, payloadText);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to load PR comments', { description: message });
     }
-  }, [currentSessionId, directory, github, pr, setActiveMainTab]);
+  }, [directory, dispatchSyntheticPrompt, github, pr, resolveChatDispatchTarget, setActiveMainTab]);
+
+  const sendSingleCommentToChat = React.useCallback((comment: TimelineCommentItem) => {
+    setCommentsDialogOpen(false);
+    setActiveMainTab('chat');
+
+    const target = resolveChatDispatchTarget();
+    if (!target) {
+      return;
+    }
+
+    const visibleText = 'Address this comment from PR and propose required changes. Do not implement until I confirm.';
+    const instructionsText = `Use the attached single-comment payload.
+- Explain what the reviewer is asking for.
+- Identify exact code areas likely impacted.
+- Propose a minimal implementation plan and verification steps.
+- Call out ambiguity and ask focused follow-up questions if needed.`;
+    const payloadText = `GitHub PR comment (JSON)\n${JSON.stringify({
+      repo: commentsDetails?.repo ?? null,
+      pr: commentsDetails?.pr ?? pr ?? null,
+      comment,
+    }, null, 2)}`;
+
+    dispatchSyntheticPrompt(target, visibleText, instructionsText, payloadText);
+  }, [commentsDetails, dispatchSyntheticPrompt, pr, resolveChatDispatchTarget, setActiveMainTab]);
 
   React.useEffect(() => {
     statusRef.current = status;
@@ -740,6 +785,8 @@ export const PullRequestSection: React.FC<{
       setStatus((prev) => {
         const nextPr = next.pr;
         const prevPr = prev?.pr;
+        // Some runtimes occasionally return PR status without body.
+        // Keep already hydrated description for the same PR number.
         const shouldCarryBody = Boolean(
           nextPr
           && prevPr
@@ -1556,10 +1603,10 @@ export const PullRequestSection: React.FC<{
             <DialogTitle className="flex items-center gap-2">
               <RiGitPullRequestLine className="h-5 w-5" />
               PR Comments
+              {pr ? (
+                <span className="typography-meta text-muted-foreground">PR #{pr.number}</span>
+              ) : null}
             </DialogTitle>
-            <DialogDescription>
-              {pr ? `PR #${pr.number}` : 'Pull request'}
-            </DialogDescription>
           </DialogHeader>
 
           <ScrollShadow className="mt-2 max-h-[66vh] overflow-y-auto overlay-scrollbar-target overlay-scrollbar-container">
@@ -1589,10 +1636,27 @@ export const PullRequestSection: React.FC<{
                               )}
                             </div>
                             <div className="rounded-lg bg-surface-elevated px-3 pt-0 pb-3 space-y-2">
-                              <div className="typography-micro text-muted-foreground">
-                                <span className="text-foreground">{comment.authorName}</span>
-                                {comment.authorLogin && comment.authorLogin !== comment.authorName ? ` · @${comment.authorLogin}` : ''}
-                                {comment.createdAt ? ` · ${formatTimestamp(comment.createdAt)}` : ''}
+                              <div className="flex flex-col items-start gap-1 typography-micro text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-1 sm:gap-y-1">
+                                <span className="text-foreground whitespace-nowrap">
+                                  {comment.authorName}
+                                  {comment.authorLogin && comment.authorLogin !== comment.authorName ? ` · @${comment.authorLogin}` : ''}
+                                </span>
+                                {comment.createdAt ? <span className="whitespace-nowrap">{formatTimestamp(comment.createdAt)}</span> : null}
+                                <Tooltip delayDuration={300}>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-0 has-[>svg]:px-0 sm:px-2 sm:has-[>svg]:px-2.5 text-[var(--status-success)] hover:bg-[var(--status-success-background)] hover:text-[var(--status-success)] justify-start"
+                                      onClick={() => sendSingleCommentToChat(comment)}
+                                      aria-label="Send this comment to agent"
+                                    >
+                                      <RiAiGenerate2 className="size-3.5" />
+                                      Send to agent
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent><p>Send this comment to agent</p></TooltipContent>
+                                </Tooltip>
                               </div>
                               <div className="typography-micro text-muted-foreground">
                                 {comment.context}
