@@ -123,6 +123,19 @@ const normalizePath = (value?: string | null) => {
   return normalized.length === 0 ? '/' : normalized;
 };
 
+const normalizeForBranchComparison = (value: string): string => {
+  return value
+    .toLowerCase()
+    .replace(/^opencode[/-]?/i, '')
+    .replace(/[-_]/g, '')
+    .trim();
+};
+
+const isBranchDifferentFromLabel = (branch: string | null, label: string): boolean => {
+  if (!branch) return false;
+  return normalizeForBranchComparison(branch) !== normalizeForBranchComparison(label);
+};
+
 const toFiniteNumber = (value: unknown): number | undefined => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value;
@@ -217,6 +230,7 @@ type SessionNode = {
 type SessionGroup = {
   id: string;
   label: string;
+  branch: string | null;
   description: string | null;
   isMain: boolean;
   worktree: WorktreeMetadata | null;
@@ -1241,6 +1255,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         label: (projectIsRepo && projectRootBranch && projectRootBranch !== 'HEAD')
           ? `project root: ${projectRootBranch}`
           : 'project root',
+        branch: projectRootBranch ?? null,
         description: normalizedProjectRoot ? formatPathForDisplay(normalizedProjectRoot, homeDirectory) : null,
         isMain: true,
         worktree: null,
@@ -1256,10 +1271,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       sortedWorktrees.forEach((meta) => {
         const directory = normalizePath(meta.path) ?? meta.path;
-        const label = meta.branch || meta.name || meta.label || formatDirectoryName(directory, homeDirectory) || directory;
+        const label = meta.label || meta.name || formatDirectoryName(directory, homeDirectory) || directory;
         groups.push({
           id: `worktree:${directory}`,
           label,
+          branch: meta.branch || null,
           description: formatPathForDisplay(directory, homeDirectory),
           isMain: false,
           worktree: meta,
@@ -1277,6 +1293,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         groups.push({
           id: `worktree:orphan:${directory}`,
           label: formatDirectoryName(directory, homeDirectory) || directory,
+          branch: null,
           description: formatPathForDisplay(directory, homeDirectory),
           isMain: false,
           worktree: null,
@@ -2334,12 +2351,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     </TooltipContent>
                   </Tooltip>
                 ) : (
-                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground self-start mt-0.5" />
                 )
               ) : null}
-              <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
-                {group.label}
-              </p>
+              <div className="min-w-0 flex flex-col">
+                <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
+                  {group.label}
+                </p>
+                {!group.isMain && isBranchDifferentFromLabel(group.branch, group.label) ? (
+                  <span className="text-[12px] text-muted-foreground truncate typography-ui-label leading-tight">
+                    {group.branch}
+                  </span>
+                ) : null}
+              </div>
             </div>
             {group.directory ? (
               <div className="flex items-center gap-1 px-0.5">

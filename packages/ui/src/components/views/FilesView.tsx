@@ -1891,7 +1891,10 @@ export const FilesView: React.FC = () => {
                 value={draftContent}
                 onChange={setDraftContent}
                 extensions={editorExtensions}
-                className="h-full"
+                className={cn(
+                  "h-full",
+                  isMobile && "[&_.cm-scroller]:pb-[var(--oc-keyboard-inset,0px)]"
+                )}
                 highlightLines={lineSelection
                   ? {
                     start: Math.min(lineSelection.start, lineSelection.end),
