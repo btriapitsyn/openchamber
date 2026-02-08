@@ -36,6 +36,7 @@ interface BranchSelectorProps {
   onCheckout: (branch: string) => void;
   onCreate: (name: string) => Promise<void>;
   disabled?: boolean;
+  tooltipDelayMs?: number;
 }
 
 const sanitizeBranchNameInput = (value: string): string => {
@@ -59,6 +60,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
   onCheckout,
   onCreate,
   disabled = false,
+  tooltipDelayMs = 1000,
 }) => {
   const [isOpen, setIsOpen] = React.useState(false);
   const [search, setSearch] = React.useState('');
@@ -127,17 +129,17 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <Tooltip delayDuration={1000}>
+      <Tooltip delayDuration={tooltipDelayMs}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1.5 px-2 py-1 h-8"
+              className="h-8 min-w-0 max-w-full justify-start gap-1.5 px-2 py-1"
               disabled={disabled}
             >
               <RiGitBranchLine className="size-4 text-primary" />
-              <span className="max-w-[140px] truncate font-medium">
+              <span className="min-w-0 truncate font-medium text-left">
                 {currentBranch || 'Detached HEAD'}
               </span>
               <RiArrowDownSLine className="size-4 opacity-60" />
@@ -145,7 +147,7 @@ export const BranchSelector: React.FC<BranchSelectorProps> = ({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent sideOffset={8}>
-          Switch branch ({localBranches.length} local · {remoteBranches.length} remote)
+          Current branch
         </TooltipContent>
       </Tooltip>
 

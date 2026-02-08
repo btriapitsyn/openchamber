@@ -24,6 +24,10 @@ interface SyncActionsProps {
   onPull: (remote: GitRemote) => void;
   onPush: (remote: GitRemote) => void;
   disabled: boolean;
+  iconOnly?: boolean;
+  tooltipDelayMs?: number;
+  aheadCount?: number;
+  behindCount?: number;
 }
 
 export const SyncActions: React.FC<SyncActionsProps> = ({
@@ -33,6 +37,10 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   onPull,
   onPush,
   disabled,
+  iconOnly = false,
+  tooltipDelayMs = 1000,
+  aheadCount = 0,
+  behindCount = 0,
 }) => {
   const hasNoRemotes = remotes.length === 0;
   const isDisabled = disabled || syncAction !== null || hasNoRemotes;
@@ -65,23 +73,34 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
     loadingIcon: React.ReactNode,
     label: string,
     onClick: () => void,
-    tooltipText: string
+    tooltipText: string,
+    counter?: number
   ) => {
     const button = (
       <Button
         variant="ghost"
         size="sm"
-        className="h-8 px-2"
+        className={iconOnly ? 'relative h-8 w-8 px-0' : 'h-8 px-2'}
         onClick={onClick}
         disabled={isDisabled}
       >
         {syncAction === action ? loadingIcon : icon}
-        <span className="hidden sm:inline">{label}</span>
+        {!iconOnly && <span className="git-header-label">{label}</span>}
+        {!iconOnly && typeof counter === 'number' && counter > 0 ? (
+          <span className="rounded-sm bg-interactive-selection/40 px-1 text-[10px] leading-4 text-foreground tabular-nums">
+            {counter}
+          </span>
+        ) : null}
+        {iconOnly && typeof counter === 'number' && counter > 0 ? (
+          <span className="absolute -right-1 -top-1 min-w-[1rem] rounded-full bg-interactive-selection px-1 text-[10px] leading-4 text-interactive-selection-foreground tabular-nums">
+            {counter}
+          </span>
+        ) : null}
       </Button>
     );
 
     return (
-      <Tooltip delayDuration={1000}>
+      <Tooltip delayDuration={tooltipDelayMs}>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
         <TooltipContent sideOffset={8}>{tooltipText}</TooltipContent>
       </Tooltip>
@@ -94,21 +113,32 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
     loadingIcon: React.ReactNode,
     label: string,
     onSelect: (remote: GitRemote) => void,
-    tooltipText: string
+    tooltipText: string,
+    counter?: number
   ) => {
     return (
       <DropdownMenu>
-        <Tooltip delayDuration={1000}>
+        <Tooltip delayDuration={tooltipDelayMs}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2"
+                className={iconOnly ? 'relative h-8 w-8 px-0' : 'h-8 px-2'}
                 disabled={isDisabled}
               >
                 {syncAction === action ? loadingIcon : icon}
-                <span className="hidden sm:inline">{label}</span>
+                {!iconOnly && <span className="git-header-label">{label}</span>}
+                {!iconOnly && typeof counter === 'number' && counter > 0 ? (
+                  <span className="rounded-sm bg-interactive-selection/40 px-1 text-[10px] leading-4 text-foreground tabular-nums">
+                    {counter}
+                  </span>
+                ) : null}
+                {iconOnly && typeof counter === 'number' && counter > 0 ? (
+                  <span className="absolute -right-1 -top-1 min-w-[1rem] rounded-full bg-interactive-selection px-1 text-[10px] leading-4 text-interactive-selection-foreground tabular-nums">
+                    {counter}
+                  </span>
+                ) : null}
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
@@ -159,7 +189,8 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
             <RiLoader4Line className="size-4 animate-spin" />,
             'Pull',
             onPull,
-            'Pull changes'
+            behindCount > 0 ? `Pull changes (${behindCount} behind)` : 'Pull changes',
+            behindCount
           )
         : renderButton(
             'pull',
@@ -167,7 +198,8 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
             <RiLoader4Line className="size-4 animate-spin" />,
             'Pull',
             handlePull,
-            'Pull changes'
+            behindCount > 0 ? `Pull changes (${behindCount} behind)` : 'Pull changes',
+            behindCount
           )}
 
       {hasMultipleRemotes
@@ -177,7 +209,8 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
             <RiLoader4Line className="size-4 animate-spin" />,
             'Push',
             onPush,
-            'Push changes'
+            aheadCount > 0 ? `Push changes (${aheadCount} ahead)` : 'Push changes',
+            aheadCount
           )
         : renderButton(
             'push',
@@ -185,7 +218,8 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
             <RiLoader4Line className="size-4 animate-spin" />,
             'Push',
             handlePush,
-            'Push changes'
+            aheadCount > 0 ? `Push changes (${aheadCount} ahead)` : 'Push changes',
+            aheadCount
           )}
     </div>
   );

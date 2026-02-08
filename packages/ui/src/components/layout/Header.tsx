@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AnimatedTabs } from '@/components/ui/animated-tabs';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiSettings3Line, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiSettings3Line, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
@@ -107,6 +107,7 @@ interface TabConfig {
 export const Header: React.FC = () => {
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const toggleCommandPalette = useUIStore((state) => state.toggleCommandPalette);
   const activeMainTab = useUIStore((state) => state.activeMainTab);
@@ -624,16 +625,25 @@ export const Header: React.FC = () => {
       },
       { id: 'files', label: 'Files', icon: RiFolder6Line },
       { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
-      {
+    );
+
+    if (isMobile) {
+      base.push({
         id: 'git',
         label: 'Git',
         icon: RiGitBranchLine,
-        showDot: isMobile && diffFileCount > 0,
-      },
-    );
+        showDot: diffFileCount > 0,
+      });
+    }
 
     return base;
   }, [diffFileCount, isMobile, showPlanTab]);
+
+  useEffect(() => {
+    if (!isMobile && activeMainTab === 'git') {
+      setActiveMainTab('chat');
+    }
+  }, [activeMainTab, isMobile, setActiveMainTab]);
 
   const servicesTabs = React.useMemo(() => {
     const base: Array<{ value: 'instance' | 'usage' | 'mcp'; label: string; icon: RemixiconComponentType }> = [];
@@ -1019,6 +1029,22 @@ export const Header: React.FC = () => {
           </TooltipTrigger>
           <TooltipContent>
             <p>Command Palette ({getModifierLabel()}+K)</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip delayDuration={500}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={toggleRightSidebar}
+              aria-label="Toggle git sidebar"
+              className={headerIconButtonClass}
+            >
+              <RiLayoutRightLine className="h-5 w-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Git sidebar</p>
           </TooltipContent>
         </Tooltip>
 

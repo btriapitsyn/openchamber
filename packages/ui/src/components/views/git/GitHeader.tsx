@@ -1,8 +1,7 @@
 import React from 'react';
 import {
-  RiArrowUpLine,
-  RiArrowDownLine,
   RiArrowDownSLine,
+  RiCheckLine,
   RiLoader4Line,
   RiGitBranchLine,
   RiGitRepositoryLine,
@@ -26,6 +25,7 @@ import { BranchSelector } from './BranchSelector';
 import { WorktreeBranchDisplay } from './WorktreeBranchDisplay';
 import { SyncActions } from './SyncActions';
 import type { GitStatus, GitIdentityProfile, GitRemote } from '@/lib/api/types';
+import { useUIStore } from '@/stores/useUIStore';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 
@@ -47,6 +47,7 @@ interface GitHeaderProps {
   onSelectIdentity: (profile: GitIdentityProfile) => void;
   isApplyingIdentity: boolean;
   isWorktreeMode: boolean;
+  isSidebarMode?: boolean;
   onOpenHistory?: () => void;
   onOpenBranchPicker?: () => void;
 }
@@ -103,6 +104,8 @@ interface IdentityDropdownProps {
   identities: GitIdentityProfile[];
   onSelect: (profile: GitIdentityProfile) => void;
   isApplying: boolean;
+  tooltipDelayMs?: number;
+  iconOnly?: boolean;
 }
 
 const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
@@ -110,18 +113,20 @@ const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   identities,
   onSelect,
   isApplying,
+  tooltipDelayMs = 1000,
+  iconOnly = false,
 }) => {
   const isDisabled = isApplying || identities.length === 0;
 
   return (
     <DropdownMenu>
-      <Tooltip delayDuration={1000}>
+      <Tooltip delayDuration={tooltipDelayMs}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1.5 px-2 py-1 h-8 typography-ui-label"
+              className="h-8 min-w-0 max-w-[15rem] justify-start gap-1.5 px-2 py-1 typography-ui-label"
               style={{ color: getIdentityColor(activeProfile?.color) }}
               disabled={isDisabled}
             >
@@ -134,21 +139,16 @@ const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
                   className="size-4"
                 />
               )}
-              <span className="max-w-[120px] truncate hidden sm:inline">
-                {activeProfile?.name || 'No identity'}
-              </span>
+              {!iconOnly && (
+                <span className="git-identity-label min-w-0 flex-1 truncate text-left">
+                  {activeProfile?.name || 'No identity'}
+                </span>
+              )}
               <RiArrowDownSLine className="size-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent sideOffset={8} className="space-y-1">
-          <p className="typography-ui-label text-foreground">
-            {activeProfile?.userName || 'Unknown user'}
-          </p>
-          <p className="typography-meta text-muted-foreground">
-            {activeProfile?.userEmail || 'No email configured'}
-          </p>
-        </TooltipContent>
+        <TooltipContent sideOffset={8}>Git identity</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-64">
         {identities.length === 0 ? (
@@ -158,25 +158,31 @@ const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
             </p>
           </div>
         ) : (
-          identities.map((profile) => (
-            <DropdownMenuItem key={profile.id} onSelect={() => onSelect(profile)}>
-              <span className="flex items-center gap-2">
-                <IdentityIcon
-                  icon={profile.icon}
-                  colorToken={profile.color}
-                  className="size-4"
-                />
-                <span className="flex flex-col">
-                  <span className="typography-ui-label text-foreground">
-                    {profile.name}
+          identities.map((profile) => {
+            const isSelected = activeProfile?.id === profile.id;
+            return (
+              <DropdownMenuItem key={profile.id} onSelect={() => onSelect(profile)}>
+                <span className="flex items-center gap-2">
+                  <IdentityIcon
+                    icon={profile.icon}
+                    colorToken={profile.color}
+                    className="size-4"
+                  />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="typography-ui-label text-foreground">
+                      {profile.name}
+                    </span>
+                    <span className="typography-meta text-muted-foreground">
+                      {profile.userEmail}
+                    </span>
                   </span>
-                  <span className="typography-meta text-muted-foreground">
-                    {profile.userEmail}
-                  </span>
+                  {isSelected ? (
+                    <RiCheckLine className="ml-auto size-4 text-foreground" />
+                  ) : null}
                 </span>
-              </span>
-            </DropdownMenuItem>
-          ))
+              </DropdownMenuItem>
+            );
+          })
         )}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -201,77 +207,31 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   onSelectIdentity,
   isApplyingIdentity,
   isWorktreeMode,
+  isSidebarMode = false,
   onOpenHistory,
   onOpenBranchPicker,
 }) => {
+  const isMobile = useUIStore((state) => state.isMobile);
+
   if (!status) {
     return null;
   }
 
-  return (
-    <header className="flex flex-wrap items-center gap-2 border-b border-border/40 px-3 py-2 bg-background">
-      {isWorktreeMode ? (
-        <WorktreeBranchDisplay
-          currentBranch={status.current}
-          onRename={onRenameBranch}
-        />
-      ) : (
-        <BranchSelector
-          currentBranch={status.current}
-          localBranches={localBranches}
-          remoteBranches={remoteBranches}
-          branchInfo={branchInfo}
-          onCheckout={onCheckoutBranch}
-          onCreate={onCreateBranch}
-        />
-      )}
+  const useTwoRowHeader = isSidebarMode || isMobile;
 
-      {(Boolean(status.tracking) || status.ahead > 0 || status.behind > 0) && (
-        <Tooltip delayDuration={800}>
-          <TooltipTrigger asChild>
-            <div className="flex items-center gap-2 px-1.5 typography-meta text-muted-foreground">
-              <span className="flex items-center gap-0.5">
-                <RiArrowUpLine className="size-3.5 text-primary/70" />
-                <span className="font-semibold text-foreground">{status.ahead}</span>
-              </span>
-              {Boolean(status.tracking) && (
-                <span className="flex items-center gap-0.5">
-                  <RiArrowDownLine className="size-3.5 text-primary/70" />
-                  <span className="font-semibold text-foreground">{status.behind}</span>
-                </span>
-              )}
-            </div>
-          </TooltipTrigger>
-          <TooltipContent sideOffset={8}>
-            {status.tracking
-              ? `Upstream: ${status.tracking}`
-              : 'Unpublished commits (no upstream set yet)'}
-          </TooltipContent>
-        </Tooltip>
-      )}
-
-      <SyncActions
-        syncAction={syncAction}
-        remotes={remotes}
-        onFetch={onFetch}
-        onPull={onPull}
-        onPush={onPush}
-        disabled={!status}
-      />
-
-      <div className="flex-1" />
-
+  const managementButtons = (
+    <div className="flex items-center gap-1 shrink-0">
       {onOpenBranchPicker ? (
-        <Tooltip delayDuration={1000}>
+        <Tooltip delayDuration={useTwoRowHeader ? 300 : 1000}>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1.5 px-2 py-1 h-8 typography-ui-label"
+              className={isSidebarMode ? 'h-8 w-8 px-0' : 'gap-1.5 px-2 py-1 h-8 typography-ui-label'}
               onClick={onOpenBranchPicker}
             >
               <RiGitRepositoryLine className="size-4" />
-              <span className="hidden sm:inline">Manage branches</span>
+              {!isSidebarMode && <span className="git-header-label">Manage branches</span>}
             </Button>
           </TooltipTrigger>
           <TooltipContent sideOffset={8}>Manage branches</TooltipContent>
@@ -279,28 +239,111 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
       ) : null}
 
       {onOpenHistory ? (
-        <Tooltip delayDuration={1000}>
+        <Tooltip delayDuration={useTwoRowHeader ? 300 : 1000}>
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="gap-1.5 px-2 py-1 h-8 typography-ui-label"
+              className={isSidebarMode ? 'h-8 w-8 px-0' : 'gap-1.5 px-2 py-1 h-8 typography-ui-label'}
               onClick={onOpenHistory}
             >
               <RiHistoryLine className="size-4" />
-              <span className="hidden sm:inline">History</span>
+              {!isSidebarMode && <span className="git-header-label">History</span>}
             </Button>
           </TooltipTrigger>
-          <TooltipContent sideOffset={8}>Show commit history</TooltipContent>
+          <TooltipContent sideOffset={8}>History</TooltipContent>
         </Tooltip>
       ) : null}
+    </div>
+  );
 
-      <IdentityDropdown
-        activeProfile={activeIdentityProfile}
-        identities={availableIdentities}
-        onSelect={onSelectIdentity}
-        isApplying={isApplyingIdentity}
-      />
+  const syncButtons = (
+    <SyncActions
+      syncAction={syncAction}
+      remotes={remotes}
+      onFetch={onFetch}
+      onPull={onPull}
+      onPush={onPush}
+      disabled={!status}
+      iconOnly={isSidebarMode}
+      tooltipDelayMs={useTwoRowHeader ? 300 : 1000}
+      aheadCount={status.ahead}
+      behindCount={status.behind}
+    />
+  );
+
+  const identityControl = (
+    <IdentityDropdown
+      activeProfile={activeIdentityProfile}
+      identities={availableIdentities}
+      onSelect={onSelectIdentity}
+      isApplying={isApplyingIdentity}
+      tooltipDelayMs={useTwoRowHeader ? 300 : 1000}
+      iconOnly={false}
+    />
+  );
+
+  if (useTwoRowHeader) {
+    return (
+      <header className="@container/git-header border-b border-border/40 px-3 py-2 bg-background">
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="min-w-0 flex-1">
+            {isWorktreeMode ? (
+              <WorktreeBranchDisplay
+                currentBranch={status.current}
+                onRename={onRenameBranch}
+              />
+            ) : (
+              <BranchSelector
+                currentBranch={status.current}
+                localBranches={localBranches}
+                remoteBranches={remoteBranches}
+                branchInfo={branchInfo}
+                onCheckout={onCheckoutBranch}
+                onCreate={onCreateBranch}
+                tooltipDelayMs={useTwoRowHeader ? 300 : 1000}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className="mt-1.5 flex items-center justify-between gap-2 min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-1">
+            {syncButtons}
+            {managementButtons}
+          </div>
+          <div className="min-w-0 max-w-[45%]">{identityControl}</div>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="@container/git-header flex items-center gap-2 border-b border-border/40 px-3 py-2 bg-background">
+      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
+        {isWorktreeMode ? (
+          <WorktreeBranchDisplay
+            currentBranch={status.current}
+            onRename={onRenameBranch}
+          />
+        ) : (
+          <BranchSelector
+            currentBranch={status.current}
+            localBranches={localBranches}
+            remoteBranches={remoteBranches}
+            branchInfo={branchInfo}
+            onCheckout={onCheckoutBranch}
+            onCreate={onCreateBranch}
+          />
+        )}
+
+        <div className="shrink-0">{syncButtons}</div>
+      </div>
+
+      <div className="flex items-center gap-1 shrink-0">
+        {managementButtons}
+        {identityControl}
+      </div>
     </header>
   );
 };

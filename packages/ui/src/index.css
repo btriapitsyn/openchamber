@@ -549,6 +549,25 @@ html:not(.dark) .chat-scroll {
   }
 }
 
+/* Git right-sidebar header/actions collapse to icon-only when narrow. */
+@container git-header (max-width: 26rem) {
+  .git-header-label {
+    display: none;
+  }
+}
+
+/* Animated tabs: collapse labels based on local container width. */
+@container animated-tabs (max-width: 23rem) {
+  .animated-tabs__label {
+    display: none;
+  }
+
+  .animated-tabs__button {
+    padding-inline: 0.5rem;
+    gap: 0;
+  }
+}
+
 /* Text font: IBM Plex Sans */
 .streamdown-content {
   font-family: var(--font-sans);

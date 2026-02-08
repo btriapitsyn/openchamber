@@ -128,7 +128,8 @@ export const PullRequestSection: React.FC<{
   branch: string;
   baseBranch: string;
   variant?: 'framed' | 'plain';
-}> = ({ directory, branch, baseBranch, variant = 'framed' }) => {
+  onGeneratedDescription?: () => void;
+}> = ({ directory, branch, baseBranch, variant = 'framed', onGeneratedDescription }) => {
   const { github } = useRuntimeAPIs();
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
@@ -464,14 +465,14 @@ export const PullRequestSection: React.FC<{
       if (generated.body?.trim()) {
         setBody(generated.body.trim());
       }
-      toast.success('PR description generated');
+      onGeneratedDescription?.();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to generate description', { description: message });
     } finally {
       setIsGenerating(false);
     }
-  }, [baseBranch, branch, directory, isGenerating, additionalContext]);
+  }, [baseBranch, branch, directory, isGenerating, additionalContext, onGeneratedDescription]);
 
   const createPr = React.useCallback(async () => {
     if (!github?.prCreate) {

@@ -15,6 +15,7 @@ interface AnimatedTabsProps<T extends string> {
   isInteractive?: boolean;
   animate?: boolean;
   collapseLabelsOnSmall?: boolean;
+  collapseLabelsOnNarrow?: boolean;
   size?: 'default' | 'sm';
 }
 
@@ -26,6 +27,7 @@ export function AnimatedTabs<T extends string>({
   isInteractive = true,
   animate = true,
   collapseLabelsOnSmall = false,
+  collapseLabelsOnNarrow = false,
   size = 'default',
 }: AnimatedTabsProps<T>) {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -66,7 +68,7 @@ export function AnimatedTabs<T extends string>({
   }, [updateClipPath]);
 
   return (
-    <div className={cn('relative isolate w-full', className)}>
+    <div className={cn('relative isolate w-full', collapseLabelsOnNarrow && '@container/animated-tabs', className)}>
       <div
         ref={containerRef}
         aria-hidden
@@ -93,7 +95,7 @@ export function AnimatedTabs<T extends string>({
                 )}
               >
                 {Icon ? <Icon className={cn(size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4')} /> : null}
-                <span className={cn('truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
+                <span className={cn('animated-tabs__label truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
                   {tab.label}
                 </span>
               </div>
@@ -122,9 +124,9 @@ export function AnimatedTabs<T extends string>({
                 if (!isInteractive) return;
                 onValueChange(tab.value);
               }}
-              className={cn(
-                'flex flex-1 items-center justify-center font-semibold transition-colors duration-150',
-                size === 'sm' ? 'h-5 rounded-md px-2 text-xs' : 'h-7 rounded-lg px-2.5 text-sm',
+                className={cn(
+                  'animated-tabs__button flex flex-1 items-center justify-center font-semibold transition-colors duration-150',
+                  size === 'sm' ? 'h-5 rounded-md px-2 text-xs' : 'h-7 rounded-lg px-2.5 text-sm',
                 collapseLabelsOnSmall ? 'gap-0 sm:gap-1.25' : 'gap-1.25',
                 isActive ? 'text-accent-foreground' : 'text-muted-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
@@ -142,9 +144,9 @@ export function AnimatedTabs<T extends string>({
                     )}
                   />
                 ) : null}
-              <span className={cn('truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
-                {tab.label}
-              </span>
+                <span className={cn('animated-tabs__label truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
+                  {tab.label}
+                </span>
 
             </button>
           );

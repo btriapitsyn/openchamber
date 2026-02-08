@@ -1,6 +1,7 @@
 import React from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { RightSidebar } from './RightSidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
@@ -19,8 +20,11 @@ import { cn } from '@/lib/utils';
 import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
 
 export const MainLayout: React.FC = () => {
+    const RIGHT_SIDEBAR_AUTO_TOGGLE_WIDTH = 1280;
     const {
         isSidebarOpen,
+        isRightSidebarOpen,
+        setRightSidebarOpen,
         activeMainTab,
         setIsMobile,
         isSessionSwitcherOpen,
@@ -77,6 +81,52 @@ export const MainLayout: React.FC = () => {
             }
         };
     }, []);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        let timeoutId: number | undefined;
+        const autoClosedByWidthRef = { current: false };
+
+        const handleResponsiveRightSidebar = () => {
+            const isNarrow = window.innerWidth < RIGHT_SIDEBAR_AUTO_TOGGLE_WIDTH;
+
+            if (isNarrow) {
+                autoClosedByWidthRef.current = true;
+                if (useUIStore.getState().isRightSidebarOpen) {
+                    setRightSidebarOpen(false);
+                }
+                return;
+            }
+
+            if (autoClosedByWidthRef.current) {
+                setRightSidebarOpen(true);
+                autoClosedByWidthRef.current = false;
+            }
+        };
+
+        const handleResize = () => {
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+            }
+
+            timeoutId = window.setTimeout(() => {
+                handleResponsiveRightSidebar();
+            }, 100);
+        };
+
+        handleResponsiveRightSidebar();
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+            }
+        };
+    }, [setRightSidebarOpen]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -388,6 +438,9 @@ export const MainLayout: React.FC = () => {
                                         </div>
                                     )}
                                 </main>
+                                <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
+                                    <ErrorBoundary><GitView mode="sidebar" /></ErrorBoundary>
+                                </RightSidebar>
                             </div>
                         </div>
 
