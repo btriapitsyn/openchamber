@@ -68,6 +68,7 @@ import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { createWorktreeOnly, createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
+import { useGitStore } from '@/stores/useGitStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -121,6 +122,19 @@ const normalizePath = (value?: string | null) => {
   }
   const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
   return normalized.length === 0 ? '/' : normalized;
+};
+
+const normalizeForBranchComparison = (value: string): string => {
+  return value
+    .toLowerCase()
+    .replace(/^opencode[/-]?/i, '')
+    .replace(/[-_]/g, '')
+    .trim();
+};
+
+const isBranchDifferentFromLabel = (branch: string | null, label: string): boolean => {
+  if (!branch) return false;
+  return normalizeForBranchComparison(branch) !== normalizeForBranchComparison(label);
 };
 
 const toFiniteNumber = (value: unknown): number | undefined => {
@@ -217,6 +231,7 @@ type SessionNode = {
 type SessionGroup = {
   id: string;
   label: string;
+  branch: string | null;
   description: string | null;
   isMain: boolean;
   worktree: WorktreeMetadata | null;
@@ -670,6 +685,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const { github, git } = useRuntimeAPIs();
 
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
+
+  const gitDirectories = useGitStore((state) => state.directories);
 
   const sessions = useSessionStore((state) => state.sessions);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
@@ -1241,6 +1258,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         label: (projectIsRepo && projectRootBranch && projectRootBranch !== 'HEAD')
           ? `project root: ${projectRootBranch}`
           : 'project root',
+        branch: projectRootBranch ?? null,
         description: normalizedProjectRoot ? formatPathForDisplay(normalizedProjectRoot, homeDirectory) : null,
         isMain: true,
         worktree: null,
@@ -1256,10 +1274,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       sortedWorktrees.forEach((meta) => {
         const directory = normalizePath(meta.path) ?? meta.path;
-        const label = meta.branch || meta.name || meta.label || formatDirectoryName(directory, homeDirectory) || directory;
+        const label = meta.label || meta.name || formatDirectoryName(directory, homeDirectory) || directory;
         groups.push({
           id: `worktree:${directory}`,
           label,
+          branch: meta.branch || null,
           description: formatPathForDisplay(directory, homeDirectory),
           isMain: false,
           worktree: meta,
@@ -1277,6 +1296,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         groups.push({
           id: `worktree:orphan:${directory}`,
           label: formatDirectoryName(directory, homeDirectory) || directory,
+          branch: null,
           description: formatPathForDisplay(directory, homeDirectory),
           isMain: false,
           worktree: null,
@@ -1364,6 +1384,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       }>;
   }, [projects]);
 
+  // Compute a dependency that changes when any project's git branch changes
+  const projectGitBranchesKey = React.useMemo(() => {
+    return normalizedProjects
+      .map((project) => {
+        const dirState = gitDirectories.get(project.normalizedPath);
+        return `${project.id}:${dirState?.status?.current ?? ''}`;
+      })
+      .join('|');
+  }, [normalizedProjects, gitDirectories]);
+
   React.useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -1390,7 +1420,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [normalizedProjects]);
+  }, [normalizedProjects, projectGitBranchesKey]);
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
@@ -2263,7 +2293,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return (
         <div className="oc-group">
           <div
-            className="group/gh flex items-center justify-between gap-2 py-1 min-h-8 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
+            className="group/gh flex items-start justify-between gap-2 py-1 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
             onMouseEnter={() => {
               if (!group.isMain) {
                 void ensureWorktreePrLoaded(groupKey, group.directory, group.label, group.worktree);
@@ -2304,11 +2334,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             }}
             aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
           >
-            <div className="min-w-0 flex items-center gap-1.5 px-0">
+            <div className="min-w-0 flex items-start gap-1.5 px-0 pt-0.5">
               {isCollapsed ? (
-                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
               ) : (
-                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
               )}
               {!group.isMain || isGitProject ? (
                 !group.isMain && groupPr?.url ? (
@@ -2322,7 +2352,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                             void openExternal(groupPr.url);
                           }
                         }}
-                        className="inline-flex h-4 w-4 items-center justify-center rounded-sm hover:bg-interactive-hover/50"
+                        className="inline-flex h-4 w-4 items-center justify-center rounded-sm hover:bg-interactive-hover/50 mt-1"
                         style={{ color: prColorVar }}
                         aria-label={getPrTooltipLabel(groupPrStatus)}
                       >
@@ -2334,12 +2364,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     </TooltipContent>
                   </Tooltip>
                 ) : (
-                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground mt-1" />
                 )
               ) : null}
-              <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
-                {group.label}
-              </p>
+              <div className="min-w-0 flex flex-col">
+                <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
+                  {group.label}
+                </p>
+                {!group.isMain && isBranchDifferentFromLabel(group.branch, group.label) ? (
+                  <span className="text-[10px] sm:text-[11px] text-muted-foreground/80 truncate leading-tight">
+                    {group.branch}
+                  </span>
+                ) : null}
+              </div>
             </div>
             {group.directory ? (
               <div className="flex items-center gap-1 px-0.5">

@@ -1,7 +1,7 @@
 import { opencodeClient } from '@/lib/opencode/client';
 import { substituteCommandVariables } from '@/lib/openchamberConfig';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { deleteRemoteBranch } from '@/lib/gitApi';
+import { deleteRemoteBranch, getGitStatus } from '@/lib/gitApi';
 
 export type ProjectRef = { id: string; path: string };
 
@@ -143,6 +143,21 @@ export async function listProjectWorktrees(project: ProjectRef): Promise<Worktre
   } catch {
     // ignore
   }
+
+  // Enrich worktrees with branch information from git status
+  await Promise.all(
+    results.map(async (worktree) => {
+      try {
+        const status = await getGitStatus(worktree.path);
+        if (status?.current) {
+          worktree.branch = status.current;
+        }
+      } catch {
+        // ignore - branch will remain empty
+      }
+    })
+  );
+
   return results.sort((a, b) => {
     const aLabel = (a.label || a.branch || a.path).toLowerCase();
     const bLabel = (b.label || b.branch || b.path).toLowerCase();
