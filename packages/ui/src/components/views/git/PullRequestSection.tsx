@@ -1,13 +1,22 @@
 import React from 'react';
 import {
+  RiChat4Line,
+  RiCheckLine,
+  RiCheckboxCircleLine,
   RiAiGenerate2,
+  RiArrowDownSLine,
+  RiArrowRightSLine,
   RiCheckboxBlankLine,
   RiCheckboxLine,
+  RiCloseLine,
+  RiEditLine,
+  RiErrorWarningLine,
   RiExternalLinkLine,
   RiGitClosePullRequestLine,
   RiGitMergeLine,
   RiGitPrDraftLine,
   RiGitPullRequestLine,
+  RiInformationLine,
   RiLoader4Line,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
@@ -20,7 +29,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import {
   Collapsible,
   CollapsibleContent,
@@ -30,6 +42,7 @@ import { generatePullRequestDescription } from '@/lib/gitApi';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
+import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -43,6 +56,10 @@ import type {
 } from '@/lib/api/types';
 
 type MergeMethod = 'merge' | 'squash' | 'rebase';
+
+const PR_REVALIDATE_TTL_MS = 90_000;
+const PR_REVALIDATE_INTERVAL_MS = 30_000;
+const PR_DISCOVERY_INTERVAL_MS = 5 * 60_000;
 
 const statusColor = (state: string | undefined | null): string => {
   switch (state) {
@@ -96,6 +113,7 @@ type PullRequestDraftSnapshot = {
 };
 
 const pullRequestDraftSnapshots = new Map<string, PullRequestDraftSnapshot>();
+const pullRequestStatusSnapshots = new Map<string, GitHubPullRequestStatus>();
 
 type TauriShell = {
   shell?: {
@@ -149,10 +167,15 @@ export const PullRequestSection: React.FC<{
     () => pullRequestDraftSnapshots.get(snapshotKey) ?? null,
     [snapshotKey]
   );
+  const initialStatusSnapshot = React.useMemo(
+    () => pullRequestStatusSnapshots.get(snapshotKey) ?? null,
+    [snapshotKey]
+  );
 
   const [isLoading, setIsLoading] = React.useState(false);
-  const [status, setStatus] = React.useState<GitHubPullRequestStatus | null>(null);
+  const [status, setStatus] = React.useState<GitHubPullRequestStatus | null>(() => initialStatusSnapshot);
   const [error, setError] = React.useState<string | null>(null);
+  const [isInitialStatusResolved, setIsInitialStatusResolved] = React.useState(() => Boolean(initialStatusSnapshot));
 
   const [title, setTitle] = React.useState(() => initialSnapshot?.title ?? branchToTitle(branch));
   const [body, setBody] = React.useState(() => initialSnapshot?.body ?? '');
@@ -162,8 +185,13 @@ export const PullRequestSection: React.FC<{
 
   const [isGenerating, setIsGenerating] = React.useState(false);
   const [isCreating, setIsCreating] = React.useState(false);
+  const [isUpdating, setIsUpdating] = React.useState(false);
   const [isMerging, setIsMerging] = React.useState(false);
   const [isMarkingReady, setIsMarkingReady] = React.useState(false);
+  const [isEditingPr, setIsEditingPr] = React.useState(false);
+  const [hydratingPrBodyKey, setHydratingPrBodyKey] = React.useState<string | null>(null);
+  const [editTitle, setEditTitle] = React.useState('');
+  const [editBody, setEditBody] = React.useState('');
 
   const [isContextOpen, setIsContextOpen] = React.useState(false);
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
@@ -171,10 +199,101 @@ export const PullRequestSection: React.FC<{
   const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
   const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
   const [isLoadingCheckDetails, setIsLoadingCheckDetails] = React.useState(false);
+  const [expandedCheckStepKeys, setExpandedCheckStepKeys] = React.useState<Set<string>>(new Set());
+  const [commentsDialogOpen, setCommentsDialogOpen] = React.useState(false);
+  const [commentsDetails, setCommentsDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
+  const [isLoadingCommentsDetails, setIsLoadingCommentsDetails] = React.useState(false);
+
+  const isRefreshInFlightRef = React.useRef(false);
+  const lastRefreshAtRef = React.useRef(0);
+  const lastDiscoveryPollAtRef = React.useRef(0);
+  const statusRef = React.useRef<GitHubPullRequestStatus | null>(null);
+  const attemptedBodyHydrationRef = React.useRef<Set<string>>(new Set());
+  const lastSyncedPrNumberRef = React.useRef<number | null>(null);
 
   const canShow = Boolean(directory && branch && baseBranch && branch !== baseBranch);
 
   const pr = status?.pr ?? null;
+  const currentPrBodyHydrationKey = pr ? `${directory}#${pr.number}` : null;
+  const isHydratingCurrentPrBody = Boolean(
+    currentPrBodyHydrationKey && hydratingPrBodyKey === currentPrBodyHydrationKey,
+  );
+
+  React.useEffect(() => {
+    if (!github?.prContext || !pr) {
+      return;
+    }
+
+    if (typeof pr.body === 'string' && pr.body.length > 0) {
+      return;
+    }
+
+    const hydrationKey = `${directory}#${pr.number}`;
+    if (attemptedBodyHydrationRef.current.has(hydrationKey)) {
+      return;
+    }
+    attemptedBodyHydrationRef.current.add(hydrationKey);
+    setHydratingPrBodyKey(hydrationKey);
+
+    let cancelled = false;
+    void github.prContext(directory, pr.number, { includeDiff: false, includeCheckDetails: false })
+      .then((ctx) => {
+        if (cancelled) {
+          return;
+        }
+        const ctxPr = ctx?.pr;
+        if (!ctxPr) {
+          return;
+        }
+        setStatus((prev) => {
+          if (!prev?.pr || prev.pr.number !== pr.number) {
+            return prev;
+          }
+          return {
+            ...prev,
+            pr: {
+              ...prev.pr,
+              body: ctxPr.body || '',
+            },
+          };
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (cancelled) {
+          return;
+        }
+        setHydratingPrBodyKey((prev) => (prev === hydrationKey ? null : prev));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [directory, github, pr]);
+
+  React.useEffect(() => {
+    if (!pr) {
+      setIsEditingPr(false);
+      setEditTitle('');
+      setEditBody('');
+      lastSyncedPrNumberRef.current = null;
+      return;
+    }
+
+    const numberChanged =
+      lastSyncedPrNumberRef.current !== null && lastSyncedPrNumberRef.current !== pr.number;
+
+    if (numberChanged) {
+      setIsEditingPr(false);
+    }
+
+    if (!isEditingPr || numberChanged) {
+      setEditTitle(pr.title || '');
+      setEditBody(pr.body || '');
+    }
+
+    lastSyncedPrNumberRef.current = pr.number;
+  }, [isEditingPr, pr]);
 
   const openChecksDialog = React.useCallback(async () => {
     if (!github?.prContext) {
@@ -184,6 +303,7 @@ export const PullRequestSection: React.FC<{
     if (!pr) return;
 
     setChecksDialogOpen(true);
+    setExpandedCheckStepKeys(new Set());
     setIsLoadingCheckDetails(true);
     try {
       const ctx = await github.prContext(directory, pr.number, {
@@ -199,59 +319,223 @@ export const PullRequestSection: React.FC<{
     }
   }, [directory, github, pr]);
 
+  const openCommentsDialog = React.useCallback(async () => {
+    if (!github?.prContext) {
+      toast.error('GitHub runtime API unavailable');
+      return;
+    }
+    if (!pr) return;
+
+    setCommentsDialogOpen(true);
+    setIsLoadingCommentsDetails(true);
+    try {
+      const ctx = await github.prContext(directory, pr.number, {
+        includeDiff: false,
+        includeCheckDetails: false,
+      });
+      setCommentsDetails(ctx);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error('Failed to load comments', { description: message });
+    } finally {
+      setIsLoadingCommentsDetails(false);
+    }
+  }, [directory, github, pr]);
+
+  const formatTimestamp = React.useCallback((value?: string) => {
+    if (!value) return '';
+    const ts = Date.parse(value);
+    if (!Number.isFinite(ts)) {
+      return value;
+    }
+    return new Date(ts).toLocaleString();
+  }, []);
+
+  const connectedGitHubLogin = React.useMemo(() => {
+    const login = githubAuthStatus?.user?.login;
+    return typeof login === 'string' ? login.trim() : '';
+  }, [githubAuthStatus]);
+
+  const selfMentionHighlightClass = React.useMemo(() => {
+    return "[&_a[href*='oc-self-mention=1']]:!text-[var(--primary-base)] [&_a[href*='oc-self-mention=1']]:font-semibold [&_a[href*='oc-self-mention=1']]:!no-underline [&_a[href*='oc-self-mention=1']:hover]:!text-[var(--primary-hover)]";
+  }, []);
+
+  const linkifyMentionsMarkdown = React.useCallback((content: string) => {
+    const selfLoginLower = connectedGitHubLogin.toLowerCase();
+    const mentionRegex = /(^|[^\w`])@([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,38}))/g;
+    return content.replace(mentionRegex, (_match, prefix: string, username: string) => {
+      const mention = `@${username}`;
+      const usernameLower = username.toLowerCase();
+      const selfTag = selfLoginLower && usernameLower === selfLoginLower ? '?oc-self-mention=1' : '';
+      return `${prefix}[${mention}](https://github.com/${usernameLower}${selfTag})`;
+    });
+  }, [connectedGitHubLogin]);
+
+  const timelineComments = React.useMemo(() => {
+    const issue = (commentsDetails?.issueComments ?? []).map((comment) => ({
+      id: `issue-${comment.id}`,
+      body: comment.body || '',
+      authorName: comment.author?.name || comment.author?.login || 'Unknown author',
+      authorLogin: comment.author?.login || null,
+      avatarUrl: comment.author?.avatarUrl || null,
+      createdAt: comment.createdAt,
+      context: 'General comment',
+      path: null as string | null,
+      line: null as number | null,
+    }));
+
+    const review = (commentsDetails?.reviewComments ?? []).map((comment) => ({
+      id: `review-${comment.id}`,
+      body: comment.body || '',
+      authorName: comment.author?.name || comment.author?.login || 'Unknown author',
+      authorLogin: comment.author?.login || null,
+      avatarUrl: comment.author?.avatarUrl || null,
+      createdAt: comment.createdAt,
+      context: 'Code review comment',
+      path: comment.path || null,
+      line: comment.line ?? null,
+    }));
+
+    const all = [...issue, ...review];
+    all.sort((a, b) => {
+      const aTs = a.createdAt ? Date.parse(a.createdAt) : 0;
+      const bTs = b.createdAt ? Date.parse(b.createdAt) : 0;
+      const aVal = Number.isFinite(aTs) ? aTs : 0;
+      const bVal = Number.isFinite(bTs) ? bTs : 0;
+      return aVal - bVal;
+    });
+    return all;
+  }, [commentsDetails]);
+
   const renderCheckRunSummary = React.useCallback((run: GitHubCheckRun) => {
     const status = run.status || 'unknown';
     const conclusion = run.conclusion ?? undefined;
     const statusText = conclusion ? `${status} / ${conclusion}` : status;
     const appName = run.app?.name || run.app?.slug;
     return (
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="typography-ui-label text-foreground truncate">{run.name}</div>
-          <div className="typography-micro text-muted-foreground truncate">
-            {appName ? `${appName} · ${statusText}` : statusText}
-          </div>
-          {run.output?.summary ? (
-            <div className="typography-micro text-muted-foreground whitespace-pre-wrap line-clamp-4 mt-2">
-              {run.output.summary}
+      <div className="space-y-2">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="typography-ui-label text-foreground truncate">{run.name}</div>
+            <div className="typography-micro text-muted-foreground truncate">
+              {appName ? `${appName} · ${statusText}` : statusText}
             </div>
+          </div>
+
+          {run.detailsUrl ? (
+            <Button variant="outline" size="sm" asChild className="flex-shrink-0">
+              <a href={run.detailsUrl} target="_blank" rel="noopener noreferrer">
+                <RiExternalLinkLine className="size-4" />
+                Open
+              </a>
+            </Button>
           ) : null}
-          {run.job?.steps && run.job.steps.length > 0 ? (
-            <div className="mt-2 space-y-1">
-              <div className="typography-micro text-muted-foreground">Steps</div>
-              <div className="space-y-1">
-                {run.job.steps.map((step, idx) => {
-                  const c = (step.conclusion || '').toLowerCase();
-                  const isFail = c && !['success', 'neutral', 'skipped'].includes(c);
+        </div>
+
+        {run.output?.title ? (
+          <div className="typography-micro text-foreground">{run.output.title}</div>
+        ) : null}
+        {run.output?.summary ? (
+          <div className="typography-micro text-muted-foreground whitespace-pre-wrap">
+            {run.output.summary}
+          </div>
+        ) : null}
+        {run.output?.text ? (
+          <div className="rounded border border-border/40 bg-background/40 px-2 py-2 typography-micro text-muted-foreground whitespace-pre-wrap max-h-48 overflow-y-auto">
+            {run.output.text}
+          </div>
+        ) : null}
+
+        {Array.isArray(run.annotations) && run.annotations.length > 0 ? (
+          <div className="space-y-1">
+            <div className="typography-micro text-muted-foreground">
+              Failed annotations{run.annotations.length > 20 ? ` (showing 20/${run.annotations.length})` : ''}
+            </div>
+            <div className="space-y-1">
+              {run.annotations.slice(0, 20).map((annotation, idx) => (
+                <div key={`${annotation.path || 'file'}:${annotation.startLine || idx}:${idx}`} className="rounded border border-[var(--status-error-border)] bg-[var(--status-error-background)]/40 px-2 py-2">
+                  <div className="typography-micro text-[var(--status-error)]">
+                    {annotation.title || annotation.level || 'Issue'}
+                    {annotation.path ? ` · ${annotation.path}` : ''}
+                    {typeof annotation.startLine === 'number' ? `:${annotation.startLine}` : ''}
+                    {typeof annotation.endLine === 'number' && annotation.endLine !== annotation.startLine ? `-${annotation.endLine}` : ''}
+                  </div>
+                  <div className="typography-micro text-foreground whitespace-pre-wrap mt-1">
+                    {annotation.message}
+                  </div>
+                  {annotation.rawDetails ? (
+                    <div className="typography-micro text-muted-foreground whitespace-pre-wrap mt-1">
+                      {annotation.rawDetails}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {run.job?.steps && run.job.steps.length > 0 ? (
+          <div className="space-y-1">
+            <div className="typography-micro text-muted-foreground">Steps</div>
+            <div className="space-y-1">
+              {run.job.steps.map((step, idx) => {
+                const c = (step.conclusion || '').toLowerCase();
+                const isFail = c && !['success', 'neutral', 'skipped'].includes(c);
+                const stepKey = `${run.id ?? 'run'}:${run.job?.jobId ?? 'job'}:${step.number ?? idx}:${step.name}`;
+                const stepExpanded = expandedCheckStepKeys.has(stepKey);
+                if (!isFail) {
                   return (
                     <div
-                      key={`${step.name}-${idx}`}
-                      className={
-                        'typography-micro flex items-center gap-2 rounded px-2 py-1 ' +
-                        (isFail ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground')
-                      }
+                      key={stepKey}
+                      className="typography-micro flex w-full items-center gap-2 rounded px-2 py-1 text-muted-foreground"
                     >
                       <span className="truncate">{step.name}</span>
                       {step.conclusion ? <span className="ml-auto flex-shrink-0">{step.conclusion}</span> : null}
                     </div>
                   );
-                })}
-              </div>
+                }
+                return (
+                  <Collapsible key={stepKey} open={stepExpanded}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setExpandedCheckStepKeys((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(stepKey)) {
+                            next.delete(stepKey);
+                          } else {
+                            next.add(stepKey);
+                          }
+                          return next;
+                        });
+                      }}
+                      className={
+                        'typography-micro flex w-full items-center gap-2 rounded px-2 py-1 text-left ' +
+                        (isFail ? 'bg-destructive/10 text-destructive' : 'text-muted-foreground')
+                      }
+                    >
+                      {stepExpanded ? <RiArrowDownSLine className="size-4" /> : <RiArrowRightSLine className="size-4" />}
+                      <span className="truncate">{step.name}</span>
+                      {step.conclusion ? <span className="ml-auto flex-shrink-0">{step.conclusion}</span> : null}
+                    </button>
+                    <CollapsibleContent>
+                      <div className="ml-6 mt-1 rounded border border-border/40 bg-background/40 px-2 py-2 typography-micro text-muted-foreground space-y-1">
+                        {typeof step.number === 'number' ? <div>Step: {step.number}</div> : null}
+                        {step.status ? <div>Status: {step.status}</div> : null}
+                        {step.conclusion ? <div>Conclusion: {step.conclusion}</div> : null}
+                        {step.startedAt ? <div>Started: {formatTimestamp(step.startedAt)}</div> : null}
+                        {step.completedAt ? <div>Completed: {formatTimestamp(step.completedAt)}</div> : null}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                );
+              })}
             </div>
-          ) : null}
-        </div>
-
-        {run.detailsUrl ? (
-          <Button variant="outline" size="sm" asChild className="flex-shrink-0">
-            <a href={run.detailsUrl} target="_blank" rel="noopener noreferrer">
-              <RiExternalLinkLine className="size-4" />
-              Open
-            </a>
-          </Button>
+          </div>
         ) : null}
       </div>
     );
-  }, []);
+  }, [expandedCheckStepKeys, formatTimestamp]);
 
   const sendFailedChecksToChat = React.useCallback(async () => {
     setActiveMainTab('chat');
@@ -292,13 +576,28 @@ export const PullRequestSection: React.FC<{
       const visibleText = 'Review these PR failed checks and propose likely fixes. Do not implement until I confirm.';
       const instructionsText = `Use the attached checks payload.
 - Summarize what is failing.
+- Prioritize check annotations/errors over generic status text.
 - Identify likely root cause(s).
 - Propose a minimal fix plan and verification steps.
 - No speculation: ask for missing info if needed.`;
+      const failedAnnotations = failed.flatMap((run) => {
+        const annotations = Array.isArray(run.annotations) ? run.annotations : [];
+        return annotations.map((annotation) => ({
+          run: run.name,
+          level: annotation.level,
+          title: annotation.title,
+          path: annotation.path,
+          startLine: annotation.startLine,
+          endLine: annotation.endLine,
+          message: annotation.message,
+          rawDetails: annotation.rawDetails,
+        }));
+      });
       const payloadText = `GitHub PR failed checks (JSON)\n${JSON.stringify({
         repo: context.repo ?? null,
         pr: context.pr ?? null,
         failedChecks: failed,
+        failedAnnotations,
       }, null, 2)}`;
 
       void useMessageStore.getState().sendMessage(
@@ -392,24 +691,81 @@ export const PullRequestSection: React.FC<{
     }
   }, [currentSessionId, directory, github, pr, setActiveMainTab]);
 
-  const refresh = React.useCallback(async () => {
+  React.useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  const refresh = React.useCallback(async (options?: { force?: boolean; onlyExistingPr?: boolean; silent?: boolean; markInitialResolved?: boolean }) => {
     if (!canShow) return;
+    if (options?.onlyExistingPr && !statusRef.current?.pr) {
+      return;
+    }
+    if (!options?.force && Date.now() - lastRefreshAtRef.current < PR_REVALIDATE_TTL_MS) {
+      return;
+    }
+    if (isRefreshInFlightRef.current) {
+      return;
+    }
+
+    isRefreshInFlightRef.current = true;
+    lastRefreshAtRef.current = Date.now();
+
     if (githubAuthChecked && githubAuthStatus?.connected === false) {
       setStatus({ connected: false });
       setError(null);
-      setIsLoading(false);
+      if (!options?.silent) {
+        setIsLoading(false);
+      }
+      if (options?.markInitialResolved !== false) {
+        setIsInitialStatusResolved(true);
+      }
+      isRefreshInFlightRef.current = false;
       return;
     }
     if (!github?.prStatus) {
       setStatus(null);
       setError('GitHub runtime API unavailable');
+      if (options?.markInitialResolved !== false) {
+        setIsInitialStatusResolved(true);
+      }
+      isRefreshInFlightRef.current = false;
       return;
     }
-    setIsLoading(true);
+    if (!options?.silent) {
+      setIsLoading(true);
+    }
     setError(null);
     try {
       const next = await github.prStatus(directory, branch);
-      setStatus(next);
+      setStatus((prev) => {
+        const nextPr = next.pr;
+        const prevPr = prev?.pr;
+        const shouldCarryBody = Boolean(
+          nextPr
+          && prevPr
+          && nextPr.number === prevPr.number
+          && (!nextPr.body || !nextPr.body.trim())
+          && typeof prevPr.body === 'string'
+          && prevPr.body.trim().length > 0,
+        );
+
+        if (!shouldCarryBody || !nextPr) {
+          return next;
+        }
+
+        const carriedBody = prevPr?.body;
+        if (!carriedBody) {
+          return next;
+        }
+
+        return {
+          ...next,
+          pr: {
+            ...nextPr,
+            body: carriedBody,
+          },
+        };
+      });
       if (next.connected === false) {
         setError(null);
       }
@@ -417,17 +773,71 @@ export const PullRequestSection: React.FC<{
       const message = e instanceof Error ? e.message : String(e);
       setError(message || 'Failed to load PR status');
     } finally {
-      setIsLoading(false);
+      if (!options?.silent) {
+        setIsLoading(false);
+      }
+      if (options?.markInitialResolved !== false) {
+        setIsInitialStatusResolved(true);
+      }
+      isRefreshInFlightRef.current = false;
     }
   }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus]);
 
   React.useEffect(() => {
     const snapshot = pullRequestDraftSnapshots.get(snapshotKey) ?? null;
+    const statusSnapshot = pullRequestStatusSnapshots.get(snapshotKey) ?? null;
     setTitle(snapshot?.title ?? branchToTitle(branch));
     setBody(snapshot?.body ?? '');
     setDraft(snapshot?.draft ?? false);
-    void refresh();
+    setStatus(statusSnapshot);
+    setError(null);
+    setIsInitialStatusResolved(Boolean(statusSnapshot));
+    void refresh({ force: true, markInitialResolved: true });
   }, [branch, refresh, snapshotKey]);
+
+  React.useEffect(() => {
+    const onFocus = () => {
+      void refresh({ force: true, silent: true });
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void refresh({ force: true, silent: true });
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [refresh]);
+
+  React.useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+
+      const hasPr = Boolean(statusRef.current?.pr);
+      if (!hasPr) {
+        const now = Date.now();
+        const shouldRunDiscovery = now - lastDiscoveryPollAtRef.current >= PR_DISCOVERY_INTERVAL_MS;
+        if (!shouldRunDiscovery) {
+          return;
+        }
+        lastDiscoveryPollAtRef.current = now;
+        void refresh({ force: true, silent: true });
+        return;
+      }
+
+      void refresh({ onlyExistingPr: true, force: true, silent: true });
+    }, PR_REVALIDATE_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [refresh]);
 
   React.useEffect(() => {
     if (githubAuthChecked && githubAuthStatus?.connected === false) {
@@ -447,6 +857,13 @@ export const PullRequestSection: React.FC<{
       additionalContext,
     });
   }, [snapshotKey, title, body, draft, additionalContext, directory, branch]);
+
+  React.useEffect(() => {
+    if (!status) {
+      return;
+    }
+    pullRequestStatusSnapshots.set(snapshotKey, status);
+  }, [snapshotKey, status]);
 
   const generateDescription = React.useCallback(async () => {
     if (isGenerating) return;
@@ -497,7 +914,7 @@ export const PullRequestSection: React.FC<{
       });
       toast.success('PR created');
       setStatus((prev) => (prev ? { ...prev, pr } : prev));
-      await refresh();
+      await refresh({ force: true });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to create PR', { description: message });
@@ -519,7 +936,7 @@ export const PullRequestSection: React.FC<{
       } else {
         toast.message('PR not merged', { description: result.message || 'Not mergeable' });
       }
-      await refresh();
+      await refresh({ force: true });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Merge failed', { description: message });
@@ -540,7 +957,7 @@ export const PullRequestSection: React.FC<{
     try {
       await github.prReady({ directory, number: pr.number });
       toast.success('Marked ready for review');
-      await refresh();
+      await refresh({ force: true });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error('Failed to mark ready', { description: message });
@@ -551,6 +968,46 @@ export const PullRequestSection: React.FC<{
       setIsMarkingReady(false);
     }
   }, [directory, github, refresh]);
+
+  const updatePr = React.useCallback(async (pr: GitHubPullRequest) => {
+    if (!github?.prUpdate) {
+      toast.error('GitHub runtime API unavailable');
+      return;
+    }
+
+    const trimmedTitle = editTitle.trim();
+    if (!trimmedTitle) {
+      toast.error('Title is required');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const updated = await github.prUpdate({
+        directory,
+        number: pr.number,
+        title: trimmedTitle,
+        body: editBody,
+      });
+      setStatus((prev) => (prev
+        ? {
+            ...prev,
+            pr: {
+              ...(prev.pr ?? pr),
+              ...updated,
+            },
+          }
+        : prev));
+      setIsEditingPr(false);
+      toast.success('PR updated');
+      await refresh({ force: true });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast.error('Failed to update PR', { description: message });
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [directory, editBody, editTitle, github, refresh]);
 
   if (!canShow) {
     return null;
@@ -577,29 +1034,58 @@ export const PullRequestSection: React.FC<{
       : 'border-0 bg-transparent rounded-none';
   const headerClassName =
     variant === 'framed'
-      ? 'px-3 py-2 border-b border-border/40 flex items-center justify-between gap-2'
-      : 'px-0 py-3 border-b border-border/40 flex items-center justify-between gap-2';
+      ? 'px-3 py-2 border-b border-border/40 flex flex-col gap-1'
+      : 'px-0 py-3 border-b border-border/40 flex flex-col gap-1';
   const bodyClassName = variant === 'framed' ? 'flex flex-col gap-3 p-3' : 'flex flex-col gap-3 py-3';
 
   return (
     <section className={containerClassName}>
       <div className={headerClassName}>
-        <div className="flex items-center gap-2 min-w-0">
-          <PrStateIcon className="size-4 shrink-0" style={{ color: pr ? prColorVar : 'var(--surface-muted-foreground)' }} />
-          <h3 className="typography-ui-header font-semibold text-foreground truncate">Pull Request</h3>
-          {pr ? (
-            <span className="typography-meta text-muted-foreground truncate">#{pr.number}</span>
-          ) : null}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {pr ? (
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm hover:bg-interactive-hover/50"
+                    onClick={() => void openExternal(pr.url)}
+                    aria-label="Open PR on GitHub"
+                  >
+                    <PrStateIcon className="size-4 shrink-0" style={{ color: prColorVar }} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent><p>Open PR on GitHub</p></TooltipContent>
+              </Tooltip>
+            ) : (
+              <PrStateIcon className="size-4 shrink-0" style={{ color: 'var(--surface-muted-foreground)' }} />
+            )}
+            <h3 className="typography-ui-header font-semibold text-foreground truncate">Pull Request</h3>
+            {pr ? (
+              <span className="typography-meta text-muted-foreground truncate">#{pr.number}</span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            {isLoading ? <RiLoader4Line className="size-4 animate-spin text-muted-foreground" /> : null}
+            {checks ? (
+              <span className="inline-flex items-center gap-2 typography-micro text-muted-foreground">
+                <span className={`h-2 w-2 rounded-full ${statusColor(checks.state)}`} />
+                {checks.total > 0 ? `${checks.success}/${checks.total} checks` : `${checks.state} checks`}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {isLoading ? <RiLoader4Line className="size-4 animate-spin text-muted-foreground" /> : null}
-          {checks ? (
-            <span className="inline-flex items-center gap-2 typography-micro text-muted-foreground">
-              <span className={`h-2 w-2 rounded-full ${statusColor(checks.state)}`} />
-              {checks.total > 0 ? `${checks.success}/${checks.total} checks` : `${checks.state} checks`}
+        {pr ? (
+          <div className="typography-micro text-muted-foreground">
+            <span style={{ color: prColorVar }}>
+              {pr.state}{pr.draft ? ' (draft)' : ''}
             </span>
-          ) : null}
-        </div>
+            {pr.mergeable === false ? ' · not mergeable' : ''}
+            {pr.state === 'open' && typeof pr.mergeableState === 'string' && pr.mergeableState && pr.mergeableState !== 'unknown'
+              ? ` · ${pr.mergeableState}`
+              : ''}
+          </div>
+        ) : null}
       </div>
 
       <div className={bodyClassName}>
@@ -629,50 +1115,44 @@ export const PullRequestSection: React.FC<{
               </div>
             ) : null}
 
-            {pr ? (
+            {!pr && !isInitialStatusResolved && !error && !shouldShowConnectionNotice ? (
+              <div className="flex items-center gap-2 typography-micro text-muted-foreground">
+                <RiLoader4Line className="size-4 animate-spin" />
+                Checking PR status...
+              </div>
+            ) : pr ? (
               <div className="flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3">
                   <div className="min-w-0">
-                    <div className="typography-ui-label text-foreground truncate">{pr.title}</div>
-                    <div className="typography-micro text-muted-foreground truncate">
-                      <span style={{ color: prColorVar }}>
-                        {pr.state}{pr.draft ? ' (draft)' : ''}
-                      </span>
-                      {pr.mergeable === false ? ' · not mergeable' : ''}
-                      {pr.state === 'open' && typeof pr.mergeableState === 'string' && pr.mergeableState && pr.mergeableState !== 'unknown'
-                        ? ` · ${pr.mergeableState}`
-                        : ''}
-                    </div>
-                    <div className="mt-2 space-y-2">
-                      <div className="flex flex-col sm:flex-row items-stretch gap-2">
-                        {checks ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={openChecksDialog}
-                            disabled={isLoadingCheckDetails}
-                            className="justify-center sm:flex-1"
-                          >
-                            {isLoadingCheckDetails ? <RiLoader4Line className="size-4 animate-spin" /> : null}
-                            Check details
-                          </Button>
-                        ) : null}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={sendCommentsToChat}
-                          className={checks ? 'justify-center sm:flex-1' : 'justify-center'}
-                        >
-                          Send PR comments to chat
-                        </Button>
+                    {isEditingPr ? (
+                      <div className="space-y-2">
+                        <Input
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          placeholder="PR title"
+                        />
+                        <Textarea
+                          value={editBody}
+                          onChange={(e) => setEditBody(e.target.value)}
+                          className="min-h-[120px] bg-background/80"
+                          placeholder="Describe this PR"
+                        />
                       </div>
-
-                      {checks?.failure ? (
-                        <Button variant="outline" size="sm" onClick={sendFailedChecksToChat} className="w-full justify-center">
-                          Send failed checks to chat
-                        </Button>
-                      ) : null}
-                    </div>
+                    ) : (
+                      <>
+                        <div className="typography-markdown text-xl font-semibold text-foreground break-words leading-snug">{pr.title}</div>
+                        {pr.body?.trim() ? (
+                          <SimpleMarkdownRenderer
+                            content={pr.body}
+                            className="typography-markdown-body text-muted-foreground break-words mt-1"
+                          />
+                        ) : (
+                          <div className="typography-micro text-muted-foreground whitespace-pre-wrap break-words mt-1">
+                            {isHydratingCurrentPrBody ? 'Loading description...' : 'No description provided.'}
+                          </div>
+                        )}
+                      </>
+                    )}
                     {canMerge && pr.draft ? (
                       <div className="typography-micro text-muted-foreground">
                         Draft PRs must be marked ready before merge.
@@ -683,46 +1163,181 @@ export const PullRequestSection: React.FC<{
                     ) : null}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" asChild>
-                      <a href={pr.url} target="_blank" rel="noopener noreferrer">
-                        <RiExternalLinkLine className="size-4" />
-                        Open
-                      </a>
-                    </Button>
-                    {canMerge && pr.draft && pr.state === 'open' ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => markReady(pr)}
-                        disabled={isMarkingReady || isMerging}
-                      >
-                        {isMarkingReady ? <RiLoader4Line className="size-4 animate-spin" /> : null}
-                        Ready
-                      </Button>
-                    ) : null}
-                    {canMerge ? (
-                      <>
-                        <select
-                          className="h-8 rounded-md border border-border bg-background px-2 typography-meta"
-                          value={mergeMethod}
-                          onChange={(e) => setMergeMethod(e.target.value as MergeMethod)}
-                          disabled={isMerging || pr.state !== 'open'}
-                        >
-                          <option value="squash">Squash</option>
-                          <option value="merge">Merge</option>
-                          <option value="rebase">Rebase</option>
-                        </select>
-                        <Button
-                          size="sm"
-                          onClick={() => mergePr(pr)}
-                          disabled={isMerging || isMarkingReady || pr.state !== 'open' || pr.draft}
-                        >
-                          {isMerging ? <RiLoader4Line className="size-4 animate-spin" /> : null}
-                          Merge
-                        </Button>
-                      </>
-                    ) : null}
+                  <div className="order-first w-full flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {pr.state === 'open' ? (
+                        isEditingPr ? (
+                          <>
+                            <Tooltip delayDuration={300}>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-8 px-0"
+                                  onClick={() => {
+                                    setIsEditingPr(false);
+                                    setEditTitle(pr.title || '');
+                                    setEditBody(pr.body || '');
+                                  }}
+                                  disabled={isUpdating}
+                                  aria-label="Cancel editing"
+                                >
+                                  <RiCloseLine className="size-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Cancel editing</p></TooltipContent>
+                            </Tooltip>
+                            <Tooltip delayDuration={300}>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  className="w-8 px-0"
+                                  onClick={() => updatePr(pr)}
+                                  disabled={isUpdating || !editTitle.trim()}
+                                  aria-label="Save PR title and description"
+                                >
+                                  {isUpdating ? <RiLoader4Line className="size-4 animate-spin" /> : <RiCheckLine className="size-4" />}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Save PR title and description</p></TooltipContent>
+                            </Tooltip>
+                          </>
+                        ) : (
+                          <Tooltip delayDuration={300}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-8 px-0"
+                                onClick={() => setIsEditingPr(true)}
+                                aria-label="Edit PR title and description"
+                              >
+                                <RiEditLine className="size-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Edit PR title and description</p></TooltipContent>
+                          </Tooltip>
+                        )
+                      ) : null}
+
+                      {checks ? (
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-8 px-0"
+                              onClick={openChecksDialog}
+                              disabled={isLoadingCheckDetails}
+                              aria-label="Open checks details"
+                            >
+                              {isLoadingCheckDetails ? <RiLoader4Line className="size-4 animate-spin" /> : <RiInformationLine className="size-4" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Open checks details</p></TooltipContent>
+                        </Tooltip>
+                      ) : null}
+
+                      {checks?.failure ? (
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-8 px-0 border-[var(--status-success-border)] bg-[var(--status-success-background)] text-[var(--status-success)]"
+                              onClick={sendFailedChecksToChat}
+                              aria-label="Resolve failed checks with agent"
+                            >
+                              <RiErrorWarningLine className="size-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Resolve failed checks with agent</p></TooltipContent>
+                        </Tooltip>
+                      ) : null}
+
+                      <Tooltip delayDuration={300}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-8 px-0"
+                            onClick={openCommentsDialog}
+                            aria-label="Open PR comments"
+                          >
+                            <RiChat4Line className="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Open PR comments</p></TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip delayDuration={300}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-8 px-0 border-[var(--status-success-border)] bg-[var(--status-success-background)] text-[var(--status-success)]"
+                            onClick={sendCommentsToChat}
+                            aria-label="Share comments with agent"
+                          >
+                            <RiAiGenerate2 className="size-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Share comments with agent</p></TooltipContent>
+                      </Tooltip>
+
+                      {canMerge && pr.draft && pr.state === 'open' ? (
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-8 px-0"
+                              onClick={() => markReady(pr)}
+                              disabled={isMarkingReady || isMerging || isUpdating || isEditingPr}
+                              aria-label="Mark PR ready for review"
+                            >
+                              {isMarkingReady ? <RiLoader4Line className="size-4 animate-spin" /> : <RiCheckboxCircleLine className="size-4" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent><p>Mark PR ready for review</p></TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                    </div>
+
+                    <div className="ml-auto flex items-center gap-2">
+                      {canMerge ? (
+                        <>
+                          <Select
+                            value={mergeMethod}
+                            onValueChange={(value) => setMergeMethod(value as MergeMethod)}
+                            disabled={isMerging || pr.state !== 'open'}
+                          >
+                            <SelectTrigger size="lg" className="h-8 w-auto min-w-0">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="squash">Squash</SelectItem>
+                              <SelectItem value="merge">Merge</SelectItem>
+                              <SelectItem value="rebase">Rebase</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Tooltip delayDuration={300}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="sm"
+                                className="w-8 px-0"
+                                onClick={() => mergePr(pr)}
+                                disabled={isMerging || isMarkingReady || pr.state !== 'open' || pr.draft || isUpdating || isEditingPr}
+                                aria-label="Merge pull request"
+                              >
+                                {isMerging ? <RiLoader4Line className="size-4 animate-spin" /> : <RiGitMergeLine className="size-4" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Merge pull request</p></TooltipContent>
+                          </Tooltip>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -917,11 +1532,14 @@ export const PullRequestSection: React.FC<{
             {!isLoadingCheckDetails ? (
               <div className="space-y-3">
                 {Array.isArray(checkDetails?.checkRuns) && checkDetails?.checkRuns.length > 0 ? (
-                  checkDetails.checkRuns.map((run, idx) => (
-                    <div key={`${run.name}-${idx}`} className="rounded-md border border-border/60 p-3">
-                      {renderCheckRunSummary(run)}
-                    </div>
-                  ))
+                  checkDetails.checkRuns.map((run, idx) => {
+                    const key = `${run.id ?? 'run'}:${run.job?.jobId ?? 'job'}:${run.name}:${idx}`;
+                    return (
+                      <div key={key} className="p-1">
+                        {renderCheckRunSummary(run)}
+                      </div>
+                    );
+                  })
                 ) : (
                   <div className="text-center text-muted-foreground py-8">No check details available.</div>
                 )}
@@ -929,12 +1547,78 @@ export const PullRequestSection: React.FC<{
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2 mt-3">
-            <div className="flex-1" />
-            <Button variant="outline" onClick={() => setChecksDialogOpen(false)}>
-              Close
-            </Button>
-          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={commentsDialogOpen} onOpenChange={setCommentsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[82vh] min-h-[38rem] flex flex-col gap-2">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RiGitPullRequestLine className="h-5 w-5" />
+              PR Comments
+            </DialogTitle>
+            <DialogDescription>
+              {pr ? `PR #${pr.number}` : 'Pull request'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollShadow className="mt-2 max-h-[66vh] overflow-y-auto overlay-scrollbar-target overlay-scrollbar-container">
+            {isLoadingCommentsDetails ? (
+              <div className="text-center text-muted-foreground py-8 flex items-center justify-center gap-2">
+                <RiLoader4Line className="h-4 w-4 animate-spin" />
+                Loading...
+              </div>
+            ) : null}
+
+            {!isLoadingCommentsDetails ? (
+              <div className="space-y-4">
+                {timelineComments.length > 0 ? (
+                  <div className="relative pl-3">
+                    <div>
+                      {timelineComments.map((comment, idx) => {
+                        const initial = (comment.authorName || '?').charAt(0).toUpperCase();
+                        const isLast = idx === timelineComments.length - 1;
+                        return (
+                          <div key={comment.id} className="relative pl-10 pb-5 last:pb-0">
+                            {!isLast ? <div className="absolute left-4 top-[2.375rem] bottom-[0.375rem] w-px bg-border/60" /> : null}
+                            <div className="absolute left-0 top-0 z-10 flex size-8 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-surface-elevated text-xs text-muted-foreground">
+                              {comment.avatarUrl ? (
+                                <img src={comment.avatarUrl} alt={comment.authorName} className="h-full w-full object-cover" />
+                              ) : (
+                                <span>{initial}</span>
+                              )}
+                            </div>
+                            <div className="rounded-lg bg-surface-elevated px-3 pt-0 pb-3 space-y-2">
+                              <div className="typography-micro text-muted-foreground">
+                                <span className="text-foreground">{comment.authorName}</span>
+                                {comment.authorLogin && comment.authorLogin !== comment.authorName ? ` · @${comment.authorLogin}` : ''}
+                                {comment.createdAt ? ` · ${formatTimestamp(comment.createdAt)}` : ''}
+                              </div>
+                              <div className="typography-micro text-muted-foreground">
+                                {comment.context}
+                                {comment.path ? ` · ${comment.path}` : ''}
+                                {comment.line ? `:${comment.line}` : ''}
+                              </div>
+                              <SimpleMarkdownRenderer
+                                content={linkifyMentionsMarkdown(comment.body)}
+                                className={[
+                                  'typography-markdown-body text-foreground break-words [&_a]:no-underline [&_a:hover]:no-underline',
+                                  selfMentionHighlightClass,
+                                ].filter(Boolean).join(' ')}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">No comments found.</div>
+                )}
+              </div>
+            ) : null}
+          </ScrollShadow>
+
         </DialogContent>
       </Dialog>
     </section>

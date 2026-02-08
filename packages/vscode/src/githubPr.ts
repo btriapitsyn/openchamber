@@ -20,6 +20,7 @@ type GitHubChecksSummary = {
 type GitHubPullRequest = {
   number: number;
   title: string;
+  body?: string;
   url: string;
   state: 'open' | 'closed' | 'merged';
   draft: boolean;
@@ -46,6 +47,13 @@ type GitHubPullRequestCreateInput = {
   base: string;
   body?: string;
   draft?: boolean;
+};
+
+type GitHubPullRequestUpdateInput = {
+  directory: string;
+  number: number;
+  title: string;
+  body?: string;
 };
 
 type GitHubPullRequestMergeInput = {
@@ -208,6 +216,7 @@ export const getPullRequestStatus = async (
   const pr: GitHubPullRequest = {
     number: typeof prJson.number === 'number' ? prJson.number : 0,
     title: readString(prJson.title) || '',
+    body: readString(prJson.body) || '',
     url: readString(prJson.html_url) || '',
     state,
     draft: Boolean(prJson.draft),
@@ -326,11 +335,68 @@ export const createPullRequest = async (
   return {
     number: typeof json.number === 'number' ? json.number : 0,
     title: readString(json.title) || '',
+    body: readString(json.body) || '',
     url: readString(json.html_url) || '',
     state: readString(json.state) === 'closed' ? 'closed' : 'open',
     draft: Boolean(json.draft),
     base: readString((json.base as JsonRecord | undefined)?.ref) || payload.base,
     head: readString((json.head as JsonRecord | undefined)?.ref) || payload.head,
+    headSha: readString((json.head as JsonRecord | undefined)?.sha) || undefined,
+    mergeable: typeof json.mergeable === 'boolean' ? json.mergeable : null,
+    mergeableState: readString(json.mergeable_state) || undefined,
+  };
+};
+
+export const updatePullRequest = async (
+  accessToken: string,
+  directory: string,
+  payload: GitHubPullRequestUpdateInput,
+): Promise<GitHubPullRequest> => {
+  const repo = await resolveRepoFromDirectory(directory);
+  if (!repo) {
+    throw new Error('Unable to resolve GitHub repo from git remote');
+  }
+
+  const resp = await githubFetch(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls/${payload.number}`, accessToken, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: payload.title,
+      ...(typeof payload.body === 'string' ? { body: payload.body } : {}),
+    }),
+  });
+
+  if (resp.status === 403) {
+    throw new Error('Not authorized to edit this PR');
+  }
+  if (resp.status === 401) {
+    const error = new Error('unauthorized');
+    (error as unknown as { status?: number }).status = 401;
+    throw error;
+  }
+
+  const json = await jsonOrNull<JsonRecord>(resp);
+  if (!resp.ok || !json) {
+    const message = readString(json?.message);
+    const firstError = Array.isArray(json?.errors) && json.errors.length > 0
+      ? readString((json.errors[0] as JsonRecord)?.message || (json.errors[0] as JsonRecord)?.code)
+      : '';
+    const details = [message, firstError].filter(Boolean).join(' · ');
+    throw new Error(details || 'Failed to update PR');
+  }
+
+  const merged = Boolean(json.merged || json.merged_at);
+  const state = merged ? 'merged' : (readString(json.state) === 'closed' ? 'closed' : 'open');
+
+  return {
+    number: typeof json.number === 'number' ? json.number : payload.number,
+    title: readString(json.title) || payload.title,
+    body: readString(json.body) || '',
+    url: readString(json.html_url) || '',
+    state,
+    draft: Boolean(json.draft),
+    base: readString((json.base as JsonRecord | undefined)?.ref) || '',
+    head: readString((json.head as JsonRecord | undefined)?.ref) || '',
     headSha: readString((json.head as JsonRecord | undefined)?.sha) || undefined,
     mergeable: typeof json.mergeable === 'boolean' ? json.mergeable : null,
     mergeableState: readString(json.mergeable_state) || undefined,

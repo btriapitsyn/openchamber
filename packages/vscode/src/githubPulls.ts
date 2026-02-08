@@ -37,8 +37,24 @@ type GitHubCheckRun = {
     url?: string;
     name?: string;
     conclusion?: string | null;
-    steps?: Array<{ name: string; status?: string; conclusion?: string | null; number?: number }>;
+    steps?: Array<{
+      name: string;
+      status?: string;
+      conclusion?: string | null;
+      number?: number;
+      startedAt?: string;
+      completedAt?: string;
+    }>;
   };
+  annotations?: Array<{
+    path?: string;
+    startLine?: number;
+    endLine?: number;
+    level?: string;
+    message: string;
+    title?: string;
+    rawDetails?: string;
+  }>;
 };
 
 type GitHubPullRequestHeadRepo = { owner: string; repo: string; url: string; cloneUrl?: string };
@@ -456,7 +472,77 @@ export const getPullRequestContext = async (
       jobsByRunId.set(runId, jobs.filter((j) => j && typeof j === 'object') as JsonRecord[]);
     }
 
+    const annotationsByRunId = new Map<number, Array<{
+      path?: string;
+      startLine?: number;
+      endLine?: number;
+      level?: string;
+      message: string;
+      title?: string;
+      rawDetails?: string;
+    }>>();
+
     for (const run of checkRuns) {
+      const runId = typeof run.id === 'number' ? run.id : 0;
+      const conclusion = (run.conclusion || '').toLowerCase();
+      const shouldLoadAnnotations = Boolean(
+        runId > 0
+        && conclusion
+        && !['success', 'neutral', 'skipped'].includes(conclusion),
+      );
+      if (!shouldLoadAnnotations) {
+        continue;
+      }
+
+      const annotations: Array<{
+        path?: string;
+        startLine?: number;
+        endLine?: number;
+        level?: string;
+        message: string;
+        title?: string;
+        rawDetails?: string;
+      }> = [];
+
+      for (let page = 1; page <= 3; page += 1) {
+        const annotationsResp = await githubFetch(
+          `${API_BASE}/repos/${repo.owner}/${repo.repo}/check-runs/${runId}/annotations?per_page=50&page=${page}`,
+          accessToken,
+        );
+        if (annotationsResp.status === 401) {
+          return { connected: false };
+        }
+        const annotationsJson = await jsonOrNull<unknown[]>(annotationsResp);
+        const chunk = Array.isArray(annotationsJson) ? annotationsJson : [];
+        chunk.forEach((entry) => {
+          const rec = entry && typeof entry === 'object' ? (entry as JsonRecord) : null;
+          const message = readString(rec?.message);
+          if (!message) return;
+          annotations.push({
+            path: readString(rec?.path) || undefined,
+            startLine: typeof rec?.start_line === 'number' ? rec.start_line : undefined,
+            endLine: typeof rec?.end_line === 'number' ? rec.end_line : undefined,
+            level: readString(rec?.annotation_level) || undefined,
+            message,
+            title: readString(rec?.title) || undefined,
+            rawDetails: readString(rec?.raw_details) || undefined,
+          });
+        });
+        if (chunk.length < 50) {
+          break;
+        }
+      }
+
+      if (annotations.length > 0) {
+        annotationsByRunId.set(runId, annotations);
+      }
+    }
+
+    for (const run of checkRuns) {
+      if (run.id && annotationsByRunId.has(run.id)) {
+        run.annotations = annotationsByRunId.get(run.id);
+      }
+
       const ids = parseIds(run.detailsUrl);
       if (!ids.runId) continue;
       const jobs = jobsByRunId.get(ids.runId) ?? [];
@@ -480,9 +566,18 @@ export const getPullRequestContext = async (
               ? (rec?.conclusion as string | null)
               : undefined,
             number: typeof rec?.number === 'number' ? rec.number : undefined,
+            startedAt: readString(rec?.started_at) || undefined,
+            completedAt: readString(rec?.completed_at) || undefined,
           };
         })
-        .filter(Boolean) as Array<{ name: string; status?: string; conclusion?: string | null; number?: number }>;
+        .filter(Boolean) as Array<{
+          name: string;
+          status?: string;
+          conclusion?: string | null;
+          number?: number;
+          startedAt?: string;
+          completedAt?: string;
+        }>;
 
       run.job = {
         runId: ids.runId,
@@ -494,6 +589,7 @@ export const getPullRequestContext = async (
           : undefined,
         steps: steps.length > 0 ? steps : undefined,
       };
+
     }
   }
 

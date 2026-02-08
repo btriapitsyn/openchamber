@@ -594,13 +594,30 @@ export type GitHubCheckRun = {
     url?: string;
     name?: string;
     conclusion?: string | null;
-    steps?: Array<{ name: string; status?: string; conclusion?: string | null; number?: number }>;
+    steps?: Array<{
+      name: string;
+      status?: string;
+      conclusion?: string | null;
+      number?: number;
+      startedAt?: string;
+      completedAt?: string;
+    }>;
   };
+  annotations?: Array<{
+    path?: string;
+    startLine?: number;
+    endLine?: number;
+    level?: string;
+    message: string;
+    title?: string;
+    rawDetails?: string;
+  }>;
 };
 
 export type GitHubPullRequest = {
   number: number;
   title: string;
+  body?: string;
   url: string;
   state: 'open' | 'closed' | 'merged';
   draft: boolean;
@@ -684,6 +701,13 @@ export type GitHubPullRequestCreateInput = {
   base: string;
   body?: string;
   draft?: boolean;
+};
+
+export type GitHubPullRequestUpdateInput = {
+  directory: string;
+  number: number;
+  title: string;
+  body?: string;
 };
 
 export type GitHubPullRequestMergeInput = {
@@ -794,6 +818,7 @@ export interface GitHubAPI {
 
   prStatus(directory: string, branch: string): Promise<GitHubPullRequestStatus>;
   prCreate(payload: GitHubPullRequestCreateInput): Promise<GitHubPullRequest>;
+  prUpdate(payload: GitHubPullRequestUpdateInput): Promise<GitHubPullRequest>;
   prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>;
   prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>;
 

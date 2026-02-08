@@ -6215,6 +6215,7 @@ async function main(options = {}) {
         pr: {
           number: prData.number,
           title: prData.title,
+          body: prData.body || '',
           url: prData.html_url,
           state: mergedState,
           draft: Boolean(prData.draft),
@@ -6280,6 +6281,7 @@ async function main(options = {}) {
       return res.json({
         number: pr.number,
         title: pr.title,
+        body: pr.body || '',
         url: pr.html_url,
         state: pr.state === 'closed' ? 'closed' : 'open',
         draft: Boolean(pr.draft),
@@ -6292,6 +6294,82 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to create GitHub PR:', error);
       return res.status(500).json({ error: error.message || 'Failed to create GitHub PR' });
+    }
+  });
+
+  app.post('/api/github/pr/update', async (req, res) => {
+    try {
+      const directory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
+      const number = typeof req.body?.number === 'number' ? req.body.number : null;
+      const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+      const body = typeof req.body?.body === 'string' ? req.body.body : undefined;
+      if (!directory || !number || !title) {
+        return res.status(400).json({ error: 'directory, number, title are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ error: 'GitHub not connected' });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
+      }
+
+      let updated;
+      try {
+        updated = await octokit.rest.pulls.update({
+          owner: repo.owner,
+          repo: repo.repo,
+          pull_number: number,
+          title,
+          ...(typeof body === 'string' ? { body } : {}),
+        });
+      } catch (error) {
+        if (error?.status === 401) {
+          return res.status(401).json({ error: 'GitHub not connected' });
+        }
+        if (error?.status === 403) {
+          return res.status(403).json({ error: 'Not authorized to edit this PR' });
+        }
+        if (error?.status === 404) {
+          return res.status(404).json({ error: 'PR not found in this repository' });
+        }
+        if (error?.status === 422) {
+          const apiMessage = error?.response?.data?.message;
+          const firstError = Array.isArray(error?.response?.data?.errors) && error.response.data.errors.length > 0
+            ? (error.response.data.errors[0]?.message || error.response.data.errors[0]?.code)
+            : null;
+          const message = [apiMessage, firstError].filter(Boolean).join(' · ') || 'Invalid PR update payload';
+          return res.status(422).json({ error: message });
+        }
+        throw error;
+      }
+
+      const pr = updated?.data;
+      if (!pr) {
+        return res.status(500).json({ error: 'Failed to update PR' });
+      }
+
+      return res.json({
+        number: pr.number,
+        title: pr.title,
+        body: pr.body || '',
+        url: pr.html_url,
+        state: pr.merged_at ? 'merged' : (pr.state === 'closed' ? 'closed' : 'open'),
+        draft: Boolean(pr.draft),
+        base: pr.base?.ref,
+        head: pr.head?.ref,
+        headSha: pr.head?.sha,
+        mergeable: pr.mergeable,
+        mergeableState: pr.mergeable_state,
+      });
+    } catch (error) {
+      console.error('Failed to update GitHub PR:', error);
+      return res.status(500).json({ error: error.message || 'Failed to update GitHub PR' });
     }
   });
 
@@ -6739,6 +6817,7 @@ async function main(options = {}) {
           const checkRuns = Array.isArray(runs?.data?.check_runs) ? runs.data.check_runs : [];
           if (checkRuns.length > 0) {
             const parsedJobs = new Map();
+            const parsedAnnotations = new Map();
             if (includeCheckDetails) {
               // Prefetch actions jobs per runId.
               const runIds = new Set();
@@ -6774,6 +6853,47 @@ async function main(options = {}) {
                   parsedJobs.set(runId, []);
                 }
               }
+
+              for (const run of checkRuns) {
+                const runConclusion = typeof run?.conclusion === 'string' ? run.conclusion.toLowerCase() : '';
+                const shouldLoadAnnotations = Boolean(
+                  run?.id
+                  && runConclusion
+                  && !['success', 'neutral', 'skipped'].includes(runConclusion)
+                );
+                if (!shouldLoadAnnotations) {
+                  continue;
+                }
+
+                const checkRunId = Number(run.id);
+                if (!Number.isFinite(checkRunId) || checkRunId <= 0) {
+                  continue;
+                }
+
+                const annotations = [];
+                for (let page = 1; page <= 3; page += 1) {
+                  try {
+                    const annotationsResp = await octokit.rest.checks.listAnnotations({
+                      owner: repo.owner,
+                      repo: repo.repo,
+                      check_run_id: checkRunId,
+                      per_page: 50,
+                      page,
+                    });
+                    const chunk = Array.isArray(annotationsResp?.data) ? annotationsResp.data : [];
+                    annotations.push(...chunk);
+                    if (chunk.length < 50) {
+                      break;
+                    }
+                  } catch {
+                    break;
+                  }
+                }
+
+                if (annotations.length > 0) {
+                  parsedAnnotations.set(checkRunId, annotations);
+                }
+              }
             }
 
             checkRunsOut = checkRuns.map((run) => {
@@ -6796,14 +6916,16 @@ async function main(options = {}) {
                       url: picked.html_url,
                       name: picked.name,
                       conclusion: picked.conclusion,
-                      steps: Array.isArray(picked.steps)
-                        ? picked.steps.map((s) => ({
-                            name: s.name,
-                            status: s.status,
-                            conclusion: s.conclusion,
-                            number: s.number,
-                          }))
-                        : undefined,
+                          steps: Array.isArray(picked.steps)
+                            ? picked.steps.map((s) => ({
+                                name: s.name,
+                                status: s.status,
+                                conclusion: s.conclusion,
+                                number: s.number,
+                                startedAt: s.started_at || undefined,
+                                completedAt: s.completed_at || undefined,
+                              }))
+                            : undefined,
                     };
                   } else {
                     job = { runId, ...(jobId ? { jobId } : {}), url: detailsUrl };
@@ -6831,6 +6953,19 @@ async function main(options = {}) {
                     }
                   : undefined,
                 ...(job ? { job } : {}),
+                ...(run.id && parsedAnnotations.has(run.id)
+                  ? {
+                      annotations: parsedAnnotations.get(run.id).map((a) => ({
+                        path: a.path || undefined,
+                        startLine: typeof a.start_line === 'number' ? a.start_line : undefined,
+                        endLine: typeof a.end_line === 'number' ? a.end_line : undefined,
+                        level: a.annotation_level || undefined,
+                        message: a.message || '',
+                        title: a.title || undefined,
+                        rawDetails: a.raw_details || undefined,
+                      })).filter((a) => a.message),
+                    }
+                  : {}),
               };
             });
             const counts = { success: 0, failure: 0, pending: 0 };

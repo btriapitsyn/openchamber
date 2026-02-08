@@ -15,6 +15,7 @@ import {
   useIsGitRepo,
 } from '@/stores/useGitStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import {
   RiGitBranchLine,
   RiGitMergeLine,
@@ -64,6 +65,11 @@ type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
 type BranchOperation = 'merge' | 'rebase' | null;
 type ActionTab = 'commit' | 'branch' | 'pr' | 'worktree';
+
+const GIT_ACTION_TAB_STORAGE_KEY = 'oc.git.actionTab';
+
+const isActionTab = (value: unknown): value is ActionTab =>
+  value === 'commit' || value === 'branch' || value === 'pr' || value === 'worktree';
 
 
 type GitViewSnapshot = {
@@ -389,7 +395,13 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   const [gitmojiEmojis, setGitmojiEmojis] = React.useState<GitmojiEntry[]>([]);
   const [gitmojiSearch, setGitmojiSearch] = React.useState('');
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = React.useState(false);
-  const [actionTab, setActionTab] = React.useState<ActionTab>('commit');
+  const [actionTab, setActionTab] = React.useState<ActionTab>(() => {
+    if (typeof window === 'undefined') {
+      return 'commit';
+    }
+    const stored = window.localStorage.getItem(GIT_ACTION_TAB_STORAGE_KEY);
+    return isActionTab(stored) ? stored : 'commit';
+  });
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
   const [branchOperation, setBranchOperation] = React.useState<BranchOperation>(null);
   const [operationLogs, setOperationLogs] = React.useState<OperationLogEntry[]>([]);
@@ -419,6 +431,13 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
     if (!conflictStorageKey || typeof window === 'undefined') return;
     window.localStorage.removeItem(conflictStorageKey);
   }, [conflictStorageKey]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(GIT_ACTION_TAB_STORAGE_KEY, actionTab);
+  }, [actionTab]);
 
   // Restore conflict state from localStorage on mount
   React.useEffect(() => {
@@ -1617,6 +1636,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
             <div className="h-px bg-border/40" />
 
             <ScrollableOverlay
+              as={ScrollShadow}
               ref={actionPanelScrollRef}
               outerClassName="flex-1 min-h-0"
               className="px-4 py-4"

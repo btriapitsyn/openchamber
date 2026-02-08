@@ -32,6 +32,7 @@ import {
   getPullRequestStatus,
   markPullRequestReady,
   mergePullRequest,
+  updatePullRequest,
 } from './githubPr';
 
 import {
@@ -1389,6 +1390,36 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           return { id, type, success: true, data: pr };
         } catch (error: unknown) {
           const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
+      }
+
+      case 'api:github/pr:update': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) return { id, type, success: false, error: 'GitHub not connected' };
+        const directory = readStringField(payload, 'directory');
+        const number = readNumberField(payload, 'number') ?? 0;
+        const title = readStringField(payload, 'title');
+        const body = readStringField(payload, 'body');
+        if (!directory || !number || !title) {
+          return { id, type, success: false, error: 'directory, number, title are required' };
+        }
+        try {
+          const pr = await updatePullRequest(stored.accessToken, directory, {
+            directory,
+            number,
+            title,
+            ...(typeof body === 'string' ? { body } : {}),
+          });
+          return { id, type, success: true, data: pr };
+        } catch (error: unknown) {
+          const status = (error && typeof error === 'object' && 'status' in error) ? (error as { status?: number }).status : undefined;
+          const message = error instanceof Error ? error.message : String(error);
+          if (status === 401 || message === 'unauthorized') {
+            await clearGitHubAuth(context);
+          }
           return { id, type, success: false, error: message };
         }
       }
