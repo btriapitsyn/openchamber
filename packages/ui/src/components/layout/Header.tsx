@@ -32,6 +32,18 @@ import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { formatPercent, formatWindowLabel, QUOTA_PROVIDERS } from '@/lib/quota';
 import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
 import { updateDesktopSettings } from '@/lib/persistence';
+import {
+  getAllModelFamilies,
+  groupModelsByFamily,
+  sortModelFamilies,
+} from '@/lib/quota/model-families';
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
 import type { UsageWindow } from '@/types';
 import type { GitHubAuthStatus } from '@/lib/api/types';
 import { DesktopHostSwitcherButton } from '@/components/desktop/DesktopHostSwitcher';
@@ -183,12 +195,23 @@ export const Header: React.FC = () => {
   const [isSwitchingGitHubAccount, setIsSwitchingGitHubAccount] = React.useState(false);
   const [isMobileRateLimitsOpen, setIsMobileRateLimitsOpen] = React.useState(false);
   useQuotaAutoRefresh();
+  const selectedModels = useQuotaStore((state) => state.selectedModels);
+  const expandedFamilies = useQuotaStore((state) => state.expandedFamilies);
+  const toggleFamilyExpanded = useQuotaStore((state) => state.toggleFamilyExpanded);
+
+  interface RateLimitGroup {
+    providerId: string;
+    providerName: string;
+    entries: Array<[string, UsageWindow]>;
+    modelFamilies?: Array<{
+      familyId: string | null;
+      familyLabel: string;
+      models: Array<[string, UsageWindow]>;
+    }>;
+  }
+
   const rateLimitGroups = React.useMemo(() => {
-    const groups: Array<{
-      providerId: string;
-      providerName: string;
-      entries: Array<[string, UsageWindow]>;
-    }> = [];
+    const groups: RateLimitGroup[] = [];
 
     for (const provider of QUOTA_PROVIDERS) {
       if (!dropdownProviderIds.includes(provider.id)) {
@@ -196,14 +219,90 @@ export const Header: React.FC = () => {
       }
       const result = quotaResults.find((entry) => entry.providerId === provider.id);
       const windows = (result?.usage?.windows ?? {}) as Record<string, UsageWindow>;
+      const models = result?.usage?.models;
       const entries = Object.entries(windows);
-      if (entries.length > 0) {
-        groups.push({ providerId: provider.id, providerName: provider.name, entries });
+
+      const group: RateLimitGroup = {
+        providerId: provider.id,
+        providerName: provider.name,
+        entries,
+      };
+
+      // Add model families if provider has per-model quotas
+      if (models && Object.keys(models).length > 0) {
+        const providerSelectedModels = selectedModels[provider.id] ?? [];
+        // If no models are explicitly selected, show all models
+        const hasExplicitSelections = providerSelectedModels.length > 0;
+        const modelGroups = groupModelsByFamily(models, provider.id);
+        const families = getAllModelFamilies(provider.id);
+        const sortedFamilies = sortModelFamilies(families);
+
+        group.modelFamilies = [];
+
+        // Add predefined families first
+        for (const family of sortedFamilies) {
+          const modelNames = modelGroups.get(family.id) ?? [];
+          if (modelNames.length === 0) continue;
+
+          // Filter to selected models only, OR show all if nothing selected
+          const selectedModelNames = hasExplicitSelections
+            ? modelNames.filter((m: string) => providerSelectedModels.includes(m))
+            : modelNames;
+          if (selectedModelNames.length === 0) continue;
+
+          const familyModels: Array<[string, UsageWindow]> = [];
+          for (const modelName of selectedModelNames) {
+            const modelUsage = models[modelName] as { windows?: Record<string, UsageWindow> } | undefined;
+            if (modelUsage?.windows) {
+              const windowEntries = Object.entries(modelUsage.windows);
+              if (windowEntries.length > 0) {
+                familyModels.push([modelName, windowEntries[0][1]]);
+              }
+            }
+          }
+
+          if (familyModels.length > 0) {
+            group.modelFamilies.push({
+              familyId: family.id,
+              familyLabel: family.label,
+              models: familyModels,
+            });
+          }
+        }
+
+        // Add "Other" family for remaining models
+        const otherModelNames = modelGroups.get(null) ?? [];
+        const selectedOtherModels = hasExplicitSelections
+          ? otherModelNames.filter((m: string) => providerSelectedModels.includes(m))
+          : otherModelNames;
+        if (selectedOtherModels.length > 0) {
+          const otherModels: Array<[string, UsageWindow]> = [];
+          for (const modelName of selectedOtherModels) {
+            const modelUsage = models[modelName] as { windows?: Record<string, UsageWindow> } | undefined;
+            if (modelUsage?.windows) {
+              const windowEntries = Object.entries(modelUsage.windows);
+              if (windowEntries.length > 0) {
+                otherModels.push([modelName, windowEntries[0][1]]);
+              }
+            }
+          }
+          if (otherModels.length > 0) {
+            group.modelFamilies.push({
+              familyId: null,
+              familyLabel: 'Other',
+              models: otherModels,
+            });
+          }
+        }
+      }
+
+      if (entries.length > 0 || (group.modelFamilies && group.modelFamilies.length > 0)) {
+        groups.push(group);
       }
     }
 
     return groups;
-  }, [dropdownProviderIds, quotaResults]);
+  }, [dropdownProviderIds, quotaResults, selectedModels]);
   const hasRateLimits = rateLimitGroups.length > 0;
   React.useEffect(() => {
     void loadQuotaSettings();
@@ -725,54 +824,125 @@ export const Header: React.FC = () => {
                 <span className="typography-ui-label text-muted-foreground">No rate limits available.</span>
               </DropdownMenuItem>
             )}
-            {rateLimitGroups.map((group, index) => (
-              <React.Fragment key={group.providerId}>
-                <DropdownMenuLabel className="sticky top-[60px] z-10 flex items-center gap-2 bg-[var(--surface-elevated)] typography-ui-label text-foreground">
-                  <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
-                  {group.providerName}
-                </DropdownMenuLabel>
-                {group.entries.length === 0 ? (
-                  <DropdownMenuItem
-                    key={`${group.providerId}-empty`}
-                    className="cursor-default"
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    <span className="typography-ui-label text-muted-foreground">No rate limits reported.</span>
-                  </DropdownMenuItem>
-                ) : (
-                  group.entries.map(([label, window]) => (
+            {rateLimitGroups.map((group, index) => {
+              const providerExpandedFamilies = expandedFamilies[group.providerId] ?? [];
+
+              return (
+                <React.Fragment key={group.providerId}>
+                  <DropdownMenuLabel className="sticky top-[60px] z-10 flex items-center gap-2 bg-[var(--surface-elevated)] typography-ui-label text-foreground">
+                    <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
+                    {group.providerName}
+                  </DropdownMenuLabel>
+
+                  {/* Provider-level entries */}
+                  {group.entries.length === 0 && (!group.modelFamilies || group.modelFamilies.length === 0) ? (
                     <DropdownMenuItem
-                      key={`${group.providerId}-${label}`}
-                      className="cursor-default items-start"
+                      key={`${group.providerId}-empty`}
+                      className="cursor-default"
                       onSelect={(event) => event.preventDefault()}
                     >
-                      <span className="flex min-w-0 flex-1 flex-col gap-2">
-                        {(() => {
-                          const displayPercent = quotaDisplayMode === 'remaining'
-                            ? window.remainingPercent
-                            : window.usedPercent;
-                          return (
-                            <>
-                              <span className="flex min-w-0 items-center justify-between gap-3">
-                                <span className="truncate typography-micro text-muted-foreground">{formatWindowLabel(label)}</span>
-                                <span className="typography-ui-label text-foreground tabular-nums">
-                                  {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
-                                </span>
-                              </span>
-                              <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="h-1" />
-                              <span className="flex items-center justify-between typography-micro text-muted-foreground text-[10px]">
-                                <span>{window.resetAfterFormatted ?? window.resetAtFormatted ?? ''}</span>
-                              </span>
-                            </>
-                          );
-                        })()}
-                      </span>
+                      <span className="typography-ui-label text-muted-foreground">No rate limits reported.</span>
                     </DropdownMenuItem>
-                  ))
-                )}
-                {index < rateLimitGroups.length - 1 && <DropdownMenuSeparator />}
-              </React.Fragment>
-            ))}
+                  ) : (
+                    <>
+                      {/* Provider-level windows */}
+                      {group.entries.map(([label, window]) => (
+                        <DropdownMenuItem
+                          key={`${group.providerId}-${label}`}
+                          className="cursor-default items-start"
+                          onSelect={(event) => event.preventDefault()}
+                        >
+                          <span className="flex min-w-0 flex-1 flex-col gap-2">
+                            {(() => {
+                              const displayPercent = quotaDisplayMode === 'remaining'
+                                ? window.remainingPercent
+                                : window.usedPercent;
+                              return (
+                                <>
+                                  <span className="flex min-w-0 items-center justify-between gap-3">
+                                    <span className="truncate typography-micro text-muted-foreground">{formatWindowLabel(label)}</span>
+                                    <span className="typography-ui-label text-foreground tabular-nums">
+                                      {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
+                                    </span>
+                                  </span>
+                                  <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="h-1" />
+                                  <span className="flex items-center justify-between typography-micro text-muted-foreground text-[10px]">
+                                    <span>{window.resetAfterFormatted ?? window.resetAtFormatted ?? ''}</span>
+                                  </span>
+                                </>
+                              );
+                            })()}
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+
+                      {/* Model families with collapsible sections - default COLLAPSED */}
+                      {group.modelFamilies && group.modelFamilies.length > 0 && (
+                        <div className="px-2 py-1">
+                          {group.modelFamilies.map((family) => {
+                            const isExpanded = providerExpandedFamilies.includes(family.familyId ?? 'other');
+
+                            return (
+                              <Collapsible
+                                key={family.familyId ?? 'other'}
+                                open={isExpanded}
+                                onOpenChange={() => toggleFamilyExpanded(group.providerId, family.familyId ?? 'other')}
+                              >
+                                <CollapsibleTrigger className="flex w-full items-center justify-between py-1.5 text-left">
+                                  <span className="typography-ui-label font-medium text-foreground">
+                                    {family.familyLabel}
+                                  </span>
+                                  {isExpanded ? (
+                                    <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
+                                  ) : (
+                                    <RiArrowRightSLine className="h-4 w-4 text-muted-foreground" />
+                                  )}
+                                </CollapsibleTrigger>
+                                <CollapsibleContent>
+                                  <div className="space-y-1 pl-2">
+                                    {family.models.map(([modelName, window]) => (
+                                      <div
+                                        key={`${group.providerId}-${modelName}`}
+                                        className="py-1.5"
+                                      >
+                                        <div className="flex min-w-0 flex-col gap-1.5">
+                                          <span className="flex min-w-0 items-center justify-between gap-3">
+                                            <span className="truncate typography-micro text-muted-foreground">{modelName}</span>
+                                            {(() => {
+                                              const displayPercent = quotaDisplayMode === 'remaining'
+                                                ? window.remainingPercent
+                                                : window.usedPercent;
+                                              return (
+                                                <span className="typography-ui-label text-foreground tabular-nums">
+                                                  {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
+                                                </span>
+                                              );
+                                            })()}
+                                          </span>
+                                          {(() => {
+                                            const displayPercent = quotaDisplayMode === 'remaining'
+                                              ? window.remainingPercent
+                                              : window.usedPercent;
+                                            return (
+                                              <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="h-1" />
+                                            );
+                                          })()}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </CollapsibleContent>
+                              </Collapsible>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {index < rateLimitGroups.length - 1 && <DropdownMenuSeparator />}
+                </React.Fragment>
+              );
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
         <McpDropdown headerIconButtonClass={headerIconButtonClass} />
