@@ -894,7 +894,7 @@ export const PullRequestSection: React.FC<{
       </div>
 
       <Dialog open={checksDialogOpen} onOpenChange={setChecksDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col">
+        <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col min-h-0">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <RiGitPullRequestLine className="h-5 w-5" />
@@ -905,7 +905,7 @@ export const PullRequestSection: React.FC<{
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto mt-2">
+          <div className="flex-1 min-h-0 overflow-y-auto mt-2">
             {isLoadingCheckDetails ? (
               <div className="text-center text-muted-foreground py-8 flex items-center justify-center gap-2">
                 <RiLoader4Line className="h-4 w-4 animate-spin" />

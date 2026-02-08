@@ -1553,8 +1553,8 @@ export const GitView: React.FC = () => {
         )}
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(520px,1fr)_480px]">
-          <div className="min-w-0 h-full flex flex-col">
+        <div className="h-full min-h-0 grid grid-cols-1 xl:grid-cols-[minmax(520px,1fr)_480px]">
+          <div className="min-w-0 min-h-0 h-full flex flex-col">
             {hasChanges ? (
               <ChangesSection
                 variant="plain"
@@ -1585,7 +1585,7 @@ export const GitView: React.FC = () => {
             )}
           </div>
 
-          <div className="min-w-0 h-full border-t xl:border-t-0 xl:border-l border-border/40 bg-muted/10 flex flex-col">
+          <div className="min-w-0 min-h-0 h-full border-t xl:border-t-0 xl:border-l border-border/40 bg-muted/10 flex flex-col">
             <div className="px-3 py-3">
               <AnimatedTabs<ActionTab>
                 value={actionTab}
@@ -1601,7 +1601,12 @@ export const GitView: React.FC = () => {
             </div>
             <div className="h-px bg-border/40" />
 
-            <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-4 py-4">
+            <ScrollableOverlay
+              outerClassName="flex-1 min-h-0"
+              className="px-4 py-4"
+              disableHorizontal
+              preventOverscroll
+            >
               {actionTab === 'commit' ? (
                 <CommitSection
                   variant="plain"

@@ -35,7 +35,7 @@ export const ChangesSection: React.FC<ChangesSectionProps> = ({
   const containerClassName =
     variant === 'framed'
       ? 'flex flex-col rounded-xl border border-border/60 bg-background/70'
-      : 'flex flex-col min-h-0';
+      : 'flex flex-col flex-1 min-h-0';
   const headerClassName =
     variant === 'framed'
       ? 'flex items-center justify-between gap-2 px-3 py-2 border-b border-border/40'
