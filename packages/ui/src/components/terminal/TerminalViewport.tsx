@@ -64,11 +64,12 @@ interface TerminalViewportProps {
   fontSize: number;
   className?: string;
   enableTouchScroll?: boolean;
+  autoFocus?: boolean;
 }
 
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
   (
-    { sessionKey, chunks, onInput, onResize, theme, fontFamily, fontSize, className, enableTouchScroll },
+    { sessionKey, chunks, onInput, onResize, theme, fontFamily, fontSize, className, enableTouchScroll, autoFocus = true },
     ref
   ) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -94,6 +95,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const refocusTimeoutRef = React.useRef<number | null>(null);
     const keydownProbeTimeoutRef = React.useRef<number | null>(null);
     const lastObservedValueRef = React.useRef('');
+    const cursorBlinkStateRef = React.useRef<boolean | null>(null);
     const [, forceRender] = React.useReducer((x) => x + 1, 0);
     const [terminalReadyVersion, bumpTerminalReady] = React.useReducer((x) => x + 1, 0);
 
@@ -157,6 +159,36 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       });
     }, [useHiddenInputOverlay]);
 
+    const setTerminalCursorBlink = React.useCallback((enabled: boolean) => {
+      if (cursorBlinkStateRef.current === enabled) {
+        return;
+      }
+
+      const terminal = terminalRef.current as unknown as {
+        setOption?: (key: string, value: unknown) => void;
+        options?: { cursorBlink?: boolean };
+      } | null;
+
+      if (!terminal) {
+        return;
+      }
+
+      try {
+        if (typeof terminal.setOption === 'function') {
+          terminal.setOption('cursorBlink', enabled);
+          cursorBlinkStateRef.current = enabled;
+          return;
+        }
+
+        if (terminal.options) {
+          terminal.options.cursorBlink = enabled;
+          cursorBlinkStateRef.current = enabled;
+        }
+      } catch {
+        // ignored
+      }
+    }, []);
+
     const useTextInput = useHiddenInputOverlay && isAndroid;
 
     const focusHiddenInput = React.useCallback((clientX?: number, clientY?: number) => {
@@ -197,6 +229,16 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         } catch { /* ignored */ }
       }
     }, [useTextInput]);
+
+    const focusTerminalInput = React.useCallback(() => {
+      if (useHiddenInputOverlay) {
+        focusHiddenInput();
+        setTerminalCursorBlink(true);
+        return;
+      }
+      terminalRef.current?.focus();
+      setTerminalCursorBlink(true);
+    }, [focusHiddenInput, setTerminalCursorBlink, useHiddenInputOverlay]);
 
     const readEditableValue = React.useCallback((target: HTMLElement) => {
       if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
@@ -839,6 +881,29 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
 
       container.tabIndex = useHiddenInputOverlay ? -1 : 0;
 
+      const handleTerminalTextareaFocus = () => {
+        setTerminalCursorBlink(true);
+      };
+
+      const handleTerminalTextareaBlur = () => {
+        setTerminalCursorBlink(false);
+      };
+
+      const handleDocumentFocusIn = (event: FocusEvent) => {
+        const target = event.target as Node | null;
+        if (target && container.contains(target)) {
+          setTerminalCursorBlink(true);
+          return;
+        }
+        setTerminalCursorBlink(false);
+      };
+
+      const handleWindowBlur = () => {
+        setTerminalCursorBlink(false);
+      };
+
+      let localTerminalTextarea: HTMLTextAreaElement | null = null;
+
       const initialize = async () => {
         try {
           const ghostty = await getGhostty();
@@ -859,6 +924,16 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
           terminal.loadAddon(fitAddon);
           terminal.open(container);
           bumpTerminalReady();
+          cursorBlinkStateRef.current = false;
+
+          localTerminalTextarea =
+            (terminal as unknown as { textarea?: HTMLTextAreaElement | null }).textarea
+            ?? container.querySelector('textarea');
+
+          if (localTerminalTextarea) {
+            localTerminalTextarea.addEventListener('focus', handleTerminalTextareaFocus);
+            localTerminalTextarea.addEventListener('blur', handleTerminalTextareaBlur);
+          }
 
           disableTerminalTextareas();
 
@@ -880,10 +955,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
 
           fitTerminal();
           setupTouchScroll();
-          if (!useHiddenInputOverlay) {
-            terminal.focus();
-          }
-
           localDisposables = [
             terminal.onData((data: string) => {
               inputHandlerRef.current(data);
@@ -907,12 +978,22 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
 
       void initialize();
 
+      document.addEventListener('focusin', handleDocumentFocusIn, true);
+      window.addEventListener('blur', handleWindowBlur);
+
       return () => {
         disposed = true;
         touchScrollCleanupRef.current?.();
         touchScrollCleanupRef.current = null;
 
+        document.removeEventListener('focusin', handleDocumentFocusIn, true);
+        window.removeEventListener('blur', handleWindowBlur);
+
         localDisposables.forEach((disposable) => disposable.dispose());
+        if (localTerminalTextarea) {
+          localTerminalTextarea.removeEventListener('focus', handleTerminalTextareaFocus);
+          localTerminalTextarea.removeEventListener('blur', handleTerminalTextareaBlur);
+        }
         localResizeObserver?.disconnect();
         localTextareaObserver?.disconnect();
 
@@ -921,9 +1002,10 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         fitAddonRef.current = null;
         viewportRef.current = null;
         lastReportedSizeRef.current = null;
+        cursorBlinkStateRef.current = null;
         resetWriteState();
       };
-    }, [disableTerminalTextareas, useHiddenInputOverlay, fitTerminal, fontFamily, fontSize, setupTouchScroll, theme, resetWriteState]);
+    }, [disableTerminalTextareas, fitTerminal, fontFamily, fontSize, setupTouchScroll, theme, resetWriteState, setTerminalCursorBlink, useHiddenInputOverlay]);
 
 
     React.useEffect(() => {
@@ -935,10 +1017,20 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       resetWriteState();
       lastReportedSizeRef.current = null;
       fitTerminal();
-      if (!useHiddenInputOverlay) {
-        terminal.focus();
+    }, [sessionKey, terminalReadyVersion, fitTerminal, resetWriteState]);
+
+    React.useEffect(() => {
+      if (!autoFocus) {
+        return;
       }
-    }, [useHiddenInputOverlay, sessionKey, terminalReadyVersion, fitTerminal, resetWriteState]);
+
+      const terminal = terminalRef.current;
+      if (!terminal) {
+        return;
+      }
+
+      focusTerminalInput();
+    }, [autoFocus, focusTerminalInput, sessionKey, terminalReadyVersion]);
 
     React.useEffect(() => {
       setupTouchScroll();
@@ -984,11 +1076,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       ref,
       (): TerminalController => ({
         focus: () => {
-          if (useHiddenInputOverlay) {
-            focusHiddenInput();
-            return;
-          }
-          terminalRef.current?.focus();
+          focusTerminalInput();
         },
         clear: () => {
           const terminal = terminalRef.current;
@@ -1003,7 +1091,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
           fitTerminal();
         },
       }),
-      [useHiddenInputOverlay, focusHiddenInput, fitTerminal, resetWriteState]
+      [focusTerminalInput, fitTerminal, resetWriteState]
     );
 
     const handleHiddenInputBlur = React.useCallback(

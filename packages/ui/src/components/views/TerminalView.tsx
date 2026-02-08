@@ -54,6 +54,15 @@ const STREAM_OPTIONS = {
     connectionTimeoutMs: 10_000,
 };
 
+const REHYDRATED_STREAM_OPTIONS = {
+    retry: {
+        maxRetries: 0,
+        initialDelayMs: 200,
+        maxDelayMs: 500,
+    },
+    connectionTimeoutMs: 1_500,
+};
+
 const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | null => {
     if (modifier) {
         switch (key) {
@@ -151,6 +160,7 @@ export const TerminalView: React.FC = () => {
     const directoryRef = React.useRef<string | null>(effectiveDirectory);
     const terminalControllerRef = React.useRef<TerminalController | null>(null);
     const lastViewportSizeRef = React.useRef<{ cols: number; rows: number } | null>(null);
+    const isTerminalVisibleRef = React.useRef(false);
     const nudgeOnConnectTerminalIdRef = React.useRef<string | null>(null);
     const rehydratedTerminalIdsRef = React.useRef<Set<string>>(new Set());
     const rehydratedSnapshotTakenRef = React.useRef(false);
@@ -177,15 +187,28 @@ export const TerminalView: React.FC = () => {
     }, [terminalHydrated]);
 
     const activeMainTab = useUIStore((state) => state.activeMainTab);
+    const isBottomTerminalOpen = useUIStore((state) => state.isBottomTerminalOpen);
     const isTerminalActive = activeMainTab === 'terminal';
+    const isTerminalVisible = isTerminalActive || isBottomTerminalOpen;
+    const [hasOpenedTerminalViewport, setHasOpenedTerminalViewport] = React.useState(isTerminalVisible);
 
     React.useEffect(() => {
-        if (!isTerminalActive || runtime.platform === 'vscode') {
+        if (!isTerminalVisible || runtime.platform === 'vscode') {
             return;
         }
 
         primeTerminalInputTransport();
-    }, [isTerminalActive, runtime.platform]);
+    }, [isTerminalVisible, runtime.platform]);
+
+    React.useEffect(() => {
+        if (isTerminalVisible) {
+            setHasOpenedTerminalViewport(true);
+        }
+    }, [isTerminalVisible]);
+
+    React.useEffect(() => {
+        isTerminalVisibleRef.current = isTerminalVisible;
+    }, [isTerminalVisible]);
 
     React.useEffect(() => {
         terminalIdRef.current = terminalSessionId;
@@ -226,7 +249,12 @@ export const TerminalView: React.FC = () => {
     );
 
     const startStream = React.useCallback(
-        (directory: string, tabId: string, terminalId: string) => {
+        (
+            directory: string,
+            tabId: string,
+            terminalId: string,
+            streamOptions = STREAM_OPTIONS
+        ) => {
             if (activeTerminalIdRef.current === terminalId) {
                 return;
             }
@@ -313,7 +341,7 @@ export const TerminalView: React.FC = () => {
                         }
                     },
                 },
-                STREAM_OPTIONS
+                streamOptions
             );
 
             streamCleanupRef.current = () => {
@@ -327,7 +355,7 @@ export const TerminalView: React.FC = () => {
     React.useEffect(() => {
         let cancelled = false;
 
-        if (!terminalHydrated) {
+        if (!terminalHydrated || !hasOpenedTerminalViewport) {
             return;
         }
 
@@ -367,6 +395,9 @@ export const TerminalView: React.FC = () => {
                 rehydratedTerminalIdsRef.current.has(terminalId as string) &&
                 (tab?.bufferLength ?? 0) === 0 &&
                 (tab?.bufferChunks?.length ?? 0) === 0;
+
+            const isRehydratedSession =
+                Boolean(terminalId) && rehydratedTerminalIdsRef.current.has(terminalId as string);
 
             if (!terminalId) {
                 setConnectionError(null);
@@ -412,11 +443,19 @@ export const TerminalView: React.FC = () => {
 
             terminalIdRef.current = terminalId;
 
-            if (shouldNudgeExisting) {
-                nudgeOnConnectTerminalIdRef.current = terminalId;
+            if (isRehydratedSession) {
                 rehydratedTerminalIdsRef.current.delete(terminalId);
             }
-            startStream(directory, tabId, terminalId);
+
+            if (shouldNudgeExisting) {
+                nudgeOnConnectTerminalIdRef.current = terminalId;
+            }
+            startStream(
+                directory,
+                tabId,
+                terminalId,
+                isRehydratedSession ? REHYDRATED_STREAM_OPTIONS : STREAM_OPTIONS
+            );
         };
 
         void ensureSession();
@@ -431,6 +470,7 @@ export const TerminalView: React.FC = () => {
         effectiveDirectory,
         terminalSessionId,
         activeTabId,
+        hasOpenedTerminalViewport,
         enableTabs,
         terminalHydrated,
         ensureDirectory,
@@ -440,6 +480,25 @@ export const TerminalView: React.FC = () => {
         disconnectStream,
         terminal,
     ]);
+
+    React.useEffect(() => {
+        if (!isTerminalVisible) {
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            terminalControllerRef.current?.focus();
+            return;
+        }
+
+        const rafId = window.requestAnimationFrame(() => {
+            terminalControllerRef.current?.focus();
+        });
+
+        return () => {
+            window.cancelAnimationFrame(rafId);
+        };
+    }, [activeTabId, isTerminalVisible]);
 
     const handleRestart = React.useCallback(async () => {
         if (!effectiveDirectory) return;
@@ -565,6 +624,9 @@ export const TerminalView: React.FC = () => {
     const handleViewportResize = React.useCallback(
         (cols: number, rows: number) => {
             lastViewportSizeRef.current = { cols, rows };
+            if (!isTerminalVisibleRef.current) {
+                return;
+            }
             const terminalId = terminalIdRef.current;
             if (!terminalId) return;
             void terminal.resize({ sessionId: terminalId, cols, rows }).catch(() => {
@@ -705,7 +767,7 @@ export const TerminalView: React.FC = () => {
     const viewportSessionKey = terminalSessionId ?? terminalSessionKey;
 
     React.useEffect(() => {
-        if (!isTerminalActive) {
+        if (!isTerminalVisible) {
             return;
         }
         const controller = terminalControllerRef.current;
@@ -727,7 +789,7 @@ export const TerminalView: React.FC = () => {
             };
         }
         fitOnce();
-    }, [isTerminalActive, terminalSessionKey, terminalSessionId]);
+    }, [isTerminalVisible, terminalSessionKey, terminalSessionId]);
 
     const isReconnecting = connectionError?.includes('Reconnecting');
 
@@ -764,6 +826,7 @@ export const TerminalView: React.FC = () => {
     }
 
     const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting;
+    const shouldRenderViewport = isMobile ? isTerminalVisible : hasOpenedTerminalViewport;
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
@@ -963,7 +1026,7 @@ export const TerminalView: React.FC = () => {
                 data-keyboard-avoid="true"
             >
                 <div className="h-full w-full box-border px-3 pt-3 pb-4">
-                    {isTerminalActive ? (
+                    {shouldRenderViewport ? (
                         isMobile ? (
                             <TerminalViewport
                                 key={viewportSessionKey}
@@ -978,6 +1041,7 @@ export const TerminalView: React.FC = () => {
                                 fontFamily={resolvedFontStack}
                                 fontSize={terminalFontSize}
                                 enableTouchScroll={hasTouchInput}
+                                autoFocus={isTerminalVisible}
                             />
                         ) : (
                             <ScrollableOverlay outerClassName="h-full" className="h-full w-full" disableHorizontal>
@@ -994,6 +1058,7 @@ export const TerminalView: React.FC = () => {
                                     fontFamily={resolvedFontStack}
                                     fontSize={terminalFontSize}
                                     enableTouchScroll={hasTouchInput}
+                                    autoFocus={isTerminalVisible}
                                 />
                             </ScrollableOverlay>
                         )

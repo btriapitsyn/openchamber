@@ -1,5 +1,6 @@
 import React from 'react';
 import { Header } from './Header';
+import { BottomTerminalDock } from './BottomTerminalDock';
 import { Sidebar } from './Sidebar';
 import { RightSidebar } from './RightSidebar';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
@@ -20,11 +21,16 @@ import { cn } from '@/lib/utils';
 import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
 
 export const MainLayout: React.FC = () => {
-    const RIGHT_SIDEBAR_AUTO_TOGGLE_WIDTH = 1280;
+    const RIGHT_SIDEBAR_AUTO_CLOSE_WIDTH = 1140;
+    const RIGHT_SIDEBAR_AUTO_OPEN_WIDTH = 1220;
+    const BOTTOM_TERMINAL_AUTO_CLOSE_HEIGHT = 640;
+    const BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT = 700;
     const {
         isSidebarOpen,
         isRightSidebarOpen,
+        isBottomTerminalOpen,
         setRightSidebarOpen,
+        setBottomTerminalOpen,
         activeMainTab,
         setIsMobile,
         isSessionSwitcherOpen,
@@ -36,6 +42,8 @@ export const MainLayout: React.FC = () => {
     } = useUIStore();
 
     const { isMobile } = useDeviceInfo();
+    const rightSidebarAutoClosedRef = React.useRef(false);
+    const bottomTerminalAutoClosedRef = React.useRef(false);
 
     useEdgeSwipe({ enabled: true });
 
@@ -88,22 +96,38 @@ export const MainLayout: React.FC = () => {
         }
 
         let timeoutId: number | undefined;
-        const autoClosedByWidthRef = { current: false };
 
-        const handleResponsiveRightSidebar = () => {
-            const isNarrow = window.innerWidth < RIGHT_SIDEBAR_AUTO_TOGGLE_WIDTH;
+        const handleResponsivePanels = () => {
+            const state = useUIStore.getState();
+            const width = window.innerWidth;
+            const height = window.innerHeight;
 
-            if (isNarrow) {
-                autoClosedByWidthRef.current = true;
-                if (useUIStore.getState().isRightSidebarOpen) {
+            const shouldCloseRightSidebar = width < RIGHT_SIDEBAR_AUTO_CLOSE_WIDTH;
+            const canAutoOpenRightSidebar = width >= RIGHT_SIDEBAR_AUTO_OPEN_WIDTH;
+
+            if (shouldCloseRightSidebar) {
+                if (state.isRightSidebarOpen) {
                     setRightSidebarOpen(false);
+                    rightSidebarAutoClosedRef.current = true;
                 }
-                return;
+            } else if (canAutoOpenRightSidebar && rightSidebarAutoClosedRef.current) {
+                setRightSidebarOpen(true);
+                rightSidebarAutoClosedRef.current = false;
             }
 
-            if (autoClosedByWidthRef.current) {
-                setRightSidebarOpen(true);
-                autoClosedByWidthRef.current = false;
+            const shouldCloseBottomTerminal =
+                height < BOTTOM_TERMINAL_AUTO_CLOSE_HEIGHT;
+            const canAutoOpenBottomTerminal =
+                height >= BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT;
+
+            if (shouldCloseBottomTerminal) {
+                if (state.isBottomTerminalOpen) {
+                    setBottomTerminalOpen(false);
+                    bottomTerminalAutoClosedRef.current = true;
+                }
+            } else if (canAutoOpenBottomTerminal && bottomTerminalAutoClosedRef.current) {
+                setBottomTerminalOpen(true);
+                bottomTerminalAutoClosedRef.current = false;
             }
         };
 
@@ -113,11 +137,11 @@ export const MainLayout: React.FC = () => {
             }
 
             timeoutId = window.setTimeout(() => {
-                handleResponsiveRightSidebar();
+                handleResponsivePanels();
             }, 100);
         };
 
-        handleResponsiveRightSidebar();
+        handleResponsivePanels();
         window.addEventListener('resize', handleResize);
 
         return () => {
@@ -126,7 +150,34 @@ export const MainLayout: React.FC = () => {
                 window.clearTimeout(timeoutId);
             }
         };
-    }, [setRightSidebarOpen]);
+    }, [setBottomTerminalOpen, setRightSidebarOpen]);
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined') {
+            return;
+        }
+
+        const unsubscribe = useUIStore.subscribe((state, prevState) => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            const rightCanAutoOpen = width >= RIGHT_SIDEBAR_AUTO_OPEN_WIDTH;
+            const bottomCanAutoOpen =
+                height >= BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT;
+
+            if (state.isRightSidebarOpen !== prevState.isRightSidebarOpen && rightCanAutoOpen) {
+                rightSidebarAutoClosedRef.current = false;
+            }
+
+            if (state.isBottomTerminalOpen !== prevState.isBottomTerminalOpen && bottomCanAutoOpen) {
+                bottomTerminalAutoClosedRef.current = false;
+            }
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, []);
 
     React.useEffect(() => {
         if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -428,19 +479,26 @@ export const MainLayout: React.FC = () => {
                                 <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
                                     <SessionSidebar />
                                 </Sidebar>
-                                <main className="flex-1 overflow-hidden bg-background relative">
-                                    <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                        <ErrorBoundary><ChatView /></ErrorBoundary>
+                                <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
+                                    <div className="flex flex-1 min-h-0 overflow-hidden">
+                                        <main className="flex-1 overflow-hidden bg-background relative">
+                                            <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
+                                                <ErrorBoundary><ChatView /></ErrorBoundary>
+                                            </div>
+                                            {secondaryView && (
+                                                <div className="absolute inset-0">
+                                                    <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                                                </div>
+                                            )}
+                                        </main>
+                                        <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
+                                            <ErrorBoundary><GitView mode="sidebar" /></ErrorBoundary>
+                                        </RightSidebar>
                                     </div>
-                                    {secondaryView && (
-                                        <div className="absolute inset-0">
-                                            <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                        </div>
-                                    )}
-                                </main>
-                                <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
-                                    <ErrorBoundary><GitView mode="sidebar" /></ErrorBoundary>
-                                </RightSidebar>
+                                    <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
+                                        <ErrorBoundary><TerminalView /></ErrorBoundary>
+                                    </BottomTerminalDock>
+                                </div>
                             </div>
                         </div>
 

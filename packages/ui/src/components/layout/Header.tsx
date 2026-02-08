@@ -107,6 +107,7 @@ interface TabConfig {
 export const Header: React.FC = () => {
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const toggleCommandPalette = useUIStore((state) => state.toggleCommandPalette);
@@ -624,11 +625,14 @@ export const Header: React.FC = () => {
         badge: !isMobile && diffFileCount > 0 ? diffFileCount : undefined,
       },
       { id: 'files', label: 'Files', icon: RiFolder6Line },
-      { id: 'terminal', label: 'Terminal', icon: RiTerminalBoxLine },
     );
 
     if (isMobile) {
       base.push({
+        id: 'terminal',
+        label: 'Terminal',
+        icon: RiTerminalBoxLine,
+      }, {
         id: 'git',
         label: 'Git',
         icon: RiGitBranchLine,
@@ -640,7 +644,7 @@ export const Header: React.FC = () => {
   }, [diffFileCount, isMobile, showPlanTab]);
 
   useEffect(() => {
-    if (!isMobile && activeMainTab === 'git') {
+    if (!isMobile && (activeMainTab === 'git' || activeMainTab === 'terminal')) {
       setActiveMainTab('chat');
     }
   }, [activeMainTab, isMobile, setActiveMainTab]);
@@ -1029,6 +1033,22 @@ export const Header: React.FC = () => {
           </TooltipTrigger>
           <TooltipContent>
             <p>Command Palette ({getModifierLabel()}+K)</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <Tooltip delayDuration={500}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={toggleBottomTerminal}
+              aria-label="Toggle terminal panel"
+              className={headerIconButtonClass}
+            >
+              <RiTerminalBoxLine className="h-5 w-5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Terminal panel</p>
           </TooltipContent>
         </Tooltip>
 

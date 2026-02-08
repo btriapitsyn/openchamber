@@ -27,6 +27,9 @@ interface UIStore {
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
   hasManuallyResizedRightSidebar: boolean;
+  isBottomTerminalOpen: boolean;
+  bottomTerminalHeight: number;
+  hasManuallyResizedBottomTerminal: boolean;
   isSessionSwitcherOpen: boolean;
   activeMainTab: MainTab;
   mainTabGuard: MainTabGuard | null;
@@ -87,6 +90,9 @@ interface UIStore {
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   setRightSidebarWidth: (width: number) => void;
+  toggleBottomTerminal: () => void;
+  setBottomTerminalOpen: (open: boolean) => void;
+  setBottomTerminalHeight: (height: number) => void;
   setSessionSwitcherOpen: (open: boolean) => void;
   setActiveMainTab: (tab: MainTab) => void;
   setMainTabGuard: (guard: MainTabGuard | null) => void;
@@ -162,6 +168,9 @@ export const useUIStore = create<UIStore>()(
         isRightSidebarOpen: false,
         rightSidebarWidth: 420,
         hasManuallyResizedRightSidebar: false,
+        isBottomTerminalOpen: false,
+        bottomTerminalHeight: 300,
+        hasManuallyResizedBottomTerminal: false,
         isSessionSwitcherOpen: false,
         activeMainTab: 'chat',
         mainTabGuard: null,
@@ -284,6 +293,42 @@ export const useUIStore = create<UIStore>()(
 
         setRightSidebarWidth: (width) => {
           set({ rightSidebarWidth: width, hasManuallyResizedRightSidebar: true });
+        },
+
+        toggleBottomTerminal: () => {
+          set((state) => {
+            const newOpen = !state.isBottomTerminalOpen;
+
+            if (newOpen && typeof window !== 'undefined') {
+              const proportionalHeight = Math.floor(window.innerHeight * 0.32);
+              return {
+                isBottomTerminalOpen: newOpen,
+                bottomTerminalHeight: proportionalHeight,
+                hasManuallyResizedBottomTerminal: false,
+              };
+            }
+
+            return { isBottomTerminalOpen: newOpen };
+          });
+        },
+
+        setBottomTerminalOpen: (open) => {
+          set(() => {
+            if (open && typeof window !== 'undefined') {
+              const proportionalHeight = Math.floor(window.innerHeight * 0.32);
+              return {
+                isBottomTerminalOpen: open,
+                bottomTerminalHeight: proportionalHeight,
+                hasManuallyResizedBottomTerminal: false,
+              };
+            }
+
+            return { isBottomTerminalOpen: open };
+          });
+        },
+
+        setBottomTerminalHeight: (height) => {
+          set({ bottomTerminalHeight: height, hasManuallyResizedBottomTerminal: true });
         },
 
         setSessionSwitcherOpen: (open) => {
@@ -670,6 +715,10 @@ export const useUIStore = create<UIStore>()(
               updates.rightSidebarWidth = Math.floor(window.innerWidth * 0.28);
             }
 
+            if (state.isBottomTerminalOpen && !state.hasManuallyResizedBottomTerminal) {
+              updates.bottomTerminalHeight = Math.floor(window.innerHeight * 0.32);
+            }
+
             return updates;
           });
         },
@@ -751,6 +800,8 @@ export const useUIStore = create<UIStore>()(
           sidebarWidth: state.sidebarWidth,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarWidth: state.rightSidebarWidth,
+          isBottomTerminalOpen: state.isBottomTerminalOpen,
+          bottomTerminalHeight: state.bottomTerminalHeight,
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
           activeMainTab: state.activeMainTab,
           sidebarSection: state.sidebarSection,

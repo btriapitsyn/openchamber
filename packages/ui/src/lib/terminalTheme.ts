@@ -76,11 +76,11 @@ export function getTerminalOptions(
     fontFamily: augmentedFontFamily,
     fontSize,
     lineHeight: 1,
-    cursorBlink: true,
-    cursorStyle: 'block' as const,
+    cursorBlink: false,
+    cursorStyle: 'bar' as const,
     theme,
     allowTransparency: false,
-    scrollback: 50_000,
+    scrollback: 10_000,
     minimumContrastRatio: 1,
     fastScrollModifier: 'shift' as const,
     fastScrollSensitivity: 5,
@@ -106,7 +106,8 @@ export function getGhosttyTerminalOptions(
   const augmentedFontFamily = `${fontFamily}, ${powerlineFallbacks}`;
 
   return {
-    cursorBlink: true,
+    cursorBlink: false,
+    cursorStyle: 'bar' as const,
     fontSize,
     lineHeight: 1.15,
     fontFamily: augmentedFontFamily,
@@ -135,7 +136,7 @@ export function getGhosttyTerminalOptions(
       brightCyan: theme.brightCyan,
       brightWhite: theme.brightWhite,
     },
-    scrollback: 50_000,
+    scrollback: 10_000,
     ghostty,
     disableStdin,
   };
