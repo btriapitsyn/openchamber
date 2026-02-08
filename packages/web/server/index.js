@@ -1111,6 +1111,114 @@ const sanitizeSettingsUpdate = (payload) => {
     result.skillCatalogs = skillCatalogs;
   }
 
+  // Usage model selections - which models appear in dropdown
+  if (candidate.usageSelectedModels && typeof candidate.usageSelectedModels === 'object') {
+    const sanitized = {};
+    for (const [providerId, models] of Object.entries(candidate.usageSelectedModels)) {
+      if (typeof providerId === 'string' && Array.isArray(models)) {
+        const validModels = models.filter((m) => typeof m === 'string' && m.length > 0);
+        if (validModels.length > 0) {
+          sanitized[providerId] = validModels;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageSelectedModels = sanitized;
+    }
+  }
+
+  // Usage page collapsed families - for "Other Models" section
+  if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === 'object') {
+    const sanitized = {};
+    for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
+      if (typeof providerId === 'string' && Array.isArray(families)) {
+        const validFamilies = families.filter((f) => typeof f === 'string' && f.length > 0);
+        if (validFamilies.length > 0) {
+          sanitized[providerId] = validFamilies;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageCollapsedFamilies = sanitized;
+    }
+  }
+
+  // Header dropdown expanded families (inverted - stores EXPANDED, default all collapsed)
+  if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === 'object') {
+    const sanitized = {};
+    for (const [providerId, families] of Object.entries(candidate.usageExpandedFamilies)) {
+      if (typeof providerId === 'string' && Array.isArray(families)) {
+        const validFamilies = families.filter((f) => typeof f === 'string' && f.length > 0);
+        if (validFamilies.length > 0) {
+          sanitized[providerId] = validFamilies;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageExpandedFamilies = sanitized;
+    }
+  }
+
+  // Custom model groups configuration
+  if (candidate.usageModelGroups && typeof candidate.usageModelGroups === 'object') {
+    const sanitized = {};
+    for (const [providerId, config] of Object.entries(candidate.usageModelGroups)) {
+      if (typeof providerId !== 'string') continue;
+
+      const providerConfig = {};
+
+      // customGroups: array of {id, label, models, order}
+      if (Array.isArray(config.customGroups)) {
+        const validGroups = config.customGroups
+          .filter((g) => g && typeof g.id === 'string' && typeof g.label === 'string')
+          .map((g) => ({
+            id: g.id.slice(0, 64),
+            label: g.label.slice(0, 128),
+            models: Array.isArray(g.models)
+              ? g.models.filter((m) => typeof m === 'string').slice(0, 500)
+              : [],
+            order: typeof g.order === 'number' ? g.order : 0,
+          }));
+        if (validGroups.length > 0) {
+          providerConfig.customGroups = validGroups;
+        }
+      }
+
+      // modelAssignments: Record<modelName, groupId>
+      if (config.modelAssignments && typeof config.modelAssignments === 'object') {
+        const assignments = {};
+        for (const [model, groupId] of Object.entries(config.modelAssignments)) {
+          if (typeof model === 'string' && typeof groupId === 'string') {
+            assignments[model] = groupId;
+          }
+        }
+        if (Object.keys(assignments).length > 0) {
+          providerConfig.modelAssignments = assignments;
+        }
+      }
+
+      // renamedGroups: Record<groupId, label>
+      if (config.renamedGroups && typeof config.renamedGroups === 'object') {
+        const renamed = {};
+        for (const [groupId, label] of Object.entries(config.renamedGroups)) {
+          if (typeof groupId === 'string' && typeof label === 'string') {
+            renamed[groupId] = label.slice(0, 128);
+          }
+        }
+        if (Object.keys(renamed).length > 0) {
+          providerConfig.renamedGroups = renamed;
+        }
+      }
+
+      if (Object.keys(providerConfig).length > 0) {
+        sanitized[providerId] = providerConfig;
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageModelGroups = sanitized;
+    }
+  }
+
   return result;
 };
 
