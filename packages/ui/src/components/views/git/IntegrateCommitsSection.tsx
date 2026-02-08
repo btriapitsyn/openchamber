@@ -7,12 +7,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-
-import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -52,6 +46,7 @@ export const IntegrateCommitsSection: React.FC<{
   defaultTargetBranch: string;
   refreshKey?: number;
   onRefresh?: () => void;
+  variant?: 'framed' | 'plain';
 }> = ({
   repoRoot,
   sourceBranch,
@@ -60,10 +55,10 @@ export const IntegrateCommitsSection: React.FC<{
   defaultTargetBranch,
   refreshKey,
   onRefresh,
+  variant = 'framed',
 }) => {
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const setActiveMainTab = useUIStore((s) => s.setActiveMainTab);
-  const [isOpen, setIsOpen] = React.useState(true);
   const [branchDropdownOpen, setBranchDropdownOpen] = React.useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -250,7 +245,7 @@ Important:
 
     // Use current session - set pending input text and synthetic parts
     if (!currentSessionId) {
-      toast.error('No active session', { description: 'Open a chat session first or use "New Session".' });
+      toast.error('No active session', { description: 'Open a chat session first or start a new session.' });
       return;
     }
 
@@ -281,7 +276,7 @@ Important:
         return;
       }
       if (result.kind === 'conflict') {
-        toast.error('Cherry-pick conflict', { description: 'Resolve conflicts, then Continue.' });
+        toast.error('Cherry-pick conflict', { description: 'Resolve conflicts, then continue.' });
         setUi({ kind: 'conflict', state: result.state, details: result.details });
         if (conflictStorageKey && typeof window !== 'undefined') {
           window.localStorage.setItem(conflictStorageKey, JSON.stringify(result.state));
@@ -342,13 +337,19 @@ Important:
     return null;
   }
 
+  const containerClassName =
+    variant === 'framed'
+      ? 'rounded-xl border border-border/60 bg-background/70 overflow-hidden'
+      : 'border-0 bg-transparent rounded-none';
+  const headerClassName =
+    variant === 'framed'
+      ? 'px-3 py-2 border-b border-border/40 flex items-center justify-between gap-2'
+      : 'px-0 py-3 border-b border-border/40 flex items-center justify-between gap-2';
+  const bodyClassName = variant === 'framed' ? 'flex flex-col gap-3 p-3' : 'flex flex-col gap-3 py-3';
+
   return (
-    <Collapsible
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      className="rounded-xl border border-border/60 bg-background/70 overflow-hidden"
-    >
-      <CollapsibleTrigger className="flex w-full items-center justify-between px-3 h-10 hover:bg-transparent">
+    <section className={containerClassName}>
+      <div className={headerClassName}>
         <div className="flex items-center gap-2 min-w-0">
           <RiSplitCellsHorizontal className="size-4 text-muted-foreground" />
           <h3 className="typography-ui-header font-semibold text-foreground truncate">Re-integrate commits</h3>
@@ -361,14 +362,12 @@ Important:
             <RiLoader4Line className="size-4 animate-spin text-muted-foreground" />
           ) : null}
         </div>
-      </CollapsibleTrigger>
+      </div>
 
-      <CollapsibleContent>
-        <div className="border-t border-border/40">
-          <div className="flex flex-col gap-3 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0">
-              <div className="typography-ui-label text-foreground">Move commits</div>
+      <div className={bodyClassName}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0">
+            <div className="typography-ui-label text-foreground">Move commits</div>
               <div className="typography-micro text-muted-foreground truncate">
                 {sourceBranch} → {targetBranch}
               </div>
@@ -519,9 +518,7 @@ Important:
               </div>
             </div>
           )}
-          </div>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+    </section>
   );
 };

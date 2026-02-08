@@ -138,38 +138,55 @@ export const getPullRequestStatus = async (
     return { connected: true, repo: null, branch, pr: null, checks: null, canMerge: false };
   }
 
-  const listUrl = new URL(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls`);
-  listUrl.searchParams.set('state', 'open');
-  listUrl.searchParams.set('head', `${repo.owner}:${branch}`);
-  listUrl.searchParams.set('per_page', '10');
+  const listNumberByHead = async (state: 'open' | 'closed'): Promise<number | null> => {
+    const url = new URL(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls`);
+    url.searchParams.set('state', state);
+    url.searchParams.set('head', `${repo.owner}:${branch}`);
+    url.searchParams.set('per_page', '10');
 
-  const listResp = await githubFetch(listUrl.toString(), accessToken);
-  if (listResp.status === 401) {
-    return { connected: false };
-  }
-  const list = await jsonOrNull<Array<{ number: number }>>(listResp);
-  let number = (listResp.ok && Array.isArray(list) && list.length > 0)
-    ? list[0].number
-    : null;
-
-  // Fork PR support: head owner differs -> head filter yields empty.
-  if (!number) {
-    const openListUrl = new URL(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls`);
-    openListUrl.searchParams.set('state', 'open');
-    openListUrl.searchParams.set('per_page', '100');
-    const openResp = await githubFetch(openListUrl.toString(), accessToken);
-    if (openResp.status === 401) {
-      return { connected: false };
+    const resp = await githubFetch(url.toString(), accessToken);
+    if (resp.status === 401) {
+      return null;
     }
-    const openList = await jsonOrNull<Array<JsonRecord>>(openResp);
-    if (openResp.ok && Array.isArray(openList)) {
-      const match = openList.find((prItem) => {
-        const head = prItem?.head && typeof prItem.head === 'object' ? (prItem.head as JsonRecord) : null;
-        return readString(head?.ref) === branch;
-      });
-      if (match && typeof match.number === 'number') {
-        number = match.number;
-      }
+    const list = await jsonOrNull<Array<{ number: number }>>(resp);
+    return (resp.ok && Array.isArray(list) && list.length > 0) ? list[0].number : null;
+  };
+
+  const listNumberByHeadRef = async (state: 'open' | 'closed'): Promise<number | null> => {
+    const url = new URL(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls`);
+    url.searchParams.set('state', state);
+    url.searchParams.set('per_page', '100');
+    const resp = await githubFetch(url.toString(), accessToken);
+    if (resp.status === 401) {
+      return null;
+    }
+    const list = await jsonOrNull<Array<JsonRecord>>(resp);
+    if (!resp.ok || !Array.isArray(list)) return null;
+
+    const match = list.find((prItem) => {
+      const head = prItem?.head && typeof prItem.head === 'object' ? (prItem.head as JsonRecord) : null;
+      return readString(head?.ref) === branch;
+    });
+    return match && typeof match.number === 'number' ? match.number : null;
+  };
+
+  // PR status by branch:
+  // - Prefer open PRs.
+  // - If none, surface closed/merged PRs.
+  // - Fork PR support: head owner differs -> head filter yields empty; fall back to matching head.ref.
+  let number = await listNumberByHead('open');
+  if (!number) number = await listNumberByHead('closed');
+  if (!number) number = await listNumberByHeadRef('open');
+  if (!number) number = await listNumberByHeadRef('closed');
+
+  // Detect auth revocation (best-effort)
+  if (number === null) {
+    const probeUrl = new URL(`${API_BASE}/repos/${repo.owner}/${repo.repo}/pulls`);
+    probeUrl.searchParams.set('state', 'open');
+    probeUrl.searchParams.set('per_page', '1');
+    const probeResp = await githubFetch(probeUrl.toString(), accessToken);
+    if (probeResp.status === 401) {
+      return { connected: false };
     }
   }
 
@@ -185,7 +202,7 @@ export const getPullRequestStatus = async (
     throw new Error('Failed to load PR');
   }
 
-  const merged = Boolean(prJson.merged);
+  const merged = Boolean(prJson.merged || prJson.merged_at);
   const prState = readString(prJson.state);
   const state = merged ? 'merged' : (prState === 'closed' ? 'closed' : 'open');
   const pr: GitHubPullRequest = {

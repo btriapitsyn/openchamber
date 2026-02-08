@@ -15,11 +15,20 @@ import {
   useIsGitRepo,
 } from '@/stores/useGitStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { RiGitBranchLine, RiLoader4Line } from '@remixicon/react';
+import {
+  RiGitBranchLine,
+  RiGitMergeLine,
+  RiGitCommitLine,
+  RiGitPullRequestLine,
+  RiLoader4Line,
+  RiSplitCellsHorizontal,
+} from '@remixicon/react';
 import { toast } from '@/components/ui';
+import { AnimatedTabs } from '@/components/ui/animated-tabs';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -46,7 +55,7 @@ import { PullRequestSection } from './git/PullRequestSection';
 import { ConflictDialog } from './git/ConflictDialog';
 import { StashDialog } from './git/StashDialog';
 import { InProgressOperationBanner } from './git/InProgressOperationBanner';
-import type { OperationLogEntry } from './git/BranchIntegrationSection';
+import { BranchIntegrationSection, type OperationLogEntry } from './git/BranchIntegrationSection';
 import type { GitRemote } from '@/lib/gitApi';
 import { BranchPickerDialog } from '@/components/session/BranchPickerDialog';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
@@ -54,6 +63,7 @@ import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
 type BranchOperation = 'merge' | 'rebase' | null;
+type ActionTab = 'commit' | 'branch' | 'pr' | 'worktree';
 
 
 type GitViewSnapshot = {
@@ -235,8 +245,6 @@ export const GitView: React.FC = () => {
   const [isBranchPickerOpen, setIsBranchPickerOpen] = React.useState(false);
   const [rootBranchHint, setRootBranchHint] = React.useState<string | null>(null);
 
-  const baseBranch = worktreeMetadata?.createdFromBranch || status?.current || 'HEAD';
-
   React.useEffect(() => {
     const projectRoot = worktreeMetadata?.projectDirectory;
     if (!projectRoot) {
@@ -363,6 +371,8 @@ export const GitView: React.FC = () => {
   const [remoteUrl, setRemoteUrl] = React.useState<string | null>(null);
   const [gitmojiEmojis, setGitmojiEmojis] = React.useState<GitmojiEntry[]>([]);
   const [gitmojiSearch, setGitmojiSearch] = React.useState('');
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = React.useState(false);
+  const [actionTab, setActionTab] = React.useState<ActionTab>('commit');
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
   const [branchOperation, setBranchOperation] = React.useState<BranchOperation>(null);
   const [operationLogs, setOperationLogs] = React.useState<OperationLogEntry[]>([]);
@@ -915,6 +925,21 @@ export const GitView: React.FC = () => {
       .sort();
   }, [branches]);
 
+  const baseBranch = React.useMemo(() => {
+    const fromMeta = typeof worktreeMetadata?.createdFromBranch === 'string'
+      ? worktreeMetadata.createdFromBranch.trim()
+      : '';
+    if (fromMeta && fromMeta !== 'HEAD') return fromMeta;
+
+    const fromHint = typeof rootBranchHint === 'string' ? rootBranchHint.trim() : '';
+    if (fromHint && fromHint !== 'HEAD') return fromHint;
+
+    if (localBranches.includes('main')) return 'main';
+    if (localBranches.includes('master')) return 'master';
+    if (localBranches.includes('develop')) return 'develop';
+    return 'main';
+  }, [localBranches, rootBranchHint, worktreeMetadata?.createdFromBranch]);
+
   const availableIdentities = React.useMemo(() => {
     const unique = new Map<string, GitIdentityProfile>();
     if (globalIdentity) {
@@ -998,6 +1023,29 @@ export const GitView: React.FC = () => {
   const selectedCount = selectedPaths.size;
   const isBusy = isLoading || syncAction !== null || commitAction !== null;
   const hasChanges = uniqueChangeCount > 0;
+  const canShowIntegrateCommitsSection = Boolean(
+    worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate && shouldShowIntegrateCommits
+  );
+  const canShowPullRequestSection = Boolean(
+    currentDirectory && status?.current && status?.tracking && status.current !== baseBranch
+  );
+  const canShowBranchWorkflows = Boolean(status?.current);
+  const integrateCommitsProps =
+    canShowIntegrateCommitsSection && repoRootForIntegrate && sourceBranchForIntegrate && worktreeMetadata
+      ? {
+          repoRoot: repoRootForIntegrate,
+          sourceBranch: sourceBranchForIntegrate,
+          worktreeMetadata,
+        }
+      : null;
+  const pullRequestProps =
+    canShowPullRequestSection && currentDirectory && status?.current
+      ? {
+          directory: currentDirectory,
+          branch: status.current,
+        }
+      : null;
+  // Keep these sections stable in layout; individual cards render placeholders when unavailable.
 
   const toggleFileSelection = (path: string) => {
     setSelectedPaths((previous) => {
@@ -1484,12 +1532,7 @@ export const GitView: React.FC = () => {
         onSelectIdentity={handleApplyIdentity}
         isApplyingIdentity={isSettingIdentity}
         isWorktreeMode={!!worktreeMetadata}
-        onMerge={handleMerge}
-        onRebase={handleRebase}
-        branchOperation={branchOperation}
-        operationLogs={operationLogs}
-        onOperationComplete={handleOperationComplete}
-        isBusy={isBusy}
+        onOpenHistory={() => setIsHistoryDialogOpen(true)}
         onOpenBranchPicker={branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
       />
 
@@ -1509,12 +1552,12 @@ export const GitView: React.FC = () => {
           />
         )}
 
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-3">
-        <div className="flex flex-col gap-3">
-          {/* Two-column layout on large screens: Changes + Commit */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full grid grid-cols-1 xl:grid-cols-[minmax(520px,1fr)_480px]">
+          <div className="min-w-0 h-full flex flex-col">
             {hasChanges ? (
               <ChangesSection
+                variant="plain"
                 changeEntries={changeEntries}
                 selectedPaths={selectedPaths}
                 diffStats={status?.diffStats}
@@ -1526,7 +1569,7 @@ export const GitView: React.FC = () => {
                 onRevertFile={handleRevertFile}
               />
             ) : (
-              <div className="lg:col-span-2 flex justify-center">
+              <div className="flex-1 min-h-0 flex items-center justify-center px-6">
                 <GitEmptyState
                   behind={status?.behind ?? 0}
                   onPull={() => {
@@ -1540,66 +1583,139 @@ export const GitView: React.FC = () => {
                 />
               </div>
             )}
-
-            {changeEntries.length > 0 && (
-              <CommitSection
-                selectedCount={selectedCount}
-                commitMessage={commitMessage}
-                onCommitMessageChange={setCommitMessage}
-                generatedHighlights={generatedHighlights}
-                onInsertHighlights={handleInsertHighlights}
-                onClearHighlights={clearGeneratedHighlights}
-                onGenerateMessage={handleGenerateCommitMessage}
-                isGeneratingMessage={isGeneratingMessage}
-                onCommit={() => handleCommit({ pushAfter: false })}
-                onCommitAndPush={() => handleCommit({ pushAfter: true })}
-                commitAction={commitAction}
-                isBusy={isBusy}
-                gitmojiEnabled={settingsGitmojiEnabled}
-                onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
-              />
-            )}
           </div>
 
-          {worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate && shouldShowIntegrateCommits ? (
-            <IntegrateCommitsSection
-              repoRoot={repoRootForIntegrate}
-              sourceBranch={sourceBranchForIntegrate}
-              worktreeMetadata={worktreeMetadata}
-              localBranches={localBranches}
-              defaultTargetBranch={defaultTargetBranch}
-              refreshKey={integrateRefreshKey}
-              onRefresh={() => {
-                if (!currentDirectory) return;
-                fetchStatus(currentDirectory, git);
-                fetchBranches(currentDirectory, git);
-                fetchLog(currentDirectory, git, logMaxCountLocal);
-              }}
-            />
-          ) : null}
+          <div className="min-w-0 h-full border-t xl:border-t-0 xl:border-l border-border/40 bg-muted/10 flex flex-col">
+            <div className="px-3 py-3">
+              <AnimatedTabs<ActionTab>
+                value={actionTab}
+                onValueChange={setActionTab}
+                collapseLabelsOnSmall
+                tabs={[
+                  { value: 'commit', label: 'Commit', icon: RiGitCommitLine },
+                  { value: 'branch', label: 'Update branch', icon: RiGitMergeLine },
+                  { value: 'pr', label: 'PR', icon: RiGitPullRequestLine },
+                  { value: 'worktree', label: 'Worktree', icon: RiSplitCellsHorizontal },
+                ]}
+              />
+            </div>
+            <div className="h-px bg-border/40" />
 
-          {currentDirectory && status?.current && status?.tracking ? (
-            <PullRequestSection
-              directory={currentDirectory}
-              branch={status.current}
-              baseBranch={baseBranch}
-            />
-          ) : null}
+            <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-4 py-4">
+              {actionTab === 'commit' ? (
+                <CommitSection
+                  variant="plain"
+                  selectedCount={selectedCount}
+                  commitMessage={commitMessage}
+                  onCommitMessageChange={setCommitMessage}
+                  generatedHighlights={generatedHighlights}
+                  onInsertHighlights={handleInsertHighlights}
+                  onClearHighlights={clearGeneratedHighlights}
+                  onGenerateMessage={handleGenerateCommitMessage}
+                  isGeneratingMessage={isGeneratingMessage}
+                  onCommit={() => handleCommit({ pushAfter: false })}
+                  onCommitAndPush={() => handleCommit({ pushAfter: true })}
+                  commitAction={commitAction}
+                  isBusy={isBusy}
+                  gitmojiEnabled={settingsGitmojiEnabled}
+                  onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+                />
+              ) : null}
 
-          {/* History below, constrained width */}
-          <HistorySection
-            log={log}
-            isLogLoading={isLogLoading}
-            logMaxCount={logMaxCountLocal}
-            onLogMaxCountChange={handleLogMaxCountChange}
-            expandedCommitHashes={expandedCommitHashes}
-            onToggleCommit={handleToggleCommit}
-            commitFilesMap={commitFilesMap}
-            loadingCommitHashes={loadingCommitHashes}
-            onCopyHash={handleCopyCommitHash}
-          />
+              {actionTab === 'branch' ? (
+                <div className="space-y-4">
+                  {canShowBranchWorkflows ? (
+                    <BranchIntegrationSection
+                      mode="inline"
+                      currentBranch={status?.current}
+                      localBranches={localBranches}
+                      remoteBranches={remoteBranches}
+                      onMerge={handleMerge}
+                      onRebase={handleRebase}
+                      disabled={isBusy}
+                      isOperating={branchOperation !== null}
+                      operationLogs={operationLogs}
+                      onOperationComplete={handleOperationComplete}
+                    />
+                  ) : (
+                    <p className="typography-meta text-muted-foreground">Branch actions unavailable.</p>
+                  )}
+                </div>
+              ) : null}
+
+              {actionTab === 'worktree' ? (
+                integrateCommitsProps ? (
+                  <IntegrateCommitsSection
+                    variant="plain"
+                    repoRoot={integrateCommitsProps.repoRoot}
+                    sourceBranch={integrateCommitsProps.sourceBranch}
+                    worktreeMetadata={integrateCommitsProps.worktreeMetadata}
+                    localBranches={localBranches}
+                    defaultTargetBranch={defaultTargetBranch}
+                    refreshKey={integrateRefreshKey}
+                    onRefresh={() => {
+                      if (!currentDirectory) return;
+                      fetchStatus(currentDirectory, git);
+                      fetchBranches(currentDirectory, git);
+                      fetchLog(currentDirectory, git, logMaxCountLocal);
+                    }}
+                  />
+                ) : (
+                  <div className="space-y-1">
+                    <div className="typography-ui-header font-semibold text-foreground">Re-integrate commits</div>
+                    <div className="typography-micro text-muted-foreground">
+                      Available in worktree mode.
+                    </div>
+                  </div>
+                )
+              ) : null}
+
+              {actionTab === 'pr' ? (
+                pullRequestProps ? (
+                  <PullRequestSection
+                    variant="plain"
+                    directory={pullRequestProps.directory}
+                    branch={pullRequestProps.branch}
+                    baseBranch={baseBranch}
+                  />
+                ) : (
+                  <div className="space-y-1">
+                    <div className="typography-ui-header font-semibold text-foreground">Pull Request</div>
+                    <div className="typography-micro text-muted-foreground">
+                      Push a non-base branch (with upstream) to create a PR.
+                    </div>
+                  </div>
+                )
+              ) : null}
+            </ScrollableOverlay>
+          </div>
         </div>
-      </ScrollableOverlay>
+      </div>
+
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>History</DialogTitle>
+            <DialogDescription>
+              Browse recent commits and inspect file-level changes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
+            <HistorySection
+              log={log}
+              isLogLoading={isLogLoading}
+              logMaxCount={logMaxCountLocal}
+              onLogMaxCountChange={handleLogMaxCountChange}
+              expandedCommitHashes={expandedCommitHashes}
+              onToggleCommit={handleToggleCommit}
+              commitFilesMap={commitFilesMap}
+              loadingCommitHashes={loadingCommitHashes}
+              onCopyHash={handleCopyCommitHash}
+              showHeader={false}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isGitmojiPickerOpen} onOpenChange={setIsGitmojiPickerOpen}>
         <DialogContent className="max-w-md p-0 overflow-hidden">

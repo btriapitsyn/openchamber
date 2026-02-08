@@ -14,8 +14,8 @@ export const GitEmptyState: React.FC<GitEmptyStateProps> = ({
   isPulling,
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      <RiGitCommitLine className="size-10 text-emerald-500/60 mb-4" />
+    <div className="flex flex-col items-center justify-center py-10 px-4 text-center">
+      <RiGitCommitLine className="size-10 text-muted-foreground/70 mb-4" />
       <p className="typography-ui-label font-semibold text-foreground mb-1">
         Working tree clean
       </p>

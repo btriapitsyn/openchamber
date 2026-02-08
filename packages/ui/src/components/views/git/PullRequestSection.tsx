@@ -4,6 +4,9 @@ import {
   RiCheckboxBlankLine,
   RiCheckboxLine,
   RiExternalLinkLine,
+  RiGitClosePullRequestLine,
+  RiGitMergeLine,
+  RiGitPrDraftLine,
   RiGitPullRequestLine,
   RiLoader4Line,
 } from '@remixicon/react';
@@ -54,6 +57,28 @@ const statusColor = (state: string | undefined | null): string => {
   }
 };
 
+const getPrVisualState = (status: GitHubPullRequestStatus | null): 'draft' | 'open' | 'blocked' | 'merged' | 'closed' | null => {
+  const pr = status?.pr;
+  if (!pr) {
+    return null;
+  }
+  if (pr.state === 'merged') {
+    return 'merged';
+  }
+  if (pr.state === 'closed') {
+    return 'closed';
+  }
+  if (pr.draft) {
+    return 'draft';
+  }
+  const checksFailed = status?.checks?.state === 'failure';
+  const notMergeable = status?.canMerge === false || pr.mergeable === false;
+  if (checksFailed || notMergeable) {
+    return 'blocked';
+  }
+  return 'open';
+};
+
 const branchToTitle = (branch: string): string => {
   return branch
     .replace(/^refs\/heads\//, '')
@@ -67,7 +92,6 @@ type PullRequestDraftSnapshot = {
   title: string;
   body: string;
   draft: boolean;
-  isOpen: boolean;
   additionalContext: string;
 };
 
@@ -103,7 +127,8 @@ export const PullRequestSection: React.FC<{
   directory: string;
   branch: string;
   baseBranch: string;
-}> = ({ directory, branch, baseBranch }) => {
+  variant?: 'framed' | 'plain';
+}> = ({ directory, branch, baseBranch, variant = 'framed' }) => {
   const { github } = useRuntimeAPIs();
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
@@ -124,7 +149,6 @@ export const PullRequestSection: React.FC<{
     [snapshotKey]
   );
 
-  const [isOpen, setIsOpen] = React.useState(initialSnapshot?.isOpen ?? true);
   const [isLoading, setIsLoading] = React.useState(false);
   const [status, setStatus] = React.useState<GitHubPullRequestStatus | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -401,7 +425,6 @@ export const PullRequestSection: React.FC<{
     setTitle(snapshot?.title ?? branchToTitle(branch));
     setBody(snapshot?.body ?? '');
     setDraft(snapshot?.draft ?? false);
-    setIsOpen(snapshot?.isOpen ?? true);
     void refresh();
   }, [branch, refresh, snapshotKey]);
 
@@ -420,10 +443,9 @@ export const PullRequestSection: React.FC<{
       title,
       body,
       draft,
-      isOpen,
       additionalContext,
     });
-  }, [snapshotKey, title, body, draft, isOpen, additionalContext, directory, branch]);
+  }, [snapshotKey, title, body, draft, additionalContext, directory, branch]);
 
   const generateDescription = React.useCallback(async () => {
     if (isGenerating) return;
@@ -538,16 +560,31 @@ export const PullRequestSection: React.FC<{
   const canMerge = Boolean(status?.canMerge);
   const isConnected = Boolean(status?.connected);
   const shouldShowConnectionNotice = githubAuthChecked && status?.connected === false;
+  const prVisualState = getPrVisualState(status);
+  const prColorVar = prVisualState ? `var(--pr-${prVisualState})` : 'var(--status-info)';
+  const PrStateIcon = prVisualState === 'draft'
+    ? RiGitPrDraftLine
+    : prVisualState === 'merged'
+      ? RiGitMergeLine
+      : prVisualState === 'closed'
+        ? RiGitClosePullRequestLine
+        : RiGitPullRequestLine;
+
+  const containerClassName =
+    variant === 'framed'
+      ? 'rounded-xl border border-border/60 bg-background/70 overflow-hidden'
+      : 'border-0 bg-transparent rounded-none';
+  const headerClassName =
+    variant === 'framed'
+      ? 'px-3 py-2 border-b border-border/40 flex items-center justify-between gap-2'
+      : 'px-0 py-3 border-b border-border/40 flex items-center justify-between gap-2';
+  const bodyClassName = variant === 'framed' ? 'flex flex-col gap-3 p-3' : 'flex flex-col gap-3 py-3';
 
   return (
-    <Collapsible
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      className="rounded-xl border border-border/60 bg-background/70 overflow-hidden"
-    >
-      <CollapsibleTrigger className="flex w-full items-center justify-between px-3 h-10 hover:bg-transparent">
+    <section className={containerClassName}>
+      <div className={headerClassName}>
         <div className="flex items-center gap-2 min-w-0">
-          <RiGitPullRequestLine className="size-4 text-muted-foreground" />
+          <PrStateIcon className="size-4 shrink-0" style={{ color: pr ? prColorVar : 'var(--surface-muted-foreground)' }} />
           <h3 className="typography-ui-header font-semibold text-foreground truncate">Pull Request</h3>
           {pr ? (
             <span className="typography-meta text-muted-foreground truncate">#{pr.number}</span>
@@ -562,16 +599,14 @@ export const PullRequestSection: React.FC<{
             </span>
           ) : null}
         </div>
-      </CollapsibleTrigger>
+      </div>
 
-      <CollapsibleContent>
-        <div className="border-t border-border/40">
-          <div className="flex flex-col gap-3 p-3">
-            {shouldShowConnectionNotice ? (
-              <div className="space-y-2">
-                <div className="typography-meta text-muted-foreground">
-                  GitHub not connected. Connect your GitHub account in settings.
-                </div>
+      <div className={bodyClassName}>
+        {shouldShowConnectionNotice ? (
+          <div className="space-y-2">
+            <div className="typography-meta text-muted-foreground">
+              GitHub not connected. Connect your GitHub account in settings.
+            </div>
                 <Button variant="outline" size="sm" onClick={openGitHubSettings} className="w-fit">
                   Open settings
                 </Button>
@@ -599,30 +634,43 @@ export const PullRequestSection: React.FC<{
                   <div className="min-w-0">
                     <div className="typography-ui-label text-foreground truncate">{pr.title}</div>
                     <div className="typography-micro text-muted-foreground truncate">
-                      {pr.state}{pr.draft ? ' (draft)' : ''}
+                      <span style={{ color: prColorVar }}>
+                        {pr.state}{pr.draft ? ' (draft)' : ''}
+                      </span>
                       {pr.mergeable === false ? ' · not mergeable' : ''}
-                      {typeof pr.mergeableState === 'string' && pr.mergeableState ? ` · ${pr.mergeableState}` : ''}
+                      {pr.state === 'open' && typeof pr.mergeableState === 'string' && pr.mergeableState && pr.mergeableState !== 'unknown'
+                        ? ` · ${pr.mergeableState}`
+                        : ''}
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {checks ? (
+                    <div className="mt-2 space-y-2">
+                      <div className="flex flex-col sm:flex-row items-stretch gap-2">
+                        {checks ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={openChecksDialog}
+                            disabled={isLoadingCheckDetails}
+                            className="justify-center sm:flex-1"
+                          >
+                            {isLoadingCheckDetails ? <RiLoader4Line className="size-4 animate-spin" /> : null}
+                            Check details
+                          </Button>
+                        ) : null}
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={openChecksDialog}
-                          disabled={isLoadingCheckDetails}
+                          onClick={sendCommentsToChat}
+                          className={checks ? 'justify-center sm:flex-1' : 'justify-center'}
                         >
-                          {isLoadingCheckDetails ? <RiLoader4Line className="size-4 animate-spin" /> : null}
-                          Check details
+                          Send PR comments to chat
                         </Button>
-                      ) : null}
+                      </div>
+
                       {checks?.failure ? (
-                        <Button variant="outline" size="sm" onClick={sendFailedChecksToChat}>
+                        <Button variant="outline" size="sm" onClick={sendFailedChecksToChat} className="w-full justify-center">
                           Send failed checks to chat
                         </Button>
                       ) : null}
-                      <Button variant="outline" size="sm" onClick={sendCommentsToChat}>
-                        Send PR comments to chat
-                      </Button>
                     </div>
                     {canMerge && pr.draft ? (
                       <div className="typography-micro text-muted-foreground">
@@ -843,9 +891,7 @@ export const PullRequestSection: React.FC<{
                 </div>
               </div>
             )}
-          </div>
-        </div>
-      </CollapsibleContent>
+      </div>
 
       <Dialog open={checksDialogOpen} onOpenChange={setChecksDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[70vh] flex flex-col">
@@ -890,6 +936,6 @@ export const PullRequestSection: React.FC<{
           </div>
         </DialogContent>
       </Dialog>
-    </Collapsible>
+    </section>
   );
 };

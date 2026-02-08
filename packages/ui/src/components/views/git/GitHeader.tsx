@@ -5,12 +5,13 @@ import {
   RiArrowDownSLine,
   RiLoader4Line,
   RiGitBranchLine,
+  RiGitRepositoryLine,
   RiBriefcaseLine,
   RiHomeLine,
   RiGraduationCapLine,
   RiCodeLine,
   RiHeartLine,
-  RiGitRepositoryLine,
+  RiHistoryLine,
   RiUser3Line,
 } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
@@ -24,11 +25,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { BranchSelector } from './BranchSelector';
 import { WorktreeBranchDisplay } from './WorktreeBranchDisplay';
 import { SyncActions } from './SyncActions';
-import { BranchIntegrationSection, type OperationLogEntry } from './BranchIntegrationSection';
 import type { GitStatus, GitIdentityProfile, GitRemote } from '@/lib/api/types';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
-type BranchOperation = 'merge' | 'rebase' | null;
 
 interface GitHeaderProps {
   status: GitStatus | null;
@@ -48,13 +47,7 @@ interface GitHeaderProps {
   onSelectIdentity: (profile: GitIdentityProfile) => void;
   isApplyingIdentity: boolean;
   isWorktreeMode: boolean;
-  // Branch integration (merge/rebase)
-  onMerge: (branch: string) => void;
-  onRebase: (branch: string) => void;
-  branchOperation: BranchOperation;
-  operationLogs: OperationLogEntry[];
-  onOperationComplete: () => void;
-  isBusy: boolean;
+  onOpenHistory?: () => void;
   onOpenBranchPicker?: () => void;
 }
 
@@ -208,12 +201,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   onSelectIdentity,
   isApplyingIdentity,
   isWorktreeMode,
-  onMerge,
-  onRebase,
-  branchOperation,
-  operationLogs,
-  onOperationComplete,
-  isBusy,
+  onOpenHistory,
   onOpenBranchPicker,
 }) => {
   if (!status) {
@@ -271,20 +259,6 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
         disabled={!status}
       />
 
-      <div className="h-4 w-px bg-border/60" />
-
-      <BranchIntegrationSection
-        currentBranch={status?.current}
-        localBranches={localBranches}
-        remoteBranches={remoteBranches}
-        onMerge={onMerge}
-        onRebase={onRebase}
-        disabled={isBusy}
-        isOperating={branchOperation !== null}
-        operationLogs={operationLogs}
-        onOperationComplete={onOperationComplete}
-      />
-
       <div className="flex-1" />
 
       {onOpenBranchPicker ? (
@@ -297,10 +271,27 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
               onClick={onOpenBranchPicker}
             >
               <RiGitRepositoryLine className="size-4" />
-              <span className="hidden sm:inline">Manage Branches</span>
+              <span className="hidden sm:inline">Manage branches</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent sideOffset={8}>Manage branches</TooltipContent>
+        </Tooltip>
+      ) : null}
+
+      {onOpenHistory ? (
+        <Tooltip delayDuration={1000}>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 px-2 py-1 h-8 typography-ui-label"
+              onClick={onOpenHistory}
+            >
+              <RiHistoryLine className="size-4" />
+              <span className="hidden sm:inline">History</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={8}>Show commit history</TooltipContent>
         </Tooltip>
       ) : null}
 

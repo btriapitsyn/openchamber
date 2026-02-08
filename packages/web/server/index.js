@@ -5844,31 +5844,38 @@ async function main(options = {}) {
         return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
       }
 
-      // Find PR for this branch (same-repo assumption)
-      const list = await octokit.rest.pulls.list({
-        owner: repo.owner,
-        repo: repo.repo,
-        state: 'open',
-        head: `${repo.owner}:${branch}`,
-        per_page: 10,
-      });
+       const listByHead = async (state) => {
+         const resp = await octokit.rest.pulls.list({
+           owner: repo.owner,
+           repo: repo.repo,
+           state,
+           head: `${repo.owner}:${branch}`,
+           per_page: 10,
+         });
+         return Array.isArray(resp?.data) ? resp.data[0] : null;
+       };
 
-      let first = Array.isArray(list?.data) ? list.data[0] : null;
+       const listByHeadRef = async (state) => {
+         const resp = await octokit.rest.pulls.list({
+           owner: repo.owner,
+           repo: repo.repo,
+           state,
+           per_page: 100,
+         });
+         const matches = Array.isArray(resp?.data)
+           ? resp.data.filter((pr) => pr?.head?.ref === branch)
+           : [];
+         return matches[0] ?? null;
+       };
 
-      // Fork PR support: head owner != base owner. If no PR found via head filter,
-      // fall back to listing open PRs and matching by head ref name.
-      if (!first) {
-        const openList = await octokit.rest.pulls.list({
-          owner: repo.owner,
-          repo: repo.repo,
-          state: 'open',
-          per_page: 100,
-        });
-        const matches = Array.isArray(openList?.data)
-          ? openList.data.filter((pr) => pr?.head?.ref === branch)
-          : [];
-        first = matches[0] ?? null;
-      }
+       // PR status by branch:
+       // - Prefer open PRs.
+       // - If none, also surface closed/merged PRs.
+       // - Fork PR support: head owner != base owner -> head filter yields empty; fall back to matching head.ref.
+       let first = await listByHead('open');
+       if (!first) first = await listByHead('closed');
+       if (!first) first = await listByHeadRef('open');
+       if (!first) first = await listByHeadRef('closed');
       if (!first) {
         return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
       }
@@ -5964,7 +5971,8 @@ async function main(options = {}) {
         canMerge = false;
       }
 
-      const mergedState = prData.merged ? 'merged' : (prData.state === 'closed' ? 'closed' : 'open');
+       const isMerged = Boolean(prData.merged || prData.merged_at);
+       const mergedState = isMerged ? 'merged' : (prData.state === 'closed' ? 'closed' : 'open');
 
       return res.json({
         connected: true,
