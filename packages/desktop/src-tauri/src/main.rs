@@ -9,7 +9,7 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use std::{collections::HashSet, fs, path::{Path, PathBuf}};
+use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
@@ -408,7 +408,15 @@ struct InstalledAppsCache {
 }
 
 const INSTALLED_APPS_CACHE_TTL_SECS: u64 = 60 * 60 * 24;
-const INSTALLED_APPS_CACHE_FILE: &str = "installed-apps.json";
+const INSTALLED_APPS_CACHE_FILE: &str = "discovered-apps.json";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InstalledAppsResponse {
+    apps: Vec<InstalledAppInfo>,
+    has_cache: bool,
+    is_cache_stale: bool,
+}
 
 #[tauri::command]
 fn desktop_filter_installed_apps(apps: Vec<String>) -> Result<Vec<String>, String> {
@@ -448,10 +456,10 @@ fn desktop_get_installed_apps(
     app: tauri::AppHandle,
     apps: Vec<String>,
     force: Option<bool>,
-) -> Result<Vec<InstalledAppInfo>, String> {
+) -> Result<InstalledAppsResponse, String> {
     #[cfg(target_os = "macos")]
     {
-        let cache_path = installed_apps_cache_path(&app);
+        let cache_path = installed_apps_cache_path();
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|err| err.to_string())?
@@ -460,43 +468,37 @@ fn desktop_get_installed_apps(
         let cache = read_installed_apps_cache(&cache_path);
         let cached_apps = cache
             .as_ref()
-            .map(|entry| filter_cached_installed_apps(entry, &apps))
+            .map(|entry| entry.apps.clone())
             .unwrap_or_default();
-        let mut is_fresh = cache
+        let has_cache = cache.is_some();
+        let is_cache_stale = cache
             .as_ref()
-            .map(|entry| now.saturating_sub(entry.updated_at) <= INSTALLED_APPS_CACHE_TTL_SECS)
+            .map(|entry| now.saturating_sub(entry.updated_at) > INSTALLED_APPS_CACHE_TTL_SECS)
             .unwrap_or(false);
-        if force.unwrap_or(false) {
-            is_fresh = false;
-        }
-        if is_fresh {
-            let has_missing_icons = cached_apps.iter().any(|entry| entry.icon_data_url.is_none());
-            if has_missing_icons {
-                is_fresh = false;
-            }
-        }
-        if is_fresh && cached_apps.is_empty() {
-            is_fresh = false;
-        }
 
-        if is_fresh {
-            log::info!("[open-in] cache hit: {} apps", cached_apps.len());
+        if has_cache {
+            if is_cache_stale {
+                log::info!("[open-in] cache hit (stale): {} apps", cached_apps.len());
+            } else {
+                log::info!("[open-in] cache hit (fresh): {} apps", cached_apps.len());
+            }
             if log::log_enabled!(log::Level::Info) {
                 let names: Vec<String> = cached_apps.iter().map(|app| app.name.clone()).collect();
                 log::info!("[open-in] cache apps: {:?}", names);
             }
-        } else {
-            log::info!("[open-in] cache miss: refreshing app list");
         }
 
-        if !is_fresh {
+        if !has_cache {
+            log::info!("[open-in] cache missing: refreshing app list");
             let app_handle = app.clone();
             let app_names = apps.clone();
+            let force_icon_refresh = false;
+            let cached_icon_map: HashMap<String, String> = HashMap::new();
             tauri::async_runtime::spawn_blocking(move || {
                 log::info!("[open-in] scan start: {} candidates", app_names.len());
-                let refreshed = build_installed_apps(&app_names);
+                let refreshed = build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
                 if log::log_enabled!(log::Level::Info) {
-                    let names: Vec<String> = refreshed.iter().map(|app| app.name.clone()).collect();
+                    let names: Vec<String> = refreshed.iter().map(|entry| entry.name.clone()).collect();
                     log::info!("[open-in] scan apps: {:?}", names);
                 }
                 log::info!("[open-in] scan done: {} installed", refreshed.len());
@@ -507,13 +509,42 @@ fn desktop_get_installed_apps(
                         .unwrap_or(0),
                     apps: refreshed.clone(),
                 };
-                let cache_path = installed_apps_cache_path(&app_handle);
+                let cache_path = installed_apps_cache_path();
+                let _ = write_installed_apps_cache(&cache_path, &cache_entry);
+                dispatch_installed_apps_update(&app_handle, &refreshed);
+            });
+        } else if force.unwrap_or(false) {
+            log::info!("[open-in] manual refresh: refreshing app list");
+            let app_handle = app.clone();
+            let app_names = apps.clone();
+            let force_icon_refresh = true;
+            let cached_icon_map: HashMap<String, String> = HashMap::new();
+            tauri::async_runtime::spawn_blocking(move || {
+                log::info!("[open-in] scan start: {} candidates", app_names.len());
+                let refreshed = build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
+                if log::log_enabled!(log::Level::Info) {
+                    let names: Vec<String> = refreshed.iter().map(|entry| entry.name.clone()).collect();
+                    log::info!("[open-in] scan apps: {:?}", names);
+                }
+                log::info!("[open-in] scan done: {} installed", refreshed.len());
+                let cache_entry = InstalledAppsCache {
+                    updated_at: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|value| value.as_secs())
+                        .unwrap_or(0),
+                    apps: refreshed.clone(),
+                };
+                let cache_path = installed_apps_cache_path();
                 let _ = write_installed_apps_cache(&cache_path, &cache_entry);
                 dispatch_installed_apps_update(&app_handle, &refreshed);
             });
         }
 
-        return Ok(cached_apps);
+        return Ok(InstalledAppsResponse {
+            apps: cached_apps,
+            has_cache,
+            is_cache_stale,
+        });
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -621,15 +652,11 @@ fn resolve_app_bundle_path(app_name: &str) -> Option<PathBuf> {
 }
 
 #[cfg(target_os = "macos")]
-fn installed_apps_cache_path(app: &tauri::AppHandle) -> PathBuf {
-    let base_dir = env::var_os("HOME")
-        .map(PathBuf::from)
-        .map(|home| home.join(".config").join("openchamber"))
-        .or_else(|| app.path().app_config_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("/tmp/openchamber"));
-
-    base_dir
-        .join("cache")
+fn installed_apps_cache_path() -> PathBuf {
+    let home = env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"));
+    home
+        .join(".config")
+        .join("openchamber")
         .join(INSTALLED_APPS_CACHE_FILE)
 }
 
@@ -649,25 +676,11 @@ fn write_installed_apps_cache(path: &Path, cache: &InstalledAppsCache) -> Result
 }
 
 #[cfg(target_os = "macos")]
-fn filter_cached_installed_apps(cache: &InstalledAppsCache, apps: &[String]) -> Vec<InstalledAppInfo> {
-    if apps.is_empty() {
-        return cache.apps.clone();
-    }
-    let requested: HashSet<String> = apps
-        .iter()
-        .map(|name| name.trim().to_string())
-        .filter(|name| !name.is_empty())
-        .collect();
-    cache
-        .apps
-        .iter()
-        .filter(|app| requested.contains(&app.name))
-        .cloned()
-        .collect()
-}
-
-#[cfg(target_os = "macos")]
-fn build_installed_apps(apps: &[String]) -> Vec<InstalledAppInfo> {
+fn build_installed_apps(
+    apps: &[String],
+    cached_icon_map: &HashMap<String, String>,
+    force_icon_refresh: bool,
+) -> Vec<InstalledAppInfo> {
     let mut seen = HashSet::new();
     let mut results = Vec::new();
 
@@ -678,8 +691,14 @@ fn build_installed_apps(apps: &[String]) -> Vec<InstalledAppInfo> {
         }
 
         if let Some(app_path) = resolve_app_bundle_path(trimmed) {
-            let icon_data_url = resolve_app_icon_path(&app_path)
-                .and_then(|icon| icon_to_data_url(&icon, trimmed));
+            let icon_data_url = if force_icon_refresh {
+                resolve_app_icon_path(&app_path).and_then(|icon| icon_to_data_url(&icon, trimmed))
+            } else {
+                cached_icon_map
+                    .get(trimmed)
+                    .cloned()
+                    .or_else(|| resolve_app_icon_path(&app_path).and_then(|icon| icon_to_data_url(&icon, trimmed)))
+            };
             results.push(InstalledAppInfo {
                 name: trimmed.to_string(),
                 icon_data_url,

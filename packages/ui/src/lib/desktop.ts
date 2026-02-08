@@ -406,17 +406,24 @@ export type InstalledDesktopAppInfo = {
   iconDataUrl?: string | null;
 };
 
+export type FetchDesktopInstalledAppsResult = {
+  apps: InstalledDesktopAppInfo[];
+  success: boolean;
+  hasCache: boolean;
+  isCacheStale: boolean;
+};
+
 export const fetchDesktopInstalledApps = async (
   apps: string[],
   force?: boolean
-): Promise<InstalledDesktopAppInfo[]> => {
+): Promise<FetchDesktopInstalledAppsResult> => {
   if (!isTauriShell() || !isDesktopLocalOriginActive()) {
-    return [];
+    return { apps: [], success: false, hasCache: false, isCacheStale: false };
   }
 
   const candidate = Array.isArray(apps) ? apps.filter((value) => typeof value === 'string') : [];
   if (candidate.length === 0) {
-    return [];
+    return { apps: [], success: true, hasCache: false, isCacheStale: false };
   }
 
   try {
@@ -425,10 +432,14 @@ export const fetchDesktopInstalledApps = async (
       apps: candidate,
       force: force === true ? true : undefined,
     });
-    if (!Array.isArray(result)) {
-      return [];
+    if (!result || typeof result !== 'object') {
+      return { apps: [], success: false, hasCache: false, isCacheStale: false };
     }
-    return result
+    const payload = result as { apps?: unknown; hasCache?: unknown; isCacheStale?: unknown };
+    if (!Array.isArray(payload.apps)) {
+      return { apps: [], success: false, hasCache: false, isCacheStale: false };
+    }
+    const installedApps = payload.apps
       .filter((entry) => entry && typeof entry === 'object')
       .map((entry) => {
         const record = entry as { name?: unknown; iconDataUrl?: unknown };
@@ -438,8 +449,14 @@ export const fetchDesktopInstalledApps = async (
         };
       })
       .filter((entry) => entry.name.length > 0);
+    return {
+      apps: installedApps,
+      success: true,
+      hasCache: payload.hasCache === true,
+      isCacheStale: payload.isCacheStale === true,
+    };
   } catch (error) {
     console.warn('Failed to fetch installed apps (tauri)', error);
-    return [];
+    return { apps: [], success: false, hasCache: false, isCacheStale: false };
   }
 };
