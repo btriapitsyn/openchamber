@@ -784,17 +784,38 @@ export const useEventStream = () => {
         // Fallback: if we see assistant parts but session.status hasn't arrived yet, mark busy.
         if (roleInfo === 'assistant') {
           const partType = (messagePart as { type?: unknown }).type;
-          const isStreamingPart =
-            partType === 'step-start' ||
-            partType === 'text' ||
-            partType === 'tool' ||
-            partType === 'reasoning' ||
-            partType === 'file' ||
-            partType === 'patch';
+          const partTime = (messagePart as { time?: { end?: unknown } }).time;
+          const partHasEnded = typeof partTime?.end === 'number';
+          const toolState = (messagePart as { state?: { status?: unknown } }).state?.status;
+          const textContent = (messagePart as { text?: unknown }).text;
+
+          const isStreamingPart = (() => {
+            if (partType === 'tool') {
+              return toolState === 'running' || toolState === 'pending';
+            }
+            if (partType === 'reasoning') {
+              return !partHasEnded;
+            }
+            if (partType === 'text') {
+              const hasText = typeof textContent === 'string' && textContent.trim().length > 0;
+              return hasText && !partHasEnded;
+            }
+            if (partType === 'step-start') {
+              return true;
+            }
+            return false;
+          })();
 
           if (isStreamingPart) {
             const currentStatus = useSessionStore.getState().sessionStatus?.get(sessionId);
+            const recentlyConfirmedIdle =
+              currentStatus?.type === 'idle' &&
+              typeof currentStatus.confirmedAt === 'number' &&
+              Date.now() - currentStatus.confirmedAt < 1200;
             if (!currentStatus || currentStatus.type === 'idle') {
+              if (recentlyConfirmedIdle) {
+                break;
+              }
               updateSessionStatus(sessionId, { type: 'busy' }, 'sse:message.part.updated');
             }
           }
@@ -1743,6 +1764,7 @@ export const useEventStream = () => {
 
       clearPauseTimeout();
       maybeBootstrapIfStale('visibility_restore');
+      triggerSessionStatusPoll();
 
       const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
       if (isStalled) {
@@ -1771,6 +1793,7 @@ export const useEventStream = () => {
     if (visibilityStateRef.current === 'visible') {
       clearPauseTimeout();
       maybeBootstrapIfStale('window_focus');
+      triggerSessionStatusPoll();
 
       const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
       if (isStalled) {
