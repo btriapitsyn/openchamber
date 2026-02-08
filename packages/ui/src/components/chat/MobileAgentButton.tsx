@@ -72,7 +72,7 @@ export const MobileAgentButton: React.FC<MobileAgentButtonProps> = ({ onCycleAge
                 'rounded-lg border border-border/50 px-1.5',
                 'typography-micro font-medium',
                 'focus:outline-none hover:bg-[var(--interactive-hover)]',
-                'touch-none',
+                'touch-pan-x',
                 className
             )}
             style={{
@@ -83,7 +83,9 @@ export const MobileAgentButton: React.FC<MobileAgentButtonProps> = ({ onCycleAge
             }}
             title={agentLabel}
         >
-            <span className="truncate">{agentLabel}</span>
+            <span className="min-w-0 max-w-full overflow-x-auto whitespace-nowrap scrollbar-hidden">
+                {agentLabel}
+            </span>
         </button>
     );
 };

@@ -24,9 +24,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { BranchSelector } from './BranchSelector';
 import { WorktreeBranchDisplay } from './WorktreeBranchDisplay';
 import { SyncActions } from './SyncActions';
-import type { GitStatus, GitIdentityProfile } from '@/lib/api/types';
+import { BranchIntegrationSection, type OperationLogEntry } from './BranchIntegrationSection';
+import type { GitStatus, GitIdentityProfile, GitRemote } from '@/lib/api/types';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
+type BranchOperation = 'merge' | 'rebase' | null;
 
 interface GitHeaderProps {
   status: GitStatus | null;
@@ -34,9 +36,10 @@ interface GitHeaderProps {
   remoteBranches: string[];
   branchInfo: Record<string, { ahead?: number; behind?: number }> | undefined;
   syncAction: SyncAction;
-  onFetch: () => void;
-  onPull: () => void;
-  onPush: () => void;
+  remotes: GitRemote[];
+  onFetch: (remote: GitRemote) => void;
+  onPull: (remote: GitRemote) => void;
+  onPush: (remote: GitRemote) => void;
   onCheckoutBranch: (branch: string) => void;
   onCreateBranch: (name: string) => Promise<void>;
   onRenameBranch?: (oldName: string, newName: string) => Promise<void>;
@@ -45,6 +48,13 @@ interface GitHeaderProps {
   onSelectIdentity: (profile: GitIdentityProfile) => void;
   isApplyingIdentity: boolean;
   isWorktreeMode: boolean;
+  // Branch integration (merge/rebase)
+  onMerge: (branch: string) => void;
+  onRebase: (branch: string) => void;
+  branchOperation: BranchOperation;
+  operationLogs: OperationLogEntry[];
+  onOperationComplete: () => void;
+  isBusy: boolean;
   onOpenBranchPicker?: () => void;
 }
 
@@ -186,6 +196,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   remoteBranches,
   branchInfo,
   syncAction,
+  remotes,
   onFetch,
   onPull,
   onPush,
@@ -197,6 +208,12 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   onSelectIdentity,
   isApplyingIdentity,
   isWorktreeMode,
+  onMerge,
+  onRebase,
+  branchOperation,
+  operationLogs,
+  onOperationComplete,
+  isBusy,
   onOpenBranchPicker,
 }) => {
   if (!status) {
@@ -247,10 +264,25 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
 
       <SyncActions
         syncAction={syncAction}
+        remotes={remotes}
         onFetch={onFetch}
         onPull={onPull}
         onPush={onPush}
         disabled={!status}
+      />
+
+      <div className="h-4 w-px bg-border/60" />
+
+      <BranchIntegrationSection
+        currentBranch={status?.current}
+        localBranches={localBranches}
+        remoteBranches={remoteBranches}
+        onMerge={onMerge}
+        onRebase={onRebase}
+        disabled={isBusy}
+        isOperating={branchOperation !== null}
+        operationLogs={operationLogs}
+        onOperationComplete={onOperationComplete}
       />
 
       <div className="flex-1" />

@@ -10,15 +10,16 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  type DragEndEvent,
-  type DragStartEvent,
+  type Modifier,
 } from '@dnd-kit/core';
 import {
   SortableContext,
+  arrayMove,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +41,9 @@ import {
   RiFileCopyLine,
   RiFolderAddLine,
   RiGitBranchLine,
+  RiGitClosePullRequestLine,
+  RiGitMergeLine,
+  RiGitPrDraftLine,
   RiGitPullRequestLine,
   RiLinkUnlinkM,
 
@@ -62,14 +66,29 @@ import type { WorktreeMetadata } from '@/types/worktree';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
-import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
+import { createWorktreeOnly, createWorktreeSession } from '@/lib/worktreeSessionCreator';
+import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import type { GitHubPullRequestStatus } from '@/lib/api/types';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
 
+const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
+
+const getAttentionDiamondDelay = (index: number): string => {
+  return index === 4 ? '0ms' : '130ms';
+};
+
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
+const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
+const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
+const PROJECT_ACTIVE_SESSION_STORAGE_KEY = 'oc.sessions.activeSessionByProject';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
+const PR_REVALIDATE_TTL_MS = 90_000;
+const PR_REVALIDATE_INTERVAL_MS = 90_000;
+const PR_REVALIDATE_CONCURRENCY = 3;
 
 const formatDateLabel = (value: string | number) => {
   const targetDate = new Date(value);
@@ -102,6 +121,84 @@ const normalizePath = (value?: string | null) => {
   }
   const normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
   return normalized.length === 0 ? '/' : normalized;
+};
+
+const toFiniteNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+};
+
+const getPrVisualState = (status: GitHubPullRequestStatus | null): 'draft' | 'open' | 'blocked' | 'merged' | 'closed' | null => {
+  const pr = status?.pr;
+  if (!pr) {
+    return null;
+  }
+  if (pr.state === 'merged') {
+    return 'merged';
+  }
+  if (pr.state === 'closed') {
+    return 'closed';
+  }
+  if (pr.draft) {
+    return 'draft';
+  }
+  const checksFailed = status?.checks?.state === 'failure';
+  const notMergeable = status?.canMerge === false || pr.mergeable === false;
+  if (checksFailed || notMergeable) {
+    return 'blocked';
+  }
+  return 'open';
+};
+
+const getPrTooltipLabel = (status: GitHubPullRequestStatus | null): string => {
+  const pr = status?.pr;
+  if (!pr) {
+    return 'Open pull request';
+  }
+  const parts: string[] = [`PR #${pr.number}`];
+  if (pr.state === 'merged') {
+    parts.push('Merged');
+  } else if (pr.state === 'closed') {
+    parts.push('Closed');
+  } else if (pr.draft) {
+    parts.push('Draft');
+  } else {
+    parts.push('Open');
+  }
+  if (status?.checks?.state === 'failure') {
+    parts.push('Checks failing');
+  }
+  if (status?.canMerge === false || pr.mergeable === false) {
+    parts.push('Merge blocked');
+  }
+  return parts.join(' · ');
+};
+
+type TauriShell = {
+  shell?: {
+    open?: (url: string) => Promise<unknown>;
+  };
+};
+
+const centerDragOverlayUnderPointer: Modifier = ({ transform, activeNodeRect, activatorEvent }) => {
+  if (!(activatorEvent instanceof MouseEvent) || !activeNodeRect) {
+    return transform;
+  }
+  const overlayHeight = 32;
+  const pointerLiftY = 16;
+  return {
+    ...transform,
+    x: transform.x,
+    y: transform.y - overlayHeight / 2 - pointerLiftY,
+  };
 };
 
 // Format project label: kebab-case/snake_case → Title Case
@@ -156,6 +253,8 @@ interface SortableProjectItemProps {
   sentinelRef: (el: HTMLDivElement | null) => void;
   children?: React.ReactNode;
   settingsAutoCreateWorktree: boolean;
+  showCreateButtons?: boolean;
+  hideHeader?: boolean;
 }
 
 const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
@@ -187,6 +286,8 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   sentinelRef,
   children,
   settingsAutoCreateWorktree,
+  showCreateButtons = true,
+  hideHeader = false,
 }) => {
   const {
     attributes,
@@ -199,41 +300,43 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
 
   return (
     <div ref={setNodeRef} className={cn('relative', isDragging && 'opacity-40')}>
-      {/* Sentinel for sticky detection */}
-      {isDesktopShell && (
-        <div
-          ref={sentinelRef}
-          data-project-id={id}
-          className="absolute top-0 h-px w-full pointer-events-none"
-          aria-hidden="true"
-        />
-      )}
-      
-      {/* Project header - sticky like workspace groups */}
-      <div
-        className={cn(
-          'sticky top-0 z-10 pt-2 pb-1.5 w-full text-left cursor-pointer group/project border-b select-none',
-          !isDesktopShell && 'bg-sidebar',
-        )}
-        style={{
-          backgroundColor: isDesktopShell
-            ? isStuck ? 'var(--sidebar-stuck-bg)' : 'transparent'
-            : undefined,
-          borderColor: isHovered
-            ? 'var(--color-border-hover)'
-            : isCollapsed
-              ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
-              : 'var(--color-border)'
-        }}
-        onMouseEnter={() => onHoverChange(true)}
-        onMouseLeave={() => onHoverChange(false)}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          if (!isRenaming) {
-            setIsMenuOpen(true);
-          }
-        }}
-      >
+      {!hideHeader ? (
+        <>
+          {/* Sentinel for sticky detection */}
+          {isDesktopShell && (
+            <div
+              ref={sentinelRef}
+              data-project-id={id}
+              className="absolute top-0 h-px w-full pointer-events-none"
+              aria-hidden="true"
+            />
+          )}
+
+          {/* Project header - sticky like workspace groups */}
+          <div
+            className={cn(
+              'sticky top-0 z-10 pt-2 pb-1.5 w-full text-left cursor-pointer group/project border-b select-none',
+              !isDesktopShell && 'bg-sidebar',
+            )}
+            style={{
+              backgroundColor: isDesktopShell
+                ? isStuck ? 'var(--sidebar-stuck-bg)' : 'transparent'
+                : undefined,
+              borderColor: isHovered
+                ? 'var(--color-border-hover)'
+                : isCollapsed
+                  ? 'color-mix(in srgb, var(--color-border) 35%, transparent)'
+                  : 'var(--color-border)'
+            }}
+            onMouseEnter={() => onHoverChange(true)}
+            onMouseLeave={() => onHoverChange(false)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              if (!isRenaming) {
+                setIsMenuOpen(true);
+              }
+            }}
+          >
         <div className="relative flex items-center gap-1 px-1" {...attributes}>
           {isRenaming ? (
             <form
@@ -312,31 +415,31 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[180px]">
-                {isRepo && !hideDirectoryControls && settingsAutoCreateWorktree && onNewSession && (
+                {showCreateButtons && isRepo && !hideDirectoryControls && settingsAutoCreateWorktree && onNewSession && (
                   <DropdownMenuItem onClick={onNewSession}>
                     <RiAddLine className="mr-1.5 h-4 w-4" />
                     New Session
                   </DropdownMenuItem>
                 )}
-                {isRepo && !hideDirectoryControls && !settingsAutoCreateWorktree && onNewWorktreeSession && (
+                {showCreateButtons && isRepo && !hideDirectoryControls && !settingsAutoCreateWorktree && onNewWorktreeSession && (
                   <DropdownMenuItem onClick={onNewWorktreeSession}>
                     <RiGitBranchLine className="mr-1.5 h-4 w-4" />
                     New Session in Worktree
                   </DropdownMenuItem>
                 )}
-                {isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
+                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubIssue && (
                   <DropdownMenuItem onClick={onNewSessionFromGitHubIssue}>
                     <RiGithubLine className="mr-1.5 h-4 w-4" />
                     New session from GitHub issue
                   </DropdownMenuItem>
                 )}
-                {isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
+                {showCreateButtons && isRepo && !hideDirectoryControls && onNewSessionFromGitHubPR && (
                   <DropdownMenuItem onClick={onNewSessionFromGitHubPR}>
                     <RiGitPullRequestLine className="mr-1.5 h-4 w-4" />
                     New session from GitHub PR
                   </DropdownMenuItem>
                 )}
-                {isRepo && !hideDirectoryControls && (
+                {showCreateButtons && isRepo && !hideDirectoryControls && (
                   <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
                     <ArrowsMerge className="mr-1.5 h-4 w-4" />
                     New Multi-Run
@@ -357,7 +460,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             </DropdownMenu>
           ) : null}
 
-          {isRepo && !hideDirectoryControls && onNewWorktreeSession && settingsAutoCreateWorktree && !isRenaming && (
+          {showCreateButtons && isRepo && !hideDirectoryControls && onNewWorktreeSession && settingsAutoCreateWorktree && !isRenaming && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -380,7 +483,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
               </TooltipContent>
             </Tooltip>
           )}
-          {(!settingsAutoCreateWorktree || !isRepo) && !isRenaming && (
+          {showCreateButtons && (!settingsAutoCreateWorktree || !isRepo) && !isRenaming && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -401,7 +504,9 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             </Tooltip>
           )}
         </div>
-      </div>
+          </div>
+        </>
+      ) : null}
 
       {/* Children (workspace groups and sessions) */}
       {children}
@@ -409,32 +514,47 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   );
 };
 
-// Drag overlay component - shows only the header during drag
-interface ProjectDragOverlayProps {
-  projectLabel: string;
-  isActiveProject: boolean;
-}
+const SortableGroupItemBase: React.FC<{
+  id: string;
+  children: React.ReactNode;
+}> = ({ id, children }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
 
-const ProjectDragOverlay: React.FC<ProjectDragOverlayProps> = ({
-  projectLabel,
-  isActiveProject,
-}) => {
   return (
     <div
-      className="bg-sidebar border border-border rounded-md shadow-lg px-2 py-1.5"
-      style={{ width: 'max-content', maxWidth: '280px' }}
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition, willChange: 'transform' }}
+      className={cn(
+        'space-y-0.5 rounded-md',
+        isDragging && 'opacity-0',
+      )}
+      {...attributes}
+      {...listeners}
     >
-      <div className="flex items-center gap-2">
-        <span className={cn(
-          "typography-ui font-semibold truncate",
-          isActiveProject ? "text-primary" : "text-foreground"
-        )}>
-          {projectLabel}
-        </span>
-      </div>
+      {children}
     </div>
   );
 };
+
+const SortableGroupItem = React.memo(SortableGroupItemBase);
+
+const GroupDragOverlayBase: React.FC<{ label: string; showBranchIcon: boolean; width?: number }> = ({ label, showBranchIcon, width }) => {
+  return (
+    <div style={width ? { width: `${width}px` } : undefined} className="h-8 min-w-[180px] max-w-[320px] rounded-sm border border-border bg-sidebar px-2 shadow-lg flex items-center gap-1.5">
+      {showBranchIcon ? <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" /> : null}
+      <p className="text-[15px] font-semibold truncate text-foreground">{label}</p>
+    </div>
+  );
+};
+
+const GroupDragOverlay = React.memo(GroupDragOverlayBase);
 
 interface SessionSidebarProps {
   mobileVariant?: boolean;
@@ -470,9 +590,63 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
   const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
-  const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
+  const [worktreePrByGroupKey, setWorktreePrByGroupKey] = React.useState<Map<string, GitHubPullRequestStatus>>(new Map());
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
+    try {
+      const raw = getSafeStorage().getItem(GROUP_COLLAPSE_STORAGE_KEY);
+      if (!raw) {
+        return new Set();
+      }
+      const parsed = JSON.parse(raw) as string[];
+      return new Set(Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  });
+  const [groupOrderByProject, setGroupOrderByProject] = React.useState<Map<string, string[]>>(() => {
+    try {
+      const raw = getSafeStorage().getItem(GROUP_ORDER_STORAGE_KEY);
+      if (!raw) {
+        return new Map();
+      }
+      const parsed = JSON.parse(raw) as Record<string, string[]>;
+      const next = new Map<string, string[]>();
+      Object.entries(parsed).forEach(([projectId, order]) => {
+        if (Array.isArray(order)) {
+          next.set(projectId, order.filter((item) => typeof item === 'string'));
+        }
+      });
+      return next;
+    } catch {
+      return new Map();
+    }
+  });
+  const [activeSessionByProject, setActiveSessionByProject] = React.useState<Map<string, string>>(() => {
+    try {
+      const raw = getSafeStorage().getItem(PROJECT_ACTIVE_SESSION_STORAGE_KEY);
+      if (!raw) {
+        return new Map();
+      }
+      const parsed = JSON.parse(raw) as Record<string, string>;
+      const next = new Map<string, string>();
+      Object.entries(parsed).forEach(([projectId, sessionId]) => {
+        if (typeof sessionId === 'string' && sessionId.length > 0) {
+          next.set(projectId, sessionId);
+        }
+      });
+      return next;
+    } catch {
+      return new Map();
+    }
+  });
+  const [activeDraggedGroupId, setActiveDraggedGroupId] = React.useState<string | null>(null);
+  const [activeDraggedGroupWidth, setActiveDraggedGroupWidth] = React.useState<number | null>(null);
+  const [isProjectRenameInline, setIsProjectRenameInline] = React.useState(false);
+  const [projectRenameDraft, setProjectRenameDraft] = React.useState('');
+  const [projectRootBranches, setProjectRootBranches] = React.useState<Map<string, string>>(new Map());
+  const worktreePrLastCheckedAtRef = React.useRef<Map<string, number>>(new Map());
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
   const persistCollapsedProjectsTimer = React.useRef<number | null>(null);
@@ -489,11 +663,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
   const renameProject = useProjectsStore((state) => state.renameProject);
-  const reorderProjects = useProjectsStore((state) => state.reorderProjects);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
+  const { github, git } = useRuntimeAPIs();
 
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
@@ -506,6 +680,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const unshareSession = useSessionStore((state) => state.unshareSession);
   const sessionMemoryState = useSessionStore((state) => state.sessionMemoryState);
   const sessionStatus = useSessionStore((state) => state.sessionStatus);
+  const sessionAttentionStates = useSessionStore((state) => state.sessionAttentionStates);
   const permissions = useSessionStore((state) => state.permissions);
   const worktreeMetadata = useSessionStore((state) => state.worktreeMetadata);
   const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
@@ -516,6 +691,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+
+  const openExternal = React.useCallback(async (url: string) => {
+    if (typeof window === 'undefined') return;
+    const tauri = (window as unknown as { __TAURI__?: TauriShell }).__TAURI__;
+    if (tauri?.shell?.open) {
+      try {
+        await tauri.shell.open(url);
+        return;
+      } catch {
+        // fall through
+      }
+    }
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const flushCollapsedProjectsPersist = React.useCallback(() => {
     if (isVSCode) {
@@ -627,17 +820,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     };
   }, [projects]);
 
-  const parentMap = React.useMemo(() => {
-    const map = new Map<string, string>();
-    sortedSessions.forEach((session) => {
-      const parentID = (session as Session & { parentID?: string | null }).parentID;
-      if (parentID) {
-        map.set(session.id, parentID);
-      }
-    });
-    return map;
-  }, [sortedSessions]);
-
   const childrenMap = React.useMemo(() => {
     const map = new Map<string, Session[]>();
     sortedSessions.forEach((session) => {
@@ -652,25 +834,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     map.forEach((list) => list.sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0)));
     return map;
   }, [sortedSessions]);
-
-  React.useEffect(() => {
-    if (!currentSessionId) {
-      return;
-    }
-    setExpandedParents((previous) => {
-      const next = new Set(previous);
-      let cursor = parentMap.get(currentSessionId) || null;
-      let changed = false;
-      while (cursor) {
-        if (!next.has(cursor)) {
-          next.add(cursor);
-          changed = true;
-        }
-        cursor = parentMap.get(cursor) || null;
-      }
-      return changed ? next : previous;
-    });
-  }, [currentSessionId, parentMap]);
 
   React.useEffect(() => {
     const directories = new Set<string>();
@@ -893,39 +1056,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const handleDeleteSession = React.useCallback(
     async (session: Session) => {
       const descendants = collectDescendants(session.id);
-      
-      // Check if this is a worktree session - if so, show confirmation dialog
-      const worktree = worktreeMetadata.get(session.id);
-      if (worktree) {
-        // Find ALL sessions linked to this worktree (not just the triggered one)
-        const worktreePath = worktree.path;
-        const allWorktreeSessions: Session[] = [];
-        const sessionIdSet = new Set<string>();
-        
-        // Iterate through all sessions and find those linked to the same worktree
-        sessions.forEach((s) => {
-          const meta = worktreeMetadata.get(s.id);
-          if (meta && meta.path === worktreePath && !sessionIdSet.has(s.id)) {
-            allWorktreeSessions.push(s);
-            sessionIdSet.add(s.id);
-            // Also collect descendants of each worktree session
-            const sessionDescendants = collectDescendants(s.id);
-            sessionDescendants.forEach((desc) => {
-              if (!sessionIdSet.has(desc.id)) {
-                allWorktreeSessions.push(desc);
-                sessionIdSet.add(desc.id);
-              }
-            });
-          }
-        });
-
-        sessionEvents.requestDelete({
-          sessions: allWorktreeSessions,
-          mode: 'worktree',
-          worktree,
-        });
-        return;
-      }
 
       if (descendants.length === 0) {
 
@@ -957,7 +1087,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         }
       }
     },
-    [collectDescendants, deleteSession, deleteSessions, worktreeMetadata, sessions],
+    [collectDescendants, deleteSession, deleteSessions],
   );
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
@@ -1017,7 +1147,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
 
   const buildGroupedSessions = React.useCallback(
-    (projectSessions: Session[], projectRoot: string | null, availableWorktrees: WorktreeMetadata[]) => {
+    (
+      projectSessions: Session[],
+      projectRoot: string | null,
+      availableWorktrees: WorktreeMetadata[],
+      projectRootBranch: string | null,
+      projectIsRepo: boolean,
+    ) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
       const sortedProjectSessions = [...projectSessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
 
@@ -1076,19 +1212,80 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         return !sessionMap.has(parentID);
       });
 
-      // Build all session nodes into a single flat group sorted by date
-      const allSessions: SessionNode[] = roots.map((session) => buildProjectNode(session));
+      const groupedNodes = new Map<string, SessionNode[]>();
+      const groupOrder = new Map<string, number>();
 
-      // Return single group with all sessions
-      return [{
-        id: 'all',
-        label: 'All sessions',
+      const getGroupKey = (session: Session) => {
+        const metadataPath = normalizePath(worktreeMetadata.get(session.id)?.path ?? null);
+        const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+        const normalizedDir = metadataPath ?? sessionDirectory;
+        if (normalizedDir && normalizedDir !== normalizedProjectRoot && worktreeByPath.has(normalizedDir)) {
+          return normalizedDir;
+        }
+        return normalizedProjectRoot ?? '__project_root__';
+      };
+
+      roots.forEach((session, index) => {
+        const node = buildProjectNode(session);
+        const groupKey = getGroupKey(session);
+        if (!groupedNodes.has(groupKey)) {
+          groupedNodes.set(groupKey, []);
+          groupOrder.set(groupKey, index);
+        }
+        groupedNodes.get(groupKey)?.push(node);
+      });
+
+      const rootKey = normalizedProjectRoot ?? '__project_root__';
+      const groups: SessionGroup[] = [{
+        id: 'root',
+        label: (projectIsRepo && projectRootBranch && projectRootBranch !== 'HEAD')
+          ? `project root: ${projectRootBranch}`
+          : 'project root',
         description: normalizedProjectRoot ? formatPathForDisplay(normalizedProjectRoot, homeDirectory) : null,
         isMain: true,
         worktree: null,
         directory: normalizedProjectRoot,
-        sessions: allSessions,
+        sessions: groupedNodes.get(rootKey) ?? [],
       }];
+
+      const sortedWorktrees = [...availableWorktrees].sort((a, b) => {
+        const aLabel = (a.label || a.branch || a.name || a.path || '').toLowerCase();
+        const bLabel = (b.label || b.branch || b.name || b.path || '').toLowerCase();
+        return aLabel.localeCompare(bLabel);
+      });
+
+      sortedWorktrees.forEach((meta) => {
+        const directory = normalizePath(meta.path) ?? meta.path;
+        const label = meta.branch || meta.name || meta.label || formatDirectoryName(directory, homeDirectory) || directory;
+        groups.push({
+          id: `worktree:${directory}`,
+          label,
+          description: formatPathForDisplay(directory, homeDirectory),
+          isMain: false,
+          worktree: meta,
+          directory,
+          sessions: groupedNodes.get(directory) ?? [],
+        });
+      });
+
+      const represented = new Set(groups.map((group) => group.directory).filter((value): value is string => Boolean(value)));
+      const orphanKeys = Array.from(groupedNodes.keys())
+        .filter((key) => !represented.has(key) && key !== rootKey)
+        .sort((a, b) => (groupOrder.get(a) ?? 0) - (groupOrder.get(b) ?? 0));
+
+      orphanKeys.forEach((directory) => {
+        groups.push({
+          id: `worktree:orphan:${directory}`,
+          label: formatDirectoryName(directory, homeDirectory) || directory,
+          description: formatPathForDisplay(directory, homeDirectory),
+          isMain: false,
+          worktree: null,
+          directory,
+          sessions: groupedNodes.get(directory) ?? [],
+        });
+      });
+
+      return groups;
     },
     [homeDirectory, worktreeMetadata]
   );
@@ -1127,6 +1324,32 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
   }, [isVSCode, safeStorage, scheduleCollapsedProjectsPersist]);
 
+  React.useEffect(() => {
+    try {
+      const serialized = Object.fromEntries(groupOrderByProject.entries());
+      safeStorage.setItem(GROUP_ORDER_STORAGE_KEY, JSON.stringify(serialized));
+    } catch {
+      // ignored
+    }
+  }, [groupOrderByProject, safeStorage]);
+
+  React.useEffect(() => {
+    try {
+      const serialized = Object.fromEntries(activeSessionByProject.entries());
+      safeStorage.setItem(PROJECT_ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(serialized));
+    } catch {
+      // ignored
+    }
+  }, [activeSessionByProject, safeStorage]);
+
+  React.useEffect(() => {
+    try {
+      safeStorage.setItem(GROUP_COLLAPSE_STORAGE_KEY, JSON.stringify(Array.from(collapsedGroups)));
+    } catch {
+      // ignored
+    }
+  }, [collapsedGroups, safeStorage]);
+
   const normalizedProjects = React.useMemo(() => {
     return projects
       .map((project) => ({
@@ -1140,6 +1363,34 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         normalizedPath: string;
       }>;
   }, [projects]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const entries = await Promise.all(
+        normalizedProjects.map(async (project) => {
+          const branch = await getRootBranch(project.normalizedPath).catch(() => null);
+          return { id: project.id, branch };
+        }),
+      );
+      if (cancelled) {
+        return;
+      }
+      setProjectRootBranches((prev) => {
+        const next = new Map(prev);
+        entries.forEach(({ id, branch }) => {
+          if (branch) {
+            next.set(id, branch);
+          }
+        });
+        return next;
+      });
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedProjects]);
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
@@ -1175,13 +1426,424 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return normalizedProjects.map((project) => {
       const projectSessions = getSessionsForProject(project);
       const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? [];
-      const groups = buildGroupedSessions(projectSessions, project.normalizedPath, worktreesForProject);
+      const groups = buildGroupedSessions(
+        projectSessions,
+        project.normalizedPath,
+        worktreesForProject,
+        projectRootBranches.get(project.id) ?? null,
+        Boolean(projectRepoStatus.get(project.id)),
+      );
       return {
         project,
         groups,
       };
     });
-  }, [normalizedProjects, getSessionsForProject, buildGroupedSessions, availableWorktreesByProject]);
+  }, [normalizedProjects, getSessionsForProject, buildGroupedSessions, availableWorktreesByProject, projectRootBranches, projectRepoStatus]);
+
+  const visibleProjectSections = React.useMemo(() => {
+    if (projectSections.length === 0) {
+      return projectSections;
+    }
+    const active = projectSections.find((section) => section.project.id === activeProjectId);
+    return active ? [active] : [projectSections[0]];
+  }, [projectSections, activeProjectId]);
+
+  const activeProjectForHeader = React.useMemo(
+    () => normalizedProjects.find((project) => project.id === activeProjectId) ?? normalizedProjects[0] ?? null,
+    [normalizedProjects, activeProjectId],
+  );
+
+  const activeProjectIsRepo = React.useMemo(
+    () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
+    [activeProjectForHeader, projectRepoStatus],
+  );
+  const activeProjectRepoState = React.useMemo(
+    () => (activeProjectForHeader ? projectRepoStatus.get(activeProjectForHeader.id) : undefined),
+    [activeProjectForHeader, projectRepoStatus],
+  );
+  const reserveHeaderActionsSpace = activeProjectRepoState !== false;
+
+  const worktreePrInFlight = React.useRef<Set<string>>(new Set());
+  const visibleWorktreeGroups = React.useMemo(() => {
+    return visibleProjectSections.flatMap((section) =>
+      section.groups
+        .filter((group) => !group.isMain)
+        .map((group) => ({
+          key: `${section.project.id}:${group.id}`,
+          directory: group.directory,
+          label: group.label,
+          worktree: group.worktree,
+        }))
+    );
+  }, [visibleProjectSections]);
+
+  React.useEffect(() => {
+    const validKeys = new Set<string>();
+    projectSections.forEach((section) => {
+      section.groups.forEach((group) => {
+        if (!group.isMain) {
+          validKeys.add(`${section.project.id}:${group.id}`);
+        }
+      });
+    });
+    setWorktreePrByGroupKey((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      let mutated = false;
+      Array.from(next.keys()).forEach((key) => {
+        if (!validKeys.has(key)) {
+          next.delete(key);
+          mutated = true;
+        }
+      });
+      return mutated ? next : prev;
+    });
+    Array.from(worktreePrLastCheckedAtRef.current.keys()).forEach((key) => {
+      if (!validKeys.has(key)) {
+        worktreePrLastCheckedAtRef.current.delete(key);
+      }
+    });
+  }, [projectSections]);
+
+  const ensureWorktreePrLoaded = React.useCallback(async (
+    groupKey: string,
+    directory: string | null,
+    label: string,
+    worktree?: WorktreeMetadata | null,
+    options?: { force?: boolean },
+  ) => {
+    if (!github?.prStatus || !directory || worktreePrInFlight.current.has(groupKey)) {
+      return;
+    }
+    const lastCheckedAt = worktreePrLastCheckedAtRef.current.get(groupKey) ?? 0;
+    const isFresh = Date.now() - lastCheckedAt < PR_REVALIDATE_TTL_MS;
+    if (!options?.force && isFresh) {
+      return;
+    }
+
+    const resolvedBranchFromDirectory = await git.getGitStatus(directory)
+      .then((status) => status?.current ?? '')
+      .catch(() => '');
+    const normalizeBranchCandidate = (value: string) => value
+      .replace(/^refs\/heads\//, '')
+      .replace(/^remotes\//, '')
+      .replace(/^origin\//, '')
+      .trim();
+    const branches = [resolvedBranchFromDirectory, worktree?.branch, worktree?.name, worktree?.label, label]
+      .map((value) => (value || '').trim())
+      .map(normalizeBranchCandidate)
+      .filter((value) => value.length > 0);
+    const uniqueBranches = Array.from(new Set(branches));
+    if (uniqueBranches.length === 0) {
+      worktreePrLastCheckedAtRef.current.set(groupKey, Date.now());
+      return;
+    }
+
+    worktreePrInFlight.current.add(groupKey);
+    try {
+      let matched: GitHubPullRequestStatus | null = null;
+      for (const branch of uniqueBranches) {
+        const status = await github.prStatus(directory, branch);
+        const hasPr = status?.connected !== false && Boolean(status?.pr);
+        if (hasPr) {
+          matched = status;
+          break;
+        }
+      }
+      setWorktreePrByGroupKey((prev) => {
+        const current = prev.get(groupKey);
+        if (!matched) {
+          if (!current) {
+            return prev;
+          }
+          const next = new Map(prev);
+          next.delete(groupKey);
+          return next;
+        }
+
+        const currentPr = current?.pr;
+        const nextPr = matched.pr;
+        const unchanged = Boolean(
+          currentPr
+            && nextPr
+            && currentPr.number === nextPr.number
+            && currentPr.state === nextPr.state
+            && currentPr.draft === nextPr.draft
+            && currentPr.mergeable === nextPr.mergeable
+            && current?.canMerge === matched.canMerge
+            && current?.checks?.state === matched.checks?.state
+            && current?.checks?.failure === matched.checks?.failure
+            && current?.checks?.pending === matched.checks?.pending
+            && current?.checks?.success === matched.checks?.success
+        );
+
+        if (unchanged) {
+          return prev;
+        }
+
+        const next = new Map(prev);
+        next.set(groupKey, matched);
+        return next;
+      });
+    } catch {
+      setWorktreePrByGroupKey((prev) => {
+        if (!prev.has(groupKey)) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.delete(groupKey);
+        return next;
+      });
+    } finally {
+      worktreePrLastCheckedAtRef.current.set(groupKey, Date.now());
+      worktreePrInFlight.current.delete(groupKey);
+    }
+  }, [github, git]);
+
+  const revalidateVisibleWorktreePrs = React.useCallback(async (options?: { force?: boolean; onlyExistingPr?: boolean }) => {
+    const targetGroups = visibleWorktreeGroups.filter((group) => {
+      if (!group.directory) {
+        return false;
+      }
+      if (options?.onlyExistingPr && !worktreePrByGroupKey.has(group.key)) {
+        return false;
+      }
+      return true;
+    });
+    if (targetGroups.length === 0) {
+      return;
+    }
+
+    let cursor = 0;
+    const workerCount = Math.min(PR_REVALIDATE_CONCURRENCY, targetGroups.length);
+    await Promise.all(
+      Array.from({ length: workerCount }).map(async () => {
+        while (cursor < targetGroups.length) {
+          const index = cursor;
+          cursor += 1;
+          const group = targetGroups[index];
+          await ensureWorktreePrLoaded(group.key, group.directory, group.label, group.worktree, { force: options?.force });
+        }
+      })
+    );
+  }, [visibleWorktreeGroups, worktreePrByGroupKey, ensureWorktreePrLoaded]);
+
+  React.useEffect(() => {
+    if (visibleWorktreeGroups.length === 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void revalidateVisibleWorktreePrs();
+    }, 120);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [visibleWorktreeGroups, revalidateVisibleWorktreePrs]);
+
+  React.useEffect(() => {
+    if (!activeProjectId) {
+      return;
+    }
+    void revalidateVisibleWorktreePrs();
+  }, [activeProjectId, revalidateVisibleWorktreePrs]);
+
+  React.useEffect(() => {
+    const onFocus = () => {
+      void revalidateVisibleWorktreePrs();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void revalidateVisibleWorktreePrs();
+      }
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [revalidateVisibleWorktreePrs]);
+
+  React.useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      void revalidateVisibleWorktreePrs({ onlyExistingPr: true });
+    }, PR_REVALIDATE_INTERVAL_MS);
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [revalidateVisibleWorktreePrs]);
+
+  const projectSessionMeta = React.useMemo(() => {
+    const metaByProject = new Map<string, Map<string, { directory: string | null }>>();
+    const firstSessionByProject = new Map<string, { id: string; directory: string | null }>();
+
+    const visitNodes = (
+      projectId: string,
+      projectRoot: string,
+      fallbackDirectory: string | null,
+      nodes: SessionNode[],
+    ) => {
+      if (!metaByProject.has(projectId)) {
+        metaByProject.set(projectId, new Map());
+      }
+      const projectMap = metaByProject.get(projectId)!;
+      nodes.forEach((node) => {
+        const sessionDirectory = normalizePath(
+          node.worktree?.path
+          ?? (node.session as Session & { directory?: string | null }).directory
+          ?? fallbackDirectory
+          ?? projectRoot,
+        );
+        projectMap.set(node.session.id, { directory: sessionDirectory });
+        if (!firstSessionByProject.has(projectId)) {
+          firstSessionByProject.set(projectId, { id: node.session.id, directory: sessionDirectory });
+        }
+        if (node.children.length > 0) {
+          visitNodes(projectId, projectRoot, sessionDirectory, node.children);
+        }
+      });
+    };
+
+    projectSections.forEach((section) => {
+      section.groups.forEach((group) => {
+        visitNodes(section.project.id, section.project.normalizedPath, group.directory, group.sessions);
+      });
+    });
+
+    return { metaByProject, firstSessionByProject };
+  }, [projectSections]);
+
+  const previousActiveProjectRef = React.useRef<string | null>(null);
+  React.useLayoutEffect(() => {
+    if (!activeProjectId || previousActiveProjectRef.current === activeProjectId) {
+      return;
+    }
+    const section = projectSections.find((item) => item.project.id === activeProjectId);
+    if (!section) {
+      return;
+    }
+    previousActiveProjectRef.current = activeProjectId;
+    const projectMap = projectSessionMeta.metaByProject.get(activeProjectId);
+    if (!projectMap || projectMap.size === 0) {
+      setActiveMainTab('chat');
+      if (mobileVariant) {
+        setSessionSwitcherOpen(false);
+      }
+      openNewSessionDraft({ directoryOverride: section.project.normalizedPath });
+      return;
+    }
+
+    const rememberedSessionId = activeSessionByProject.get(activeProjectId);
+    const remembered = rememberedSessionId && projectMap.has(rememberedSessionId)
+      ? rememberedSessionId
+      : null;
+    const fallback = projectSessionMeta.firstSessionByProject.get(activeProjectId)?.id ?? null;
+    const targetSessionId = remembered ?? fallback;
+    if (!targetSessionId || targetSessionId === currentSessionId) {
+      return;
+    }
+    const targetDirectory = projectMap.get(targetSessionId)?.directory ?? null;
+    handleSessionSelect(targetSessionId, targetDirectory, false, activeProjectId);
+  }, [
+    activeProjectId,
+    activeSessionByProject,
+    currentSessionId,
+    handleSessionSelect,
+    mobileVariant,
+    openNewSessionDraft,
+    projectSections,
+    projectSessionMeta,
+    setActiveMainTab,
+    setSessionSwitcherOpen,
+  ]);
+
+  React.useEffect(() => {
+    if (!activeProjectId || !currentSessionId) {
+      return;
+    }
+    const projectMap = projectSessionMeta.metaByProject.get(activeProjectId);
+    if (!projectMap || !projectMap.has(currentSessionId)) {
+      return;
+    }
+    setActiveSessionByProject((prev) => {
+      if (prev.get(activeProjectId) === currentSessionId) {
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(activeProjectId, currentSessionId);
+      return next;
+    });
+  }, [activeProjectId, currentSessionId, projectSessionMeta]);
+
+  const currentSessionDirectory = React.useMemo(() => {
+    if (!currentSessionId) {
+      return null;
+    }
+    const metadataPath = worktreeMetadata.get(currentSessionId)?.path;
+    if (metadataPath) {
+      return normalizePath(metadataPath) ?? metadataPath;
+    }
+    const activeSession = sessions.find((session) => session.id === currentSessionId);
+    if (!activeSession) {
+      return null;
+    }
+    return normalizePath((activeSession as Session & { directory?: string | null }).directory ?? null);
+  }, [currentSessionId, sessions, worktreeMetadata]);
+
+  const getOrderedGroups = React.useCallback(
+    (projectId: string, groups: SessionGroup[]) => {
+      const preferredOrder = groupOrderByProject.get(projectId);
+      if (!preferredOrder || preferredOrder.length === 0) {
+        return groups;
+      }
+      const groupById = new Map(groups.map((group) => [group.id, group]));
+      const ordered: SessionGroup[] = [];
+      preferredOrder.forEach((id) => {
+        const group = groupById.get(id);
+        if (group) {
+          ordered.push(group);
+          groupById.delete(id);
+        }
+      });
+      groups.forEach((group) => {
+        if (groupById.has(group.id)) {
+          ordered.push(group);
+        }
+      });
+      return ordered;
+    },
+    [groupOrderByProject],
+  );
+
+  const handleStartInlineProjectRename = React.useCallback(() => {
+    if (!activeProjectForHeader) {
+      return;
+    }
+    setProjectRenameDraft(formatProjectLabel(
+      activeProjectForHeader.label?.trim()
+      || formatDirectoryName(activeProjectForHeader.normalizedPath, homeDirectory)
+      || activeProjectForHeader.normalizedPath,
+    ));
+    setIsProjectRenameInline(true);
+  }, [activeProjectForHeader, homeDirectory]);
+
+  const handleSaveInlineProjectRename = React.useCallback(() => {
+    if (!activeProjectForHeader) {
+      return;
+    }
+    const trimmed = projectRenameDraft.trim();
+    if (!trimmed) {
+      return;
+    }
+    renameProject(activeProjectForHeader.id, trimmed);
+    setIsProjectRenameInline(false);
+  }, [activeProjectForHeader, projectRenameDraft, renameProject]);
+
+  const headerActionButtonClass =
+    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50';
 
   // Track when project sticky headers become "stuck"
   React.useEffect(() => {
@@ -1227,8 +1889,23 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const sessionTitle = session.title || 'Untitled Session';
       const hasChildren = node.children.length > 0;
       const isExpanded = expandedParents.has(session.id);
-      const additions = session.summary?.additions;
-      const deletions = session.summary?.deletions;
+      const needsAttention = sessionAttentionStates.get(session.id)?.needsAttention === true;
+      const sessionSummary = session.summary as
+        | {
+          additions?: number | string | null;
+          deletions?: number | string | null;
+          diffs?: Array<{ additions?: number | string | null; deletions?: number | string | null }>;
+        }
+        | undefined;
+      const diffTotals = sessionSummary?.diffs?.reduce<{ additions: number; deletions: number }>(
+        (acc, diff) => ({
+          additions: acc.additions + (toFiniteNumber(diff?.additions) ?? 0),
+          deletions: acc.deletions + (toFiniteNumber(diff?.deletions) ?? 0),
+        }),
+        { additions: 0, deletions: 0 },
+      );
+      const additions = toFiniteNumber(sessionSummary?.additions) ?? diffTotals?.additions;
+      const deletions = toFiniteNumber(sessionSummary?.deletions) ?? diffTotals?.deletions;
       const hasSummary = typeof additions === 'number' || typeof deletions === 'number';
 
       if (editingId === session.id) {
@@ -1309,6 +1986,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const statusType = sessionStatus?.get(session.id)?.type ?? 'idle';
       const isStreaming = statusType === 'busy' || statusType === 'retry';
       const pendingPermissionCount = permissions.get(session.id)?.length ?? 0;
+      const showUnreadStatus = !isStreaming && needsAttention && !isActive;
+      const showStatusMarker = isStreaming || showUnreadStatus;
 
       const streamingIndicator = (() => {
         if (!memoryState) return null;
@@ -1343,8 +2022,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               >
                 {}
                 <div className="flex w-full items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                  {isStreaming ? (
-                    <GridLoader size="xs" className="text-primary flex-shrink-0" />
+                  {showStatusMarker ? (
+                    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
+                      {isStreaming ? (
+                        <GridLoader size="xs" className="text-primary" />
+                      ) : (
+                        <span className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]" aria-label="Unread updates" title="Unread updates">
+                          {Array.from({ length: 9 }, (_, i) => (
+                            ATTENTION_DIAMOND_INDICES.has(i) ? (
+                              <span
+                                key={i}
+                                className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse"
+                                style={{ animationDelay: getAttentionDiamondDelay(i) }}
+                              />
+                            ) : (
+                              <span key={i} className="h-[3px] w-[3px]" />
+                            )
+                          ))}
+                        </span>
+                      )}
+                    </span>
                   ) : null}
                   <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">
                     {sessionTitle}
@@ -1392,18 +2089,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
                   {session.share ? (
                     <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
-                  ) : null}
-                  {node.worktree ? (
-                    <Tooltip delayDuration={700}>
-                      <TooltipTrigger asChild>
-                        <span className="flex-shrink-0">
-                          <RiGitBranchLine className="h-3 w-3 text-[color:var(--status-info)]" />
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" className="text-xs">
-                        {node.worktree.branch || node.worktree.label || 'Worktree'}
-                      </TooltipContent>
-                    </Tooltip>
                   ) : null}
                   {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
                     <span className="flex-shrink-0 text-[0.7rem] leading-none">
@@ -1490,24 +2175,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         </DropdownMenuItem>
                       </>
                     )}
-                    {node.worktree ? (
-                      <DropdownMenuItem
-                        onClick={() => {
-                          if (projectId && projectId !== activeProjectId) {
-                            setActiveProject(projectId);
-                          }
-                          setActiveMainTab('chat');
-                          if (mobileVariant) {
-                            setSessionSwitcherOpen(false);
-                          }
-                          openNewSessionDraft({ directoryOverride: node.worktree?.path ?? null });
-                        }}
-                        className="[&>svg]:mr-1"
-                      >
-                        <RiGitBranchLine className="mr-1 h-4 w-4" />
-                        New session in worktree
-                      </DropdownMenuItem>
-                    ) : null}
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive [&>svg]:mr-1"
                       onClick={() => handleDeleteSession(session)}
@@ -1532,6 +2199,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       directoryStatus,
       sessionMemoryState,
       sessionStatus,
+      sessionAttentionStates,
       permissions,
       currentSessionId,
       expandedParents,
@@ -1547,11 +2215,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       handleDeleteSession,
       copiedSessionId,
       mobileVariant,
-      activeProjectId,
-      setActiveProject,
-      setActiveMainTab,
-      setSessionSwitcherOpen,
-      openNewSessionDraft,
       openMenuSessionId,
     ],
   );
@@ -1559,41 +2222,231 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const renderGroupSessions = React.useCallback(
     (group: SessionGroup, groupKey: string, projectId?: string | null) => {
       const isExpanded = expandedSessionGroups.has(groupKey);
+      const isCollapsed = collapsedGroups.has(groupKey);
       const maxVisible = hideDirectoryControls ? 10 : 5;
       const totalSessions = group.sessions.length;
       const visibleSessions = isExpanded ? group.sessions : group.sessions.slice(0, maxVisible);
       const remainingCount = totalSessions - visibleSessions.length;
+      const collectGroupSessions = (nodes: SessionNode[]): Session[] => {
+        const collected: Session[] = [];
+        const visit = (list: SessionNode[]) => {
+          list.forEach((node) => {
+            collected.push(node.session);
+            if (node.children.length > 0) {
+              visit(node.children);
+            }
+          });
+        };
+        visit(nodes);
+        return collected;
+      };
+      const allGroupSessions = collectGroupSessions(group.sessions);
+      const normalizedGroupDirectory = normalizePath(group.directory ?? null);
+      const isGitProject = Boolean(projectId && projectRepoStatus.get(projectId));
+      const groupPrStatus = projectId ? worktreePrByGroupKey.get(groupKey) ?? null : null;
+      const groupPr = groupPrStatus?.pr ?? null;
+      const prVisualState = getPrVisualState(groupPrStatus);
+      const prColorVar = prVisualState ? `var(--pr-${prVisualState})` : 'var(--status-info)';
+      const PrStateIcon = prVisualState === 'draft'
+        ? RiGitPrDraftLine
+        : prVisualState === 'merged'
+          ? RiGitMergeLine
+          : prVisualState === 'closed'
+            ? RiGitClosePullRequestLine
+            : RiGitPullRequestLine;
+      const isActiveGroup = Boolean(
+        normalizedGroupDirectory
+          && currentSessionDirectory
+          && normalizedGroupDirectory === currentSessionDirectory,
+      );
 
       return (
-        <>
-          {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
-          {totalSessions === 0 ? (
-            <div className="py-1 text-left typography-micro text-muted-foreground">
-              No sessions in this workspace yet.
+        <div className="oc-group">
+          <div
+            className="group/gh flex items-center justify-between gap-2 py-1 min-h-8 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
+            onMouseEnter={() => {
+              if (!group.isMain) {
+                void ensureWorktreePrLoaded(groupKey, group.directory, group.label, group.worktree);
+              }
+            }}
+            onClick={() => {
+              if (!group.isMain) {
+                void ensureWorktreePrLoaded(groupKey, group.directory, group.label, group.worktree);
+              }
+              setCollapsedGroups((prev) => {
+                const next = new Set(prev);
+                if (next.has(groupKey)) {
+                  next.delete(groupKey);
+                } else {
+                  next.add(groupKey);
+                }
+                return next;
+              });
+            }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                if (!group.isMain) {
+                  void ensureWorktreePrLoaded(groupKey, group.directory, group.label, group.worktree);
+                }
+                setCollapsedGroups((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(groupKey)) {
+                    next.delete(groupKey);
+                  } else {
+                    next.add(groupKey);
+                  }
+                  return next;
+                });
+              }
+            }}
+            aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
+          >
+            <div className="min-w-0 flex items-center gap-1.5 px-0">
+              {isCollapsed ? (
+                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+              ) : (
+                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+              )}
+              {!group.isMain || isGitProject ? (
+                !group.isMain && groupPr?.url ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (groupPr?.url) {
+                            void openExternal(groupPr.url);
+                          }
+                        }}
+                        className="inline-flex h-4 w-4 items-center justify-center rounded-sm hover:bg-interactive-hover/50"
+                        style={{ color: prColorVar }}
+                        aria-label={getPrTooltipLabel(groupPrStatus)}
+                      >
+                        <PrStateIcon className="h-3.5 w-3.5 flex-shrink-0" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={4}>
+                      <p>{getPrTooltipLabel(groupPrStatus)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                )
+              ) : null}
+              <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
+                {group.label}
+              </p>
+            </div>
+            {group.directory ? (
+              <div className="flex items-center gap-1 px-0.5">
+                {!group.isMain && group.worktree ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          sessionEvents.requestDelete({
+                            sessions: allGroupSessions,
+                            mode: 'worktree',
+                            worktree: group.worktree,
+                          });
+                        }}
+                        className={cn(
+                          'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
+                          mobileVariant ? 'opacity-100' : 'opacity-0 group-hover/gh:opacity-100 group-focus-within/gh:opacity-100',
+                        )}
+                        aria-label={`Delete ${group.label}`}
+                      >
+                        <RiDeleteBinLine className="h-4 w-4" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={4}>
+                      <p>Delete worktree</p>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (projectId && projectId !== activeProjectId) {
+                          setActiveProject(projectId);
+                        }
+                        setActiveMainTab('chat');
+                        if (mobileVariant) {
+                          setSessionSwitcherOpen(false);
+                        }
+                        openNewSessionDraft({ directoryOverride: group.directory });
+                      }}
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                      aria-label={`New session in ${group.label}`}
+                    >
+                      <RiAddLine className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}>
+                    <p>New session</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : null}
+          </div>
+          {!isCollapsed ? (
+            <div className="oc-group-body pb-3">
+              {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
+              {totalSessions === 0 ? (
+                <div className="py-1 text-left typography-micro text-muted-foreground">
+                  No sessions in this workspace yet.
+                </div>
+              ) : null}
+              {remainingCount > 0 && !isExpanded ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSessionLimit(groupKey)}
+                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                >
+                  Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
+                </button>
+              ) : null}
+              {isExpanded && totalSessions > maxVisible ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSessionLimit(groupKey)}
+                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                >
+                  Show fewer sessions
+                </button>
+              ) : null}
             </div>
           ) : null}
-          {remainingCount > 0 && !isExpanded ? (
-            <button
-              type="button"
-              onClick={() => toggleGroupSessionLimit(groupKey)}
-              className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
-            >
-              Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
-            </button>
-          ) : null}
-          {isExpanded && totalSessions > maxVisible ? (
-            <button
-              type="button"
-              onClick={() => toggleGroupSessionLimit(groupKey)}
-              className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
-            >
-              Show fewer sessions
-            </button>
-          ) : null}
-        </>
+        </div>
       );
     },
-    [expandedSessionGroups, hideDirectoryControls, renderSessionNode, toggleGroupSessionLimit]
+    [
+      expandedSessionGroups,
+      collapsedGroups,
+      hideDirectoryControls,
+      currentSessionDirectory,
+      projectRepoStatus,
+      worktreePrByGroupKey,
+      openExternal,
+      ensureWorktreePrLoaded,
+      renderSessionNode,
+      toggleGroupSessionLimit,
+      activeProjectId,
+      setActiveProject,
+      setActiveMainTab,
+      mobileVariant,
+      setSessionSwitcherOpen,
+      openNewSessionDraft,
+    ]
   );
 
   // DnD sensors for project reordering
@@ -1608,52 +2461,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     })
   );
 
-  const handleDragStart = React.useCallback(
-    (event: DragStartEvent) => {
-      setActiveDragId(event.active.id as string);
-    },
-    []
-  );
-
-  const handleDragEnd = React.useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      setActiveDragId(null);
-      
-      if (!over || active.id === over.id) {
-        return;
-      }
-
-      const oldIndex = normalizedProjects.findIndex((p) => p.id === active.id);
-      const newIndex = normalizedProjects.findIndex((p) => p.id === over.id);
-      if (oldIndex !== -1 && newIndex !== -1) {
-        reorderProjects(oldIndex, newIndex);
-      }
-    },
-    [normalizedProjects, reorderProjects]
-  );
-
-  const handleDragCancel = React.useCallback(() => {
-    setActiveDragId(null);
-  }, []);
-
-  // Get the active dragging project for the overlay
-  const activeDragProject = React.useMemo(() => {
-    if (!activeDragId) return null;
-    const section = projectSections.find((s) => s.project.id === activeDragId);
-    if (!section) return null;
-    const project = section.project;
-    return {
-      id: project.id,
-      label: formatProjectLabel(
-        project.label?.trim()
-          || formatDirectoryName(project.normalizedPath, homeDirectory)
-          || project.normalizedPath
-      ),
-      isActive: project.id === activeProjectId,
-    };
-  }, [activeDragId, projectSections, homeDirectory, activeProjectId]);
-
   return (
     <div
       className={cn(
@@ -1662,14 +2469,104 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       )}
     >
       {!hideDirectoryControls && (
-        <div className="h-8 select-none pl-3.5 pr-2 flex-shrink-0">
-          <div className="flex h-full items-center justify-between gap-2">
-            <div className="min-w-0 flex items-center gap-2">
-              <p className="typography-ui-label font-medium text-muted-foreground">Projects</p>
-              <span className="typography-micro text-muted-foreground/50">
-                {projects.length}
-              </span>
-            </div>
+        <div className="select-none pl-3.5 pr-2 py-1.5 flex-shrink-0 border-b border-border/60">
+          <div className="flex h-8 items-center justify-between gap-2">
+            <DropdownMenu
+              onOpenChange={(open) => {
+                if (!open) {
+                  setIsProjectRenameInline(false);
+                }
+              }}
+            >
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex h-8 min-w-0 max-w-[calc(100%-2.5rem)] items-center gap-1 rounded-md px-2 text-left text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                >
+                  <span className="text-base font-semibold truncate">
+                    {activeProjectForHeader
+                      ? formatProjectLabel(
+                        activeProjectForHeader.label?.trim()
+                        || formatDirectoryName(activeProjectForHeader.normalizedPath, homeDirectory)
+                        || activeProjectForHeader.normalizedPath,
+                      )
+                      : 'Projects'}
+                  </span>
+                  <RiArrowDownSLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[220px] max-w-[320px]">
+                {normalizedProjects.map((project) => {
+                  const label = formatProjectLabel(
+                    project.label?.trim()
+                    || formatDirectoryName(project.normalizedPath, homeDirectory)
+                    || project.normalizedPath
+                  );
+                  return (
+                    <DropdownMenuItem
+                      key={project.id}
+                      onClick={() => setActiveProject(project.id)}
+                      className={cn('truncate', project.id === activeProjectId && 'text-primary')}
+                    >
+                      <span className="truncate">{label}</span>
+                    </DropdownMenuItem>
+                  );
+                })}
+                <div className="my-1 h-px bg-border/70" />
+                {!isProjectRenameInline ? (
+                  <DropdownMenuItem
+                    onClick={(event) => {
+                      event.preventDefault();
+                      handleStartInlineProjectRename();
+                    }}
+                    className="gap-2"
+                  >
+                    <RiPencilAiLine className="h-4 w-4" />
+                    Rename project
+                  </DropdownMenuItem>
+                ) : (
+                  <div className="px-2 py-1.5">
+                    <form
+                      className="flex items-center gap-1"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        handleSaveInlineProjectRename();
+                      }}
+                    >
+                      <input
+                        value={projectRenameDraft}
+                        onChange={(event) => setProjectRenameDraft(event.target.value)}
+                        className="h-7 flex-1 rounded border border-border bg-transparent px-2 typography-ui-label text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                        placeholder="Rename project"
+                        autoFocus
+                      />
+                      <button type="submit" className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground">
+                        <RiCheckLine className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsProjectRenameInline(false)}
+                        className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                      >
+                        <RiCloseLine className="h-4 w-4" />
+                      </button>
+                    </form>
+                  </div>
+                )}
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (!activeProjectForHeader) {
+                      return;
+                    }
+                    removeProject(activeProjectForHeader.id);
+                  }}
+                  className="text-destructive focus:text-destructive gap-2"
+                >
+                  <RiCloseLine className="h-4 w-4" />
+                  Close project
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <button
               type="button"
               onClick={handleOpenDirectoryDialog}
@@ -1683,6 +2580,82 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               <RiFolderAddLine className="h-4.5 w-4.5" />
             </button>
           </div>
+          {reserveHeaderActionsSpace ? (
+            <div className="mt-1 h-8 pl-1">
+              {activeProjectIsRepo ? (
+              <div className="inline-flex h-8 items-center gap-1.5 rounded-md pl-0 pr-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!activeProjectForHeader) {
+                        return;
+                      }
+                      if (activeProjectForHeader.id !== activeProjectId) {
+                        setActiveProject(activeProjectForHeader.id);
+                      }
+                      const newWorktreePath = await createWorktreeOnly();
+                      if (!newWorktreePath) {
+                        return;
+                      }
+                      setActiveMainTab('chat');
+                      if (mobileVariant) {
+                        setSessionSwitcherOpen(false);
+                      }
+                      openNewSessionDraft({ directoryOverride: newWorktreePath });
+                    }}
+                    className={headerActionButtonClass}
+                    aria-label="New worktree"
+                  >
+                    <RiGitBranchLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New worktree</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setIssuePickerOpen(true)}
+                    className={headerActionButtonClass}
+                    aria-label="New from issue"
+                  >
+                    <RiGithubLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New from issue</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setPullRequestPickerOpen(true)}
+                    className={headerActionButtonClass}
+                    aria-label="New from PR"
+                  >
+                    <RiGitPullRequestLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New from PR</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={openMultiRunLauncher}
+                    className={headerActionButtonClass}
+                    aria-label="New multi-run"
+                  >
+                    <ArrowsMerge className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
+              </Tooltip>
+              </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -1719,18 +2692,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             })()}
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onDragCancel={handleDragCancel}
-          >
-            <SortableContext
-              items={normalizedProjects.map((p) => p.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {projectSections.map((section) => {
+          <>
+            {visibleProjectSections.map((section) => {
                 const project = section.project;
                 const projectKey = project.id;
                 const projectLabel = formatProjectLabel(
@@ -1739,10 +2702,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     || project.normalizedPath
                 );
                 const projectDescription = formatPathForDisplay(project.normalizedPath, homeDirectory);
-                const isCollapsed = collapsedProjects.has(projectKey);
+                const isCollapsed = collapsedProjects.has(projectKey) && hideDirectoryControls;
                 const isActiveProject = projectKey === activeProjectId;
                 const isRepo = projectRepoStatus.get(projectKey);
                 const isHovered = hoveredProjectId === projectKey;
+                const orderedGroups = getOrderedGroups(projectKey, section.groups);
 
                 return (
                   <SortableProjectItem
@@ -1810,10 +2774,71 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     onClose={() => removeProject(projectKey)}
                     sentinelRef={(el) => { projectHeaderSentinelRefs.current.set(projectKey, el); }}
                     settingsAutoCreateWorktree={settingsAutoCreateWorktree}
+                    showCreateButtons={false}
+                    hideHeader
                   >
                     {!isCollapsed ? (
-                      <div className="space-y-[0.6rem] py-1 pl-1">
-                        {section.groups[0] ? renderGroupSessions(section.groups[0], `${projectKey}:all`, projectKey) : (
+                      <div className="space-y-[0.6rem] py-1">
+                        {section.groups.length > 0 ? (
+                          <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragStart={(event) => {
+                              setActiveDraggedGroupId(String(event.active.id));
+                              const width = (event.active.rect.current.initial?.width ?? null);
+                              setActiveDraggedGroupWidth(typeof width === 'number' ? width : null);
+                            }}
+                            onDragCancel={() => {
+                              setActiveDraggedGroupId(null);
+                              setActiveDraggedGroupWidth(null);
+                            }}
+                            onDragEnd={(event) => {
+                              const { active, over } = event;
+                              setActiveDraggedGroupId(null);
+                              setActiveDraggedGroupWidth(null);
+                              if (!over || active.id === over.id) {
+                                return;
+                              }
+                              const oldIndex = orderedGroups.findIndex((item) => item.id === active.id);
+                              const newIndex = orderedGroups.findIndex((item) => item.id === over.id);
+                              if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
+                                return;
+                              }
+                              const next = arrayMove(orderedGroups, oldIndex, newIndex).map((item) => item.id);
+                              setGroupOrderByProject((prev) => {
+                                const map = new Map(prev);
+                                map.set(projectKey, next);
+                                return map;
+                              });
+                            }}
+                          >
+                            <SortableContext
+                              items={orderedGroups.map((group) => group.id)}
+                              strategy={verticalListSortingStrategy}
+                            >
+                              {orderedGroups.map((group) => {
+                                const groupKey = `${projectKey}:${group.id}`;
+                                return (
+                                  <SortableGroupItem key={group.id} id={group.id}>
+                                    {renderGroupSessions(group, groupKey, projectKey)}
+                                  </SortableGroupItem>
+                                );
+                              })}
+                            </SortableContext>
+                            <DragOverlay modifiers={[centerDragOverlayUnderPointer]} dropAnimation={null}>
+                              {activeDraggedGroupId ? (
+                                (() => {
+                                  const dragGroup = orderedGroups.find((group) => group.id === activeDraggedGroupId);
+                                  if (!dragGroup) {
+                                    return null;
+                                  }
+                                  const showBranchIcon = !dragGroup.isMain || Boolean(isRepo);
+                                  return <GroupDragOverlay label={dragGroup.label} showBranchIcon={showBranchIcon} width={activeDraggedGroupWidth ?? undefined} />;
+                                })()
+                              ) : null}
+                            </DragOverlay>
+                          </DndContext>
+                        ) : (
                           <div className="py-1 text-left typography-micro text-muted-foreground">
                             No sessions yet.
                           </div>
@@ -1823,16 +2848,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   </SortableProjectItem>
                 );
               })}
-            </SortableContext>
-            <DragOverlay>
-              {activeDragProject ? (
-                <ProjectDragOverlay
-                  projectLabel={activeDragProject.label}
-                  isActiveProject={activeDragProject.isActive}
-                />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+          </>
         )}
       </ScrollableOverlay>
 

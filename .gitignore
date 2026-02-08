@@ -27,3 +27,4 @@ local-dev*
 *.sln
 *.sw?
 .opencode/plans/*
+.hive

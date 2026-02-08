@@ -2269,6 +2269,97 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: result };
       }
 
+      case 'api:git/remotes': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.getRemotes(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase': {
+        const { directory, onto } = (payload || {}) as { directory?: string; onto?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        if (!onto) {
+          return { id, type, success: false, error: 'onto is required' };
+        }
+        const result = await gitService.rebase(directory, { onto });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase/abort': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.abortRebase(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge': {
+        const { directory, branch } = (payload || {}) as { directory?: string; branch?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        if (!branch) {
+          return { id, type, success: false, error: 'branch is required' };
+        }
+        const result = await gitService.merge(directory, { branch });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge/abort': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.abortMerge(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase/continue': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.continueRebase(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge/continue': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.continueMerge(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/stash': {
+        const { directory, message, includeUntracked } = (payload || {}) as {
+          directory?: string;
+          message?: string;
+          includeUntracked?: boolean;
+        };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.stash(directory, { message, includeUntracked });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/stash/pop': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.stashPop(directory);
+        return { id, type, success: true, data: result };
+      }
+
       case 'api:git/log': {
         const { directory, maxCount, from, to, file } = (payload || {}) as { 
           directory?: string; 
@@ -2406,6 +2497,84 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
 
         return { id, type, success: false, error: `Unsupported method: ${normalizedMethod}` };
+      }
+
+      case 'api:git/ignore-openchamber': {
+        // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
+        // This is now a no-op since the function was removed with legacy worktree support.
+        return { id, type, success: true, data: { success: true } };
+      }
+
+      case 'api:git/conflict-details': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+
+        try {
+          // Get git status --porcelain
+          const statusResult = await execGit(['status', '--porcelain'], directory);
+          const statusPorcelain = statusResult.stdout;
+
+          // Get unmerged files (files with conflicts)
+          const unmergedResult = await execGit(['diff', '--name-only', '--diff-filter=U'], directory);
+          const unmergedFiles = unmergedResult.stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+          // Get current diff
+          const diffResult = await execGit(['diff'], directory);
+          const diff = diffResult.stdout;
+
+          // Detect operation type and get head info
+          let operation: 'merge' | 'rebase' = 'merge';
+          let headInfo = '';
+
+          // Check for MERGE_HEAD (merge in progress)
+          const mergeHeadResult = await execGit(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], directory);
+          const mergeHeadExists = mergeHeadResult.exitCode === 0;
+
+          if (mergeHeadExists) {
+            operation = 'merge';
+            const mergeHead = mergeHeadResult.stdout.trim();
+            // Try to read MERGE_MSG file
+            let mergeMsg = '';
+            try {
+              const mergeMsgPath = path.join(directory, '.git', 'MERGE_MSG');
+              mergeMsg = await fs.promises.readFile(mergeMsgPath, 'utf8');
+            } catch {
+              // MERGE_MSG may not exist
+            }
+            headInfo = `MERGE_HEAD: ${mergeHead}${mergeMsg ? '\n' + mergeMsg : ''}`;
+          } else {
+            // Check for REBASE_HEAD (rebase in progress)
+            const rebaseHeadResult = await execGit(['rev-parse', '--verify', '--quiet', 'REBASE_HEAD'], directory);
+            const rebaseHeadExists = rebaseHeadResult.exitCode === 0;
+
+            if (rebaseHeadExists) {
+              operation = 'rebase';
+              const rebaseHead = rebaseHeadResult.stdout.trim();
+              headInfo = `REBASE_HEAD: ${rebaseHead}`;
+            }
+          }
+
+          return {
+            id,
+            type,
+            success: true,
+            data: {
+              statusPorcelain: statusPorcelain.trim(),
+              unmergedFiles,
+              diff: diff.trim(),
+              headInfo: headInfo.trim(),
+              operation,
+            },
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
       }
 
       default:

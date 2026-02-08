@@ -29,6 +29,7 @@ import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { StatusRow } from './StatusRow';
 import { MobileAgentButton } from './MobileAgentButton';
 import { MobileModelButton } from './MobileModelButton';
+import { MobileSessionStatusBar } from './MobileSessionStatusBar';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
 import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
@@ -113,6 +114,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const saveSessionAgentSelection = useSessionStore((state) => state.saveSessionAgentSelection);
     const consumePendingInputText = useSessionStore((state) => state.consumePendingInputText);
     const pendingInputText = useSessionStore((state) => state.pendingInputText);
+    const consumePendingSyntheticParts = useSessionStore((state) => state.consumePendingSyntheticParts);
 
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
@@ -417,7 +419,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         let primaryText = '';
         let primaryAttachments: AttachedFile[] = [];
         let agentMentionName: string | undefined;
-        const additionalParts: Array<{ text: string; attachments?: AttachedFile[] }> = [];
+        const additionalParts: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }> = [];
+
+        // Consume any pending synthetic parts (from conflict resolution, etc.)
+        const syntheticParts = consumePendingSyntheticParts();
 
         // Process queued messages first
         for (let i = 0; i < queuedMessages.length; i++) {
@@ -479,6 +484,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 lastPart.text = appendInlineComments(lastPart.text, drafts);
             } else {
                 primaryText = appendInlineComments(primaryText, drafts);
+            }
+        }
+
+        // Add synthetic parts (from conflict resolution, etc.)
+        if (syntheticParts && syntheticParts.length > 0) {
+            for (const part of syntheticParts) {
+                additionalParts.push({
+                    text: part.text,
+                    synthetic: true,
+                });
             }
         }
 
@@ -1750,7 +1765,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 )}
                 <div
                     className={cn(
-                        "flex flex-col relative overflow-visible",
+                        "flex flex-col relative overflow-visible overflow-hidden",
                         "border border-border/80",
                         "focus-within:ring-1 focus-within:ring-primary/50"
                     )}
@@ -1852,10 +1867,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                     <div className="flex items-center gap-x-1">
                                         {attachmentsControls}
                                     </div>
-                                    <div className="flex items-center flex-shrink-0 gap-x-1">
-                                        <MobileModelButton onOpenModel={handleOpenMobileControls} />
-                                        <MobileAgentButton onCycleAgent={handleCycleAgent} onOpenAgentPanel={() => setMobileControlsPanel('agent')} />
-                                        {actionButtons}
+                                    <div className="flex items-center min-w-0 gap-x-1 justify-end">
+                                        <div className="flex items-center gap-x-1 min-w-0 max-w-[60vw] flex-shrink">
+                                            <MobileModelButton onOpenModel={handleOpenMobileControls} className="min-w-0 flex-shrink" />
+                                            <MobileAgentButton onCycleAgent={handleCycleAgent} onOpenAgentPanel={() => setMobileControlsPanel('agent')} className="min-w-0 flex-shrink" />
+                                        </div>
+                                        <div className="flex items-center gap-x-1 flex-shrink-0">
+                                            {actionButtons}
+                                        </div>
                                     </div>
                                 </div>
                                 <ModelControls
@@ -1884,8 +1903,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             </>
                         )}
                     </div>
-                </div>
 
+                    {/* Mobile Session Status Bar - 在输入框上方 */}
+                    {isMobile && <MobileSessionStatusBar />}
+                </div>
             </div>
         </form>
     );

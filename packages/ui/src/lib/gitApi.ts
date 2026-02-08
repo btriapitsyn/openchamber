@@ -21,6 +21,10 @@ export type {
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   DiscoveredGitCredential,
+  GitRemote,
+  GitMergeResult,
+  GitRebaseResult,
+  MergeConflictDetails,
 } from './api/types';
 
 declare global {
@@ -261,4 +265,73 @@ export async function getRemoteUrl(directory: string, remote?: string): Promise<
   const runtime = getRuntimeGit();
   if (runtime?.getRemoteUrl) return runtime.getRemoteUrl(directory, remote);
   return gitHttp.getRemoteUrl(directory, remote);
+}
+
+export async function getRemotes(directory: string): Promise<import('./api/types').GitRemote[]> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.getRemotes(directory);
+  return gitHttp.getRemotes(directory);
+}
+
+export async function rebase(
+  directory: string,
+  options: { onto: string }
+): Promise<import('./api/types').GitRebaseResult> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.rebase(directory, options);
+  return gitHttp.rebase(directory, options);
+}
+
+export async function abortRebase(directory: string): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.abortRebase(directory);
+  return gitHttp.abortRebase(directory);
+}
+
+export async function merge(
+  directory: string,
+  options: { branch: string }
+): Promise<import('./api/types').GitMergeResult> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.merge(directory, options);
+  return gitHttp.merge(directory, options);
+}
+
+export async function abortMerge(directory: string): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.abortMerge(directory);
+  return gitHttp.abortMerge(directory);
+}
+
+export async function continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.continueRebase(directory);
+  return gitHttp.continueRebase(directory);
+}
+
+export async function continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.continueMerge(directory);
+  return gitHttp.continueMerge(directory);
+}
+
+export async function stash(
+  directory: string,
+  options?: { message?: string; includeUntracked?: boolean }
+): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.stash(directory, options);
+  return gitHttp.stash(directory, options);
+}
+
+export async function stashPop(directory: string): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.stashPop(directory);
+  return gitHttp.stashPop(directory);
+}
+
+export async function getConflictDetails(directory: string): Promise<import('./api/types').MergeConflictDetails> {
+  const runtime = getRuntimeGit();
+  if (runtime?.getConflictDetails) return runtime.getConflictDetails(directory);
+  return gitHttp.getConflictDetails(directory);
 }

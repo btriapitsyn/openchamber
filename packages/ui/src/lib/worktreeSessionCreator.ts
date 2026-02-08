@@ -229,6 +229,70 @@ export function isCreatingWorktree(): boolean {
   return isCreatingWorktreeSession;
 }
 
+export async function createWorktreeOnly(): Promise<string | null> {
+  if (isCreatingWorktreeSession) {
+    return null;
+  }
+
+  const activeProject = useProjectsStore.getState().getActiveProject();
+  if (!activeProject?.path) {
+    toast.error('No active project', {
+      description: 'Please select a project first.',
+    });
+    return null;
+  }
+
+  const projectDirectory = activeProject.path;
+  let isGitRepo = false;
+  try {
+    isGitRepo = await checkIsGitRepository(projectDirectory);
+  } catch {
+    // ignored
+  }
+
+  if (!isGitRepo) {
+    toast.error('Not a Git repository', {
+      description: 'Worktrees can only be created in Git repositories.',
+    });
+    return null;
+  }
+
+  isCreatingWorktreeSession = true;
+  startConfigUpdate('Creating new worktree...');
+
+  try {
+    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
+    const preferredName = generateBranchName();
+    const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const metadata = await createSdkWorktree(projectRef, {
+      preferredName,
+      setupCommands,
+    });
+
+    const rootBranch = await getRootBranch(projectRef.path).catch(() => undefined);
+    const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
+
+    const branchLabel = metadata.branch || metadata.label || metadata.name;
+    toast.success('Worktree created', {
+      description: branchLabel
+        ? `${branchLabel}${rootBranch ? ` from ${rootBranch}` : ''}`
+        : status?.isDirty ? 'Created (dirty)' : 'Ready',
+    });
+
+    await useSessionStore.getState().loadSessions();
+    return metadata.path;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create worktree';
+    toast.error('Failed to create worktree', {
+      description: message,
+    });
+    return null;
+  } finally {
+    finishConfigUpdate();
+    isCreatingWorktreeSession = false;
+  }
+}
+
 /**
  * Create a new session with a worktree for a specific branch.
  * Unlike createWorktreeSession(), this allows specifying the project and branch explicitly.

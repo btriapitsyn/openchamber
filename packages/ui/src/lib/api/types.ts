@@ -90,6 +90,20 @@ export interface GitStatusFile {
   working_dir: string;
 }
 
+export interface GitMergeInProgress {
+  /** Short SHA of MERGE_HEAD */
+  head: string;
+  /** First line of MERGE_MSG */
+  message: string;
+}
+
+export interface GitRebaseInProgress {
+  /** Branch name being rebased */
+  headName: string;
+  /** Short SHA of the onto commit */
+  onto: string;
+}
+
 export interface GitStatus {
   current: string;
   tracking: string | null;
@@ -98,6 +112,10 @@ export interface GitStatus {
   files: GitStatusFile[];
   isClean: boolean;
   diffStats?: Record<string, { insertions: number; deletions: number }>;
+  /** Present when a merge is in progress with conflicts */
+  mergeInProgress?: GitMergeInProgress | null;
+  /** Present when a rebase is in progress */
+  rebaseInProgress?: GitRebaseInProgress | null;
 }
 
 export interface GitDiffResponse {
@@ -166,6 +184,37 @@ export interface GitPullResult {
   files: string[];
   insertions: number;
   deletions: number;
+}
+
+export interface GitRemote {
+  name: string;
+  fetchUrl: string;
+  pushUrl: string;
+}
+
+export interface GitMergeResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface GitRebaseResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface MergeConflictDetails {
+  /** Git status --porcelain output showing current state */
+  statusPorcelain: string;
+  /** List of unmerged file paths */
+  unmergedFiles: string[];
+  /** Git diff output showing current conflict state */
+  diff: string;
+  /** Information about MERGE_HEAD or REBASE_HEAD */
+  headInfo: string;
+  /** The operation type: 'merge' or 'rebase' */
+  operation: 'merge' | 'rebase';
 }
 
 export type GitIdentityAuthType = 'ssh' | 'token';
@@ -297,6 +346,16 @@ export interface GitAPI {
   discoverGitCredentials?(): Promise<DiscoveredGitCredential[]>;
   getGlobalGitIdentity?(): Promise<GitIdentitySummary | null>;
   getRemoteUrl?(directory: string, remote?: string): Promise<string | null>;
+  getRemotes(directory: string): Promise<GitRemote[]>;
+  rebase(directory: string, options: { onto: string }): Promise<GitRebaseResult>;
+  abortRebase(directory: string): Promise<{ success: boolean }>;
+  continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
+  merge(directory: string, options: { branch: string }): Promise<GitMergeResult>;
+  abortMerge(directory: string): Promise<{ success: boolean }>;
+  continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
+  stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
+  stashPop(directory: string): Promise<{ success: boolean }>;
+  getConflictDetails(directory: string): Promise<MergeConflictDetails>;
 }
 
 export interface FileListEntry {

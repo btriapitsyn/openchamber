@@ -2,6 +2,7 @@ import React from 'react';
 import { opencodeClient, type RoutedOpencodeEvent } from '@/lib/opencode/client';
 import { saveSessionCursor } from '@/lib/messageCursorPersistence';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useMessageStore } from '@/stores/messageStore';
 import { getActiveSessionWindow } from '@/stores/types/sessionTypes';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore, type EventStreamStatus } from '@/stores/useUIStore';
@@ -16,6 +17,7 @@ import { useMcpStore } from '@/stores/useMcpStore';
 import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { isDesktopLocalOriginActive } from '@/lib/desktop';
+import { triggerSessionStatusPoll } from '@/hooks/useServerSessionStatus';
 
 interface EventData {
   type: string;
@@ -392,8 +394,7 @@ export const useEventStream = () => {
     [bootstrapState]
   );
 
-  const sessionStatusLastRefreshAtRef = React.useRef<number>(0);
-  const sessionStatusRefreshInFlightRef = React.useRef<Promise<void> | null>(null);
+
   const currentSessionIdRef = React.useRef<string | null>(currentSessionId);
   const previousSessionIdRef = React.useRef<string | null>(null);
   const previousSessionDirectoryRef = React.useRef<string | null>(null);
@@ -464,7 +465,6 @@ export const useEventStream = () => {
     [applySessionMetadata, getWorktreeMetadata]
   );
 
-
   type SessionStatusPayload = {
     type: 'idle' | 'busy' | 'retry';
     attempt?: number;
@@ -482,6 +482,9 @@ export const useEventStream = () => {
     const storeStatus = useSessionStore.getState().sessionStatus?.get(sessionId);
     const prevType = storeStatus?.type ?? 'idle';
     const nextType = status?.type ?? 'idle';
+
+    // Note: needs_attention logic is now handled by the server
+    // Server maintains authoritative state based on view tracking and message events
 
     if (prevType !== nextType) {
       try {
@@ -550,124 +553,17 @@ export const useEventStream = () => {
 
     const next = new Map(useSessionStore.getState().sessionStatus ?? new Map());
     if (nextType === 'idle') {
-      next.delete(sessionId);
+      next.set(sessionId, { ...status, confirmedAt: Date.now() });
     } else {
-      next.set(sessionId, status);
+      const existing = next.get(sessionId);
+      if (existing?.confirmedAt) {
+        next.set(sessionId, { ...status, confirmedAt: existing.confirmedAt });
+      } else {
+        next.set(sessionId, status);
+      }
     }
     useSessionStore.setState({ sessionStatus: next });
   }, []);
-
-  const refreshSessionStatus = React.useCallback(async () => {
-    const now = Date.now();
-    if (sessionStatusRefreshInFlightRef.current) {
-      return sessionStatusRefreshInFlightRef.current;
-    }
-    if (now - sessionStatusLastRefreshAtRef.current < 1500) {
-      return;
-    }
-    sessionStatusLastRefreshAtRef.current = now;
-
-      const applyStatusMap = (statusMap: Record<string, { type?: string }>) => {
-        const observed = new Set<string>();
-      // Use getState() to avoid sessions dependency which causes cascading updates
-      const currentSessions = useSessionStore.getState().sessions;
-      const knownSessionIds = new Set(currentSessions.map((session) => session.id));
-
-      for (const [sessionId, raw] of Object.entries(statusMap)) {
-        if (!sessionId || !raw) continue;
-        observed.add(sessionId);
-        const typeRaw = raw.type;
-        const status: SessionStatusPayload =
-          typeRaw === 'retry'
-            ? {
-              type: 'retry',
-              attempt: (raw as { attempt?: unknown }).attempt as number | undefined,
-              message: (raw as { message?: unknown }).message as string | undefined,
-              next: (raw as { next?: unknown }).next as number | undefined,
-            }
-            : typeRaw === 'busy' || typeRaw === 'cooldown'
-              ? { type: 'busy' }
-              : { type: 'idle' };
-        updateSessionStatus(sessionId, status, 'poll:/session/status');
-      }
-
-      // OpenCode's /session/status may omit idle sessions (returns only busy/retry).
-      // Treat missing entries as idle to avoid sessions getting stuck "working".
-      const currentStatuses = useSessionStore.getState().sessionStatus;
-      if (!currentStatuses) return;
-
-      for (const [sessionId, status] of currentStatuses.entries()) {
-        if (!knownSessionIds.has(sessionId)) continue;
-        if ((status.type === 'busy' || status.type === 'retry') && !observed.has(sessionId)) {
-          updateSessionStatus(sessionId, { type: 'idle' }, 'poll:missing->idle');
-        }
-      }
-    };
-
-    const task = (async (): Promise<void> => {
-      try {
-        // OpenCode global session status (busy/retry only; idle omitted)
-        const globalStatusMap = await opencodeClient.getGlobalSessionStatus();
-        if (globalStatusMap && Object.keys(globalStatusMap).length > 0) {
-          applyStatusMap(globalStatusMap);
-          return;
-        }
-
-        const directories = new Set<string>();
-        // Use getState() to avoid sessions dependency which causes cascading updates
-        const currentSessions = useSessionStore.getState().sessions;
-        for (const session of currentSessions) {
-          const directory = resolveSessionDirectoryForStatus(session.id);
-          if (directory) directories.add(directory);
-        }
-
-        const effective = normalizeDirectory(effectiveDirectory ?? null);
-        if (effective) directories.add(effective);
-
-        const queries = Array.from(directories);
-        if (queries.length === 0) {
-          // Fall back to scoped status for whatever the OpenCode client currently tracks.
-          const scoped = await opencodeClient.getSessionStatus();
-          if (scoped) {
-            applyStatusMap(scoped);
-          }
-          return;
-        }
-
-        const results = await Promise.allSettled(
-          queries.map((directory) => opencodeClient.getSessionStatusForDirectory(directory))
-        );
-
-        const merged: Record<string, { type?: string }> = {};
-        for (const result of results) {
-          if (result.status !== 'fulfilled' || !result.value) continue;
-          Object.assign(merged, result.value);
-        }
-
-        if (Object.keys(merged).length === 0) {
-          const hasActiveStatuses = Array.from(useSessionStore.getState().sessionStatus?.values?.() ?? []).some(
-            (status) => status?.type === 'busy' || status?.type === 'retry'
-          );
-
-          if (hasActiveStatuses) {
-            const healthy = await opencodeClient.checkHealth().catch(() => false);
-            if (!healthy) {
-              return;
-            }
-          }
-        }
-
-        applyStatusMap(merged);
-      } catch {
-        // ignored
-      }
-    })().finally(() => {
-      sessionStatusRefreshInFlightRef.current = null;
-    });
-
-    sessionStatusRefreshInFlightRef.current = task;
-    return task;
-  }, [effectiveDirectory, normalizeDirectory, resolveSessionDirectoryForStatus, updateSessionStatus]);
 
   React.useEffect(() => {
     const nextSessionId = currentSessionId ?? null;
@@ -677,13 +573,13 @@ export const useEventStream = () => {
 
     if (prevSessionId && nextSessionId && prevSessionId !== nextSessionId) {
       if (prevDirectory && nextDirectory && prevDirectory !== nextDirectory) {
-        void refreshSessionStatus();
+        // Removed: void refreshSessionStatus();
       }
     }
 
     previousSessionIdRef.current = nextSessionId;
     previousSessionDirectoryRef.current = nextDirectory;
-  }, [currentSessionId, refreshSessionStatus, resolveSessionDirectoryForStatus]);
+  }, [currentSessionId,  resolveSessionDirectoryForStatus]);
 
   const handleEvent = React.useCallback((event: EventData) => {
     lastEventTimestampRef.current = Date.now();
@@ -762,6 +658,47 @@ export const useEventStream = () => {
               updateSessionStatus(sessionId, { type: 'idle' }, 'sse:session.status');
             }
             requestSessionMetadataRefresh(sessionId, typeof props.directory === 'string' ? props.directory : null);
+          }
+        }
+        break;
+
+      case 'openchamber:session-status':
+        {
+          const sessionId = typeof props.sessionId === 'string' ? props.sessionId : null;
+          const status = typeof props.status === 'string' ? props.status : null;
+          const needsAttention = typeof props.needsAttention === 'boolean' ? props.needsAttention : false;
+          const timestamp = typeof props.timestamp === 'number' ? props.timestamp : Date.now();
+
+          if (sessionId && status) {
+            // Update session status
+            if (status === 'busy') {
+              updateSessionStatus(sessionId, { type: 'busy' }, 'sse:openchamber:session-status');
+            } else if (status === 'retry') {
+              const metadata = (typeof props.metadata === 'object' && props.metadata !== null) ? props.metadata as Record<string, unknown> : {};
+              updateSessionStatus(sessionId, {
+                type: 'retry',
+                attempt: typeof metadata.attempt === 'number' ? metadata.attempt : undefined,
+                message: typeof metadata.message === 'string' ? metadata.message : undefined,
+                next: typeof metadata.next === 'number' ? metadata.next : undefined,
+              }, 'sse:openchamber:session-status');
+            } else {
+              updateSessionStatus(sessionId, { type: 'idle' }, 'sse:openchamber:session-status');
+            }
+
+            // Update attention state in the same update to ensure atomicity
+            const currentAttentionStates = useSessionStore.getState().sessionAttentionStates || new Map();
+            const newAttentionStates = new Map(currentAttentionStates);
+            const existing = newAttentionStates.get(sessionId);
+
+            newAttentionStates.set(sessionId, {
+              needsAttention,
+              lastStatusChangeAt: timestamp,
+              lastUserMessageAt: existing?.lastUserMessageAt ?? null,
+              status: status as 'idle' | 'busy' | 'retry',
+              isViewed: existing?.isViewed ?? false,
+            });
+
+            useSessionStore.setState({ sessionAttentionStates: newAttentionStates });
           }
         }
         break;
@@ -938,6 +875,18 @@ export const useEventStream = () => {
         trackMessage(messageId, 'message_updated', { role: (messageExt as { role?: unknown }).role });
 
         if ((messageExt as { role?: unknown }).role === 'user') {
+          // Update lastUserMessageAt in session memory state
+          const { sessionMemoryState } = useMessageStore.getState();
+          const currentMemory = sessionMemoryState.get(sessionId);
+          if (currentMemory) {
+            const newMemoryState = new Map(sessionMemoryState);
+            newMemoryState.set(sessionId, {
+              ...currentMemory,
+              lastUserMessageAt: Date.now(),
+            });
+            useMessageStore.setState({ sessionMemoryState: newMemoryState });
+          }
+
           const serverParts = (props as { parts?: unknown }).parts || (messageExt as { parts?: unknown }).parts;
           const partsArray = Array.isArray(serverParts) ? (serverParts as Part[]) : [];
           const existingUserMessage = getMessageFromStore(sessionId, messageId);
@@ -1269,6 +1218,8 @@ export const useEventStream = () => {
           }
 
 	          completeStreamingMessage(sessionId, messageId);
+	          updateSessionStatus(sessionId, { type: 'idle' }, 'sse:message.updated.completed');
+	          // Removed: void refreshSessionStatus();
 
 	          const rawMessageSessionId = (message as { sessionID?: string }).sessionID;
           const messageSessionId: string =
@@ -1345,6 +1296,9 @@ export const useEventStream = () => {
             ? (props.messageID as string)
             : null;
 
+        if (sessionId) {
+          updateSessionStatus(sessionId, { type: 'idle' }, 'sse:session.abort');
+        }
         if (sessionId && messageId) {
           completeStreamingMessage(sessionId, messageId);
         }
@@ -1533,11 +1487,12 @@ export const useEventStream = () => {
     applySessionMetadata,
     trackMessage,
     reportMessage,
-    updateSessionStatus,
+    
     updateSession,
     removeSessionFromStore,
     bootstrapState,
-    effectiveDirectory
+    effectiveDirectory,
+    updateSessionStatus,
   ]);
 
   const shouldHoldConnection = React.useCallback(() => {
@@ -1627,10 +1582,11 @@ export const useEventStream = () => {
       lastEventTimestampRef.current = Date.now();
       publishStatus('connected', null);
       checkConnection();
+      triggerSessionStatusPoll();
 
       // Always refresh session status on connect to detect any
       // already-running sessions (e.g., started via CLI before UI opened)
-      void refreshSessionStatus();
+      // Removed: void refreshSessionStatus();
 
        if (shouldRefresh) {
          void bootstrapState('sse_reconnected');
@@ -1713,7 +1669,7 @@ export const useEventStream = () => {
     requestSessionMetadataRefresh,
     handleEvent,
     effectiveDirectory,
-    refreshSessionStatus,
+    
     debugConnectionState,
     bootstrapState
   ]);
@@ -1800,7 +1756,8 @@ export const useEventStream = () => {
           requestSessionMetadataRefresh(sessionId);
         }
 
-        void refreshSessionStatus();
+        // Removed: void refreshSessionStatus();
+        triggerSessionStatusPoll();
         publishStatus('connecting', 'Resuming stream');
         startStream({ resetAttempts: true });
       }
@@ -1825,7 +1782,8 @@ export const useEventStream = () => {
              requestSessionMetadataRefresh(sessionId);
              scheduleSoftResync(sessionId, 'window_focus', getActiveSessionWindow());
            }
-           void refreshSessionStatus();
+           // Removed: void refreshSessionStatus();
+           triggerSessionStatusPoll();
 
           publishStatus('connecting', 'Resuming stream');
           startStream({ resetAttempts: true });
@@ -1837,6 +1795,7 @@ export const useEventStream = () => {
         onlineStatusRef.current = true;
         maybeBootstrapIfStale('network_restored');
         if (pendingResumeRef.current || !unsubscribeRef.current) {
+          triggerSessionStatusPoll();
           publishStatus('connecting', 'Network restored');
           startStream({ resetAttempts: true });
         }
@@ -1865,7 +1824,8 @@ export const useEventStream = () => {
             void scheduleSoftResync(sessionId, 'page_show', getActiveSessionWindow());
             requestSessionMetadataRefresh(sessionId);
           }
-          void refreshSessionStatus();
+          // Removed: void refreshSessionStatus();
+          triggerSessionStatusPoll();
           startStream({ resetAttempts: true });
         }
       };
@@ -1899,7 +1859,7 @@ export const useEventStream = () => {
           );
 
           if (hasBusySessions) {
-            void refreshSessionStatus();
+            // Removed: void refreshSessionStatus();
           }
           if (now - lastEventTimestampRef.current > 45000) {
             Promise.resolve().then(async () => {
@@ -1974,8 +1934,8 @@ export const useEventStream = () => {
     scheduleReconnect,
     loadMessages,
     requestSessionMetadataRefresh,
-    updateSessionStatus,
-    refreshSessionStatus,
+    
+    
     shouldHoldConnection,
     loadSessions,
     maybeBootstrapIfStale,
