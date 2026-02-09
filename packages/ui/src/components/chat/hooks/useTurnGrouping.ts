@@ -120,8 +120,7 @@ const extractFinalAssistantText = (turn: Turn): string | undefined => {
     return undefined;
 };
 
-const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
-    const showTextJustificationActivity = useUIStore.getState().showTextJustificationActivity;
+const getTurnActivityInfo = (turn: Turn, showTextJustificationActivity: boolean): TurnActivityInfo => {
     interface SummaryDiff {
         additions?: number | null | undefined;
         deletions?: number | null | undefined;
@@ -179,15 +178,33 @@ const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
         });
     });
 
+    // Find the LAST assistant message that has text content - this is the summary
+    // All other text messages are justification (yapping during work)
+    let lastTextMessageId: string | undefined;
+    for (let i = turn.assistantMessages.length - 1; i >= 0; i--) {
+        const msg = turn.assistantMessages[i];
+        if (!msg) continue;
+        const hasText = msg.parts.some((p) => {
+            if (p.type !== 'text') return false;
+            const text = (p as { text?: string; content?: string }).text ?? 
+                        (p as { text?: string; content?: string }).content;
+            return typeof text === 'string' && text.trim().length > 0;
+        });
+        if (hasText) {
+            lastTextMessageId = msg.info.id;
+            break;
+        }
+    }
+
     const activityParts: TurnActivityPart[] = [];
     let syntheticIdCounter = 0;
 
     turn.assistantMessages.forEach((msg) => {
         const messageId = msg.info.id;
-        const infoFinish = (msg.info as { finish?: string | null | undefined }).finish;
-        const hasStopFinishInMessage = showTextJustificationActivity
-            ? infoFinish === 'stop'
-            : false;
+        
+        // Only the LAST message with text is the summary (not justification)
+        // All earlier text messages are justification
+        const isFinalSummaryMessage = messageId === lastTextMessageId;
 
         msg.parts.forEach((part) => {
             const baseId =
@@ -235,7 +252,7 @@ const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
                 showTextJustificationActivity &&
                 part.type === 'text' &&
                 (hasTools || hasReasoning) &&
-                !hasStopFinishInMessage
+                !isFinalSummaryMessage
             ) {
                 const text =
                     (part as { text?: string | null | undefined; content?: string | null | undefined }).text ??
@@ -375,6 +392,7 @@ interface UseTurnGroupingResult {
 
 export const useTurnGrouping = (messages: ChatMessageEntry[]): UseTurnGroupingResult => {
     const { isWorking: sessionIsWorking } = useCurrentSessionActivity();
+    const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
 
     const turns = React.useMemo(() => detectTurns(messages), [messages]);
 
@@ -397,10 +415,10 @@ export const useTurnGrouping = (messages: ChatMessageEntry[]): UseTurnGroupingRe
     const turnActivityInfo = React.useMemo(() => {
         const map = new Map<string, TurnActivityInfo>();
         turns.forEach((turn) => {
-            map.set(turn.turnId, getTurnActivityInfo(turn));
+            map.set(turn.turnId, getTurnActivityInfo(turn, showTextJustificationActivity));
         });
         return map;
-    }, [turns]);
+    }, [turns, showTextJustificationActivity]);
 
     const [turnUiStates, setTurnUiStates] = React.useState<Map<string, TurnUiState>>(
         () => new Map()

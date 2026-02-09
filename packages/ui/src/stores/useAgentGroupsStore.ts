@@ -6,11 +6,8 @@ import { useDirectoryStore } from './useDirectoryStore';
 import { useProjectsStore } from './useProjectsStore';
 import { useSessionStore } from './useSessionStore';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { listWorktrees, mapWorktreeToMetadata } from '@/lib/git/worktreeService';
 import type { Session } from '@opencode-ai/sdk/v2';
 
-// LEGACY_WORKTREES: legacy worktree root inside project.
-const OPENCHAMBER_DIR = '.openchamber';
 
 const resolveProjectDirectory = (currentDirectory: string | null | undefined): string | null => {
   const projectsState = useProjectsStore.getState();
@@ -109,48 +106,6 @@ const normalize = (value: string): string => {
   return replaced.replace(/\/+$/, '');
 };
 
-const buildOpenChamberRoot = (projectDirectory: string): string => {
-  const normalizedProject = normalize(projectDirectory);
-  if (!normalizedProject || normalizedProject === '/') {
-    return `/${OPENCHAMBER_DIR}`;
-  }
-  return `${normalizedProject}/${OPENCHAMBER_DIR}`;
-};
-
-const resolveDirectoryListingPaths = (root: string, entries: Array<{ name?: string; path?: string }>): string[] => {
-  const normalizedRoot = normalize(root);
-  return entries
-    .map((entry) => {
-      const entryPath = typeof entry.path === 'string' && entry.path.trim().length > 0 ? entry.path : null;
-      if (entryPath) {
-        const normalizedEntry = normalize(entryPath);
-        if (normalizedEntry) {
-          return normalizedEntry;
-        }
-      }
-      const name = typeof entry.name === 'string' ? entry.name.trim() : '';
-      if (!name || !normalizedRoot) {
-        return null;
-      }
-      return `${normalizedRoot}/${name}`;
-    })
-    .filter((value): value is string => Boolean(value));
-};
-
-const listOpenChamberDirectories = async (root: string): Promise<string[]> => {
-  const normalizedRoot = normalize(root);
-  if (!normalizedRoot) {
-    return [];
-  }
-
-  try {
-    const entries = await opencodeClient.listLocalDirectory(normalizedRoot);
-    const directories = entries.filter((entry) => entry.isDirectory);
-    return resolveDirectoryListingPaths(normalizedRoot, directories);
-  } catch {
-    return [];
-  }
-};
 
 const startsWithDirectory = (candidate: string, root: string): boolean => {
   const normalizedCandidate = normalize(candidate);
@@ -253,12 +208,12 @@ const buildWorktreeMetadataByPath = async (group: AgentGroup, projectDirectory: 
   }
 
   try {
-    const infos = await listWorktrees(projectDirectory);
-    const infoByPath = new Map(infos.map((info) => [normalize(info.worktree), info]));
+    const worktrees = await listProjectWorktrees({ id: `path:${projectDirectory}`, path: projectDirectory });
+    const infoByPath = new Map(worktrees.map((meta) => [normalize(meta.path), meta]));
     missingPaths.forEach((path) => {
       const info = infoByPath.get(path);
       if (info) {
-        map.set(path, mapWorktreeToMetadata(projectDirectory, info));
+        map.set(path, info);
       }
     });
   } catch {
@@ -419,23 +374,16 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
             : [];
 
           const worktreeDirectorySet = new Set<string>();
+          const worktreeMetadataMap = new Map<string, WorktreeMetadata>();
           [...managedWorktrees, ...managedWorktreesCanonical].forEach((meta) => {
             if (meta?.path) {
-              worktreeDirectorySet.add(normalize(meta.path));
+              const key = normalize(meta.path);
+              worktreeDirectorySet.add(key);
+              if (!worktreeMetadataMap.has(key)) {
+                worktreeMetadataMap.set(key, meta);
+              }
             }
           });
-
-          // Get git worktree info first - we need to query each worktree separately
-          let worktreeInfoMap = new Map<string, Awaited<ReturnType<typeof listWorktrees>>[number]>();
-          let worktreeInfoList: Awaited<ReturnType<typeof listWorktrees>> = [];
-          try {
-            worktreeInfoList = await listWorktrees(normalizedProject);
-            worktreeInfoMap = new Map(
-              worktreeInfoList.map((info) => [normalize(info.worktree), info])
-            );
-          } catch {
-            console.debug('Failed to list git worktrees');
-          }
 
           const fetchCandidateSessions = async (): Promise<Session[]> => {
             try {
@@ -497,23 +445,6 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
             // 1) Known worktree directories for this project
             worktreeDirectorySet.forEach((dir) => candidates.add(dir));
 
-            // 2) Git worktree list (covers SDK + legacy)
-            worktreeInfoList
-              .map((info) => normalize(info.worktree))
-              .filter(Boolean)
-              .forEach((worktreePath) => candidates.add(worktreePath));
-
-            // LEGACY_WORKTREES: optional filesystem scan for legacy <project>/.openchamber/*
-            const roots = [buildOpenChamberRoot(normalizedProject), buildOpenChamberRoot(canonicalProject)]
-              .map((p) => normalize(p))
-              .filter(Boolean);
-            await Promise.all(
-              Array.from(new Set(roots)).map(async (root) => {
-                const dirs = await listOpenChamberDirectories(root);
-                dirs.forEach((dir) => candidates.add(dir));
-              })
-            );
-
             if (candidates.size > 0) {
               allSessions = await fetchSessionsByWorktreeDirectories(Array.from(candidates));
             }
@@ -533,7 +464,7 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
             if (!parsed) continue; // Skip sessions without valid agent group title
 
             const sessionPath = normalize(session.directory);
-            const worktreeInfo = worktreeInfoMap.get(sessionPath);
+            const worktreeInfo = worktreeMetadataMap.get(sessionPath);
 
             const agentSession: AgentGroupSession = {
               id: session.id,
@@ -543,9 +474,7 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
               instanceNumber: parsed.index,
               branch: worktreeInfo?.branch ?? '',
               displayLabel: `${parsed.provider}/${parsed.model}`,
-              worktreeMetadata: worktreeInfo
-                ? mapWorktreeToMetadata(normalizedProject, worktreeInfo)
-                : undefined,
+              worktreeMetadata: worktreeInfo,
             };
 
             const existing = groupsMap.get(parsed.groupSlug);

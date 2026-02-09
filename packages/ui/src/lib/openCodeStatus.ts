@@ -10,6 +10,30 @@ type ProbeResult = {
   summary: string;
 };
 
+type OpenChamberHealthSnapshot = {
+  openCodePort?: unknown;
+  openCodeRunning?: unknown;
+  isOpenCodeReady?: unknown;
+  lastOpenCodeError?: unknown;
+  opencodeBinaryResolved?: unknown;
+  opencodeBinarySource?: unknown;
+  opencodeShimInterpreter?: unknown;
+  nodeBinaryResolved?: unknown;
+  bunBinaryResolved?: unknown;
+};
+
+type OpenChamberOpencodeResolution = {
+  configured?: unknown;
+  resolved?: unknown;
+  resolvedDir?: unknown;
+  source?: unknown;
+  detectedNow?: unknown;
+  detectedSourceNow?: unknown;
+  shim?: unknown;
+  node?: unknown;
+  bun?: unknown;
+};
+
 const getCurrentDirectory = (): string => {
   const state = useSessionStore.getState();
   const currentSessionId = state.currentSessionId;
@@ -85,6 +109,72 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const apiBase = origin ? `${origin.replace(/\/+$/, '')}/api/` : '';
 
+  const openChamberHealth: OpenChamberHealthSnapshot | null = await (async () => {
+    if (!origin) return null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const resp = await fetch(`${origin.replace(/\/+$/, '')}/health`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      if (!resp.ok) return null;
+      const json = (await resp.json().catch(() => null)) as unknown;
+      if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+      return json as OpenChamberHealthSnapshot;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+
+  const openChamberOpencodeResolutionResult: {
+    data: OpenChamberOpencodeResolution | null;
+    status: number | null;
+    error: string | null;
+  } = await (async () => {
+    if (!origin) return null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 7000);
+    try {
+      const resp = await fetch(`${origin.replace(/\/+$/, '')}/api/config/opencode-resolution`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+      const contentType = resp.headers.get('content-type') || '(none)';
+      if (!resp.ok) {
+        return { data: null, status: resp.status, error: `http ${resp.status} content-type=${contentType}` };
+      }
+      const raw = await resp.text();
+      let json: unknown = null;
+      try {
+        json = JSON.parse(raw);
+      } catch {
+        const snippet = raw.replace(/\s+/g, ' ').slice(0, 120);
+        return {
+          data: null,
+          status: resp.status,
+          error: `invalid json content-type=${contentType} body=${snippet || '(empty)'}`,
+        };
+      }
+      if (!json || typeof json !== 'object' || Array.isArray(json)) {
+        return { data: null, status: resp.status, error: `invalid json-shape content-type=${contentType}` };
+      }
+      return { data: json as OpenChamberOpencodeResolution, status: resp.status, error: null };
+    } catch (error) {
+      return {
+        data: null,
+        status: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  })() || { data: null, status: null, error: null };
+
   const buildProbeUrl = (pathname: string, includeDirectory = true): string | null => {
     if (!apiBase) return null;
     const url = new URL(pathname.replace(/^\/+/, ''), apiBase);
@@ -129,6 +219,73 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
     const injected = (window as unknown as { __OPENCHAMBER_MACOS_MAJOR__?: unknown }).__OPENCHAMBER_MACOS_MAJOR__;
     if (typeof injected === 'number' && Number.isFinite(injected) && injected > 0) {
       lines.push(`macOS major: ${injected}`);
+    }
+  }
+
+  const isLikelyMac = /Mac OS X|Macintosh/.test(platform);
+  if (isLikelyMac) {
+    lines.push('');
+    lines.push('OpenCode CLI resolution:');
+
+    const openChamberOpencodeResolution = openChamberOpencodeResolutionResult.data;
+    const configured =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.configured === 'string'
+        ? openChamberOpencodeResolution.configured
+        : null;
+    const resolved =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.resolved === 'string'
+        ? openChamberOpencodeResolution.resolved
+        : (openChamberHealth && typeof openChamberHealth.opencodeBinaryResolved === 'string' ? openChamberHealth.opencodeBinaryResolved : '');
+    const resolvedDir =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.resolvedDir === 'string'
+        ? openChamberOpencodeResolution.resolvedDir
+        : '';
+    const source =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.source === 'string'
+        ? openChamberOpencodeResolution.source
+        : (openChamberHealth && typeof openChamberHealth.opencodeBinarySource === 'string' ? openChamberHealth.opencodeBinarySource : '');
+    const shim =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.shim === 'string'
+        ? openChamberOpencodeResolution.shim
+        : (openChamberHealth && typeof openChamberHealth.opencodeShimInterpreter === 'string' ? openChamberHealth.opencodeShimInterpreter : '');
+    const node =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.node === 'string'
+        ? openChamberOpencodeResolution.node
+        : (openChamberHealth && typeof openChamberHealth.nodeBinaryResolved === 'string' ? openChamberHealth.nodeBinaryResolved : '');
+    const bun =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.bun === 'string'
+        ? openChamberOpencodeResolution.bun
+        : (openChamberHealth && typeof openChamberHealth.bunBinaryResolved === 'string' ? openChamberHealth.bunBinaryResolved : '');
+    const detectedNow =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.detectedNow === 'string'
+        ? openChamberOpencodeResolution.detectedNow
+        : '';
+    const detectedSourceNow =
+      openChamberOpencodeResolution && typeof openChamberOpencodeResolution.detectedSourceNow === 'string'
+        ? openChamberOpencodeResolution.detectedSourceNow
+        : '';
+
+    if (configured !== null) {
+      lines.push(`- configured: ${configured.trim().length === 0 ? '(cleared)' : configured}`);
+    }
+
+    if (resolved) {
+      const dir = resolvedDir || (resolved.includes('/') ? resolved.split('/').slice(0, -1).join('/') || '/' : '');
+      lines.push(`- opencode: ${resolved}${dir ? ` (dir=${dir})` : ''}`);
+    } else {
+      lines.push('- opencode: (n/a)');
+    }
+
+    lines.push(`- source: ${source || '(n/a)'}`);
+    if (detectedNow) {
+      lines.push(`- detected-now: ${detectedNow}`);
+      lines.push(`- detected-source: ${detectedSourceNow || '(n/a)'}`);
+    }
+    lines.push(`- shim: ${shim || '(n/a)'}`);
+    lines.push(`- node: ${node || '(n/a)'}`);
+    lines.push(`- bun: ${bun || '(n/a)'}`);
+    if (!openChamberOpencodeResolution && openChamberOpencodeResolutionResult.error) {
+      lines.push(`- resolution-endpoint: ${openChamberOpencodeResolutionResult.error}`);
     }
   }
 

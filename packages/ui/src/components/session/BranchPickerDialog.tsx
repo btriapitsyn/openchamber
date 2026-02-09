@@ -21,7 +21,6 @@ import {
 import { cn } from '@/lib/utils';
 import { deleteGitBranch, getGitBranches, listGitWorktrees, renameBranch } from '@/lib/gitApi';
 import type { GitBranch, GitWorktreeInfo } from '@/lib/api/types';
-import { createWorktreeSessionForBranch } from '@/lib/worktreeSessionCreator';
 
 export interface BranchPickerProject {
   id: string;
@@ -46,7 +45,6 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [creatingWorktree, setCreatingWorktree] = React.useState<string | null>(null);
   const [deletingBranch, setDeletingBranch] = React.useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = React.useState<string | null>(null);
   const [forceDeleteBranch, setForceDeleteBranch] = React.useState<string | null>(null);
@@ -91,21 +89,6 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
     if (!query.trim()) return list;
     const lower = query.toLowerCase();
     return list.filter((b) => b.toLowerCase().includes(lower));
-  };
-
-  const handleCreateWorktree = async (branchName: string) => {
-    if (!project) return;
-    setCreatingWorktree(branchName);
-    try {
-      await createWorktreeSessionForBranch(project.path, branchName);
-      onOpenChange(false);
-    } catch (err) {
-      toast.error('Failed to create worktree', {
-        description: err instanceof Error ? err.message : 'Create failed',
-      });
-    } finally {
-      setCreatingWorktree(null);
-    }
   };
 
   const beginRename = React.useCallback((branchName: string) => {
@@ -222,7 +205,6 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
               localBranches.map((branchName) => {
                 const details = branches?.branches[branchName];
                 const isCurrent = Boolean(details?.current);
-                const isCreating = creatingWorktree === branchName;
                 const isDeleting = deletingBranch === branchName;
                 const isRenaming = renamingBranchKey === branchName;
                 const hasAttachedWorktree = worktreeBranches.has(branchName);
@@ -302,25 +284,6 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
 
                     {!isEditing && !isConfirming ? (
                       <div className="flex items-center gap-1 flex-shrink-0">
-                        <Tooltip delayDuration={700}>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => handleCreateWorktree(branchName)}
-                              disabled={isCreating}
-                              className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 hover:bg-primary/20 text-primary transition-colors disabled:opacity-50"
-                              aria-label="Create worktree from"
-                            >
-                              {isCreating ? (
-                                <RiLoader4Line className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <RiGitBranchLine className="h-4 w-4" />
-                              )}
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="left">Create worktree from</TooltipContent>
-                        </Tooltip>
-
                         <Tooltip delayDuration={700}>
                           <TooltipTrigger asChild>
                             <button

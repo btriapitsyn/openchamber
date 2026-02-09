@@ -463,9 +463,15 @@ html:not(.dark) .chat-scroll {
 :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
   display: inline;
 }
+:root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
+  display: inline;
+}
 
 @media (max-width: 940px) {
   :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
+    display: none;
+  }
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
     display: none;
   }
   :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-badge {
@@ -540,6 +546,25 @@ html:not(.dark) .chat-scroll {
 
   .commit-actions__btn {
     padding-inline: 0.5rem;
+  }
+}
+
+/* Git right-sidebar header/actions collapse to icon-only when narrow. */
+@container git-header (max-width: 26rem) {
+  .git-header-label {
+    display: none;
+  }
+}
+
+/* Animated tabs: collapse labels based on local container width. */
+@container animated-tabs (max-width: 23rem) {
+  .animated-tabs__label {
+    display: none;
+  }
+
+  .animated-tabs__button {
+    padding-inline: 0.5rem;
+    gap: 0;
   }
 }
 
@@ -700,8 +725,74 @@ html:not(.dark) .chat-scroll {
 }
 
 /* Hide system caret in terminal - targets both Ghostty internal input and our custom touch input */
-.terminal-viewport-container textarea {
+.terminal-viewport-container textarea,
+.terminal-viewport-container input {
   caret-color: transparent !important;
+}
+
+.terminal-viewport-container [contenteditable="true"][aria-label="Terminal input"] {
+  caret-color: transparent !important;
+  outline: none !important;
+}
+
+[contenteditable="true"][aria-label="Terminal input"] {
+  caret-color: transparent !important;
+  outline: none !important;
+}
+
+/* Keep Ghostty's internal focus textarea fully non-painting on desktop. */
+.terminal-viewport-container textarea:not([data-terminal-hidden-input="true"]) {
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  clip-path: inset(100%) !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+textarea[aria-label="Terminal input"],
+input[aria-label="Terminal input"] {
+  caret-color: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  clip-path: inset(100%) !important;
+  outline: none !important;
+}
+
+/* Terminal touch input is portaled to document.body; keep it fully non-painting across engines. */
+input[data-terminal-hidden-input="true"],
+textarea[data-terminal-hidden-input="true"] {
+  caret-color: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[data-terminal-hidden-input="true"]::selection,
+textarea[data-terminal-hidden-input="true"]::selection {
+  background: transparent;
+  color: transparent;
+}
+
+input[data-terminal-hidden-input="true"]::placeholder,
+textarea[data-terminal-hidden-input="true"]::placeholder {
+  color: transparent !important;
 }
 
 /* Mobile Terminal Optimizations */
@@ -736,6 +827,19 @@ html:not(.dark) .chat-scroll {
   animation: grid-pulse 1.2s ease-in-out infinite;
 }
 
+@keyframes attention-diamond-pulse {
+  0%, 100% {
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+.animate-attention-diamond-pulse {
+  animation: attention-diamond-pulse 2.3s ease-in-out infinite;
+}
+
 @keyframes marquee-scroll {
   0% { transform: translateX(0); }
   100% { transform: translateX(-100%); }
@@ -760,6 +864,11 @@ html:not(.dark) .chat-scroll {
   .marquee-text--auto,
   .group:hover .marquee-text--active,
   .marquee-text--active:hover {
+    animation: none;
+  }
+
+  .animate-grid-pulse,
+  .animate-attention-diamond-pulse {
     animation: none;
   }
 }

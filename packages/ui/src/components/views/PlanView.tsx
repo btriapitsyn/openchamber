@@ -1,32 +1,26 @@
 import React from 'react';
-import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
+import { CodeMirrorEditor, type BlockWidgetDef } from '@/components/ui/CodeMirrorEditor';
+import { InlineCommentCard, InlineCommentInput } from '@/components/comments';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/useUIStore';
-import { cn, getModifierLabel } from '@/lib/utils';
+
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
-import { RiCheckLine, RiClipboardLine, RiFileCopy2Line, RiMoreLine, RiDeleteBinLine } from '@remixicon/react';
+import { RiCheckLine, RiClipboardLine, RiFileCopy2Line } from '@remixicon/react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { toast } from '@/components/ui';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -92,13 +86,14 @@ export const PlanView: React.FC = () => {
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const runtimeApis = useRuntimeAPIs();
   const newSessionDraftOpen = useSessionStore((state) => state.newSessionDraft?.open);
-  const { inputBarOffset, isKeyboardOpen } = useUIStore();
+  useUIStore();
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
 
   // Inline comment drafts
   const addDraft = useInlineCommentDraftStore((state) => state.addDraft);
+  const updateDraft = useInlineCommentDraftStore((state) => state.updateDraft);
   const removeDraft = useInlineCommentDraftStore((state) => state.removeDraft);
   const allDrafts = useInlineCommentDraftStore((state) => state.drafts);
 
@@ -134,6 +129,7 @@ export const PlanView: React.FC = () => {
 
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = React.useState('');
+  const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
 
   const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
 
@@ -173,19 +169,36 @@ export const PlanView: React.FC = () => {
   React.useEffect(() => {
     setLineSelection(null);
     setCommentText('');
+    setEditingDraftId(null);
   }, [content]);
 
   React.useEffect(() => {
     if (!lineSelection) return;
+    
+    // Auto-scroll input into view on mobile
+    if (isMobile && !editingDraftId) {
+       // We rely on InlineCommentInput doing this now via useEffect
+    }
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const commentUI = document.querySelector('[data-comment-ui]');
-      if (commentUI?.contains(target)) return;
+      // Check if click is inside any comment component
+      if (
+        target.closest('[data-comment-card="true"]') ||
+        target.closest('[data-comment-input="true"]') ||
+        target.closest('.oc-block-widget')
+      ) {
+        return;
+      }
+      
       if (target.closest('.cm-gutterElement')) return;
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
+      
+      // If clicking outside while editing, maybe we should save or ask confirmation?
+      // For now, cancel edit
       setLineSelection(null);
       setCommentText('');
+      setEditingDraftId(null);
     };
 
     const timeoutId = window.setTimeout(() => {
@@ -196,7 +209,7 @@ export const PlanView: React.FC = () => {
       window.clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [lineSelection]);
+  }, [lineSelection, editingDraftId, isMobile]);
 
   const extractSelectedCode = React.useCallback((text: string, range: SelectedLineRange): string => {
     const lines = text.split('\n');
@@ -209,10 +222,13 @@ export const PlanView: React.FC = () => {
   const handleCancelComment = React.useCallback(() => {
     setCommentText('');
     setLineSelection(null);
+    setEditingDraftId(null);
   }, []);
 
-  const handleSaveComment = React.useCallback(() => {
-    if (!lineSelection || !commentText.trim()) return;
+  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
+    // Use provided range override or fall back to current selection
+    const targetRange = rangeOverride ?? lineSelection;
+    if (!targetRange || !textToSave.trim()) return;
 
     const sessionKey = getSessionKey();
     if (!sessionKey) {
@@ -220,26 +236,39 @@ export const PlanView: React.FC = () => {
       return;
     }
 
-    const code = extractSelectedCode(content, lineSelection);
+    const code = extractSelectedCode(content, targetRange);
     const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
     const language = resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown';
 
-    addDraft({
-      sessionKey,
-      source: 'plan',
-      fileLabel,
-      startLine: lineSelection.start,
-      endLine: lineSelection.end,
-      code,
-      language,
-      text: commentText.trim(),
-    });
+    if (editingDraftId) {
+      updateDraft(sessionKey, editingDraftId, {
+        fileLabel,
+        startLine: targetRange.start,
+        endLine: targetRange.end,
+        code,
+        language,
+        text: textToSave.trim(),
+      });
+    } else {
+      addDraft({
+        sessionKey,
+        source: 'plan',
+        fileLabel,
+        startLine: targetRange.start,
+        endLine: targetRange.end,
+        code,
+        language,
+        text: textToSave.trim(),
+      });
+    }
 
     setCommentText('');
     setLineSelection(null);
+    setEditingDraftId(null);
 
-    toast.success('Comment saved');
-  }, [lineSelection, commentText, content, displayPath, resolvedPath, addDraft, getSessionKey, extractSelectedCode]);
+    toast.success(editingDraftId ? 'Comment updated' : 'Comment saved');
+  }, [lineSelection, content, displayPath, resolvedPath, addDraft, updateDraft, getSessionKey, extractSelectedCode, editingDraftId]);
+
 
   const editorExtensions = React.useMemo(() => {
     const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];
@@ -348,153 +377,87 @@ export const PlanView: React.FC = () => {
     };
   }, []);
 
-  const renderCommentUI = () => {
-    if (!lineSelection) return null;
-    return (
-      <div
-        data-comment-ui
-        className="flex flex-col items-center gap-2 px-4"
-        style={{ width: 'min(100vw - 1rem, 42rem)' }}
-      >
-        <div className="w-full rounded-xl border bg-background flex flex-col relative shadow-lg" style={{ borderColor: 'var(--primary)' }}>
-          <Textarea
-            value={commentText}
-            onChange={(e) => {
-              setCommentText(e.target.value);
-              const textarea = e.target;
-              textarea.style.height = 'auto';
-              const lineHeight = 20;
-              const maxHeight = lineHeight * 5 + 8;
-              textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-            }}
-            placeholder="Type your comment..."
-            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 shadow-none rounded-none appearance-none focus:shadow-none focus-visible:shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-transparent hover:border-transparent bg-transparent dark:bg-transparent focus-visible:outline-none overflow-y-auto"
-            autoFocus={!isMobile}
-            rows={1}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                handleSaveComment();
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                handleCancelComment();
-              }
-            }}
-          />
-          {/* Footer with Cancel and Comment buttons */}
-          <div className="px-2.5 py-1 flex items-center justify-between gap-x-2">
-            <span className="text-xs text-muted-foreground">
-              Plan:{lineSelection.start}-{lineSelection.end}
-            </span>
-            <div className="flex items-center gap-x-2">
-              {!isMobile && (
-                <span className="text-xs text-muted-foreground">
-                  {getModifierLabel()}+⏎
-                </span>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleCancelComment}
-                className="h-7 px-2 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={handleSaveComment}
-                disabled={!commentText.trim()}
-                className="h-7 px-2 text-xs"
-                style={{
-                  backgroundColor: currentTheme?.colors?.status?.success,
-                  color: currentTheme?.colors?.status?.successForeground,
-                }}
-              >
-                Comment
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // Render saved comment cards
-  const renderSavedComments = () => {
-    if (mdViewMode === 'preview') return null;
+  const blockWidgets = React.useMemo(() => {
+    if (mdViewMode === 'preview') return [];
 
     const sessionKey = getSessionKey();
-    if (!sessionKey) return null;
+    if (!sessionKey) return [];
 
     const sessionDrafts = allDrafts[sessionKey] ?? [];
     const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
     const fileDrafts = sessionDrafts.filter((d) => d.source === 'plan' && d.fileLabel === fileLabel);
 
-    if (fileDrafts.length === 0) return null;
+    const widgets: BlockWidgetDef[] = [];
 
-    return (
-      <div className="absolute inset-0 pointer-events-none z-40">
-        {fileDrafts.map((draft) => {
-          // For CodeMirror, we need to position based on line
-          // This is a simplified version - in production, you'd query the editor's DOM
-          const lineHeight = 24; // Approximate line height in pixels
-          const top = (draft.startLine - 1) * lineHeight;
-
-          return (
-            <div
-              key={draft.id}
-              className="absolute pointer-events-auto"
-              style={{
-                top: `${top}px`,
-                right: '8px',
-                maxWidth: '300px',
+    // Add saved drafts
+    fileDrafts.forEach((draft) => {
+      if (draft.id === editingDraftId) {
+        // Always show edit input (even on mobile)
+        widgets.push({
+          afterLine: draft.endLine,
+          id: `edit-${draft.id}`,
+          content: (
+            <InlineCommentInput
+              fileLabel={fileLabel}
+              lineRange={{ start: draft.startLine, end: draft.endLine }}
+              initialText={commentText}
+              onSave={handleSaveComment}
+              onCancel={handleCancelComment}
+              isEditing={true}
+            />
+          ),
+        });
+      } else {
+        // Show saved cards on all devices
+        widgets.push({
+          afterLine: draft.endLine,
+          id: `draft-${draft.id}`,
+          content: (
+            <InlineCommentCard
+              draft={draft}
+              onEdit={() => {
+                setLineSelection({ start: draft.startLine, end: draft.endLine });
+                setCommentText(draft.text);
+                setEditingDraftId(draft.id);
               }}
-            >
-              <div
-                className="rounded-lg border p-2 shadow-md"
-                style={{
-                  backgroundColor: currentTheme?.colors?.surface?.elevated,
-                  borderColor: currentTheme?.colors?.interactive?.border,
-                }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-muted-foreground mb-1">
-                      {draft.fileLabel}:{draft.startLine}-{draft.endLine}
-                    </div>
-                    <div className="text-sm line-clamp-3">{draft.text}</div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex-shrink-0 p-1 rounded hover:bg-[var(--interactive-hover)] text-muted-foreground"
-                      >
-                        <RiMoreLine className="h-4 w-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => removeDraft(draft.sessionKey, draft.id)}
-                        className="text-destructive"
-                      >
-                        <RiDeleteBinLine className="h-4 w-4 mr-2" />
-                        Delete comment
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+              onDelete={() => removeDraft(draft.sessionKey, draft.id)}
+            />
+          ),
+        });
+      }
+    });
+
+    // Add new comment input if selecting AND not editing an existing draft
+    if (lineSelection && !editingDraftId) {
+      widgets.push({
+        afterLine: lineSelection.end,
+        id: 'new-comment-input',
+        content: (
+          <InlineCommentInput
+            fileLabel={fileLabel}
+            lineRange={lineSelection}
+            initialText={commentText} // Usually empty for new, unless restored?
+            onSave={handleSaveComment}
+            onCancel={handleCancelComment}
+            isEditing={false}
+          />
+        ),
+      });
+    }
+
+    return widgets;
+  }, [
+    mdViewMode,
+    getSessionKey,
+    allDrafts,
+    displayPath,
+    editingDraftId,
+    lineSelection,
+    commentText,
+    handleSaveComment,
+    handleCancelComment,
+    removeDraft,
+  ]);
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background">
@@ -580,11 +543,7 @@ export const PlanView: React.FC = () => {
               <div
                 className="h-full"
                 style={{
-                  ['--oc-plan-comment-pad' as string]: lineSelection
-                    ? (isMobile
-                      ? 'calc(var(--oc-keyboard-inset, 0px) + 140px)'
-                      : '140px')
-                    : '0px',
+                  ['--oc-plan-comment-pad' as string]: '0px',
                 }}
               >
                 <div className="h-full oc-plan-editor">
@@ -611,7 +570,7 @@ export const PlanView: React.FC = () => {
                           // read-only
                         }}
                         readOnly={true}
-                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)]"
+                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)] [&_.cm-scroller]:relative"
                         extensions={editorExtensions}
                         highlightLines={lineSelection
                           ? {
@@ -619,6 +578,7 @@ export const PlanView: React.FC = () => {
                             end: Math.max(lineSelection.start, lineSelection.end),
                           }
                           : undefined}
+                        blockWidgets={blockWidgets}
                         lineNumbersConfig={{
                           domEventHandlers: {
                             mousedown: (view, line, event) => {
@@ -667,7 +627,6 @@ export const PlanView: React.FC = () => {
                         },
                       }}
                     />
-                    {renderSavedComments()}
                   </div>
                   )}
                 </div>
@@ -676,28 +635,6 @@ export const PlanView: React.FC = () => {
           )}
         </ScrollableOverlay>
       </div>
-
-      {lineSelection && mdViewMode !== 'preview' && (
-        <div
-          className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-end"
-          style={{ paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : '0px' }}
-        >
-          <div
-            className={cn(
-              "pointer-events-auto pb-2 transition-none w-full flex justify-center",
-              isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
-            )}
-            style={{
-              marginBottom: isMobile
-                ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
-                : '16px'
-            }}
-            data-keyboard-avoid="true"
-          >
-            {renderCommentUI()}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

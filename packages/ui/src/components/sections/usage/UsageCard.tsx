@@ -3,14 +3,25 @@ import type { UsageWindow } from '@/types';
 import { formatPercent, formatWindowLabel } from '@/lib/quota';
 import { UsageProgressBar } from './UsageProgressBar';
 import { useQuotaStore } from '@/stores/useQuotaStore';
+import { Switch } from '@/components/ui/switch';
 
 interface UsageCardProps {
   title: string;
   window: UsageWindow;
   subtitle?: string | null;
+  showToggle?: boolean;
+  toggleEnabled?: boolean;
+  onToggle?: (enabled: boolean) => void;
 }
 
-export const UsageCard: React.FC<UsageCardProps> = ({ title, window, subtitle }) => {
+export const UsageCard: React.FC<UsageCardProps> = ({
+  title,
+  window,
+  subtitle,
+  showToggle = false,
+  toggleEnabled = false,
+  onToggle,
+}) => {
   const displayMode = useQuotaStore((state) => state.displayMode);
   const displayPercent = displayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
   const barLabel = displayMode === 'remaining' ? 'remaining' : 'used';
@@ -21,13 +32,23 @@ export const UsageCard: React.FC<UsageCardProps> = ({ title, window, subtitle })
   return (
     <div className="rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="typography-ui-label text-foreground truncate">{windowLabel}</div>
           {subtitle && (
             <div className="typography-micro text-muted-foreground truncate">{subtitle}</div>
           )}
         </div>
-        <div className="typography-ui-label text-foreground tabular-nums">{percentLabel === '-' ? '' : percentLabel}</div>
+        {showToggle ? (
+          <Switch
+            checked={toggleEnabled}
+            onCheckedChange={onToggle}
+            aria-label="Show in dropdown"
+          />
+        ) : (
+          <div className="typography-ui-label text-foreground tabular-nums">
+            {percentLabel === '-' ? '' : percentLabel}
+          </div>
+        )}
       </div>
 
       <div className="mt-3">

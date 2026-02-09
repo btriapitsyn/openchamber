@@ -49,6 +49,7 @@ export class CSSVariableGenerator {
     cssVars.push(...this.generateSurfaceColors(theme.colors.surface));
     cssVars.push(...this.generateInteractiveColors(theme.colors.interactive));
     cssVars.push(...this.generateStatusColors(theme.colors.status));
+    cssVars.push(...this.generatePullRequestColors(theme));
 
     cssVars.push(...this.generateSyntaxColors(theme.colors.syntax));
 
@@ -253,6 +254,17 @@ export class CSSVariableGenerator {
     vars.push(`  --status-info-background: ${status.infoBackground};`);
     vars.push(`  --status-info-border: ${status.infoBorder};`);
 
+    return vars;
+  }
+
+  private generatePullRequestColors(theme: Theme): string[] {
+    const vars: string[] = [];
+    const pr = theme.colors.pr;
+    vars.push(`  --pr-open: ${pr?.open || theme.colors.status.success};`);
+    vars.push(`  --pr-draft: ${pr?.draft || theme.colors.surface.mutedForeground};`);
+    vars.push(`  --pr-blocked: ${pr?.blocked || theme.colors.status.warning};`);
+    vars.push(`  --pr-merged: ${pr?.merged || (theme.metadata.variant === 'dark' ? '#8957e5' : '#8250df')};`);
+    vars.push(`  --pr-closed: ${pr?.closed || theme.colors.status.error};`);
     return vars;
   }
 

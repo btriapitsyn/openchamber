@@ -160,8 +160,9 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     const rawText = partWithText.text || partWithText.content || '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
 
-    const timeInfo = 'time' in part ? (part.time as { start: number; end?: number }) : null;
-    if (!timeInfo?.end) {
+    // Show reasoning even if time.end isn't set yet (during streaming)
+    // Only hide if there's no text content
+    if (!textContent || textContent.trim().length === 0) {
         return null;
     }
 

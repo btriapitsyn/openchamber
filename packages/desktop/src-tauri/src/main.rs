@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::{
     net::TcpListener,
@@ -8,8 +9,9 @@ use std::{
     sync::Mutex,
     time::Duration,
 };
-use std::{fs, path::PathBuf};
+use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 use std::env;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 fn eval_in_main_window<R: tauri::Runtime>(app: &tauri::AppHandle<R>, script: &str) {
@@ -365,6 +367,518 @@ fn desktop_set_auto_worktree_menu(app: tauri::AppHandle, enabled: bool) -> Resul
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let mut command = Command::new("open");
+        if let Some(app_name) = app.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+            command.arg("-a").arg(app_name);
+        }
+        command.arg(trimmed);
+        command.spawn().map_err(|err| err.to_string())?;
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("desktop_open_path is only supported on macOS".to_string())
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct InstalledAppInfo {
+    name: String,
+    icon_data_url: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct InstalledAppsCache {
+    updated_at: u64,
+    apps: Vec<InstalledAppInfo>,
+}
+
+const INSTALLED_APPS_CACHE_TTL_SECS: u64 = 60 * 60 * 24;
+const INSTALLED_APPS_CACHE_FILE: &str = "discovered-apps.json";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InstalledAppsResponse {
+    apps: Vec<InstalledAppInfo>,
+    has_cache: bool,
+    is_cache_stale: bool,
+}
+
+#[tauri::command]
+fn desktop_filter_installed_apps(apps: Vec<String>) -> Result<Vec<String>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut installed: Vec<String> = Vec::new();
+
+        for raw in apps {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let bundle_name = if trimmed.ends_with(".app") {
+                trimmed.to_string()
+            } else {
+                format!("{trimmed}.app")
+            };
+
+            if is_app_bundle_installed(&bundle_name) {
+                installed.push(trimmed.to_string());
+            }
+        }
+
+        return Ok(installed);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = apps;
+        Err("desktop_filter_installed_apps is only supported on macOS".to_string())
+    }
+}
+
+#[tauri::command]
+fn desktop_get_installed_apps(
+    app: tauri::AppHandle,
+    apps: Vec<String>,
+    force: Option<bool>,
+) -> Result<InstalledAppsResponse, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let cache_path = installed_apps_cache_path();
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|err| err.to_string())?
+            .as_secs();
+
+        let cache = read_installed_apps_cache(&cache_path);
+        let cached_apps = cache
+            .as_ref()
+            .map(|entry| entry.apps.clone())
+            .unwrap_or_default();
+        let has_cache = cache.is_some();
+        let is_cache_stale = cache
+            .as_ref()
+            .map(|entry| now.saturating_sub(entry.updated_at) > INSTALLED_APPS_CACHE_TTL_SECS)
+            .unwrap_or(false);
+
+        if has_cache {
+            if is_cache_stale {
+                log::info!("[open-in] cache hit (stale): {} apps", cached_apps.len());
+            } else {
+                log::info!("[open-in] cache hit (fresh): {} apps", cached_apps.len());
+            }
+            if log::log_enabled!(log::Level::Info) {
+                let names: Vec<String> = cached_apps.iter().map(|app| app.name.clone()).collect();
+                log::info!("[open-in] cache apps: {:?}", names);
+            }
+        }
+
+        if !has_cache {
+            log::info!("[open-in] cache missing: refreshing app list");
+            let app_handle = app.clone();
+            let app_names = apps.clone();
+            let force_icon_refresh = false;
+            let cached_icon_map: HashMap<String, String> = HashMap::new();
+            tauri::async_runtime::spawn_blocking(move || {
+                log::info!("[open-in] scan start: {} candidates", app_names.len());
+                let refreshed = build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
+                if log::log_enabled!(log::Level::Info) {
+                    let names: Vec<String> = refreshed.iter().map(|entry| entry.name.clone()).collect();
+                    log::info!("[open-in] scan apps: {:?}", names);
+                }
+                log::info!("[open-in] scan done: {} installed", refreshed.len());
+                let cache_entry = InstalledAppsCache {
+                    updated_at: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|value| value.as_secs())
+                        .unwrap_or(0),
+                    apps: refreshed.clone(),
+                };
+                let cache_path = installed_apps_cache_path();
+                let _ = write_installed_apps_cache(&cache_path, &cache_entry);
+                dispatch_installed_apps_update(&app_handle, &refreshed);
+            });
+        } else if force.unwrap_or(false) {
+            log::info!("[open-in] manual refresh: refreshing app list");
+            let app_handle = app.clone();
+            let app_names = apps.clone();
+            let force_icon_refresh = true;
+            let cached_icon_map: HashMap<String, String> = HashMap::new();
+            tauri::async_runtime::spawn_blocking(move || {
+                log::info!("[open-in] scan start: {} candidates", app_names.len());
+                let refreshed = build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
+                if log::log_enabled!(log::Level::Info) {
+                    let names: Vec<String> = refreshed.iter().map(|entry| entry.name.clone()).collect();
+                    log::info!("[open-in] scan apps: {:?}", names);
+                }
+                log::info!("[open-in] scan done: {} installed", refreshed.len());
+                let cache_entry = InstalledAppsCache {
+                    updated_at: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map(|value| value.as_secs())
+                        .unwrap_or(0),
+                    apps: refreshed.clone(),
+                };
+                let cache_path = installed_apps_cache_path();
+                let _ = write_installed_apps_cache(&cache_path, &cache_entry);
+                dispatch_installed_apps_update(&app_handle, &refreshed);
+            });
+        }
+
+        return Ok(InstalledAppsResponse {
+            apps: cached_apps,
+            has_cache,
+            is_cache_stale,
+        });
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = apps;
+        Err("desktop_get_installed_apps is only supported on macOS".to_string())
+    }
+}
+
+#[derive(Serialize)]
+struct AppIconPayload {
+    app: String,
+    data_url: String,
+}
+
+#[tauri::command]
+fn desktop_fetch_app_icons(apps: Vec<String>) -> Result<Vec<AppIconPayload>, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut results: Vec<AppIconPayload> = Vec::new();
+
+        for raw in apps {
+            let trimmed = raw.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            let Some(app_path) = resolve_app_bundle_path(trimmed) else {
+                continue;
+            };
+
+            let Some(icon_path) = resolve_app_icon_path(&app_path) else {
+                continue;
+            };
+
+            let Some(data_url) = icon_to_data_url(&icon_path, trimmed) else {
+                continue;
+            };
+
+            results.push(AppIconPayload {
+                app: trimmed.to_string(),
+                data_url,
+            });
+        }
+
+        return Ok(results);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = apps;
+        Err("desktop_fetch_app_icons is only supported on macOS".to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_app_bundle_path(app_name: &str) -> Option<PathBuf> {
+    if app_name.trim().is_empty() {
+        return None;
+    }
+
+    let bundle_name = if app_name.ends_with(".app") {
+        app_name.to_string()
+    } else {
+        format!("{app_name}.app")
+    };
+
+    let candidates = [
+        format!("/Applications/{bundle_name}"),
+        format!("/System/Applications/{bundle_name}"),
+        format!("/System/Applications/Utilities/{bundle_name}"),
+    ];
+
+    for candidate in candidates {
+        let path = PathBuf::from(&candidate);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+
+    if let Some(home) = env::var_os("HOME") {
+        let user_app_path = PathBuf::from(home).join("Applications").join(&bundle_name);
+        if user_app_path.exists() {
+            return Some(user_app_path);
+        }
+    }
+
+    if let Ok(output) = Command::new("mdfind").args(["-name", &bundle_name]).output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let path = PathBuf::from(trimmed);
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn installed_apps_cache_path() -> PathBuf {
+    let home = env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"));
+    home
+        .join(".config")
+        .join("openchamber")
+        .join(INSTALLED_APPS_CACHE_FILE)
+}
+
+#[cfg(target_os = "macos")]
+fn read_installed_apps_cache(path: &Path) -> Option<InstalledAppsCache> {
+    let bytes = fs::read(path).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+#[cfg(target_os = "macos")]
+fn write_installed_apps_cache(path: &Path, cache: &InstalledAppsCache) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|err| err.to_string())?;
+    }
+    let payload = serde_json::to_vec(cache).map_err(|err| err.to_string())?;
+    fs::write(path, payload).map_err(|err| err.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn build_installed_apps(
+    apps: &[String],
+    cached_icon_map: &HashMap<String, String>,
+    force_icon_refresh: bool,
+) -> Vec<InstalledAppInfo> {
+    let mut seen = HashSet::new();
+    let mut results = Vec::new();
+
+    for raw in apps {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() || !seen.insert(trimmed.to_string()) {
+            continue;
+        }
+
+        if let Some(app_path) = resolve_app_bundle_path(trimmed) {
+            let icon_data_url = if force_icon_refresh {
+                resolve_app_icon_path(&app_path).and_then(|icon| icon_to_data_url(&icon, trimmed))
+            } else {
+                cached_icon_map
+                    .get(trimmed)
+                    .cloned()
+                    .or_else(|| resolve_app_icon_path(&app_path).and_then(|icon| icon_to_data_url(&icon, trimmed)))
+            };
+            results.push(InstalledAppInfo {
+                name: trimmed.to_string(),
+                icon_data_url,
+            });
+        }
+    }
+
+    results
+}
+
+#[cfg(target_os = "macos")]
+fn dispatch_installed_apps_update(app: &tauri::AppHandle, apps: &[InstalledAppInfo]) {
+    let event = serde_json::to_string("openchamber:installed-apps-updated")
+        .unwrap_or_else(|_| "\"openchamber:installed-apps-updated\"".into());
+    let detail = serde_json::to_string(apps).unwrap_or_else(|_| "[]".into());
+    let script = format!("window.dispatchEvent(new CustomEvent({event}, {{ detail: {detail} }}));");
+    eval_in_main_window(app, &script);
+}
+
+#[cfg(target_os = "macos")]
+fn resolve_app_icon_path(app_path: &Path) -> Option<PathBuf> {
+    if !app_path.exists() {
+        return None;
+    }
+
+    if let Some(icon_file) = read_bundle_icon_file(app_path) {
+        let icon_path = app_path
+            .join("Contents")
+            .join("Resources")
+            .join(&icon_file);
+        if icon_path.exists() {
+            return Some(icon_path);
+        }
+    }
+
+    if let Ok(output) = Command::new("mdls")
+        .args(["-name", "kMDItemIconFile", "-raw", &app_path.to_string_lossy()])
+        .output()
+    {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let icon_name = stdout.trim();
+            if !icon_name.is_empty() && icon_name != "(null)" {
+                let icon_file = if icon_name.ends_with(".icns") {
+                    icon_name.to_string()
+                } else {
+                    format!("{icon_name}.icns")
+                };
+                let icon_path = app_path
+                    .join("Contents")
+                    .join("Resources")
+                    .join(icon_file);
+                if icon_path.exists() {
+                    return Some(icon_path);
+                }
+            }
+        }
+    }
+
+    let resources_path = app_path.join("Contents").join("Resources");
+    if let Ok(entries) = fs::read_dir(resources_path) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(ext) = path.extension().and_then(|value| value.to_str()) {
+                if ext.eq_ignore_ascii_case("icns") {
+                    return Some(path);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn read_bundle_icon_file(app_path: &Path) -> Option<String> {
+    let plist_path = app_path.join("Contents").join("Info.plist");
+    if !plist_path.exists() {
+        return None;
+    }
+
+    let output = Command::new("defaults")
+        .args(["read", &plist_path.to_string_lossy(), "CFBundleIconFile"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let icon_name = stdout.trim();
+    if icon_name.is_empty() {
+        return None;
+    }
+
+    let icon_file = if icon_name.ends_with(".icns") {
+        icon_name.to_string()
+    } else {
+        format!("{icon_name}.icns")
+    };
+
+    Some(icon_file)
+}
+
+#[cfg(target_os = "macos")]
+fn icon_to_data_url(icon_path: &Path, app_name: &str) -> Option<String> {
+    if !icon_path.exists() {
+        return None;
+    }
+
+    let sanitized: String = app_name
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|value| value.as_millis())
+        .unwrap_or(0);
+    let tmp_path = env::temp_dir().join(format!("openchamber-icon-{sanitized}-{timestamp}.png"));
+
+    let status = Command::new("sips")
+        .args([
+            "-s",
+            "format",
+            "png",
+            "-Z",
+            "32",
+            &icon_path.to_string_lossy(),
+            "--out",
+            &tmp_path.to_string_lossy(),
+        ])
+        .status()
+        .ok()?;
+
+    if !status.success() {
+        return None;
+    }
+
+    let bytes = fs::read(&tmp_path).ok()?;
+    let _ = fs::remove_file(&tmp_path);
+    if bytes.is_empty() {
+        return None;
+    }
+
+    let encoded = general_purpose::STANDARD.encode(bytes);
+    Some(format!("data:image/png;base64,{encoded}"))
+}
+
+#[cfg(target_os = "macos")]
+fn is_app_bundle_installed(bundle_name: &str) -> bool {
+    if bundle_name.trim().is_empty() {
+        return false;
+    }
+
+    if let Ok(output) = Command::new("mdfind").args(["-name", bundle_name]).output() {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if !stdout.trim().is_empty() {
+                return true;
+            }
+        }
+    }
+
+    let app_path = format!("/Applications/{bundle_name}");
+    let system_app_path = format!("/System/Applications/{bundle_name}");
+    let utilities_path = format!("/System/Applications/Utilities/{bundle_name}");
+
+    if Path::new(&app_path).exists() || Path::new(&system_app_path).exists() || Path::new(&utilities_path).exists() {
+        return true;
+    }
+
+    if let Some(home) = env::var_os("HOME") {
+        let user_app_path = PathBuf::from(home).join("Applications").join(bundle_name);
+        if user_app_path.exists() {
+            return true;
+        }
+    }
+
+    false
 }
 
 const SIDECAR_NAME: &str = "openchamber-server";
@@ -858,6 +1372,53 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     let mut path_segments: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::<String>::new();
 
+    let resolved_home_dir_path = app.path().home_dir().ok();
+    let resolved_home_dir = resolved_home_dir_path.as_ref().and_then(|p| {
+        let s = p.to_string_lossy().to_string();
+        if s.trim().is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    });
+
+    let opencode_binary_from_settings: Option<String> = (|| {
+        let data_dir = env::var("OPENCHAMBER_DATA_DIR")
+            .ok()
+            .and_then(|v| {
+                let t = v.trim().to_string();
+                if t.is_empty() {
+                    None
+                } else {
+                    Some(PathBuf::from(t))
+                }
+            })
+            .or_else(|| {
+                resolved_home_dir_path
+                    .as_ref()
+                    .map(|home| home.join(".config").join("openchamber"))
+            });
+        let data_dir = data_dir?;
+        let settings_path = data_dir.join("settings.json");
+        let raw = fs::read_to_string(&settings_path).ok()?;
+        let json = serde_json::from_str::<serde_json::Value>(&raw).ok()?;
+        let value = json.get("opencodeBinary")?.as_str()?.trim();
+        if value.is_empty() {
+            return None;
+        }
+
+        let mut candidate = value.to_string();
+        if fs::metadata(&candidate).map(|m| m.is_dir()).unwrap_or(false) {
+            let bin_name = if cfg!(windows) { "opencode.exe" } else { "opencode" };
+            candidate = PathBuf::from(candidate)
+                .join(bin_name)
+                .to_string_lossy()
+                .to_string();
+        }
+
+        Some(candidate)
+    })();
+
     let mut push_unique = |value: String| {
         let trimmed = value.trim();
         if trimmed.is_empty() {
@@ -869,6 +1430,16 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     };
 
     // Respect explicit binary overrides by adding their parent dir first.
+    if let Some(val) = opencode_binary_from_settings.as_deref() {
+        let trimmed = val.trim();
+        if !trimmed.is_empty() {
+            let path = std::path::Path::new(trimmed);
+            if let Some(parent) = path.parent() {
+                push_unique(parent.to_string_lossy().to_string());
+            }
+        }
+    }
+
     for var in [
         "OPENCHAMBER_OPENCODE_PATH",
         "OPENCHAMBER_OPENCODE_BIN",
@@ -895,16 +1466,13 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     push_unique("/usr/sbin".to_string());
     push_unique("/sbin".to_string());
 
-    if let Ok(home) = env::var("HOME") {
-        let home = home.trim();
-        if !home.is_empty() {
+        if let Some(home) = resolved_home_dir.as_deref() {
             // OpenCode installer default.
             push_unique(format!("{home}/.opencode/bin"));
             push_unique(format!("{home}/.local/bin"));
             push_unique(format!("{home}/.bun/bin"));
             push_unique(format!("{home}/.cargo/bin"));
             push_unique(format!("{home}/bin"));
-        }
     }
 
     if let Ok(existing) = env::var("PATH") {
@@ -922,7 +1490,7 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
         };
         let url = build_local_url(port);
 
-        let cmd = app
+        let mut cmd = app
             .shell()
             .sidecar(SIDECAR_NAME)
             .map_err(|err| anyhow!("Failed to resolve sidecar '{SIDECAR_NAME}': {err}"))?
@@ -933,6 +1501,17 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
             .env("PATH", augmented_path.clone())
             .env("NO_PROXY", no_proxy)
             .env("no_proxy", no_proxy);
+
+        if let Some(home) = resolved_home_dir.as_deref() {
+            cmd = cmd.env("HOME", home);
+        }
+
+        if let Some(bin) = opencode_binary_from_settings.as_deref() {
+            let trimmed = bin.trim();
+            if !trimmed.is_empty() {
+                cmd = cmd.env("OPENCODE_BINARY", trimmed);
+            }
+        }
 
         let (rx, child) = match cmd.spawn() {
             Ok(v) => v,
@@ -1417,6 +1996,14 @@ fn main() {
                     *state.focused.lock().expect("focus mutex") = *focused;
                 }
             }
+
+            #[cfg(target_os = "macos")]
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                // Ensure sidecar is not left running when users close the main window.
+                let app = window.app_handle();
+                kill_sidecar(app.clone());
+                app.exit(0);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             desktop_notify,
@@ -1424,6 +2011,10 @@ fn main() {
             desktop_download_and_install_update,
             desktop_restart,
             desktop_set_auto_worktree_menu,
+            desktop_open_path,
+            desktop_filter_installed_apps,
+            desktop_get_installed_apps,
+            desktop_fetch_app_icons,
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,
@@ -1431,7 +2022,6 @@ fn main() {
         .setup(|app| {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                // Always ensure local server is running for escape hatch.
                 let local_url = if cfg!(debug_assertions) {
                     let dev_url = "http://127.0.0.1:3001";
                     if wait_for_health(dev_url).await {
@@ -1455,29 +2045,41 @@ fn main() {
                     }
                 };
 
+                let local_ui_url = if cfg!(debug_assertions) {
+                    let vite_url = "http://127.0.0.1:5173";
+                    if wait_for_health(vite_url).await {
+                        vite_url.to_string()
+                    } else {
+                        log::warn!("[desktop] Vite dev server not ready, using local API UI at {local_url}");
+                        local_url.clone()
+                    }
+                } else {
+                    local_url.clone()
+                };
+
                 // Ensure local URL is always available to desktop commands,
                 // even when we are using the Vite dev server (no sidecar child).
                 if let Some(state) = handle.try_state::<SidecarState>() {
                     *state.url.lock().expect("sidecar url mutex") = Some(local_url.clone());
                 }
 
-                let local_origin = url::Url::parse(&local_url)
+                let local_origin = url::Url::parse(&local_ui_url)
                     .ok()
                     .map(|u| u.origin().ascii_serialization())
-                    .unwrap_or_else(|| local_url.clone());
+                    .unwrap_or_else(|| local_ui_url.clone());
 
                 // Selected host: env override first, then desktop default host, else local.
                 let env_target = std::env::var("OPENCHAMBER_SERVER_URL")
                     .ok()
                     .and_then(|raw| normalize_server_url(&raw));
 
-                let mut initial_url = env_target.unwrap_or_else(|| local_url.clone());
+                let mut initial_url = env_target.unwrap_or_else(|| local_ui_url.clone());
 
-                if initial_url == local_url {
+                if initial_url == local_ui_url {
                     let cfg = read_desktop_hosts_config_from_disk();
                     if let Some(default_id) = cfg.default_host_id {
                         if default_id == LOCAL_HOST_ID {
-                            initial_url = local_url.clone();
+                            initial_url = local_ui_url.clone();
                         } else if let Some(host) = cfg.hosts.into_iter().find(|h| h.id == default_id) {
                             initial_url = host.url;
                         }

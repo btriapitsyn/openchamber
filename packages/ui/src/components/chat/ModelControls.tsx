@@ -57,8 +57,6 @@ type IconComponent = ComponentType<any>;
 
 type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
 
-const isPrimaryMode = (mode?: string) => mode === 'primary' || mode === 'all' || mode === undefined || mode === null;
-
 type PermissionAction = 'allow' | 'ask' | 'deny';
 type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
 
@@ -288,6 +286,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     // Use visible agents (excludes hidden internal agents)
     const agents = getVisibleAgents();
+    const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
 
     const {
         currentSessionId,
@@ -432,8 +431,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         setModelSelectedIndex(0);
     }, [desktopModelQuery]);
 
+    const selectableDesktopAgents = React.useMemo(() => {
+        return agents.filter((agent) => agent.mode !== 'subagent');
+    }, [agents]);
+
     const sortedAndFilteredAgents = React.useMemo(() => {
-        const sorted = [...agents].sort((a, b) => a.name.localeCompare(b.name));
+        const sorted = [...selectableDesktopAgents].sort((a, b) => a.name.localeCompare(b.name));
         if (!agentSearchQuery.trim()) {
             return sorted;
         }
@@ -441,17 +444,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             fuzzyMatch(agentSearchQuery, agent.name) ||
             (agent.description && fuzzyMatch(agentSearchQuery, agent.description))
         );
-    }, [agents, agentSearchQuery]);
+    }, [selectableDesktopAgents, agentSearchQuery]);
 
     const defaultAgentName = React.useMemo(() => {
         if (settingsDefaultAgent) {
-            const found = agents.find(a => a.name === settingsDefaultAgent);
+            const found = selectableDesktopAgents.find(a => a.name === settingsDefaultAgent);
             if (found) return found.name;
         }
-        const buildAgent = agents.find(a => a.name === 'build');
+        const buildAgent = selectableDesktopAgents.find(a => a.name === 'build');
         if (buildAgent) return buildAgent.name;
-        return agents[0]?.name;
-    }, [settingsDefaultAgent, agents]);
+        return selectableDesktopAgents[0]?.name;
+    }, [settingsDefaultAgent, selectableDesktopAgents]);
 
     const currentAgent = React.useMemo(() => {
         if (uiAgentName) {
@@ -696,7 +699,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return;
             }
 
-            const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
             const fallbackAgent = agents.find(agent => agent.name === 'build') || primaryAgents[0] || agents[0];
             if (!fallbackAgent) {
                 return;
@@ -821,6 +823,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         currentSessionId,
         currentSessionMessageCount,
         agents,
+        primaryAgents,
         currentAgentName,
         getAgentModelForSession,
         setAgent,
@@ -1107,7 +1110,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const getAgentDisplayName = () => {
         if (!uiAgentName) {
-            const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
             const buildAgent = primaryAgents.find(agent => agent.name === 'build');
             const defaultAgent = buildAgent || primaryAgents[0];
             return defaultAgent ? capitalizeAgentName(defaultAgent.name) : 'Select Agent';
@@ -1723,8 +1725,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const renderMobileAgentPanel = () => {
         if (!isCompact) return null;
- 
-        const primaryAgents = agents.filter(agent => isPrimaryMode(agent.mode));
  
         return (
             <MobileOverlayPanel

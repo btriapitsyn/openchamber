@@ -33,8 +33,8 @@ const JustificationBlock: React.FC<JustificationBlockProps> = ({
     const rawText = partWithText.text || partWithText.content || '';
     const textContent = React.useMemo(() => cleanJustificationText(rawText), [rawText]);
 
-    const timeInfo = 'time' in part ? (part.time as { start: number; end?: number }) : null;
-    if (!timeInfo?.end) {
+    // Don't render if there's no text content
+    if (!textContent || textContent.trim().length === 0) {
         return null;
     }
 

@@ -236,8 +236,6 @@ const isActivityStandaloneTool = (toolName: unknown): boolean => {
     return typeof toolName === 'string' && ACTIVITY_STANDALONE_TOOL_NAMES.has(toolName.toLowerCase());
 };
 
-const ENABLE_TEXT_JUSTIFICATION_ACTIVITY = false;
-
 const extractFinalAssistantText = (turn: Turn): string | undefined => {
     for (const assistantMsg of turn.assistantMessages) {
         const infoFinish = (assistantMsg.info as { finish?: string | null | undefined }).finish;
@@ -255,7 +253,7 @@ const extractFinalAssistantText = (turn: Turn): string | undefined => {
     return undefined;
 };
 
-const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
+const getTurnActivityInfo = (turn: Turn, showTextJustificationActivity: boolean): TurnActivityInfo => {
     interface SummaryDiff {
         additions?: number | null | undefined;
         deletions?: number | null | undefined;
@@ -303,13 +301,33 @@ const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
         });
     });
 
+    // Find the LAST assistant message that has text content - this is the summary
+    // All other text messages are justification (yapping during work)
+    let lastTextMessageId: string | undefined;
+    for (let i = turn.assistantMessages.length - 1; i >= 0; i--) {
+        const msg = turn.assistantMessages[i];
+        if (!msg) continue;
+        const hasText = msg.parts.some((p) => {
+            if (p.type !== 'text') return false;
+            const text = (p as { text?: string; content?: string }).text ?? 
+                        (p as { text?: string; content?: string }).content;
+            return typeof text === 'string' && text.trim().length > 0;
+        });
+        if (hasText) {
+            lastTextMessageId = msg.info.id;
+            break;
+        }
+    }
+
     const activityParts: TurnActivityPart[] = [];
     let syntheticIdCounter = 0;
 
     turn.assistantMessages.forEach((msg) => {
         const messageId = msg.info.id;
-        const infoFinish = (msg.info as { finish?: string | null | undefined }).finish;
-        const hasStopFinishInMessage = ENABLE_TEXT_JUSTIFICATION_ACTIVITY ? infoFinish === 'stop' : false;
+        
+        // Only the LAST message with text is the summary (not justification)
+        // All earlier text messages are justification
+        const isFinalSummaryMessage = messageId === lastTextMessageId;
 
         msg.parts.forEach((part) => {
             const baseId = (typeof part.id === 'string' && part.id.trim().length > 0)
@@ -351,10 +369,10 @@ const getTurnActivityInfo = (turn: Turn): TurnActivityInfo => {
             }
 
             if (
-                ENABLE_TEXT_JUSTIFICATION_ACTIVITY &&
+                showTextJustificationActivity &&
                 part.type === 'text' &&
                 (hasTools || hasReasoning) &&
-                !hasStopFinishInMessage
+                !isFinalSummaryMessage
             ) {
                 const text = (part as { text?: string | null | undefined; content?: string | null | undefined }).text ??
                     (part as { text?: string | null | undefined; content?: string | null | undefined }).content;
@@ -483,9 +501,10 @@ const buildNeighborMap = (messages: ChatMessageEntry[]): Map<string, NeighborInf
 export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ messages, children }) => {
     const { isWorking: sessionIsWorking } = useCurrentSessionActivity();
     const toolCallExpansion = useUIStore((state) => state.toolCallExpansion);
+    const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
     const defaultActivityExpanded = toolCallExpansion === 'activity' || toolCallExpansion === 'detailed';
 
-    // Static data - only changes when messages change
+    // Static data - only changes when messages change or justification setting changes
     const staticValue = React.useMemo<TurnGroupingStaticData>(() => {
         const turns = detectTurns(messages);
         const lastTurnId = turns.length > 0 ? turns[turns.length - 1]!.turnId : null;
@@ -500,7 +519,7 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
 
         const turnActivityInfo = new Map<string, TurnActivityInfo>();
         turns.forEach((turn) => {
-            turnActivityInfo.set(turn.turnId, getTurnActivityInfo(turn));
+            turnActivityInfo.set(turn.turnId, getTurnActivityInfo(turn, showTextJustificationActivity));
         });
 
         const messageNeighbors = buildNeighborMap(messages);
@@ -524,7 +543,7 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
             defaultActivityExpanded,
             messageNeighbors,
         };
-    }, [messages, defaultActivityExpanded]);
+    }, [messages, defaultActivityExpanded, showTextJustificationActivity]);
 
     // UI state for expansion toggles
     const [turnUiStates, setTurnUiStates] = React.useState<Map<string, { isExpanded: boolean }>>(

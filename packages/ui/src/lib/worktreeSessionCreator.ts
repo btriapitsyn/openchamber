@@ -12,9 +12,7 @@ import { useContextStore } from '@/stores/contextStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
-import {
-  getWorktreeStatus,
-} from '@/lib/git/worktreeService';
+import { getRootBranch, getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import {
   createSdkWorktree,
@@ -28,11 +26,26 @@ const normalizePath = (value: string): string => value.replace(/\\/g, '/').repla
 const resolveProjectRef = (directory: string): ProjectRef | null => {
   const normalized = normalizePath(directory);
   const projects = useProjectsStore.getState().projects;
-  const match = projects.find((project) => normalizePath(project.path) === normalized);
-  if (!match) {
+  if (projects.length === 0) {
     return null;
   }
-  return { id: match.id, path: match.path };
+
+  const activeProject = useProjectsStore.getState().getActiveProject();
+  if (activeProject?.path) {
+    const activePath = normalizePath(activeProject.path);
+    if (normalized === activePath || normalized.startsWith(`${activePath}/`)) {
+      return { id: activeProject.id, path: activeProject.path };
+    }
+  }
+
+  const matches = projects.filter((project) => {
+    const projectPath = normalizePath(project.path);
+    return normalized === projectPath || normalized.startsWith(`${projectPath}/`);
+  });
+
+  const match = matches.sort((a, b) => normalizePath(b.path).length - normalizePath(a.path).length)[0];
+
+  return match ? { id: match.id, path: match.path } : null;
 };
 
 // Track if we're currently creating a worktree session
@@ -40,7 +53,7 @@ let isCreatingWorktreeSession = false;
 
 /**
  * Create a new session with an auto-generated worktree.
- * Uses project's worktree defaults (branch prefix, base branch) from settings.
+ * Uses project's worktree defaults for naming/metadata.
  * 
  * @returns The created session, or null if creation failed
  */
@@ -78,27 +91,21 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
   startConfigUpdate("Creating new worktree session...");
 
   try {
-    // Get worktree defaults from project settings
-    const worktreeDefaults = activeProject.worktreeDefaults;
-    const baseBranch = worktreeDefaults?.baseBranch;
-
     const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
 
     // Generate a friendly name (SDK will slugify + ensure uniqueness).
     const preferredName = generateBranchName();
 
-    const startPoint = baseBranch && baseBranch !== 'HEAD' ? baseBranch : undefined;
-
     const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const rootBranch = await getRootBranch(projectRef.path);
     const metadata = await createSdkWorktree(projectRef, {
       preferredName,
       setupCommands,
-      startPoint,
     });
 
     const createdMetadata = {
       ...metadata,
-      createdFromBranch: startPoint ?? 'HEAD',
+      createdFromBranch: rootBranch,
       kind: 'standard' as const,
     };
 
@@ -222,6 +229,70 @@ export function isCreatingWorktree(): boolean {
   return isCreatingWorktreeSession;
 }
 
+export async function createWorktreeOnly(): Promise<string | null> {
+  if (isCreatingWorktreeSession) {
+    return null;
+  }
+
+  const activeProject = useProjectsStore.getState().getActiveProject();
+  if (!activeProject?.path) {
+    toast.error('No active project', {
+      description: 'Please select a project first.',
+    });
+    return null;
+  }
+
+  const projectDirectory = activeProject.path;
+  let isGitRepo = false;
+  try {
+    isGitRepo = await checkIsGitRepository(projectDirectory);
+  } catch {
+    // ignored
+  }
+
+  if (!isGitRepo) {
+    toast.error('Not a Git repository', {
+      description: 'Worktrees can only be created in Git repositories.',
+    });
+    return null;
+  }
+
+  isCreatingWorktreeSession = true;
+  startConfigUpdate('Creating new worktree...');
+
+  try {
+    const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
+    const preferredName = generateBranchName();
+    const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const metadata = await createSdkWorktree(projectRef, {
+      preferredName,
+      setupCommands,
+    });
+
+    const rootBranch = await getRootBranch(projectRef.path).catch(() => undefined);
+    const status = await getWorktreeStatus(metadata.path).catch(() => undefined);
+
+    const branchLabel = metadata.branch || metadata.label || metadata.name;
+    toast.success('Worktree created', {
+      description: branchLabel
+        ? `${branchLabel}${rootBranch ? ` from ${rootBranch}` : ''}`
+        : status?.isDirty ? 'Created (dirty)' : 'Ready',
+    });
+
+    await useSessionStore.getState().loadSessions();
+    return metadata.path;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to create worktree';
+    toast.error('Failed to create worktree', {
+      description: message,
+    });
+    return null;
+  } finally {
+    finishConfigUpdate();
+    isCreatingWorktreeSession = false;
+  }
+}
+
 /**
  * Create a new session with a worktree for a specific branch.
  * Unlike createWorktreeSession(), this allows specifying the project and branch explicitly.
@@ -238,21 +309,6 @@ export async function createWorktreeSessionForBranch(
     return null;
   }
 
-  // Check if it's a git repo
-  let isGitRepo = false;
-  try {
-    isGitRepo = await checkIsGitRepository(projectDirectory);
-  } catch {
-    // Ignore errors, treat as not a git repo
-  }
-
-  if (!isGitRepo) {
-    toast.error('Not a Git repository', {
-      description: 'Worktrees can only be created in Git repositories.',
-    });
-    return null;
-  }
-
   isCreatingWorktreeSession = true;
   startConfigUpdate("Creating worktree session...");
 
@@ -262,16 +318,31 @@ export async function createWorktreeSessionForBranch(
       throw new Error('Project is not registered in OpenChamber');
     }
 
+    // Check if it's a git repo (root project path)
+    let isGitRepo = false;
+    try {
+      isGitRepo = await checkIsGitRepository(projectRef.path);
+    } catch {
+      // Ignore errors, treat as not a git repo
+    }
+
+    if (!isGitRepo) {
+      toast.error('Not a Git repository', {
+        description: 'Worktrees can only be created in Git repositories.',
+      });
+      return null;
+    }
+
     const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const rootBranch = await getRootBranch(projectRef.path);
     const metadata = await createSdkWorktree(projectRef, {
       preferredName: branchName,
       setupCommands,
-      startPoint: branchName,
     });
 
     const createdMetadata = {
       ...metadata,
-      createdFromBranch: branchName,
+      createdFromBranch: rootBranch,
       kind: 'standard' as const,
     };
 
@@ -389,30 +460,16 @@ export async function createWorktreeSessionForBranch(
 }
 
 /**
- * Create a worktree session for a new branch (created at startPoint).
- * This avoids checking out the branch in the main worktree.
+ * Create a worktree session for a new branch name.
+ * Callers can still use startPoint for metadata or follow-up git operations.
  */
 export async function createWorktreeSessionForNewBranch(
   projectDirectory: string,
   preferredBranchName: string,
-  startPoint: string,
-  options?: { allowSuffix?: boolean; kind?: 'pr' | 'standard' }
+  startPoint?: string,
+  options?: { kind?: 'pr' | 'standard' }
 ): Promise<{ id: string; branch: string } | null> {
   if (isCreatingWorktreeSession) {
-    return null;
-  }
-
-  let isGitRepo = false;
-  try {
-    isGitRepo = await checkIsGitRepository(projectDirectory);
-  } catch {
-    // ignore
-  }
-
-  if (!isGitRepo) {
-    toast.error('Not a Git repository', {
-      description: 'Worktrees can only be created in Git repositories.',
-    });
     return null;
   }
 
@@ -426,7 +483,6 @@ export async function createWorktreeSessionForNewBranch(
       throw new Error('Branch name is required');
     }
 
-    const allowSuffix = options?.allowSuffix !== false;
     const kind = options?.kind ?? 'standard';
 
     const projectRef = resolveProjectRef(projectDirectory);
@@ -434,19 +490,31 @@ export async function createWorktreeSessionForNewBranch(
       throw new Error('Project is not registered in OpenChamber');
     }
 
+    let isGitRepo = false;
+    try {
+      isGitRepo = await checkIsGitRepository(projectRef.path);
+    } catch {
+      // ignore
+    }
+
+    if (!isGitRepo) {
+      toast.error('Not a Git repository', {
+        description: 'Worktrees can only be created in Git repositories.',
+      });
+      return null;
+    }
+
     const setupCommands = await getWorktreeSetupCommands(projectRef);
+    const rootBranch = await getRootBranch(projectRef.path);
 
     try {
       const metadata = await createSdkWorktree(projectRef, {
         preferredName: base,
         setupCommands,
-        startPoint: start,
-        allowSuffix,
       });
-
       const createdMetadata = {
         ...metadata,
-        createdFromBranch: start,
+        createdFromBranch: rootBranch || start,
         kind,
       };
 
@@ -541,8 +609,8 @@ export async function createWorktreeSessionForNewBranch(
 }
 
 /**
- * Same as createWorktreeSessionForNewBranch, but does NOT suffix the branch name.
- * Use when the worktree must be created on an exact branch name (e.g. PR head ref).
+ * Same as createWorktreeSessionForNewBranch, but preserves the exact branch name.
+ * Use when the worktree must be tied to a specific ref (e.g. PR head ref).
  */
 export async function createWorktreeSessionForNewBranchExact(
   projectDirectory: string,
@@ -551,7 +619,6 @@ export async function createWorktreeSessionForNewBranchExact(
   options?: { kind?: 'pr' | 'standard' }
 ): Promise<{ id: string; branch: string } | null> {
   return createWorktreeSessionForNewBranch(projectDirectory, branchName, startPoint, {
-    allowSuffix: false,
     kind: options?.kind,
   });
 }

@@ -3,9 +3,8 @@ export interface WorktreeMetadata {
   /**
    * Worktree origin.
    * - sdk: created/managed by OpenCode SDK worktrees
-   * - legacy: git worktree under <project>/.openchamber
    */
-  source?: 'sdk' | 'legacy';
+  source?: 'sdk';
 
   path: string;
 

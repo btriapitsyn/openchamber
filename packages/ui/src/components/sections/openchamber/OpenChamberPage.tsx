@@ -8,6 +8,7 @@ import { GitSettings } from './GitSettings';
 import { WorktreeSectionContent } from './WorktreeSectionContent';
 import { NotificationSettings } from './NotificationSettings';
 import { GitHubSettings } from './GitHubSettings';
+import { OpenCodeCliSettings } from './OpenCodeCliSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
@@ -21,6 +22,7 @@ interface OpenChamberPageProps {
 export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => {
     const { isMobile } = useDeviceInfo();
     const showAbout = isMobile && isWebRuntime();
+    const isVSCode = isVSCodeRuntime();
 
     // If no section specified, show all (mobile/legacy behavior)
     if (!section) {
@@ -35,6 +37,11 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                     <div className="border-t border-border/40 pt-6">
                         <DefaultsSettings />
                     </div>
+                    {!isVSCode && (
+                        <div className="border-t border-border/40 pt-6">
+                            <OpenCodeCliSettings />
+                        </div>
+                    )}
                     <div className="border-t border-border/40 pt-6">
                         <SessionRetentionSettings />
                     </div>
@@ -86,16 +93,22 @@ const VisualSectionContent: React.FC = () => {
     return <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'terminalFontSize', 'spacing', 'cornerRadius', 'inputBarOffset', 'terminalQuickKeys']} />;
 };
 
-// Chat section: Default Tool Output, Diff layout, Show reasoning traces, Queue mode
+// Chat section: Default Tool Output, Diff layout, Show reasoning traces, Queue mode, Persist draft
 const ChatSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'dotfiles', 'reasoning', 'textJustificationActivity', 'queueMode']} />;
+    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'dotfiles', 'reasoning', 'textJustificationActivity', 'queueMode', 'persistDraft']} />;
 };
 
 // Sessions section: Default model & agent, Session retention, Memory limits
 const SessionsSectionContent: React.FC = () => {
+    const isVSCode = isVSCodeRuntime();
     return (
         <div className="space-y-6">
             <DefaultsSettings />
+            {!isVSCode && (
+                <div className="border-t border-border/40 pt-6">
+                    <OpenCodeCliSettings />
+                </div>
+            )}
             <div className="border-t border-border/40 pt-6">
                 <SessionRetentionSettings />
             </div>

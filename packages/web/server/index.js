@@ -4,11 +4,22 @@ import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
+import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
 import { createUiAuth } from './lib/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
+import {
+  TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
+  TERMINAL_INPUT_WS_PATH,
+  createTerminalInputWsControlFrame,
+  isRebindRateLimited,
+  normalizeTerminalInputWsMessageToText,
+  parseRequestPathname,
+  pruneRebindTimestamps,
+  readTerminalInputWsControlFrame,
+} from './lib/terminal-input-ws-protocol.js';
 import { createOpencodeServer } from '@opencode-ai/sdk/server';
 import webPush from 'web-push';
 
@@ -1243,24 +1254,6 @@ const sanitizeProjects = (input) => {
       ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
     };
 
-    // Preserve worktreeDefaults
-    if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
-      const wt = candidate.worktreeDefaults;
-      const defaults = {};
-      if (typeof wt.branchPrefix === 'string' && wt.branchPrefix.trim()) {
-        defaults.branchPrefix = wt.branchPrefix.trim();
-      }
-      if (typeof wt.baseBranch === 'string' && wt.baseBranch.trim()) {
-        defaults.baseBranch = wt.baseBranch.trim();
-      }
-      if (typeof wt.autoCreateWorktree === 'boolean') {
-        defaults.autoCreateWorktree = wt.autoCreateWorktree;
-      }
-      if (Object.keys(defaults).length > 0) {
-        project.worktreeDefaults = defaults;
-      }
-    }
-
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       project.sidebarCollapsed = candidate.sidebarCollapsed;
     }
@@ -1299,6 +1292,14 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.homeDirectory === 'string' && candidate.homeDirectory.length > 0) {
     result.homeDirectory = candidate.homeDirectory;
+  }
+
+  // Absolute path to the opencode CLI binary (optional override).
+  // Accept empty-string to clear (we persist an empty string sentinel so the running
+  // process can reliably drop a previously applied OPENCODE_BINARY override).
+  if (typeof candidate.opencodeBinary === 'string') {
+    const normalized = normalizeDirectoryPath(candidate.opencodeBinary).trim();
+    result.opencodeBinary = normalized;
   }
   if (Array.isArray(candidate.projects)) {
     const projects = sanitizeProjects(candidate.projects);
@@ -1480,6 +1481,12 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.filesViewShowGitignored === 'boolean') {
     result.filesViewShowGitignored = candidate.filesViewShowGitignored;
   }
+  if (typeof candidate.openInAppId === 'string') {
+    const trimmed = candidate.openInAppId.trim();
+    if (trimmed.length > 0) {
+      result.openInAppId = trimmed;
+    }
+  }
 
   // Memory limits for message viewport management
   if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {
@@ -1495,6 +1502,114 @@ const sanitizeSettingsUpdate = (payload) => {
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
   if (skillCatalogs) {
     result.skillCatalogs = skillCatalogs;
+  }
+
+  // Usage model selections - which models appear in dropdown
+  if (candidate.usageSelectedModels && typeof candidate.usageSelectedModels === 'object') {
+    const sanitized = {};
+    for (const [providerId, models] of Object.entries(candidate.usageSelectedModels)) {
+      if (typeof providerId === 'string' && Array.isArray(models)) {
+        const validModels = models.filter((m) => typeof m === 'string' && m.length > 0);
+        if (validModels.length > 0) {
+          sanitized[providerId] = validModels;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageSelectedModels = sanitized;
+    }
+  }
+
+  // Usage page collapsed families - for "Other Models" section
+  if (candidate.usageCollapsedFamilies && typeof candidate.usageCollapsedFamilies === 'object') {
+    const sanitized = {};
+    for (const [providerId, families] of Object.entries(candidate.usageCollapsedFamilies)) {
+      if (typeof providerId === 'string' && Array.isArray(families)) {
+        const validFamilies = families.filter((f) => typeof f === 'string' && f.length > 0);
+        if (validFamilies.length > 0) {
+          sanitized[providerId] = validFamilies;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageCollapsedFamilies = sanitized;
+    }
+  }
+
+  // Header dropdown expanded families (inverted - stores EXPANDED, default all collapsed)
+  if (candidate.usageExpandedFamilies && typeof candidate.usageExpandedFamilies === 'object') {
+    const sanitized = {};
+    for (const [providerId, families] of Object.entries(candidate.usageExpandedFamilies)) {
+      if (typeof providerId === 'string' && Array.isArray(families)) {
+        const validFamilies = families.filter((f) => typeof f === 'string' && f.length > 0);
+        if (validFamilies.length > 0) {
+          sanitized[providerId] = validFamilies;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageExpandedFamilies = sanitized;
+    }
+  }
+
+  // Custom model groups configuration
+  if (candidate.usageModelGroups && typeof candidate.usageModelGroups === 'object') {
+    const sanitized = {};
+    for (const [providerId, config] of Object.entries(candidate.usageModelGroups)) {
+      if (typeof providerId !== 'string') continue;
+
+      const providerConfig = {};
+
+      // customGroups: array of {id, label, models, order}
+      if (Array.isArray(config.customGroups)) {
+        const validGroups = config.customGroups
+          .filter((g) => g && typeof g.id === 'string' && typeof g.label === 'string')
+          .map((g) => ({
+            id: g.id.slice(0, 64),
+            label: g.label.slice(0, 128),
+            models: Array.isArray(g.models)
+              ? g.models.filter((m) => typeof m === 'string').slice(0, 500)
+              : [],
+            order: typeof g.order === 'number' ? g.order : 0,
+          }));
+        if (validGroups.length > 0) {
+          providerConfig.customGroups = validGroups;
+        }
+      }
+
+      // modelAssignments: Record<modelName, groupId>
+      if (config.modelAssignments && typeof config.modelAssignments === 'object') {
+        const assignments = {};
+        for (const [model, groupId] of Object.entries(config.modelAssignments)) {
+          if (typeof model === 'string' && typeof groupId === 'string') {
+            assignments[model] = groupId;
+          }
+        }
+        if (Object.keys(assignments).length > 0) {
+          providerConfig.modelAssignments = assignments;
+        }
+      }
+
+      // renamedGroups: Record<groupId, label>
+      if (config.renamedGroups && typeof config.renamedGroups === 'object') {
+        const renamed = {};
+        for (const [groupId, label] of Object.entries(config.renamedGroups)) {
+          if (typeof groupId === 'string' && typeof label === 'string') {
+            renamed[groupId] = label.slice(0, 128);
+          }
+        }
+        if (Object.keys(renamed).length > 0) {
+          providerConfig.renamedGroups = renamed;
+        }
+      }
+
+      if (Object.keys(providerConfig).length > 0) {
+        sanitized[providerId] = providerConfig;
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.usageModelGroups = sanitized;
+    }
   }
 
   return result;
@@ -1817,6 +1932,96 @@ const getUiSessionTokenFromRequest = (req) => {
   return null;
 };
 
+const TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW = 128;
+const TERMINAL_INPUT_WS_REBIND_WINDOW_MS = 60 * 1000;
+const TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS = 15 * 1000;
+
+const rejectWebSocketUpgrade = (socket, statusCode, reason) => {
+  if (!socket || socket.destroyed) {
+    return;
+  }
+
+  const message = typeof reason === 'string' && reason.trim().length > 0 ? reason.trim() : 'Bad Request';
+  const body = Buffer.from(message, 'utf8');
+  const statusText = {
+    400: 'Bad Request',
+    401: 'Unauthorized',
+    403: 'Forbidden',
+    404: 'Not Found',
+    500: 'Internal Server Error',
+  }[statusCode] || 'Bad Request';
+
+  try {
+    socket.write(
+      `HTTP/1.1 ${statusCode} ${statusText}\r\n` +
+      'Connection: close\r\n' +
+      'Content-Type: text/plain; charset=utf-8\r\n' +
+      `Content-Length: ${body.length}\r\n\r\n`
+    );
+    socket.write(body);
+  } catch {
+  }
+
+  try {
+    socket.destroy();
+  } catch {
+  }
+};
+
+
+const getRequestOriginCandidates = async (req) => {
+  const origins = new Set();
+  const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string'
+    ? req.headers['x-forwarded-proto'].split(',')[0].trim().toLowerCase()
+    : '';
+  const protocol = forwardedProto || (req.socket?.encrypted ? 'https' : 'http');
+
+  const forwardedHost = typeof req.headers['x-forwarded-host'] === 'string'
+    ? req.headers['x-forwarded-host'].split(',')[0].trim()
+    : '';
+  const host = forwardedHost || (typeof req.headers.host === 'string' ? req.headers.host.trim() : '');
+
+  if (host) {
+    origins.add(`${protocol}://${host}`);
+    const [hostname, port] = host.split(':');
+    const normalizedHost = typeof hostname === 'string' ? hostname.toLowerCase() : '';
+    const portSuffix = typeof port === 'string' && port.length > 0 ? `:${port}` : '';
+    if (normalizedHost === 'localhost') {
+      origins.add(`${protocol}://127.0.0.1${portSuffix}`);
+      origins.add(`${protocol}://[::1]${portSuffix}`);
+    } else if (normalizedHost === '127.0.0.1' || normalizedHost === '[::1]') {
+      origins.add(`${protocol}://localhost${portSuffix}`);
+    }
+  }
+
+  try {
+    const settings = await readSettingsFromDiskMigrated();
+    if (typeof settings?.publicOrigin === 'string' && settings.publicOrigin.trim().length > 0) {
+      origins.add(new URL(settings.publicOrigin.trim()).origin);
+    }
+  } catch {
+  }
+
+  return origins;
+};
+
+const isRequestOriginAllowed = async (req) => {
+  const originHeader = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : '';
+  if (!originHeader) {
+    return false;
+  }
+
+  let normalizedOrigin = '';
+  try {
+    normalizedOrigin = new URL(originHeader).origin;
+  } catch {
+    return false;
+  }
+
+  const allowedOrigins = await getRequestOriginCandidates(req);
+  return allowedOrigins.has(normalizedOrigin);
+};
+
 const normalizePushSubscriptions = (record) => {
   if (!Array.isArray(record)) return [];
   return record
@@ -1994,6 +2199,246 @@ const sessionActivityPhases = new Map(); // sessionId -> { phase: 'idle'|'busy'|
 const sessionActivityCooldowns = new Map(); // sessionId -> timeoutId
 const SESSION_COOLDOWN_DURATION_MS = 2000;
 
+// Complete session status tracking - source of truth for web clients
+// This maintains the authoritative state, clients only cache it
+const sessionStates = new Map(); // sessionId -> {
+//   status: 'idle'|'busy'|'retry',
+//   lastUpdateAt: number,
+//   lastEventId: string,
+//   metadata: { attempt?: number, message?: string, next?: number }
+// }
+const SESSION_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SESSION_STATE_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+
+const updateSessionState = (sessionId, status, eventId, metadata = {}) => {
+  if (!sessionId || typeof sessionId !== 'string') return;
+
+  const now = Date.now();
+  const existing = sessionStates.get(sessionId);
+
+  // Only update if this is a newer event (simple ordering protection)
+  if (existing && existing.lastUpdateAt > now - 5000 && status === existing.status) {
+    // Same status within 5 seconds, skip to reduce noise
+    return;
+  }
+
+  sessionStates.set(sessionId, {
+    status,
+    lastUpdateAt: now,
+    lastEventId: eventId || `server-${now}`,
+    metadata: { ...existing?.metadata, ...metadata }
+  });
+
+  // Update attention tracking state (must be called before broadcasting)
+  updateSessionAttentionStatus(sessionId, status, eventId);
+
+  // Broadcast status change to connected web clients via SSE
+  // This enables real-time updates without polling
+  // Include needsAttention in the same event to ensure atomic updates
+  if (uiNotificationClients.size > 0 && (!existing || existing.status !== status)) {
+    const state = sessionStates.get(sessionId);
+    const attentionState = sessionAttentionStates.get(sessionId);
+    for (const res of uiNotificationClients) {
+      try {
+        writeSseEvent(res, {
+          type: 'openchamber:session-status',
+          properties: {
+            sessionId,
+            status: state.status,
+            timestamp: state.lastUpdateAt,
+            metadata: state.metadata,
+            needsAttention: attentionState?.needsAttention ?? false
+          }
+        });
+      } catch {
+        // Client disconnected, will be cleaned up by close handler
+      }
+    }
+  }
+
+  // Also update activity phases for backward compatibility
+  const phase = status === 'busy' || status === 'retry' ? 'busy' : 'idle';
+  setSessionActivityPhase(sessionId, phase);
+};
+
+const getSessionStateSnapshot = () => {
+  const result = {};
+  const now = Date.now();
+
+  for (const [sessionId, data] of sessionStates) {
+    // Skip very old states (session likely gone)
+    if (now - data.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) continue;
+
+    result[sessionId] = {
+      status: data.status,
+      lastUpdateAt: data.lastUpdateAt,
+      metadata: data.metadata
+    };
+  }
+
+  return result;
+};
+
+const getSessionState = (sessionId) => {
+  if (!sessionId) return null;
+  return sessionStates.get(sessionId) || null;
+};
+
+// Session attention tracking - authoritative source for unread/needs-attention state
+// Tracks which sessions need user attention based on activity and view state
+const sessionAttentionStates = new Map(); // sessionId -> {
+//   needsAttention: boolean,
+//   lastUserMessageAt: number | null,
+//   lastStatusChangeAt: number,
+//   viewedByClients: Set<clientId>,
+//   status: 'idle' | 'busy' | 'retry'
+// }
+const SESSION_ATTENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const getOrCreateAttentionState = (sessionId) => {
+  if (!sessionId || typeof sessionId !== 'string') return null;
+
+  let state = sessionAttentionStates.get(sessionId);
+  if (!state) {
+    state = {
+      needsAttention: false,
+      lastUserMessageAt: null,
+      lastStatusChangeAt: Date.now(),
+      viewedByClients: new Set(),
+      status: 'idle'
+    };
+    sessionAttentionStates.set(sessionId, state);
+  }
+  return state;
+};
+
+const updateSessionAttentionStatus = (sessionId, status, eventId) => {
+  const state = getOrCreateAttentionState(sessionId);
+  if (!state) return;
+
+  const prevStatus = state.status;
+  state.status = status;
+  state.lastStatusChangeAt = Date.now();
+
+  // Check if we need to mark as needsAttention
+  // Condition: transitioning from busy/retry to idle + user sent message + not currently viewed
+  // Note: The actual broadcast with needsAttention is done in updateSessionState
+  // to ensure both status and attention are sent in a single event
+  if ((prevStatus === 'busy' || prevStatus === 'retry') && status === 'idle') {
+    if (state.lastUserMessageAt && state.viewedByClients.size === 0) {
+      state.needsAttention = true;
+    }
+  }
+};
+
+const markSessionViewed = (sessionId, clientId) => {
+  const state = getOrCreateAttentionState(sessionId);
+  if (!state) return;
+
+  const wasNeedsAttention = state.needsAttention;
+  state.viewedByClients.add(clientId);
+
+  // Clear needsAttention when viewed
+  if (wasNeedsAttention) {
+    state.needsAttention = false;
+
+    // Broadcast attention cleared event
+    if (uiNotificationClients.size > 0) {
+      for (const res of uiNotificationClients) {
+        try {
+          writeSseEvent(res, {
+            type: 'openchamber:session-status',
+            properties: {
+              sessionId,
+              status: state.status,
+              timestamp: Date.now(),
+              metadata: {},
+              needsAttention: false
+            }
+          });
+        } catch {
+          // Client disconnected
+        }
+      }
+    }
+  }
+};
+
+const markSessionUnviewed = (sessionId, clientId) => {
+  const state = sessionAttentionStates.get(sessionId);
+  if (!state) return;
+
+  state.viewedByClients.delete(clientId);
+};
+
+const markUserMessageSent = (sessionId) => {
+  const state = getOrCreateAttentionState(sessionId);
+  if (!state) return;
+
+  state.lastUserMessageAt = Date.now();
+};
+
+const getSessionAttentionSnapshot = () => {
+  const result = {};
+  const now = Date.now();
+
+  for (const [sessionId, state] of sessionAttentionStates) {
+    // Skip very old states
+    if (now - state.lastStatusChangeAt > SESSION_ATTENTION_MAX_AGE_MS) continue;
+
+    result[sessionId] = {
+      needsAttention: state.needsAttention,
+      lastUserMessageAt: state.lastUserMessageAt,
+      lastStatusChangeAt: state.lastStatusChangeAt,
+      status: state.status,
+      isViewed: state.viewedByClients.size > 0
+    };
+  }
+
+  return result;
+};
+
+const getSessionAttentionState = (sessionId) => {
+  if (!sessionId) return null;
+  const state = sessionAttentionStates.get(sessionId);
+  if (!state) return null;
+
+  return {
+    needsAttention: state.needsAttention,
+    lastUserMessageAt: state.lastUserMessageAt,
+    lastStatusChangeAt: state.lastStatusChangeAt,
+    status: state.status,
+    isViewed: state.viewedByClients.size > 0
+  };
+};
+
+const cleanupOldSessionStates = () => {
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const [sessionId, data] of sessionStates) {
+    if (now - data.lastUpdateAt > SESSION_STATE_MAX_AGE_MS) {
+      sessionStates.delete(sessionId);
+      cleaned++;
+    }
+  }
+
+  // Also cleanup attention states
+  for (const [sessionId, state] of sessionAttentionStates) {
+    if (now - state.lastStatusChangeAt > SESSION_ATTENTION_MAX_AGE_MS) {
+      sessionAttentionStates.delete(sessionId);
+      cleaned++;
+    }
+  }
+
+  if (cleaned > 0) {
+    console.info(`[SessionState] Cleaned up ${cleaned} old session states`);
+  }
+};
+
+// Start periodic cleanup
+setInterval(cleanupOldSessionStates, SESSION_STATE_CLEANUP_INTERVAL_MS);
+
 const setSessionActivityPhase = (sessionId, phase) => {
   if (!sessionId || typeof sessionId !== 'string') return false;
 
@@ -2168,6 +2613,7 @@ let openCodeNotReadySince = 0;
 let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
+let terminalInputWsServer = null;
 
 // Sync helper - call after modifying any HMR state variable
 const syncToHmrState = () => {
@@ -2208,6 +2654,7 @@ async function isOpenCodeProcessHealthy() {
   try {
     const response = await fetch(`http://127.0.0.1:${openCodePort}/session`, {
       method: 'GET',
+      headers: getOpenCodeAuthHeaders(),
       signal: AbortSignal.timeout(2000),
     });
     return response.ok;
@@ -2232,6 +2679,28 @@ const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
                                     process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
 const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
 
+// OpenCode server authentication (Basic Auth with username "opencode")
+const ENV_OPENCODE_SERVER_PASSWORD = (() => {
+  const pwd = process.env.OPENCODE_SERVER_PASSWORD;
+  return typeof pwd === 'string' && pwd.length > 0 ? pwd : null;
+})();
+
+/**
+ * Returns auth headers for OpenCode server requests if OPENCODE_SERVER_PASSWORD is set.
+ * Uses Basic Auth with username "opencode" and the password from the env variable.
+ */
+function getOpenCodeAuthHeaders() {
+  // Re-read from env each time in case it wasn't set at module load (HMR issue)
+  const password = ENV_OPENCODE_SERVER_PASSWORD || process.env.OPENCODE_SERVER_PASSWORD;
+  
+  if (!password) {
+    return {};
+  }
+  
+  const credentials = Buffer.from(`opencode:${password}`).toString('base64');
+  return { Authorization: `Basic ${credentials}` };
+}
+
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
@@ -2241,6 +2710,477 @@ const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
 }
 
 let globalEventWatcherAbortController = null;
+
+let resolvedOpencodeBinary = null;
+let resolvedOpencodeBinarySource = null;
+let resolvedNodeBinary = null;
+let resolvedBunBinary = null;
+
+function isExecutable(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return false;
+    if (process.platform === 'win32') {
+      const ext = path.extname(filePath).toLowerCase();
+      if (!ext) return true;
+      return ['.exe', '.cmd', '.bat', '.com'].includes(ext);
+    }
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function prependToPath(dir) {
+  const trimmed = typeof dir === 'string' ? dir.trim() : '';
+  if (!trimmed) return;
+  const current = process.env.PATH || '';
+  const parts = current.split(path.delimiter).filter(Boolean);
+  if (parts.includes(trimmed)) return;
+  process.env.PATH = [trimmed, ...parts].join(path.delimiter);
+}
+
+function searchPathFor(binaryName) {
+  const current = process.env.PATH || '';
+  const parts = current.split(path.delimiter).filter(Boolean);
+  for (const dir of parts) {
+    const candidate = path.join(dir, binaryName);
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveOpencodeCliPath() {
+  const explicit = [
+    process.env.OPENCODE_BINARY,
+    process.env.OPENCODE_PATH,
+    process.env.OPENCHAMBER_OPENCODE_PATH,
+    process.env.OPENCHAMBER_OPENCODE_BIN,
+  ]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean);
+
+  for (const candidate of explicit) {
+    if (isExecutable(candidate)) {
+      resolvedOpencodeBinarySource = 'env';
+      return candidate;
+    }
+  }
+
+  const resolvedFromPath = searchPathFor('opencode');
+  if (resolvedFromPath) {
+    resolvedOpencodeBinarySource = 'path';
+    return resolvedFromPath;
+  }
+
+  const home = os.homedir();
+  const unixFallbacks = [
+    path.join(home, '.opencode', 'bin', 'opencode'),
+    path.join(home, '.bun', 'bin', 'opencode'),
+    path.join(home, '.local', 'bin', 'opencode'),
+    path.join(home, 'bin', 'opencode'),
+    '/opt/homebrew/bin/opencode',
+    '/usr/local/bin/opencode',
+    '/usr/bin/opencode',
+    '/bin/opencode',
+  ];
+
+  const winFallbacks = (() => {
+    const userProfile = process.env.USERPROFILE || home;
+    const appData = process.env.APPDATA || '';
+    const localAppData = process.env.LOCALAPPDATA || '';
+    const programData = process.env.ProgramData || 'C:\\ProgramData';
+
+    return [
+      path.join(userProfile, '.opencode', 'bin', 'opencode.exe'),
+      path.join(userProfile, '.opencode', 'bin', 'opencode.cmd'),
+      path.join(appData, 'npm', 'opencode.cmd'),
+      path.join(userProfile, 'scoop', 'shims', 'opencode.cmd'),
+      path.join(programData, 'chocolatey', 'bin', 'opencode.exe'),
+      path.join(programData, 'chocolatey', 'bin', 'opencode.cmd'),
+      path.join(userProfile, '.bun', 'bin', 'opencode.exe'),
+      path.join(userProfile, '.bun', 'bin', 'opencode.cmd'),
+      localAppData ? path.join(localAppData, 'Programs', 'opencode', 'opencode.exe') : '',
+    ].filter(Boolean);
+  })();
+
+  const fallbacks = process.platform === 'win32' ? winFallbacks : unixFallbacks;
+  for (const candidate of fallbacks) {
+    if (isExecutable(candidate)) {
+      resolvedOpencodeBinarySource = 'fallback';
+      return candidate;
+    }
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const result = spawnSync('where', ['opencode'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const lines = (result.stdout || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const found = lines.find((line) => isExecutable(line));
+        if (found) {
+          resolvedOpencodeBinarySource = 'where';
+          return found;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
+  for (const shell of shells) {
+    if (!isExecutable(shell)) continue;
+    try {
+      const result = spawnSync(shell, ['-lic', 'command -v opencode'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const found = (result.stdout || '').trim().split(/\s+/).pop() || '';
+        if (found && isExecutable(found)) {
+          resolvedOpencodeBinarySource = 'shell';
+          return found;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function resolveNodeCliPath() {
+  const explicit = [process.env.NODE_BINARY, process.env.OPENCHAMBER_NODE_BINARY]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean);
+
+  for (const candidate of explicit) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  const resolvedFromPath = searchPathFor('node');
+  if (resolvedFromPath) {
+    return resolvedFromPath;
+  }
+
+  const unixFallbacks = [
+    '/opt/homebrew/bin/node',
+    '/usr/local/bin/node',
+    '/usr/bin/node',
+    '/bin/node',
+  ];
+  for (const candidate of unixFallbacks) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (process.platform === 'win32') {
+    try {
+      const result = spawnSync('where', ['node'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const lines = (result.stdout || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const found = lines.find((line) => isExecutable(line));
+        if (found) return found;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
+  for (const shell of shells) {
+    if (!isExecutable(shell)) continue;
+    try {
+      const result = spawnSync(shell, ['-lic', 'command -v node'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const found = (result.stdout || '').trim().split(/\s+/).pop() || '';
+        if (found && isExecutable(found)) {
+          return found;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function resolveBunCliPath() {
+  const explicit = [process.env.BUN_BINARY, process.env.OPENCHAMBER_BUN_BINARY]
+    .map((v) => (typeof v === 'string' ? v.trim() : ''))
+    .filter(Boolean);
+
+  for (const candidate of explicit) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  const resolvedFromPath = searchPathFor('bun');
+  if (resolvedFromPath) {
+    return resolvedFromPath;
+  }
+
+  const home = os.homedir();
+  const unixFallbacks = [
+    path.join(home, '.bun', 'bin', 'bun'),
+    '/opt/homebrew/bin/bun',
+    '/usr/local/bin/bun',
+    '/usr/bin/bun',
+    '/bin/bun',
+  ];
+  for (const candidate of unixFallbacks) {
+    if (isExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (process.platform === 'win32') {
+    const userProfile = process.env.USERPROFILE || home;
+    const winFallbacks = [
+      path.join(userProfile, '.bun', 'bin', 'bun.exe'),
+      path.join(userProfile, '.bun', 'bin', 'bun.cmd'),
+    ];
+    for (const candidate of winFallbacks) {
+      if (isExecutable(candidate)) return candidate;
+    }
+
+    try {
+      const result = spawnSync('where', ['bun'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const lines = (result.stdout || '')
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        const found = lines.find((line) => isExecutable(line));
+        if (found) return found;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  const shells = [process.env.SHELL, '/bin/zsh', '/bin/bash', '/bin/sh'].filter(Boolean);
+  for (const shell of shells) {
+    if (!isExecutable(shell)) continue;
+    try {
+      const result = spawnSync(shell, ['-lic', 'command -v bun'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      if (result.status === 0) {
+        const found = (result.stdout || '').trim().split(/\s+/).pop() || '';
+        if (found && isExecutable(found)) {
+          return found;
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  return null;
+}
+
+function ensureBunCliEnv() {
+  if (resolvedBunBinary) {
+    return resolvedBunBinary;
+  }
+
+  const resolved = resolveBunCliPath();
+  if (resolved) {
+    prependToPath(path.dirname(resolved));
+    resolvedBunBinary = resolved;
+    return resolved;
+  }
+
+  return null;
+}
+
+function ensureNodeCliEnv() {
+  if (resolvedNodeBinary) {
+    return resolvedNodeBinary;
+  }
+
+  const resolved = resolveNodeCliPath();
+  if (resolved) {
+    prependToPath(path.dirname(resolved));
+    resolvedNodeBinary = resolved;
+    return resolved;
+  }
+
+  return null;
+}
+
+function readShebang(opencodePath) {
+  if (!opencodePath || typeof opencodePath !== 'string') {
+    return null;
+  }
+  try {
+    // Best effort: detect "#!/usr/bin/env <runtime>" without reading whole file.
+    const fd = fs.openSync(opencodePath, 'r');
+    try {
+      const buf = Buffer.alloc(256);
+      const bytes = fs.readSync(fd, buf, 0, buf.length, 0);
+      const head = buf.subarray(0, bytes).toString('utf8');
+      const firstLine = head.split(/\r?\n/, 1)[0] || '';
+      if (!firstLine.startsWith('#!')) {
+        return null;
+      }
+      const shebang = firstLine.slice(2).trim();
+      if (!shebang) {
+        return null;
+      }
+      return shebang;
+    } finally {
+      try {
+        fs.closeSync(fd);
+      } catch {
+        // ignore
+      }
+    }
+  } catch {
+    return null;
+  }
+}
+
+function opencodeShimInterpreter(opencodePath) {
+  const shebang = readShebang(opencodePath);
+  if (!shebang) return null;
+  if (/\bnode\b/i.test(shebang)) return 'node';
+  if (/\bbun\b/i.test(shebang)) return 'bun';
+  return null;
+}
+
+function ensureOpencodeShimRuntime(opencodePath) {
+  const runtime = opencodeShimInterpreter(opencodePath);
+  if (runtime === 'node') {
+    ensureNodeCliEnv();
+  }
+  if (runtime === 'bun') {
+    ensureBunCliEnv();
+  }
+}
+
+function normalizeOpencodeBinarySetting(raw) {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const trimmed = normalizeDirectoryPath(raw).trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  try {
+    const stat = fs.statSync(trimmed);
+    if (stat.isDirectory()) {
+      const bin = process.platform === 'win32' ? 'opencode.exe' : 'opencode';
+      return path.join(trimmed, bin);
+    }
+  } catch {
+    // ignore
+  }
+
+  return trimmed;
+}
+
+async function applyOpencodeBinaryFromSettings() {
+  try {
+    const settings = await readSettingsFromDiskMigrated();
+    if (!settings || typeof settings !== 'object') {
+      return null;
+    }
+    if (!Object.prototype.hasOwnProperty.call(settings, 'opencodeBinary')) {
+      return null;
+    }
+
+    const normalized = normalizeOpencodeBinarySetting(settings.opencodeBinary);
+
+    if (normalized === '') {
+      delete process.env.OPENCODE_BINARY;
+      resolvedOpencodeBinary = null;
+      resolvedOpencodeBinarySource = null;
+      return null;
+    }
+
+    if (normalized && isExecutable(normalized)) {
+      process.env.OPENCODE_BINARY = normalized;
+      prependToPath(path.dirname(normalized));
+      resolvedOpencodeBinary = normalized;
+      resolvedOpencodeBinarySource = 'settings';
+      ensureOpencodeShimRuntime(normalized);
+      return normalized;
+    }
+
+    const raw = typeof settings.opencodeBinary === 'string' ? settings.opencodeBinary.trim() : '';
+    if (raw) {
+      console.warn(`Configured settings.opencodeBinary is not executable: ${raw}`);
+    }
+  } catch {
+    // ignore
+  }
+
+  return null;
+}
+
+function ensureOpencodeCliEnv() {
+  if (resolvedOpencodeBinary) {
+    ensureOpencodeShimRuntime(resolvedOpencodeBinary);
+    return resolvedOpencodeBinary;
+  }
+
+  const existing = typeof process.env.OPENCODE_BINARY === 'string' ? process.env.OPENCODE_BINARY.trim() : '';
+  if (existing && isExecutable(existing)) {
+    resolvedOpencodeBinary = existing;
+    resolvedOpencodeBinarySource = resolvedOpencodeBinarySource || 'env';
+    prependToPath(path.dirname(existing));
+    ensureOpencodeShimRuntime(existing);
+    return resolvedOpencodeBinary;
+  }
+
+  const resolved = resolveOpencodeCliPath();
+  if (resolved) {
+    process.env.OPENCODE_BINARY = resolved;
+    prependToPath(path.dirname(resolved));
+    ensureOpencodeShimRuntime(resolved);
+    resolvedOpencodeBinary = resolved;
+    resolvedOpencodeBinarySource = resolvedOpencodeBinarySource || 'unknown';
+    console.log(`Resolved opencode CLI: ${resolved}`);
+    return resolved;
+  }
+
+  return null;
+}
 
 const startGlobalEventWatcher = async () => {
   if (globalEventWatcherAbortController) {
@@ -2266,6 +3206,7 @@ const startGlobalEventWatcher = async () => {
             Accept: 'text/event-stream',
             'Cache-Control': 'no-cache',
             Connection: 'keep-alive',
+            ...getOpenCodeAuthHeaders(),
           },
           signal,
         });
@@ -2288,10 +3229,11 @@ const startGlobalEventWatcher = async () => {
 
           buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
-          let separatorIndex;
-          while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+          let separatorIndex = buffer.indexOf('\n\n');
+          while (separatorIndex !== -1) {
             const block = buffer.slice(0, separatorIndex);
             buffer = buffer.slice(separatorIndex + 2);
+            separatorIndex = buffer.indexOf('\n\n');
             const payload = parseSseDataPayload(block);
             // Cache session titles from session.updated/session.created events
             maybeCacheSessionInfoFromEvent(payload);
@@ -2301,6 +3243,21 @@ const startGlobalEventWatcher = async () => {
             if (transitions && transitions.length > 0) {
               for (const activity of transitions) {
                 setSessionActivityPhase(activity.sessionId, activity.phase);
+              }
+            }
+
+            // Update authoritative session state from OpenCode events
+            if (payload && payload.type === 'session.status') {
+              const status = payload.properties?.status;
+              const sessionId = payload.properties?.sessionID ?? payload.properties?.sessionId;
+              const eventId = payload.properties?.eventId || `sse-${Date.now()}`;
+
+              if (typeof sessionId === 'string' && status?.type) {
+                updateSessionState(sessionId, status.type, eventId, {
+                  attempt: status.attempt,
+                  message: status.message,
+                  next: status.next
+                });
               }
             }
           }
@@ -2450,7 +3407,10 @@ async function waitForReady(url, timeoutMs = 10000) {
       const timeout = setTimeout(() => controller.abort(), 3000);
       const res = await fetch(`${url.replace(/\/+$/, '')}/global/health`, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          ...getOpenCodeAuthHeaders(),
+        },
         signal: controller.signal
       });
       clearTimeout(timeout);
@@ -2709,7 +3669,10 @@ const fetchSessionParentId = async (sessionId) => {
   try {
     const response = await fetch(buildOpenCodeUrl('/session', ''), {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...getOpenCodeAuthHeaders(),
+       },
       signal: AbortSignal.timeout(2000),
     });
     if (!response.ok) {
@@ -3250,6 +4213,9 @@ async function startOpenCode() {
   );
   // Note: SDK starts in current process CWD. openCodeWorkingDirectory is tracked but not used for spawn in SDK.
 
+  await applyOpencodeBinaryFromSettings();
+  ensureOpencodeCliEnv();
+
   try {
     const serverInstance = await createOpencodeServer({
       hostname: '127.0.0.1',
@@ -3287,10 +4253,11 @@ async function startOpenCode() {
       throw new Error('Server started but health check failed (timeout)');
     }
   } catch (error) {
-    lastOpenCodeError = error.message;
+    const message = error instanceof Error ? error.message : String(error);
+    lastOpenCodeError = message;
     openCodePort = null;
     syncToHmrState();
-    console.error(`Failed to start OpenCode: ${error.message}`);
+    console.error(`Failed to start OpenCode: ${message}`);
     throw error;
   }
 }
@@ -3383,11 +4350,11 @@ async function waitForOpenCodeReady(timeoutMs = 20000, intervalMs = 400) {
       const [configResult, agentResult] = await Promise.all([
         fetch(buildOpenCodeUrl('/config', ''), {
           method: 'GET',
-          headers: { Accept: 'application/json' }
+          headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
         }).catch((error) => error),
         fetch(buildOpenCodeUrl('/agent', ''), {
           method: 'GET',
-          headers: { Accept: 'application/json' }
+          headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
         }).catch((error) => error)
       ]);
 
@@ -3450,7 +4417,7 @@ async function waitForAgentPresence(agentName, timeoutMs = 15000, intervalMs = 3
     try {
       const response = await fetch(buildOpenCodeUrl('/agent'), {
         method: 'GET',
-        headers: { Accept: 'application/json' }
+        headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
       });
 
       if (response.ok) {
@@ -3476,7 +4443,7 @@ async function fetchAgentsSnapshot() {
 
   const response = await fetch(buildOpenCodeUrl('/agent'), {
     method: 'GET',
-    headers: { Accept: 'application/json' }
+    headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
   });
 
   if (!response.ok) {
@@ -3497,7 +4464,7 @@ async function fetchProvidersSnapshot() {
 
   const response = await fetch(buildOpenCodeUrl('/provider'), {
     method: 'GET',
-    headers: { Accept: 'application/json' }
+    headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
   });
 
   if (!response.ok) {
@@ -3518,7 +4485,7 @@ async function fetchModelsSnapshot() {
 
   const response = await fetch(buildOpenCodeUrl('/model'), {
     method: 'GET',
-    headers: { Accept: 'application/json' }
+    headers: { Accept: 'application/json',  ...getOpenCodeAuthHeaders()  }
   });
 
   if (!response.ok) {
@@ -3536,6 +4503,11 @@ async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
   const { agentName } = options;
 
   console.log(`Refreshing OpenCode after ${reason}`);
+
+  // Settings might include a new opencodeBinary; drop cache before restart.
+  resolvedOpencodeBinary = null;
+  await applyOpencodeBinaryFromSettings();
+
   await restartOpenCode();
 
   try {
@@ -3559,13 +4531,15 @@ async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
 }
 
 function setupProxy(app) {
-  if (!openCodePort) return;
-
   if (app.get('opencodeProxyConfigured')) {
     return;
   }
 
-  console.log(`Setting up proxy to OpenCode on port ${openCodePort}`);
+  if (openCodePort) {
+    console.log(`Setting up proxy to OpenCode on port ${openCodePort}`);
+  } else {
+    console.log('Setting up OpenCode API gate (OpenCode not started yet)');
+  }
   app.set('opencodeProxyConfigured', true);
 
   app.use('/api', (req, res, next) => {
@@ -3573,6 +4547,7 @@ function setupProxy(app) {
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/push') ||
       req.path.startsWith('/config/agents') ||
+      req.path.startsWith('/config/opencode-resolution') ||
       req.path.startsWith('/config/settings') ||
       req.path.startsWith('/config/skills') ||
       req.path === '/config/reload' ||
@@ -3606,6 +4581,7 @@ function setupProxy(app) {
     if (
       req.path.startsWith('/themes/custom') ||
       req.path.startsWith('/config/agents') ||
+      req.path.startsWith('/config/opencode-resolution') ||
       req.path.startsWith('/config/settings') ||
       req.path.startsWith('/config/skills') ||
       req.path === '/health'
@@ -3615,6 +4591,7 @@ function setupProxy(app) {
     console.log(`API → OpenCode: ${req.method} ${req.path}`);
     next();
   });
+
 
   const proxyMiddleware = createProxyMiddleware({
     target: openCodePort ? `http://localhost:${openCodePort}` : 'http://127.0.0.1:0',
@@ -3634,37 +4611,44 @@ function setupProxy(app) {
 
       return suffix;
     },
-    ws: true,
-    onError: (err, req, res) => {
-      console.error(`Proxy error: ${err.message}`);
-      if (!res.headersSent) {
-        res.status(503).json({ error: 'OpenCode service unavailable' });
+    ws: false,
+    // v3.x API: callbacks go in 'on' object
+    on: {
+      error: (err, req, res) => {
+        console.error(`Proxy error: ${err.message}`);
+        if (!res.headersSent) {
+          res.status(503).json({ error: 'OpenCode service unavailable' });
+        }
+      },
+      proxyReq: (proxyReq, req, res) => {
+        console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
+        const authHeaders = getOpenCodeAuthHeaders();
+        if (authHeaders.Authorization) {
+          proxyReq.setHeader('Authorization', authHeaders.Authorization);
+        }
+
+        if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
+          proxyReq.setHeader('Accept', 'text/event-stream');
+          proxyReq.setHeader('Cache-Control', 'no-cache');
+          proxyReq.setHeader('Connection', 'keep-alive');
+        }
+      },
+      proxyRes: (proxyRes, req, res) => {
+        // Strip WWW-Authenticate to prevent browser's native Basic Auth popup
+        if (proxyRes.headers['www-authenticate']) {
+          delete proxyRes.headers['www-authenticate'];
+        }
+
+        if (req.url?.includes('/event')) {
+          proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+          proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
+          proxyRes.headers['Content-Type'] = 'text/event-stream';
+          proxyRes.headers['Cache-Control'] = 'no-cache';
+          proxyRes.headers['Connection'] = 'keep-alive';
+          proxyRes.headers['X-Accel-Buffering'] = 'no';
+          proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
+        }
       }
-    },
-    onProxyReq: (proxyReq, req, res) => {
-      console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
-
-      if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
-        console.log(`[SSE] Setting up SSE proxy for ${req.method} ${req.path}`);
-        proxyReq.setHeader('Accept', 'text/event-stream');
-        proxyReq.setHeader('Cache-Control', 'no-cache');
-        proxyReq.setHeader('Connection', 'keep-alive');
-      }
-    },
-    onProxyRes: (proxyRes, req, res) => {
-      if (req.url?.includes('/event')) {
-        console.log(`[SSE] Proxy response for ${req.method} ${req.url} - Status: ${proxyRes.statusCode}`);
-        proxyRes.headers['Access-Control-Allow-Origin'] = '*';
-        proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
-        proxyRes.headers['Content-Type'] = 'text/event-stream';
-        proxyRes.headers['Cache-Control'] = 'no-cache';
-        proxyRes.headers['Connection'] = 'keep-alive';
-
-        proxyRes.headers['X-Accel-Buffering'] = 'no';
-        proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
-      }
-
-
     }
   });
 
@@ -3703,6 +4687,24 @@ async function gracefulShutdown(options = {}) {
 
   if (healthCheckInterval) {
     clearInterval(healthCheckInterval);
+  }
+
+  if (terminalInputWsServer) {
+    try {
+      for (const client of terminalInputWsServer.clients) {
+        try {
+          client.terminate();
+        } catch {
+        }
+      }
+
+      await new Promise((resolve) => {
+        terminalInputWsServer.close(() => resolve());
+      });
+    } catch {
+    } finally {
+      terminalInputWsServer = null;
+    }
   }
 
   // Only stop OpenCode if we started it ourselves (not when using external server)
@@ -3782,7 +4784,12 @@ async function main(options = {}) {
       openCodeApiPrefix: '',
       openCodeApiPrefixDetected: true,
       isOpenCodeReady,
-      lastOpenCodeError
+      lastOpenCodeError,
+      opencodeBinaryResolved: resolvedOpencodeBinary || null,
+      opencodeBinarySource: resolvedOpencodeBinarySource || null,
+      opencodeShimInterpreter: resolvedOpencodeBinary ? opencodeShimInterpreter(resolvedOpencodeBinary) : null,
+      nodeBinaryResolved: resolvedNodeBinary || null,
+      bunBinaryResolved: resolvedBunBinary || null,
     });
   });
 
@@ -3960,6 +4967,114 @@ async function main(options = {}) {
     res.json(getSessionActivitySnapshot());
   });
 
+  // New authoritative session status endpoints
+  // Server maintains the source of truth, clients only query
+
+  // GET /api/sessions/snapshot - Combined status + attention snapshot
+  app.get('/api/sessions/snapshot', (_req, res) => {
+    res.json({
+      statusSessions: getSessionStateSnapshot(),
+      attentionSessions: getSessionAttentionSnapshot(),
+      serverTime: Date.now()
+    });
+  });
+
+  // GET /api/sessions/status - Get status for all sessions
+  app.get('/api/sessions/status', (_req, res) => {
+    const snapshot = getSessionStateSnapshot();
+    res.json({
+      sessions: snapshot,
+      serverTime: Date.now()
+    });
+  });
+
+  // GET /api/sessions/:id/status - Get status for a specific session
+  app.get('/api/sessions/:id/status', (req, res) => {
+    const sessionId = req.params.id;
+    const state = getSessionState(sessionId);
+
+    if (!state) {
+      return res.status(404).json({
+        error: 'Session not found or no state available',
+        sessionId
+      });
+    }
+
+    res.json({
+      sessionId,
+      ...state
+    });
+  });
+
+  // Session attention tracking endpoints
+  // GET /api/sessions/attention - Get attention state for all sessions
+  app.get('/api/sessions/attention', (_req, res) => {
+    const snapshot = getSessionAttentionSnapshot();
+    res.json({
+      sessions: snapshot,
+      serverTime: Date.now()
+    });
+  });
+
+  // GET /api/sessions/:id/attention - Get attention state for a specific session
+  app.get('/api/sessions/:id/attention', (req, res) => {
+    const sessionId = req.params.id;
+    const state = getSessionAttentionState(sessionId);
+
+    if (!state) {
+      return res.status(404).json({
+        error: 'Session not found or no attention state available',
+        sessionId
+      });
+    }
+
+    res.json({
+      sessionId,
+      ...state
+    });
+  });
+
+  // POST /api/sessions/:id/view - Client reports viewing this session
+  app.post('/api/sessions/:id/view', (req, res) => {
+    const sessionId = req.params.id;
+    const clientId = req.headers['x-client-id'] || req.ip || 'anonymous';
+
+    markSessionViewed(sessionId, clientId);
+
+    res.json({
+      success: true,
+      sessionId,
+      viewed: true
+    });
+  });
+
+  // POST /api/sessions/:id/unview - Client reports leaving this session
+  app.post('/api/sessions/:id/unview', (req, res) => {
+    const sessionId = req.params.id;
+    const clientId = req.headers['x-client-id'] || req.ip || 'anonymous';
+
+    markSessionUnviewed(sessionId, clientId);
+
+    res.json({
+      success: true,
+      sessionId,
+      viewed: false
+    });
+  });
+
+  // POST /api/sessions/:id/message-sent - User sent a message in this session
+  app.post('/api/sessions/:id/message-sent', (req, res) => {
+    const sessionId = req.params.id;
+
+    markUserMessageSent(sessionId);
+
+    res.json({
+      success: true,
+      sessionId,
+      messageSent: true
+    });
+  });
+
   app.get('/api/openchamber/update-check', async (_req, res) => {
     try {
       const { checkForUpdates } = await import('./lib/package-manager.js');
@@ -4123,7 +5238,8 @@ async function main(options = {}) {
     const headers = {
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
-      Connection: 'keep-alive'
+      Connection: 'keep-alive',
+      ...getOpenCodeAuthHeaders(),
     };
 
     const lastEventId = req.header('Last-Event-ID');
@@ -4209,11 +5325,12 @@ async function main(options = {}) {
         if (done) break;
         buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
-        let separatorIndex;
-        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+        let separatorIndex = buffer.indexOf('\n\n');
+        while (separatorIndex !== -1) {
           const block = buffer.slice(0, separatorIndex);
           buffer = buffer.slice(separatorIndex + 2);
           forwardBlock(block);
+          separatorIndex = buffer.indexOf('\n\n');
         }
       }
 
@@ -4256,7 +5373,8 @@ async function main(options = {}) {
     const headers = {
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
-      Connection: 'keep-alive'
+      Connection: 'keep-alive',
+      ...getOpenCodeAuthHeaders(),
     };
 
     const lastEventId = req.header('Last-Event-ID');
@@ -4335,11 +5453,12 @@ async function main(options = {}) {
         if (done) break;
         buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
 
-        let separatorIndex;
-        while ((separatorIndex = buffer.indexOf('\n\n')) !== -1) {
+        let separatorIndex = buffer.indexOf('\n\n');
+        while (separatorIndex !== -1) {
           const block = buffer.slice(0, separatorIndex);
           buffer = buffer.slice(separatorIndex + 2);
           forwardBlock(block);
+          separatorIndex = buffer.indexOf('\n\n');
         }
       }
 
@@ -4368,6 +5487,50 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to load settings:', error);
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to load settings' });
+    }
+  });
+
+  app.get('/api/config/opencode-resolution', async (_req, res) => {
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const configured = typeof settings?.opencodeBinary === 'string' ? settings.opencodeBinary : null;
+
+      const previousSource = resolvedOpencodeBinarySource;
+      const detectedNow = resolveOpencodeCliPath();
+      const rawDetectedSourceNow = resolvedOpencodeBinarySource;
+      resolvedOpencodeBinarySource = previousSource;
+
+      // Best-effort: apply configured override (if any) and resolve.
+      await applyOpencodeBinaryFromSettings();
+      ensureOpencodeCliEnv();
+
+      const resolved = resolvedOpencodeBinary || null;
+      const source = resolvedOpencodeBinarySource || null;
+      const detectedSourceNow =
+        detectedNow &&
+        resolved &&
+        detectedNow === resolved &&
+        rawDetectedSourceNow === 'env' &&
+        source &&
+        source !== 'env'
+          ? source
+          : rawDetectedSourceNow;
+      const shim = resolved ? opencodeShimInterpreter(resolved) : null;
+
+      res.json({
+        configured,
+        resolved,
+        resolvedDir: resolved ? path.dirname(resolved) : null,
+        source,
+        detectedNow,
+        detectedSourceNow,
+        shim,
+        node: resolvedNodeBinary || null,
+        bun: resolvedBunBinary || null,
+      });
+    } catch (error) {
+      console.error('Failed to build opencode resolution snapshot:', error);
+      res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to build snapshot' });
     }
   });
 
@@ -5468,31 +6631,38 @@ async function main(options = {}) {
         return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
       }
 
-      // Find PR for this branch (same-repo assumption)
-      const list = await octokit.rest.pulls.list({
-        owner: repo.owner,
-        repo: repo.repo,
-        state: 'open',
-        head: `${repo.owner}:${branch}`,
-        per_page: 10,
-      });
+       const listByHead = async (state) => {
+         const resp = await octokit.rest.pulls.list({
+           owner: repo.owner,
+           repo: repo.repo,
+           state,
+           head: `${repo.owner}:${branch}`,
+           per_page: 10,
+         });
+         return Array.isArray(resp?.data) ? resp.data[0] : null;
+       };
 
-      let first = Array.isArray(list?.data) ? list.data[0] : null;
+       const listByHeadRef = async (state) => {
+         const resp = await octokit.rest.pulls.list({
+           owner: repo.owner,
+           repo: repo.repo,
+           state,
+           per_page: 100,
+         });
+         const matches = Array.isArray(resp?.data)
+           ? resp.data.filter((pr) => pr?.head?.ref === branch)
+           : [];
+         return matches[0] ?? null;
+       };
 
-      // Fork PR support: head owner != base owner. If no PR found via head filter,
-      // fall back to listing open PRs and matching by head ref name.
-      if (!first) {
-        const openList = await octokit.rest.pulls.list({
-          owner: repo.owner,
-          repo: repo.repo,
-          state: 'open',
-          per_page: 100,
-        });
-        const matches = Array.isArray(openList?.data)
-          ? openList.data.filter((pr) => pr?.head?.ref === branch)
-          : [];
-        first = matches[0] ?? null;
-      }
+       // PR status by branch:
+       // - Prefer open PRs.
+       // - If none, also surface closed/merged PRs.
+       // - Fork PR support: head owner != base owner -> head filter yields empty; fall back to matching head.ref.
+       let first = await listByHead('open');
+       if (!first) first = await listByHead('closed');
+       if (!first) first = await listByHeadRef('open');
+       if (!first) first = await listByHeadRef('closed');
       if (!first) {
         return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
       }
@@ -5588,7 +6758,8 @@ async function main(options = {}) {
         canMerge = false;
       }
 
-      const mergedState = prData.merged ? 'merged' : (prData.state === 'closed' ? 'closed' : 'open');
+       const isMerged = Boolean(prData.merged || prData.merged_at);
+       const mergedState = isMerged ? 'merged' : (prData.state === 'closed' ? 'closed' : 'open');
 
       return res.json({
         connected: true,
@@ -5597,6 +6768,7 @@ async function main(options = {}) {
         pr: {
           number: prData.number,
           title: prData.title,
+          body: prData.body || '',
           url: prData.html_url,
           state: mergedState,
           draft: Boolean(prData.draft),
@@ -5662,6 +6834,7 @@ async function main(options = {}) {
       return res.json({
         number: pr.number,
         title: pr.title,
+        body: pr.body || '',
         url: pr.html_url,
         state: pr.state === 'closed' ? 'closed' : 'open',
         draft: Boolean(pr.draft),
@@ -5674,6 +6847,82 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to create GitHub PR:', error);
       return res.status(500).json({ error: error.message || 'Failed to create GitHub PR' });
+    }
+  });
+
+  app.post('/api/github/pr/update', async (req, res) => {
+    try {
+      const directory = typeof req.body?.directory === 'string' ? req.body.directory.trim() : '';
+      const number = typeof req.body?.number === 'number' ? req.body.number : null;
+      const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+      const body = typeof req.body?.body === 'string' ? req.body.body : undefined;
+      if (!directory || !number || !title) {
+        return res.status(400).json({ error: 'directory, number, title are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ error: 'GitHub not connected' });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
+      }
+
+      let updated;
+      try {
+        updated = await octokit.rest.pulls.update({
+          owner: repo.owner,
+          repo: repo.repo,
+          pull_number: number,
+          title,
+          ...(typeof body === 'string' ? { body } : {}),
+        });
+      } catch (error) {
+        if (error?.status === 401) {
+          return res.status(401).json({ error: 'GitHub not connected' });
+        }
+        if (error?.status === 403) {
+          return res.status(403).json({ error: 'Not authorized to edit this PR' });
+        }
+        if (error?.status === 404) {
+          return res.status(404).json({ error: 'PR not found in this repository' });
+        }
+        if (error?.status === 422) {
+          const apiMessage = error?.response?.data?.message;
+          const firstError = Array.isArray(error?.response?.data?.errors) && error.response.data.errors.length > 0
+            ? (error.response.data.errors[0]?.message || error.response.data.errors[0]?.code)
+            : null;
+          const message = [apiMessage, firstError].filter(Boolean).join(' · ') || 'Invalid PR update payload';
+          return res.status(422).json({ error: message });
+        }
+        throw error;
+      }
+
+      const pr = updated?.data;
+      if (!pr) {
+        return res.status(500).json({ error: 'Failed to update PR' });
+      }
+
+      return res.json({
+        number: pr.number,
+        title: pr.title,
+        body: pr.body || '',
+        url: pr.html_url,
+        state: pr.merged_at ? 'merged' : (pr.state === 'closed' ? 'closed' : 'open'),
+        draft: Boolean(pr.draft),
+        base: pr.base?.ref,
+        head: pr.head?.ref,
+        headSha: pr.head?.sha,
+        mergeable: pr.mergeable,
+        mergeableState: pr.mergeable_state,
+      });
+    } catch (error) {
+      console.error('Failed to update GitHub PR:', error);
+      return res.status(500).json({ error: error.message || 'Failed to update GitHub PR' });
     }
   });
 
@@ -6121,6 +7370,7 @@ async function main(options = {}) {
           const checkRuns = Array.isArray(runs?.data?.check_runs) ? runs.data.check_runs : [];
           if (checkRuns.length > 0) {
             const parsedJobs = new Map();
+            const parsedAnnotations = new Map();
             if (includeCheckDetails) {
               // Prefetch actions jobs per runId.
               const runIds = new Set();
@@ -6156,6 +7406,47 @@ async function main(options = {}) {
                   parsedJobs.set(runId, []);
                 }
               }
+
+              for (const run of checkRuns) {
+                const runConclusion = typeof run?.conclusion === 'string' ? run.conclusion.toLowerCase() : '';
+                const shouldLoadAnnotations = Boolean(
+                  run?.id
+                  && runConclusion
+                  && !['success', 'neutral', 'skipped'].includes(runConclusion)
+                );
+                if (!shouldLoadAnnotations) {
+                  continue;
+                }
+
+                const checkRunId = Number(run.id);
+                if (!Number.isFinite(checkRunId) || checkRunId <= 0) {
+                  continue;
+                }
+
+                const annotations = [];
+                for (let page = 1; page <= 3; page += 1) {
+                  try {
+                    const annotationsResp = await octokit.rest.checks.listAnnotations({
+                      owner: repo.owner,
+                      repo: repo.repo,
+                      check_run_id: checkRunId,
+                      per_page: 50,
+                      page,
+                    });
+                    const chunk = Array.isArray(annotationsResp?.data) ? annotationsResp.data : [];
+                    annotations.push(...chunk);
+                    if (chunk.length < 50) {
+                      break;
+                    }
+                  } catch {
+                    break;
+                  }
+                }
+
+                if (annotations.length > 0) {
+                  parsedAnnotations.set(checkRunId, annotations);
+                }
+              }
             }
 
             checkRunsOut = checkRuns.map((run) => {
@@ -6178,14 +7469,16 @@ async function main(options = {}) {
                       url: picked.html_url,
                       name: picked.name,
                       conclusion: picked.conclusion,
-                      steps: Array.isArray(picked.steps)
-                        ? picked.steps.map((s) => ({
-                            name: s.name,
-                            status: s.status,
-                            conclusion: s.conclusion,
-                            number: s.number,
-                          }))
-                        : undefined,
+                          steps: Array.isArray(picked.steps)
+                            ? picked.steps.map((s) => ({
+                                name: s.name,
+                                status: s.status,
+                                conclusion: s.conclusion,
+                                number: s.number,
+                                startedAt: s.started_at || undefined,
+                                completedAt: s.completed_at || undefined,
+                              }))
+                            : undefined,
                     };
                   } else {
                     job = { runId, ...(jobId ? { jobId } : {}), url: detailsUrl };
@@ -6213,6 +7506,19 @@ async function main(options = {}) {
                     }
                   : undefined,
                 ...(job ? { job } : {}),
+                ...(run.id && parsedAnnotations.has(run.id)
+                  ? {
+                      annotations: parsedAnnotations.get(run.id).map((a) => ({
+                        path: a.path || undefined,
+                        startLine: typeof a.start_line === 'number' ? a.start_line : undefined,
+                        endLine: typeof a.end_line === 'number' ? a.end_line : undefined,
+                        level: a.annotation_level || undefined,
+                        message: a.message || '',
+                        title: a.title || undefined,
+                        rawDetails: a.raw_details || undefined,
+                      })).filter((a) => a.message),
+                    }
+                  : {}),
               };
             });
             const counts = { success: 0, failure: 0, pending: 0 };
@@ -6822,12 +8128,17 @@ async function main(options = {}) {
 
       const diffSummaries = diffs.map(({ path, diff }) => `FILE: ${path}\n${diff}`).join('\n\n');
 
-      let prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:
-- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")
-- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes
-- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names
-- Testing: bullet list ("- Not tested" allowed)
-- Notes: bullet list; include breaking/rollout notes only when relevant
+      let prompt = `You are drafting a GitHub Pull Request title + description for a squash-merge workflow.
+Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:
+- Title format: conventional, outcome-first, <= 90 chars, no trailing punctuation.
+- Use: <type>(<scope>): <summary>. Types: feat, fix, refactor, perf, docs, test, chore.
+- Pick the most important user-facing outcome first; include a second major outcome only when needed.
+- Body: GitHub-flavored markdown with sections in this exact order: ## Summary, ## Why, ## Testing.
+- Summary: 3-6 bullets, concrete product/workflow impact, no vague filler, no internal helper names.
+- Why: 1-3 bullets explaining motivation/tradeoff (what problem this solves for users/devs).
+- Testing: checkbox list using "- [ ]"; include realistic manual/automated checks inferred from the diff.
+- If tests were not run, include "- [ ] Not run locally" as first testing item.
+- Keep language crisp and specific; avoid generic boilerplate.
 
 Context:
 - base branch: ${base}
@@ -6944,6 +8255,166 @@ Context:
     } catch (error) {
       console.error('Failed to fetch:', error);
       res.status(500).json({ error: error.message || 'Failed to fetch from remote' });
+    }
+  });
+
+  app.get('/api/git/remotes', async (req, res) => {
+    const { getRemotes } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const remotes = await getRemotes(directory);
+      res.json(remotes);
+    } catch (error) {
+      console.error('Failed to get remotes:', error);
+      res.status(500).json({ error: error.message || 'Failed to get remotes' });
+    }
+  });
+
+  app.post('/api/git/rebase', async (req, res) => {
+    const { rebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await rebase(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to rebase' });
+    }
+  });
+
+  app.post('/api/git/rebase/abort', async (req, res) => {
+    const { abortRebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await abortRebase(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to abort rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to abort rebase' });
+    }
+  });
+
+  app.post('/api/git/merge', async (req, res) => {
+    const { merge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await merge(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to merge' });
+    }
+  });
+
+  app.post('/api/git/merge/abort', async (req, res) => {
+    const { abortMerge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await abortMerge(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to abort merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to abort merge' });
+    }
+  });
+
+  app.post('/api/git/rebase/continue', async (req, res) => {
+    const { continueRebase } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await continueRebase(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to continue rebase:', error);
+      res.status(500).json({ error: error.message || 'Failed to continue rebase' });
+    }
+  });
+
+  app.post('/api/git/merge/continue', async (req, res) => {
+    const { continueMerge } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await continueMerge(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to continue merge:', error);
+      res.status(500).json({ error: error.message || 'Failed to continue merge' });
+    }
+  });
+
+  app.get('/api/git/conflict-details', async (req, res) => {
+    const { getConflictDetails } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await getConflictDetails(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to get conflict details:', error);
+      res.status(500).json({ error: error.message || 'Failed to get conflict details' });
+    }
+  });
+
+  app.post('/api/git/stash', async (req, res) => {
+    const { stash } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await stash(directory, req.body);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to stash:', error);
+      res.status(500).json({ error: error.message || 'Failed to stash' });
+    }
+  });
+
+  app.post('/api/git/stash/pop', async (req, res) => {
+    const { stashPop } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await stashPop(directory);
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to pop stash:', error);
+      res.status(500).json({ error: error.message || 'Failed to pop stash' });
     }
   });
 
@@ -7111,65 +8582,6 @@ Context:
       console.warn('Failed to get worktrees, returning empty list:', error?.message || error);
       res.setHeader('X-OpenChamber-Warning', 'git worktrees unavailable');
       res.json([]);
-    }
-  });
-
-  app.post('/api/git/worktrees', async (req, res) => {
-    const { addWorktree } = await getGitLibraries();
-    try {
-      const directory = req.query.directory;
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
-      const { path, branch, createBranch, startPoint } = req.body;
-      if (!path || !branch) {
-        return res.status(400).json({ error: 'path and branch are required' });
-      }
-
-      const result = await addWorktree(directory, path, branch, { createBranch, startPoint });
-      res.json(result);
-    } catch (error) {
-      console.error('Failed to add worktree:', error);
-      res.status(500).json({ error: error.message || 'Failed to add worktree' });
-    }
-  });
-
-  app.delete('/api/git/worktrees', async (req, res) => {
-    const { removeWorktree } = await getGitLibraries();
-    try {
-      const directory = req.query.directory;
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
-      const { path, force } = req.body;
-      if (!path) {
-        return res.status(400).json({ error: 'path is required' });
-      }
-
-      const result = await removeWorktree(directory, path, { force });
-      res.json(result);
-    } catch (error) {
-      console.error('Failed to remove worktree:', error);
-      res.status(500).json({ error: error.message || 'Failed to remove worktree' });
-    }
-  });
-
-  app.post('/api/git/ignore-openchamber', async (req, res) => {
-    // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-    const { ensureOpenChamberIgnored } = await getGitLibraries();
-    try {
-      const directory = req.query.directory;
-      if (!directory) {
-        return res.status(400).json({ error: 'directory parameter is required' });
-      }
-
-      await ensureOpenChamberIgnored(directory);
-      res.json({ success: true });
-    } catch (error) {
-      console.error('Failed to ignore .openchamber directory:', error);
-      res.status(500).json({ error: error.message || 'Failed to update git ignore' });
     }
   });
 
@@ -7923,6 +9335,192 @@ Context:
   const terminalSessions = new Map();
   const MAX_TERMINAL_SESSIONS = 20;
   const TERMINAL_IDLE_TIMEOUT = 30 * 60 * 1000;
+  const terminalInputCapabilities = {
+    input: {
+      preferred: 'ws',
+      transports: ['http', 'ws'],
+      ws: {
+        path: TERMINAL_INPUT_WS_PATH,
+        v: 1,
+        enc: 'text+json-bin-control',
+      },
+    },
+  };
+
+  const sendTerminalInputWsControl = (socket, payload) => {
+    if (!socket || socket.readyState !== 1) {
+      return;
+    }
+
+    try {
+      socket.send(createTerminalInputWsControlFrame(payload), { binary: true });
+    } catch {
+    }
+  };
+
+  terminalInputWsServer = new WebSocketServer({
+    noServer: true,
+    maxPayload: TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
+  });
+
+  terminalInputWsServer.on('connection', (socket) => {
+    const connectionState = {
+      boundSessionId: null,
+      invalidFrames: 0,
+      rebindTimestamps: [],
+      lastActivityAt: Date.now(),
+    };
+
+    sendTerminalInputWsControl(socket, { t: 'ok', v: 1 });
+
+    const heartbeatInterval = setInterval(() => {
+      if (socket.readyState !== 1) {
+        return;
+      }
+
+      try {
+        socket.ping();
+      } catch {
+      }
+    }, TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS);
+
+    socket.on('pong', () => {
+      connectionState.lastActivityAt = Date.now();
+    });
+
+    socket.on('message', (message, isBinary) => {
+      connectionState.lastActivityAt = Date.now();
+
+      if (isBinary) {
+        const controlMessage = readTerminalInputWsControlFrame(message);
+        if (!controlMessage || typeof controlMessage.t !== 'string') {
+          connectionState.invalidFrames += 1;
+          sendTerminalInputWsControl(socket, {
+            t: 'e',
+            c: 'BAD_FRAME',
+            f: connectionState.invalidFrames >= 10,
+          });
+          if (connectionState.invalidFrames >= 10) {
+            socket.close(1008, 'protocol violation');
+          }
+          return;
+        }
+
+        if (controlMessage.t === 'p') {
+          sendTerminalInputWsControl(socket, { t: 'po', v: 1 });
+          return;
+        }
+
+        if (controlMessage.t !== 'b' || typeof controlMessage.s !== 'string') {
+          connectionState.invalidFrames += 1;
+          sendTerminalInputWsControl(socket, {
+            t: 'e',
+            c: 'BAD_FRAME',
+            f: connectionState.invalidFrames >= 10,
+          });
+          if (connectionState.invalidFrames >= 10) {
+            socket.close(1008, 'protocol violation');
+          }
+          return;
+        }
+
+        const now = Date.now();
+        connectionState.rebindTimestamps = pruneRebindTimestamps(
+          connectionState.rebindTimestamps,
+          now,
+          TERMINAL_INPUT_WS_REBIND_WINDOW_MS
+        );
+
+        if (isRebindRateLimited(connectionState.rebindTimestamps, TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW)) {
+          sendTerminalInputWsControl(socket, { t: 'e', c: 'RATE_LIMIT', f: false });
+          return;
+        }
+
+        const nextSessionId = controlMessage.s.trim();
+        const targetSession = terminalSessions.get(nextSessionId);
+        if (!targetSession) {
+          connectionState.boundSessionId = null;
+          sendTerminalInputWsControl(socket, { t: 'e', c: 'SESSION_NOT_FOUND', f: false });
+          return;
+        }
+
+        connectionState.rebindTimestamps.push(now);
+        connectionState.boundSessionId = nextSessionId;
+        sendTerminalInputWsControl(socket, { t: 'bok', v: 1 });
+        return;
+      }
+
+      const payload = normalizeTerminalInputWsMessageToText(message);
+      if (payload.length === 0) {
+        return;
+      }
+
+      if (!connectionState.boundSessionId) {
+        sendTerminalInputWsControl(socket, { t: 'e', c: 'NOT_BOUND', f: false });
+        return;
+      }
+
+      const session = terminalSessions.get(connectionState.boundSessionId);
+      if (!session) {
+        connectionState.boundSessionId = null;
+        sendTerminalInputWsControl(socket, { t: 'e', c: 'SESSION_NOT_FOUND', f: false });
+        return;
+      }
+
+      try {
+        session.ptyProcess.write(payload);
+        session.lastActivity = Date.now();
+      } catch {
+        sendTerminalInputWsControl(socket, { t: 'e', c: 'WRITE_FAIL', f: false });
+      }
+    });
+
+    socket.on('close', () => {
+      clearInterval(heartbeatInterval);
+    });
+
+    socket.on('error', (error) => {
+      void error;
+    });
+  });
+
+  server.on('upgrade', (req, socket, head) => {
+    const pathname = parseRequestPathname(req.url);
+    if (pathname !== TERMINAL_INPUT_WS_PATH) {
+      return;
+    }
+
+    const handleUpgrade = async () => {
+      try {
+        if (uiAuthController?.enabled) {
+          const sessionToken = uiAuthController?.ensureSessionToken?.(req, null);
+          if (!sessionToken) {
+            rejectWebSocketUpgrade(socket, 401, 'UI authentication required');
+            return;
+          }
+
+          const originAllowed = await isRequestOriginAllowed(req);
+          if (!originAllowed) {
+            rejectWebSocketUpgrade(socket, 403, 'Invalid origin');
+            return;
+          }
+        }
+
+        if (!terminalInputWsServer) {
+          rejectWebSocketUpgrade(socket, 500, 'Terminal WebSocket unavailable');
+          return;
+        }
+
+        terminalInputWsServer.handleUpgrade(req, socket, head, (ws) => {
+          terminalInputWsServer.emit('connection', ws, req);
+        });
+      } catch {
+        rejectWebSocketUpgrade(socket, 500, 'Upgrade failed');
+      }
+    };
+
+    void handleUpgrade();
+  });
 
   setInterval(() => {
     const now = Date.now();
@@ -7993,7 +9591,7 @@ Context:
       });
 
       console.log(`Created terminal session: ${sessionId} in ${cwd}`);
-      res.json({ sessionId, cols: cols || 80, rows: rows || 24 });
+      res.json({ sessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalInputCapabilities });
     } catch (error) {
       console.error('Failed to create terminal session:', error);
       res.status(500).json({ error: error.message || 'Failed to create terminal session' });
@@ -8214,7 +9812,7 @@ Context:
       });
 
       console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd}`);
-      res.json({ sessionId: newSessionId, cols: cols || 80, rows: rows || 24 });
+      res.json({ sessionId: newSessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalInputCapabilities });
     } catch (error) {
       console.error('Failed to restart terminal session:', error);
       res.status(500).json({ error: error.message || 'Failed to restart terminal session' });
@@ -8323,6 +9921,11 @@ Context:
           }
         },
       }));
+
+      // Alias for PWA manifest (.webmanifest redirect → /site.webmanifest)
+      app.get('/manifest.webmanifest', (req, res) => {
+        res.redirect(301, '/site.webmanifest');
+      });
 
     app.get(/^(?!\/api|.*\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|map)).*$/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

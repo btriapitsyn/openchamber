@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/web",
-  "version": "1.6.4",
+  "version": "1.6.5",
   "private": false,
   "type": "module",
   "main": "./server/index.js",
@@ -13,8 +13,8 @@
   },
   "scripts": {
     "dev": "bun run build:watch",
-    "dev:server": "bun server/index.js --port 3001",
-    "dev:server:watch": "nodemon --watch server --ext js --exec \"bun server/index.js --port 3001\"",
+    "dev:server": "bun server/index.js --port ${OPENCHAMBER_PORT:-3001}",
+    "dev:server:watch": "nodemon --watch server --ext js --exec \"bun server/index.js --port ${OPENCHAMBER_PORT:-3001}\"",
     "build": "vite build",
     "build:watch": "vite build --watch",
     "type-check": "tsc --noEmit",
@@ -26,7 +26,7 @@
     "@fontsource/ibm-plex-sans": "^5.1.1",
     "@ibm/plex": "^6.4.1",
     "@octokit/rest": "^22.0.1",
-    "@opencode-ai/sdk": "^1.1.48",
+    "@opencode-ai/sdk": "^1.1.53",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -60,6 +60,7 @@
     "strip-json-comments": "^5.0.3",
     "tailwind-merge": "^3.3.1",
     "web-push": "^3.6.7",
+    "ws": "^8.18.3",
     "yaml": "^2.8.1",
     "zustand": "^5.0.8"
   },

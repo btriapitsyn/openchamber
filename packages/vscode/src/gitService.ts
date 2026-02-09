@@ -243,6 +243,20 @@ export interface GitStatusFile {
   working_dir: string;
 }
 
+export interface GitMergeInProgress {
+  /** Short SHA of MERGE_HEAD */
+  head: string;
+  /** First line of MERGE_MSG */
+  message: string;
+}
+
+export interface GitRebaseInProgress {
+  /** Branch name being rebased */
+  headName: string;
+  /** Short SHA of the onto commit */
+  onto: string;
+}
+
 export interface GitStatusResult {
   current: string;
   tracking: string | null;
@@ -251,6 +265,10 @@ export interface GitStatusResult {
   files: GitStatusFile[];
   isClean: boolean;
   diffStats?: Record<string, { insertions: number; deletions: number }>;
+  /** Present when a merge is in progress with conflicts */
+  mergeInProgress?: GitMergeInProgress | null;
+  /** Present when a rebase is in progress */
+  rebaseInProgress?: GitRebaseInProgress | null;
 }
 
 /**
@@ -323,6 +341,9 @@ export async function getGitStatus(directory: string): Promise<GitStatusResult> 
     }
   }
 
+  // Check for in-progress operations
+  const inProgressState = await checkInProgressOperations(directory);
+
   return {
     current: head?.name || '',
     tracking: head?.upstream ? `${head.upstream.remote}/${head.upstream.name}` : null,
@@ -330,7 +351,71 @@ export async function getGitStatus(directory: string): Promise<GitStatusResult> 
     behind: head?.behind || 0,
     files,
     isClean: files.length === 0,
+    ...inProgressState,
   };
+}
+
+/**
+ * Check for in-progress merge/rebase operations
+ */
+async function checkInProgressOperations(directory: string): Promise<{
+  mergeInProgress?: GitMergeInProgress | null;
+  rebaseInProgress?: GitRebaseInProgress | null;
+}> {
+  const result: {
+    mergeInProgress?: GitMergeInProgress | null;
+    rebaseInProgress?: GitRebaseInProgress | null;
+  } = {};
+
+  const gitDir = path.join(directory, '.git');
+
+  try {
+    // Check MERGE_HEAD for merge in progress
+    const mergeHeadPath = path.join(gitDir, 'MERGE_HEAD');
+    const mergeHeadExists = await fs.promises.stat(mergeHeadPath).then(() => true).catch(() => false);
+    
+    if (mergeHeadExists) {
+      const mergeHead = await fs.promises.readFile(mergeHeadPath, 'utf8').catch(() => '');
+      const headSha = mergeHead.trim().slice(0, 7);
+      // Only set mergeInProgress if we actually have a valid head SHA
+      if (headSha) {
+        const mergeMsg = await fs.promises.readFile(path.join(gitDir, 'MERGE_MSG'), 'utf8').catch(() => '');
+        result.mergeInProgress = {
+          head: headSha,
+          message: mergeMsg.split('\n')[0] || '',
+        };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  try {
+    // Check for rebase in progress (.git/rebase-merge or .git/rebase-apply)
+    const rebaseMergeExists = await fs.promises.stat(path.join(gitDir, 'rebase-merge')).then(() => true).catch(() => false);
+    const rebaseApplyExists = await fs.promises.stat(path.join(gitDir, 'rebase-apply')).then(() => true).catch(() => false);
+    
+    if (rebaseMergeExists || rebaseApplyExists) {
+      const rebaseDir = rebaseMergeExists ? 'rebase-merge' : 'rebase-apply';
+      const headName = await fs.promises.readFile(path.join(gitDir, rebaseDir, 'head-name'), 'utf8').catch(() => '');
+      const onto = await fs.promises.readFile(path.join(gitDir, rebaseDir, 'onto'), 'utf8').catch(() => '');
+      
+      const headNameTrimmed = headName.trim().replace('refs/heads/', '');
+      const ontoTrimmed = onto.trim().slice(0, 7);
+      
+      // Only set rebaseInProgress if we have valid data
+      if (headNameTrimmed || ontoTrimmed) {
+        result.rebaseInProgress = {
+          headName: headNameTrimmed,
+          onto: ontoTrimmed,
+        };
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return result;
 }
 
 /**
@@ -383,6 +468,9 @@ async function getGitStatusRaw(directory: string): Promise<GitStatusResult> {
     }
   }
 
+  // Check for in-progress operations
+  const inProgressState = await checkInProgressOperations(directory);
+
   return {
     current,
     tracking,
@@ -390,6 +478,7 @@ async function getGitStatusRaw(directory: string): Promise<GitStatusResult> {
     behind,
     files,
     isClean: files.length === 0,
+    ...inProgressState,
   };
 }
 
@@ -692,48 +781,6 @@ export async function getAvailableBranchesForWorktree(directory: string): Promis
   }
 
   return availableBranches;
-}
-
-/**
- * Add a new worktree
- */
-export async function addGitWorktree(
-  directory: string, 
-  worktreePath: string, 
-  branch: string, 
-  createBranch = false
-): Promise<{ success: boolean; path: string; branch: string }> {
-  const args = ['worktree', 'add'];
-  
-  if (createBranch) {
-    args.push('-b', branch, worktreePath);
-  } else {
-    args.push(worktreePath, branch);
-  }
-
-  const result = await execGit(args, directory);
-  
-  return {
-    success: result.exitCode === 0,
-    path: worktreePath,
-    branch,
-  };
-}
-
-/**
- * Remove a worktree
- */
-export async function removeGitWorktree(
-  directory: string, 
-  worktreePath: string, 
-  force = false
-): Promise<{ success: boolean }> {
-  const args = ['worktree', 'remove'];
-  if (force) args.push('--force');
-  args.push(worktreePath);
-
-  const result = await execGit(args, directory);
-  return { success: result.exitCode === 0 };
 }
 
 // ============== Diff Operations ==============
@@ -1362,31 +1409,226 @@ export async function setGitIdentity(
   return { success: true };
 }
 
-// ============== Utility Operations ==============
+// ============== Remote Operations ==============
+
+export interface GitRemote {
+  name: string;
+  fetchUrl: string;
+  pushUrl: string;
+}
 
 /**
- * Ensure .openchamber is in git exclude
+ * Get list of remotes
  */
-export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
-  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-  const excludeFile = path.join(directory, '.git', 'info', 'exclude');
-  
-  try {
-    const uri = vscode.Uri.file(excludeFile);
-    let content = '';
-    
-    try {
-      const bytes = await vscode.workspace.fs.readFile(uri);
-      content = Buffer.from(bytes).toString('utf8');
-    } catch {
-      // File doesn't exist, we'll create it
-    }
-    
-    if (!content.includes('.openchamber')) {
-      const newContent = content.trimEnd() + '\n.openchamber\n';
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(newContent, 'utf8'));
-    }
-  } catch (error) {
-    console.warn('[GitService] Failed to update git exclude:', error);
+export async function getRemotes(directory: string): Promise<GitRemote[]> {
+  const result = await execGit(['remote', '-v'], directory);
+  if (result.exitCode !== 0) {
+    return [];
   }
+
+  const remoteMap = new Map<string, GitRemote>();
+  const lines = result.stdout.split('\n').filter(Boolean);
+
+  for (const line of lines) {
+    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+    if (match) {
+      const [, name, url, type] = match;
+      if (!remoteMap.has(name)) {
+        remoteMap.set(name, { name, fetchUrl: '', pushUrl: '' });
+      }
+      const remote = remoteMap.get(name)!;
+      if (type === 'fetch') {
+        remote.fetchUrl = url;
+      } else {
+        remote.pushUrl = url;
+      }
+    }
+  }
+
+  return Array.from(remoteMap.values());
+}
+
+// ============== Merge & Rebase Operations ==============
+
+export interface GitMergeResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface GitRebaseResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+/**
+ * Rebase current branch onto target
+ */
+export async function rebase(
+  directory: string,
+  options: { onto: string }
+): Promise<GitRebaseResult> {
+  const result = await execGit(['rebase', options.onto], directory);
+
+  if (result.exitCode === 0) {
+    return { success: true, conflict: false };
+  }
+
+  const output = (result.stdout + result.stderr).toLowerCase();
+  const isConflict =
+    output.includes('conflict') ||
+    output.includes('could not apply') ||
+    output.includes('merge conflict');
+
+  if (isConflict) {
+    const statusResult = await execGit(['status', '--porcelain'], directory);
+    const conflictFiles = statusResult.stdout
+      .split('\n')
+      .filter((line) => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
+      .map((line) => line.slice(3).trim());
+
+    return { success: false, conflict: true, conflictFiles };
+  }
+
+  throw new Error(result.stderr || 'Rebase failed');
+}
+
+/**
+ * Abort an in-progress rebase
+ */
+export async function abortRebase(directory: string): Promise<{ success: boolean }> {
+  const result = await execGit(['rebase', '--abort'], directory);
+  return { success: result.exitCode === 0 };
+}
+
+/**
+ * Merge branch into current
+ */
+export async function merge(
+  directory: string,
+  options: { branch: string }
+): Promise<GitMergeResult> {
+  const result = await execGit(['merge', options.branch], directory);
+
+  if (result.exitCode === 0) {
+    return { success: true, conflict: false };
+  }
+
+  const output = (result.stdout + result.stderr).toLowerCase();
+  const isConflict =
+    output.includes('conflict') ||
+    output.includes('merge conflict') ||
+    output.includes('automatic merge failed');
+
+  if (isConflict) {
+    const statusResult = await execGit(['status', '--porcelain'], directory);
+    const conflictFiles = statusResult.stdout
+      .split('\n')
+      .filter((line) => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
+      .map((line) => line.slice(3).trim());
+
+    return { success: false, conflict: true, conflictFiles };
+  }
+
+  throw new Error(result.stderr || 'Merge failed');
+}
+
+/**
+ * Abort an in-progress merge
+ */
+export async function abortMerge(directory: string): Promise<{ success: boolean }> {
+  const result = await execGit(['merge', '--abort'], directory);
+  return { success: result.exitCode === 0 };
+}
+
+/**
+ * Continue an in-progress rebase after conflicts are resolved
+ */
+export async function continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const result = await execGit(['rebase', '--continue'], directory);
+
+  if (result.exitCode === 0) {
+    return { success: true, conflict: false };
+  }
+
+  const output = (result.stdout + result.stderr).toLowerCase();
+  const isConflict =
+    output.includes('conflict') ||
+    output.includes('needs merge') ||
+    output.includes('unmerged');
+
+  if (isConflict) {
+    const statusResult = await execGit(['status', '--porcelain'], directory);
+    const conflictFiles = statusResult.stdout
+      .split('\n')
+      .filter((line) => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
+      .map((line) => line.slice(3).trim());
+
+    return { success: false, conflict: true, conflictFiles };
+  }
+
+  throw new Error(result.stderr || 'Continue rebase failed');
+}
+
+/**
+ * Continue an in-progress merge after conflicts are resolved
+ */
+export async function continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  // For merge, we commit after resolving conflicts
+  const result = await execGit(['commit', '--no-edit'], directory);
+
+  if (result.exitCode === 0) {
+    return { success: true, conflict: false };
+  }
+
+  const output = (result.stdout + result.stderr).toLowerCase();
+  const isConflict =
+    output.includes('conflict') ||
+    output.includes('needs merge') ||
+    output.includes('unmerged');
+
+  if (isConflict) {
+    const statusResult = await execGit(['status', '--porcelain'], directory);
+    const conflictFiles = statusResult.stdout
+      .split('\n')
+      .filter((line) => line.startsWith('UU') || line.startsWith('AA') || line.startsWith('DD'))
+      .map((line) => line.slice(3).trim());
+
+    return { success: false, conflict: true, conflictFiles };
+  }
+
+  throw new Error(result.stderr || 'Continue merge failed');
+}
+
+// ============== Stash Operations ==============
+
+/**
+ * Stash changes
+ */
+export async function stash(
+  directory: string,
+  options?: { message?: string; includeUntracked?: boolean }
+): Promise<{ success: boolean }> {
+  const args = ['stash', 'push'];
+
+  // Include untracked files by default
+  if (options?.includeUntracked !== false) {
+    args.push('--include-untracked');
+  }
+
+  if (options?.message) {
+    args.push('-m', options.message);
+  }
+
+  const result = await execGit(args, directory);
+  return { success: result.exitCode === 0 };
+}
+
+/**
+ * Pop the most recent stash
+ */
+export async function stashPop(directory: string): Promise<{ success: boolean }> {
+  const result = await execGit(['stash', 'pop'], directory);
+  return { success: result.exitCode === 0 };
 }

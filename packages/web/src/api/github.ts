@@ -12,6 +12,7 @@ import type {
   GitHubPullRequestMergeResult,
   GitHubPullRequestReadyInput,
   GitHubPullRequestReadyResult,
+  GitHubPullRequestUpdateInput,
   GitHubPullRequestStatus,
   GitHubDeviceFlowComplete,
   GitHubDeviceFlowStart,
@@ -110,6 +111,19 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     const body = await jsonOrNull<GitHubPullRequest & { error?: string }>(response);
     if (!response.ok || !body) {
       throw new Error((body as { error?: string } | null)?.error || response.statusText || 'Failed to create PR');
+    }
+    return body;
+  },
+
+  async prUpdate(payload: GitHubPullRequestUpdateInput): Promise<GitHubPullRequest> {
+    const response = await fetch('/api/github/pr/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await jsonOrNull<GitHubPullRequest & { error?: string }>(response);
+    if (!response.ok || !body) {
+      throw new Error((body as { error?: string } | null)?.error || response.statusText || 'Failed to update PR');
     }
     return body;
   },

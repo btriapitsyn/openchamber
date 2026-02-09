@@ -35,6 +35,7 @@ const sidecarName = process.platform === 'win32'
 
 const sidecarPath = path.join(tauriDir, 'sidecars', sidecarName);
 const distDir = path.join(tauriDir, 'resources', 'web-dist');
+const webDir = path.join(repoRoot, 'packages', 'web');
 
 const run = (cmd, args, cwd) => {
   const result = spawnSync(cmd, args, { cwd, stdio: 'inherit' });
@@ -47,9 +48,9 @@ const run = (cmd, args, cwd) => {
 console.log('[desktop] ensuring sidecar + web-dist...');
 run('node', ['./scripts/build-sidecar.mjs'], desktopDir);
 
-console.log('[desktop] starting dev server on http://127.0.0.1:3001 ...');
+console.log('[desktop] starting API server on http://127.0.0.1:3001 ...');
 
-const child = spawn(sidecarPath, ['--port', '3001'], {
+const apiChild = spawn(sidecarPath, ['--port', '3001'], {
   cwd: repoRoot,
   stdio: 'inherit',
   env: {
@@ -61,13 +62,61 @@ const child = spawn(sidecarPath, ['--port', '3001'], {
   },
 });
 
+console.log('[desktop] starting Vite HMR server on http://127.0.0.1:5173 ...');
+
+const webChild = spawn('bun', ['x', 'vite', '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
+  cwd: webDir,
+  stdio: 'inherit',
+  env: {
+    ...process.env,
+    OPENCHAMBER_PORT: process.env.OPENCHAMBER_PORT || '3001',
+    NO_PROXY: process.env.NO_PROXY || 'localhost,127.0.0.1',
+    no_proxy: process.env.no_proxy || 'localhost,127.0.0.1',
+  },
+});
+
+let shuttingDown = false;
+
 const shutdown = () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
   try {
-    child.kill('SIGTERM');
-  } catch {
-    // ignore
-  }
+    apiChild.kill('SIGTERM');
+  } catch {}
+
+  try {
+    webChild.kill('SIGTERM');
+  } catch {}
 };
+
+const handleExit = (label) => (code, signal) => {
+  if (shuttingDown) {
+    return;
+  }
+
+  if (code !== 0 || signal) {
+    console.error(`[desktop] ${label} exited unexpectedly (code=${code ?? 'null'} signal=${signal ?? 'none'})`);
+  }
+
+  shutdown();
+  process.exit(typeof code === 'number' ? code : 1);
+};
+
+apiChild.on('exit', handleExit('API server'));
+webChild.on('exit', handleExit('Vite server'));
+
+const handleError = (label) => (error) => {
+  if (shuttingDown) {
+    return;
+  }
+  console.error(`[desktop] failed to start ${label}:`, error);
+  shutdown();
+  process.exit(1);
+};
+
+apiChild.on('error', handleError('API server'));
+webChild.on('error', handleError('Vite server'));
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

@@ -9,3 +9,6 @@ export { HistorySection } from './HistorySection';
 export { HistoryCommitRow } from './HistoryCommitRow';
 export { SyncActions } from './SyncActions';
 export { BranchSelector } from './BranchSelector';
+export { BranchIntegrationSection } from './BranchIntegrationSection';
+export { ConflictDialog } from './ConflictDialog';
+export { StashDialog } from './StashDialog';

@@ -6,7 +6,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
@@ -54,6 +53,135 @@ const statusTone = (status: McpStatus | undefined): 'default' | 'success' | 'war
 interface McpDropdownProps {
   headerIconButtonClass: string;
 }
+
+interface McpDropdownContentProps {
+  active: boolean;
+  className?: string;
+}
+
+export const McpDropdownContent: React.FC<McpDropdownContentProps> = ({ active, className }) => {
+  const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const directory = currentDirectory ?? null;
+  const status = useMcpStore((state) => state.getStatusForDirectory(directory));
+  const refresh = useMcpStore((state) => state.refresh);
+  const connect = useMcpStore((state) => state.connect);
+  const disconnect = useMcpStore((state) => state.disconnect);
+  const [isSpinning, setIsSpinning] = React.useState(false);
+  const [busyName, setBusyName] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    void refresh({ directory, silent: true });
+  }, [refresh, directory]);
+
+  React.useEffect(() => {
+    if (!active) return;
+    void refresh({ directory, silent: true });
+  }, [active, refresh, directory]);
+
+  const sortedNames = React.useMemo(() => {
+    return Object.keys(status).sort((a, b) => a.localeCompare(b));
+  }, [status]);
+
+  const handleRefresh = React.useCallback((e?: React.MouseEvent) => {
+    e?.preventDefault();
+    if (isSpinning) return;
+    setIsSpinning(true);
+    const minSpinPromise = new Promise(resolve => setTimeout(resolve, 500));
+    Promise.all([refresh({ directory }), minSpinPromise]).finally(() => {
+      setIsSpinning(false);
+    });
+  }, [isSpinning, refresh, directory]);
+
+  return (
+    <div className={cn('w-full', className)}>
+      <div className="sticky top-0 z-20 bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
+        <div className="flex items-center justify-between gap-3 px-2 py-2.5">
+          <div className="min-w-0 flex items-center gap-2">
+            <div className="typography-ui-header font-semibold text-foreground">MCP Servers</div>
+            {directory && (
+              <div className="truncate typography-ui-label text-muted-foreground">
+                {directory.split('/').pop() || directory}
+              </div>
+            )}
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            disabled={isSpinning}
+            onClick={handleRefresh}
+            aria-label="Refresh"
+          >
+            <RiRefreshLine className={cn('h-4 w-4', isSpinning && 'animate-spin')} />
+          </button>
+        </div>
+      </div>
+
+      <div className="max-h-64 overflow-y-auto py-1">
+        {sortedNames.map((serverName) => {
+          const serverStatus = status[serverName];
+          const tone = statusTone(serverStatus);
+          const isConnected = serverStatus?.status === 'connected';
+          const isBusy = busyName === serverName;
+          const tooltip = statusTooltip(serverStatus);
+
+          return (
+            <div
+              key={serverName}
+              className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-interactive-hover/50"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Tooltip delayDuration={300}>
+                    <TooltipTrigger asChild>
+                      <span
+                        className={cn(
+                          'h-2 w-2 rounded-full flex-shrink-0',
+                          tone === 'success' && 'bg-status-success',
+                          tone === 'error' && 'bg-status-error',
+                          tone === 'warning' && 'bg-status-warning',
+                          tone === 'default' && 'bg-muted-foreground/40'
+                        )}
+                        aria-label={tooltip}
+                      />
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      <p>{tooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <span className="typography-ui-label truncate">{serverName}</span>
+                </div>
+              </div>
+
+              <Switch
+                checked={isConnected}
+                disabled={isBusy}
+                className="data-[state=checked]:bg-status-info"
+                onCheckedChange={async (checked) => {
+                  setBusyName(serverName);
+                  try {
+                    if (checked) {
+                      await connect(serverName, directory);
+                    } else {
+                      await disconnect(serverName, directory);
+                    }
+                  } finally {
+                    setBusyName(null);
+                  }
+                }}
+              />
+            </div>
+          );
+        })}
+
+        {sortedNames.length === 0 && (
+          <div className="px-2 py-3 typography-ui-label text-muted-foreground text-center">
+            Configure MCP servers in Opencode config.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass }) => {
   const [open, setOpen] = React.useState(false);
@@ -277,35 +405,7 @@ export const McpDropdown: React.FC<McpDropdownProps> = ({ headerIconButtonClass 
       </Tooltip>
 
       <DropdownMenuContent align="end" className="w-72">
-        <div className="flex items-center justify-between px-2 py-1">
-          <span className="typography-ui-label font-semibold">MCP Servers</span>
-          <button
-            type="button"
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover transition-colors"
-            disabled={isSpinning}
-            onClick={handleRefresh}
-            aria-label="Refresh"
-          >
-            <RiRefreshLine className={cn('h-4 w-4', isSpinning && 'animate-spin')} />
-          </button>
-        </div>
-
-        <DropdownMenuSeparator />
-
-        <div className="max-h-64 overflow-y-auto py-1">
-          {renderServerList()}
-        </div>
-
-        {directory && (
-          <>
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1">
-              <span className="typography-meta text-muted-foreground truncate block">
-                {directory.split('/').pop() || directory}
-              </span>
-            </div>
-          </>
-        )}
+        <McpDropdownContent active={open} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

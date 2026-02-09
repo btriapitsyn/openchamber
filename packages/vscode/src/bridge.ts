@@ -32,6 +32,7 @@ import {
   getPullRequestStatus,
   markPullRequestReady,
   mergePullRequest,
+  updatePullRequest,
 } from './githubPr';
 
 import {
@@ -93,10 +94,39 @@ const CLIENT_RELOAD_DELAY_MS = 800;
 const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
+const OPENCHAMBER_SHARED_SETTINGS_PATH = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+
+const readSharedSettingsFromDisk = (): Record<string, unknown> => {
+  try {
+    const raw = fs.readFileSync(OPENCHAMBER_SHARED_SETTINGS_PATH, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+};
+
+const writeSharedSettingsToDisk = async (changes: Record<string, unknown>): Promise<void> => {
+  try {
+    await fs.promises.mkdir(path.dirname(OPENCHAMBER_SHARED_SETTINGS_PATH), { recursive: true });
+    const current = readSharedSettingsFromDisk();
+    const next: Record<string, unknown> = { ...current, ...changes };
+    // Keep empty-string sentinel (""), so other runtimes can detect explicit clears.
+    await fs.promises.writeFile(OPENCHAMBER_SHARED_SETTINGS_PATH, JSON.stringify(next, null, 2), 'utf8');
+  } catch {
+    // ignore
+  }
+};
+
 const readSettings = (ctx?: BridgeContext) => {
   const stored = ctx?.context?.globalState.get<Record<string, unknown>>(SETTINGS_KEY) || {};
   const restStored = { ...stored };
   delete (restStored as Record<string, unknown>).lastDirectory;
+  const shared = readSharedSettingsFromDisk();
+  const sharedOpencodeBinary = typeof shared.opencodeBinary === 'string' ? shared.opencodeBinary.trim() : '';
   const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
   const themeVariant =
     vscode.window.activeColorTheme.kind === vscode.ColorThemeKind.Light ||
@@ -108,6 +138,10 @@ const readSettings = (ctx?: BridgeContext) => {
     themeVariant,
     lastDirectory: workspaceFolder,
     ...restStored,
+    opencodeBinary:
+      typeof restStored.opencodeBinary === 'string'
+        ? String(restStored.opencodeBinary).trim()
+        : (sharedOpencodeBinary || undefined),
   };
 };
 
@@ -177,10 +211,13 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
   const restChanges = { ...(changes || {}) };
   delete restChanges.lastDirectory;
 
+  const keysToClear = new Set<string>();
+
   // Normalize empty-string clears to key removal (match web/desktop behavior)
-  for (const key of ['defaultModel', 'defaultVariant', 'defaultAgent', 'defaultGitIdentityId']) {
+  for (const key of ['defaultModel', 'defaultVariant', 'defaultAgent', 'defaultGitIdentityId', 'opencodeBinary']) {
     const value = restChanges[key];
     if (typeof value === 'string' && value.trim().length === 0) {
+      keysToClear.add(key);
       delete restChanges[key];
     }
   }
@@ -195,8 +232,18 @@ const persistSettings = async (changes: Record<string, unknown>, ctx?: BridgeCon
     delete restChanges.usageRefreshIntervalMs;
   }
 
-  const merged = { ...current, ...restChanges, lastDirectory: current.lastDirectory };
+  const merged = { ...current, ...restChanges, lastDirectory: current.lastDirectory } as Record<string, unknown>;
+  for (const key of keysToClear) {
+    delete merged[key];
+  }
   await ctx?.context?.globalState.update(SETTINGS_KEY, merged);
+
+  if (keysToClear.has('opencodeBinary')) {
+    await writeSharedSettingsToDisk({ opencodeBinary: '' });
+  } else if (typeof restChanges.opencodeBinary === 'string') {
+    await writeSharedSettingsToDisk({ opencodeBinary: restChanges.opencodeBinary.trim() });
+  }
+
   return merged;
 };
 
@@ -1347,6 +1394,36 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
       }
 
+      case 'api:github/pr:update': {
+        const context = ctx?.context;
+        if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
+        const stored = await readGitHubAuth(context);
+        if (!stored?.accessToken) return { id, type, success: false, error: 'GitHub not connected' };
+        const directory = readStringField(payload, 'directory');
+        const number = readNumberField(payload, 'number') ?? 0;
+        const title = readStringField(payload, 'title');
+        const body = readStringField(payload, 'body');
+        if (!directory || !number || !title) {
+          return { id, type, success: false, error: 'directory, number, title are required' };
+        }
+        try {
+          const pr = await updatePullRequest(stored.accessToken, directory, {
+            directory,
+            number,
+            title,
+            ...(typeof body === 'string' ? { body } : {}),
+          });
+          return { id, type, success: true, data: pr };
+        } catch (error: unknown) {
+          const status = (error && typeof error === 'object' && 'status' in error) ? (error as { status?: number }).status : undefined;
+          const message = error instanceof Error ? error.message : String(error);
+          if (status === 401 || message === 'unauthorized') {
+            await clearGitHubAuth(context);
+          }
+          return { id, type, success: false, error: message };
+        }
+      }
+
       case 'api:github/pr:merge': {
         const context = ctx?.context;
         if (!context) return { id, type, success: false, error: 'Missing VS Code context' };
@@ -2125,42 +2202,12 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:git/worktrees': {
-        const { directory, method, path: worktreePath, branch, createBranch, force } = (payload || {}) as { 
-          directory?: string; 
-          method?: string;
-          path?: string;
-          branch?: string;
-          createBranch?: boolean;
-          force?: boolean;
-        };
+        const { directory } = (payload || {}) as { directory?: string };
         if (!directory) {
           return { id, type, success: false, error: 'Directory is required' };
         }
-
-        const normalizedMethod = typeof method === 'string' ? method.toUpperCase() : 'GET';
-
-        if (normalizedMethod === 'GET') {
-          const worktrees = await gitService.listGitWorktrees(directory);
-          return { id, type, success: true, data: worktrees };
-        }
-
-        if (normalizedMethod === 'POST') {
-          if (!worktreePath || !branch) {
-            return { id, type, success: false, error: 'Path and branch are required' };
-          }
-          const result = await gitService.addGitWorktree(directory, worktreePath, branch, createBranch);
-          return { id, type, success: true, data: result };
-        }
-
-        if (normalizedMethod === 'DELETE') {
-          if (!worktreePath) {
-            return { id, type, success: false, error: 'Path is required' };
-          }
-          const result = await gitService.removeGitWorktree(directory, worktreePath, force);
-          return { id, type, success: true, data: result };
-        }
-
-        return { id, type, success: false, error: `Unsupported method: ${normalizedMethod}` };
+        const worktrees = await gitService.listGitWorktrees(directory);
+        return { id, type, success: true, data: worktrees };
       }
 
       case 'api:git/diff': {
@@ -2250,6 +2297,97 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           return { id, type, success: false, error: 'Directory is required' };
         }
         const result = await gitService.gitFetch(directory, { remote, branch });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/remotes': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.getRemotes(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase': {
+        const { directory, onto } = (payload || {}) as { directory?: string; onto?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        if (!onto) {
+          return { id, type, success: false, error: 'onto is required' };
+        }
+        const result = await gitService.rebase(directory, { onto });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase/abort': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.abortRebase(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge': {
+        const { directory, branch } = (payload || {}) as { directory?: string; branch?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        if (!branch) {
+          return { id, type, success: false, error: 'branch is required' };
+        }
+        const result = await gitService.merge(directory, { branch });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge/abort': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.abortMerge(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/rebase/continue': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.continueRebase(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/merge/continue': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.continueMerge(directory);
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/stash': {
+        const { directory, message, includeUntracked } = (payload || {}) as {
+          directory?: string;
+          message?: string;
+          includeUntracked?: boolean;
+        };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.stash(directory, { message, includeUntracked });
+        return { id, type, success: true, data: result };
+      }
+
+      case 'api:git/stash/pop': {
+        const { directory } = (payload || {}) as { directory?: string };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+        const result = await gitService.stashPop(directory);
         return { id, type, success: true, data: result };
       }
 
@@ -2394,12 +2532,80 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
       case 'api:git/ignore-openchamber': {
         // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
+        // This is now a no-op since the function was removed with legacy worktree support.
+        return { id, type, success: true, data: { success: true } };
+      }
+
+      case 'api:git/conflict-details': {
         const { directory } = (payload || {}) as { directory?: string };
         if (!directory) {
           return { id, type, success: false, error: 'Directory is required' };
         }
-        await gitService.ensureOpenChamberIgnored(directory);
-        return { id, type, success: true, data: { success: true } };
+
+        try {
+          // Get git status --porcelain
+          const statusResult = await execGit(['status', '--porcelain'], directory);
+          const statusPorcelain = statusResult.stdout;
+
+          // Get unmerged files (files with conflicts)
+          const unmergedResult = await execGit(['diff', '--name-only', '--diff-filter=U'], directory);
+          const unmergedFiles = unmergedResult.stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean);
+
+          // Get current diff
+          const diffResult = await execGit(['diff'], directory);
+          const diff = diffResult.stdout;
+
+          // Detect operation type and get head info
+          let operation: 'merge' | 'rebase' = 'merge';
+          let headInfo = '';
+
+          // Check for MERGE_HEAD (merge in progress)
+          const mergeHeadResult = await execGit(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], directory);
+          const mergeHeadExists = mergeHeadResult.exitCode === 0;
+
+          if (mergeHeadExists) {
+            operation = 'merge';
+            const mergeHead = mergeHeadResult.stdout.trim();
+            // Try to read MERGE_MSG file
+            let mergeMsg = '';
+            try {
+              const mergeMsgPath = path.join(directory, '.git', 'MERGE_MSG');
+              mergeMsg = await fs.promises.readFile(mergeMsgPath, 'utf8');
+            } catch {
+              // MERGE_MSG may not exist
+            }
+            headInfo = `MERGE_HEAD: ${mergeHead}${mergeMsg ? '\n' + mergeMsg : ''}`;
+          } else {
+            // Check for REBASE_HEAD (rebase in progress)
+            const rebaseHeadResult = await execGit(['rev-parse', '--verify', '--quiet', 'REBASE_HEAD'], directory);
+            const rebaseHeadExists = rebaseHeadResult.exitCode === 0;
+
+            if (rebaseHeadExists) {
+              operation = 'rebase';
+              const rebaseHead = rebaseHeadResult.stdout.trim();
+              headInfo = `REBASE_HEAD: ${rebaseHead}`;
+            }
+          }
+
+          return {
+            id,
+            type,
+            success: true,
+            data: {
+              statusPorcelain: statusPorcelain.trim(),
+              unmergedFiles,
+              diff: diff.trim(),
+              headInfo: headInfo.trim(),
+              operation,
+            },
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: message };
+        }
       }
 
       default:

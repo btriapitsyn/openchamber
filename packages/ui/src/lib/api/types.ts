@@ -33,6 +33,17 @@ export interface TerminalSession {
   sessionId: string;
   cols: number;
   rows: number;
+  capabilities?: {
+    input?: {
+      preferred?: 'ws' | 'http';
+      transports?: Array<'ws' | 'http'>;
+      ws?: {
+        path: string;
+        v?: number;
+        enc?: string;
+      };
+    };
+  };
 }
 
 export interface TerminalStreamEvent {
@@ -90,6 +101,20 @@ export interface GitStatusFile {
   working_dir: string;
 }
 
+export interface GitMergeInProgress {
+  /** Short SHA of MERGE_HEAD */
+  head: string;
+  /** First line of MERGE_MSG */
+  message: string;
+}
+
+export interface GitRebaseInProgress {
+  /** Branch name being rebased */
+  headName: string;
+  /** Short SHA of the onto commit */
+  onto: string;
+}
+
 export interface GitStatus {
   current: string;
   tracking: string | null;
@@ -98,6 +123,10 @@ export interface GitStatus {
   files: GitStatusFile[];
   isClean: boolean;
   diffStats?: Record<string, { insertions: number; deletions: number }>;
+  /** Present when a merge is in progress with conflicts */
+  mergeInProgress?: GitMergeInProgress | null;
+  /** Present when a rebase is in progress */
+  rebaseInProgress?: GitRebaseInProgress | null;
 }
 
 export interface GitDiffResponse {
@@ -168,6 +197,37 @@ export interface GitPullResult {
   deletions: number;
 }
 
+export interface GitRemote {
+  name: string;
+  fetchUrl: string;
+  pushUrl: string;
+}
+
+export interface GitMergeResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface GitRebaseResult {
+  success: boolean;
+  conflict?: boolean;
+  conflictFiles?: string[];
+}
+
+export interface MergeConflictDetails {
+  /** Git status --porcelain output showing current state */
+  statusPorcelain: string;
+  /** List of unmerged file paths */
+  unmergedFiles: string[];
+  /** Git diff output showing current conflict state */
+  diff: string;
+  /** Information about MERGE_HEAD or REBASE_HEAD */
+  headInfo: string;
+  /** The operation type: 'merge' or 'rebase' */
+  operation: 'merge' | 'rebase';
+}
+
 export type GitIdentityAuthType = 'ssh' | 'token';
 
 export interface GitIdentityProfile {
@@ -230,18 +290,6 @@ export interface GitWorktreeInfo {
   branch?: string;
 }
 
-export interface GitAddWorktreePayload {
-  path: string;
-  branch: string;
-  createBranch?: boolean;
-  startPoint?: string;
-}
-
-export interface GitRemoveWorktreePayload {
-  path: string;
-  force?: boolean;
-}
-
 export interface GitDeleteBranchPayload {
   branch: string;
   force?: boolean;
@@ -290,9 +338,6 @@ export interface GitAPI {
     payload: { base: string; head: string; context?: string }
   ): Promise<GeneratedPullRequestDescription>;
   listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
-  addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }>;
-  removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }>;
-  ensureOpenChamberIgnored(directory: string): Promise<void>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
   gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
   gitPull(directory: string, options?: { remote?: string; branch?: string }): Promise<GitPullResult>;
@@ -312,6 +357,16 @@ export interface GitAPI {
   discoverGitCredentials?(): Promise<DiscoveredGitCredential[]>;
   getGlobalGitIdentity?(): Promise<GitIdentitySummary | null>;
   getRemoteUrl?(directory: string, remote?: string): Promise<string | null>;
+  getRemotes(directory: string): Promise<GitRemote[]>;
+  rebase(directory: string, options: { onto: string }): Promise<GitRebaseResult>;
+  abortRebase(directory: string): Promise<{ success: boolean }>;
+  continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
+  merge(directory: string, options: { branch: string }): Promise<GitMergeResult>;
+  abortMerge(directory: string): Promise<{ success: boolean }>;
+  continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }>;
+  stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
+  stashPop(directory: string): Promise<{ success: boolean }>;
+  getConflictDetails(directory: string): Promise<MergeConflictDetails>;
 }
 
 export interface FileListEntry {
@@ -366,18 +421,12 @@ export interface FilesAPI {
   execCommands?(commands: string[], cwd: string): Promise<{ success: boolean; results: CommandExecResult[] }>;
 }
 
-export interface WorktreeDefaults {
-  baseBranch?: string;          // e.g. "main", "develop", or "HEAD"
-  autoCreateWorktree?: boolean; // future: skip dialog, create worktree automatically
-}
-
 export interface ProjectEntry {
   id: string;
   path: string;
   label?: string;
   addedAt?: number;
   lastOpenedAt?: number;
-  worktreeDefaults?: WorktreeDefaults;
   sidebarCollapsed?: boolean;
 }
 
@@ -389,6 +438,7 @@ export interface SettingsPayload {
   darkThemeId?: string;
   lastDirectory?: string;
   homeDirectory?: string;
+  opencodeBinary?: string;
   projects?: ProjectEntry[];
   activeProjectId?: string;
   approvedDirectories?: string[];
@@ -412,6 +462,7 @@ export interface SettingsPayload {
   diffViewMode?: 'single' | 'stacked';
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
+  openInAppId?: string;
 
   [key: string]: unknown;
 }
@@ -543,13 +594,30 @@ export type GitHubCheckRun = {
     url?: string;
     name?: string;
     conclusion?: string | null;
-    steps?: Array<{ name: string; status?: string; conclusion?: string | null; number?: number }>;
+    steps?: Array<{
+      name: string;
+      status?: string;
+      conclusion?: string | null;
+      number?: number;
+      startedAt?: string;
+      completedAt?: string;
+    }>;
   };
+  annotations?: Array<{
+    path?: string;
+    startLine?: number;
+    endLine?: number;
+    level?: string;
+    message: string;
+    title?: string;
+    rawDetails?: string;
+  }>;
 };
 
 export type GitHubPullRequest = {
   number: number;
   title: string;
+  body?: string;
   url: string;
   state: 'open' | 'closed' | 'merged';
   draft: boolean;
@@ -633,6 +701,13 @@ export type GitHubPullRequestCreateInput = {
   base: string;
   body?: string;
   draft?: boolean;
+};
+
+export type GitHubPullRequestUpdateInput = {
+  directory: string;
+  number: number;
+  title: string;
+  body?: string;
 };
 
 export type GitHubPullRequestMergeInput = {
@@ -743,6 +818,7 @@ export interface GitHubAPI {
 
   prStatus(directory: string, branch: string): Promise<GitHubPullRequestStatus>;
   prCreate(payload: GitHubPullRequestCreateInput): Promise<GitHubPullRequest>;
+  prUpdate(payload: GitHubPullRequestUpdateInput): Promise<GitHubPullRequest>;
   prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>;
   prReady(payload: GitHubPullRequestReadyInput): Promise<GitHubPullRequestReadyResult>;
 

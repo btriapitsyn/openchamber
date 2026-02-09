@@ -1,6 +1,9 @@
 import React from 'react';
 import { RiFileCopyLine, RiCheckLine, RiExternalLinkLine } from '@remixicon/react';
 import { isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { updateDesktopSettings } from '@/lib/persistence';
 
 const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install | bash';
 const POLL_INTERVAL_MS = 3000;
@@ -37,6 +40,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
   const [showHint, setShowHint] = React.useState(false);
   const [isDesktopApp, setIsDesktopApp] = React.useState(false);
   const [isRetrying, setIsRetrying] = React.useState(false);
+  const [opencodeBinary, setOpencodeBinary] = React.useState('');
 
   React.useEffect(() => {
     const timer = setTimeout(() => setShowHint(true), HINT_DELAY_MS);
@@ -45,6 +49,27 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
 
   React.useEffect(() => {
     setIsDesktopApp(isDesktopShell());
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch('/api/config/settings', { method: 'GET', headers: { Accept: 'application/json' } });
+        if (!response.ok) return;
+        const data = (await response.json().catch(() => null)) as null | { opencodeBinary?: unknown };
+        if (!data || cancelled) return;
+        const value = typeof data.opencodeBinary === 'string' ? data.opencodeBinary.trim() : '';
+        if (value) {
+          setOpencodeBinary(value);
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleDragStart = React.useCallback(async (e: React.MouseEvent) => {
@@ -82,6 +107,43 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
       setTimeout(() => setIsRetrying(false), 1000);
     }
   }, []);
+
+  const handleBrowse = React.useCallback(async () => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (!isDesktopApp || !isTauriShell()) {
+      return;
+    }
+
+    const tauri = (window as unknown as { __TAURI__?: { dialog?: { open?: (opts: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
+    if (!tauri?.dialog?.open) {
+      return;
+    }
+
+    try {
+      const selected = await tauri.dialog.open({
+        title: 'Select opencode binary',
+        multiple: false,
+        directory: false,
+      });
+      if (typeof selected === 'string' && selected.trim().length > 0) {
+        setOpencodeBinary(selected.trim());
+      }
+    } catch {
+      // ignore
+    }
+  }, [isDesktopApp]);
+
+  const handleApplyPath = React.useCallback(async () => {
+    setIsRetrying(true);
+    try {
+      await updateDesktopSettings({ opencodeBinary: opencodeBinary.trim() });
+      await fetch('/api/config/reload', { method: 'POST' });
+    } finally {
+      setTimeout(() => setIsRetrying(false), 1000);
+    }
+  }, [opencodeBinary]);
 
   const handleCopy = React.useCallback(async () => {
     try {
@@ -168,6 +230,39 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
             {isRetrying ? 'Retrying…' : 'Retry'}
           </button>
         </div>
+
+        <div className="mx-auto w-full max-w-xl pt-4">
+          <div className="space-y-2">
+            <div className="text-sm text-muted-foreground">Already installed? Set the OpenCode CLI path:</div>
+            <div className="flex gap-2">
+              <Input
+                value={opencodeBinary}
+                onChange={(e) => setOpencodeBinary(e.target.value)}
+                placeholder="/Users/you/.bun/bin/opencode"
+                disabled={isRetrying}
+                className="flex-1 font-mono text-xs"
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={handleBrowse}
+                disabled={isRetrying || !isDesktopApp || !isTauriShell()}
+              >
+                Browse
+              </Button>
+              <Button
+                type="button"
+                onClick={handleApplyPath}
+                disabled={isRetrying}
+              >
+                Apply
+              </Button>
+            </div>
+            <div className="text-xs text-muted-foreground/70">
+              Saves to <code className="text-foreground/70">~/.config/openchamber/settings.json</code> and reloads OpenCode configuration.
+            </div>
+          </div>
+        </div>
       </div>
 
       {showHint && (
@@ -177,6 +272,9 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
           </p>
           <p className="text-sm text-muted-foreground/70">
             or set <code className="text-foreground/70">OPENCODE_BINARY</code> environment variable.
+          </p>
+          <p className="text-sm text-muted-foreground/70">
+            If you see <code className="text-foreground/70">env: node: No such file or directory</code> or <code className="text-foreground/70">env: bun: No such file or directory</code>, install that runtime or ensure it is on PATH.
           </p>
         </div>
       )}

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
-import type { ProjectEntry, WorktreeDefaults } from '@/lib/api/types';
+import type { ProjectEntry } from '@/lib/api/types';
 import type { DesktopSettings } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getSafeStorage } from './utils/safeStorage';
@@ -27,7 +27,6 @@ interface ProjectsStore {
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings) => void;
   getActiveProject: () => ProjectEntry | null;
-  updateWorktreeDefaults: (projectId: string, defaults: Partial<WorktreeDefaults>) => void;
 }
 
 const safeStorage = getSafeStorage();
@@ -124,20 +123,6 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       project.sidebarCollapsed = candidate.sidebarCollapsed;
     }
-    if (candidate.worktreeDefaults && typeof candidate.worktreeDefaults === 'object') {
-      const wt = candidate.worktreeDefaults as Record<string, unknown>;
-      const defaults: WorktreeDefaults = {};
-      if (typeof wt.baseBranch === 'string') {
-        defaults.baseBranch = wt.baseBranch;
-      }
-      if (typeof wt.autoCreateWorktree === 'boolean') {
-        defaults.autoCreateWorktree = wt.autoCreateWorktree;
-      }
-      if (Object.keys(defaults).length > 0) {
-        project.worktreeDefaults = defaults;
-      }
-    }
-
     result.push(project);
   }
 
@@ -452,37 +437,6 @@ export const useProjectsStore = create<ProjectsStore>()(
       return projects.find((project) => project.id === activeProjectId) ?? null;
     },
 
-    updateWorktreeDefaults: (projectId: string, defaults: Partial<WorktreeDefaults>) => {
-      if (vscodeWorkspace) {
-        return;
-      }
-      const { projects, activeProjectId } = get();
-      const target = projects.find((project) => project.id === projectId);
-      if (!target) {
-        return;
-      }
-
-      const merged: WorktreeDefaults = { ...target.worktreeDefaults };
-      if (defaults.baseBranch !== undefined) {
-        if (defaults.baseBranch.trim()) {
-          merged.baseBranch = defaults.baseBranch.trim();
-        } else {
-          delete merged.baseBranch;
-        }
-      }
-      if (defaults.autoCreateWorktree !== undefined) {
-        merged.autoCreateWorktree = defaults.autoCreateWorktree;
-      }
-
-      const nextProjects = projects.map((project) =>
-        project.id === projectId
-          ? { ...project, worktreeDefaults: Object.keys(merged).length > 0 ? merged : undefined }
-          : project
-      );
-
-      set({ projects: nextProjects });
-      persistProjects(nextProjects, activeProjectId);
-    },
   }), { name: 'projects-store' })
 );
 

@@ -13,6 +13,10 @@ const sizeConfig = {
   lg: { container: 'gap-1.5', dot: 'h-2 w-2' },
 };
 
+const getPulseDelayMs = (index: number): number => {
+  return ((index % 3) + Math.floor(index / 3)) * 150;
+};
+
 const GridLoader: React.FC<GridLoaderProps> = ({ className, size = 'md' }) => {
   const config = sizeConfig[size];
 
@@ -25,7 +29,7 @@ const GridLoader: React.FC<GridLoaderProps> = ({ className, size = 'md' }) => {
         <div
           key={i}
           className={cn('rounded-full bg-current animate-grid-pulse', config.dot)}
-          style={{ animationDelay: `${((i % 3) + Math.floor(i / 3)) * 150}ms` }}
+          style={{ animationDelay: `${getPulseDelayMs(i)}ms` }}
         />
       ))}
     </div>

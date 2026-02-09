@@ -37,6 +37,8 @@ export type DesktopSettings = {
   darkThemeId?: string;
   lastDirectory?: string;
   homeDirectory?: string;
+  // Optional absolute path to `opencode` binary.
+  opencodeBinary?: string;
   projects?: ProjectEntry[];
   activeProjectId?: string;
   approvedDirectories?: string[];
@@ -71,12 +73,21 @@ export type DesktopSettings = {
   usageRefreshIntervalMs?: number;
   usageDisplayMode?: 'usage' | 'remaining';
   usageDropdownProviders?: string[];
+  usageSelectedModels?: Record<string, string[]>;  // Map of providerId -> selected model names
+  usageCollapsedFamilies?: Record<string, string[]>;  // Map of providerId -> collapsed family IDs (UsagePage)
+  usageExpandedFamilies?: Record<string, string[]>;  // Map of providerId -> EXPANDED family IDs (header dropdown - inverted)
+  usageModelGroups?: Record<string, {
+    customGroups?: Array<{id: string; label: string; models: string[]; order: number}>;
+    modelAssignments?: Record<string, string>;  // modelName -> groupId
+    renamedGroups?: Record<string, string>;  // groupId -> custom label
+  }>;  // Per-provider custom model groups configuration
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   defaultModel?: string; // format: "provider/model"
   defaultVariant?: string;
   defaultAgent?: string;
   defaultGitIdentityId?: string; // ''/undefined = unset, 'global' or profile id
+  openInAppId?: string;
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
@@ -338,5 +349,142 @@ export const restartToApplyUpdate = async (): Promise<boolean> => {
   } catch (error) {
     console.warn('Failed to restart for update (tauri)', error);
     return false;
+  }
+};
+
+export const openDesktopPath = async (path: string, app?: string | null): Promise<boolean> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return false;
+  }
+
+  const trimmed = path?.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    await tauri?.core?.invoke?.('desktop_open_path', {
+      path: trimmed,
+      app: typeof app === 'string' && app.trim().length > 0 ? app.trim() : undefined,
+    });
+    return true;
+  } catch (error) {
+    console.warn('Failed to open path (tauri)', error);
+    return false;
+  }
+};
+
+export const filterInstalledDesktopApps = async (apps: string[]): Promise<string[]> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return [];
+  }
+
+  const candidate = Array.isArray(apps) ? apps.filter((value) => typeof value === 'string') : [];
+  if (candidate.length === 0) {
+    return [];
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_filter_installed_apps', {
+      apps: candidate,
+    });
+    return Array.isArray(result) ? result.filter((value) => typeof value === 'string') : [];
+  } catch (error) {
+    console.warn('Failed to check installed apps (tauri)', error);
+    return [];
+  }
+};
+
+export const fetchDesktopAppIcons = async (apps: string[]): Promise<Record<string, string>> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return {};
+  }
+
+  const candidate = Array.isArray(apps) ? apps.filter((value) => typeof value === 'string') : [];
+  if (candidate.length === 0) {
+    return {};
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_fetch_app_icons', {
+      apps: candidate,
+    });
+    if (!Array.isArray(result)) {
+      return {};
+    }
+    const map: Record<string, string> = {};
+    for (const entry of result) {
+      if (!entry || typeof entry !== 'object') continue;
+      const candidateEntry = entry as { app?: unknown; data_url?: unknown };
+      if (typeof candidateEntry.app !== 'string' || typeof candidateEntry.data_url !== 'string') continue;
+      map[candidateEntry.app] = candidateEntry.data_url;
+    }
+    return map;
+  } catch (error) {
+    console.warn('Failed to fetch installed app icons (tauri)', error);
+    return {};
+  }
+};
+
+export type InstalledDesktopAppInfo = {
+  name: string;
+  iconDataUrl?: string | null;
+};
+
+export type FetchDesktopInstalledAppsResult = {
+  apps: InstalledDesktopAppInfo[];
+  success: boolean;
+  hasCache: boolean;
+  isCacheStale: boolean;
+};
+
+export const fetchDesktopInstalledApps = async (
+  apps: string[],
+  force?: boolean
+): Promise<FetchDesktopInstalledAppsResult> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return { apps: [], success: false, hasCache: false, isCacheStale: false };
+  }
+
+  const candidate = Array.isArray(apps) ? apps.filter((value) => typeof value === 'string') : [];
+  if (candidate.length === 0) {
+    return { apps: [], success: true, hasCache: false, isCacheStale: false };
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_get_installed_apps', {
+      apps: candidate,
+      force: force === true ? true : undefined,
+    });
+    if (!result || typeof result !== 'object') {
+      return { apps: [], success: false, hasCache: false, isCacheStale: false };
+    }
+    const payload = result as { apps?: unknown; hasCache?: unknown; isCacheStale?: unknown };
+    if (!Array.isArray(payload.apps)) {
+      return { apps: [], success: false, hasCache: false, isCacheStale: false };
+    }
+    const installedApps = payload.apps
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => {
+        const record = entry as { name?: unknown; iconDataUrl?: unknown };
+        return {
+          name: typeof record.name === 'string' ? record.name : '',
+          iconDataUrl: typeof record.iconDataUrl === 'string' ? record.iconDataUrl : null,
+        };
+      })
+      .filter((entry) => entry.name.length > 0);
+    return {
+      apps: installedApps,
+      success: true,
+      hasCache: payload.hasCache === true,
+      isCacheStale: payload.isCacheStale === true,
+    };
+  } catch (error) {
+    console.warn('Failed to fetch installed apps (tauri)', error);
+    return { apps: [], success: false, hasCache: false, isCacheStale: false };
   }
 };

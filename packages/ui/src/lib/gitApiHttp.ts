@@ -11,8 +11,6 @@ import type {
   GitDeleteRemoteBranchPayload,
   GeneratedCommitMessage,
   GitWorktreeInfo,
-  GitAddWorktreePayload,
-  GitRemoveWorktreePayload,
   CreateGitCommitOptions,
   GitCommitResult,
   GitPushResult,
@@ -23,6 +21,7 @@ import type {
   GitIdentityProfile,
   GitIdentitySummary,
   DiscoveredGitCredential,
+  MergeConflictDetails,
 } from './api/types';
 
 declare global {
@@ -289,56 +288,6 @@ export async function listGitWorktrees(directory: string): Promise<GitWorktreeIn
     throw new Error(error.error || 'Failed to list worktrees');
   }
   return response.json();
-}
-
-export async function addGitWorktree(directory: string, payload: GitAddWorktreePayload): Promise<{ success: boolean; path: string; branch: string }> {
-  if (!payload?.path || !payload?.branch) {
-    throw new Error('path and branch are required to add a worktree');
-  }
-
-  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to add worktree');
-  }
-
-  return response.json();
-}
-
-export async function removeGitWorktree(directory: string, payload: GitRemoveWorktreePayload): Promise<{ success: boolean }> {
-  if (!payload?.path) {
-    throw new Error('path is required to remove a worktree');
-  }
-
-  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to remove worktree');
-  }
-
-  return response.json();
-}
-
-export async function ensureOpenChamberIgnored(directory: string): Promise<void> {
-  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-  const response = await fetch(buildUrl(`${API_BASE}/ignore-openchamber`, directory), {
-    method: 'POST',
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: response.statusText }));
-    throw new Error(error.error || 'Failed to update git ignore');
-  }
 }
 
 export async function createGitCommit(
@@ -613,4 +562,123 @@ export async function getRemoteUrl(directory: string, remote?: string): Promise<
   }
   const data = await response.json();
   return data.url ?? null;
+}
+
+export async function getRemotes(directory: string): Promise<Array<{ name: string; fetchUrl: string; pushUrl: string }>> {
+  const response = await fetch(buildUrl(`${API_BASE}/remotes`, directory));
+  if (!response.ok) {
+    throw new Error(`Failed to get remotes: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function rebase(
+  directory: string,
+  options: { onto: string }
+): Promise<{ success: boolean; conflict?: boolean; conflictFiles?: string[] }> {
+  const response = await fetch(buildUrl(`${API_BASE}/rebase`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to rebase');
+  }
+  return response.json();
+}
+
+export async function abortRebase(directory: string): Promise<{ success: boolean }> {
+  const response = await fetch(buildUrl(`${API_BASE}/rebase/abort`, directory), {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to abort rebase');
+  }
+  return response.json();
+}
+
+export async function merge(
+  directory: string,
+  options: { branch: string }
+): Promise<{ success: boolean; conflict?: boolean; conflictFiles?: string[] }> {
+  const response = await fetch(buildUrl(`${API_BASE}/merge`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to merge');
+  }
+  return response.json();
+}
+
+export async function abortMerge(directory: string): Promise<{ success: boolean }> {
+  const response = await fetch(buildUrl(`${API_BASE}/merge/abort`, directory), {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to abort merge');
+  }
+  return response.json();
+}
+
+export async function continueRebase(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const response = await fetch(buildUrl(`${API_BASE}/rebase/continue`, directory), {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to continue rebase');
+  }
+  return response.json();
+}
+
+export async function continueMerge(directory: string): Promise<{ success: boolean; conflict: boolean; conflictFiles?: string[] }> {
+  const response = await fetch(buildUrl(`${API_BASE}/merge/continue`, directory), {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to continue merge');
+  }
+  return response.json();
+}
+
+export async function stash(
+  directory: string,
+  options?: { message?: string; includeUntracked?: boolean }
+): Promise<{ success: boolean }> {
+  const response = await fetch(buildUrl(`${API_BASE}/stash`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options || {}),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to stash');
+  }
+  return response.json();
+}
+
+export async function stashPop(directory: string): Promise<{ success: boolean }> {
+  const response = await fetch(buildUrl(`${API_BASE}/stash/pop`, directory), {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to pop stash');
+  }
+  return response.json();
+}
+
+export async function getConflictDetails(directory: string): Promise<MergeConflictDetails> {
+  const response = await fetch(buildUrl(`${API_BASE}/conflict-details`, directory));
+  if (!response.ok) {
+    throw new Error(`Failed to get conflict details: ${response.statusText}`);
+  }
+  return response.json();
 }

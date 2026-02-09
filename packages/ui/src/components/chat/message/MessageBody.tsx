@@ -4,6 +4,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import UserTextPart from './parts/UserTextPart';
 import ToolPart from './parts/ToolPart';
 import ProgressiveGroup from './parts/ProgressiveGroup';
+import ReasoningPart from './parts/ReasoningPart';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
@@ -556,8 +557,11 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     const visibleActivityPartsForTurn = React.useMemo(() => {
         if (!turnGroupingContext) return [];
 
+        // Filter out reasoning if showReasoningTraces is off.
+        // Justification parts are already filtered at the source (useTurnGrouping)
+        // based on showTextJustificationActivity, so we keep them here.
         const base = !showReasoningTraces
-            ? activityPartsForTurn.filter((activity) => activity.kind === 'tool')
+            ? activityPartsForTurn.filter((activity) => activity.kind !== 'reasoning')
             : activityPartsForTurn;
 
         // Tools rendered standalone are excluded from Activity group.
@@ -581,10 +585,18 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             (segment) => segment.afterToolPartId !== null
         );
 
-        if (visibleActivityPartsForTurn.length > 1 || (hasTaskSplitSegments && visibleActivityPartsForTurn.length > 0)) {
+        const hasReasoningActivity = visibleActivityPartsForTurn.some(
+            (activity) => activity.kind === 'reasoning'
+        );
+
+        if (
+            visibleActivityPartsForTurn.length > 1 ||
+            (hasTaskSplitSegments && visibleActivityPartsForTurn.length > 0) ||
+            hasReasoningActivity
+        ) {
             setHasEverHadMultipleVisibleActivities(true);
         }
-    }, [turnGroupingContext, visibleActivityPartsForTurn.length]);
+    }, [turnGroupingContext, visibleActivityPartsForTurn]);
 
     const shouldShowActivityGroup = Boolean(turnGroupingContext && hasEverHadMultipleVisibleActivities);
 
@@ -611,8 +623,11 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             activityGroupSegmentsForMessage
                 .filter((segment) => (segment.afterToolPartId ?? null) === afterToolPartId)
                 .forEach((segment) => {
+                    // Filter out reasoning if showReasoningTraces is off.
+                    // Justification parts are already filtered at the source (useTurnGrouping)
+                    // based on showTextJustificationActivity, so we keep them here.
                     const visibleSegmentParts = !showReasoningTraces
-                        ? segment.parts.filter((activity) => activity.kind === 'tool')
+                        ? segment.parts.filter((activity) => activity.kind !== 'reasoning')
                         : segment.parts;
 
                     if (visibleSegmentParts.length === 0) {
@@ -638,6 +653,8 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         };
 
         // Activity groups and standalone tasks are interleaved in message order.
+        // Note: Reasoning parts are rendered in the visibleParts.forEach loop below
+        // when Activity group isn't showing, to maintain proper ordering with tools.
         renderActivitySegments(null);
 
         standaloneToolParts.forEach((standaloneToolPart) => {
@@ -715,6 +732,23 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
                     element = toolElement;
                     endTime = isFinalized && typeof time?.end === 'number' ? time.end : null;
+                } else if (activity.kind === 'reasoning' && showReasoningTraces) {
+                    // Fallback rendering for reasoning when Activity group isn't shown
+                    const time = (part as { time?: { end?: number | null | undefined } | null | undefined }).time;
+                    const partEndTime = typeof time?.end === 'number' ? time.end : null;
+
+                    const reasoningElement = (
+                        <FadeInOnReveal key={`reasoning-${activity.id}`}>
+                            <ReasoningPart
+                                part={part}
+                                messageId={messageId}
+                                onContentChange={onContentChange}
+                            />
+                        </FadeInOnReveal>
+                    );
+
+                    element = reasoningElement;
+                    endTime = partEndTime;
                 }
 
                 if (element) {
@@ -752,6 +786,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         expandedTools,
         isMobile,
         isToolFinalized,
+        messageId,
         onContentChange,
         onShowPopup,
         onToggleTool,

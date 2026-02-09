@@ -1,10 +1,10 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import type { GitIdentityProfile, CommitFileEntry } from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
-import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import {
   useGitStore,
@@ -15,11 +15,21 @@ import {
   useIsGitRepo,
 } from '@/stores/useGitStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { RiGitBranchLine, RiLoader4Line } from '@remixicon/react';
+import { ScrollShadow } from '@/components/ui/ScrollShadow';
+import {
+  RiGitBranchLine,
+  RiGitMergeLine,
+  RiGitCommitLine,
+  RiGitPullRequestLine,
+  RiLoader4Line,
+  RiSplitCellsHorizontal,
+} from '@remixicon/react';
 import { toast } from '@/components/ui';
+import { AnimatedTabs } from '@/components/ui/animated-tabs';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -38,14 +48,29 @@ import { useUIStore } from '@/stores/useUIStore';
 import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 
 import { GitHeader } from './git/GitHeader';
-import { GitEmptyState } from './git/GitEmptyState';
 import { ChangesSection } from './git/ChangesSection';
 import { CommitSection } from './git/CommitSection';
+import { GitEmptyState } from './git/GitEmptyState';
 import { HistorySection } from './git/HistorySection';
 import { PullRequestSection } from './git/PullRequestSection';
+import { ConflictDialog } from './git/ConflictDialog';
+import { StashDialog } from './git/StashDialog';
+import { InProgressOperationBanner } from './git/InProgressOperationBanner';
+import { BranchIntegrationSection, type OperationLogEntry } from './git/BranchIntegrationSection';
+import type { GitRemote } from '@/lib/gitApi';
+import { BranchPickerDialog } from '@/components/session/BranchPickerDialog';
+import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
+import { cn } from '@/lib/utils';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
+type BranchOperation = 'merge' | 'rebase' | null;
+type ActionTab = 'commit' | 'branch' | 'pr' | 'worktree';
+
+const GIT_ACTION_TAB_STORAGE_KEY = 'oc.git.actionTab';
+
+const isActionTab = (value: unknown): value is ActionTab =>
+  value === 'commit' || value === 'branch' || value === 'pr' || value === 'worktree';
 
 
 type GitViewSnapshot = {
@@ -185,7 +210,14 @@ const matchGitmojiFromSubject = (subject: string, gitmojis: GitmojiEntry[]): Git
 
 const gitViewSnapshots = new Map<string, GitViewSnapshot>();
 
-export const GitView: React.FC = () => {
+const normalizePath = (value?: string | null): string =>
+  (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+
+interface GitViewProps {
+  mode?: 'full' | 'sidebar';
+}
+
+export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   const { git } = useRuntimeAPIs();
   const currentDirectory = useEffectiveDirectory();
   const { currentSessionId, worktreeMetadata: worktreeMap } = useSessionStore();
@@ -220,25 +252,66 @@ export const GitView: React.FC = () => {
   }, [currentDirectory]);
 
   const settingsGitmojiEnabled = useConfigStore((state) => state.settingsGitmojiEnabled);
+  const projects = useProjectsStore((state) => state.projects);
+  const [isBranchPickerOpen, setIsBranchPickerOpen] = React.useState(false);
+  const [rootBranchHint, setRootBranchHint] = React.useState<string | null>(null);
 
-  const activeProject = useProjectsStore((state) => state.getActiveProject());
-  const baseBranch = React.useMemo(() => {
-    const fromProject = activeProject?.worktreeDefaults?.baseBranch;
-    if (typeof fromProject === 'string' && fromProject.trim().length > 0) {
-      return fromProject.trim();
+  React.useEffect(() => {
+    const projectRoot = worktreeMetadata?.projectDirectory;
+    if (!projectRoot) {
+      setRootBranchHint(null);
+      return;
     }
-    return 'main';
-  }, [activeProject?.worktreeDefaults?.baseBranch]);
+
+    let cancelled = false;
+    void getRootBranch(projectRoot)
+      .then((branch) => {
+        if (cancelled) return;
+        const normalized = branch.trim();
+        setRootBranchHint(normalized && normalized !== 'HEAD' ? normalized : null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRootBranchHint(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [worktreeMetadata?.projectDirectory]);
+
+  const branchPickerProject = React.useMemo(() => {
+    const current = normalizePath(currentDirectory);
+    const worktreeRoot = normalizePath(worktreeMetadata?.projectDirectory);
+    const best = projects
+      .map((project) => ({
+        id: project.id,
+        path: project.path,
+        label: project.label,
+        normalizedPath: normalizePath(project.path),
+      }))
+      .sort((a, b) => b.normalizedPath.length - a.normalizedPath.length)
+      .find((project) => {
+        if (!project.normalizedPath) return false;
+        if (worktreeRoot && project.normalizedPath === worktreeRoot) return true;
+        return current === project.normalizedPath || current.startsWith(`${project.normalizedPath}/`);
+      });
+
+    return best ?? null;
+  }, [currentDirectory, projects, worktreeMetadata?.projectDirectory]);
 
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
   );
   const [isGitmojiPickerOpen, setIsGitmojiPickerOpen] = React.useState(false);
+  const actionPanelScrollRef = React.useRef<HTMLElement | null>(null);
   const [syncAction, setSyncAction] = React.useState<SyncAction>(null);
   const [commitAction, setCommitAction] = React.useState<CommitAction>(null);
   const [logMaxCountLocal, setLogMaxCountLocal] = React.useState<number>(25);
   const [isSettingIdentity, setIsSettingIdentity] = React.useState(false);
   const { triggerFireworks } = useFireworksCelebration();
+  const isSidebarMode = mode === 'sidebar';
 
   const autoAppliedDefaultRef = React.useRef<Map<string, string>>(new Map());
   const identityApplyCountRef = React.useRef(0);
@@ -266,6 +339,17 @@ export const GitView: React.FC = () => {
     initialSnapshot?.generatedHighlights ?? []
   );
 
+  const scrollActionPanelToBottom = React.useCallback(() => {
+    const scrollTarget = actionPanelScrollRef.current;
+    if (!scrollTarget) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollTarget.scrollTo({ top: scrollTarget.scrollHeight, behavior: 'smooth' });
+      });
+    });
+  }, []);
+
   const repoRootForIntegrate = worktreeMetadata?.projectDirectory || null;
   const sourceBranchForIntegrate = status?.current || null;
   const shouldShowIntegrateCommits = React.useMemo(() => {
@@ -277,15 +361,31 @@ export const GitView: React.FC = () => {
   }, [status?.tracking]);
   const defaultTargetBranch = React.useMemo(() => {
     const fromMeta = worktreeMetadata?.createdFromBranch;
-    if (typeof fromMeta === 'string' && fromMeta.trim().length > 0) {
-      return fromMeta.trim();
+    const normalizedFromMeta = typeof fromMeta === 'string' ? fromMeta.trim() : '';
+    const current = typeof status?.current === 'string' ? status.current.trim() : '';
+    const normalizedRoot = typeof rootBranchHint === 'string' ? rootBranchHint.trim() : '';
+
+    if (normalizedFromMeta) {
+      const looksLikeCorruptedSelfTarget =
+        normalizedFromMeta === current &&
+        normalizedFromMeta.startsWith('opencode/') &&
+        normalizedRoot.length > 0 &&
+        normalizedRoot !== normalizedFromMeta;
+
+      if (looksLikeCorruptedSelfTarget) {
+        return normalizedRoot;
+      }
+
+      return normalizedFromMeta;
     }
-    const fromProject = activeProject?.worktreeDefaults?.baseBranch;
-    if (typeof fromProject === 'string' && fromProject.trim().length > 0) {
-      return fromProject.trim();
+    if (normalizedRoot) {
+      return normalizedRoot;
     }
-    return 'main';
-  }, [worktreeMetadata?.createdFromBranch, activeProject?.worktreeDefaults?.baseBranch]);
+    if (current) {
+      return current;
+    }
+    return 'HEAD';
+  }, [worktreeMetadata?.createdFromBranch, status, rootBranchHint]);
   const clearGeneratedHighlights = React.useCallback(() => {
     setGeneratedHighlights([]);
   }, []);
@@ -295,6 +395,82 @@ export const GitView: React.FC = () => {
   const [remoteUrl, setRemoteUrl] = React.useState<string | null>(null);
   const [gitmojiEmojis, setGitmojiEmojis] = React.useState<GitmojiEntry[]>([]);
   const [gitmojiSearch, setGitmojiSearch] = React.useState('');
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = React.useState(false);
+  const [actionTab, setActionTab] = React.useState<ActionTab>(() => {
+    if (typeof window === 'undefined') {
+      return 'commit';
+    }
+    const stored = window.localStorage.getItem(GIT_ACTION_TAB_STORAGE_KEY);
+    return isActionTab(stored) ? stored : 'commit';
+  });
+  const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
+  const [branchOperation, setBranchOperation] = React.useState<BranchOperation>(null);
+  const [operationLogs, setOperationLogs] = React.useState<OperationLogEntry[]>([]);
+  const [conflictDialogOpen, setConflictDialogOpen] = React.useState(false);
+  const [conflictFiles, setConflictFiles] = React.useState<string[]>([]);
+  const [conflictOperation, setConflictOperation] = React.useState<'merge' | 'rebase'>('merge');
+
+  // Conflict state persistence key
+  const conflictStorageKey = React.useMemo(() => {
+    if (!currentSessionId) return null;
+    return `openchamber.conflict:${currentSessionId}`;
+  }, [currentSessionId]);
+
+  // Save conflict state to localStorage
+  const persistConflictState = React.useCallback((
+    directory: string,
+    files: string[],
+    operation: 'merge' | 'rebase'
+  ) => {
+    if (!conflictStorageKey || typeof window === 'undefined') return;
+    const payload = { directory, conflictFiles: files, operation };
+    window.localStorage.setItem(conflictStorageKey, JSON.stringify(payload));
+  }, [conflictStorageKey]);
+
+  // Clear conflict state from localStorage
+  const clearConflictState = React.useCallback(() => {
+    if (!conflictStorageKey || typeof window === 'undefined') return;
+    window.localStorage.removeItem(conflictStorageKey);
+  }, [conflictStorageKey]);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(GIT_ACTION_TAB_STORAGE_KEY, actionTab);
+  }, [actionTab]);
+
+  // Restore conflict state from localStorage on mount
+  React.useEffect(() => {
+    if (!conflictStorageKey || typeof window === 'undefined' || !currentDirectory) return;
+
+    const raw = window.localStorage.getItem(conflictStorageKey);
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as {
+        directory: string;
+        conflictFiles: string[];
+        operation: 'merge' | 'rebase';
+      };
+
+      // Validate the stored state matches current directory
+      if (parsed.directory !== currentDirectory) {
+        window.localStorage.removeItem(conflictStorageKey);
+        return;
+      }
+
+      // Restore conflict state
+      setConflictFiles(parsed.conflictFiles ?? []);
+      setConflictOperation(parsed.operation ?? 'merge');
+      setConflictDialogOpen(true);
+    } catch {
+      window.localStorage.removeItem(conflictStorageKey);
+    }
+  }, [conflictStorageKey, currentDirectory]);
+  const [stashDialogOpen, setStashDialogOpen] = React.useState(false);
+  const [stashDialogOperation, setStashDialogOperation] = React.useState<'merge' | 'rebase'>('merge');
+  const [stashDialogBranch, setStashDialogBranch] = React.useState('');
 
   const handleCopyCommitHash = React.useCallback((hash: string) => {
     navigator.clipboard
@@ -379,6 +555,14 @@ export const GitView: React.FC = () => {
       return;
     }
     git.getRemoteUrl(currentDirectory).then(setRemoteUrl).catch(() => setRemoteUrl(null));
+  }, [currentDirectory, git]);
+
+  React.useEffect(() => {
+    if (!currentDirectory || !git?.getRemotes) {
+      setRemotes([]);
+      return;
+    }
+    git.getRemotes(currentDirectory).then(setRemotes).catch(() => setRemotes([]));
   }, [currentDirectory, git]);
 
   React.useEffect(() => {
@@ -505,7 +689,7 @@ export const GitView: React.FC = () => {
     };
   }, [beginIdentityApply, currentDirectory, defaultGitIdentityId, endIdentityApply, git, isGitRepo, refreshIdentity]);
 
-    const changeEntries = React.useMemo(() => {
+  const changeEntries = React.useMemo(() => {
     if (!status) return [];
     const files = status.files ?? [];
     const unique = new Map<string, (typeof files)[number]>();
@@ -541,22 +725,22 @@ export const GitView: React.FC = () => {
     });
   }, [status, changeEntries, hasUserAdjustedSelection]);
 
-  const handleSyncAction = async (action: Exclude<SyncAction, null>) => {
+  const handleSyncAction = async (action: Exclude<SyncAction, null>, remote: GitRemote) => {
     if (!currentDirectory) return;
     setSyncAction(action);
 
     try {
       if (action === 'fetch') {
-        await git.gitFetch(currentDirectory);
-        toast.success('Fetched latest updates');
+        await git.gitFetch(currentDirectory, { remote: remote.name });
+        toast.success(`Fetched from ${remote.name}`);
       } else if (action === 'pull') {
-        const result = await git.gitPull(currentDirectory);
+        const result = await git.gitPull(currentDirectory, { remote: remote.name });
         toast.success(
-          `Pulled ${result.files.length} file${result.files.length === 1 ? '' : 's'}`
+          `Pulled ${result.files.length} file${result.files.length === 1 ? '' : 's'} from ${remote.name}`
         );
       } else if (action === 'push') {
-        await git.gitPush(currentDirectory);
-        toast.success('Pushed to remote');
+        await git.gitPush(currentDirectory, { remote: remote.name });
+        toast.success(`Pushed to ${remote.name}`);
       }
 
       await refreshStatusAndBranches(false);
@@ -650,7 +834,7 @@ export const GitView: React.FC = () => {
       }
       setGeneratedHighlights(highlights);
 
-      toast.success('Commit message generated');
+      scrollActionPanelToBottom();
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to generate commit message';
@@ -658,7 +842,7 @@ export const GitView: React.FC = () => {
     } finally {
       setIsGeneratingMessage(false);
     }
-  }, [currentDirectory, selectedPaths, git, settingsGitmojiEnabled, gitmojiEmojis]);
+  }, [currentDirectory, selectedPaths, git, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom]);
 
   const handleCreateBranch = async (branchName: string) => {
     if (!currentDirectory || !status) return;
@@ -778,6 +962,50 @@ export const GitView: React.FC = () => {
       .sort();
   }, [branches]);
 
+  const effectiveRemotes = React.useMemo<GitRemote[]>(() => {
+    if (remotes.length > 0) {
+      return remotes;
+    }
+
+    const inferredNames = new Set<string>();
+    const tracking = status?.tracking?.trim();
+    if (tracking && tracking.includes('/')) {
+      inferredNames.add(tracking.split('/')[0]);
+    }
+
+    for (const branchName of remoteBranches) {
+      const slashIndex = branchName.indexOf('/');
+      if (slashIndex > 0) {
+        inferredNames.add(branchName.slice(0, slashIndex));
+      }
+    }
+
+    if (inferredNames.size === 0 && remoteUrl) {
+      inferredNames.add('origin');
+    }
+
+    return Array.from(inferredNames).map((name) => ({
+      name,
+      fetchUrl: remoteUrl ?? '',
+      pushUrl: remoteUrl ?? '',
+    }));
+  }, [remotes, remoteBranches, remoteUrl, status?.tracking]);
+
+  const baseBranch = React.useMemo(() => {
+    const fromMeta = typeof worktreeMetadata?.createdFromBranch === 'string'
+      ? worktreeMetadata.createdFromBranch.trim()
+      : '';
+    if (fromMeta && fromMeta !== 'HEAD') return fromMeta;
+
+    const fromHint = typeof rootBranchHint === 'string' ? rootBranchHint.trim() : '';
+    if (fromHint && fromHint !== 'HEAD') return fromHint;
+
+    if (localBranches.includes('main')) return 'main';
+    if (localBranches.includes('master')) return 'master';
+    if (localBranches.includes('develop')) return 'develop';
+    return 'main';
+  }, [localBranches, rootBranchHint, worktreeMetadata?.createdFromBranch]);
+
   const availableIdentities = React.useMemo(() => {
     const unique = new Map<string, GitIdentityProfile>();
     if (globalIdentity) {
@@ -857,10 +1085,31 @@ export const GitView: React.FC = () => {
     return globalIdentity ?? null;
   }, [currentIdentity, profiles, globalIdentity]);
 
-  const uniqueChangeCount = changeEntries.length;
   const selectedCount = selectedPaths.size;
   const isBusy = isLoading || syncAction !== null || commitAction !== null;
-  const hasChanges = uniqueChangeCount > 0;
+  const canShowIntegrateCommitsSection = Boolean(
+    worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate && shouldShowIntegrateCommits
+  );
+  const canShowPullRequestSection = Boolean(
+    currentDirectory && status?.current && status?.tracking && status.current !== baseBranch
+  );
+  const canShowBranchWorkflows = Boolean(status?.current);
+  const integrateCommitsProps =
+    canShowIntegrateCommitsSection && repoRootForIntegrate && sourceBranchForIntegrate && worktreeMetadata
+      ? {
+          repoRoot: repoRootForIntegrate,
+          sourceBranch: sourceBranchForIntegrate,
+          worktreeMetadata,
+        }
+      : null;
+  const pullRequestProps =
+    canShowPullRequestSection && currentDirectory && status?.current
+      ? {
+          directory: currentDirectory,
+          branch: status.current,
+        }
+      : null;
+  // Keep these sections stable in layout; individual cards render placeholders when unavailable.
 
   const toggleFileSelection = (path: string) => {
     setSelectedPaths((previous) => {
@@ -955,6 +1204,343 @@ export const GitView: React.FC = () => {
     [currentDirectory, setLogMaxCount, fetchLog, git]
   );
 
+  const isUncommittedChangesError = React.useCallback((error: unknown): boolean => {
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    return (
+      message.includes('uncommitted changes') ||
+      message.includes('local changes') ||
+      message.includes('your local changes would be overwritten') ||
+      message.includes('please commit your changes or stash them') ||
+      message.includes('cannot rebase: you have unstaged changes') ||
+      message.includes('error: cannot pull with rebase')
+    );
+  }, []);
+
+  // Helper to add/update operation logs
+  const addOperationLog = React.useCallback((message: string, status: OperationLogEntry['status']) => {
+    setOperationLogs(prev => [...prev, { message, status, timestamp: Date.now() }]);
+  }, []);
+
+  const updateLastLog = React.useCallback((status: OperationLogEntry['status'], message?: string) => {
+    setOperationLogs(prev => {
+      if (prev.length === 0) return prev;
+      const updated = [...prev];
+      updated[updated.length - 1] = {
+        ...updated[updated.length - 1],
+        status,
+        ...(message ? { message } : {}),
+      };
+      return updated;
+    });
+  }, []);
+
+  // Called at start of operation to reset logs
+  const resetOperationLogs = React.useCallback(() => {
+    setOperationLogs([]);
+  }, []);
+
+  // Called when dialog is closed to fully reset state
+  const handleOperationComplete = React.useCallback(() => {
+    setOperationLogs([]);
+    setBranchOperation(null);
+  }, []);
+
+  const handleMerge = React.useCallback(
+    async (branch: string) => {
+      if (!currentDirectory) return;
+      setBranchOperation('merge');
+      resetOperationLogs();
+
+      const currentBranch = status?.current;
+
+      try {
+        // If it's a remote branch (contains '/'), fetch latest first
+        const slashIndex = branch.indexOf('/');
+        if (slashIndex > 0) {
+          const remote = branch.substring(0, slashIndex);
+          const remoteBranch = branch.substring(slashIndex + 1);
+          addOperationLog(`Fetching ${remote}/${remoteBranch}...`, 'running');
+          await git.gitFetch(currentDirectory, { remote, branch: remoteBranch });
+          updateLastLog('done', `Fetched ${remote}/${remoteBranch}`);
+        }
+
+        addOperationLog(`Merging ${branch} into ${currentBranch}...`, 'running');
+        const result = await git.merge(currentDirectory, { branch });
+
+        if (result.conflict) {
+          updateLastLog('error', `Merge conflicts detected`);
+          setConflictFiles(result.conflictFiles ?? []);
+          setConflictOperation('merge');
+          setConflictDialogOpen(true);
+          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'merge');
+        } else {
+          updateLastLog('done', `Merged ${branch} into ${currentBranch}`);
+          clearConflictState();
+          addOperationLog('Refreshing repository status...', 'running');
+          await refreshStatusAndBranches();
+          await refreshLog();
+          updateLastLog('done', 'Repository status updated');
+        }
+      } catch (err) {
+        if (isUncommittedChangesError(err)) {
+          updateLastLog('error', 'Uncommitted changes detected');
+          setStashDialogOperation('merge');
+          setStashDialogBranch(branch);
+          setStashDialogOpen(true);
+        } else {
+          const message = err instanceof Error ? err.message : `Failed to merge ${branch}`;
+          updateLastLog('error', message);
+        }
+      }
+      // Note: branchOperation is cleared when dialog closes via handleOperationComplete
+    },
+    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
+  );
+
+  const handleRebase = React.useCallback(
+    async (branch: string) => {
+      if (!currentDirectory) return;
+      setBranchOperation('rebase');
+      resetOperationLogs();
+
+      const currentBranch = status?.current;
+
+      try {
+        // If it's a remote branch (contains '/'), fetch latest first
+        const slashIndex = branch.indexOf('/');
+        if (slashIndex > 0) {
+          const remote = branch.substring(0, slashIndex);
+          const remoteBranch = branch.substring(slashIndex + 1);
+          addOperationLog(`Fetching ${remote}/${remoteBranch}...`, 'running');
+          await git.gitFetch(currentDirectory, { remote, branch: remoteBranch });
+          updateLastLog('done', `Fetched ${remote}/${remoteBranch}`);
+        }
+
+        addOperationLog(`Rebasing ${currentBranch} onto ${branch}...`, 'running');
+        const result = await git.rebase(currentDirectory, { onto: branch });
+
+        if (result.conflict) {
+          updateLastLog('error', `Rebase conflicts detected`);
+          setConflictFiles(result.conflictFiles ?? []);
+          setConflictOperation('rebase');
+          setConflictDialogOpen(true);
+          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'rebase');
+        } else {
+          updateLastLog('done', `Rebased ${currentBranch} onto ${branch}`);
+          clearConflictState();
+          addOperationLog('Refreshing repository status...', 'running');
+          await refreshStatusAndBranches();
+          await refreshLog();
+          updateLastLog('done', 'Repository status updated');
+        }
+      } catch (err) {
+        if (isUncommittedChangesError(err)) {
+          updateLastLog('error', 'Uncommitted changes detected');
+          setStashDialogOperation('rebase');
+          setStashDialogBranch(branch);
+          setStashDialogOpen(true);
+        } else {
+          const message = err instanceof Error ? err.message : `Failed to rebase onto ${branch}`;
+          updateLastLog('error', message);
+        }
+      }
+      // Note: branchOperation is cleared when dialog closes via handleOperationComplete
+    },
+    [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
+  );
+
+  const handleAbortConflict = React.useCallback(async () => {
+    if (!currentDirectory) return;
+
+    try {
+      if (conflictOperation === 'merge') {
+        await git.abortMerge(currentDirectory);
+        toast.success('Merge aborted');
+      } else {
+        await git.abortRebase(currentDirectory);
+        toast.success('Rebase aborted');
+      }
+      clearConflictState();
+      await refreshStatusAndBranches();
+      await refreshLog();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `Failed to abort ${conflictOperation}`;
+      toast.error(message);
+    }
+  }, [currentDirectory, git, conflictOperation, refreshStatusAndBranches, refreshLog, clearConflictState]);
+
+  // Check if there are unresolved conflicts (files with 'U' status)
+  const hasUnresolvedConflicts = React.useMemo(() => {
+    if (!status?.files) return false;
+    return status.files.some((f) =>
+      (f.index === 'U' || f.working_dir === 'U') ||
+      (f.index === 'A' && f.working_dir === 'A') ||
+      (f.index === 'D' && f.working_dir === 'D')
+    );
+  }, [status?.files]);
+
+  const handleContinueOperation = React.useCallback(async () => {
+    if (!currentDirectory) return;
+
+    try {
+      const isMerge = !!status?.mergeInProgress?.head;
+      const isRebase = !!(status?.rebaseInProgress?.headName || status?.rebaseInProgress?.onto);
+
+      if (isMerge) {
+        const result = await git.continueMerge(currentDirectory);
+        if (result.conflict) {
+          setConflictFiles(result.conflictFiles ?? []);
+          setConflictOperation('merge');
+          setConflictDialogOpen(true);
+          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'merge');
+          toast.error('Merge conflicts detected');
+        } else {
+          clearConflictState();
+          toast.success('Merge completed');
+          await refreshStatusAndBranches();
+          await refreshLog();
+        }
+      } else if (isRebase) {
+        const result = await git.continueRebase(currentDirectory);
+        if (result.conflict) {
+          setConflictFiles(result.conflictFiles ?? []);
+          setConflictOperation('rebase');
+          setConflictDialogOpen(true);
+          persistConflictState(currentDirectory, result.conflictFiles ?? [], 'rebase');
+          toast.error('Rebase conflicts detected');
+        } else {
+          clearConflictState();
+          toast.success('Rebase step completed');
+          await refreshStatusAndBranches();
+          await refreshLog();
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to continue operation';
+      toast.error(message);
+    }
+  }, [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, persistConflictState, clearConflictState]);
+
+  const handleAbortOperation = React.useCallback(async () => {
+    if (!currentDirectory) return;
+
+    try {
+      const isMerge = !!status?.mergeInProgress?.head;
+      if (isMerge) {
+        await git.abortMerge(currentDirectory);
+        toast.success('Merge aborted');
+      } else {
+        await git.abortRebase(currentDirectory);
+        toast.success('Rebase aborted');
+      }
+      clearConflictState();
+      await refreshStatusAndBranches();
+      await refreshLog();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to abort operation';
+      toast.error(message);
+    }
+  }, [currentDirectory, git, status, refreshStatusAndBranches, refreshLog, clearConflictState]);
+
+  const handleResolveWithAIFromBanner = React.useCallback(() => {
+    if (!currentDirectory) return;
+
+    // Determine operation type from status
+    const isMerge = !!status?.mergeInProgress?.head;
+    const operation = isMerge ? 'merge' : 'rebase';
+
+    // Get conflict files from status (files with 'U' status indicate unmerged/conflicted)
+    const filesWithConflicts = status?.files
+      ?.filter((f) => f.index === 'U' || f.working_dir === 'U')
+      .map((f) => f.path) ?? [];
+
+    // Update conflict state and open dialog
+    if (filesWithConflicts.length > 0) {
+      setConflictFiles(filesWithConflicts);
+    }
+    setConflictOperation(operation);
+    setConflictDialogOpen(true);
+  }, [currentDirectory, status]);
+
+  const handleStashAndRetry = React.useCallback(
+    async (restoreAfter: boolean) => {
+      if (!currentDirectory) return;
+
+      const currentBranch = status?.current;
+      const operation = stashDialogOperation;
+      const branch = stashDialogBranch;
+
+      // Stash changes
+      try {
+        await git.stash(currentDirectory, {
+          message: `Auto-stash before ${operation} with ${branch}`,
+          includeUntracked: true,
+        });
+      } catch (stashErr) {
+        const msg = stashErr instanceof Error ? stashErr.message : 'Failed to stash changes';
+        toast.error(msg);
+        return;
+      }
+
+      let operationSucceeded = false;
+      let hasConflict = false;
+
+      try {
+        // Perform the operation
+        if (operation === 'merge') {
+          const result = await git.merge(currentDirectory, { branch });
+          if (result.conflict) {
+            hasConflict = true;
+            setConflictFiles(result.conflictFiles ?? []);
+            setConflictOperation('merge');
+            setConflictDialogOpen(true);
+          } else {
+            operationSucceeded = true;
+            toast.success(`Merged ${branch} into ${currentBranch}`);
+          }
+        } else {
+          const result = await git.rebase(currentDirectory, { onto: branch });
+          if (result.conflict) {
+            hasConflict = true;
+            setConflictFiles(result.conflictFiles ?? []);
+            setConflictOperation('rebase');
+            setConflictDialogOpen(true);
+          } else {
+            operationSucceeded = true;
+            toast.success(`Rebased ${currentBranch} onto ${branch}`);
+          }
+        }
+
+        // Restore stashed changes if requested and operation succeeded
+        if (restoreAfter && operationSucceeded) {
+          try {
+            await git.stashPop(currentDirectory);
+            toast.success('Stashed changes restored');
+          } catch (popErr) {
+            const popMessage = popErr instanceof Error ? popErr.message : 'Failed to restore stashed changes';
+            toast.error(popMessage);
+          }
+        } else if (restoreAfter && hasConflict) {
+          toast.info('Stashed changes will need to be restored manually after resolving conflicts');
+        }
+
+        await refreshStatusAndBranches();
+        await refreshLog();
+      } catch (err) {
+        // If the operation failed (not due to conflicts), try to restore stash
+        if (restoreAfter) {
+          try {
+            await git.stashPop(currentDirectory);
+          } catch {
+            // Ignore stash pop errors in this case
+          }
+        }
+        throw err;
+      }
+    },
+    [currentDirectory, git, status, stashDialogOperation, stashDialogBranch, refreshStatusAndBranches, refreshLog]
+  );
+
   if (!currentDirectory) {
     return (
       <div className="flex h-full items-center justify-center px-4 text-center">
@@ -998,9 +1584,10 @@ export const GitView: React.FC = () => {
         remoteBranches={remoteBranches}
         branchInfo={branches?.branches}
         syncAction={syncAction}
-        onFetch={() => handleSyncAction('fetch')}
-        onPull={() => handleSyncAction('pull')}
-        onPush={() => handleSyncAction('push')}
+        remotes={effectiveRemotes}
+        onFetch={(remote) => handleSyncAction('fetch', remote)}
+        onPull={(remote) => handleSyncAction('pull', remote)}
+        onPush={(remote) => handleSyncAction('push', remote)}
         onCheckoutBranch={handleCheckoutBranch}
         onCreateBranch={handleCreateBranch}
         onRenameBranch={handleRenameBranch}
@@ -1009,80 +1596,186 @@ export const GitView: React.FC = () => {
         onSelectIdentity={handleApplyIdentity}
         isApplyingIdentity={isSettingIdentity}
         isWorktreeMode={!!worktreeMetadata}
+        isSidebarMode={isSidebarMode}
+        onOpenHistory={() => setIsHistoryDialogOpen(true)}
+        onOpenBranchPicker={branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
       />
 
-        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="p-3">
-          <div className="flex flex-col gap-3">
-            {/* Two-column layout on large screens: Changes + Commit */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {hasChanges ? (
-                <ChangesSection
-                  changeEntries={changeEntries}
-                  selectedPaths={selectedPaths}
-                  diffStats={status?.diffStats}
-                  revertingPaths={revertingPaths}
-                  onToggleFile={toggleFileSelection}
-                  onSelectAll={selectAll}
-                  onClearSelection={clearSelection}
-                  onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
-                  onRevertFile={handleRevertFile}
-                />
-              ) : (
-                <div className="lg:col-span-2 flex justify-center">
-                  <GitEmptyState
-                    behind={status?.behind ?? 0}
-                    onPull={() => handleSyncAction('pull')}
-                    isPulling={syncAction === 'pull'}
-                  />
-                </div>
-              )}
+      {/* In-progress operation banner */}
+      {currentDirectory && (
+        (status?.mergeInProgress?.head) ||
+        (status?.rebaseInProgress?.headName || status?.rebaseInProgress?.onto)
+      ) && (
+          <InProgressOperationBanner
+            mergeInProgress={status?.mergeInProgress}
+            rebaseInProgress={status?.rebaseInProgress}
+            onContinue={handleContinueOperation}
+            onAbort={handleAbortOperation}
+            onResolveWithAI={handleResolveWithAIFromBanner}
+            hasUnresolvedConflicts={hasUnresolvedConflicts}
+            isLoading={isLoading}
+          />
+        )}
 
-              {changeEntries.length > 0 && (
-                <CommitSection
-                  selectedCount={selectedCount}
-                  commitMessage={commitMessage}
-                  onCommitMessageChange={setCommitMessage}
-                  generatedHighlights={generatedHighlights}
-                  onInsertHighlights={handleInsertHighlights}
-                  onClearHighlights={clearGeneratedHighlights}
-                  onGenerateMessage={handleGenerateCommitMessage}
-                  isGeneratingMessage={isGeneratingMessage}
-                  onCommit={() => handleCommit({ pushAfter: false })}
-                  onCommitAndPush={() => handleCommit({ pushAfter: true })}
-                  commitAction={commitAction}
-                  isBusy={isBusy}
-                  gitmojiEnabled={settingsGitmojiEnabled}
-                  onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
-                />
-              )}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="h-full min-h-0 flex flex-col">
+          <div className={cn('min-w-0 min-h-0 h-full bg-muted/10 flex flex-col', isSidebarMode && 'border-t border-border/40')}>
+            <div className="px-3 py-3">
+              <AnimatedTabs<ActionTab>
+                value={actionTab}
+                onValueChange={setActionTab}
+                collapseLabelsOnSmall
+                collapseLabelsOnNarrow={isSidebarMode}
+                tabs={[
+                  { value: 'commit', label: 'Commit', icon: RiGitCommitLine },
+                  { value: 'branch', label: 'Update', icon: RiGitMergeLine },
+                  { value: 'pr', label: 'PR', icon: RiGitPullRequestLine },
+                  { value: 'worktree', label: 'Worktree', icon: RiSplitCellsHorizontal },
+                ]}
+              />
             </div>
+            <div className="h-px bg-border/40" />
 
-            {worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate && shouldShowIntegrateCommits ? (
-              <IntegrateCommitsSection
-                repoRoot={repoRootForIntegrate}
-                sourceBranch={sourceBranchForIntegrate}
-                worktreeMetadata={worktreeMetadata}
-                localBranches={localBranches}
-                defaultTargetBranch={defaultTargetBranch}
-                refreshKey={integrateRefreshKey}
-                onRefresh={() => {
-                  if (!currentDirectory) return;
-                  fetchStatus(currentDirectory, git);
-                  fetchBranches(currentDirectory, git);
-                  fetchLog(currentDirectory, git, logMaxCountLocal);
-                }}
-              />
-            ) : null}
+            <ScrollableOverlay
+              as={ScrollShadow}
+              ref={actionPanelScrollRef}
+              outerClassName="flex-1 min-h-0"
+              className="px-4 py-4"
+              disableHorizontal
+              preventOverscroll
+            >
+              {actionTab === 'commit' ? (
+                <div className="space-y-4">
+                  {(changeEntries?.length ?? 0) > 0 ? (
+                    <>
+                      <ChangesSection
+                        variant="plain"
+                        maxListHeightClassName="max-h-[40vh]"
+                        changeEntries={changeEntries}
+                        selectedPaths={selectedPaths}
+                        diffStats={status?.diffStats}
+                        revertingPaths={revertingPaths}
+                        onToggleFile={toggleFileSelection}
+                        onSelectAll={selectAll}
+                        onClearSelection={clearSelection}
+                        onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
+                        onRevertFile={handleRevertFile}
+                      />
 
-            {currentDirectory && status?.current && status?.tracking ? (
-              <PullRequestSection
-                directory={currentDirectory}
-                branch={status.current}
-                baseBranch={baseBranch}
-              />
-            ) : null}
+                      <CommitSection
+                        variant="plain"
+                        selectedCount={selectedCount}
+                        commitMessage={commitMessage}
+                        onCommitMessageChange={setCommitMessage}
+                        generatedHighlights={generatedHighlights}
+                        onInsertHighlights={handleInsertHighlights}
+                        onClearHighlights={clearGeneratedHighlights}
+                        onGenerateMessage={handleGenerateCommitMessage}
+                        isGeneratingMessage={isGeneratingMessage}
+                        onCommit={() => handleCommit({ pushAfter: false })}
+                        onCommitAndPush={() => handleCommit({ pushAfter: true })}
+                        commitAction={commitAction}
+                        isBusy={isBusy}
+                        gitmojiEnabled={settingsGitmojiEnabled}
+                        onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+                      />
+                    </>
+                  ) : (
+                    <GitEmptyState
+                      behind={effectiveRemotes.length > 0 ? (status?.behind ?? 0) : 0}
+                      isPulling={syncAction === 'pull'}
+                      onPull={() => {
+                        const remote = effectiveRemotes[0];
+                        if (!remote) {
+                          return;
+                        }
+                        void handleSyncAction('pull', remote);
+                      }}
+                    />
+                  )}
+                </div>
+              ) : null}
 
-            {/* History below, constrained width */}
+              {actionTab === 'branch' ? (
+                <div className="space-y-4">
+                  {canShowBranchWorkflows ? (
+                    <BranchIntegrationSection
+                      mode="inline"
+                      currentBranch={status?.current}
+                      localBranches={localBranches}
+                      remoteBranches={remoteBranches}
+                      onMerge={handleMerge}
+                      onRebase={handleRebase}
+                      disabled={isBusy}
+                      isOperating={branchOperation !== null}
+                      operationLogs={operationLogs}
+                      onOperationComplete={handleOperationComplete}
+                    />
+                  ) : (
+                    <p className="typography-meta text-muted-foreground">Branch actions unavailable.</p>
+                  )}
+                </div>
+              ) : null}
+
+              {actionTab === 'worktree' ? (
+                integrateCommitsProps ? (
+                  <IntegrateCommitsSection
+                    variant="plain"
+                    repoRoot={integrateCommitsProps.repoRoot}
+                    sourceBranch={integrateCommitsProps.sourceBranch}
+                    worktreeMetadata={integrateCommitsProps.worktreeMetadata}
+                    localBranches={localBranches}
+                    defaultTargetBranch={defaultTargetBranch}
+                    refreshKey={integrateRefreshKey}
+                    onRefresh={() => {
+                      if (!currentDirectory) return;
+                      fetchStatus(currentDirectory, git);
+                      fetchBranches(currentDirectory, git);
+                      fetchLog(currentDirectory, git, logMaxCountLocal);
+                    }}
+                  />
+                ) : (
+                  <div className="space-y-1">
+                    <div className="typography-ui-header font-semibold text-foreground">Re-integrate commits</div>
+                    <div className="typography-micro text-muted-foreground">
+                      Available in worktree mode.
+                    </div>
+                  </div>
+                )
+              ) : null}
+
+              {actionTab === 'pr' ? (
+                pullRequestProps ? (
+                  <PullRequestSection
+                    variant="plain"
+                    directory={pullRequestProps.directory}
+                    branch={pullRequestProps.branch}
+                    baseBranch={baseBranch}
+                    onGeneratedDescription={scrollActionPanelToBottom}
+                  />
+                ) : (
+                  <div className="space-y-1">
+                    <div className="typography-ui-header font-semibold text-foreground">Pull Request</div>
+                    <div className="typography-micro text-muted-foreground">
+                      Push a non-base branch (with upstream) to create a PR.
+                    </div>
+                  </div>
+                )
+              ) : null}
+            </ScrollableOverlay>
+          </div>
+        </div>
+      </div>
+
+      <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+        <DialogContent className="max-w-5xl max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>History</DialogTitle>
+            <DialogDescription>
+              Browse recent commits and inspect file-level changes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0">
             <HistorySection
               log={log}
               isLogLoading={isLogLoading}
@@ -1093,50 +1786,78 @@ export const GitView: React.FC = () => {
               commitFilesMap={commitFilesMap}
               loadingCommitHashes={loadingCommitHashes}
               onCopyHash={handleCopyCommitHash}
+              showHeader={false}
             />
           </div>
-        </ScrollableOverlay>
+        </DialogContent>
+      </Dialog>
 
-        <Dialog open={isGitmojiPickerOpen} onOpenChange={setIsGitmojiPickerOpen}>
-          <DialogContent className="max-w-md p-0 overflow-hidden">
-            <DialogHeader className="px-4 pt-4">
-              <DialogTitle>Pick a gitmoji</DialogTitle>
-            </DialogHeader>
-            <Command className="h-[420px]">
-              <CommandInput
-                placeholder="Search gitmojis..."
-                value={gitmojiSearch}
-                onValueChange={setGitmojiSearch}
-              />
-              <CommandList>
-                <CommandEmpty>No gitmojis found.</CommandEmpty>
-                <CommandGroup>
-                  {(gitmojiEmojis.length === 0
-                    ? []
-                    : gitmojiEmojis.filter((entry) => {
-                        const term = gitmojiSearch.trim().toLowerCase();
-                        if (!term) return true;
-                        return (
-                          entry.emoji.includes(term) ||
-                          entry.code.toLowerCase().includes(term) ||
-                          entry.description.toLowerCase().includes(term)
-                        );
-                      })
-                  ).map((entry) => (
-                    <CommandItem
-                      key={entry.code}
-                      onSelect={() => handleSelectGitmoji(entry.emoji, entry.code)}
-                    >
-                      <span className="text-lg">{entry.emoji}</span>
-                      <span className="typography-ui-label text-foreground">{entry.code}</span>
-                      <span className="typography-meta text-muted-foreground">{entry.description}</span>
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </DialogContent>
-        </Dialog>
+      <Dialog open={isGitmojiPickerOpen} onOpenChange={setIsGitmojiPickerOpen}>
+        <DialogContent className="max-w-md p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4">
+            <DialogTitle>Pick a gitmoji</DialogTitle>
+          </DialogHeader>
+          <Command className="h-[420px]">
+            <CommandInput
+              placeholder="Search gitmojis..."
+              value={gitmojiSearch}
+              onValueChange={setGitmojiSearch}
+            />
+            <CommandList>
+              <CommandEmpty>No gitmojis found.</CommandEmpty>
+              <CommandGroup>
+                {(gitmojiEmojis.length === 0
+                  ? []
+                  : gitmojiEmojis.filter((entry) => {
+                    const term = gitmojiSearch.trim().toLowerCase();
+                    if (!term) return true;
+                    return (
+                      entry.emoji.includes(term) ||
+                      entry.code.toLowerCase().includes(term) ||
+                      entry.description.toLowerCase().includes(term)
+                    );
+                  })
+                ).map((entry) => (
+                  <CommandItem
+                    key={entry.code}
+                    onSelect={() => handleSelectGitmoji(entry.emoji, entry.code)}
+                  >
+                    <span className="text-lg">{entry.emoji}</span>
+                    <span className="typography-ui-label text-foreground">{entry.code}</span>
+                    <span className="typography-meta text-muted-foreground">{entry.description}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </DialogContent>
+      </Dialog>
+
+      {currentDirectory && (
+        <ConflictDialog
+          open={conflictDialogOpen}
+          onOpenChange={setConflictDialogOpen}
+          conflictFiles={conflictFiles}
+          directory={currentDirectory}
+          operation={conflictOperation}
+          onAbort={handleAbortConflict}
+          onClearState={clearConflictState}
+        />
+      )}
+
+      <StashDialog
+        open={stashDialogOpen}
+        onOpenChange={setStashDialogOpen}
+        operation={stashDialogOperation}
+        targetBranch={stashDialogBranch}
+        onConfirm={handleStashAndRetry}
+      />
+
+      <BranchPickerDialog
+        open={isBranchPickerOpen}
+        onOpenChange={setIsBranchPickerOpen}
+        project={branchPickerProject}
+      />
 
     </div>
   );

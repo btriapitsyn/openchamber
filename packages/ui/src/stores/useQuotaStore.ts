@@ -5,6 +5,8 @@ import type { ProviderResult, QuotaProviderId } from '@/types';
 import { QUOTA_PROVIDERS } from '@/lib/quota';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { getDefaultModels } from '@/lib/quota/model-families';
+import { updateDesktopSettings } from '@/lib/persistence';
 
 const DEFAULT_REFRESH_INTERVAL_MS = 60000;
 
@@ -13,6 +15,8 @@ interface QuotaSettingsState {
   refreshIntervalMs: number;
   displayMode: 'usage' | 'remaining';
   dropdownProviderIds: QuotaProviderId[];
+  selectedModels: Record<string, string[]>;  // Map of providerId -> selected model names
+  expandedFamilies: Record<string, string[]>;  // Map of providerId -> EXPANDED family IDs (header dropdown - inverted)
 }
 
 interface QuotaStore extends QuotaSettingsState {
@@ -31,6 +35,11 @@ interface QuotaStore extends QuotaSettingsState {
   setRefreshInterval: (intervalMs: number) => void;
   setDisplayMode: (mode: 'usage' | 'remaining') => void;
   setDropdownProviderIds: (providerIds: QuotaProviderId[]) => void;
+  setSelectedModels: (providerId: string, modelNames: string[]) => void;
+  toggleModelSelected: (providerId: string, modelName: string) => void;
+  setExpandedFamilies: (providerId: string, familyIds: string[]) => void;
+  toggleFamilyExpanded: (providerId: string, familyId: string) => void;
+  applyDefaultSelections: (providerId: string, availableModels: string[]) => void;
 }
 
 const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState => {
@@ -53,7 +62,36 @@ const parseSettings = (data: Record<string, unknown> | null): QuotaSettingsState
       )
     : allProviderIds;
 
-  return { autoRefresh, refreshIntervalMs, displayMode, dropdownProviderIds };
+  // Parse selected models (providerId -> array of model names)
+  const selectedModels: Record<string, string[]> = {};
+  const rawSelectedModels = data?.usageSelectedModels;
+  if (rawSelectedModels && typeof rawSelectedModels === 'object') {
+    for (const [providerId, models] of Object.entries(rawSelectedModels)) {
+      if (Array.isArray(models)) {
+        selectedModels[providerId] = models.filter((m): m is string => typeof m === 'string');
+      }
+    }
+  }
+
+  // Parse expanded families (inverted collapsed logic for header dropdown)
+  const expandedFamilies: Record<string, string[]> = {};
+  const rawExpandedFamilies = data?.usageExpandedFamilies;
+  if (rawExpandedFamilies && typeof rawExpandedFamilies === 'object') {
+    for (const [providerId, families] of Object.entries(rawExpandedFamilies)) {
+      if (Array.isArray(families)) {
+        expandedFamilies[providerId] = families.filter((f): f is string => typeof f === 'string');
+      }
+    }
+  }
+
+  return {
+    autoRefresh,
+    refreshIntervalMs,
+    displayMode,
+    dropdownProviderIds,
+    selectedModels,
+    expandedFamilies,
+  };
 };
 
 const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
@@ -83,7 +121,9 @@ const loadSettingsFromRuntime = async (): Promise<QuotaSettingsState> => {
     autoRefresh: false,
     refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
     displayMode: 'usage',
-    dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id)
+    dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id),
+    selectedModels: {},
+    expandedFamilies: {},
   };
 };
 
@@ -100,6 +140,8 @@ export const useQuotaStore = create<QuotaStore>()(
       refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
       displayMode: 'usage',
       dropdownProviderIds: QUOTA_PROVIDERS.map((provider) => provider.id),
+      selectedModels: {},
+      expandedFamilies: {},
 
       loadSettings: async () => {
         try {
@@ -174,7 +216,64 @@ export const useQuotaStore = create<QuotaStore>()(
         set({ refreshIntervalMs: clamped });
       },
       setDisplayMode: (mode) => set({ displayMode: mode }),
-      setDropdownProviderIds: (providerIds) => set({ dropdownProviderIds: providerIds })
+      setDropdownProviderIds: (providerIds) => set({ dropdownProviderIds: providerIds }),
+
+      setSelectedModels: (providerId, modelNames) => {
+        set((state) => ({
+          selectedModels: { ...state.selectedModels, [providerId]: modelNames }
+        }));
+      },
+
+      toggleModelSelected: (providerId, modelName) => {
+        set((state) => {
+          const currentSelected = state.selectedModels[providerId] ?? [];
+          const isSelected = currentSelected.includes(modelName);
+          const nextSelected = isSelected
+            ? currentSelected.filter((m) => m !== modelName)
+            : [...currentSelected, modelName];
+          return {
+            selectedModels: { ...state.selectedModels, [providerId]: nextSelected }
+          };
+        });
+      },
+
+      setExpandedFamilies: (providerId, familyIds) => {
+        set((state) => ({
+          expandedFamilies: { ...state.expandedFamilies, [providerId]: familyIds }
+        }));
+        // Persist
+        void updateDesktopSettings({ usageExpandedFamilies: get().expandedFamilies });
+      },
+
+      toggleFamilyExpanded: (providerId, familyId) => {
+        set((state) => {
+          const currentExpanded = state.expandedFamilies[providerId] ?? [];
+          const isExpanded = currentExpanded.includes(familyId);
+          const nextExpanded = isExpanded
+            ? currentExpanded.filter((id) => id !== familyId)
+            : [...currentExpanded, familyId];
+          return {
+            expandedFamilies: { ...state.expandedFamilies, [providerId]: nextExpanded }
+          };
+        });
+        // Persist
+        void updateDesktopSettings({ usageExpandedFamilies: get().expandedFamilies });
+      },
+
+      applyDefaultSelections: (providerId, availableModels) => {
+        const state = get();
+        // Only apply if no prior selections exist
+        if ((state.selectedModels[providerId]?.length ?? 0) > 0) return;
+
+        const defaults = getDefaultModels(providerId as QuotaProviderId, availableModels);
+        if (defaults.length === 0) return;
+
+        set((s) => ({
+          selectedModels: { ...s.selectedModels, [providerId]: defaults },
+        }));
+        // Persist
+        void updateDesktopSettings({ usageSelectedModels: get().selectedModels });
+      },
     }),
     { name: 'quota-store' }
   )

@@ -1,8 +1,7 @@
 import React from 'react';
-import { RiAddLine, RiAlertLine, RiArrowDownLine, RiArrowGoBackLine, RiArrowLeftLine, RiArrowRightLine, RiArrowUpLine, RiCheckboxCircleLine, RiCircleLine, RiCloseLine, RiCommandLine, RiDeleteBinLine, RiRestartLine } from '@remixicon/react';
+import { RiAddLine, RiArrowDownLine, RiArrowGoBackLine, RiArrowLeftLine, RiArrowRightLine, RiArrowUpLine, RiCloseLine, RiCommandLine } from '@remixicon/react';
 
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useTerminalStore } from '@/stores/useTerminalStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { type TerminalStreamEvent } from '@/lib/api/types';
@@ -17,6 +16,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { primeTerminalInputTransport } from '@/lib/terminalApi';
 
 type Modifier = 'ctrl' | 'cmd';
 type MobileKey =
@@ -53,6 +53,15 @@ const STREAM_OPTIONS = {
     connectionTimeoutMs: 10_000,
 };
 
+const REHYDRATED_STREAM_OPTIONS = {
+    retry: {
+        maxRetries: 0,
+        initialDelayMs: 200,
+        maxDelayMs: 500,
+    },
+    connectionTimeoutMs: 1_500,
+};
+
 const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | null => {
     if (modifier) {
         switch (key) {
@@ -87,18 +96,6 @@ export const TerminalView: React.FC = () => {
     const hasActiveContext = currentSessionId !== null || newSessionDraft?.open === true;
 
     const effectiveDirectory = useEffectiveDirectory() ?? null;
-    const { homeDirectory } = useDirectoryStore();
-
-    const displayDirectory = React.useMemo(() => {
-        if (!effectiveDirectory) return '';
-        if (!homeDirectory) return effectiveDirectory;
-        if (effectiveDirectory === homeDirectory) return '~';
-        if (effectiveDirectory.startsWith(homeDirectory + '/')) {
-            return '~' + effectiveDirectory.slice(homeDirectory.length);
-        }
-        return effectiveDirectory;
-    }, [effectiveDirectory, homeDirectory]);
-
     const terminalStore = useTerminalStore();
     const terminalSessions = terminalStore.sessions;
     const terminalHydrated = terminalStore.hasHydrated;
@@ -109,7 +106,6 @@ export const TerminalView: React.FC = () => {
     const setTabSessionId = terminalStore.setTabSessionId;
     const setConnecting = terminalStore.setConnecting;
     const appendToBuffer = terminalStore.appendToBuffer;
-    const clearBuffer = terminalStore.clearBuffer;
 
     const directoryTerminalState = React.useMemo(() => {
         if (!effectiveDirectory) return undefined;
@@ -135,7 +131,6 @@ export const TerminalView: React.FC = () => {
 
     const terminalSessionId = activeTab?.terminalSessionId ?? null;
     const bufferChunks = activeTab?.bufferChunks ?? [];
-    const bufferLength = activeTab?.bufferLength ?? 0;
     const isConnecting = activeTab?.isConnecting ?? false;
 
     const [connectionError, setConnectionError] = React.useState<string | null>(null);
@@ -150,6 +145,7 @@ export const TerminalView: React.FC = () => {
     const directoryRef = React.useRef<string | null>(effectiveDirectory);
     const terminalControllerRef = React.useRef<TerminalController | null>(null);
     const lastViewportSizeRef = React.useRef<{ cols: number; rows: number } | null>(null);
+    const isTerminalVisibleRef = React.useRef(false);
     const nudgeOnConnectTerminalIdRef = React.useRef<string | null>(null);
     const rehydratedTerminalIdsRef = React.useRef<Set<string>>(new Set());
     const rehydratedSnapshotTakenRef = React.useRef(false);
@@ -176,7 +172,28 @@ export const TerminalView: React.FC = () => {
     }, [terminalHydrated]);
 
     const activeMainTab = useUIStore((state) => state.activeMainTab);
+    const isBottomTerminalOpen = useUIStore((state) => state.isBottomTerminalOpen);
     const isTerminalActive = activeMainTab === 'terminal';
+    const isTerminalVisible = isTerminalActive || isBottomTerminalOpen;
+    const [hasOpenedTerminalViewport, setHasOpenedTerminalViewport] = React.useState(isTerminalVisible);
+
+    React.useEffect(() => {
+        if (!isTerminalVisible || runtime.platform === 'vscode') {
+            return;
+        }
+
+        primeTerminalInputTransport();
+    }, [isTerminalVisible, runtime.platform]);
+
+    React.useEffect(() => {
+        if (isTerminalVisible) {
+            setHasOpenedTerminalViewport(true);
+        }
+    }, [isTerminalVisible]);
+
+    React.useEffect(() => {
+        isTerminalVisibleRef.current = isTerminalVisible;
+    }, [isTerminalVisible]);
 
     React.useEffect(() => {
         terminalIdRef.current = terminalSessionId;
@@ -217,7 +234,12 @@ export const TerminalView: React.FC = () => {
     );
 
     const startStream = React.useCallback(
-        (directory: string, tabId: string, terminalId: string) => {
+        (
+            directory: string,
+            tabId: string,
+            terminalId: string,
+            streamOptions = STREAM_OPTIONS
+        ) => {
             if (activeTerminalIdRef.current === terminalId) {
                 return;
             }
@@ -237,11 +259,6 @@ export const TerminalView: React.FC = () => {
 
                         switch (event.type) {
                             case 'connected': {
-                                if (event.runtime || event.ptyBackend) {
-                                    console.log(
-                                        `[Terminal] connected runtime=${event.runtime ?? 'unknown'} pty=${event.ptyBackend ?? 'unknown'}`
-                                    );
-                                }
                                 setConnecting(directory, tabId, false);
                                 setConnectionError(null);
                                 setIsFatalError(false);
@@ -309,7 +326,7 @@ export const TerminalView: React.FC = () => {
                         }
                     },
                 },
-                STREAM_OPTIONS
+                streamOptions
             );
 
             streamCleanupRef.current = () => {
@@ -323,7 +340,7 @@ export const TerminalView: React.FC = () => {
     React.useEffect(() => {
         let cancelled = false;
 
-        if (!terminalHydrated) {
+        if (!terminalHydrated || !hasOpenedTerminalViewport) {
             return;
         }
 
@@ -363,6 +380,9 @@ export const TerminalView: React.FC = () => {
                 rehydratedTerminalIdsRef.current.has(terminalId as string) &&
                 (tab?.bufferLength ?? 0) === 0 &&
                 (tab?.bufferChunks?.length ?? 0) === 0;
+
+            const isRehydratedSession =
+                Boolean(terminalId) && rehydratedTerminalIdsRef.current.has(terminalId as string);
 
             if (!terminalId) {
                 setConnectionError(null);
@@ -408,11 +428,19 @@ export const TerminalView: React.FC = () => {
 
             terminalIdRef.current = terminalId;
 
-            if (shouldNudgeExisting) {
-                nudgeOnConnectTerminalIdRef.current = terminalId;
+            if (isRehydratedSession) {
                 rehydratedTerminalIdsRef.current.delete(terminalId);
             }
-            startStream(directory, tabId, terminalId);
+
+            if (shouldNudgeExisting) {
+                nudgeOnConnectTerminalIdRef.current = terminalId;
+            }
+            startStream(
+                directory,
+                tabId,
+                terminalId,
+                isRehydratedSession ? REHYDRATED_STREAM_OPTIONS : STREAM_OPTIONS
+            );
         };
 
         void ensureSession();
@@ -427,6 +455,7 @@ export const TerminalView: React.FC = () => {
         effectiveDirectory,
         terminalSessionId,
         activeTabId,
+        hasOpenedTerminalViewport,
         enableTabs,
         terminalHydrated,
         ensureDirectory,
@@ -436,6 +465,25 @@ export const TerminalView: React.FC = () => {
         disconnectStream,
         terminal,
     ]);
+
+    React.useEffect(() => {
+        if (!isTerminalVisible) {
+            return;
+        }
+
+        if (typeof window === 'undefined') {
+            terminalControllerRef.current?.focus();
+            return;
+        }
+
+        const rafId = window.requestAnimationFrame(() => {
+            terminalControllerRef.current?.focus();
+        });
+
+        return () => {
+            window.cancelAnimationFrame(rafId);
+        };
+    }, [activeTabId, isTerminalVisible]);
 
     const handleRestart = React.useCallback(async () => {
         if (!effectiveDirectory) return;
@@ -467,21 +515,6 @@ export const TerminalView: React.FC = () => {
         // Keep semantics: “close tab -> new clean tab”.
         await handleRestart();
     }, [handleRestart]);
-
-    const handleClear = React.useCallback(() => {
-        if (!effectiveDirectory) return;
-        if (!activeTabId) return;
-        clearBuffer(effectiveDirectory, activeTabId);
-        terminalControllerRef.current?.clear();
-        terminalControllerRef.current?.focus();
-
-        const terminalId = terminalIdRef.current;
-        if (terminalId) {
-            void terminal.sendInput(terminalId, '\u000c').catch((error) => {
-                setConnectionError(error instanceof Error ? error.message : 'Failed to refresh prompt');
-            });
-        }
-    }, [activeTabId, clearBuffer, effectiveDirectory, setConnectionError, terminal]);
 
     const handleCreateTab = React.useCallback(() => {
         if (!effectiveDirectory) return;
@@ -561,6 +594,9 @@ export const TerminalView: React.FC = () => {
     const handleViewportResize = React.useCallback(
         (cols: number, rows: number) => {
             lastViewportSizeRef.current = { cols, rows };
+            if (!isTerminalVisibleRef.current) {
+                return;
+            }
             const terminalId = terminalIdRef.current;
             if (!terminalId) return;
             void terminal.resize({ sessionId: terminalId, cols, rows }).catch(() => {
@@ -701,7 +737,7 @@ export const TerminalView: React.FC = () => {
     const viewportSessionKey = terminalSessionId ?? terminalSessionKey;
 
     React.useEffect(() => {
-        if (!isTerminalActive) {
+        if (!isTerminalVisible) {
             return;
         }
         const controller = terminalControllerRef.current;
@@ -723,19 +759,7 @@ export const TerminalView: React.FC = () => {
             };
         }
         fitOnce();
-    }, [isTerminalActive, terminalSessionKey, terminalSessionId]);
-
-    const isReconnecting = connectionError?.includes('Reconnecting');
-
-    const statusIcon = connectionError
-        ? isReconnecting
-            ? <RiAlertLine size={20} className="text-[color:var(--status-warning)]" />
-            : <RiCloseLine size={20} className="text-[color:var(--status-error)]" />
-        : terminalSessionId && !isConnecting && !isRestarting
-            ? <RiCheckboxCircleLine size={20} className="text-[color:var(--status-success)]" />
-            : isConnecting || isRestarting
-                ? <RiCircleLine size={20} className="text-[color:var(--status-warning)] animate-pulse" />
-                : <RiCircleLine size={20} className="text-[var(--surface-muted-foreground)]" />;
+    }, [isTerminalVisible, terminalSessionKey, terminalSessionId]);
 
     if (!hasActiveContext) {
         return (
@@ -760,195 +784,177 @@ export const TerminalView: React.FC = () => {
     }
 
     const quickKeysDisabled = !terminalSessionId || isConnecting || isRestarting;
+    const shouldRenderViewport = isMobile ? isTerminalVisible : hasOpenedTerminalViewport;
+    const quickKeysControls = (
+        <>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 px-2 text-xs"
+                onClick={() => handleMobileKeyPress('esc')}
+                disabled={quickKeysDisabled}
+            >
+                Esc
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 w-9 p-0"
+                onClick={() => handleMobileKeyPress('tab')}
+                disabled={quickKeysDisabled}
+            >
+                <RiArrowRightLine size={16} />
+                <span className="sr-only">Tab</span>
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant={activeModifier === 'ctrl' ? 'default' : 'outline'}
+                className="h-6 w-9 p-0"
+                onClick={() => handleModifierToggle('ctrl')}
+                disabled={quickKeysDisabled}
+            >
+                <span className="text-xs font-medium">Ctrl</span>
+                <span className="sr-only">Control modifier</span>
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant={activeModifier === 'cmd' ? 'default' : 'outline'}
+                className="h-6 w-9 p-0"
+                onClick={() => handleModifierToggle('cmd')}
+                disabled={quickKeysDisabled}
+            >
+                <RiCommandLine size={16} />
+                <span className="sr-only">Command modifier</span>
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 w-9 p-0"
+                onClick={() => handleMobileKeyPress('arrow-up')}
+                disabled={quickKeysDisabled}
+            >
+                <RiArrowUpLine size={16} />
+                <span className="sr-only">Arrow up</span>
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 w-9 p-0"
+                onClick={() => handleMobileKeyPress('arrow-left')}
+                disabled={quickKeysDisabled}
+            >
+                <RiArrowLeftLine size={16} />
+                <span className="sr-only">Arrow left</span>
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 w-9 p-0"
+                onClick={() => handleMobileKeyPress('arrow-down')}
+                disabled={quickKeysDisabled}
+            >
+                <RiArrowDownLine size={16} />
+                <span className="sr-only">Arrow down</span>
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 w-9 p-0"
+                onClick={() => handleMobileKeyPress('arrow-right')}
+                disabled={quickKeysDisabled}
+            >
+                <RiArrowRightLine size={16} />
+                <span className="sr-only">Arrow right</span>
+            </Button>
+            <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-6 w-9 p-0"
+                onClick={() => handleMobileKeyPress('enter')}
+                disabled={quickKeysDisabled}
+            >
+                <RiArrowGoBackLine size={16} />
+                <span className="sr-only">Enter</span>
+            </Button>
+        </>
+    );
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
-            <div className="px-3 py-2 text-xs bg-[var(--surface-background)]">
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2 text-muted-foreground">
-                        <span className="truncate font-mono text-foreground/90">{displayDirectory}</span>
-                    </div>
-                    {isMobile ? (
-                        <div className="flex items-center gap-2">
-                            {statusIcon}
-                            <Button
-                                size="sm"
-                                variant="default"
-                                className="h-7 px-2 py-0"
-                                onClick={handleClear}
-                                disabled={!bufferLength}
-                                title="Clear output"
-                                type="button"
-                            >
-                                <RiDeleteBinLine size={16} />
-                                Clear
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="default"
-                                className="h-7 px-2 py-0"
-                                onClick={handleRestart}
-                                disabled={isRestarting}
-                                title="Restart terminal"
-                                type="button"
-                            >
-                                <RiRestartLine size={16} className={cn((isConnecting || isRestarting) && 'animate-spin')} />
-                                Restart
-                            </Button>
-                        </div>
-                    ) : null}
-                </div>
-
+            <div className="px-5 py-2 text-xs bg-[var(--surface-background)]">
                 {enableTabs && directoryTerminalState ? (
-                    <div className="mt-2 flex items-center gap-1 overflow-x-auto pb-1">
-                        {directoryTerminalState.tabs.map((tab) => {
-                            const isActive = tab.id === activeTabId;
-                            return (
-                                <div
-                                    key={tab.id}
-                                    className={cn(
-                                        'group flex items-center gap-1 rounded-md border px-2 py-1 text-xs whitespace-nowrap',
-                                        isActive
-                                            ? 'bg-[var(--interactive-selection)] border-[var(--primary-muted)] text-[var(--interactive-selection-foreground)]'
-                                            : 'bg-transparent border-[var(--interactive-border)] text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]'
-                                    )}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() => handleSelectTab(tab.id)}
-                                        className="max-w-[10rem] truncate text-left"
-                                        title={tab.label}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={cn(
-                                            'rounded-sm p-0.5 text-[var(--surface-muted-foreground)] hover:text-[var(--surface-foreground)]',
-                                            !isActive && 'opacity-0 group-hover:opacity-100'
-                                        )}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleCloseTab(tab.id);
-                                        }}
-                                        title="Close tab"
-                                    >
-                                        <RiCloseLine size={14} />
-                                    </button>
-                                </div>
-                            );
-                        })}
+                    <div className="mt-2 pl-1 pr-1 flex items-center gap-2">
+                        <div className="min-w-0 flex-1 overflow-x-auto pb-1">
+                            <div className="flex w-max items-center gap-1 pr-1">
+                                {directoryTerminalState.tabs.map((tab) => {
+                                    const isActive = tab.id === activeTabId;
+                                    return (
+                                        <div
+                                            key={tab.id}
+                                            className={cn(
+                                                'group flex items-center gap-1 rounded-md border px-2 py-1 text-xs whitespace-nowrap',
+                                                isActive
+                                                    ? 'bg-[var(--interactive-selection)] border-[var(--primary-muted)] text-[var(--interactive-selection-foreground)]'
+                                                    : 'bg-transparent border-[var(--interactive-border)] text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]'
+                                            )}
+                                        >
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectTab(tab.id)}
+                                                className="max-w-[10rem] truncate text-left"
+                                                title={tab.label}
+                                            >
+                                                {tab.label}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    'rounded-sm p-0.5 text-[var(--surface-muted-foreground)] hover:text-[var(--surface-foreground)]',
+                                                    !isActive && 'opacity-0 group-hover:opacity-100'
+                                                )}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCloseTab(tab.id);
+                                                }}
+                                                title="Close tab"
+                                            >
+                                                <RiCloseLine size={14} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
 
-                        <button
-                            type="button"
-                            onClick={handleCreateTab}
-                            className="ml-1 flex h-7 w-7 items-center justify-center rounded-md border border-[var(--interactive-border)] bg-transparent text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]"
-                            title="New tab"
-                        >
-                            <RiAddLine size={16} />
-                        </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCreateTab}
+                                    className="ml-1 flex h-7 w-7 items-center justify-center rounded-md border border-[var(--interactive-border)] bg-transparent text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]"
+                                    title="New tab"
+                                >
+                                    <RiAddLine size={16} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {!isMobile && showQuickKeys ? (
+                            <div className="flex shrink-0 items-center gap-1 overflow-x-auto pb-1">
+                                {quickKeysControls}
+                            </div>
+                        ) : null}
                     </div>
                 ) : null}
-                {showQuickKeys ? (
+
+                {showQuickKeys && (isMobile || !enableTabs || !directoryTerminalState) ? (
                     <div className="mt-2 flex flex-wrap items-center gap-1">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 px-2 text-xs"
-                            onClick={() => handleMobileKeyPress('esc')}
-                            disabled={quickKeysDisabled}
-                        >
-                            Esc
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleMobileKeyPress('tab')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <RiArrowRightLine size={16} />
-                            <span className="sr-only">Tab</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={activeModifier === 'ctrl' ? 'default' : 'outline'}
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleModifierToggle('ctrl')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <span className="text-xs font-medium">Ctrl</span>
-                            <span className="sr-only">Control modifier</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant={activeModifier === 'cmd' ? 'default' : 'outline'}
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleModifierToggle('cmd')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <RiCommandLine size={16} />
-                            <span className="sr-only">Command modifier</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleMobileKeyPress('arrow-up')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <RiArrowUpLine size={16} />
-                            <span className="sr-only">Arrow up</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleMobileKeyPress('arrow-left')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <RiArrowLeftLine size={16} />
-                            <span className="sr-only">Arrow left</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleMobileKeyPress('arrow-down')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <RiArrowDownLine size={16} />
-                            <span className="sr-only">Arrow down</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleMobileKeyPress('arrow-right')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <RiArrowRightLine size={16} />
-                            <span className="sr-only">Arrow right</span>
-                        </Button>
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-6 w-9 p-0"
-                            onClick={() => handleMobileKeyPress('enter')}
-                            disabled={quickKeysDisabled}
-                        >
-                            <RiArrowGoBackLine size={16} />
-                            <span className="sr-only">Enter</span>
-                        </Button>
+                        {quickKeysControls}
                     </div>
                 ) : null}
             </div>
@@ -958,8 +964,8 @@ export const TerminalView: React.FC = () => {
                 style={{ backgroundColor: xtermTheme.background }}
                 data-keyboard-avoid="true"
             >
-                <div className="h-full w-full box-border px-3 pt-3 pb-4">
-                    {isTerminalActive ? (
+                <div className="h-full w-full box-border pl-7 pr-5 pt-3 pb-4">
+                    {shouldRenderViewport ? (
                         isMobile ? (
                             <TerminalViewport
                                 key={viewportSessionKey}
@@ -974,6 +980,7 @@ export const TerminalView: React.FC = () => {
                                 fontFamily={resolvedFontStack}
                                 fontSize={terminalFontSize}
                                 enableTouchScroll={hasTouchInput}
+                                autoFocus={isTerminalVisible}
                             />
                         ) : (
                             <ScrollableOverlay outerClassName="h-full" className="h-full w-full" disableHorizontal>
@@ -990,6 +997,7 @@ export const TerminalView: React.FC = () => {
                                     fontFamily={resolvedFontStack}
                                     fontSize={terminalFontSize}
                                     enableTouchScroll={hasTouchInput}
+                                    autoFocus={isTerminalVisible}
                                 />
                             </ScrollableOverlay>
                         )

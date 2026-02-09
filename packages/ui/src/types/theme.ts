@@ -67,6 +67,14 @@ export interface StatusColors {
   infoBorder: string;
 }
 
+export interface PullRequestColors {
+  open: string;
+  draft: string;
+  blocked: string;
+  merged: string;
+  closed: string;
+}
+
 export interface SyntaxBaseColors {
   background: string;
   foreground: string;
@@ -189,6 +197,7 @@ export interface Theme {
     surface: SurfaceColors;
     interactive: InteractiveColors;
     status: StatusColors;
+    pr?: PullRequestColors;
 
     syntax: SyntaxColors;
 

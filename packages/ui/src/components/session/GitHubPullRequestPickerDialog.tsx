@@ -743,84 +743,87 @@ Nice-to-have:
 
         <div className="mt-4 p-3 bg-muted/30 rounded-lg">
           <p className="typography-meta text-muted-foreground font-medium mb-2">Actions</p>
-          <div className="flex items-center gap-2">
-            <div
-              className="flex items-center gap-2 cursor-pointer"
-              role="button"
-              tabIndex={0}
-              aria-pressed={createInWorktree}
-              onClick={() => setCreateInWorktree((v) => !v)}
-              onKeyDown={(e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                  e.preventDefault();
-                  setCreateInWorktree((v) => !v);
-                }
-              }}
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setCreateInWorktree((v) => !v);
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                role="button"
+                tabIndex={0}
+                aria-pressed={createInWorktree}
+                onClick={() => setCreateInWorktree((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    setCreateInWorktree((v) => !v);
+                  }
                 }}
-                aria-label="Toggle worktree"
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
-                {createInWorktree ? (
-                  <RiCheckboxLine className="h-4 w-4 text-primary" />
-                ) : (
-                  <RiCheckboxBlankLine className="h-4 w-4" />
-                )}
-              </button>
-              <span className="typography-meta text-muted-foreground">Create session in PR worktree</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setCreateInWorktree((v) => !v);
+                  }}
+                  aria-label="Toggle worktree"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {createInWorktree ? (
+                    <RiCheckboxLine className="h-4 w-4 text-primary" />
+                  ) : (
+                    <RiCheckboxBlankLine className="h-4 w-4" />
+                  )}
+                </button>
+                <span className="typography-meta text-muted-foreground">Create in PR worktree</span>
+              </div>
+
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                role="button"
+                tabIndex={0}
+                aria-pressed={includeDiff}
+                onClick={() => setIncludeDiff((v) => !v)}
+                onKeyDown={(e) => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    setIncludeDiff((v) => !v);
+                  }
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIncludeDiff((v) => !v);
+                  }}
+                  aria-label="Toggle diff"
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                >
+                  {includeDiff ? (
+                    <RiCheckboxLine className="h-4 w-4 text-primary" />
+                  ) : (
+                    <RiCheckboxBlankLine className="h-4 w-4" />
+                  )}
+                </button>
+                <span className="typography-meta text-muted-foreground">Include full diff</span>
+              </div>
             </div>
 
-
-            <div
-              className="flex items-center gap-2 cursor-pointer"
-              role="button"
-              tabIndex={0}
-              aria-pressed={includeDiff}
-              onClick={() => setIncludeDiff((v) => !v)}
-              onKeyDown={(e) => {
-                if (e.key === ' ' || e.key === 'Enter') {
-                  e.preventDefault();
-                  setIncludeDiff((v) => !v);
-                }
-              }}
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIncludeDiff((v) => !v);
-                }}
-                aria-label="Toggle diff"
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                {includeDiff ? (
-                  <RiCheckboxLine className="h-4 w-4 text-primary" />
-                ) : (
-                  <RiCheckboxBlankLine className="h-4 w-4" />
-                )}
-              </button>
-              <span className="typography-meta text-muted-foreground">Include full diff</span>
-            </div>
-
-            <div className="flex-1" />
-            {repoUrl ? (
-              <Button variant="outline" size="sm" asChild>
-                <a href={repoUrl} target="_blank" rel="noopener noreferrer">
-                  <RiExternalLinkLine className="size-4" />
-                  Open Repo
-                </a>
+            <div className="hidden sm:block sm:flex-1" />
+            <div className="flex items-center gap-2">
+              {repoUrl ? (
+                <Button variant="outline" size="sm" asChild>
+                  <a href={repoUrl} target="_blank" rel="noopener noreferrer">
+                    <RiExternalLinkLine className="size-4" />
+                    Open Repo
+                  </a>
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading || Boolean(startingNumber)}>
+                Refresh
               </Button>
-            ) : null}
-            <Button variant="outline" size="sm" onClick={refresh} disabled={isLoading || Boolean(startingNumber)}>
-              Refresh
-            </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

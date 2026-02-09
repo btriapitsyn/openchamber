@@ -4,6 +4,7 @@ import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multiru
 import { opencodeClient } from '@/lib/opencode/client';
 import { saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import { createSdkWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
+import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
 import { useDirectoryStore } from './useDirectoryStore';
@@ -121,11 +122,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
           }
 
           const groupSlug = toGitSafeSlug(groupName);
-          const worktreeBaseBranch =
-            typeof params.worktreeBaseBranch === 'string' && params.worktreeBaseBranch.trim().length > 0
-              ? params.worktreeBaseBranch.trim()
-              : 'HEAD';
-          const startPoint = worktreeBaseBranch !== 'HEAD' ? worktreeBaseBranch : undefined;
+          const rootBranch = await getRootBranch(directory);
 
           const createdRuns: Array<{
             sessionId: string;
@@ -164,12 +161,11 @@ export const useMultiRunStore = create<MultiRunStore>()(
               const worktreeMetadata = await createSdkWorktree(project, {
                 preferredName,
                 setupCommands: commandsToRun,
-                startPoint: startPoint ?? null,
               });
 
               const enrichedMetadata = {
                 ...worktreeMetadata,
-                createdFromBranch: startPoint ?? 'HEAD',
+                createdFromBranch: rootBranch,
                 kind: 'standard' as const,
               };
 

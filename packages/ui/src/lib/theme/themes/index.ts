@@ -1,10 +1,11 @@
 import type { Theme } from '@/types/theme';
 import { presetThemes } from './presets';
+import { withPrColors } from './prColors';
 import flexokiLightRaw from './flexoki-light.json';
 import flexokiDarkRaw from './flexoki-dark.json';
 
-export const flexokiLightTheme = flexokiLightRaw as Theme;
-export const flexokiDarkTheme = flexokiDarkRaw as Theme;
+export const flexokiLightTheme = withPrColors(flexokiLightRaw as Theme);
+export const flexokiDarkTheme = withPrColors(flexokiDarkRaw as Theme);
 
 export const DEFAULT_LIGHT_THEME_ID = 'flexoki-light' as const;
 export const DEFAULT_DARK_THEME_ID = 'flexoki-dark' as const;

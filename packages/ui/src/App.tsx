@@ -10,6 +10,7 @@ import { useEventStream } from '@/hooks/useEventStream';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useMenuActions } from '@/hooks/useMenuActions';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
+import { useServerSessionStatus } from '@/hooks/useServerSessionStatus';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
@@ -55,6 +56,7 @@ function App({ apis }: AppProps) {
   const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
   const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   const [showCliOnboarding, setShowCliOnboarding] = React.useState(false);
+  const appReadyDispatchedRef = React.useRef(false);
 
   React.useEffect(() => {
     setIsVSCodeRuntime(apis.runtime.isVSCode);
@@ -156,7 +158,20 @@ function App({ apis }: AppProps) {
     syncDirectoryAndSessions();
   }, [currentDirectory, isSwitchingDirectory, loadSessions, isConnected, isVSCodeRuntime]);
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isInitialized || isSwitchingDirectory) return;
+    if (appReadyDispatchedRef.current) return;
+    appReadyDispatchedRef.current = true;
+    (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady = true;
+    window.dispatchEvent(new Event('openchamber:app-ready'));
+  }, [isInitialized, isSwitchingDirectory]);
+
   useEventStream();
+
+  // Server-authoritative session status polling
+  // Replaces SSE-dependent status updates with reliable HTTP polling
+  useServerSessionStatus();
 
   usePushVisibilityBeacon();
 
@@ -221,7 +236,9 @@ function App({ apis }: AppProps) {
         if (!data || cancelled) return;
         const openCodeRunning = data.openCodeRunning === true;
         const err = typeof data.lastOpenCodeError === 'string' ? data.lastOpenCodeError : '';
-        const cliMissing = !openCodeRunning && /ENOENT|spawn\s+opencode|opencode(\.exe)?\s+not\s+found|not\s+found/i.test(err);
+        const cliMissing =
+          !openCodeRunning &&
+          /ENOENT|spawn\s+opencode|Unable\s+to\s+locate\s+the\s+opencode\s+CLI|OpenCode\s+CLI\s+not\s+found|opencode(\.exe)?\s+not\s+found|env:\s*(node|bun):\s*No\s+such\s+file\s+or\s+directory|(node|bun):\s*No\s+such\s+file\s+or\s+directory/i.test(err);
         setShowCliOnboarding(cliMissing);
       } catch {
         // ignore

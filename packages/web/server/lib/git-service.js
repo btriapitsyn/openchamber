@@ -9,6 +9,54 @@ const fsp = fs.promises;
 const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
+/**
+ * Escape an SSH key path for use in core.sshCommand.
+ * Handles Windows/Unix differences and prevents command injection.
+ */
+function escapeSshKeyPath(sshKeyPath) {
+  const isWindows = process.platform === 'win32';
+  
+  // Normalize path first on Windows (convert backslashes to forward slashes)
+  let normalizedPath = sshKeyPath;
+  if (isWindows) {
+    normalizedPath = sshKeyPath.replace(/\\/g, '/');
+  }
+  
+  // Validate: reject paths with characters that could enable injection
+  // Allow only alphanumeric, path separators, dots, dashes, underscores, spaces, and colons (for Windows drives)
+  // Note: backslash is not in this list since we've already normalized Windows paths
+  const dangerousChars = /[`$!"';&|<>(){}[\]*?#~]/;
+  if (dangerousChars.test(normalizedPath)) {
+    throw new Error(`SSH key path contains invalid characters: ${sshKeyPath}`);
+  }
+
+  if (isWindows) {
+    // On Windows, Git (via MSYS/MinGW) expects Unix-style paths
+    // Convert "C:/path" to "/c/path" for MSYS compatibility
+    let unixPath = normalizedPath;
+    const driveMatch = unixPath.match(/^([A-Za-z]):\//);
+    if (driveMatch) {
+      unixPath = `/${driveMatch[1].toLowerCase()}${unixPath.slice(2)}`;
+    }
+    
+    // Use single quotes for the path (prevents shell interpretation)
+    return `'${unixPath}'`;
+  } else {
+    // On Unix, use single quotes and escape any single quotes in the path
+    // Single quotes prevent all shell interpretation except for single quotes themselves
+    const escaped = normalizedPath.replace(/'/g, "'\\''");
+    return `'${escaped}'`;
+  }
+}
+
+/**
+ * Build the SSH command string for git config
+ */
+function buildSshCommand(sshKeyPath) {
+  const escapedPath = escapeSshKeyPath(sshKeyPath);
+  return `ssh -i ${escapedPath} -o IdentitiesOnly=yes`;
+}
+
 const isSocketPath = async (candidate) => {
   if (!candidate || typeof candidate !== 'string') {
     return false;
@@ -130,46 +178,6 @@ export async function isGitRepository(directory) {
   return fs.existsSync(gitDir);
 }
 
-export async function ensureOpenChamberIgnored(directory) {
-  // LEGACY_WORKTREES: only needed for <project>/.openchamber era. Safe to remove after legacy support dropped.
-  const directoryPath = normalizeDirectoryPath(directory);
-  if (!directoryPath || !fs.existsSync(directoryPath)) {
-    return false;
-  }
-
-  const gitDir = path.join(directoryPath, '.git');
-  if (!fs.existsSync(gitDir)) {
-    return false;
-  }
-
-  const infoDir = path.join(gitDir, 'info');
-  const excludePath = path.join(infoDir, 'exclude');
-  const entry = '/.openchamber/';
-
-  try {
-    await fsp.mkdir(infoDir, { recursive: true });
-    let contents = '';
-    try {
-      contents = await fsp.readFile(excludePath, 'utf8');
-    } catch (readError) {
-      if (readError && readError.code !== 'ENOENT') {
-        throw readError;
-      }
-    }
-
-    const lines = contents.split(/\r?\n/).map((line) => line.trim());
-    if (!lines.includes(entry)) {
-      const prefix = contents.length > 0 && !contents.endsWith('\n') ? '\n' : '';
-      await fsp.appendFile(excludePath, `${prefix}${entry}\n`, 'utf8');
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Failed to ensure .openchamber ignore:', error);
-    throw error;
-  }
-}
-
 export async function getGlobalIdentity() {
   const git = await createGit();
 
@@ -261,7 +269,7 @@ export async function setLocalIdentity(directory, profile) {
     if (authType === 'ssh' && profile.sshKey) {
       await git.addConfig(
         'core.sshCommand',
-        `ssh -i ${profile.sshKey}`,
+        buildSshCommand(profile.sshKey),
         false,
         'local'
       );
@@ -444,6 +452,58 @@ export async function getStatus(directory) {
       }
     }
 
+    // Check for in-progress operations
+    let mergeInProgress = null;
+    let rebaseInProgress = null;
+
+    try {
+      // Check MERGE_HEAD for merge in progress
+      const mergeHeadExists = await git
+        .raw(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])
+        .then(() => true)
+        .catch(() => false);
+      
+      if (mergeHeadExists) {
+        const mergeHead = await git.raw(['rev-parse', 'MERGE_HEAD']).catch(() => '');
+        const headSha = mergeHead.trim().slice(0, 7);
+        // Only set mergeInProgress if we actually have a valid head SHA
+        if (headSha) {
+          const mergeMsg = await fsp.readFile(path.join(directoryPath, '.git', 'MERGE_MSG'), 'utf8').catch(() => '');
+          mergeInProgress = {
+            head: headSha,
+            message: mergeMsg.split('\n')[0] || '',
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      // Check for rebase in progress (.git/rebase-merge or .git/rebase-apply)
+      const rebaseMergeExists = await fsp.stat(path.join(directoryPath, '.git', 'rebase-merge')).then(() => true).catch(() => false);
+      const rebaseApplyExists = await fsp.stat(path.join(directoryPath, '.git', 'rebase-apply')).then(() => true).catch(() => false);
+      
+      if (rebaseMergeExists || rebaseApplyExists) {
+        const rebaseDir = rebaseMergeExists ? 'rebase-merge' : 'rebase-apply';
+        const headName = await fsp.readFile(path.join(directoryPath, '.git', rebaseDir, 'head-name'), 'utf8').catch(() => '');
+        const onto = await fsp.readFile(path.join(directoryPath, '.git', rebaseDir, 'onto'), 'utf8').catch(() => '');
+        
+        const headNameTrimmed = headName.trim().replace('refs/heads/', '');
+        const ontoTrimmed = onto.trim().slice(0, 7);
+        
+        // Only set rebaseInProgress if we have valid data
+        if (headNameTrimmed || ontoTrimmed) {
+          rebaseInProgress = {
+            headName: headNameTrimmed,
+            onto: ontoTrimmed,
+          };
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     return {
       current: status.current,
       tracking,
@@ -456,6 +516,8 @@ export async function getStatus(directory) {
       })),
       isClean: status.isClean(),
       diffStats,
+      mergeInProgress,
+      rebaseInProgress,
     };
   } catch (error) {
     console.error('Failed to get Git status:', error);
@@ -1018,57 +1080,6 @@ export async function getWorktrees(directory) {
   }
 }
 
-export async function addWorktree(directory, worktreePath, branch, options = {}) {
-  const git = await createGit(directory);
-
-  try {
-    const args = ['worktree', 'add'];
-    const startPoint = typeof options.startPoint === 'string' ? options.startPoint.trim() : '';
-
-    if (options.createBranch) {
-      args.push('-b', branch);
-    }
-
-    args.push(worktreePath);
-
-    if (!options.createBranch) {
-      args.push(branch);
-    } else if (startPoint) {
-      args.push(startPoint);
-    }
-
-    await git.raw(args);
-
-    return {
-      success: true,
-      path: worktreePath,
-      branch
-    };
-  } catch (error) {
-    console.error('Failed to add worktree:', error);
-    throw error;
-  }
-}
-
-export async function removeWorktree(directory, worktreePath, options = {}) {
-  const git = await createGit(directory);
-
-  try {
-    const args = ['worktree', 'remove', worktreePath];
-
-    if (options.force) {
-      args.push('--force');
-    }
-
-    await git.raw(args);
-
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to remove worktree:', error);
-    throw error;
-  }
-}
-
 export async function deleteBranch(directory, branch, options = {}) {
   const git = await createGit(directory);
 
@@ -1289,6 +1300,305 @@ export async function renameBranch(directory, oldName, newName) {
     return { success: true, branch: newName };
   } catch (error) {
     console.error('Failed to rename branch:', error);
+    throw error;
+  }
+}
+
+export async function getRemotes(directory) {
+  const git = await createGit(directory);
+
+  try {
+    const remotes = await git.getRemotes(true);
+    
+    return remotes.map((remote) => ({
+      name: remote.name,
+      fetchUrl: remote.refs.fetch,
+      pushUrl: remote.refs.push
+    }));
+  } catch (error) {
+    console.error('Failed to get remotes:', error);
+    throw error;
+  }
+}
+
+export async function rebase(directory, options = {}) {
+  const git = await createGit(directory);
+
+  try {
+    const { onto } = options;
+    if (!onto) {
+      throw new Error('onto parameter is required for rebase');
+    }
+
+    await git.rebase([onto]);
+
+    return {
+      success: true,
+      conflict: false
+    };
+  } catch (error) {
+    const errorMessage = String(error?.message || error || '').toLowerCase();
+    const isConflict = errorMessage.includes('conflict') || 
+                       errorMessage.includes('could not apply') ||
+                       errorMessage.includes('merge conflict');
+
+    if (isConflict) {
+      // Get list of conflicted files
+      const status = await git.status().catch(() => ({ conflicted: [] }));
+      return {
+        success: false,
+        conflict: true,
+        conflictFiles: status.conflicted || []
+      };
+    }
+
+    console.error('Failed to rebase:', error);
+    throw error;
+  }
+}
+
+export async function abortRebase(directory) {
+  const git = await createGit(directory);
+
+  try {
+    await git.rebase(['--abort']);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to abort rebase:', error);
+    throw error;
+  }
+}
+
+export async function merge(directory, options = {}) {
+  const git = await createGit(directory);
+
+  try {
+    const { branch } = options;
+    if (!branch) {
+      throw new Error('branch parameter is required for merge');
+    }
+
+    await git.merge([branch]);
+
+    return {
+      success: true,
+      conflict: false
+    };
+  } catch (error) {
+    const errorMessage = String(error?.message || error || '').toLowerCase();
+    const isConflict = errorMessage.includes('conflict') || 
+                       errorMessage.includes('merge conflict') ||
+                       errorMessage.includes('automatic merge failed');
+
+    if (isConflict) {
+      // Get list of conflicted files
+      const status = await git.status().catch(() => ({ conflicted: [] }));
+      return {
+        success: false,
+        conflict: true,
+        conflictFiles: status.conflicted || []
+      };
+    }
+
+    console.error('Failed to merge:', error);
+    throw error;
+  }
+}
+
+export async function abortMerge(directory) {
+  const git = await createGit(directory);
+
+  try {
+    await git.merge(['--abort']);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to abort merge:', error);
+    throw error;
+  }
+}
+
+export async function continueRebase(directory) {
+  const directoryPath = normalizeDirectoryPath(directory);
+  const git = await createGit(directoryPath);
+
+  try {
+    // Set GIT_EDITOR to prevent editor prompts
+    await git.env('GIT_EDITOR', 'true').rebase(['--continue']);
+    return { success: true, conflict: false };
+  } catch (error) {
+    const errorMessage = String(error?.message || error || '').toLowerCase();
+    const isConflict = errorMessage.includes('conflict') || 
+                       errorMessage.includes('needs merge') ||
+                       errorMessage.includes('unmerged') ||
+                       errorMessage.includes('fix conflicts');
+
+    if (isConflict) {
+      const status = await git.status().catch(() => ({ conflicted: [] }));
+      return {
+        success: false,
+        conflict: true,
+        conflictFiles: status.conflicted || []
+      };
+    }
+
+    // Check for "nothing to commit" which means rebase step is complete
+    if (errorMessage.includes('nothing to commit') || errorMessage.includes('no changes')) {
+      // Skip this commit and continue
+      try {
+        await git.env('GIT_EDITOR', 'true').rebase(['--skip']);
+        return { success: true, conflict: false };
+      } catch {
+        // If skip also fails, the rebase may be complete
+        return { success: true, conflict: false };
+      }
+    }
+
+    console.error('Failed to continue rebase:', error);
+    throw error;
+  }
+}
+
+export async function continueMerge(directory) {
+  const directoryPath = normalizeDirectoryPath(directory);
+  const git = await createGit(directoryPath);
+
+  try {
+    // Check if there are still unmerged files
+    const status = await git.status();
+    if (status.conflicted && status.conflicted.length > 0) {
+      return {
+        success: false,
+        conflict: true,
+        conflictFiles: status.conflicted
+      };
+    }
+
+    // For merge, we commit after resolving conflicts
+    // Use --no-edit to use the default merge commit message
+    await git.env('GIT_EDITOR', 'true').commit([], { '--no-edit': null });
+    return { success: true, conflict: false };
+  } catch (error) {
+    const errorMessage = String(error?.message || error || '').toLowerCase();
+    const isConflict = errorMessage.includes('conflict') || 
+                       errorMessage.includes('needs merge') ||
+                       errorMessage.includes('unmerged') ||
+                       errorMessage.includes('fix conflicts');
+
+    if (isConflict) {
+      const status = await git.status().catch(() => ({ conflicted: [] }));
+      return {
+        success: false,
+        conflict: true,
+        conflictFiles: status.conflicted || []
+      };
+    }
+
+    // "nothing to commit" can happen if all conflicts resolved to one side
+    if (errorMessage.includes('nothing to commit') || errorMessage.includes('no changes added')) {
+      // The merge is effectively complete (all changes already committed or no changes needed)
+      return { success: true, conflict: false };
+    }
+
+    console.error('Failed to continue merge:', error);
+    throw error;
+  }
+}
+
+export async function getConflictDetails(directory) {
+  const directoryPath = normalizeDirectoryPath(directory);
+  const git = await createGit(directoryPath);
+
+  try {
+    // Get git status --porcelain
+    const statusPorcelain = await git.raw(['status', '--porcelain']).catch(() => '');
+
+    // Get unmerged files
+    const unmergedFilesRaw = await git.raw(['diff', '--name-only', '--diff-filter=U']).catch(() => '');
+    const unmergedFiles = unmergedFilesRaw
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    // Get current diff
+    const diff = await git.raw(['diff']).catch(() => '');
+
+    // Detect operation type and get head info
+    let operation = 'merge';
+    let headInfo = '';
+
+    // Check for MERGE_HEAD (merge in progress)
+    const mergeHeadExists = await git
+      .raw(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'])
+      .then(() => true)
+      .catch(() => false);
+
+    if (mergeHeadExists) {
+      operation = 'merge';
+      const mergeHead = await git.raw(['rev-parse', 'MERGE_HEAD']).catch(() => '');
+      const mergeMsg = await fsp
+        .readFile(path.join(directoryPath, '.git', 'MERGE_MSG'), 'utf8')
+        .catch(() => '');
+      headInfo = `MERGE_HEAD: ${mergeHead.trim()}\n${mergeMsg}`;
+    } else {
+      // Check for REBASE_HEAD (rebase in progress)
+      const rebaseHeadExists = await git
+        .raw(['rev-parse', '--verify', '--quiet', 'REBASE_HEAD'])
+        .then(() => true)
+        .catch(() => false);
+
+      if (rebaseHeadExists) {
+        operation = 'rebase';
+        const rebaseHead = await git.raw(['rev-parse', 'REBASE_HEAD']).catch(() => '');
+        headInfo = `REBASE_HEAD: ${rebaseHead.trim()}`;
+      }
+    }
+
+    return {
+      statusPorcelain: statusPorcelain.trim(),
+      unmergedFiles,
+      diff: diff.trim(),
+      headInfo: headInfo.trim(),
+      operation,
+    };
+  } catch (error) {
+    console.error('Failed to get conflict details:', error);
+    throw error;
+  }
+}
+
+// ============== Stash Operations ==============
+
+export async function stash(directory, options = {}) {
+  const git = await createGit(directory);
+
+  try {
+    const args = ['stash', 'push'];
+    
+    // Include untracked files by default
+    if (options.includeUntracked !== false) {
+      args.push('--include-untracked');
+    }
+    
+    if (options.message) {
+      args.push('-m', options.message);
+    }
+
+    await git.raw(args);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to stash:', error);
+    throw error;
+  }
+}
+
+export async function stashPop(directory) {
+  const git = await createGit(directory);
+
+  try {
+    await git.raw(['stash', 'pop']);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to pop stash:', error);
     throw error;
   }
 }

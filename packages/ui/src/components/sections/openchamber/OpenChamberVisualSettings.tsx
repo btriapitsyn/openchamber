@@ -82,7 +82,7 @@ const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys';
+export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -116,6 +116,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setShowTerminalQuickKeysOnDesktop = useUIStore(state => state.setShowTerminalQuickKeysOnDesktop);
     const queueModeEnabled = useMessageQueueStore(state => state.queueModeEnabled);
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
+    const persistChatDraft = useUIStore(state => state.persistChatDraft);
+    const setPersistChatDraft = useUIStore(state => state.setPersistChatDraft);
     const {
         themeMode,
         setThemeMode,
@@ -753,6 +755,23 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         {queueModeEnabled 
                             ? `Enter queues messages, ${getModifierLabel()}+Enter sends immediately.` 
                             : `Enter sends immediately, ${getModifierLabel()}+Enter queues messages.`}
+                    </p>
+                </div>
+            )}
+
+            {shouldShow('persistDraft') && (
+                <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                            checked={persistChatDraft}
+                            onChange={setPersistChatDraft}
+                        />
+                        <span className="typography-ui-header font-semibold text-foreground">
+                            Persist chat input draft
+                        </span>
+                    </label>
+                    <p className="typography-meta text-muted-foreground pl-5">
+                        Save your typed message across page reloads and session switches.
                     </p>
                 </div>
             )}

@@ -18,9 +18,6 @@ export const createWebGitAPI = (): GitAPI => ({
   generateCommitMessage: gitApiHttp.generateCommitMessage,
   generatePullRequestDescription: gitApiHttp.generatePullRequestDescription,
   listGitWorktrees: gitApiHttp.listGitWorktrees,
-  addGitWorktree: gitApiHttp.addGitWorktree as GitAPI['addGitWorktree'],
-  removeGitWorktree: gitApiHttp.removeGitWorktree as GitAPI['removeGitWorktree'],
-  ensureOpenChamberIgnored: gitApiHttp.ensureOpenChamberIgnored,
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions) {
     return gitApiHttp.createGitCommit(directory, message, options);
   },
@@ -41,4 +38,14 @@ export const createWebGitAPI = (): GitAPI => ({
   createGitIdentity: gitApiHttp.createGitIdentity,
   updateGitIdentity: gitApiHttp.updateGitIdentity,
   deleteGitIdentity: gitApiHttp.deleteGitIdentity,
+  getRemotes: gitApiHttp.getRemotes,
+  rebase: gitApiHttp.rebase,
+  abortRebase: gitApiHttp.abortRebase,
+  continueRebase: gitApiHttp.continueRebase,
+  merge: gitApiHttp.merge,
+  abortMerge: gitApiHttp.abortMerge,
+  continueMerge: gitApiHttp.continueMerge,
+  stash: gitApiHttp.stash,
+  stashPop: gitApiHttp.stashPop,
+  getConflictDetails: gitApiHttp.getConflictDetails,
 });

@@ -10,6 +10,7 @@ import { toolDisplayStyles } from '@/lib/typography';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -1067,6 +1068,22 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const diffStats = (part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') ? parseDiffStats(metadata) : null;
     const description = getToolDescription(part, state, isMobile, currentDirectory);
     const displayName = getToolMetadata(part.tool).displayName;
+    
+    // Get justification text (tool title/description) when setting is enabled
+    const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
+    const justificationText = React.useMemo(() => {
+        if (!showTextJustificationActivity) return null;
+        // Get title or description from state - this is the "yapping" text like "Shows system information"
+        const title = (stateWithData as { title?: string }).title;
+        if (typeof title === 'string' && title.trim().length > 0) {
+            return title;
+        }
+        const inputDesc = input?.description;
+        if (typeof inputDesc === 'string' && inputDesc.trim().length > 0) {
+            return inputDesc;
+        }
+        return null;
+    }, [showTextJustificationActivity, stateWithData, input]);
 
     const runtime = React.useContext(RuntimeAPIContext);
 
@@ -1147,7 +1164,12 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                 </div>
 
                 <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
-                    {description && (
+                    {justificationText && (
+                        <span className={cn("truncate italic", isMobile && "max-w-[120px]")} style={{ color: 'var(--tools-description)', opacity: 0.8 }}>
+                            {justificationText}
+                        </span>
+                    )}
+                    {!justificationText && description && (
                         <span className={cn("truncate", isMobile && "max-w-[120px]")}>
                             {description}
                         </span>

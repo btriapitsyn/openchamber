@@ -4,10 +4,11 @@ import type { Session } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { getSafeStorage } from "./utils/safeStorage";
 import type { WorktreeMetadata } from "@/types/worktree";
-import { getWorktreeStatus, listWorktrees, mapWorktreeToMetadata } from "@/lib/git/worktreeService";
+import { getWorktreeStatus } from "@/lib/worktrees/worktreeStatus";
 import { listProjectWorktrees, removeProjectWorktree } from "@/lib/worktrees/worktreeManager";
 import { useDirectoryStore } from "./useDirectoryStore";
 import { useProjectsStore } from "./useProjectsStore";
+import { triggerSessionStatusPoll } from "@/hooks/useServerSessionStatus";
 import type { ProjectEntry } from "@/lib/api/types";
 import { checkIsGitRepository } from "@/lib/gitApi";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
@@ -52,8 +53,6 @@ type SessionStore = SessionState & SessionActions;
 
 const safeStorage = getSafeStorage();
 const SESSION_SELECTION_STORAGE_KEY = "oc.sessionSelectionByDirectory";
-const WORKTREE_ROOT = ".openchamber";
-
 type SessionSelectionMap = Record<string, string>;
 
 const readSessionSelectionMap = (): SessionSelectionMap => {
@@ -278,11 +277,11 @@ const hydrateSessionWorktreeMetadata = async (
         return null;
     }
 
-    let worktreeEntries;
+    let worktreeEntries: WorktreeMetadata[];
     try {
-        worktreeEntries = await listWorktrees(normalizedProject);
+        worktreeEntries = await listProjectWorktrees({ id: `path:${normalizedProject}`, path: normalizedProject });
     } catch (error) {
-        console.debug("Failed to hydrate worktree metadata from git worktree list:", error);
+        console.debug("Failed to hydrate worktree metadata from worktree list:", error);
         return null;
     }
 
@@ -298,8 +297,7 @@ const hydrateSessionWorktreeMetadata = async (
     }
 
     const worktreeMapByPath = new Map<string, WorktreeMetadata>();
-    worktreeEntries.forEach((info) => {
-        const metadata = mapWorktreeToMetadata(normalizedProject, info);
+    worktreeEntries.forEach((metadata) => {
         const normalizedPath = normalizePath(metadata.path) ?? metadata.path;
 
         if (normalizedPath === normalizedProject) {
@@ -312,6 +310,26 @@ const hydrateSessionWorktreeMetadata = async (
     let mutated = false;
     const next = new Map(existingMetadata);
 
+    const mergeHydratedMetadata = (
+        hydrated: WorktreeMetadata,
+        previous?: WorktreeMetadata
+    ): WorktreeMetadata => {
+        if (!previous) {
+            return hydrated;
+        }
+        return {
+            ...previous,
+            ...hydrated,
+            branch: hydrated.branch || previous.branch,
+            label: hydrated.label || previous.label,
+            name: hydrated.name || previous.name,
+            projectDirectory: hydrated.projectDirectory || previous.projectDirectory,
+            createdFromBranch: hydrated.createdFromBranch || previous.createdFromBranch,
+            kind: hydrated.kind || previous.kind,
+            status: hydrated.status || previous.status,
+        };
+    };
+
     sessionsWithDirectory.forEach(({ id, directory }) => {
         const metadata = worktreeMapByPath.get(directory);
         if (!metadata) {
@@ -322,8 +340,19 @@ const hydrateSessionWorktreeMetadata = async (
         }
 
         const previous = next.get(id);
-        if (!previous || previous.path !== metadata.path || previous.branch !== metadata.branch || previous.label !== metadata.label) {
-            next.set(id, metadata);
+        const merged = mergeHydratedMetadata(metadata, previous);
+        if (
+            !previous ||
+            previous.path !== merged.path ||
+            previous.branch !== merged.branch ||
+            previous.label !== merged.label ||
+            previous.name !== merged.name ||
+            previous.projectDirectory !== merged.projectDirectory ||
+            previous.createdFromBranch !== merged.createdFromBranch ||
+            previous.kind !== merged.kind ||
+            previous.source !== merged.source
+        ) {
+            next.set(id, merged);
             mutated = true;
         }
     });
@@ -569,7 +598,6 @@ export const useSessionStore = create<SessionStore>()(
                                 validPaths.add(normalizedProject);
 
                                 if (isGitRepo) {
-                                    const worktreeRoot = `${normalizedProject}/${WORKTREE_ROOT}`;
                                     try {
                                         const candidates = new Set<string>();
 
@@ -583,25 +611,6 @@ export const useSessionStore = create<SessionStore>()(
                                                 candidates.add(normalizePath(meta.path) ?? meta.path);
                                             }
                                         });
-
-                                        // LEGACY_WORKTREES: check if .openchamber directory exists before listing it
-                                        // LEGACY_WORKTREES: filesystem scan fallback for legacy <project>/.openchamber/*
-                                        const projectEntriesList = await opencodeClient.listLocalDirectory(normalizedProject);
-                                        const worktreeDirExists = projectEntriesList.some(
-                                            (entry) => entry.isDirectory && entry.name === WORKTREE_ROOT
-                                        );
-
-                                        if (worktreeDirExists) {
-                                            const entries = await opencodeClient.listLocalDirectory(worktreeRoot);
-                                            entries
-                                                .filter((entry) => entry.isDirectory)
-                                                .forEach((entry) => {
-                                                    const isAbsolutePath = /^([A-Za-z]:)?\//.test(entry.path);
-                                                    const resolvedPath = isAbsolutePath ? entry.path : `${worktreeRoot}/${entry.name}`;
-                                                    const normalizedPath = normalizePath(resolvedPath) ?? resolvedPath;
-                                                    candidates.add(normalizedPath);
-                                                });
-                                        }
 
                                         candidates.forEach((candidate) => {
                                             const normalizedCandidate = normalizePath(candidate) ?? candidate;
@@ -1229,7 +1238,26 @@ export const useSessionStore = create<SessionStore>()(
                 },
 
                 setCurrentSession: (id: string | null) => {
+                    const prevSessionId = get().currentSessionId;
                     set({ currentSessionId: id, error: null });
+
+                    // Notify server of view state changes
+                    // This enables server-side needs_attention tracking
+                    if (prevSessionId && prevSessionId !== id) {
+                        // Leaving previous session
+                        fetch(`/api/sessions/${prevSessionId}/unview`, { method: 'POST' })
+                            .catch(() => { /* ignore */ });
+                    }
+                    if (id) {
+                        // Entering new session
+                        fetch(`/api/sessions/${id}/view`, { method: 'POST' })
+                            .catch(() => { /* ignore */ });
+                    }
+
+                    // Trigger immediate poll to get latest attention states
+                    // This prevents stale state when switching sessions
+                    triggerSessionStatusPoll();
+
                     const directory = opencodeClient.getDirectory() ?? null;
                     storeSessionForDirectory(directory, id);
                 },
@@ -1505,7 +1533,7 @@ export const useSessionStore = create<SessionStore>()(
 
         const mergedSessions = dedupeSessionsById(persistedSessions);
 
-        return {
+        const mergedResult = {
             ...currentState,
             ...persistedState,
             sessions: mergedSessions,
@@ -1519,6 +1547,7 @@ export const useSessionStore = create<SessionStore>()(
                 : currentState.availableWorktreesByProject,
             lastLoadedDirectory,
         };
+        return mergedResult;
     },
             }
         ),

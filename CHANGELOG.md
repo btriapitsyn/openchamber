@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-02-6
+
+- Settings: added an OpenCode CLI path override so you can point OpenChamber at a custom/local CLI install.
+- Chat: added arrow-key prompt history and an optional setting to persist input drafts between restarts (thanks to @gsxdsm).
+- Chat: thinking/reasoning blocks now render more consistently, and justification visibility settings now apply reliably (thanks to @gsxdsm).
+- Diff/Plans: added inline comment drafts so you can leave line-level notes and feed them back into requests (thanks to @nelsonPires5).
+- Sessions: you can now rename projects directly from the sidebar, and issue/PR pickers are easier to scan when starting from GitHub context (thanks to @shekohex, @gsxdsm).
+- Worktrees: improved worktree flow reliability, including cleaner handling when a worktree was already removed outside the app (thanks to @gsxdsm).
+- Terminal: improved Android keyboard behavior and removed distracting native caret blink in terminal inputs (thanks to @shekohex).
+- UI: added Vitesse Dark and Vitesse Light theme presets.
+- Reliability: improved OpenCode binary resolution and HOME-path handling across runtimes for steadier local startup.
+
+
 ## [1.6.4] - 2026-02-5
 
 - Desktop: switch between local and remote OpenChamber instances, plus a thinner runtime for better feature parity and fewer desktop-only quirks.

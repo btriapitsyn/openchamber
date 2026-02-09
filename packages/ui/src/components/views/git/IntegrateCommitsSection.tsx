@@ -1,16 +1,11 @@
 import * as React from 'react';
-import { RiArrowDownSLine, RiLoader4Line, RiSplitCellsHorizontal } from '@remixicon/react';
-import { Button } from '@/components/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { RiArrowDownSLine, RiLoader4Line, RiSplitCellsHorizontal, RiSparklingLine } from '@remixicon/react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -20,8 +15,6 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { toast } from '@/components/ui';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useMessageStore } from '@/stores/messageStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { execCommand } from '@/lib/execCommands';
@@ -53,6 +46,7 @@ export const IntegrateCommitsSection: React.FC<{
   defaultTargetBranch: string;
   refreshKey?: number;
   onRefresh?: () => void;
+  variant?: 'framed' | 'plain';
 }> = ({
   repoRoot,
   sourceBranch,
@@ -61,15 +55,27 @@ export const IntegrateCommitsSection: React.FC<{
   defaultTargetBranch,
   refreshKey,
   onRefresh,
+  variant = 'framed',
 }) => {
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const setActiveMainTab = useUIStore((s) => s.setActiveMainTab);
-  const [isOpen, setIsOpen] = React.useState(true);
+  const [branchDropdownOpen, setBranchDropdownOpen] = React.useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   const [targetBranch, setTargetBranch] = React.useState<string>(defaultTargetBranch);
   React.useEffect(() => {
     setTargetBranch(defaultTargetBranch);
   }, [defaultTargetBranch]);
+
+  // Focus search input when branch dropdown opens
+  React.useEffect(() => {
+    if (branchDropdownOpen) {
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [branchDropdownOpen]);
 
   const isEligible = Boolean(
     repoRoot && sourceBranch && targetBranch && targetBranch !== 'HEAD' && sourceBranch !== targetBranch
@@ -171,32 +177,30 @@ export const IntegrateCommitsSection: React.FC<{
     [currentSessionId, worktreeMetadata]
   );
 
-  const handleResolveWithAi = React.useCallback(async (payload: { state: IntegrateInProgress; details: IntegrateConflictDetails }) => {
-    setActiveMainTab('chat');
-    if (!currentSessionId) {
-      toast.error('No active session', { description: 'Open a chat session first.' });
-      return;
-    }
-    const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore.getState();
-    const lastUsedProvider = useMessageStore.getState().lastUsedProvider;
-    const providerID = currentProviderId || lastUsedProvider?.providerID;
-    const modelID = currentModelId || lastUsedProvider?.modelID;
-    if (!providerID || !modelID) {
-      toast.error('No model selected');
-      return;
-    }
+  const openNewSessionDraft = useSessionStore((s) => s.openNewSessionDraft);
 
-    const visibleText = `Resolve cherry-pick conflicts and keep intent of commit ${payload.state.currentCommit} onto branch ${payload.state.targetBranch}. After edits, report if I can continue process.`;
-    const instructionsText = `Worktree commit integration is in progress.
+  const buildConflictContext = React.useCallback((payload: { state: IntegrateInProgress; details: IntegrateConflictDetails }) => {
+    const visibleText = `Resolve cherry-pick conflicts, stage the resolved files, and continue the cherry-pick. Keep intent of commit ${payload.state.currentCommit} onto branch ${payload.state.targetBranch}.`;
+    const instructionsText = `Worktree commit integration (cherry-pick) is in progress with conflicts.
 - Repo root: ${payload.state.repoRoot}
 - Temp target worktree: ${payload.state.tempWorktreePath}
 - Source branch: ${payload.state.sourceBranch}
 - Target branch: ${payload.state.targetBranch}
+- Current commit: ${payload.state.currentCommit}
 
-Goal:
-- Resolve conflicts inside the temp target worktree directory.
-- Do NOT change intent of the commit being applied.
-- After edits, say whether I can click "Continue".
+Required steps:
+1. Read each conflicted file in the temp worktree to understand the conflict markers (<<<<<<< HEAD, =======, >>>>>>> ...)
+2. Edit each file to resolve conflicts by choosing the correct code or merging both changes appropriately
+3. Stage all resolved files with: git add <file>
+4. Complete the cherry-pick with: git cherry-pick --continue
+
+Important:
+- Work inside the temp worktree directory: ${payload.state.tempWorktreePath}
+- Remove ALL conflict markers from files (<<<<<<< HEAD, =======, >>>>>>>)
+- Preserve the intent of the commit being applied
+- Make sure the final code is syntactically correct
+- Do not leave any files with unresolved conflict markers
+- After completing all steps, confirm the cherry-pick was successful
 `;
     const payloadText = `Cherry-pick conflict context (JSON)\n${JSON.stringify({
       repoRoot: payload.state.repoRoot,
@@ -212,24 +216,46 @@ Goal:
       diff: payload.details.diff,
     }, null, 2)}`;
 
-    void useMessageStore.getState().sendMessage(
-      visibleText,
-      providerID,
-      modelID,
-      currentAgentName ?? undefined,
-      currentSessionId,
-      undefined,
-      null,
-      [
-        { text: instructionsText, synthetic: true },
-        { text: payloadText, synthetic: true },
-      ],
-      currentVariant
-    ).catch((e) => {
-      const message = e instanceof Error ? e.message : String(e);
-      toast.error('Failed to send message', { description: message });
-    });
-  }, [currentSessionId, setActiveMainTab]);
+    return { visibleText, instructionsText, payloadText };
+  }, []);
+
+  const setPendingInputText = useSessionStore((s) => s.setPendingInputText);
+  const setPendingSyntheticParts = useSessionStore((s) => s.setPendingSyntheticParts);
+
+  const handleResolveWithAi = React.useCallback((
+    payload: { state: IntegrateInProgress; details: IntegrateConflictDetails },
+    useNewSession: boolean
+  ) => {
+    const context = buildConflictContext(payload);
+
+    if (useNewSession) {
+      // Open new session with the conflict context as initial prompt + synthetic parts
+      openNewSessionDraft({
+        directoryOverride: payload.state.tempWorktreePath,
+        initialPrompt: context.visibleText,
+        syntheticParts: [
+          { text: context.instructionsText, synthetic: true },
+          { text: context.payloadText, synthetic: true },
+        ],
+      });
+      // Navigate to chat tab so user sees the new session
+      setActiveMainTab('chat');
+      return;
+    }
+
+    // Use current session - set pending input text and synthetic parts
+    if (!currentSessionId) {
+      toast.error('No active session', { description: 'Open a chat session first or start a new session.' });
+      return;
+    }
+
+    setPendingInputText(context.visibleText, 'replace');
+    setPendingSyntheticParts([
+      { text: context.instructionsText, synthetic: true },
+      { text: context.payloadText, synthetic: true },
+    ]);
+    setActiveMainTab('chat');
+  }, [currentSessionId, setActiveMainTab, buildConflictContext, openNewSessionDraft, setPendingInputText, setPendingSyntheticParts]);
 
   const handleMove = React.useCallback(async () => {
     if (ui.kind !== 'ready') return;
@@ -250,7 +276,7 @@ Goal:
         return;
       }
       if (result.kind === 'conflict') {
-        toast.error('Cherry-pick conflict', { description: 'Resolve conflicts, then Continue.' });
+        toast.error('Cherry-pick conflict', { description: 'Resolve conflicts, then continue.' });
         setUi({ kind: 'conflict', state: result.state, details: result.details });
         if (conflictStorageKey && typeof window !== 'undefined') {
           window.localStorage.setItem(conflictStorageKey, JSON.stringify(result.state));
@@ -311,13 +337,19 @@ Goal:
     return null;
   }
 
+  const containerClassName =
+    variant === 'framed'
+      ? 'rounded-xl border border-border/60 bg-background/70 overflow-hidden'
+      : 'border-0 bg-transparent rounded-none';
+  const headerClassName =
+    variant === 'framed'
+      ? 'px-3 py-2 border-b border-border/40 flex items-center justify-between gap-2'
+      : 'px-0 py-3 border-b border-border/40 flex items-center justify-between gap-2';
+  const bodyClassName = variant === 'framed' ? 'flex flex-col gap-3 p-3' : 'flex flex-col gap-3 py-3';
+
   return (
-    <Collapsible
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      className="rounded-xl border border-border/60 bg-background/70 overflow-hidden"
-    >
-      <CollapsibleTrigger className="flex w-full items-center justify-between px-3 h-10 hover:bg-transparent">
+    <section className={containerClassName}>
+      <div className={headerClassName}>
         <div className="flex items-center gap-2 min-w-0">
           <RiSplitCellsHorizontal className="size-4 text-muted-foreground" />
           <h3 className="typography-ui-header font-semibold text-foreground truncate">Re-integrate commits</h3>
@@ -330,14 +362,12 @@ Goal:
             <RiLoader4Line className="size-4 animate-spin text-muted-foreground" />
           ) : null}
         </div>
-      </CollapsibleTrigger>
+      </div>
 
-      <CollapsibleContent>
-        <div className="border-t border-border/40">
-          <div className="flex flex-col gap-3 p-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="min-w-0">
-              <div className="typography-ui-label text-foreground">Move commits</div>
+      <div className={bodyClassName}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-0">
+            <div className="typography-ui-label text-foreground">Move commits</div>
               <div className="typography-micro text-muted-foreground truncate">
                 {sourceBranch} → {targetBranch}
               </div>
@@ -345,7 +375,7 @@ Goal:
 
             <div className="flex-1" />
 
-            <DropdownMenu>
+            <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   Target
@@ -358,7 +388,7 @@ Goal:
                 className="w-72 p-0 max-h-(--radix-dropdown-menu-content-available-height) flex flex-col overflow-hidden"
               >
                 <Command className="h-full min-h-0">
-                  <CommandInput placeholder="Search branches..." />
+                  <CommandInput ref={searchInputRef} placeholder="Search branches..." />
                   <CommandList
                     className="h-full min-h-0"
                     scrollbarClassName="overlay-scrollbar--flush overlay-scrollbar--dense overlay-scrollbar--zero"
@@ -373,6 +403,7 @@ Goal:
                           onSelect={() => {
                             setTargetBranch(branch);
                             persistTarget(branch);
+                            setBranchDropdownOpen(false);
                           }}
                         >
                           {branch}
@@ -465,10 +496,21 @@ Goal:
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-7 px-2 py-0 typography-meta"
-                  onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details })}
+                  className="h-7 px-2 py-0 typography-meta gap-1"
+                  disabled={!currentSessionId}
+                  onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details }, false)}
                 >
-                  Resolve with AI
+                  <RiSparklingLine className="size-3.5" />
+                  Current Session
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 px-2 py-0 typography-meta gap-1"
+                  onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details }, true)}
+                >
+                  <RiSparklingLine className="size-3.5" />
+                  New Session
                 </Button>
                 <Button size="sm" className="h-7 px-2 py-0 typography-meta" onClick={() => void handleContinue()}>
                   Continue
@@ -476,9 +518,7 @@ Goal:
               </div>
             </div>
           )}
-          </div>
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+      </div>
+    </section>
   );
 };

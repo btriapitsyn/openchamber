@@ -24,6 +24,7 @@ interface InlineCommentDraftState {
 
 interface InlineCommentDraftActions {
   addDraft: (draft: Omit<InlineCommentDraft, 'id' | 'createdAt'>) => void;
+  updateDraft: (sessionKey: string, draftId: string, updates: Partial<Omit<InlineCommentDraft, 'id' | 'createdAt' | 'sessionKey'>>) => void;
   removeDraft: (sessionKey: string, draftId: string) => void;
   clearDrafts: (sessionKey: string) => void;
   getDrafts: (sessionKey: string) => InlineCommentDraft[];
@@ -59,6 +60,28 @@ export const useInlineCommentDraftStore = create<InlineCommentDraftStore>()(
           });
 
           return id;
+        },
+
+        updateDraft: (sessionKey, draftId, updates) => {
+          set((state) => {
+            const currentDrafts = state.drafts[sessionKey] ?? [];
+            const newDrafts = currentDrafts.map((draft) => {
+              if (draft.id !== draftId) {
+                return draft;
+              }
+              return {
+                ...draft,
+                ...updates,
+              };
+            });
+
+            return {
+              drafts: {
+                ...state.drafts,
+                [sessionKey]: newDrafts,
+              },
+            };
+          });
         },
 
         removeDraft: (sessionKey, draftId) => {

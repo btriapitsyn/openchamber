@@ -84,6 +84,53 @@ function appendToPath(dir: string) {
 }
 
 function resolveOpencodeCliPath(): string | null {
+  const configured = (() => {
+    try {
+      const config = vscode.workspace.getConfiguration('openchamber');
+      const raw = config.get<string>('opencodeBinary') || '';
+      const trimmed = raw.trim();
+      if (!trimmed) return null;
+      try {
+        const stat = fs.statSync(trimmed);
+        if (stat.isDirectory()) {
+          return path.join(trimmed, process.platform === 'win32' ? 'opencode.exe' : 'opencode');
+        }
+      } catch {
+        // ignore
+      }
+      return trimmed;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (configured && isExecutable(configured)) {
+    return configured;
+  }
+
+  const sharedFromOpenChamber = (() => {
+    try {
+      const settingsPath = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+      const raw = fs.readFileSync(settingsPath, 'utf8');
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return null;
+      }
+      const candidate = (parsed as Record<string, unknown>).opencodeBinary;
+      if (typeof candidate !== 'string') {
+        return null;
+      }
+      const trimmed = candidate.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    } catch {
+      return null;
+    }
+  })();
+
+  if (sharedFromOpenChamber && isExecutable(sharedFromOpenChamber)) {
+    return sharedFromOpenChamber;
+  }
+
   const explicit = [
     process.env.OPENCODE_BINARY,
     process.env.OPENCODE_PATH,
@@ -102,6 +149,7 @@ function resolveOpencodeCliPath(): string | null {
   const home = os.homedir();
   const unixFallbacks = [
     path.join(home, '.opencode', 'bin', 'opencode'),
+    path.join(home, '.bun', 'bin', 'opencode'),
     path.join(home, '.local', 'bin', 'opencode'),
     path.join(home, 'bin', 'opencode'),
   ];
@@ -367,6 +415,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       if (resolvedCli) {
         cliPath = resolvedCli;
         appendToPath(path.dirname(resolvedCli));
+        process.env.OPENCODE_BINARY = resolvedCli;
       }
 
       // SDK spawns `opencode serve` in current process cwd.

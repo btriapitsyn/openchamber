@@ -16,9 +16,7 @@ import { DirectoryExplorerDialog } from './DirectoryExplorerDialog';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import type { Session } from '@opencode-ai/sdk/v2';
 import type { WorktreeMetadata } from '@/types/worktree';
-import {
-    getWorktreeStatus,
-} from '@/lib/git/worktreeService';
+import { getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -56,6 +54,8 @@ export const SessionDialogs: React.FC = () => {
     const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
     const [deleteDialogShouldRemoveRemote, setDeleteDialogShouldRemoveRemote] = React.useState(false);
     const [isProcessingDelete, setIsProcessingDelete] = React.useState(false);
+    const [hasCompletedDirtyCheck, setHasCompletedDirtyCheck] = React.useState(false);
+    const [dirtyWorktreePaths, setDirtyWorktreePaths] = React.useState<Set<string>>(new Set());
 
     const {
         deleteSession,
@@ -84,12 +84,7 @@ export const SessionDialogs: React.FC = () => {
         return { id: match?.id ?? `path:${fallbackPath}`, path: fallbackPath };
     }, [projectDirectory, projects]);
 
-    const hasDirtyWorktrees = React.useMemo(
-        () =>
-            (deleteDialog?.worktree?.status?.isDirty ?? false) ||
-            deleteDialogSummaries.some((entry) => entry.metadata.status?.isDirty),
-        [deleteDialog?.worktree?.status?.isDirty, deleteDialogSummaries],
-    );
+    const hasDirtyWorktrees = hasCompletedDirtyCheck && dirtyWorktreePaths.size > 0;
     const canRemoveRemoteBranches = React.useMemo(
         () => {
             const targetWorktree = deleteDialog?.worktree;
@@ -107,8 +102,6 @@ export const SessionDialogs: React.FC = () => {
     const shouldArchiveWorktree = isWorktreeDelete;
     const removeRemoteOptionDisabled =
         isProcessingDelete || !isWorktreeDelete || !canRemoveRemoteBranches;
-
-    // NOTE: stop auto-modifying .gitignore for legacy `.openchamber`.
 
     React.useEffect(() => {
         loadSessions();
@@ -194,6 +187,8 @@ export const SessionDialogs: React.FC = () => {
         setDeleteDialogSummaries([]);
         setDeleteDialogShouldRemoveRemote(false);
         setIsProcessingDelete(false);
+        setHasCompletedDirtyCheck(false);
+        setDirtyWorktreePaths(new Set());
     }, []);
 
     React.useEffect(() => {
@@ -212,6 +207,8 @@ export const SessionDialogs: React.FC = () => {
         if (!deleteDialog) {
             setDeleteDialogSummaries([]);
             setDeleteDialogShouldRemoveRemote(false);
+            setHasCompletedDirtyCheck(false);
+            setDirtyWorktreePaths(new Set());
             return;
         }
 
@@ -224,39 +221,97 @@ export const SessionDialogs: React.FC = () => {
 
         setDeleteDialogSummaries(summaries);
         setDeleteDialogShouldRemoveRemote(false);
+        setHasCompletedDirtyCheck(false);
+        setDirtyWorktreePaths(new Set());
 
-        if (summaries.length === 0) {
+        const metadataByPath = new Map<string, WorktreeMetadata>();
+        if (deleteDialog.worktree?.path) {
+            metadataByPath.set(normalizeProjectDirectory(deleteDialog.worktree.path), deleteDialog.worktree);
+        }
+        summaries.forEach(({ metadata }) => {
+            if (metadata.path) {
+                metadataByPath.set(normalizeProjectDirectory(metadata.path), metadata);
+            }
+        });
+
+        if (metadataByPath.size === 0) {
+            setHasCompletedDirtyCheck(true);
             return;
         }
 
         let cancelled = false;
 
         (async () => {
-            const statuses = await Promise.all(
-                summaries.map(async ({ metadata }) => {
-                    if (metadata.status && typeof metadata.status.isDirty === 'boolean') {
-                        return metadata.status;
-                    }
+            const statusByPath = new Map<string, WorktreeMetadata['status']>();
+            const nextDirtyPaths = new Set<string>();
+
+            await Promise.all(
+                Array.from(metadataByPath.entries()).map(async ([pathKey, metadata]) => {
                     try {
-                        return await getWorktreeStatus(metadata.path);
+                        const status = await getWorktreeStatus(metadata.path);
+                        statusByPath.set(pathKey, status);
+                        if (status?.isDirty) {
+                            nextDirtyPaths.add(pathKey);
+                        }
                     } catch {
-                        return metadata.status;
+                        if (metadata.status) {
+                            statusByPath.set(pathKey, metadata.status);
+                            if (metadata.status.isDirty) {
+                                nextDirtyPaths.add(pathKey);
+                            }
+                        }
                     }
                 })
             ).catch((error) => {
                 console.warn('Failed to inspect worktree status before deletion:', error);
-                return summaries.map(({ metadata }) => metadata.status);
             });
 
-            if (cancelled || !Array.isArray(statuses)) {
+            if (cancelled) {
                 return;
             }
 
+            setDirtyWorktreePaths(nextDirtyPaths);
+            setHasCompletedDirtyCheck(true);
+
+            setDeleteDialog((prev) => {
+                if (!prev?.worktree?.path) {
+                    return prev;
+                }
+                const pathKey = normalizeProjectDirectory(prev.worktree.path);
+                const nextStatus = statusByPath.get(pathKey);
+                if (!nextStatus) {
+                    return prev;
+                }
+                const prevStatus = prev.worktree.status;
+                if (
+                    prevStatus?.isDirty === nextStatus.isDirty &&
+                    prevStatus?.ahead === nextStatus.ahead &&
+                    prevStatus?.behind === nextStatus.behind &&
+                    prevStatus?.upstream === nextStatus.upstream
+                ) {
+                    return prev;
+                }
+                return {
+                    ...prev,
+                    worktree: {
+                        ...prev.worktree,
+                        status: nextStatus,
+                    },
+                };
+            });
+
             setDeleteDialogSummaries((prev) =>
-                prev.map((entry, index) => ({
-                    session: entry.session,
-                    metadata: { ...entry.metadata, status: statuses[index] ?? entry.metadata.status },
-                }))
+                prev.map((entry) => {
+                    const pathKey = normalizeProjectDirectory(entry.metadata.path);
+                    const nextStatus = statusByPath.get(pathKey);
+                    if (!nextStatus) {
+                        return entry;
+                    }
+                    return {
+                        session: entry.session,
+                        metadata: { ...entry.metadata, status: nextStatus },
+                    };
+                })
             );
         })();
 
