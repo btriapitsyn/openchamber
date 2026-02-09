@@ -1819,6 +1819,19 @@ fn desktop_new_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Open a new window pointed at a specific URL (used by the host switcher UI).
+///
+/// IMPORTANT: Must remain synchronous -- see `desktop_new_window` doc comment.
+#[tauri::command]
+fn desktop_new_window_at_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let local_origin = app
+        .try_state::<DesktopUiInjectionState>()
+        .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone())
+        .ok_or_else(|| "Local origin not yet known (sidecar may still be starting)".to_string())?;
+
+    create_window(&app, &url, &local_origin).map_err(|e| e.to_string())
+}
+
 #[cfg(target_os = "macos")]
 fn macos_major_version() -> Option<u32> {
     fn cmd_stdout(cmd: &str, args: &[&str]) -> Option<String> {
@@ -2176,6 +2189,7 @@ fn main() {
             desktop_download_and_install_update,
             desktop_restart,
             desktop_new_window,
+            desktop_new_window_at_url,
             desktop_set_auto_worktree_menu,
             desktop_open_path,
             desktop_filter_installed_apps,

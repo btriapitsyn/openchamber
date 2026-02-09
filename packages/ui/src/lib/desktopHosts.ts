@@ -108,3 +108,9 @@ export const desktopHostProbe = async (url: string): Promise<HostProbeResult> =>
   const latencyMs = readNumber(raw, 'latencyMs') ?? readNumber(raw, 'latency_ms') ?? 0;
   return { status, latencyMs };
 };
+
+export const desktopOpenNewWindowAtUrl = async (url: string): Promise<void> => {
+  const invoke = getInvoke();
+  if (!invoke) return;
+  await invoke('desktop_new_window_at_url', { url });
+};

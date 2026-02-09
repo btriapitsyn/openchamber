@@ -29,6 +29,7 @@ import {
   RiStarFill,
   RiStarLine,
   RiDeleteBinLine,
+  RiWindowLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { isTauriShell, isDesktopShell } from '@/lib/desktop';
@@ -36,6 +37,7 @@ import {
   desktopHostProbe,
   desktopHostsGet,
   desktopHostsSet,
+  desktopOpenNewWindowAtUrl,
   type DesktopHost,
   type HostProbeResult,
 } from '@/lib/desktopHosts';
@@ -337,6 +339,13 @@ export function DesktopHostSwitcherDialog({
     await persist(configHosts, next);
   }, [configHosts, persist]);
 
+  const openInNewWindow = React.useCallback((host: DesktopHost) => {
+    const origin = host.id === LOCAL_HOST_ID ? getLocalOrigin() : (normalizeHostUrl(host.url) || '');
+    if (!origin) return;
+    const target = toNavigationUrl(origin);
+    void desktopOpenNewWindowAtUrl(target);
+  }, []);
+
   if (!isDesktopShell()) {
     return null;
   }
@@ -467,28 +476,6 @@ export function DesktopHostSwitcherDialog({
                     </button>
 
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Tooltip delayDuration={700}>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            className={cn(
-                              'h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-interactive-hover transition-colors',
-                              isDefault
-                                ? 'text-primary hover:text-primary/80'
-                                : 'text-muted-foreground/60 hover:text-primary/80',
-                            )}
-                            onClick={() => void setDefault(host.id)}
-                            aria-label={isDefault ? 'Default instance' : 'Set as default'}
-                            disabled={isSaving}
-                          >
-                            {isDefault ? <RiStarFill className="h-4 w-4" /> : <RiStarLine className="h-4 w-4" />}
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>
-                          {isDefault ? 'Default' : 'Set as default'}
-                        </TooltipContent>
-                      </Tooltip>
-
                       {!isLocal && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -534,6 +521,45 @@ export function DesktopHostSwitcherDialog({
                           aria-hidden="true"
                         />
                       )}
+
+                      <Tooltip delayDuration={700}>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className={cn(
+                              'h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-interactive-hover transition-colors',
+                              isDefault
+                                ? 'text-primary hover:text-primary/80'
+                                : 'text-muted-foreground/60 hover:text-primary/80',
+                            )}
+                            onClick={() => void setDefault(host.id)}
+                            aria-label={isDefault ? 'Default instance' : 'Set as default'}
+                            disabled={isSaving}
+                          >
+                            {isDefault ? <RiStarFill className="h-4 w-4" /> : <RiStarLine className="h-4 w-4" />}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={6}>
+                          {isDefault ? 'Default' : 'Set as default'}
+                        </TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip delayDuration={700}>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="h-8 w-8 rounded-md inline-flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-interactive-hover transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openInNewWindow(host);
+                            }}
+                            aria-label="Open in new window"
+                          >
+                            <RiWindowLine className="h-4 w-4" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={6}>Open in new window</TooltipContent>
+                      </Tooltip>
                     </div>
                   </div>
                 );
