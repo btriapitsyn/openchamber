@@ -28,7 +28,7 @@ const LANGUAGE_OPTIONS = [
     { value: 'pt-BR', label: 'Português' },
     { value: 'it-IT', label: 'Italiano' },
     { value: 'ko-KR', label: '한국어' },
-    { value: 'ru-RU', label: 'Русский' },
+    { value: 'uk-UA', label: 'Українська' },
 ];
 
 /**

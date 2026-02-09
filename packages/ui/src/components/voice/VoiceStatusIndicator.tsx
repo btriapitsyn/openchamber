@@ -106,9 +106,10 @@ export function VoiceStatusIndicator({
     const config = statusConfig[status];
     const Icon = config.icon;
     const sizeClass = sizeClasses[size];
+    const containerClass = showLabel ? sizeClass.container : '';
 
     return (
-        <div className={`flex items-center ${sizeClass.container} ${className}`}>
+        <div className={`flex items-center ${containerClass} ${className}`}>
             <div className="relative">
                 <Icon
                     className={`

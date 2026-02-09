@@ -14,6 +14,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useBrowserVoice } from '@/hooks/useBrowserVoice';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { Button } from '@/components/ui/button';
 import {
     Tooltip,
@@ -23,8 +24,8 @@ import {
 } from '@/components/ui/tooltip';
 import {
     RiMicOffLine,
-    RiLoopLeftLine,
-    RiStopLine,
+    RiStopCircleLine,
+    RiVoiceRecognitionLine,
     RiVolumeUpLine,
 } from '@remixicon/react';
 import { VoiceStatusIndicator } from './VoiceStatusIndicator';
@@ -84,12 +85,18 @@ export function BrowserVoiceButton() {
     } = useBrowserVoice();
     
     const [isPressing, setIsPressing] = useState(false);
+    const isVSCode = isVSCodeRuntime();
+    const buttonSizeClass = isMobile ? 'h-8 w-8 min-h-[32px] min-w-[32px]' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
+    const iconSizeClass = isMobile ? 'h-[18px] w-[18px]' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
+    const continuousIconSizeClass = 'size-[18px]';
+    const clearHoverBackgroundClass = 'bg-transparent hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent';
     
     // Refs for touch handling
     const touchHandledRef = useRef(false);
     const isIOSSafariRef = useRef(false);
     const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
     const longPressTriggeredRef = useRef(false);
+    const lastToastedErrorRef = useRef<string | null>(null);
     
     // Initialize iOS detection on mount
     useEffect(() => {
@@ -105,18 +112,24 @@ export function BrowserVoiceButton() {
     const isError = status === 'error';
     const isIdle = status === 'idle';
 
-    // Button variant based on state
     const isSpeaking = status === 'speaking';
-    const variant = isSpeaking ? 'default' : isActive ? 'default' : 'ghost';
 
     // Show toast notification when voice error occurs
     useEffect(() => {
         if (isError && error) {
+            if (lastToastedErrorRef.current === error) {
+                return;
+            }
+            lastToastedErrorRef.current = error;
             const displayError = normalizeVoiceErrorMessage(error);
             
             toast.error(displayError, {
                 duration: 5000,
             });
+        }
+
+        if (!isError) {
+            lastToastedErrorRef.current = null;
         }
     }, [isError, error]);
 
@@ -241,6 +254,12 @@ export function BrowserVoiceButton() {
         setIsPressing(false);
     }, []);
 
+    const handleToggleConversationMode = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleConversationMode();
+    }, [toggleConversationMode]);
+
 
 
     // If voice mode is disabled, don't render anything
@@ -268,8 +287,9 @@ export function BrowserVoiceButton() {
                             variant="ghost"
                             disabled
                             aria-label={tooltipMessage}
+                            className={`${buttonSizeClass} p-0 ${clearHoverBackgroundClass}`}
                         >
-                            <RiMicOffLine className="w-5 h-5 opacity-50" />
+                            <RiMicOffLine className={`${iconSizeClass} opacity-50`} />
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" align="center">
@@ -281,7 +301,7 @@ export function BrowserVoiceButton() {
     }
 
     return (
-        <div className={`flex items-center ${isMobile ? 'gap-0.5' : 'gap-1'}`}>
+        <div className={`flex items-center ${isMobile ? 'gap-1' : 'gap-1.5'}`}>
             {/* Status indicator with label - show when active, simplified on mobile */}
             {isActive && !isMobile && (
                 <VoiceStatusIndicator
@@ -298,7 +318,7 @@ export function BrowserVoiceButton() {
                     <TooltipTrigger asChild>
                         <Button
                             size="icon"
-                            variant={variant}
+                            variant="ghost"
                             onClick={handleClick}
                             onTouchStart={handleTouchStart}
                             onTouchEnd={handleTouchEnd}
@@ -306,7 +326,9 @@ export function BrowserVoiceButton() {
                             aria-label={statusText}
                             className={`
                                 relative
-                                ${isMobile ? 'min-w-[32px] min-h-[32px] h-8 w-8' : 'min-w-[44px] min-h-[44px]'}
+                                ${buttonSizeClass}
+                                p-0
+                                ${clearHoverBackgroundClass}
                                 touch-manipulation
                                 ${isPressing ? 'scale-95 opacity-80' : ''}
                                 ${conversationMode && isIdle && isMobile ? 'ring-1 ring-primary/50' : ''}
@@ -319,16 +341,15 @@ export function BrowserVoiceButton() {
                             {isActive ? (
                                 isSpeaking ? (
                                     // Green speaker icon when AI is speaking
-                                    <RiVolumeUpLine className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-green-400 animate-pulse`} />
+                                    <RiVolumeUpLine className={`${iconSizeClass} text-green-400 animate-pulse`} />
                                 ) : (
                                     // Red stop icon for listening/processing (both mobile and desktop)
-                                    <RiStopLine className={`${isMobile ? 'w-4 h-4' : 'w-5 h-5'} text-red-500`} />
+                                    <RiStopCircleLine className={`${iconSizeClass} text-[var(--status-error)]`} />
                                 )
                             ) : (
                                 <VoiceStatusIndicator
                                     status={isError ? 'idle' : status}
-                                    size={isMobile ? 'sm' : 'md'}
-                                    conversationMode={conversationMode}
+                                    size={isMobile || isVSCode ? 'sm' : 'md'}
                                 />
                             )}
                         </Button>
@@ -343,13 +364,16 @@ export function BrowserVoiceButton() {
             {(status === 'idle' || status === 'error') && (
                 <Button
                     size="icon"
-                    variant={conversationMode ? 'default' : 'ghost'}
-                    onClick={toggleConversationMode}
+                    variant="ghost"
+                    onPointerDownCapture={(event) => event.stopPropagation()}
+                    onClick={handleToggleConversationMode}
                     aria-label={conversationMode ? 'Continuous mode on' : 'Continuous mode off'}
                     title={conversationMode ? 'Continuous mode on' : 'Continuous mode off'}
-                    className={isMobile ? 'h-7 w-7' : 'h-7 w-7'}
+                    className={
+                        `${buttonSizeClass} p-0 ${clearHoverBackgroundClass} ${conversationMode ? 'text-[var(--status-info)] hover:text-[var(--status-info)]' : 'text-muted-foreground hover:text-foreground'}`
+                    }
                 >
-                    <RiLoopLeftLine className={`${isMobile ? 'w-3 h-3' : 'w-4 h-4'} ${conversationMode ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
+                    <RiVoiceRecognitionLine className={continuousIconSizeClass} />
                 </Button>
             )}
         </div>

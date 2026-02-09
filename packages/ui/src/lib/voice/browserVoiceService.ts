@@ -273,6 +273,12 @@ class BrowserVoiceService {
     };
 
     this.recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      // "aborted" is commonly emitted when we intentionally stop/pause recognition.
+      // Treat it as non-fatal to avoid noisy error loops in continuous mode.
+      if (event.error === 'aborted') {
+        return;
+      }
+
       const errorMessage = this.getErrorMessage(event.error);
       this.onErrorCallback?.(errorMessage);
 
@@ -491,10 +497,6 @@ class BrowserVoiceService {
         this.isSpeaking = false;
         console.log('[BrowserVoiceService] Speech ended');
         onEnd?.();
-        // If conversation mode is on, automatically resume listening
-        if (this.conversationMode) {
-          this.resumeListening();
-        }
       };
 
       utterance.onerror = (event) => {
@@ -504,11 +506,6 @@ class BrowserVoiceService {
         // Track autoplay policy violations
         if (event.error === 'not-allowed' || event.error === 'interrupted') {
           this.audioUnlockRequired = true;
-        }
-
-        // If conversation mode is on, resume listening even on error
-        if (this.conversationMode) {
-          this.resumeListening();
         }
 
         // Provide more specific error messages

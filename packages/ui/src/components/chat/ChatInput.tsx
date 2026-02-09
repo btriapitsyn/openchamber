@@ -1439,6 +1439,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const iconSizeClass = isMobile ? 'h-[18px] w-[18px]' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
 
     const iconButtonBaseClass = 'flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0';
+    const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
 
     // Send button - respects queue mode setting
     const sendButton = (
@@ -1473,8 +1474,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 handlePrimaryAction();
             }}
             className={cn(
-                iconButtonBaseClass,
-                buttonSizeClass,
+                footerIconButtonClass,
                 canSend && (currentSessionId || newSessionDraftOpen)
                     ? 'text-primary hover:text-primary'
                     : 'opacity-30'
@@ -1515,8 +1515,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 handleQueueMessage();
             }}
             className={cn(
-                iconButtonBaseClass,
-                buttonSizeClass,
+                footerIconButtonClass,
                 'absolute bottom-full left-1/2 -translate-x-1/2 mb-1',
                 hasContent && currentSessionId
                     ? 'text-primary hover:text-primary'
@@ -1534,8 +1533,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             type="button"
             onClick={handleAbort}
             className={cn(
-                iconButtonBaseClass,
-                buttonSizeClass,
+                footerIconButtonClass,
                 'text-[var(--status-error)] hover:text-[var(--status-error)]'
             )}
             aria-label="Stop generating"
@@ -1587,7 +1585,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     <DropdownMenuTrigger asChild>
                         <button
                             type="button"
-                            className={cn(iconButtonBaseClass, isMobile && 'h-7 w-7')}
+                            className={footerIconButtonClass}
                             title="Add attachment"
                             aria-label="Add attachment"
                         >
@@ -1623,7 +1621,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         <button
             type='button'
             onClick={onOpenSettings}
-            className={cn(iconButtonBaseClass, isMobile && 'h-7 w-7')}
+            className={footerIconButtonClass}
             title='Model and agent settings'
             aria-label='Model and agent settings'
         >
@@ -1632,13 +1630,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     ) : null;
 
     const attachmentsControls = (
-        <div className="flex items-center gap-x-1">
+        <div className="flex items-center gap-x-1.5">
             {isMobile ? (
                 <button
                     type="button"
                     className={cn(
-                        iconButtonBaseClass,
-                        'h-7 w-7 rounded-md text-muted-foreground',
+                        footerIconButtonClass,
+                        'rounded-md text-muted-foreground',
                         'hover:bg-interactive-hover/40 hover:text-foreground'
                     )}
                     onPointerDownCapture={(event) => {

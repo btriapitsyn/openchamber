@@ -66,6 +66,23 @@ export interface UseBrowserVoiceReturn {
 const LANGUAGE_STORAGE_KEY = 'browserVoiceLanguage';
 // Storage key for persisting conversation mode preference
 const CONVERSATION_MODE_STORAGE_KEY = 'browserVoiceConversationMode';
+const LANGUAGE_CHANGE_EVENT = 'openchamber:voice-language-changed';
+const CONVERSATION_MODE_CHANGE_EVENT = 'openchamber:voice-conversation-mode-changed';
+const FINAL_TRANSCRIPT_SETTLE_MS = 1200;
+const DEVICE_CHANGE_RESTART_DELAY_MS = 700;
+const BLOCKED_SPEECH_LANGUAGES = new Set(['ru', 'ru-RU']);
+
+const sanitizeSpeechLanguage = (lang: string): string => {
+  const normalized = (lang || '').trim();
+  if (!normalized) {
+    return 'en-US';
+  }
+  const base = normalized.split('-')[0].toLowerCase();
+  if (BLOCKED_SPEECH_LANGUAGES.has(normalized) || BLOCKED_SPEECH_LANGUAGES.has(base)) {
+    return 'en-US';
+  }
+  return normalized;
+};
 
 /**
  * Hook for managing browser-based voice conversations
@@ -77,9 +94,9 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
     // Try to load from localStorage, fallback to navigator.language
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-      if (saved) return saved;
+      if (saved) return sanitizeSpeechLanguage(saved);
     }
-    return navigator.language || 'en-US';
+    return sanitizeSpeechLanguage(navigator.language || 'en-US');
   });
   const [conversationMode, setConversationModeState] = useState<boolean>(() => {
     // Try to load from localStorage, default to false
@@ -104,6 +121,10 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
   const processingMessageRef = useRef(false);
   const lastTranscriptRef = useRef('');
   const messagesRef = useRef<Map<string, { info: { role: string }; parts: Array<{ type: string; text?: string }> }>>(new Map());
+  const pendingResumeOnVisibleRef = useRef(false);
+  const pendingFinalTranscriptRef = useRef('');
+  const finalTranscriptTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deviceChangeRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Store access
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
@@ -150,10 +171,40 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
   
   // Persist language preference
   const setLanguage = useCallback((lang: string) => {
-    setLanguageState(lang);
+    const nextLang = sanitizeSpeechLanguage(lang);
+    setLanguageState(nextLang);
     if (typeof window !== 'undefined') {
-      localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+      localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLang);
+      window.dispatchEvent(new CustomEvent<string>(LANGUAGE_CHANGE_EVENT, { detail: nextLang }));
     }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleLanguageEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<string>;
+      const nextLang = sanitizeSpeechLanguage(customEvent.detail || localStorage.getItem(LANGUAGE_STORAGE_KEY) || 'en-US');
+      setLanguageState((prev) => (prev === nextLang ? prev : nextLang));
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== LANGUAGE_STORAGE_KEY || !event.newValue) {
+        return;
+      }
+      const nextLang = sanitizeSpeechLanguage(event.newValue);
+      setLanguageState((prev) => (prev === nextLang ? prev : nextLang));
+    };
+
+    window.addEventListener(LANGUAGE_CHANGE_EVENT, handleLanguageEvent as EventListener);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener(LANGUAGE_CHANGE_EVENT, handleLanguageEvent as EventListener);
+      window.removeEventListener('storage', handleStorage);
+    };
   }, []);
 
   // Toggle conversation mode
@@ -163,19 +214,42 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
       browserVoiceService.setConversationMode(next);
       if (typeof window !== 'undefined') {
         localStorage.setItem(CONVERSATION_MODE_STORAGE_KEY, String(next));
+        window.dispatchEvent(new CustomEvent<boolean>(CONVERSATION_MODE_CHANGE_EVENT, { detail: next }));
       }
       return next;
     });
-    
-    // When turning ON continuous mode, also start listening immediately
-    // Only if not already active and we have a valid session
-    if (!conversationMode && !isActiveRef.current && currentSessionId && isSupported) {
-      // Use setTimeout to ensure state update happens first
-      setTimeout(() => {
-        startVoiceRef.current?.();
-      }, 0);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
     }
-  }, [conversationMode, currentSessionId, isSupported]);
+
+    const handleConversationModeEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<boolean>;
+      const detail = customEvent.detail;
+      if (typeof detail !== 'boolean') {
+        return;
+      }
+      setConversationModeState((prev) => (prev === detail ? prev : detail));
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== CONVERSATION_MODE_STORAGE_KEY || event.newValue == null) {
+        return;
+      }
+      const next = event.newValue === 'true';
+      setConversationModeState((prev) => (prev === next ? prev : next));
+    };
+
+    window.addEventListener(CONVERSATION_MODE_CHANGE_EVENT, handleConversationModeEvent as EventListener);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener(CONVERSATION_MODE_CHANGE_EVENT, handleConversationModeEvent as EventListener);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
 
   // Initialize conversation mode in service on mount
   useEffect(() => {
@@ -185,13 +259,34 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
   // Refs for callbacks to avoid circular dependencies
   const handleSpeechErrorRef = useRef<((errorMsg: string) => void) | null>(null);
   const handleSpeechResultRef = useRef<((text: string, isFinal: boolean) => Promise<void>) | null>(null);
-  const startVoiceRef = useRef<(() => void) | null>(null);
 
   // Handle speech recognition error
   const handleSpeechError = useCallback((errorMsg: string) => {
     // Ignore errors if we've already stopped voice mode
     if (!isActiveRef.current) {
       console.log('[useBrowserVoice] Ignoring error after voice stopped:', errorMsg);
+      return;
+    }
+
+    const normalizedError = errorMsg.toLowerCase();
+    if (normalizedError.includes('aborted')) {
+      console.log('[useBrowserVoice] Ignoring non-fatal aborted error');
+      setError(null);
+      setStatus('listening');
+      return;
+    }
+
+    const isHidden = typeof document !== 'undefined' && document.visibilityState !== 'visible';
+    const isPermissionStyleError =
+      normalizedError.includes('permission') ||
+      normalizedError.includes('not allowed') ||
+      normalizedError.includes('service not allowed');
+
+    if (isHidden && isPermissionStyleError && conversationMode) {
+      console.log('[useBrowserVoice] Suppressing permission error while app hidden; will resume on visibility');
+      pendingResumeOnVisibleRef.current = true;
+      setError(null);
+      setStatus('idle');
       return;
     }
     
@@ -209,20 +304,19 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
         }
       }, 1000);
     }
-  }, [language]);
+  }, [language, conversationMode]);
 
   // Update the ref when handleSpeechError changes
   useEffect(() => {
     handleSpeechErrorRef.current = handleSpeechError;
   }, [handleSpeechError]);
 
-  // Handle speech recognition result
-  const handleSpeechResult = useCallback(async (text: string, isFinal: boolean) => {
-    if (!isFinal || !text.trim() || !isActiveRef.current) return;
-    
+  const processFinalTranscript = useCallback(async (finalText: string) => {
+    if (!finalText.trim() || !isActiveRef.current) return;
+
     // Prevent duplicate processing of same transcript
-    if (text.trim() === lastTranscriptRef.current) return;
-    lastTranscriptRef.current = text.trim();
+    if (finalText.trim() === lastTranscriptRef.current) return;
+    lastTranscriptRef.current = finalText.trim();
 
     // Check if provider and model are configured
     if (!currentProviderId || !currentModelId) {
@@ -236,7 +330,7 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
 
     // Non-continuous mode: fill chat input only, do not auto-send.
     if (!conversationMode) {
-      setPendingInputText(text.trim(), 'replace');
+      setPendingInputText(finalText.trim(), 'replace');
       processingMessageRef.current = false;
       isActiveRef.current = false;
       setStatus('idle');
@@ -264,7 +358,7 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
 
       // Send message to AI
       await sendMessage(
-        text.trim(),
+        finalText.trim(),
         currentProviderId,
         currentModelId,
         currentAgentName ?? undefined
@@ -311,6 +405,13 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
               // Only auto-restart if conversation mode is enabled
               const restartListening = () => {
                 if (isActiveRef.current && conversationMode) {
+                  const isHidden = typeof document !== 'undefined' && document.visibilityState !== 'visible';
+                  if (isHidden) {
+                    pendingResumeOnVisibleRef.current = true;
+                    setStatus('idle');
+                    return;
+                  }
+
                   setStatus('listening');
                   if (isMobile) {
                     try {
@@ -437,6 +538,124 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
     }
   }, [currentSessionId, currentProviderId, currentModelId, currentAgentName, language, sendMessage, setPendingInputText, createSession, speechRate, speechPitch, speechVolume, isMobile, isServerTTSAvailable, speakServerTTS, isSayTTSAvailable, speakSayTTS, voiceProvider, sayVoice, browserVoice, openaiVoice, summarizeVoiceConversation, summarizeCharacterThreshold, conversationMode]);
 
+  // Handle speech recognition result
+  const handleSpeechResult = useCallback(async (text: string, isFinal: boolean) => {
+    if (!isActiveRef.current) return;
+    const normalized = text.trim();
+    if (!isFinal || !normalized) return;
+
+    pendingFinalTranscriptRef.current = normalized;
+
+    if (finalTranscriptTimerRef.current) {
+      clearTimeout(finalTranscriptTimerRef.current);
+    }
+
+    finalTranscriptTimerRef.current = setTimeout(() => {
+      finalTranscriptTimerRef.current = null;
+      const transcript = pendingFinalTranscriptRef.current.trim();
+      pendingFinalTranscriptRef.current = '';
+      if (!transcript) return;
+      void processFinalTranscript(transcript);
+    }, FINAL_TRANSCRIPT_SETTLE_MS);
+  }, [processFinalTranscript]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      if (!pendingResumeOnVisibleRef.current) {
+        return;
+      }
+      if (!isActiveRef.current || !conversationMode) {
+        pendingResumeOnVisibleRef.current = false;
+        return;
+      }
+
+      pendingResumeOnVisibleRef.current = false;
+      setStatus('listening');
+      try {
+        if (isMobile) {
+          browserVoiceService.startListeningSync(language, handleSpeechResultRef.current!, handleSpeechErrorRef.current!);
+        } else {
+          browserVoiceService.startListening(language, handleSpeechResultRef.current!, handleSpeechErrorRef.current!);
+        }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to resume voice';
+        setError(errorMsg);
+        setStatus('error');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [conversationMode, isMobile, language]);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined') {
+      return;
+    }
+
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices || typeof mediaDevices.addEventListener !== 'function') {
+      return;
+    }
+
+    const handleDeviceChange = () => {
+      if (!isActiveRef.current || status !== 'listening') {
+        return;
+      }
+
+      if (deviceChangeRestartTimerRef.current) {
+        clearTimeout(deviceChangeRestartTimerRef.current);
+      }
+
+      deviceChangeRestartTimerRef.current = setTimeout(() => {
+        deviceChangeRestartTimerRef.current = null;
+        if (!isActiveRef.current || status !== 'listening') {
+          return;
+        }
+
+        const isHidden = typeof document !== 'undefined' && document.visibilityState !== 'visible';
+        if (isHidden) {
+          pendingResumeOnVisibleRef.current = true;
+          setStatus('idle');
+          return;
+        }
+
+        try {
+          browserVoiceService.stopListening();
+          if (isMobile) {
+            browserVoiceService.startListeningSync(language, handleSpeechResultRef.current!, handleSpeechErrorRef.current!);
+          } else {
+            void browserVoiceService.startListening(language, handleSpeechResultRef.current!, handleSpeechErrorRef.current!);
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : 'Microphone source changed. Tap mic to continue.';
+          setError(errorMsg);
+          setStatus('error');
+          isActiveRef.current = false;
+        }
+      }, DEVICE_CHANGE_RESTART_DELAY_MS);
+    };
+
+    mediaDevices.addEventListener('devicechange', handleDeviceChange);
+
+    return () => {
+      mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      if (deviceChangeRestartTimerRef.current) {
+        clearTimeout(deviceChangeRestartTimerRef.current);
+        deviceChangeRestartTimerRef.current = null;
+      }
+    };
+  }, [isMobile, language, status]);
+
   // Update the ref when handleSpeechResult changes
   useEffect(() => {
     handleSpeechResultRef.current = handleSpeechResult;
@@ -515,15 +734,20 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
     }
   }, [isSupported, currentSessionId, language, handleSpeechResult, handleSpeechError, isMobile, unlockServerTTSAudio, unlockSayTTSAudio]);
 
-  // Update the ref when startVoice changes
-  useEffect(() => {
-    startVoiceRef.current = startVoice;
-  }, [startVoice]);
-
   // Stop voice mode
   const stopVoice = useCallback(() => {
     isActiveRef.current = false;
     processingMessageRef.current = false;
+    pendingResumeOnVisibleRef.current = false;
+    if (deviceChangeRestartTimerRef.current) {
+      clearTimeout(deviceChangeRestartTimerRef.current);
+      deviceChangeRestartTimerRef.current = null;
+    }
+    pendingFinalTranscriptRef.current = '';
+    if (finalTranscriptTimerRef.current) {
+      clearTimeout(finalTranscriptTimerRef.current);
+      finalTranscriptTimerRef.current = null;
+    }
     browserVoiceService.stopListening();
     browserVoiceService.cancelSpeech();
     stopServerTTS(); // Also stop server TTS if playing
@@ -536,6 +760,15 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
   useEffect(() => {
     return () => {
       isActiveRef.current = false;
+      if (deviceChangeRestartTimerRef.current) {
+        clearTimeout(deviceChangeRestartTimerRef.current);
+        deviceChangeRestartTimerRef.current = null;
+      }
+      pendingFinalTranscriptRef.current = '';
+      if (finalTranscriptTimerRef.current) {
+        clearTimeout(finalTranscriptTimerRef.current);
+        finalTranscriptTimerRef.current = null;
+      }
       browserVoiceService.setConversationMode(false);
       browserVoiceService.stopListening();
       browserVoiceService.cancelSpeech();
