@@ -50,6 +50,7 @@ import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 import { GitHeader } from './git/GitHeader';
 import { ChangesSection } from './git/ChangesSection';
 import { CommitSection } from './git/CommitSection';
+import { GitEmptyState } from './git/GitEmptyState';
 import { HistorySection } from './git/HistorySection';
 import { PullRequestSection } from './git/PullRequestSection';
 import { ConflictDialog } from './git/ConflictDialog';
@@ -1645,37 +1646,53 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
             >
               {actionTab === 'commit' ? (
                 <div className="space-y-4">
-                  <ChangesSection
-                    variant="plain"
-                    maxListHeightClassName="max-h-[40vh]"
-                    changeEntries={changeEntries}
-                    selectedPaths={selectedPaths}
-                    diffStats={status?.diffStats}
-                    revertingPaths={revertingPaths}
-                    onToggleFile={toggleFileSelection}
-                    onSelectAll={selectAll}
-                    onClearSelection={clearSelection}
-                    onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
-                    onRevertFile={handleRevertFile}
-                  />
+                  {(changeEntries?.length ?? 0) > 0 ? (
+                    <>
+                      <ChangesSection
+                        variant="plain"
+                        maxListHeightClassName="max-h-[40vh]"
+                        changeEntries={changeEntries}
+                        selectedPaths={selectedPaths}
+                        diffStats={status?.diffStats}
+                        revertingPaths={revertingPaths}
+                        onToggleFile={toggleFileSelection}
+                        onSelectAll={selectAll}
+                        onClearSelection={clearSelection}
+                        onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
+                        onRevertFile={handleRevertFile}
+                      />
 
-                  <CommitSection
-                    variant="plain"
-                    selectedCount={selectedCount}
-                    commitMessage={commitMessage}
-                    onCommitMessageChange={setCommitMessage}
-                    generatedHighlights={generatedHighlights}
-                    onInsertHighlights={handleInsertHighlights}
-                    onClearHighlights={clearGeneratedHighlights}
-                    onGenerateMessage={handleGenerateCommitMessage}
-                    isGeneratingMessage={isGeneratingMessage}
-                    onCommit={() => handleCommit({ pushAfter: false })}
-                    onCommitAndPush={() => handleCommit({ pushAfter: true })}
-                    commitAction={commitAction}
-                    isBusy={isBusy}
-                    gitmojiEnabled={settingsGitmojiEnabled}
-                    onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
-                  />
+                      <CommitSection
+                        variant="plain"
+                        selectedCount={selectedCount}
+                        commitMessage={commitMessage}
+                        onCommitMessageChange={setCommitMessage}
+                        generatedHighlights={generatedHighlights}
+                        onInsertHighlights={handleInsertHighlights}
+                        onClearHighlights={clearGeneratedHighlights}
+                        onGenerateMessage={handleGenerateCommitMessage}
+                        isGeneratingMessage={isGeneratingMessage}
+                        onCommit={() => handleCommit({ pushAfter: false })}
+                        onCommitAndPush={() => handleCommit({ pushAfter: true })}
+                        commitAction={commitAction}
+                        isBusy={isBusy}
+                        gitmojiEnabled={settingsGitmojiEnabled}
+                        onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+                      />
+                    </>
+                  ) : (
+                    <GitEmptyState
+                      behind={effectiveRemotes.length > 0 ? (status?.behind ?? 0) : 0}
+                      isPulling={syncAction === 'pull'}
+                      onPull={() => {
+                        const remote = effectiveRemotes[0];
+                        if (!remote) {
+                          return;
+                        }
+                        void handleSyncAction('pull', remote);
+                      }}
+                    />
+                  )}
                 </div>
               ) : null}
 
