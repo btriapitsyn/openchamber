@@ -1824,6 +1824,13 @@ fn desktop_new_window(app: tauri::AppHandle) -> Result<(), String> {
 /// IMPORTANT: Must remain synchronous -- see `desktop_new_window` doc comment.
 #[tauri::command]
 fn desktop_new_window_at_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    // Validate scheme to prevent file://, data:, javascript: etc.
+    let parsed = url::Url::parse(&url).map_err(|e| format!("Invalid URL: {e}"))?;
+    match parsed.scheme() {
+        "http" | "https" => {}
+        scheme => return Err(format!("Unsupported URL scheme: {scheme}")),
+    }
+
     let local_origin = app
         .try_state::<DesktopUiInjectionState>()
         .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone())

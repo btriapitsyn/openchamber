@@ -32,6 +32,7 @@ import {
   RiWindowLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui';
 import { isTauriShell, isDesktopShell } from '@/lib/desktop';
 import {
   desktopHostProbe,
@@ -343,7 +344,11 @@ export function DesktopHostSwitcherDialog({
     const origin = host.id === LOCAL_HOST_ID ? getLocalOrigin() : (normalizeHostUrl(host.url) || '');
     if (!origin) return;
     const target = toNavigationUrl(origin);
-    void desktopOpenNewWindowAtUrl(target);
+    desktopOpenNewWindowAtUrl(target).catch((err: unknown) => {
+      toast.error('Failed to open new window', {
+        description: err instanceof Error ? err.message : String(err),
+      });
+    });
   }, []);
 
   if (!isDesktopShell()) {
