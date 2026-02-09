@@ -152,9 +152,16 @@ class OpencodeService {
   }
 
   private fetchWithAuth = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
+    const requestHeaders = input instanceof Request ? input.headers : undefined;
+    const mergedHeaders = this.mergeAuthHeaders(requestHeaders);
+    const initHeaders = new Headers(init.headers ?? undefined);
+    initHeaders.forEach((value, key) => {
+      mergedHeaders.set(key, value);
+    });
+
     return fetch(input, {
       ...init,
-      headers: this.mergeAuthHeaders(init.headers),
+      headers: mergedHeaders,
     });
   };
 
