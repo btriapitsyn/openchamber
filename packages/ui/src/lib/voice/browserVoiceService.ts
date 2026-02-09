@@ -172,11 +172,25 @@ class BrowserVoiceService {
       throw new Error('Web Speech API not supported in this browser');
     }
 
+    if (typeof navigator === 'undefined' || typeof navigator.mediaDevices?.getUserMedia !== 'function') {
+      // Some embedded runtimes (e.g. desktop webviews) may not expose mediaDevices,
+      // while SpeechRecognition can still request mic permission on start().
+      return true;
+    }
+
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
       return true;
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Microphone permission denied';
+      const name = typeof err === 'object' && err && 'name' in err ? String((err as { name?: unknown }).name) : '';
+      if (name === 'NotAllowedError') {
+        throw new Error('Microphone permission denied');
+      }
+      if (name === 'NotFoundError') {
+        throw new Error('No microphone found');
+      }
+      const errorMsg = err instanceof Error ? err.message : 'Unable to access microphone';
       throw new Error(errorMsg);
     }
   }
@@ -304,16 +318,9 @@ class BrowserVoiceService {
     onResult: SpeechResultCallback,
     onError?: ErrorCallback
   ): Promise<void> {
-    // Request microphone permission first
-    try {
-      await this.prepareListening();
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Microphone permission denied';
-      onError?.(errorMsg);
-      throw new Error(errorMsg);
-    }
-
-    // Start recognition synchronously
+    // Start recognition directly from the user gesture path.
+    // Some webview runtimes reject preflight getUserMedia and then never show
+    // permission prompt, while SpeechRecognition.start() can still trigger it.
     this.startListeningSync(lang, onResult, onError);
   }
 

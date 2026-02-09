@@ -323,6 +323,15 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     // TTS for message playback
     const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
     const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
+    const voiceProvider = useConfigStore((state) => state.voiceProvider);
+
+    const readAloudTooltip = React.useMemo(() => {
+        if (isTTSPlaying) {
+            return 'Stop speaking';
+        }
+        const providerLabel = voiceProvider === 'browser' ? 'Browser' : voiceProvider === 'openai' ? 'OpenAI' : 'Say';
+        return `Read aloud (${providerLabel} voice)`;
+    }, [isTTSPlaying, voiceProvider]);
 
 
     const hasTools = toolParts.length > 0;
@@ -928,9 +937,9 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                              )}
                          </Button>
                      </TooltipTrigger>
-                     <TooltipContent sideOffset={6}>{isTTSPlaying ? 'Stop speaking' : 'Read aloud'}</TooltipContent>
-                 </Tooltip>
-             )}
+                      <TooltipContent sideOffset={6}>{readAloudTooltip}</TooltipContent>
+                  </Tooltip>
+              )}
              {onCopyMessage && (
                  <Tooltip delayDuration={1000}>
                      <TooltipTrigger asChild>

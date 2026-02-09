@@ -108,6 +108,7 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
   // Store access
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
   const sendMessage = useSessionStore((s) => s.sendMessage);
+  const setPendingInputText = useSessionStore((s) => s.setPendingInputText);
   const messages = useSessionStore((s) => s.messages);
   const createSession = useSessionStore((s) => s.createSession);
   const { currentProviderId, currentModelId, currentAgentName, voiceProvider, speechRate, speechPitch, speechVolume, sayVoice, browserVoice, openaiVoice, summarizeVoiceConversation, summarizeCharacterThreshold } = useConfigStore();
@@ -232,6 +233,16 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
 
     // Stop listening while processing
     browserVoiceService.stopListening();
+
+    // Non-continuous mode: fill chat input only, do not auto-send.
+    if (!conversationMode) {
+      setPendingInputText(text.trim(), 'replace');
+      processingMessageRef.current = false;
+      isActiveRef.current = false;
+      setStatus('idle');
+      return;
+    }
+
     setStatus('processing');
     processingMessageRef.current = true;
 
@@ -424,7 +435,7 @@ export function useBrowserVoice(): UseBrowserVoiceReturn {
       setStatus('error');
       processingMessageRef.current = false;
     }
-  }, [currentSessionId, currentProviderId, currentModelId, currentAgentName, language, sendMessage, createSession, speechRate, speechPitch, speechVolume, isMobile, isServerTTSAvailable, speakServerTTS, isSayTTSAvailable, speakSayTTS, voiceProvider, sayVoice, browserVoice, openaiVoice, summarizeVoiceConversation, summarizeCharacterThreshold, conversationMode]);
+  }, [currentSessionId, currentProviderId, currentModelId, currentAgentName, language, sendMessage, setPendingInputText, createSession, speechRate, speechPitch, speechVolume, isMobile, isServerTTSAvailable, speakServerTTS, isSayTTSAvailable, speakSayTTS, voiceProvider, sayVoice, browserVoice, openaiVoice, summarizeVoiceConversation, summarizeCharacterThreshold, conversationMode]);
 
   // Update the ref when handleSpeechResult changes
   useEffect(() => {

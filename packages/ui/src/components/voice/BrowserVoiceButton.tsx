@@ -48,6 +48,23 @@ const isIOSSafari = (): boolean => {
     return isIOS && isSafari;
 };
 
+const normalizeVoiceErrorMessage = (error: string): string => {
+    const isMediaDevicesError =
+        error.includes('getUserMedia') ||
+        error.includes('mediaDevices') ||
+        error.includes('Cannot read properties of undefined');
+
+    if (!isMediaDevicesError) {
+        return error;
+    }
+
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+        return 'Voice requires a secure connection (HTTPS) or localhost. Please use HTTPS or access via localhost.';
+    }
+
+    return 'Microphone access is unavailable in this runtime. On desktop, check System Settings -> Privacy & Security -> Microphone for OpenChamber.';
+};
+
 /**
  * Browser Voice Button with language selection
  */
@@ -64,7 +81,6 @@ export function BrowserVoiceButton() {
         conversationMode,
         toggleConversationMode,
         isMobile,
-        voiceProvider,
     } = useBrowserVoice();
     
     const [isPressing, setIsPressing] = useState(false);
@@ -96,11 +112,7 @@ export function BrowserVoiceButton() {
     // Show toast notification when voice error occurs
     useEffect(() => {
         if (isError && error) {
-            // Improve error message for getUserMedia errors (likely HTTPS issue)
-            let displayError = error;
-            if (error.includes("getUserMedia") || error.includes("Cannot read properties of undefined")) {
-                displayError = "Voice requires a secure connection (HTTPS) or localhost. Please use HTTPS or access via localhost.";
-            }
+            const displayError = normalizeVoiceErrorMessage(error);
             
             toast.error(displayError, {
                 duration: 5000,
@@ -118,11 +130,7 @@ export function BrowserVoiceButton() {
     // Tooltip content based on state
     const getTooltipContent = () => {
         if (isError && error) {
-            // Improve error message for getUserMedia errors (likely HTTPS issue)
-            if (error.includes("getUserMedia") || error.includes("Cannot read properties of undefined")) {
-                return "Voice requires a secure connection (HTTPS) or localhost. Please use HTTPS or access via localhost.";
-            }
-            return error;
+            return normalizeVoiceErrorMessage(error);
         }
         if (isActive) {
             return 'Stop voice conversation';
@@ -274,17 +282,6 @@ export function BrowserVoiceButton() {
 
     return (
         <div className={`flex items-center ${isMobile ? 'gap-0.5' : 'gap-1'}`}>
-            {/* Voice provider indicator - hidden on mobile for cleaner look */}
-            {status === 'idle' && !isMobile && (
-                <div
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground"
-                    title={voiceProvider === 'browser' ? 'Using Browser Voice' : voiceProvider === 'openai' ? 'Using OpenAI' : 'Using macOS Say'}
-                >
-                    <RiVolumeUpLine className="w-3 h-3" />
-                    {voiceProvider === 'browser' ? 'Browser' : voiceProvider === 'openai' ? 'OpenAI' : 'Say'}
-                </div>
-            )}
-
             {/* Status indicator with label - show when active, simplified on mobile */}
             {isActive && !isMobile && (
                 <VoiceStatusIndicator
