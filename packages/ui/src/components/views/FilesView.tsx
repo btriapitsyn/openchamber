@@ -2,6 +2,7 @@ import React from 'react';
 
 import {
   RiArrowLeftSLine,
+  RiArrowRightSLine,
   RiArrowDownSLine,
   RiClipboardLine,
   RiCloseLine,
@@ -18,7 +19,6 @@ import {
   RiRefreshLine,
   RiSearchLine,
   RiSave3Line,
-  RiSendPlane2Line,
   RiTextWrap,
   RiMore2Fill,
   RiFileAddLine,
@@ -39,8 +39,7 @@ import {
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
+import { CodeMirrorEditor, type BlockWidgetDef } from '@/components/ui/CodeMirrorEditor';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
@@ -57,18 +56,18 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
+import { useLongPress } from '@/hooks/useLongPress';
 import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useConfigStore } from '@/stores/useConfigStore';
-import { useContextStore } from '@/stores/contextStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useMessageQueueStore } from '@/stores/messageQueueStore';
-import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
+import { useGitStatus } from '@/stores/useGitStore';
+import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
+import { InlineCommentCard, InlineCommentInput } from '@/components/comments';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
@@ -98,7 +97,86 @@ const sortNodes = (items: FileNode[]) =>
 
 const normalizePath = (value: string): string => value.replace(/\\/g, '/');
 
+const getAncestorPaths = (filePath: string, root: string): string[] => {
+  const normalizedRoot = normalizePath(root);
+  const normalizedFile = normalizePath(filePath);
+  
+  // Ensure file is within root
+  if (!normalizedFile.startsWith(normalizedRoot)) return [];
+  
+  const relative = normalizedFile.slice(normalizedRoot.length).replace(/^\//, '');
+  const parts = relative.split('/');
+  const ancestors: string[] = [];
+  let current = normalizedRoot;
+  
+  for (let i = 0; i < parts.length - 1; i++) {
+    current = current ? `${current}/${parts[i]}` : parts[i];
+    ancestors.push(current);
+  }
+  return ancestors;
+};
+
+type BreadcrumbSegment = { label: string; path: string };
+
+const parseBreadcrumbs = (relativePath: string, root: string): BreadcrumbSegment[] => {
+  const parts = relativePath.split('/');
+  const segments: BreadcrumbSegment[] = [];
+  let currentPath = root;
+
+  for (const part of parts) {
+    if (!part) continue;
+    currentPath = currentPath ? `${currentPath}/${part}` : part;
+    segments.push({ label: part, path: currentPath });
+  }
+  return segments;
+};
+
+const FileBreadcrumbs: React.FC<{
+  path: string;
+  root: string;
+  onNavigate: (dirPath: string) => void;
+}> = ({ path, root, onNavigate }) => {
+  const segments = React.useMemo(() => parseBreadcrumbs(path, root), [path, root]);
+  
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto whitespace-nowrap min-w-0 flex-1 hide-scrollbar">
+      {segments.map((seg, i) => (
+        <React.Fragment key={seg.path}>
+          {i > 0 && <RiArrowRightSLine className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+          <button
+            type="button"
+            onClick={() => i < segments.length - 1 && onNavigate(seg.path)}
+            className={cn(
+              "typography-meta transition-colors",
+              i === segments.length - 1 
+                ? "text-foreground font-medium cursor-default" 
+                : "text-muted-foreground hover:text-foreground hover:underline cursor-pointer"
+            )}
+            disabled={i === segments.length - 1}
+          >
+            {seg.label}
+          </button>
+        </React.Fragment>
+      ))}
+    </div>
+  );
+};
+
 const DEFAULT_IGNORED_DIR_NAMES = new Set(['node_modules']);
+
+type FileStatus = 'open' | 'modified' | 'git-modified' | 'git-added' | 'git-deleted';
+
+const FileStatusDot: React.FC<{ status: FileStatus }> = ({ status }) => {
+  const color = {
+    open: 'var(--status-info)',
+    modified: 'var(--status-warning)',
+    'git-modified': 'var(--status-warning)',
+    'git-added': 'var(--status-success)',
+    'git-deleted': 'var(--status-error)',
+  }[status];
+
+  return <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />;
+};
 
 const shouldIgnoreEntryName = (name: string): boolean => DEFAULT_IGNORED_DIR_NAMES.has(name);
 
@@ -249,6 +327,179 @@ const isMarkdownFile = (path: string): boolean => {
   return ext === 'md' || ext === 'markdown';
 };
 
+interface FileRowProps {
+  node: FileNode;
+  isExpanded: boolean;
+  isActive: boolean;
+  isLoading: boolean;
+  isMobile: boolean;
+  status?: FileStatus | null;
+  badge?: { modified: number; added: number } | null;
+  permissions: {
+    canRename: boolean;
+    canCreateFile: boolean;
+    canCreateFolder: boolean;
+    canDelete: boolean;
+  };
+  contextMenuPath: string | null;
+  setContextMenuPath: (path: string | null) => void;
+  onSelect: (node: FileNode) => void;
+  onToggle: (path: string) => void;
+  onOpenDialog: (type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => void;
+}
+
+const FileRow: React.FC<FileRowProps> = ({
+  node,
+  isExpanded,
+  isActive,
+  isLoading,
+  isMobile,
+  status,
+  badge,
+  permissions,
+  contextMenuPath,
+  setContextMenuPath,
+  onSelect,
+  onToggle,
+  onOpenDialog,
+}) => {
+  const isDir = node.type === 'directory';
+  const { canRename, canCreateFile, canCreateFolder, canDelete } = permissions;
+
+  const handleContextMenu = React.useCallback((event?: React.MouseEvent) => {
+    if (!canRename && !canCreateFile && !canCreateFolder && !canDelete) {
+      return;
+    }
+    event?.preventDefault();
+    setContextMenuPath(node.path);
+  }, [canRename, canCreateFile, canCreateFolder, canDelete, node.path, setContextMenuPath]);
+
+  const handleInteraction = React.useCallback(() => {
+    if (isDir) {
+      onToggle(node.path);
+    } else {
+      onSelect(node);
+    }
+  }, [isDir, node, onSelect, onToggle]);
+
+  const longPressHandlers = useLongPress({
+    onLongPress: handleContextMenu,
+    onTap: handleInteraction,
+    enableHaptic: true,
+  });
+
+  const interactionProps = isMobile ? longPressHandlers : {
+    onClick: handleInteraction,
+    onContextMenu: handleContextMenu,
+  };
+
+  return (
+    <div
+      className="group relative flex items-center"
+      onContextMenu={!isMobile ? handleContextMenu : undefined}
+    >
+      <button
+        type="button"
+        {...interactionProps}
+        className={cn(
+          'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8 select-none',
+          isActive ? 'bg-interactive-selection/70' : 'hover:bg-interactive-hover/40'
+        )}
+      >
+        {isDir ? (
+          isLoading ? (
+            <RiLoader4Line className="h-4 w-4 flex-shrink-0 animate-spin" />
+          ) : isExpanded ? (
+            <RiFolderOpenFill className="h-4 w-4 flex-shrink-0 text-primary/60" />
+          ) : (
+            <RiFolder3Fill className="h-4 w-4 flex-shrink-0 text-primary/60" />
+          )
+        ) : (
+          getFileIcon(node.extension)
+        )}
+        <span
+          className="min-w-0 flex-1 truncate typography-meta"
+          title={node.path}
+        >
+          {node.name}
+        </span>
+        {!isDir && status && <FileStatusDot status={status} />}
+        {isDir && badge && (
+          <span className="text-xs flex items-center gap-1 ml-auto mr-1">
+            {badge.modified > 0 && <span className="text-[var(--status-warning)]">M{badge.modified}</span>}
+            {badge.added > 0 && <span className="text-[var(--status-success)]">+{badge.added}</span>}
+          </span>
+        )}
+      </button>
+      {(canRename || canCreateFile || canCreateFolder || canDelete) && (
+        <div className={cn(
+          "absolute right-1 top-1/2 -translate-y-1/2 opacity-0 focus-within:opacity-100",
+          !isMobile && "group-hover:opacity-100",
+          (isMobile && contextMenuPath === node.path) && "opacity-100"
+        )}>
+          <DropdownMenu
+            open={contextMenuPath === node.path}
+            onOpenChange={(open) => setContextMenuPath(open ? node.path : null)}
+          >
+            {!isMobile && (
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <RiMore2Fill className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            )}
+            {isMobile && (
+              <DropdownMenuTrigger asChild>
+                <span className="hidden" />
+              </DropdownMenuTrigger>
+            )}
+            <DropdownMenuContent align="end" onCloseAutoFocus={() => setContextMenuPath(null)}>
+              {canRename && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenDialog('rename', node); }}>
+                  <RiEditLine className="mr-2 h-4 w-4" /> Rename
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={(e) => {
+                e.stopPropagation();
+                void navigator.clipboard.writeText(node.path);
+                toast.success('Path copied');
+              }}>
+                <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
+              </DropdownMenuItem>
+              {isDir && (canCreateFile || canCreateFolder) && (
+                <>
+                  <DropdownMenuSeparator />
+                  {canCreateFile && (
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenDialog('createFile', node); }}>
+                      <RiFileAddLine className="mr-2 h-4 w-4" /> New File
+                    </DropdownMenuItem>
+                  )}
+                  {canCreateFolder && (
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenDialog('createFolder', node); }}>
+                      <RiFolderAddLine className="mr-2 h-4 w-4" /> New Folder
+                    </DropdownMenuItem>
+                  )}
+                </>
+              )}
+              {canDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={(e) => { e.stopPropagation(); onOpenDialog('delete', node); }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <RiDeleteBinLine className="mr-2 h-4 w-4" /> Delete
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const FilesView: React.FC = () => {
   const { files, runtime } = useRuntimeAPIs();
   const { currentTheme } = useThemeSystem();
@@ -260,6 +511,7 @@ export const FilesView: React.FC = () => {
   const currentDirectory = useEffectiveDirectory() ?? '';
   const root = normalizePath(currentDirectory.trim());
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
+  const gitStatus = useGitStatus(currentDirectory);
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
@@ -268,22 +520,19 @@ export const FilesView: React.FC = () => {
   const [showMobilePageContent, setShowMobilePageContent] = React.useState(false);
   const [wrapLines, setWrapLines] = React.useState(isMobile);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
-
-  const [expandedDirs, setExpandedDirs] = React.useState<Set<string>>(new Set());
-  const [childrenByDir, setChildrenByDir] = React.useState<Record<string, FileNode[]>>({});
-  const loadedDirsRef = React.useRef<Set<string>>(new Set());
-  const inFlightDirsRef = React.useRef<Set<string>>(new Set());
-
-  const [searchResults, setSearchResults] = React.useState<FileNode[]>([]);
-  const [searching, setSearching] = React.useState(false);
+  const [isSearchOpen, setIsSearchOpen] = React.useState(false);
 
   const EMPTY_PATHS: string[] = React.useMemo(() => [], []);
   const openPaths = useFilesViewTabsStore((state) => (root ? (state.byRoot[root]?.openPaths ?? EMPTY_PATHS) : EMPTY_PATHS));
   const selectedPath = useFilesViewTabsStore((state) => (root ? (state.byRoot[root]?.selectedPath ?? null) : null));
+  const expandedPaths = useFilesViewTabsStore((state) => (root ? (state.byRoot[root]?.expandedPaths ?? EMPTY_PATHS) : EMPTY_PATHS));
   const addOpenPath = useFilesViewTabsStore((state) => state.addOpenPath);
   const removeOpenPath = useFilesViewTabsStore((state) => state.removeOpenPath);
   const removeOpenPathsByPrefix = useFilesViewTabsStore((state) => state.removeOpenPathsByPrefix);
   const setSelectedPath = useFilesViewTabsStore((state) => state.setSelectedPath);
+  const toggleExpandedPath = useFilesViewTabsStore((state) => state.toggleExpandedPath);
+  const expandPath = useFilesViewTabsStore((state) => state.expandPath);
+  const expandPaths = useFilesViewTabsStore((state) => state.expandPaths);
 
   const toFileNode = React.useCallback((path: string): FileNode => {
     const normalized = normalizePath(path);
@@ -301,6 +550,13 @@ export const FilesView: React.FC = () => {
   const openFiles = React.useMemo(() => openPaths.map(toFileNode), [openPaths, toFileNode]);
   const effectiveSelectedPath = React.useMemo(() => selectedPath ?? openPaths[0] ?? null, [openPaths, selectedPath]);
   const selectedFile = React.useMemo(() => (effectiveSelectedPath ? toFileNode(effectiveSelectedPath) : null), [effectiveSelectedPath, toFileNode]);
+
+  const [childrenByDir, setChildrenByDir] = React.useState<Record<string, FileNode[]>>({});
+  const loadedDirsRef = React.useRef<Set<string>>(new Set());
+  const inFlightDirsRef = React.useRef<Set<string>>(new Set());
+
+  const [searchResults, setSearchResults] = React.useState<FileNode[]>([]);
+  const [searching, setSearching] = React.useState(false);
 
   const [fileContent, setFileContent] = React.useState<string>('');
   const [fileLoading, setFileLoading] = React.useState(false);
@@ -345,25 +601,18 @@ export const FilesView: React.FC = () => {
 
   // Line selection state for commenting
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
-  const [commentText, setCommentText] = React.useState('');
   const isSelectingRef = React.useRef(false);
   const selectionStartRef = React.useRef<number | null>(null);
 
   // Session/config for sending comments
-  const sendMessage = useSessionStore((state) => state.sendMessage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
-  const { currentProviderId, currentModelId, currentAgentName, currentVariant } = useConfigStore();
-  const getSessionAgentSelection = useContextStore((state) => state.getSessionAgentSelection);
-  const getAgentModelForSession = useContextStore((state) => state.getAgentModelForSession);
-  const getAgentModelVariantForSession = useContextStore((state) => state.getAgentModelVariantForSession);
-  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setMainTabGuard = useUIStore((state) => state.setMainTabGuard);
-  const inputBarOffset = useUIStore((state) => state.inputBarOffset);
-  const isKeyboardOpen = useUIStore((state) => state.isKeyboardOpen);
-  const queueModeEnabled = useMessageQueueStore((state) => state.queueModeEnabled);
-  const addToQueue = useMessageQueueStore((state) => state.addToQueue);
-  const { phase: sessionPhase } = useCurrentSessionActivity();
 
+  const addDraft = useInlineCommentDraftStore((s) => s.addDraft);
+  const updateDraft = useInlineCommentDraftStore((s) => s.updateDraft);
+  const removeDraft = useInlineCommentDraftStore((s) => s.removeDraft);
+  const allDrafts = useInlineCommentDraftStore((s) => s.drafts);
+  const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
 
   // Global mouseup to end drag selection
   React.useEffect(() => {
@@ -378,7 +627,6 @@ export const FilesView: React.FC = () => {
   // Clear selection when file changes
   React.useEffect(() => {
     setLineSelection(null);
-    setCommentText('');
     setMainTabGuard(null);
     setDraftContent('');
     setIsSaving(false);
@@ -397,15 +645,14 @@ export const FilesView: React.FC = () => {
 
   // Click outside to dismiss selection
   React.useEffect(() => {
-    if (!lineSelection) return;
+    if (!lineSelection && !editingDraftId) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      
+
       // Check if click is inside comment UI
-      const commentUI = document.querySelector('[data-comment-ui]');
-      if (commentUI?.contains(target)) return;
-      
+      if (target.closest('[data-comment-input="true"]') || target.closest('[data-comment-card="true"]')) return;
+
       // Check if click is on CM gutter (only gutter should not dismiss)
       if (target.closest('.cm-gutterElement')) return;
 
@@ -414,7 +661,7 @@ export const FilesView: React.FC = () => {
 
       // Clicking anywhere else (including code content) dismisses selection
       setLineSelection(null);
-      setCommentText('');
+      setEditingDraftId(null);
     };
 
     const timeoutId = setTimeout(() => {
@@ -425,7 +672,7 @@ export const FilesView: React.FC = () => {
       clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [lineSelection]);
+  }, [lineSelection, editingDraftId]);
 
   // Extract selected code
   const extractSelectedCode = React.useCallback((content: string, range: SelectedLineRange): string => {
@@ -436,61 +683,40 @@ export const FilesView: React.FC = () => {
     return lines.slice(startLine - 1, endLine).join('\n');
   }, []);
 
-  // Send comment handler
-  const handleSendComment = React.useCallback(async () => {
-    if (!lineSelection || !commentText.trim() || !selectedFile) return;
-    if (!currentSessionId) {
-      toast.error('Select a session to send comment');
-      return;
-    }
+  const handleSaveComment = React.useCallback((text: string, range?: { start: number; end: number }) => {
+    if (!selectedFile) return;
 
-    // Get session-specific agent/model/variant with fallback to config values
-    const sessionAgent = getSessionAgentSelection(currentSessionId) || currentAgentName;
-    const sessionModel = sessionAgent ? getAgentModelForSession(currentSessionId, sessionAgent) : null;
-    const effectiveProviderId = sessionModel?.providerId || currentProviderId;
-    const effectiveModelId = sessionModel?.modelId || currentModelId;
+    const sessionKey = currentSessionId ?? 'draft';
+    const finalRange = range || lineSelection;
+    if (!finalRange) return;
 
-    if (!effectiveProviderId || !effectiveModelId) {
-      toast.error('Select a model to send comment');
-      return;
-    }
+    const code = extractSelectedCode(fileContent, { start: finalRange.start, end: finalRange.end });
 
-    const effectiveVariant = sessionAgent && effectiveProviderId && effectiveModelId
-      ? getAgentModelVariantForSession(currentSessionId, sessionAgent, effectiveProviderId, effectiveModelId) ?? currentVariant
-      : currentVariant;
-
-    const code = extractSelectedCode(fileContent, lineSelection);
-    const language = getLanguageFromExtension(selectedFile.path) || 'text';
-    const fileName = selectedFile.name;
-    const startLine = lineSelection.start;
-    const endLine = lineSelection.end;
-
-    const message = `Comment on \`${fileName}\` lines ${startLine}-${endLine}:\n\`\`\`${language}\n${code}\n\`\`\`\n\n${commentText}`;
-
-    // Clear state and switch to chat immediately
-    setCommentText('');
-    setLineSelection(null);
-    setActiveMainTab('chat');
-
-    // Check if should queue instead of send
-    const canQueue = sessionPhase !== 'idle';
-    if (queueModeEnabled && canQueue) {
-      addToQueue(currentSessionId, { content: message });
-    } else {
-      void sendMessage(
-        message,
-        effectiveProviderId,
-        effectiveModelId,
-        sessionAgent,
-        undefined,
-        undefined,
-        undefined,
-        effectiveVariant
-      ).catch((e) => {
-        console.error('Failed to send comment', e);
+    if (editingDraftId) {
+      updateDraft(sessionKey, editingDraftId, {
+        text: text.trim(),
+        code,
+        startLine: finalRange.start,
+        endLine: finalRange.end,
       });
+      toast.success('Comment updated');
+    } else {
+      addDraft({
+        sessionKey,
+        source: 'file',
+        fileLabel: selectedFile.name,
+        startLine: finalRange.start,
+        endLine: finalRange.end,
+        code,
+        language: getLanguageFromExtension(selectedFile.path) || 'text',
+        text: text.trim(),
+      });
+      toast.success('Comment saved');
     }
-  }, [lineSelection, commentText, selectedFile, fileContent, currentSessionId, currentProviderId, currentModelId, currentAgentName, currentVariant, extractSelectedCode, sendMessage, setActiveMainTab, getSessionAgentSelection, getAgentModelForSession, getAgentModelVariantForSession, queueModeEnabled, sessionPhase, addToQueue]);
+
+    setLineSelection(null);
+    setEditingDraftId(null);
+  }, [selectedFile, currentSessionId, lineSelection, fileContent, extractSelectedCode, editingDraftId, updateDraft, addDraft]);
 
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
@@ -568,7 +794,6 @@ export const FilesView: React.FC = () => {
 
     loadedDirsRef.current = new Set();
     inFlightDirsRef.current = new Set();
-    setExpandedDirs((prev) => (prev.size === 0 ? prev : new Set()));
     setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}));
 
     await loadDirectory(root);
@@ -603,7 +828,6 @@ export const FilesView: React.FC = () => {
       lastFilesViewTreeKeyRef.current = treeKey;
       loadedDirsRef.current = new Set();
       inFlightDirsRef.current = new Set();
-      setExpandedDirs((prev) => (prev.size === 0 ? prev : new Set()));
       setChildrenByDir((prev) => (Object.keys(prev).length === 0 ? prev : {}));
       void loadDirectory(root);
     }
@@ -935,13 +1159,14 @@ export const FilesView: React.FC = () => {
         return;
       }
 
-      if (e.key.toLowerCase() !== 's') {
-        return;
-      }
-
-      e.preventDefault();
-      if (!isSaving) {
-        void saveDraft();
+      if (e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        if (!isSaving) {
+          void saveDraft();
+        }
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setIsSearchOpen(true);
       }
     };
 
@@ -1014,6 +1239,21 @@ export const FilesView: React.FC = () => {
     if (root) {
       setSelectedPath(root, node.path);
       addOpenPath(root, node.path);
+      
+      // Auto-expand parents
+      const ancestors = getAncestorPaths(node.path, root);
+      if (ancestors.length > 0) {
+        expandPaths(root, ancestors);
+        
+        // Ensure ancestor directories are loaded
+        for (const ancestor of ancestors) {
+          if (!loadedDirsRef.current.has(ancestor)) {
+            // Load sequentially to ensure order (though loadDirectory is async)
+            // We use void to fire and forget but they will update state when done
+            void loadDirectory(ancestor);
+          }
+        }
+      }
     }
 
     setFileError(null);
@@ -1024,7 +1264,7 @@ export const FilesView: React.FC = () => {
     if (isMobile) {
       setShowMobilePageContent(true);
     }
-  }, [addOpenPath, isDirty, isMobile, root, setSelectedPath]);
+  }, [addOpenPath, isDirty, isMobile, root, setSelectedPath, expandPaths, loadDirectory]);
 
   React.useEffect(() => {
     if (!selectedFile) {
@@ -1176,29 +1416,61 @@ export const FilesView: React.FC = () => {
     }
   }, [getNextOpenFile, handleSelectFile, isDirty, isMobile, openFiles, removeOpenPath, root, selectedFile?.path, setSelectedPath]);
 
+  const getFileStatus = React.useCallback((path: string): FileStatus | null => {
+    // Check open status
+    if (openPaths.includes(path)) return 'open';
+    
+    // Check git status
+    if (gitStatus?.files) {
+      const relative = path.startsWith(root + '/') ? path.slice(root.length + 1) : path;
+      const file = gitStatus.files.find(f => f.path === relative);
+      if (file) {
+        if (file.index === 'A' || file.working_dir === '?') return 'git-added';
+        if (file.index === 'D') return 'git-deleted';
+        if (file.index === 'M' || file.working_dir === 'M') return 'git-modified';
+      }
+    }
+    return null;
+  }, [openPaths, gitStatus, root]);
+
+  const getFolderBadge = React.useCallback((dirPath: string): { modified: number; added: number } | null => {
+    if (!gitStatus?.files) return null;
+    const relativeDir = dirPath.startsWith(root + '/') ? dirPath.slice(root.length + 1) : dirPath;
+    const prefix = relativeDir ? `${relativeDir}/` : '';
+    
+    let modified = 0, added = 0;
+    for (const f of gitStatus.files) {
+      if (f.path.startsWith(prefix)) {
+        if (f.index === 'M' || f.working_dir === 'M') modified++;
+        if (f.index === 'A' || f.working_dir === '?') added++;
+      }
+    }
+    return modified + added > 0 ? { modified, added } : null;
+  }, [gitStatus, root]);
+
   const toggleDirectory = React.useCallback(async (dirPath: string) => {
     const normalized = normalizePath(dirPath);
-    setExpandedDirs((prev) => {
-      const next = new Set(prev);
-      if (next.has(normalized)) {
-        next.delete(normalized);
-      } else {
-        next.add(normalized);
-      }
-      return next;
-    });
+    if (!root) return;
+
+    toggleExpandedPath(root, normalized);
 
     if (!loadedDirsRef.current.has(normalized)) {
       await loadDirectory(normalized);
     }
-  }, [loadDirectory]);
+  }, [loadDirectory, root, toggleExpandedPath]);
+
+  const handleBreadcrumbNavigate = React.useCallback((dirPath: string) => {
+    if (!root) return;
+    expandPath(root, dirPath);
+    void loadDirectory(dirPath);
+  }, [root, expandPath, loadDirectory]);
 
   const renderTree = React.useCallback((dirPath: string, depth: number): React.ReactNode => {
     const nodes = childrenByDir[dirPath] ?? [];
 
     return nodes.map((node, index) => {
       const isDir = node.type === 'directory';
-      const isExpanded = isDir && expandedDirs.has(node.path);
+      const isExpanded = isDir && expandedPaths.includes(node.path);
       const isActive = selectedFile?.path === node.path;
       const isLoading = isDir && inFlightDirsRef.current.has(node.path);
       const isLast = index === nodes.length - 1;
@@ -1213,103 +1485,21 @@ export const FilesView: React.FC = () => {
               )}
             </>
           )}
-          <div
-            className="group relative flex items-center"
-            onContextMenu={(event) => {
-              if (!canRename && !canCreateFile && !canCreateFolder && !canDelete) {
-                return;
-              }
-              event.preventDefault();
-              setContextMenuPath(node.path);
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                if (isDir) {
-                  void toggleDirectory(node.path);
-                } else {
-                  void handleSelectFile(node);
-                }
-              }}
-              className={cn(
-                'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8 select-none',
-                isActive ? 'bg-interactive-selection/70' : 'hover:bg-interactive-hover/40'
-              )}
-            >
-              {isDir ? (
-                isLoading ? (
-                  <RiLoader4Line className="h-4 w-4 flex-shrink-0 animate-spin" />
-                ) : isExpanded ? (
-                  <RiFolderOpenFill className="h-4 w-4 flex-shrink-0 text-primary/60" />
-                ) : (
-                  <RiFolder3Fill className="h-4 w-4 flex-shrink-0 text-primary/60" />
-                )
-              ) : (
-                getFileIcon(node.extension)
-              )}
-              <span
-                className="min-w-0 flex-1 truncate typography-meta"
-                title={node.path}
-              >
-                {node.name}
-              </span>
-            </button>
-            {(canRename || canCreateFile || canCreateFolder || canDelete) && (
-              <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-                <DropdownMenu
-                  open={contextMenuPath === node.path}
-                  onOpenChange={(open) => setContextMenuPath(open ? node.path : null)}
-                >
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-6 w-6">
-                      <RiMore2Fill className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" onCloseAutoFocus={() => setContextMenuPath(null)}>
-                    {canRename && (
-                      <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('rename', node); }}>
-                        <RiEditLine className="mr-2 h-4 w-4" /> Rename
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      void navigator.clipboard.writeText(node.path);
-                      toast.success('Path copied');
-                    }}>
-                      <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
-                    </DropdownMenuItem>
-                    {isDir && (canCreateFile || canCreateFolder) && (
-                      <>
-                        <DropdownMenuSeparator />
-                        {canCreateFile && (
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFile', node); }}>
-                            <RiFileAddLine className="mr-2 h-4 w-4" /> New File
-                          </DropdownMenuItem>
-                        )}
-                        {canCreateFolder && (
-                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleOpenDialog('createFolder', node); }}>
-                            <RiFolderAddLine className="mr-2 h-4 w-4" /> New Folder
-                          </DropdownMenuItem>
-                        )}
-                      </>
-                    )}
-                    {canDelete && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onClick={(e) => { e.stopPropagation(); handleOpenDialog('delete', node); }}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <RiDeleteBinLine className="mr-2 h-4 w-4" /> Delete
-                        </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
-          </div>
+          <FileRow
+            node={node}
+            isExpanded={isExpanded}
+            isActive={isActive}
+            isLoading={isLoading}
+            isMobile={isMobile}
+            status={!isDir ? getFileStatus(node.path) : undefined}
+            badge={isDir ? getFolderBadge(node.path) : undefined}
+            permissions={{ canRename, canCreateFile, canCreateFolder, canDelete }}
+            contextMenuPath={contextMenuPath}
+            setContextMenuPath={setContextMenuPath}
+            onSelect={handleSelectFile}
+            onToggle={toggleDirectory}
+            onOpenDialog={handleOpenDialog}
+          />
           {isDir && isExpanded && (
             <ul className="flex flex-col gap-1 ml-3 pl-3 border-l border-border/40 relative">
               {renderTree(node.path, depth + 1)}
@@ -1318,7 +1508,7 @@ export const FilesView: React.FC = () => {
         </li>
       );
     });
-  }, [childrenByDir, expandedDirs, handleSelectFile, selectedFile?.path, toggleDirectory, handleOpenDialog, canCreateFile, canCreateFolder, canRename, canDelete, contextMenuPath, setContextMenuPath]);
+  }, [childrenByDir, expandedPaths, handleSelectFile, selectedFile?.path, toggleDirectory, handleOpenDialog, canCreateFile, canCreateFolder, canRename, canDelete, contextMenuPath, setContextMenuPath, isMobile, getFileStatus, getFolderBadge]);
 
   const isSelectedImage = Boolean(selectedFile?.path && isImageFile(selectedFile.path));
   const isSelectedSvg = Boolean(selectedFile?.path && selectedFile.path.toLowerCase().endsWith('.svg'));
@@ -1467,90 +1657,75 @@ export const FilesView: React.FC = () => {
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-
-  // Comment UI component
-  const renderCommentUI = () => {
-    if (!lineSelection || !selectedFile) return null;
-    return (
-      <div
-        data-comment-ui
-        className="flex flex-col items-center gap-2 px-4"
-        style={{ width: 'min(100vw - 1rem, 42rem)' }}
-      >
-        <div 
-          className="w-full rounded-xl flex flex-col relative shadow-lg border border-border/80 focus-within:border-primary/70 focus-within:ring-1 focus-within:ring-primary/50"
-          style={{ 
-            backgroundColor: currentTheme?.colors?.surface?.subtle,
-          }}
-        >
-          <Textarea
-            value={commentText}
-            onChange={(e) => {
-              setCommentText(e.target.value);
-              const textarea = e.target;
-              textarea.style.height = 'auto';
-              const lineHeight = 20;
-              const maxHeight = lineHeight * 5 + 8;
-              textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-            }}
-            placeholder="Type your comment..."
-            outerClassName="focus-within:ring-0"
-            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 rounded-none appearance-none hover:border-transparent bg-transparent dark:bg-transparent overflow-y-auto focus:ring-0 focus:shadow-none"
-            autoFocus={!isMobile}
-            rows={1}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                handleSendComment();
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                setLineSelection(null);
-                setCommentText('');
-              }
-            }}
-          />
-          <div className="px-2.5 py-1 flex items-center justify-between gap-x-1.5">
-            <span className="text-xs text-muted-foreground">
-              {selectedFile.name}:{lineSelection.start}-{lineSelection.end}
-            </span>
-            <div className="flex items-center gap-x-1.5">
-              {!isMobile && (
-                <span className="text-xs text-muted-foreground">
-                  {getModifierLabel()}+⏎
-                </span>
-              )}
-              <button
-                type="button"
-                onTouchEnd={(e) => {
-                  if (commentText.trim()) {
-                    e.preventDefault();
-                    handleSendComment();
-                  }
-                }}
-                onClick={() => {
-                  if (!isMobile) {
-                    handleSendComment();
-                  }
-                }}
-                disabled={!commentText.trim()}
-                className={cn(
-                  "h-7 w-7 flex items-center justify-center text-muted-foreground transition-none outline-none focus:outline-none flex-shrink-0",
-                  commentText.trim() ? "text-primary hover:text-primary" : "opacity-30"
-                )}
-                aria-label="Send comment"
-              >
-                <RiSendPlane2Line className="h-[18px] w-[18px]" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     );
-  };
+
+  const blockWidgets = React.useMemo(() => {
+    if (!selectedFile) return [];
+
+    const sessionKey = currentSessionId ?? 'draft';
+    const sessionDrafts = allDrafts[sessionKey] ?? [];
+    // Filter drafts for current file
+    const fileDrafts = sessionDrafts.filter(
+      (d) => d.source === 'file' && d.fileLabel === selectedFile.name
+    );
+
+    const widgets: BlockWidgetDef[] = [];
+
+    // Add cards for existing drafts
+    fileDrafts.forEach((draft) => {
+      const isEditing = editingDraftId === draft.id;
+
+      if (isEditing) {
+        widgets.push({
+          afterLine: draft.endLine,
+          id: `edit-${draft.id}`,
+          content: (
+            <InlineCommentInput
+              initialText={draft.text}
+              lineRange={{ start: draft.startLine, end: draft.endLine }}
+              onSave={(text) => handleSaveComment(text, { start: draft.startLine, end: draft.endLine })}
+              onCancel={() => setEditingDraftId(null)}
+              isEditing={true}
+            />
+          ),
+        });
+      } else {
+        widgets.push({
+          afterLine: draft.endLine,
+          id: `card-${draft.id}`,
+          content: (
+            <InlineCommentCard
+              draft={draft}
+              onEdit={() => {
+                setEditingDraftId(draft.id);
+                setLineSelection(null);
+              }}
+              onDelete={() => removeDraft(sessionKey, draft.id)}
+            />
+          ),
+        });
+      }
+    });
+
+    // Add input for new comment
+    if (lineSelection && !editingDraftId) {
+      widgets.push({
+        afterLine: lineSelection.end,
+        id: 'new-comment-input',
+        content: (
+          <InlineCommentInput
+            lineRange={lineSelection}
+            onSave={(text) => handleSaveComment(text)}
+            onCancel={() => setLineSelection(null)}
+          />
+        ),
+      });
+    }
+
+    return widgets;
+  }, [selectedFile, currentSessionId, allDrafts, editingDraftId, lineSelection, handleSaveComment, removeDraft]);
 
   const fileViewer = (
     <div
@@ -1704,9 +1879,11 @@ export const FilesView: React.FC = () => {
                   })}
                 </div>
                 {selectedFile && (
-                  <div className="typography-meta text-muted-foreground truncate" title={displaySelectedPath}>
-                    {displaySelectedPath}
-                  </div>
+                  <FileBreadcrumbs
+                    path={displaySelectedPath}
+                    root={root}
+                    onNavigate={handleBreadcrumbNavigate}
+                  />
                 )}
               </div>
             ) : (
@@ -1739,18 +1916,32 @@ export const FilesView: React.FC = () => {
           )}
 
           {selectedFile && !isSelectedImage && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setWrapLines(!wrapLines)}
-              className={cn(
-                'h-5 w-5 p-0 transition-opacity',
-                wrapLines ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
-              )}
-              title={wrapLines ? 'Disable line wrap' : 'Enable line wrap'}
-            >
-              <RiTextWrap className="size-4" />
-            </Button>
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setWrapLines(!wrapLines)}
+                className={cn(
+                  'h-5 w-5 p-0 transition-opacity',
+                  wrapLines ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
+                )}
+                title={wrapLines ? 'Disable line wrap' : 'Enable line wrap'}
+              >
+                <RiTextWrap className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsSearchOpen(!isSearchOpen)}
+                className={cn(
+                  'h-5 w-5 p-0 transition-opacity',
+                  isSearchOpen ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
+                )}
+                title="Find in file"
+              >
+                <RiSearchLine className="size-4" />
+              </Button>
+            </>
           )}
 
           {(canCopy || canCopyPath || (selectedFile && isMarkdownFile(selectedFile.path))) && (canEdit || (selectedFile && !isSelectedImage)) && (
@@ -1895,6 +2086,10 @@ export const FilesView: React.FC = () => {
                   "h-full",
                   isMobile && "[&_.cm-scroller]:pb-[var(--oc-keyboard-inset,0px)]"
                 )}
+                enableSearch
+                searchOpen={isSearchOpen}
+                onSearchOpenChange={setIsSearchOpen}
+                blockWidgets={blockWidgets}
                 highlightLines={lineSelection
                   ? {
                     start: Math.min(lineSelection.start, lineSelection.end),
@@ -1966,31 +2161,6 @@ export const FilesView: React.FC = () => {
           )}
         </ScrollableOverlay>
       </div>
-
-      {/* Comment UI floating at bottom */}
-      {lineSelection && (
-        <div
-          className="pointer-events-none absolute inset-0 z-50 flex flex-col justify-end"
-          style={{ 
-            paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : '0px'
-          }}
-        >
-          <div
-            className={cn(
-              "pointer-events-auto pb-2 transition-none w-full flex justify-center",
-              isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
-            )}
-            style={{
-              marginBottom: isMobile
-                ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
-                : '16px'
-            }}
-            data-keyboard-avoid="true"
-          >
-            {renderCommentUI()}
-          </div>
-        </div>
-      )}
     </div>
   );
 
