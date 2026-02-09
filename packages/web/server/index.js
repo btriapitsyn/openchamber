@@ -6062,6 +6062,7 @@ async function main(options = {}) {
     try {
       const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
       const branch = typeof req.query?.branch === 'string' ? req.query.branch.trim() : '';
+      const remote = typeof req.query?.remote === 'string' ? req.query.remote.trim() : 'origin';
       if (!directory || !branch) {
         return res.status(400).json({ error: 'directory and branch are required' });
       }
@@ -6073,7 +6074,7 @@ async function main(options = {}) {
       }
 
       const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
-      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      const { repo } = await resolveGitHubRepoFromDirectory(directory, remote);
       if (!repo) {
         return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
       }
@@ -6247,7 +6248,10 @@ async function main(options = {}) {
       const base = typeof req.body?.base === 'string' ? req.body.base.trim() : '';
       const body = typeof req.body?.body === 'string' ? req.body.body : undefined;
       const draft = typeof req.body?.draft === 'boolean' ? req.body.draft : undefined;
+      // remote = target repo (where PR is created, e.g., 'upstream' for forks)
       const remote = typeof req.body?.remote === 'string' ? req.body.remote.trim() : 'origin';
+      // headRemote = source repo (where head branch lives, e.g., 'origin' for forks)
+      const headRemote = typeof req.body?.headRemote === 'string' ? req.body.headRemote.trim() : '';
       if (!directory || !title || !head || !base) {
         return res.status(400).json({ error: 'directory, title, head, base are required' });
       }
@@ -6264,11 +6268,22 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
       }
 
+      // For fork workflows: if headRemote is specified and different from remote,
+      // we need to prefix the head with the fork owner (e.g., "fork-owner:branch")
+      let headRef = head;
+      if (headRemote && headRemote !== remote) {
+        const { repo: headRepo } = await resolveGitHubRepoFromDirectory(directory, headRemote);
+        if (headRepo && headRepo.owner !== repo.owner) {
+          // Cross-fork PR: prefix head with the fork owner
+          headRef = `${headRepo.owner}:${head}`;
+        }
+      }
+
       const created = await octokit.rest.pulls.create({
         owner: repo.owner,
         repo: repo.repo,
         title,
-        head,
+        head: headRef,
         base,
         ...(typeof body === 'string' ? { body } : {}),
         ...(typeof draft === 'boolean' ? { draft } : {}),

@@ -90,9 +90,14 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     return payload;
   },
 
-  async prStatus(directory: string, branch: string): Promise<GitHubPullRequestStatus> {
+  async prStatus(directory: string, branch: string, remote?: string): Promise<GitHubPullRequestStatus> {
+    const params = new URLSearchParams({
+      directory,
+      branch,
+      ...(remote ? { remote } : {}),
+    });
     const response = await fetch(
-      `/api/github/pr/status?directory=${encodeURIComponent(directory)}&branch=${encodeURIComponent(branch)}`,
+      `/api/github/pr/status?${params.toString()}`,
       { method: 'GET', headers: { Accept: 'application/json' } }
     );
     const payload = await jsonOrNull<GitHubPullRequestStatus & { error?: string }>(response);

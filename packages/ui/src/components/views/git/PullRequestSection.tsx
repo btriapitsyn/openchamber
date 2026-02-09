@@ -225,8 +225,16 @@ export const PullRequestSection: React.FC<{
 
   const [isContextOpen, setIsContextOpen] = React.useState(false);
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
+  const [selectedRemote, setSelectedRemote] = React.useState<GitRemote | null>(() => remotes[0] ?? null);
 
   const hasMultipleRemotes = remotes.length > 1;
+
+  // Update selected remote when remotes change
+  React.useEffect(() => {
+    if (remotes.length > 0 && !selectedRemote) {
+      setSelectedRemote(remotes[0]);
+    }
+  }, [remotes, selectedRemote]);
 
   const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
   const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
@@ -791,7 +799,7 @@ export const PullRequestSection: React.FC<{
     }
     setError(null);
     try {
-      const next = await github.prStatus(directory, branch);
+      const next = await github.prStatus(directory, branch, selectedRemote?.name);
       setStatus((prev) => {
         const nextPr = next.pr;
         const prevPr = prev?.pr;
@@ -838,7 +846,16 @@ export const PullRequestSection: React.FC<{
       }
       isRefreshInFlightRef.current = false;
     }
-  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus]);
+  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus, selectedRemote?.name]);
+
+  // Refetch PR status when selected remote changes
+  const handleRemoteChange = React.useCallback((remote: GitRemote) => {
+    setSelectedRemote(remote);
+    // Clear current status and refetch
+    setStatus(null);
+    setError(null);
+    lastRefreshAtRef.current = 0; // Force refresh
+  }, []);
 
   React.useEffect(() => {
     const snapshot = pullRequestDraftSnapshots.get(snapshotKey) ?? null;
@@ -851,6 +868,13 @@ export const PullRequestSection: React.FC<{
     setIsInitialStatusResolved(Boolean(statusSnapshot));
     void refresh({ force: true, markInitialResolved: true });
   }, [branch, refresh, snapshotKey]);
+
+  // Refetch when selected remote changes
+  React.useEffect(() => {
+    if (selectedRemote) {
+      void refresh({ force: true, markInitialResolved: true });
+    }
+  }, [selectedRemote, refresh]);
 
   React.useEffect(() => {
     const onFocus = () => {
@@ -948,7 +972,7 @@ export const PullRequestSection: React.FC<{
     }
   }, [baseBranch, branch, directory, isGenerating, additionalContext, onGeneratedDescription]);
 
-  const createPr = React.useCallback(async (remote?: GitRemote) => {
+  const createPr = React.useCallback(async (targetRemote?: GitRemote, headRemote?: GitRemote) => {
     if (!github?.prCreate) {
       toast.error('GitHub runtime API unavailable');
       return;
@@ -968,7 +992,8 @@ export const PullRequestSection: React.FC<{
         base: baseBranch,
         ...(body.trim() ? { body } : {}),
         draft,
-        ...(remote ? { remote: remote.name } : {}),
+        ...(targetRemote ? { remote: targetRemote.name } : {}),
+        ...(headRemote ? { headRemote: headRemote.name } : {}),
       });
       toast.success('PR created');
       setStatus((prev) => (prev ? { ...prev, pr } : prev));
@@ -1130,6 +1155,36 @@ export const PullRequestSection: React.FC<{
                 <span className={`h-2 w-2 rounded-full ${statusColor(checks.state)}`} />
                 {checks.total > 0 ? `${checks.success}/${checks.total} checks` : `${checks.state} checks`}
               </span>
+            ) : null}
+            {hasMultipleRemotes ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 gap-1">
+                    <span className="typography-micro">{selectedRemote?.name}</span>
+                    <RiArrowDownSLine className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[200px]">
+                  {remotes.map((remote) => (
+                    <DropdownMenuItem
+                      key={remote.name}
+                      onSelect={() => handleRemoteChange(remote)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="typography-ui-label text-foreground">
+                          {remote.name}
+                          {remote.name === selectedRemote?.name && (
+                            <span className="ml-2 text-primary">✓</span>
+                          )}
+                        </span>
+                        <span className="typography-meta text-muted-foreground truncate">
+                          {remote.pushUrl}
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null}
           </div>
         </div>
@@ -1408,7 +1463,52 @@ export const PullRequestSection: React.FC<{
                       {branch} → {baseBranch}
                     </div>
                   </div>
-                  {repoUrl ? (
+                  {hasMultipleRemotes ? (
+                    <div className="flex items-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-r-none border-r-0"
+                        asChild
+                      >
+                        <a href={repoUrl ?? '#'} target="_blank" rel="noopener noreferrer">
+                          <RiExternalLinkLine className="size-4" />
+                          {selectedRemote?.name ?? 'Repo'}
+                        </a>
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-l-none px-1.5"
+                          >
+                            <RiArrowDownSLine className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[200px]">
+                          {remotes.map((remote) => (
+                            <DropdownMenuItem
+                              key={remote.name}
+                              onSelect={() => handleRemoteChange(remote)}
+                            >
+                              <div className="flex flex-col">
+                                <span className="typography-ui-label text-foreground">
+                                  {remote.name}
+                                  {remote.name === selectedRemote?.name && (
+                                    <span className="ml-2 text-primary">✓</span>
+                                  )}
+                                </span>
+                                <span className="typography-meta text-muted-foreground truncate">
+                                  {remote.pushUrl}
+                                </span>
+                              </div>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  ) : repoUrl ? (
                     <Button variant="outline" size="sm" asChild>
                       <a href={repoUrl} target="_blank" rel="noopener noreferrer">
                         <RiExternalLinkLine className="size-4" />
@@ -1573,22 +1673,37 @@ export const PullRequestSection: React.FC<{
                           <RiArrowDownSLine className="size-4 opacity-60" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="min-w-[200px]">
-                        {remotes.map((remote) => (
-                          <DropdownMenuItem
-                            key={remote.name}
-                            onSelect={() => createPr(remote)}
-                          >
-                            <div className="flex flex-col">
-                              <span className="typography-ui-label text-foreground">
-                                {remote.name}
-                              </span>
-                              <span className="typography-meta text-muted-foreground truncate">
-                                {remote.pushUrl}
-                              </span>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
+                      <DropdownMenuContent align="end" className="min-w-[240px]">
+                        <div className="px-2 py-1.5 typography-micro text-muted-foreground">
+                          Create PR on:
+                        </div>
+                        {remotes.map((targetRemote) => {
+                          // For fork workflows: head remote is typically 'origin'
+                          // If target is 'origin', no headRemote needed
+                          // If target is different (e.g., 'upstream'), use 'origin' as headRemote
+                          const originRemote = remotes.find((r) => r.name === 'origin');
+                          const headRemote = targetRemote.name === 'origin' ? undefined : originRemote;
+                          return (
+                            <DropdownMenuItem
+                              key={targetRemote.name}
+                              onSelect={() => createPr(targetRemote, headRemote)}
+                            >
+                              <div className="flex flex-col">
+                                <span className="typography-ui-label text-foreground">
+                                  {targetRemote.name}
+                                  {headRemote && (
+                                    <span className="text-muted-foreground font-normal">
+                                      {' '}(from {headRemote.name})
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="typography-meta text-muted-foreground truncate">
+                                  {targetRemote.pushUrl}
+                                </span>
+                              </div>
+                            </DropdownMenuItem>
+                          );
+                        })}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ) : (
