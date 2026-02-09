@@ -25,7 +25,8 @@ interface ServerSnapshotResponse {
   serverTime: number;
 }
 
-const IMMEDIATE_POLL_DELAY_MS = 500; // 500ms for immediate poll after notification
+const IMMEDIATE_POLL_DELAY_MS = 150;
+const FOLLOW_UP_POLL_DELAY_MS = 1100;
 
 // Ref to be accessed from outside (e.g., useEventStream) for triggering immediate poll
 let triggerImmediatePollRef: (() => void) | null = null;
@@ -45,8 +46,10 @@ export const triggerSessionStatusPoll = () => {
  */
 export function useServerSessionStatus() {
   const isSyncingRef = React.useRef(false);
+  const hasPendingImmediateSyncRef = React.useRef(false);
   const lastSyncAtRef = React.useRef(0);
   const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const followUpTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   const fetchSessionStatus = React.useCallback(async (immediate = false) => {
     const now = Date.now();
@@ -54,8 +57,12 @@ export function useServerSessionStatus() {
       return;
     }
 
-    // Prevent concurrent syncs
+    // Prevent concurrent syncs; if an immediate sync is requested while running,
+    // queue one more pass right after current request settles.
     if (isSyncingRef.current) {
+      if (immediate) {
+        hasPendingImmediateSyncRef.current = true;
+      }
       return;
     }
 
@@ -65,6 +72,7 @@ export function useServerSessionStatus() {
     try {
       const snapshotResponse = await fetch('/api/sessions/snapshot', {
         method: 'GET',
+        cache: 'no-store',
         headers: { Accept: 'application/json' },
       });
 
@@ -179,8 +187,36 @@ export function useServerSessionStatus() {
       console.warn('[useServerSessionStatus] Error fetching session status:', error);
     } finally {
       isSyncingRef.current = false;
+      if (hasPendingImmediateSyncRef.current) {
+        hasPendingImmediateSyncRef.current = false;
+        setTimeout(() => {
+          void fetchSessionStatus(true);
+        }, 120);
+      }
     }
   }, []);
+
+  // Function to trigger immediate snapshot sync from external modules
+  const triggerImmediatePoll = React.useCallback(() => {
+    // Clear any pending timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    if (followUpTimeoutRef.current) {
+      clearTimeout(followUpTimeoutRef.current);
+    }
+
+    // Schedule immediate sync with small delay to batch rapid calls
+    timeoutRef.current = setTimeout(() => {
+      void fetchSessionStatus(true);
+    }, IMMEDIATE_POLL_DELAY_MS);
+
+    // Run one follow-up sync after short settle period to catch delayed
+    // server status transitions that happen right after reconnect/restore.
+    followUpTimeoutRef.current = setTimeout(() => {
+      void fetchSessionStatus(true);
+    }, FOLLOW_UP_POLL_DELAY_MS);
+  }, [fetchSessionStatus]);
 
   // Initial snapshot sync on mount
   React.useEffect(() => {
@@ -190,6 +226,9 @@ export function useServerSessionStatus() {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      if (followUpTimeoutRef.current) {
+        clearTimeout(followUpTimeoutRef.current);
+      }
     };
   }, [fetchSessionStatus]);
 
@@ -197,10 +236,7 @@ export function useServerSessionStatus() {
   React.useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Small delay to let the browser settle
-        timeoutRef.current = setTimeout(() => {
-          void fetchSessionStatus(true);
-        }, 100);
+        triggerImmediatePoll();
       }
     };
 
@@ -208,20 +244,7 @@ export function useServerSessionStatus() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [fetchSessionStatus]);
-
-  // Function to trigger immediate snapshot sync from external modules
-  const triggerImmediatePoll = React.useCallback(() => {
-    // Clear any pending timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-
-    // Schedule immediate sync with small delay to batch rapid calls
-    timeoutRef.current = setTimeout(() => {
-      void fetchSessionStatus(true);
-    }, IMMEDIATE_POLL_DELAY_MS);
-  }, [fetchSessionStatus]);
+  }, [triggerImmediatePoll]);
 
   // Update the ref for external access
   React.useEffect(() => {
