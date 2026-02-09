@@ -63,7 +63,6 @@ export function BrowserVoiceButton() {
         stopVoice,
         conversationMode,
         toggleConversationMode,
-        prepareVoice,
         isMobile,
         voiceProvider,
     } = useBrowserVoice();
