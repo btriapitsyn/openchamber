@@ -29,7 +29,7 @@ fn next_window_label() -> String {
 
 /// Evaluate a script in all open webview windows.
 fn eval_in_all_windows<R: tauri::Runtime>(app: &tauri::AppHandle<R>, script: &str) {
-    for (_label, window) in app.webview_windows() {
+    for window in app.webview_windows().values() {
         let _ = window.eval(script);
     }
 }
@@ -944,6 +944,9 @@ struct SidecarState {
 struct DesktopUiInjectionState {
     script: Mutex<Option<String>>,
     local_origin: Mutex<Option<String>>,
+    /// Host URLs that were probed unreachable (e.g. at startup).
+    /// `open_new_window` checks this to avoid opening windows at dead hosts.
+    unreachable_hosts: Mutex<HashSet<String>>,
 }
 
 /// Tracks the set of currently-focused window labels.
@@ -1991,9 +1994,22 @@ fn open_new_window(app: &tauri::AppHandle) {
     let cfg = read_desktop_hosts_config_from_disk();
     if let Some(default_id) = cfg.default_host_id {
         if default_id == LOCAL_HOST_ID {
-            target_url = local_ui_url;
+            target_url = local_ui_url.clone();
         } else if let Some(host) = cfg.hosts.into_iter().find(|h| h.id == default_id) {
             target_url = host.url;
+        }
+    }
+
+    // If this host was previously probed unreachable (e.g. at startup), fall back to local.
+    if target_url != local_ui_url {
+        let is_cached_unreachable = app
+            .try_state::<DesktopUiInjectionState>()
+            .map(|state| state.unreachable_hosts.lock().expect("unreachable hosts mutex").contains(&target_url))
+            .unwrap_or(false);
+
+        if is_cached_unreachable {
+            log::info!("[desktop] new window: default host ({}) cached as unreachable, using local", target_url);
+            target_url = local_ui_url;
         }
     }
 
@@ -2275,6 +2291,7 @@ fn main() {
                 }
 
                 if initial_url != local_ui_url {
+                    let failed_url = initial_url.clone();
                     match desktop_host_probe(initial_url.clone()).await {
                         Ok(probe) if probe.status != "unreachable" => {}
                         Ok(_) => {
@@ -2284,6 +2301,10 @@ fn main() {
                                 local_ui_url
                             );
                             initial_url = local_ui_url.clone();
+                            // Cache the failure so open_new_window skips this host.
+                            if let Some(state) = handle.try_state::<DesktopUiInjectionState>() {
+                                state.unreachable_hosts.lock().expect("unreachable hosts mutex").insert(failed_url);
+                            }
                         }
                         Err(err) => {
                             log::warn!(
@@ -2293,6 +2314,9 @@ fn main() {
                                 local_ui_url
                             );
                             initial_url = local_ui_url.clone();
+                            if let Some(state) = handle.try_state::<DesktopUiInjectionState>() {
+                                state.unreachable_hosts.lock().expect("unreachable hosts mutex").insert(failed_url);
+                            }
                         }
                     }
                 }
