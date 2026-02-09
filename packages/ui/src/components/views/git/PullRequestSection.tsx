@@ -1468,52 +1468,7 @@ export const PullRequestSection: React.FC<{
                       {branch} → {baseBranch}
                     </div>
                   </div>
-                  {hasMultipleRemotes ? (
-                    <div className="flex items-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-r-none border-r-0"
-                        asChild
-                      >
-                        <a href={repoUrl ?? '#'} target="_blank" rel="noopener noreferrer">
-                          <RiExternalLinkLine className="size-4" />
-                          {selectedRemote?.name ?? 'Repo'}
-                        </a>
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-l-none px-1.5"
-                          >
-                            <RiArrowDownSLine className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-[200px]">
-                          {remotes.map((remote) => (
-                            <DropdownMenuItem
-                              key={remote.name}
-                              onSelect={() => handleRemoteChange(remote)}
-                            >
-                              <div className="flex flex-col">
-                                <span className="typography-ui-label text-foreground">
-                                  {remote.name}
-                                  {remote.name === selectedRemote?.name && (
-                                    <span className="ml-2 text-primary">✓</span>
-                                  )}
-                                </span>
-                                <span className="typography-meta text-muted-foreground truncate">
-                                  {remote.pushUrl}
-                                </span>
-                              </div>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  ) : repoUrl ? (
+                  {repoUrl ? (
                     <Button variant="outline" size="sm" asChild>
                       <a href={repoUrl} target="_blank" rel="noopener noreferrer">
                         <RiExternalLinkLine className="size-4" />
