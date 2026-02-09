@@ -32,6 +32,7 @@ interface HistorySectionProps {
   commitFilesMap: Map<string, CommitFileEntry[]>;
   loadingCommitHashes: Set<string>;
   onCopyHash: (hash: string) => void;
+  showHeader?: boolean;
 }
 
 export const HistorySection: React.FC<HistorySectionProps> = ({
@@ -44,11 +45,46 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
   commitFilesMap,
   loadingCommitHashes,
   onCopyHash,
+  showHeader = true,
 }) => {
   const [isOpen, setIsOpen] = React.useState(true);
 
   if (!log) {
     return null;
+  }
+
+  const content = (
+    <ScrollableOverlay outerClassName="min-h-0 max-h-[50vh]" className="w-full">
+      {log.all.length === 0 ? (
+        <div className="flex h-full items-center justify-center p-4">
+          <p className="typography-ui-label text-muted-foreground">
+            No commits found
+          </p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border/60">
+          {log.all.map((entry) => (
+            <HistoryCommitRow
+              key={entry.hash}
+              entry={entry}
+              isExpanded={expandedCommitHashes.has(entry.hash)}
+              onToggle={() => onToggleCommit(entry.hash)}
+              files={commitFilesMap.get(entry.hash) ?? []}
+              isLoadingFiles={loadingCommitHashes.has(entry.hash)}
+              onCopyHash={onCopyHash}
+            />
+          ))}
+        </ul>
+      )}
+    </ScrollableOverlay>
+  );
+
+  if (!showHeader) {
+    return (
+      <section className="rounded-xl border border-border/60 bg-background/70 overflow-hidden">
+        {content}
+      </section>
+    );
   }
 
   return (
@@ -95,31 +131,7 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
         </div>
       </CollapsibleTrigger>
 
-      <CollapsibleContent>
-        <ScrollableOverlay outerClassName="min-h-0 max-h-[50vh]" className="w-full">
-          {log.all.length === 0 ? (
-            <div className="flex h-full items-center justify-center p-4">
-              <p className="typography-ui-label text-muted-foreground">
-                No commits found
-              </p>
-            </div>
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {log.all.map((entry) => (
-                <HistoryCommitRow
-                  key={entry.hash}
-                  entry={entry}
-                  isExpanded={expandedCommitHashes.has(entry.hash)}
-                  onToggle={() => onToggleCommit(entry.hash)}
-                  files={commitFilesMap.get(entry.hash) ?? []}
-                  isLoadingFiles={loadingCommitHashes.has(entry.hash)}
-                  onCopyHash={onCopyHash}
-                />
-              ))}
-            </ul>
-          )}
-        </ScrollableOverlay>
-      </CollapsibleContent>
+      <CollapsibleContent>{content}</CollapsibleContent>
     </Collapsible>
   );
 };

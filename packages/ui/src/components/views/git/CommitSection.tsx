@@ -33,6 +33,7 @@ interface CommitSectionProps {
   isBusy: boolean;
   gitmojiEnabled: boolean;
   onOpenGitmojiPicker: () => void;
+  variant?: 'framed' | 'plain';
 }
 
 export const CommitSection: React.FC<CommitSectionProps> = ({
@@ -50,18 +51,32 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
   isBusy,
   gitmojiEnabled,
   onOpenGitmojiPicker,
+  variant = 'framed',
 }) => {
   const hasSelectedFiles = selectedCount > 0;
   const canCommit = commitMessage.trim() && hasSelectedFiles && commitAction === null;
   const { isMobile } = useDeviceInfo();
 
+  const containerClassName =
+    variant === 'framed'
+      ? 'rounded-xl border border-border/60 bg-background/70 overflow-hidden'
+      : 'border-0 bg-transparent rounded-none';
+  const headerClassName =
+    variant === 'framed'
+      ? 'flex w-full items-center justify-between px-3 py-2'
+      : 'flex w-full items-center justify-between px-4 py-3 border-b border-border/40';
+  const contentClassName =
+    variant === 'framed'
+      ? 'flex flex-col gap-3 p-3 pt-0'
+      : 'flex flex-col gap-3 px-4 py-3';
+
   return (
     <Collapsible
-      open={hasSelectedFiles}
-      className="rounded-xl border border-border/60 bg-background/70 overflow-hidden"
+      open={variant === 'plain' ? true : hasSelectedFiles}
+      className={containerClassName}
       data-keyboard-avoid="true"
     >
-      <div className="flex w-full items-center justify-between px-3 py-2">
+      <div className={headerClassName}>
         <h3 className="typography-ui-header font-semibold text-foreground">Commit</h3>
         <span className="typography-meta text-muted-foreground">
           {hasSelectedFiles
@@ -71,7 +86,13 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
       </div>
 
       <CollapsibleContent>
-        <div className="flex flex-col gap-3 p-3 pt-0">
+        <div className={contentClassName}>
+          {!hasSelectedFiles ? (
+            <p className="typography-meta text-muted-foreground">
+              Select files in Changes to enable commit.
+            </p>
+          ) : null}
+
           <AIHighlightsBox
             highlights={generatedHighlights}
             onInsert={onInsertHighlights}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 interface WorktreeBranchDisplayProps {
   currentBranch: string | null | undefined;
   onRename?: (oldName: string, newName: string) => Promise<void>;
+  showEditButton?: boolean;
 }
 
 const sanitizeBranchNameInput = (value: string): string => {
@@ -23,6 +24,7 @@ const sanitizeBranchNameInput = (value: string): string => {
 export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
   currentBranch,
   onRename,
+  showEditButton = true,
 }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editBranchName, setEditBranchName] = React.useState(currentBranch || '');
@@ -117,24 +119,24 @@ export const WorktreeBranchDisplay: React.FC<WorktreeBranchDisplayProps> = ({
   }
 
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-1.5 px-2 py-1 h-8">
-        <RiGitBranchLine className="size-4 text-primary" />
-        <span className="max-w-[140px] truncate typography-ui-label font-normal text-foreground">
+    <div className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1 h-8">
+      <RiGitBranchLine className="size-4 text-primary shrink-0" />
+      <div className="inline-flex min-w-0 max-w-full items-center gap-1">
+        <span className="truncate typography-ui-label font-normal text-foreground">
           {currentBranch || 'Detached HEAD'}
         </span>
+        {showEditButton && onRename && currentBranch && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 shrink-0"
+            onClick={handleStartEdit}
+            title="Rename branch"
+          >
+            <RiEditLine className="size-4" />
+          </Button>
+        )}
       </div>
-      {onRename && currentBranch && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={handleStartEdit}
-          title="Rename branch"
-        >
-          <RiEditLine className="size-4" />
-        </Button>
-      )}
     </div>
   );
 };

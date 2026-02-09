@@ -61,7 +61,7 @@ export const StashDialog: React.FC<StashDialogProps> = ({
             <DialogTitle>Uncommitted Changes</DialogTitle>
           </div>
           <DialogDescription>
-            You have uncommitted changes that would be overwritten by {operation}. 
+            You have uncommitted changes that would be overwritten by this {operation}.
             Would you like to stash them temporarily?
           </DialogDescription>
         </DialogHeader>
@@ -72,7 +72,11 @@ export const StashDialog: React.FC<StashDialogProps> = ({
           </p>
           <ol className="list-decimal list-inside space-y-1 typography-meta text-foreground">
             <li>Stash your uncommitted changes</li>
-            <li>{operationLabel} <span className="font-mono text-primary">{targetBranch}</span></li>
+            <li>
+              {operation === 'merge' ? 'Merge' : 'Rebase'}{' '}
+              {operation === 'merge' ? 'with' : 'onto'}{' '}
+              <span className="font-mono text-primary">{targetBranch}</span>
+            </li>
             {restoreAfter && <li>Restore your stashed changes</li>}
           </ol>
         </div>
@@ -88,7 +92,7 @@ export const StashDialog: React.FC<StashDialogProps> = ({
             className="typography-ui-label text-foreground cursor-pointer select-none"
             onClick={() => !isProcessing && setRestoreAfter(!restoreAfter)}
           >
-            Restore changes after {operation}
+            Restore changes after the {operation}
           </span>
         </div>
 

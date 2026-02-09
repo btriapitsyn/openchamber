@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FileDiff as PierreFileDiff, type FileContents, type FileDiffOptions, type SelectedLineRange } from '@pierre/diffs';
-import { RiMoreLine, RiDeleteBinLine, RiEditLine } from '@remixicon/react';
+import { FileDiff as PierreFileDiff, type FileContents, type FileDiffOptions, type SelectedLineRange, type DiffLineAnnotation, type AnnotationSide } from '@pierre/diffs';
+import { InlineCommentCard, InlineCommentInput } from '@/components/comments';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -10,20 +10,11 @@ import { ensurePierreThemeRegistered, getResolvedShikiTheme } from '@/lib/shiki/
 import { getDefaultTheme } from '@/lib/theme/themes';
 
 import { toast } from '@/components/ui';
-import { Textarea } from '@/components/ui/textarea';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
-import { cn, getModifierLabel } from '@/lib/utils';
-import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
+import { cn } from '@/lib/utils';
+import { useInlineCommentDraftStore, type InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 
 
 interface PierreDiffViewerProps {
@@ -143,218 +134,129 @@ const isSameSelection = (left: SelectedLineRange | null, right: SelectedLineRang
   return left.start === right.start && left.end === right.end && left.side === right.side;
 };
 
+type AnnotationData = 
+  | { type: 'saved' | 'edit'; draft: InlineCommentDraft }
+  | { type: 'new'; selection: SelectedLineRange };
+
 export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   original,
   modified,
   language,
-  fileName = 'file',
+  fileName,
   renderSideBySide,
-  wrapLines = false,
+  wrapLines,
   layout = 'fill',
 }) => {
+  const themeContext = useOptionalThemeSystem();
+  
+  const isDark = themeContext?.themeMode === 'dark';
+  const lightTheme = themeContext?.availableThemes.find(t => t.metadata.id === themeContext.lightThemeId) ?? getDefaultTheme(false);
+  const darkTheme = themeContext?.availableThemes.find(t => t.metadata.id === themeContext.darkThemeId) ?? getDefaultTheme(true);
+
+  useUIStore();
   const { isMobile } = useDeviceInfo();
-  const { inputBarOffset, isKeyboardOpen } = useUIStore();
+  
+  const addDraft = useInlineCommentDraftStore((state) => state.addDraft);
+  const updateDraft = useInlineCommentDraftStore((state) => state.updateDraft);
+  const removeDraft = useInlineCommentDraftStore((state) => state.removeDraft);
+  const allDrafts = useInlineCommentDraftStore((state) => state.drafts);
+  const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const newSessionDraftOpen = useSessionStore((state) => state.newSessionDraft?.open);
 
-  const themeSystem = useOptionalThemeSystem();
-  const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
-
-  const fallbackLight = getDefaultTheme(false);
-  const fallbackDark = getDefaultTheme(true);
-
-  const lightThemeId = themeSystem?.lightThemeId ?? fallbackLight.metadata.id;
-  const darkThemeId = themeSystem?.darkThemeId ?? fallbackDark.metadata.id;
-
-  const lightTheme =
-    themeSystem?.availableThemes.find((theme) => theme.metadata.id === lightThemeId) ??
-    fallbackLight;
-  const darkTheme =
-    themeSystem?.availableThemes.find((theme) => theme.metadata.id === darkThemeId) ??
-    fallbackDark;
-
-  const [selection, setSelection] = useState<SelectedLineRange | null>(null);
-  const [commentText, setCommentText] = useState('');
-  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
-  const [pendingFocus, setPendingFocus] = useState(false);
-  const commentContainerRef = useRef<HTMLDivElement>(null);
-  const commentInputRef = useRef<HTMLTextAreaElement | null>(null);
-
-  // Refs to prevent infinite loops when syncing selection with diff instance
-  const selectionRef = useRef<SelectedLineRange | null>(null);
-  const isApplyingSelectionRef = useRef(false);
-  const lastAppliedSelectionRef = useRef<SelectedLineRange | null>(null);
-
-  // Keep selectionRef in sync with state
-  useEffect(() => {
-    selectionRef.current = selection;
-  }, [selection]);
-
-  // Calculate initial center and width synchronously to avoid flicker
-  const getMainContentMetrics = useCallback(() => {
-    if (isMobile) return { center: '50%', width: '100vw' };
-    const mainContent = document.querySelector('main.flex-1');
-    if (mainContent) {
-      const rect = mainContent.getBoundingClientRect();
-      return {
-        center: `${rect.left + rect.width / 2}px`,
-        width: `${rect.width}px`
-      };
-    }
-    return { center: '50%', width: '100vw' };
-  }, [isMobile]);
-
-  const [mainContentMetrics, setMainContentMetrics] = useState(getMainContentMetrics);
-  const mainContentCenter = mainContentMetrics.center;
-  const mainContentWidth = mainContentMetrics.width;
-
-  const currentSessionId = useSessionStore(state => state.currentSessionId);
-  const newSessionDraftOpen = useSessionStore(state => state.newSessionDraft?.open);
-
-  // Inline comment drafts
-  const addDraft = useInlineCommentDraftStore(state => state.addDraft);
-  const updateDraft = useInlineCommentDraftStore(state => state.updateDraft);
-  const removeDraft = useInlineCommentDraftStore(state => state.removeDraft);
-  const allDrafts = useInlineCommentDraftStore(state => state.drafts);
-
-  // Filter drafts locally to avoid returning new array refs from selector
-  const drafts = useMemo(() => {
-    const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : '');
-    if (!sessionKey) return [];
-    return (allDrafts[sessionKey] ?? []).filter(
-      d => d.source === 'diff' && d.fileLabel === fileName
-    );
-  }, [currentSessionId, newSessionDraftOpen, fileName, allDrafts]);
-
-  const { currentTheme } = useThemeSystem();
-
-  // Get session key for drafts
   const getSessionKey = useCallback(() => {
     return currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
   }, [currentSessionId, newSessionDraftOpen]);
 
-  // Update main content metrics on resize
-  useEffect(() => {
-    if (isMobile) return;
+  const [selection, setSelection] = useState<SelectedLineRange | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
 
-    const updateMetrics = () => {
-      setMainContentMetrics(getMainContentMetrics());
-    };
+  // Use a ref to track if we're currently applying a selection programmatically
+  // to avoid loop with onLineSelected callback
+  const isApplyingSelectionRef = useRef(false);
+  const lastAppliedSelectionRef = useRef<SelectedLineRange | null>(null);
 
-    window.addEventListener('resize', updateMetrics);
-    return () => window.removeEventListener('resize', updateMetrics);
-  }, [isMobile, getMainContentMetrics]);
-
-  // Stable handler that uses refs to avoid recreating on selection changes
   const handleSelectionChange = useCallback((range: SelectedLineRange | null) => {
     // Ignore callbacks while we're programmatically applying selection
     if (isApplyingSelectionRef.current) {
       return;
     }
-
-    const lastApplied = lastAppliedSelectionRef.current;
-    if (isSameSelection(range, lastApplied)) {
+    
+    // Mobile tap-to-extend: if selection exists and new tap is on same side, extend range
+    if (isMobile && selection && range && range.side === selection.side) {
+      const start = Math.min(selection.start, range.start);
+      const end = Math.max(selection.end, range.end);
+      setSelection({ ...range, start, end });
       return;
     }
-
-    const currentSelection = selectionRef.current;
-    if (isSameSelection(range, currentSelection)) {
-      return;
-    }
-
-    // On mobile: implement "tap to extend" behavior
-    // If user taps a new single line while we have an existing selection, extend the range
-    if (isMobile && range && currentSelection && range.start === range.end) {
-      const tappedLine = range.start;
-      const existingStart = currentSelection.start;
-      const existingEnd = currentSelection.end;
-
-      // Extend the selection to include the tapped line
-      const newStart = Math.min(existingStart, existingEnd, tappedLine);
-      const newEnd = Math.max(existingStart, existingEnd, tappedLine);
-
-      // Only extend if tapping outside current selection
-      if (tappedLine < existingStart || tappedLine > existingEnd) {
-        setSelection({
-          ...range,
-          start: newStart,
-          end: newEnd,
-        });
-        return;
-      }
-    }
-
+    
     setSelection(range);
-    if (!range) {
-      setCommentText('');
-      setEditingDraftId(null);
-      setPendingFocus(false);
-    }
-  }, [isMobile]);
-
-  // Dismiss selection when clicking outside line numbers (desktop behavior)
-  useEffect(() => {
-    if (!selection) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-
-      // Check if click is inside the comment UI portal
-      if (commentContainerRef.current?.contains(target)) return;
-
-      // Check if click is inside toast (sonner)
-      if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
-
-      // Check if click is on a line number (inside shadow DOM)
-      const path = e.composedPath();
-      const isLineNumber = path.some((el) => {
-        if (el instanceof HTMLElement) {
-          return el.hasAttribute('data-line-number') || el.closest?.('[data-line-number]');
-        }
-        return false;
-      });
-
-      if (!isLineNumber) {
-        setSelection(null);
+    
+    // Clear editing state when selection changes user-driven
+    if (range) {
+      // Don't clear if we're just updating the selection for the same draft?
+      // For now, simple behavior: new selection = new comment flow
+      if (!editingDraftId) {
         setCommentText('');
-        setEditingDraftId(null);
-        setPendingFocus(false);
       }
-    };
-
-    // Use timeout to avoid immediate dismissal from the same click that selected
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, [selection]);
+    }
+  }, [editingDraftId, isMobile, selection]);
 
   const handleCancelComment = useCallback(() => {
     setCommentText('');
     setSelection(null);
     setEditingDraftId(null);
-    setPendingFocus(false);
   }, []);
 
-  useEffect(() => {
-    if (!pendingFocus || !selection || isMobile) return;
-    if (typeof window === 'undefined') return;
-    const frame = window.requestAnimationFrame(() => {
-      const input = commentInputRef.current;
-      input?.focus();
-      if (input) {
-        const length = input.value.length;
-        input.setSelectionRange(length, length);
-      }
-      setPendingFocus(false);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [pendingFocus, selection, isMobile]);
+  // Helper to generate consistent annotation IDs
+  const getAnnotationId = useCallback((meta: AnnotationData): string => {
+    if (meta.type === 'saved' || meta.type === 'edit') {
+      return `draft-${meta.draft.id}`;
+    } else if (meta.type === 'new') {
+      return 'new-comment-input';
+    }
+    return '';
+  }, []);
 
-  const handleSaveComment = useCallback(() => {
-    if (!selection || !commentText.trim()) return;
+  // Robust target resolver that checks shadow root, light DOM, and container
+  const resolveAnnotationTarget = useCallback((id: string): HTMLElement | null => {
+    if (!id || !diffContainerRef.current) return null;
+    
+    const diffsContainer = diffContainerRef.current.querySelector('diffs-container');
+    if (!diffsContainer) return null;
+    
+    // Try shadow root first
+    const shadowTarget = diffsContainer.shadowRoot?.querySelector(`[data-annotation-id="${id}"]`);
+    if (shadowTarget) return shadowTarget as HTMLElement;
+    
+    // Try light DOM (slotted content)
+    const lightTarget = diffsContainer.querySelector(`[data-annotation-id="${id}"]`);
+    if (lightTarget) return lightTarget as HTMLElement;
+    
+    // Try container directly
+    const containerTarget = diffContainerRef.current.querySelector(`[data-annotation-id="${id}"]`);
+    if (containerTarget) return containerTarget as HTMLElement;
+    
+    return null;
+  }, []);
+
+  const renderAnnotation = useCallback((annotation: DiffLineAnnotation<AnnotationData>) => {
+    const div = document.createElement('div');
+    // Ensure full width and proper spacing
+    div.className = 'w-full my-2';
+    
+    const meta = (annotation as DiffLineAnnotation<AnnotationData>).metadata;
+    const id = getAnnotationId(meta);
+    
+    div.dataset.annotationId = id;
+    return div;
+  }, [getAnnotationId]);
+
+
+  const handleSaveComment = useCallback((textToSave: string, rangeOverride?: SelectedLineRange) => {
+    // Use provided range override or fall back to current selection
+    const targetRange = rangeOverride ?? selection;
+    if (!targetRange || !textToSave.trim()) return;
 
     const sessionKey = getSessionKey();
     if (!sessionKey) {
@@ -362,40 +264,46 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       return;
     }
 
-    const code = extractSelectedCode(original, modified, selection);
-    const side = selection.side === 'deletions' ? 'original' : 'modified';
+    const fileLabel = fileName ? fileName.split('/').pop() || 'unknown' : 'unknown';
+    // Pierre selection range: { start, end, side }
+    // Store needs { startLine, endLine, side: 'original'|'modified' }
+    // Pierre side: 'additions' (right) | 'deletions' (left)
+    const storeSide = targetRange.side === 'deletions' ? 'original' : 'modified';
+
+    // Use deterministic code extraction instead of instance.getSelectedText()
+    const selectedText = extractSelectedCode(original, modified, targetRange);
 
     if (editingDraftId) {
       updateDraft(sessionKey, editingDraftId, {
-        fileLabel: fileName,
-        startLine: selection.start,
-        endLine: selection.end,
-        side,
-        code,
-        language,
-        text: commentText.trim(),
+        fileLabel,
+        startLine: targetRange.start,
+        endLine: targetRange.end,
+        side: storeSide,
+        code: selectedText,
+        language: language,
+        text: textToSave.trim(),
       });
     } else {
       addDraft({
         sessionKey,
         source: 'diff',
-        fileLabel: fileName,
-        startLine: selection.start,
-        endLine: selection.end,
-        side,
-        code,
-        language,
-        text: commentText.trim(),
+        fileLabel,
+        startLine: targetRange.start,
+        endLine: targetRange.end,
+        side: storeSide,
+        code: selectedText,
+        language: language,
+        text: textToSave.trim(),
       });
     }
 
-    // Clear selection and comment text
     setCommentText('');
     setSelection(null);
     setEditingDraftId(null);
 
     toast.success(editingDraftId ? 'Comment updated' : 'Comment saved');
-  }, [selection, commentText, original, modified, fileName, language, addDraft, updateDraft, getSessionKey, editingDraftId]);
+  }, [selection, fileName, language, original, modified, addDraft, updateDraft, getSessionKey, editingDraftId]);
+
 
   const applySelection = useCallback((range: SelectedLineRange) => {
     setSelection(range);
@@ -420,6 +328,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const diffRootRef = useRef<HTMLDivElement | null>(null);
   const diffContainerRef = useRef<HTMLDivElement | null>(null);
   const diffInstanceRef = useRef<PierreFileDiff<unknown> | null>(null);
+  const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
   const workerPool = useWorkerPool();
 
   const lightResolvedTheme = useMemo(() => getResolvedShikiTheme(lightTheme), [lightTheme]);
@@ -499,6 +408,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     }
   }, [darkResolvedTheme, diffThemeKey, isDark, lightResolvedTheme]);
 
+
   const options = useMemo(() => ({
     theme: {
       dark: darkTheme.metadata.id,
@@ -516,7 +426,51 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     enableHoverUtility: false,
     onLineSelected: handleSelectionChange,
     unsafeCSS: WEBKIT_SCROLL_FIX_CSS,
-  }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id, renderSideBySide, wrapLines, handleSelectionChange]);
+    renderAnnotation,
+  }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id, renderSideBySide, wrapLines, handleSelectionChange, renderAnnotation]);
+
+
+  const lineAnnotations = useMemo(() => {
+    const sessionKey = getSessionKey();
+    if (!sessionKey) return [];
+
+    const sessionDrafts = allDrafts[sessionKey] ?? [];
+    // Match file label logic - use basename
+    const fileLabel = fileName ? fileName.split('/').pop() || 'unknown' : 'unknown';
+    const fileDrafts = sessionDrafts.filter((d) => d.source === 'diff' && d.fileLabel === fileLabel);
+
+    const anns: DiffLineAnnotation<AnnotationData>[] = [];
+
+    fileDrafts.forEach((d) => {
+      // Force cast to AnnotationSide to satisfy compiler
+      const side = (d.side === 'original' ? 'deletions' : 'additions') as AnnotationSide;
+      if (d.id === editingDraftId) {
+        // Always show edit input (even on mobile)
+        anns.push({
+          lineNumber: d.endLine,
+          side: side,
+          metadata: { type: 'edit', draft: d },
+        });
+      } else {
+        // Show saved cards on all devices
+        anns.push({
+          lineNumber: d.endLine,
+          side: side,
+          metadata: { type: 'saved', draft: d },
+        });
+      }
+    });
+
+    if (selection && !editingDraftId) {
+      anns.push({
+        lineNumber: selection.end,
+        side: (selection.side ?? 'additions') as AnnotationSide,
+        metadata: { type: 'new', selection },
+      });
+    }
+
+    return anns;
+  }, [allDrafts, getSessionKey, fileName, editingDraftId, selection]);
 
   // Imperative render (like upstream OpenCode): avoids `parseDiffFromFile` on main thread.
   useEffect(() => {
@@ -536,13 +490,13 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     lastAppliedSelectionRef.current = null;
 
     const oldFile: FileContents = {
-      name: fileName,
+      name: fileName || '',
       contents: original,
       lang: language as FileContents['lang'],
       cacheKey: `old:${diffThemeKey}:${fileName}:${makeContentCacheKey(original)}`,
     };
     const newFile: FileContents = {
-      name: fileName,
+      name: fileName || '',
       contents: modified,
       lang: language as FileContents['lang'],
       cacheKey: `new:${diffThemeKey}:${fileName}:${makeContentCacheKey(modified)}`,
@@ -551,9 +505,12 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     instance.render({
       oldFile,
       newFile,
-      lineAnnotations: [],
+      lineAnnotations,
       containerWrapper: container,
     });
+
+    // Force update to render portals into new DOM elements created by Pierre
+    requestAnimationFrame(() => forceUpdate());
 
     return () => {
       instance.cleanUp();
@@ -562,7 +519,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       }
       container.innerHTML = '';
     };
-  }, [diffThemeKey, fileName, language, modified, options, original, workerPool]);
+  }, [diffThemeKey, fileName, language, modified, options, original, workerPool, lineAnnotations]);
 
   useEffect(() => {
     const instance = diffInstanceRef.current;
@@ -591,190 +548,131 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     }
   }, [selection]);
 
+  // MutationObserver to trigger re-renders when annotation DOM nodes are added/removed
+  useEffect(() => {
+    const container = diffContainerRef.current;
+    if (!container) return;
+
+    let observer: MutationObserver | null = null;
+    let rafId: number | null = null;
+
+    const setupObserver = () => {
+      const diffsContainer = container.querySelector('diffs-container');
+      if (!diffsContainer) return;
+
+      // Watch for annotation nodes being added/removed
+      observer = new MutationObserver((mutations) => {
+        const hasAnnotationChanges = mutations.some(m => 
+          Array.from(m.addedNodes).some(n => 
+            n instanceof HTMLElement && n.hasAttribute('data-annotation-id')
+          ) ||
+          Array.from(m.removedNodes).some(n => 
+            n instanceof HTMLElement && n.hasAttribute('data-annotation-id')
+          )
+        );
+
+        if (hasAnnotationChanges) {
+          // Debounce with RAF to batch multiple mutations
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame(() => {
+            forceUpdate();
+            rafId = null;
+          });
+        }
+      });
+
+      // Observe both shadow root and light DOM
+      if (diffsContainer.shadowRoot) {
+        observer.observe(diffsContainer.shadowRoot, { childList: true, subtree: true });
+      }
+      observer.observe(diffsContainer, { childList: true, subtree: true });
+    };
+
+    // Delay setup to allow Pierre to initialize
+    const timeoutId = setTimeout(setupObserver, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (rafId) cancelAnimationFrame(rafId);
+      observer?.disconnect();
+    };
+  }, [diffThemeKey, fileName]); // Re-setup when diff changes
+
   if (typeof window === 'undefined') {
     return null;
   }
 
-  // Extracted Comment Interface Content for reuse in Portal or In-Flow
-  const renderCommentContent = () => {
-    if (!selection) return null;
-    return (
-      <div
-        className="flex flex-col items-center gap-2 px-4"
-        style={{ width: `min(calc(${mainContentWidth} - 2rem), 42rem)` }}
-      >
-        <div
-          className="w-full rounded-xl flex flex-col relative shadow-lg border border-border/80 focus-within:border-primary/70 focus-within:ring-1 focus-within:ring-primary/50"
-          style={{
-            backgroundColor: themeSystem?.currentTheme?.colors?.surface?.subtle,
+  // Render portals for inline comments with robust target resolution
+  const portals = lineAnnotations.map((ann) => {
+    const meta = (ann as DiffLineAnnotation<AnnotationData>).metadata;
+    const id = getAnnotationId(meta);
+    
+    // Use robust resolver that checks shadow, light DOM, and container
+    const target = resolveAnnotationTarget(id);
+    
+    // If target not found, skip rendering (will retry on next update cycle)
+    if (!target) {
+      return null;
+    }
+
+    if (meta.type === 'saved') {
+      return createPortal(
+        <InlineCommentCard
+          key={id}
+          draft={meta.draft}
+          onEdit={() => {
+            const side = meta.draft.side === 'original' ? 'deletions' : 'additions';
+            applySelection({
+              start: meta.draft.startLine,
+              end: meta.draft.endLine,
+              side,
+            });
+            setCommentText(meta.draft.text);
+            setEditingDraftId(meta.draft.id);
           }}
-        >
-          {/* Textarea - auto-grows from 1 line to max 5 lines */}
-          <Textarea
-            ref={commentInputRef}
-            value={commentText}
-            onChange={(e) => {
-              setCommentText(e.target.value);
-              // Auto-resize textarea
-              const textarea = e.target;
-              textarea.style.height = 'auto';
-              const lineHeight = 20; // approx line height
-              const maxHeight = lineHeight * 5 + 8; // 5 lines + padding
-              textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-            }}
-            placeholder="Type your comment..."
-            outerClassName="focus-within:ring-0"
-            className="min-h-[28px] max-h-[108px] resize-none border-0 px-3 pt-2 pb-1 rounded-none appearance-none hover:border-transparent bg-transparent dark:bg-transparent overflow-y-auto focus:ring-0 focus:shadow-none"
-            autoFocus={!isMobile}
-            rows={1}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                e.preventDefault();
-                handleSaveComment();
-              }
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                handleCancelComment();
-              }
-            }}
-          />
-          {/* Footer with Cancel and Comment buttons */}
-          <div className="px-2.5 py-1 flex items-center justify-between gap-x-2">
-            <span className="text-xs text-muted-foreground">
-              {fileName.split('/').pop()}:{selection.start}-{selection.end}
-            </span>
-            <div className="flex items-center gap-x-2">
-              {!isMobile && (
-                <span className="text-xs text-muted-foreground">
-                  {getModifierLabel()}+⏎
-                </span>
-              )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleCancelComment}
-                className="h-7 px-2 text-xs"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="default"
-                size="sm"
-                onClick={handleSaveComment}
-                disabled={!commentText.trim()}
-                className="h-7 px-2 text-xs"
-                style={{
-                  backgroundColor: currentTheme?.colors?.status?.success,
-                  color: currentTheme?.colors?.status?.successForeground,
-                }}
-              >
-                {editingDraftId ? 'Save' : 'Comment'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+          onDelete={() => removeDraft(meta.draft.sessionKey, meta.draft.id)}
+        />,
+        target,
+        id
+      );
+    } else if (meta.type === 'edit') {
+      return createPortal(
+        <InlineCommentInput
+          key={id}
+          initialText={commentText}
+          fileLabel={(fileName?.split('/').pop()) ?? ''}
+          lineRange={{
+            start: meta.draft.startLine,
+            end: meta.draft.endLine,
+            side: meta.draft.side === 'original' ? 'deletions' : 'additions'
+          }}
+          isEditing={true}
+          onSave={handleSaveComment}
+          onCancel={handleCancelComment}
+        />,
+        target,
+        id
+      );
+    } else {
+      return createPortal(
+        <InlineCommentInput
+          key={id}
+          initialText={commentText}
+          fileLabel={(fileName?.split('/').pop()) ?? ''}
+          lineRange={selection || undefined}
+          isEditing={false}
+          onSave={handleSaveComment}
+          onCancel={handleCancelComment}
+        />,
+        target,
+        id
+      );
+    }
+  });
 
-  // Render saved comment cards
-  const renderSavedComments = () => {
-    if (drafts.length === 0) return null;
-
-    return (
-      <div className="absolute inset-0 pointer-events-none z-40">
-        {drafts.map(draft => {
-          // Approximate line placement; shadow DOM prevents direct line querying.
-          const lineHeight = 24;
-          const top = (draft.startLine - 1) * lineHeight;
-
-          return (
-            <div
-              key={draft.id}
-              className="absolute pointer-events-auto"
-              style={{
-                top: `${top}px`,
-                right: '8px',
-                maxWidth: '300px',
-              }}
-            >
-              <div
-                className="rounded-lg border p-2 shadow-md"
-                style={{
-                  backgroundColor: currentTheme?.colors?.surface?.elevated,
-                  borderColor: currentTheme?.colors?.interactive?.border,
-                }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-medium text-muted-foreground mb-1">
-                      {draft.fileLabel}:{draft.startLine}-{draft.endLine}
-                      {draft.side && ` (${draft.side})`}
-                    </div>
-                    <div className="text-sm line-clamp-3">{draft.text}</div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="flex-shrink-0 p-1 rounded hover:bg-[var(--interactive-hover)] text-muted-foreground"
-                      >
-                        <RiMoreLine className="h-4 w-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      onCloseAutoFocus={(event) => event.preventDefault()}
-                    >
-                      <DropdownMenuItem
-                        onClick={() => {
-                          const selectionSide = draft.side === 'original' ? 'deletions' : 'additions';
-                          applySelection({
-                            start: draft.startLine,
-                            end: draft.endLine,
-                            side: selectionSide,
-                          });
-                          setCommentText(draft.text);
-                          setEditingDraftId(draft.id);
-                          setPendingFocus(true);
-                        }}
-                      >
-                        <RiEditLine className="h-4 w-4 mr-2" />
-                        Edit comment
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => removeDraft(draft.sessionKey, draft.id)}
-                        className="text-destructive"
-                      >
-                        <RiDeleteBinLine className="h-4 w-4 mr-2" />
-                        Delete comment
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-
-  const commentContent = renderCommentContent();
-
-  // If we're in the main diff view ('fill' layout), render In-Flow (like ChatInput).
-  // If we're in an inline diff ('inline' layout), render via Portal (fixed over content).
   if (layout === 'fill') {
     return (
-      <div
-        className={cn("flex flex-col relative", "size-full")}
-        style={{
-          // Apply keyboard padding to the main container, just like ChatContainer
-          paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : undefined
-        }}
-      >
+      <div className={cn("flex flex-col relative", "size-full")}>
         <div className="flex-1 relative min-h-0">
           <ScrollableOverlay
             outerClassName="pierre-diff-wrapper size-full"
@@ -783,72 +681,23 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
           >
             <div ref={diffRootRef} className="size-full relative">
               <div ref={diffContainerRef} className="size-full" />
-              {renderSavedComments()}
+              {portals}
             </div>
           </ScrollableOverlay>
         </div>
-
-        {/* Render Input overlay at the bottom */}
-        {selection && (
-          <div
-            className={cn(
-              "pointer-events-auto absolute bottom-0 left-0 right-0 pb-2 transition-none z-50 flex justify-center w-full",
-              isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
-            )}
-            style={{
-              marginBottom: isMobile
-                ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
-                : '16px'
-            }}
-            data-keyboard-avoid="true"
-            data-comment-ui="true"
-            ref={commentContainerRef}
-          >
-            {commentContent}
-          </div>
-        )}
       </div>
     );
   }
 
-  // Fallback for 'inline' layout: use Portal behavior
-  // Use simple div with overflow-x-auto to avoid nested ScrollableOverlay issues in Chrome
+  // Fallback for 'inline' layout
   return (
     <div className={cn("relative", "w-full")}>
       <div ref={diffRootRef} className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible relative">
         <div ref={diffContainerRef} className="w-full" />
-        {renderSavedComments()}
+        {portals}
       </div>
-
-      {selection && createPortal(
-        <div
-          className="fixed inset-0 z-50 flex flex-col justify-end items-start pointer-events-none transition-none transform-gpu"
-          style={{
-            paddingBottom: isMobile ? 'var(--oc-keyboard-inset, 0px)' : '0px',
-            isolation: 'isolate'
-          }}
-        >
-          <div
-            className={cn(
-              "pointer-events-auto relative pb-2 transition-none",
-              isMobile && isKeyboardOpen ? "ios-keyboard-safe-area" : "bottom-safe-area"
-            )}
-            style={{
-              marginLeft: mainContentCenter,
-              transform: 'translateX(-50%)',
-              marginBottom: isMobile
-                ? (!isKeyboardOpen && inputBarOffset > 0 ? `${inputBarOffset}px` : '16px')
-                : '16px'
-            }}
-            data-keyboard-avoid="true"
-            data-comment-ui="true"
-            ref={commentContainerRef}
-          >
-            {commentContent}
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 };
+
+

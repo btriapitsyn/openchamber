@@ -24,6 +24,12 @@ interface UIStore {
   isSidebarOpen: boolean;
   sidebarWidth: number;
   hasManuallyResizedLeftSidebar: boolean;
+  isRightSidebarOpen: boolean;
+  rightSidebarWidth: number;
+  hasManuallyResizedRightSidebar: boolean;
+  isBottomTerminalOpen: boolean;
+  bottomTerminalHeight: number;
+  hasManuallyResizedBottomTerminal: boolean;
   isSessionSwitcherOpen: boolean;
   activeMainTab: MainTab;
   mainTabGuard: MainTabGuard | null;
@@ -81,6 +87,12 @@ interface UIStore {
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   setSidebarWidth: (width: number) => void;
+  toggleRightSidebar: () => void;
+  setRightSidebarOpen: (open: boolean) => void;
+  setRightSidebarWidth: (width: number) => void;
+  toggleBottomTerminal: () => void;
+  setBottomTerminalOpen: (open: boolean) => void;
+  setBottomTerminalHeight: (height: number) => void;
   setSessionSwitcherOpen: (open: boolean) => void;
   setActiveMainTab: (tab: MainTab) => void;
   setMainTabGuard: (guard: MainTabGuard | null) => void;
@@ -153,6 +165,12 @@ export const useUIStore = create<UIStore>()(
         isSidebarOpen: true,
         sidebarWidth: 264,
         hasManuallyResizedLeftSidebar: false,
+        isRightSidebarOpen: false,
+        rightSidebarWidth: 420,
+        hasManuallyResizedRightSidebar: false,
+        isBottomTerminalOpen: false,
+        bottomTerminalHeight: 300,
+        hasManuallyResizedBottomTerminal: false,
         isSessionSwitcherOpen: false,
         activeMainTab: 'chat',
         mainTabGuard: null,
@@ -241,6 +259,76 @@ export const useUIStore = create<UIStore>()(
 
         setSidebarWidth: (width) => {
           set({ sidebarWidth: width, hasManuallyResizedLeftSidebar: true });
+        },
+
+        toggleRightSidebar: () => {
+          set((state) => {
+            const newOpen = !state.isRightSidebarOpen;
+
+            if (newOpen && typeof window !== 'undefined') {
+              const proportionalWidth = Math.floor(window.innerWidth * 0.28);
+              return {
+                isRightSidebarOpen: newOpen,
+                rightSidebarWidth: proportionalWidth,
+                hasManuallyResizedRightSidebar: false,
+              };
+            }
+            return { isRightSidebarOpen: newOpen };
+          });
+        },
+
+        setRightSidebarOpen: (open) => {
+          set(() => {
+            if (open && typeof window !== 'undefined') {
+              const proportionalWidth = Math.floor(window.innerWidth * 0.28);
+              return {
+                isRightSidebarOpen: open,
+                rightSidebarWidth: proportionalWidth,
+                hasManuallyResizedRightSidebar: false,
+              };
+            }
+            return { isRightSidebarOpen: open };
+          });
+        },
+
+        setRightSidebarWidth: (width) => {
+          set({ rightSidebarWidth: width, hasManuallyResizedRightSidebar: true });
+        },
+
+        toggleBottomTerminal: () => {
+          set((state) => {
+            const newOpen = !state.isBottomTerminalOpen;
+
+            if (newOpen && typeof window !== 'undefined') {
+              const proportionalHeight = Math.floor(window.innerHeight * 0.32);
+              return {
+                isBottomTerminalOpen: newOpen,
+                bottomTerminalHeight: proportionalHeight,
+                hasManuallyResizedBottomTerminal: false,
+              };
+            }
+
+            return { isBottomTerminalOpen: newOpen };
+          });
+        },
+
+        setBottomTerminalOpen: (open) => {
+          set(() => {
+            if (open && typeof window !== 'undefined') {
+              const proportionalHeight = Math.floor(window.innerHeight * 0.32);
+              return {
+                isBottomTerminalOpen: open,
+                bottomTerminalHeight: proportionalHeight,
+                hasManuallyResizedBottomTerminal: false,
+              };
+            }
+
+            return { isBottomTerminalOpen: open };
+          });
+        },
+
+        setBottomTerminalHeight: (height) => {
+          set({ bottomTerminalHeight: height, hasManuallyResizedBottomTerminal: true });
         },
 
         setSessionSwitcherOpen: (open) => {
@@ -623,6 +711,14 @@ export const useUIStore = create<UIStore>()(
               updates.sidebarWidth = Math.floor(window.innerWidth * 0.2);
             }
 
+            if (state.isRightSidebarOpen && !state.hasManuallyResizedRightSidebar) {
+              updates.rightSidebarWidth = Math.floor(window.innerWidth * 0.28);
+            }
+
+            if (state.isBottomTerminalOpen && !state.hasManuallyResizedBottomTerminal) {
+              updates.bottomTerminalHeight = Math.floor(window.innerHeight * 0.32);
+            }
+
             return updates;
           });
         },
@@ -702,6 +798,10 @@ export const useUIStore = create<UIStore>()(
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
           sidebarWidth: state.sidebarWidth,
+          isRightSidebarOpen: state.isRightSidebarOpen,
+          rightSidebarWidth: state.rightSidebarWidth,
+          isBottomTerminalOpen: state.isBottomTerminalOpen,
+          bottomTerminalHeight: state.bottomTerminalHeight,
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
           activeMainTab: state.activeMainTab,
           sidebarSection: state.sidebarSection,

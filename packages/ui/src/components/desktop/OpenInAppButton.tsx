@@ -47,7 +47,7 @@ const OPEN_IN_APPS: OpenInAppOption[] = [
   { id: 'trae', label: 'Trae', appName: 'Trae' },
 ];
 
-const DEFAULT_APP_ID = 'vscode';
+const DEFAULT_APP_ID = 'finder';
 const ALWAYS_AVAILABLE_APP_IDS = new Set(['finder', 'terminal']);
 const getAlwaysAvailableApps = () => OPEN_IN_APPS.filter((app) => ALWAYS_AVAILABLE_APP_IDS.has(app.id));
 
@@ -121,9 +121,17 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
     if (typeof window === 'undefined') return;
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<DesktopSettings>).detail;
-      if (detail && typeof detail.openInAppId === 'string' && detail.openInAppId.length > 0) {
-        setSelectedAppId(detail.openInAppId);
+      const nextId = detail
+        && typeof detail.openInAppId === 'string'
+        && detail.openInAppId.length > 0
+        && OPEN_IN_APPS.some((app) => app.id === detail.openInAppId)
+        ? detail.openInAppId
+        : null;
+      if (!nextId) {
+        return;
       }
+      window.localStorage.setItem('openInAppId', nextId);
+      setSelectedAppId(nextId);
     };
     window.addEventListener('openchamber:settings-synced', handler);
     return () => window.removeEventListener('openchamber:settings-synced', handler);
@@ -174,10 +182,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
       retryTimeoutRef.current = null;
     }
     if (force) {
-      console.info('[open-in] manual refresh requested');
       setLoadedState(false);
-    } else {
-      console.info('[open-in] load installed apps');
     }
     isLoadingRef.current = true;
     setIsScanning(true);
@@ -191,7 +196,6 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
       } = await fetchDesktopInstalledApps(appNames, force);
       if (!isMountedRef.current) return;
       setIsCacheStale(hasCache ? nextCacheStale : false);
-      console.info('[open-in] installed apps returned', installed.map((app) => app.name));
       applyInstalledApps(installed);
       if (success) {
         if (!hasCache && installed.length === 0 && retryAttemptRef.current < 3) {
@@ -230,14 +234,12 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
     if (typeof window === 'undefined') return;
     void loadInstalledApps();
     const handler = () => {
-      console.info('[open-in] app ready, starting installed app scan');
       void loadInstalledApps();
     };
     window.addEventListener('openchamber:app-ready', handler);
     const updateHandler = (event: Event) => {
       const detail = (event as CustomEvent<InstalledDesktopAppInfo[]>).detail;
       if (Array.isArray(detail)) {
-        console.info('[open-in] received installed app update', detail.length);
         retryAttemptRef.current = 3;
         keepScanningRef.current = false;
         setIsScanning(false);
@@ -248,7 +250,6 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
     window.addEventListener('openchamber:installed-apps-updated', updateHandler);
     const flag = (window as unknown as { __openchamberAppReady?: boolean }).__openchamberAppReady;
     if (flag) {
-      console.info('[open-in] app ready flag already set');
       void loadInstalledApps();
     }
     return () => {
@@ -262,22 +263,22 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
     if (typeof window === 'undefined') return;
     const fallbackTimer = window.setTimeout(() => {
       if (!hasLoadedAppsRef.current) {
-        console.info('[open-in] fallback scan triggered');
         void loadInstalledApps();
       }
     }, 5000);
     return () => window.clearTimeout(fallbackTimer);
   }, [isDesktopLocal, loadInstalledApps]);
 
-  const selectedApp = availableApps.find((app) => app.id === selectedAppId) ?? availableApps[0];
-
-  React.useEffect(() => {
-    if (!selectedApp) return;
-    if (selectedAppId !== selectedApp.id) {
-      setSelectedAppId(selectedApp.id);
-      void updateDesktopSettings({ openInAppId: selectedApp.id });
+  const selectedApp = React.useMemo(() => {
+    const known = OPEN_IN_APPS.find((app) => app.id === selectedAppId)
+      ?? OPEN_IN_APPS.find((app) => app.id === DEFAULT_APP_ID)
+      ?? OPEN_IN_APPS[0];
+    if (known) {
+      const iconDataUrl = availableApps.find((app) => app.appName === known.appName)?.iconDataUrl;
+      return iconDataUrl ? { ...known, iconDataUrl } : known;
     }
-  }, [selectedApp, selectedAppId]);
+    return availableApps[0];
+  }, [availableApps, selectedAppId]);
 
   if (!isDesktopLocal || !directory) {
     return null;
@@ -293,6 +294,9 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
 
   const handleSelect = async (app: OpenInAppOption) => {
     setSelectedAppId(app.id);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('openInAppId', app.id);
+    }
     await updateDesktopSettings({ openInAppId: app.id });
     await handleOpen(app);
   };
@@ -348,7 +352,9 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
           iconDataUrl={selectedApp.iconDataUrl}
           fallbackIconDataUrl={selectedApp.fallbackIconDataUrl}
         />
-        <span className={cn(isScanning ? 'animate-pulse text-muted-foreground' : undefined)}>Open</span>
+        <span className={cn('header-open-label', isScanning ? 'animate-pulse text-muted-foreground' : undefined)}>
+          Open
+        </span>
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

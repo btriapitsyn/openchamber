@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  RiAddLine,
   RiCheckLine,
   RiCloudOffLine,
   RiEarthLine,
@@ -143,9 +144,16 @@ const resolveCurrentHost = (hosts: DesktopHost[]) => {
 type DesktopHostSwitcherDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  embedded?: boolean;
+  onHostSwitched?: () => void;
 };
 
-export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwitcherDialogProps) {
+export function DesktopHostSwitcherDialog({
+  open,
+  onOpenChange,
+  embedded = false,
+  onHostSwitched,
+}: DesktopHostSwitcherDialogProps) {
   const [configHosts, setConfigHosts] = React.useState<DesktopHost[]>([]);
   const [defaultHostId, setDefaultHostId] = React.useState<string | null>(null);
   const [statusById, setStatusById] = React.useState<Record<string, HostStatus>>({});
@@ -160,6 +168,7 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
 
   const [newLabel, setNewLabel] = React.useState('');
   const [newUrl, setNewUrl] = React.useState('');
+  const [isAddFormOpen, setIsAddFormOpen] = React.useState(!embedded);
 
   const allHosts = React.useMemo(() => {
     const local = buildLocalHost();
@@ -241,11 +250,12 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
       setEditUrl('');
       setNewLabel('');
       setNewUrl('');
+      setIsAddFormOpen(!embedded);
       setError('');
       return;
     }
     void refresh();
-  }, [open, refresh]);
+  }, [embedded, open, refresh]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -256,13 +266,14 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
     const origin = host.id === LOCAL_HOST_ID ? getLocalOrigin() : (normalizeHostUrl(host.url) || '');
     if (!origin) return;
     const target = toNavigationUrl(origin);
+    onHostSwitched?.();
 
     try {
       window.location.assign(target);
     } catch {
       window.location.href = target;
     }
-  }, []);
+  }, [onHostSwitched]);
 
   const beginEdit = React.useCallback((host: DesktopHost) => {
     setEditingId(host.id);
@@ -309,7 +320,10 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
     await persist(nextHosts, defaultHostId);
     setNewLabel('');
     setNewUrl('');
-  }, [configHosts, defaultHostId, newLabel, newUrl, persist]);
+    if (embedded) {
+      setIsAddFormOpen(false);
+    }
+  }, [configHosts, defaultHostId, embedded, newLabel, newUrl, persist]);
 
   const deleteHost = React.useCallback(async (id: string) => {
     if (id === LOCAL_HOST_ID) return;
@@ -329,9 +343,34 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
 
   const tauriAvailable = isTauriShell();
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[min(42rem,calc(100vw-2rem))] max-w-none max-h-[70vh] flex flex-col overflow-hidden gap-3">
+  const content = (
+    <>
+      {embedded ? (
+        <div className="flex-shrink-0 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-2 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex items-center gap-2">
+              <span className="typography-ui-header font-semibold text-foreground">Current</span>
+              <span className="max-w-[9rem] truncate typography-ui-label text-muted-foreground">{current.label}</span>
+              <span className="text-muted-foreground">•</span>
+              <span className="typography-ui-header font-semibold text-foreground">Default</span>
+              <span className="max-w-[9rem] truncate typography-ui-label text-muted-foreground">{currentDefaultLabel}</span>
+            </div>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors',
+                'hover:text-foreground hover:bg-interactive-hover',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+              )}
+              onClick={() => void probeAll(allHosts)}
+              disabled={!tauriAvailable || isLoading || isProbing}
+              aria-label="Refresh instances"
+            >
+              <RiRefreshLine className={cn('h-4 w-4', isProbing && 'animate-spin')} />
+            </button>
+          </div>
+        </div>
+      ) : (
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <RiServerLine className="h-5 w-5" />
@@ -341,7 +380,9 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
             Switch between Local and remote OpenChamber servers
           </DialogDescription>
         </DialogHeader>
+      )}
 
+      {!embedded && (
         <div className="flex items-center justify-between gap-2 flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <span className="typography-meta text-muted-foreground">Current:</span>
@@ -362,6 +403,7 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
             </Button>
           </div>
         </div>
+      )}
 
         {!tauriAvailable && (
           <div className="flex-shrink-0 rounded-lg border border-border/50 bg-muted/20 p-3">
@@ -531,38 +573,85 @@ export function DesktopHostSwitcherDialog({ open, onOpenChange }: DesktopHostSwi
           </div>
         )}
 
-        <div className="flex-shrink-0 rounded-lg border border-border/50 bg-muted/20 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="typography-ui-label font-medium text-foreground">Add instance</div>
-            <Button
+        {embedded && !isAddFormOpen ? (
+          <div className="flex-shrink-0 border-t border-[var(--interactive-border)]">
+            <button
               type="button"
-              size="sm"
-              onClick={() => void addHost()}
-              disabled={!tauriAvailable || isSaving || !newUrl.trim()}
+              className="w-full flex items-center gap-2 px-2 py-2 text-left text-muted-foreground hover:text-foreground hover:bg-interactive-hover/30 transition-colors"
+              onClick={() => setIsAddFormOpen(true)}
+              disabled={!tauriAvailable || isSaving}
             >
-              {isSaving ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : null}
-              Add
-            </Button>
+              <RiAddLine className="h-4 w-4" />
+              <span className="typography-ui-label">Add instance</span>
+            </button>
           </div>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Input
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Label (optional)"
-              disabled={!tauriAvailable || isSaving}
-            />
-            <Input
-              value={newUrl}
-              onChange={(e) => setNewUrl(e.target.value)}
-              placeholder="https://host:port"
-              disabled={!tauriAvailable || isSaving}
-            />
+        ) : (
+          <div className={cn(
+            'flex-shrink-0',
+            embedded
+              ? 'border-t border-[var(--interactive-border)] px-2 py-2'
+              : 'rounded-md border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-2.5'
+          )}>
+            <div className="flex items-center justify-between gap-2">
+              <div className="typography-ui-label font-medium text-foreground">Add instance</div>
+              <div className="flex items-center gap-2">
+                {embedded && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsAddFormOpen(false)}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void addHost()}
+                  disabled={!tauriAvailable || isSaving || !newUrl.trim()}
+                >
+                  {isSaving ? <RiLoader4Line className="h-4 w-4 animate-spin" /> : null}
+                  Add
+                </Button>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Input
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                placeholder="Label (optional)"
+                disabled={!tauriAvailable || isSaving}
+              />
+              <Input
+                value={newUrl}
+                onChange={(e) => setNewUrl(e.target.value)}
+                placeholder="https://host:port"
+                disabled={!tauriAvailable || isSaving}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {error && (
           <div className="flex-shrink-0 typography-meta text-status-error">{error}</div>
         )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="w-full max-h-[70vh] flex flex-col overflow-hidden gap-2">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[min(42rem,calc(100vw-2rem))] max-w-none max-h-[70vh] flex flex-col overflow-hidden gap-3">
+        {content}
       </DialogContent>
     </Dialog>
   );

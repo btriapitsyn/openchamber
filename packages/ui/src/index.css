@@ -463,9 +463,15 @@ html:not(.dark) .chat-scroll {
 :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
   display: inline;
 }
+:root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
+  display: inline;
+}
 
 @media (max-width: 940px) {
   :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
+    display: none;
+  }
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
     display: none;
   }
   :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-badge {
@@ -540,6 +546,25 @@ html:not(.dark) .chat-scroll {
 
   .commit-actions__btn {
     padding-inline: 0.5rem;
+  }
+}
+
+/* Git right-sidebar header/actions collapse to icon-only when narrow. */
+@container git-header (max-width: 26rem) {
+  .git-header-label {
+    display: none;
+  }
+}
+
+/* Animated tabs: collapse labels based on local container width. */
+@container animated-tabs (max-width: 23rem) {
+  .animated-tabs__label {
+    display: none;
+  }
+
+  .animated-tabs__button {
+    padding-inline: 0.5rem;
+    gap: 0;
   }
 }
 
