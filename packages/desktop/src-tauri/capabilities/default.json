@@ -12,7 +12,7 @@
       "https://*/*"
     ]
   },
-  "windows": ["main"],
+  "windows": ["main", "main-*"],
   "permissions": [
     "core:default",
     "core:window:default",

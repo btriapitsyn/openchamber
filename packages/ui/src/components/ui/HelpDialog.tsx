@@ -26,6 +26,7 @@ import {
   RiTerminalBoxLine,
   RiText,
   RiTimeLine,
+  RiWindowLine,
 } from "@remixicon/react";
 import { getModifierLabel } from "@/lib/utils";
 
@@ -123,6 +124,11 @@ export const HelpDialog: React.FC = () => {
           keys: [`Shift + ${mod} + T`],
           description: "Cycle Thinking Variant",
           icon: RiBrainAi3Line,
+        },
+        {
+          keys: [`Shift + Alt + ${mod} + N`],
+          description: "New Window (desktop only)",
+          icon: RiWindowLine,
         },
       ],
     },

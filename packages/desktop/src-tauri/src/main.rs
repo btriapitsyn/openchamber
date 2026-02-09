@@ -13,6 +13,7 @@ use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::utils::config::BackgroundThrottlingPolicy;
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -1806,6 +1807,12 @@ fn desktop_restart(app: tauri::AppHandle) {
     app.restart();
 }
 
+/// Create a new desktop window from the UI layer.
+///
+/// IMPORTANT: This command MUST remain synchronous (not `async`). Tauri runs
+/// sync commands on the main thread, which is required on macOS for
+/// `WebviewWindowBuilder::build()`. Making this `async` would move execution
+/// to the Tokio thread pool and risk crashes or undefined behavior.
 #[tauri::command]
 fn desktop_new_window(app: tauri::AppHandle) -> Result<(), String> {
     open_new_window(&app);
@@ -1896,6 +1903,7 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Resul
         .decorations(true)
         .visible(false)
         .initialization_script(&init_script)
+        .background_throttling(BackgroundThrottlingPolicy::Disabled)
         ;
 
     #[cfg(target_os = "macos")]
@@ -1915,13 +1923,32 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Resul
 }
 
 /// Open a new window pointed at the default host (local or configured default).
+///
+/// Known multi-window limitations (acceptable for v1):
+///
+/// - **localStorage conflicts**: Windows sharing the same origin (e.g. both on local)
+///   share `localStorage`. Zustand `persist` middleware writes full state blobs on every
+///   change with no cross-tab sync, so concurrent windows can overwrite each other's
+///   persisted UI preferences, session selections, and model/agent choices.
+///   Server-side data is unaffected. Scoping storage keys per window or adding
+///   `storage` event listeners would fix this in a future iteration.
+///
+/// - **Duplicate SSE connections**: Each window opens its own SSE connection to
+///   `/api/global/event`, resulting in N connections for N windows. Each window
+///   independently processes all events and may show duplicate toast notifications.
+///   A SharedWorker, BroadcastChannel leader-election, or Rust-side SSE relay
+///   would consolidate this in a future iteration.
+///
+/// - **Startup race**: If called before the sidecar finishes starting (local_origin
+///   not yet set), this function silently bails with a log warning. The user sees
+///   no feedback from clicking the dock icon during the startup window (~0-20s).
 fn open_new_window(app: &tauri::AppHandle) {
     let local_origin = app
         .try_state::<DesktopUiInjectionState>()
         .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone());
 
     let Some(local_origin) = local_origin else {
-        log::warn!("[desktop] cannot open new window: local origin not yet known");
+        log::warn!("[desktop] cannot open new window: local origin not yet known (sidecar may still be starting)");
         return;
     };
 
