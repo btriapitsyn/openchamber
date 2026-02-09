@@ -1880,15 +1880,73 @@ const migrateSettingsFromLegacyCollapsedProjects = async (current) => {
   return { settings: next, changed: true };
 };
 
+const DEFAULT_NOTIFICATION_TEMPLATES = {
+  completion: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
+  error: { title: 'Tool error', message: '{last_message}' },
+  question: { title: 'Input needed', message: '{last_message}' },
+  subtask: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
+};
+
+const ensureNotificationTemplateShape = (templates) => {
+  const input = templates && typeof templates === 'object' ? templates : {};
+  let changed = false;
+  const next = {};
+
+  for (const event of Object.keys(DEFAULT_NOTIFICATION_TEMPLATES)) {
+    const currentEntry = input[event];
+    const base = DEFAULT_NOTIFICATION_TEMPLATES[event];
+    const currentTitle = typeof currentEntry?.title === 'string' ? currentEntry.title : base.title;
+    const currentMessage = typeof currentEntry?.message === 'string' ? currentEntry.message : base.message;
+    if (!currentEntry || typeof currentEntry.title !== 'string' || typeof currentEntry.message !== 'string') {
+      changed = true;
+    }
+    next[event] = { title: currentTitle, message: currentMessage };
+  }
+
+  return { templates: next, changed };
+};
+
+const migrateSettingsNotificationDefaults = async (current) => {
+  const settings = current && typeof current === 'object' ? current : {};
+  let changed = false;
+  const next = { ...settings };
+
+  if (typeof settings.notifyOnSubtasks !== 'boolean') {
+    next.notifyOnSubtasks = true;
+    changed = true;
+  }
+  if (typeof settings.notifyOnCompletion !== 'boolean') {
+    next.notifyOnCompletion = true;
+    changed = true;
+  }
+  if (typeof settings.notifyOnError !== 'boolean') {
+    next.notifyOnError = true;
+    changed = true;
+  }
+  if (typeof settings.notifyOnQuestion !== 'boolean') {
+    next.notifyOnQuestion = true;
+    changed = true;
+  }
+
+  const { templates, changed: templatesChanged } = ensureNotificationTemplateShape(settings.notificationTemplates);
+  if (templatesChanged || !settings.notificationTemplates || typeof settings.notificationTemplates !== 'object') {
+    next.notificationTemplates = templates;
+    changed = true;
+  }
+
+  return { settings: changed ? next : settings, changed };
+};
+
 const readSettingsFromDiskMigrated = async () => {
   const current = await readSettingsFromDisk();
   const migration1 = await migrateSettingsFromLegacyLastDirectory(current);
   const migration2 = await migrateSettingsFromLegacyThemePreferences(migration1.settings);
   const migration3 = await migrateSettingsFromLegacyCollapsedProjects(migration2.settings);
-  if (migration1.changed || migration2.changed || migration3.changed) {
-    await writeSettingsToDisk(migration3.settings);
+  const migration4 = await migrateSettingsNotificationDefaults(migration3.settings);
+  if (migration1.changed || migration2.changed || migration3.changed || migration4.changed) {
+    await writeSettingsToDisk(migration4.settings);
   }
-  return migration3.settings;
+  return migration4.settings;
 };
 
 const getOrCreateVapidKeys = async () => {

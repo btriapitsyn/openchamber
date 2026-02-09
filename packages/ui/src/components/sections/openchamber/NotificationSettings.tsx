@@ -7,6 +7,13 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 import { GridLoader } from '@/components/ui/grid-loader';
 
+const DEFAULT_NOTIFICATION_TEMPLATES = {
+  completion: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
+  error: { title: 'Tool error', message: '{last_message}' },
+  question: { title: 'Input needed', message: '{last_message}' },
+  subtask: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
+} as const;
+
 export const NotificationSettings: React.FC = () => {
   const isDesktop = React.useMemo(() => isDesktopShell(), []);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
@@ -540,7 +547,7 @@ export const NotificationSettings: React.FC = () => {
                     value={notificationTemplates[event].title}
                     onChange={(e) => updateTemplate(event, 'title', e.target.value)}
                     className="w-full rounded-md border border-border bg-background px-3 py-1.5 typography-ui text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                    placeholder={`Title for ${event} notifications`}
+                    placeholder={DEFAULT_NOTIFICATION_TEMPLATES[event].title}
                   />
                 </div>
                 <div>
@@ -550,7 +557,7 @@ export const NotificationSettings: React.FC = () => {
                     value={notificationTemplates[event].message}
                     onChange={(e) => updateTemplate(event, 'message', e.target.value)}
                     className="w-full rounded-md border border-border bg-background px-3 py-1.5 typography-ui text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
-                    placeholder={`Message for ${event} notifications`}
+                    placeholder={DEFAULT_NOTIFICATION_TEMPLATES[event].message}
                   />
                 </div>
               </div>
