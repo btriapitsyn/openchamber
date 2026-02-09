@@ -6079,12 +6079,21 @@ async function main(options = {}) {
         return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
       }
 
-       const listByHead = async (state) => {
+       // Determine if we're looking at a fork scenario (where origin differs from the target remote)
+       let forkOwner = null;
+       if (remote !== 'origin') {
+         const { repo: originRepo } = await resolveGitHubRepoFromDirectory(directory, 'origin');
+         if (originRepo && originRepo.owner !== repo.owner) {
+           forkOwner = originRepo.owner;
+         }
+       }
+
+       const listByHead = async (state, headOwner = repo.owner) => {
          const resp = await octokit.rest.pulls.list({
            owner: repo.owner,
            repo: repo.repo,
            state,
-           head: `${repo.owner}:${branch}`,
+           head: `${headOwner}:${branch}`,
            per_page: 10,
          });
          return Array.isArray(resp?.data) ? resp.data[0] : null;
@@ -6106,9 +6115,20 @@ async function main(options = {}) {
        // PR status by branch:
        // - Prefer open PRs.
        // - If none, also surface closed/merged PRs.
-       // - Fork PR support: head owner != base owner -> head filter yields empty; fall back to matching head.ref.
-       let first = await listByHead('open');
+       // - For fork PRs: first try with fork owner, then fall back to target owner, then ref match.
+       let first = null;
+       
+       // For fork workflows, try fork owner first
+       if (forkOwner) {
+         first = await listByHead('open', forkOwner);
+         if (!first) first = await listByHead('closed', forkOwner);
+       }
+       
+       // Try with target repo owner
+       if (!first) first = await listByHead('open');
        if (!first) first = await listByHead('closed');
+       
+       // Fall back to matching head.ref directly (handles edge cases)
        if (!first) first = await listByHeadRef('open');
        if (!first) first = await listByHeadRef('closed');
       if (!first) {
@@ -6285,6 +6305,32 @@ async function main(options = {}) {
         }
       }
 
+      // For cross-repo PRs, verify the branch exists on the head repo first
+      if (headRef.includes(':')) {
+        const [headOwner] = headRef.split(':');
+        const headRepoName = sourceRemote 
+          ? (await resolveGitHubRepoFromDirectory(directory, sourceRemote)).repo?.repo 
+          : repo.repo;
+        
+        if (headRepoName) {
+          try {
+            await octokit.rest.repos.getBranch({
+              owner: headOwner,
+              repo: headRepoName,
+              branch: head,
+            });
+          } catch (branchError) {
+            if (branchError?.status === 404) {
+              return res.status(400).json({
+                error: `Branch "${head}" not found on ${headOwner}/${headRepoName}. Please push your branch first: git push ${sourceRemote || 'origin'} ${head}`,
+              });
+            }
+            // For other errors, log and continue - let the PR create attempt handle it
+            console.log('[PR Create Debug] Branch check failed (non-404):', branchError?.message);
+          }
+        }
+      }
+
       const created = await octokit.rest.pulls.create({
         owner: repo.owner,
         repo: repo.repo,
@@ -6315,6 +6361,20 @@ async function main(options = {}) {
       });
     } catch (error) {
       console.error('Failed to create GitHub PR:', error);
+      
+      // Check for head validation error (common with fork PRs)
+      const errorMessage = error.message || '';
+      const isHeadValidationError = 
+        errorMessage.includes('Validation Failed') && 
+        errorMessage.includes('"field":"head"') &&
+        errorMessage.includes('"code":"invalid"');
+      
+      if (isHeadValidationError) {
+        return res.status(400).json({ 
+          error: 'Unable to create PR: You must have write access to the source repository. Make sure you have pushed your branch to a repository you own (your fork), and that the branch exists on the remote.' 
+        });
+      }
+      
       return res.status(500).json({ error: error.message || 'Failed to create GitHub PR' });
     }
   });
