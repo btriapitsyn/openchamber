@@ -16,6 +16,7 @@ interface SectionGroup {
   id: OpenChamberSection;
   label: string;
   items: string[];
+  badge?: string;
   webOnly?: boolean;
   hideInVSCode?: boolean;
 }
@@ -57,6 +58,7 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     id: 'voice',
     label: 'Voice',
     items: ['Language', 'Continuous Mode'],
+    badge: 'experimental',
   },
 ];
 
@@ -100,9 +102,16 @@ export const OpenChamberSidebar: React.FC<OpenChamberSidebarProps> = ({
                 onClick={() => onSelectSection(group.id)}
                 className="w-full text-left flex flex-col gap-0 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               >
-                <span className="typography-ui-label font-normal text-foreground">
-                  {group.label}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="typography-ui-label font-normal text-foreground">
+                    {group.label}
+                  </span>
+                  {group.badge && (
+                    <span className="text-[10px] leading-none uppercase font-bold tracking-tight bg-[var(--status-warning-background)] text-[var(--status-warning)] border border-[var(--status-warning-border)] px-1.5 py-0.5 rounded">
+                      {group.badge}
+                    </span>
+                  )}
+                </div>
                 <div className="typography-micro text-muted-foreground/60 leading-tight">
                   {group.items.join(' · ')}
                 </div>
