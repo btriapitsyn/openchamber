@@ -409,6 +409,8 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   const [conflictDialogOpen, setConflictDialogOpen] = React.useState(false);
   const [conflictFiles, setConflictFiles] = React.useState<string[]>([]);
   const [conflictOperation, setConflictOperation] = React.useState<'merge' | 'rebase'>('merge');
+  const [pushRemoteDialogOpen, setPushRemoteDialogOpen] = React.useState(false);
+  const [pendingPushAction, setPendingPushAction] = React.useState<'commitAndPush' | null>(null);
 
   // Conflict state persistence key
   const conflictStorageKey = React.useMemo(() => {
@@ -756,7 +758,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
     }
   };
 
-  const handleCommit = async (options: { pushAfter?: boolean } = {}) => {
+  const handleCommit = async (options: { pushAfter?: boolean; remote?: GitRemote } = {}) => {
     if (!currentDirectory) return;
     if (!commitMessage.trim()) {
       toast.error('Please enter a commit message');
@@ -768,6 +770,17 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
       toast.error('Select at least one file to commit');
       return;
     }
+
+    // If pushing with multiple remotes and no remote specified, this shouldn't happen anymore
+    // since CommitSection now uses a dropdown. But keep as fallback for safety.
+    if (options.pushAfter && remotes.length > 1 && !options.remote) {
+      setPendingPushAction('commitAndPush');
+      setPushRemoteDialogOpen(true);
+      return;
+    }
+
+    // If there's only one remote, use it automatically when no remote is specified
+    const targetRemote = options.remote ?? (remotes.length === 1 ? remotes[0] : undefined);
 
     const action: CommitAction = options.pushAfter ? 'commitAndPush' : 'commit';
     setCommitAction(action);
@@ -785,8 +798,9 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
       await refreshStatusAndBranches();
 
       if (options.pushAfter) {
-        await git.gitPush(currentDirectory);
-        toast.success('Pushed to remote');
+        const remoteName = targetRemote?.name;
+        await git.gitPush(currentDirectory, remoteName ? { remote: remoteName } : undefined);
+        toast.success(remoteName ? `Pushed to ${remoteName}` : 'Pushed to remote');
         triggerFireworks();
         await refreshStatusAndBranches(false);
       } else {
@@ -801,6 +815,19 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
     } finally {
       setCommitAction(null);
     }
+  };
+
+  const handlePushRemoteSelect = (remote: GitRemote) => {
+    setPushRemoteDialogOpen(false);
+    if (pendingPushAction === 'commitAndPush') {
+      handleCommit({ pushAfter: true, remote });
+    }
+    setPendingPushAction(null);
+  };
+
+  const handlePushRemoteDialogClose = () => {
+    setPushRemoteDialogOpen(false);
+    setPendingPushAction(null);
   };
 
   const handleGenerateCommitMessage = React.useCallback(async () => {
@@ -844,19 +871,22 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
     }
   }, [currentDirectory, selectedPaths, git, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom]);
 
-  const handleCreateBranch = async (branchName: string) => {
+  const handleCreateBranch = async (branchName: string, remote?: GitRemote) => {
     if (!currentDirectory || !status) return;
     const checkoutBase = status.current ?? null;
+    const remoteName = remote?.name ?? 'origin';
 
     try {
       await git.createBranch(currentDirectory, branchName, checkoutBase ?? 'HEAD');
       toast.success(`Created branch ${branchName}`);
 
+      // Checkout the new branch and stay on it
+      await git.checkoutBranch(currentDirectory, branchName);
+
       let pushSucceeded = false;
       try {
-        await git.checkoutBranch(currentDirectory, branchName);
         await git.gitPush(currentDirectory, {
-          remote: 'origin',
+          remote: remoteName,
           branch: branchName,
           options: ['--set-upstream'],
         });
@@ -865,7 +895,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
         const message =
           pushError instanceof Error
             ? pushError.message
-            : 'Unable to push new branch to origin.';
+            : `Unable to push new branch to ${remoteName}.`;
         toast.warning('Branch created locally', {
           description: (
             <span className="text-foreground/80 dark:text-foreground/70">
@@ -873,21 +903,13 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
             </span>
           ),
         });
-      } finally {
-        if (checkoutBase) {
-          try {
-            await git.checkoutBranch(currentDirectory, checkoutBase);
-          } catch (restoreError) {
-            console.warn('Failed to restore original branch after creation:', restoreError);
-          }
-        }
       }
 
       await refreshStatusAndBranches();
       await refreshLog();
 
       if (pushSucceeded) {
-        toast.success(`Upstream set for ${branchName}`);
+        toast.success(`Upstream set for ${branchName} on ${remoteName}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create branch';
@@ -1673,11 +1695,12 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                         onGenerateMessage={handleGenerateCommitMessage}
                         isGeneratingMessage={isGeneratingMessage}
                         onCommit={() => handleCommit({ pushAfter: false })}
-                        onCommitAndPush={() => handleCommit({ pushAfter: true })}
+                        onCommitAndPush={(remote) => handleCommit({ pushAfter: true, remote })}
                         commitAction={commitAction}
                         isBusy={isBusy}
                         gitmojiEnabled={settingsGitmojiEnabled}
                         onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+                        remotes={remotes}
                       />
                     </>
                   ) : (
@@ -1751,6 +1774,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                     directory={pullRequestProps.directory}
                     branch={pullRequestProps.branch}
                     baseBranch={baseBranch}
+                    remotes={remotes}
                     onGeneratedDescription={scrollActionPanelToBottom}
                   />
                 ) : (
@@ -1858,6 +1882,34 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
         onOpenChange={setIsBranchPickerOpen}
         project={branchPickerProject}
       />
+
+      <Dialog open={pushRemoteDialogOpen} onOpenChange={handlePushRemoteDialogClose}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Select remote</DialogTitle>
+            <DialogDescription>
+              Choose which remote to push to
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            {remotes.map((remote) => (
+              <button
+                key={remote.name}
+                type="button"
+                onClick={() => handlePushRemoteSelect(remote)}
+                className="flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-left border border-border/60 hover:bg-accent hover:border-border transition-colors"
+              >
+                <span className="typography-ui-label text-foreground font-medium">
+                  {remote.name}
+                </span>
+                <span className="typography-meta text-muted-foreground truncate max-w-full">
+                  {remote.pushUrl}
+                </span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

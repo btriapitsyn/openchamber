@@ -28,6 +28,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,6 +59,7 @@ import type {
   GitHubCheckRun,
   GitHubPullRequestContextResult,
   GitHubPullRequestStatus,
+  GitRemote,
 } from '@/lib/api/types';
 
 type MergeMethod = 'merge' | 'squash' | 'rebase';
@@ -167,9 +174,10 @@ export const PullRequestSection: React.FC<{
   directory: string;
   branch: string;
   baseBranch: string;
+  remotes?: GitRemote[];
   variant?: 'framed' | 'plain';
   onGeneratedDescription?: () => void;
-}> = ({ directory, branch, baseBranch, variant = 'framed', onGeneratedDescription }) => {
+}> = ({ directory, branch, baseBranch, remotes = [], variant = 'framed', onGeneratedDescription }) => {
   const { github } = useRuntimeAPIs();
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
@@ -217,6 +225,16 @@ export const PullRequestSection: React.FC<{
 
   const [isContextOpen, setIsContextOpen] = React.useState(false);
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
+  const [selectedRemote, setSelectedRemote] = React.useState<GitRemote | null>(() => remotes[0] ?? null);
+
+  const hasMultipleRemotes = remotes.length > 1;
+
+  // Update selected remote when remotes change
+  React.useEffect(() => {
+    if (remotes.length > 0 && !selectedRemote) {
+      setSelectedRemote(remotes[0]);
+    }
+  }, [remotes, selectedRemote]);
 
   const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
   const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
@@ -781,7 +799,7 @@ export const PullRequestSection: React.FC<{
     }
     setError(null);
     try {
-      const next = await github.prStatus(directory, branch);
+      const next = await github.prStatus(directory, branch, selectedRemote?.name);
       setStatus((prev) => {
         const nextPr = next.pr;
         const prevPr = prev?.pr;
@@ -828,7 +846,16 @@ export const PullRequestSection: React.FC<{
       }
       isRefreshInFlightRef.current = false;
     }
-  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus]);
+  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus, selectedRemote?.name]);
+
+  // Refetch PR status when selected remote changes
+  const handleRemoteChange = React.useCallback((remote: GitRemote) => {
+    setSelectedRemote(remote);
+    // Clear current status and refetch
+    setStatus(null);
+    setError(null);
+    lastRefreshAtRef.current = 0; // Force refresh
+  }, []);
 
   React.useEffect(() => {
     const snapshot = pullRequestDraftSnapshots.get(snapshotKey) ?? null;
@@ -841,6 +868,13 @@ export const PullRequestSection: React.FC<{
     setIsInitialStatusResolved(Boolean(statusSnapshot));
     void refresh({ force: true, markInitialResolved: true });
   }, [branch, refresh, snapshotKey]);
+
+  // Refetch when selected remote changes
+  React.useEffect(() => {
+    if (selectedRemote) {
+      void refresh({ force: true, markInitialResolved: true });
+    }
+  }, [selectedRemote, refresh]);
 
   React.useEffect(() => {
     const onFocus = () => {
@@ -951,6 +985,8 @@ export const PullRequestSection: React.FC<{
 
     setIsCreating(true);
     try {
+      // Let the server determine the head source from tracking info
+      // The server will check the branch's tracking remote and use that
       const pr = await github.prCreate({
         directory,
         title: trimmedTitle,
@@ -958,6 +994,7 @@ export const PullRequestSection: React.FC<{
         base: baseBranch,
         ...(body.trim() ? { body } : {}),
         draft,
+        ...(selectedRemote ? { remote: selectedRemote.name } : {}),
       });
       toast.success('PR created');
       setStatus((prev) => (prev ? { ...prev, pr } : prev));
@@ -968,7 +1005,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsCreating(false);
     }
-  }, [baseBranch, body, branch, directory, draft, github, refresh, title]);
+  }, [baseBranch, body, branch, directory, draft, github, refresh, selectedRemote, title]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
@@ -1119,6 +1156,36 @@ export const PullRequestSection: React.FC<{
                 <span className={`h-2 w-2 rounded-full ${statusColor(checks.state)}`} />
                 {checks.total > 0 ? `${checks.success}/${checks.total} checks` : `${checks.state} checks`}
               </span>
+            ) : null}
+            {hasMultipleRemotes ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 gap-1">
+                    <span className="typography-micro">{selectedRemote?.name}</span>
+                    <RiArrowDownSLine className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[200px]">
+                  {remotes.map((remote) => (
+                    <DropdownMenuItem
+                      key={remote.name}
+                      onSelect={() => handleRemoteChange(remote)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="typography-ui-label text-foreground">
+                          {remote.name}
+                          {remote.name === selectedRemote?.name && (
+                            <span className="ml-2 text-primary">✓</span>
+                          )}
+                        </span>
+                        <span className="typography-meta text-muted-foreground truncate">
+                          {remote.pushUrl}
+                        </span>
+                      </div>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             ) : null}
           </div>
         </div>
@@ -1554,7 +1621,7 @@ export const PullRequestSection: React.FC<{
                     disabled={isCreating || !isConnected}
                   >
                     <span className="inline-flex size-4 items-center justify-center">
-                      {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <span className="size-4" aria-hidden="true" />}
+                      {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <RiGitPullRequestLine className="size-4" />}
                     </span>
                     <span>Create PR</span>
                   </Button>

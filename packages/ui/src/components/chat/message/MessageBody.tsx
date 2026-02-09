@@ -14,7 +14,7 @@ import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine } from '@remixicon/react';
+import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiVolumeUpLine, RiStopLine } from '@remixicon/react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -24,6 +24,8 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT } from '@/lib/messages/executionMeta';
+import { useMessageTTS } from '@/hooks/useMessageTTS';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { TextSelectionMenu } from './TextSelectionMenu';
 
 const formatTurnDuration = (durationMs: number): string => {
@@ -317,6 +319,19 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
     const hasStopFinish = messageFinish === 'stop';
+    
+    // TTS for message playback
+    const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
+    const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
+    const voiceProvider = useConfigStore((state) => state.voiceProvider);
+
+    const readAloudTooltip = React.useMemo(() => {
+        if (isTTSPlaying) {
+            return 'Stop speaking';
+        }
+        const providerLabel = voiceProvider === 'browser' ? 'Browser' : voiceProvider === 'openai' ? 'OpenAI' : 'Say';
+        return `Read aloud (${providerLabel} voice)`;
+    }, [isTTSPlaying, voiceProvider]);
 
 
     const hasTools = toolParts.length > 0;
@@ -501,6 +516,24 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             openMultiRunLauncherWithPrompt(prefilledPrompt);
         },
         [assistantTextParts, openMultiRunLauncherWithPrompt]
+    );
+
+    const handleTTSClick = React.useCallback(
+        (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+            event.preventDefault();
+            
+            if (isTTSPlaying) {
+                stopTTS();
+                return;
+            }
+            
+            const messageText = flattenAssistantTextParts(assistantTextParts);
+            if (messageText.trim()) {
+                void playTTS(messageText);
+            }
+        },
+        [assistantTextParts, isTTSPlaying, playTTS, stopTTS]
     );
 
     React.useEffect(() => {
@@ -882,6 +915,31 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                   <TooltipContent sideOffset={6}>Start new multi-run from this answer</TooltipContent>
               </Tooltip>
 
+             {showMessageTTSButtons && hasCopyableText && (
+                 <Tooltip delayDuration={1000}>
+                     <TooltipTrigger asChild>
+                         <Button
+                             type="button"
+                             variant="ghost"
+                             size="icon"
+                             className={cn(
+                                 'h-8 w-8 bg-transparent hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
+                                 isTTSPlaying ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'
+                             )}
+                             aria-label={isTTSPlaying ? 'Stop speaking' : 'Read aloud'}
+                             onPointerDown={(event) => event.stopPropagation()}
+                             onClick={handleTTSClick}
+                         >
+                             {isTTSPlaying ? (
+                                 <RiStopLine className="h-3.5 w-3.5" />
+                             ) : (
+                                 <RiVolumeUpLine className="h-3.5 w-3.5" />
+                             )}
+                         </Button>
+                     </TooltipTrigger>
+                      <TooltipContent sideOffset={6}>{readAloudTooltip}</TooltipContent>
+                  </Tooltip>
+              )}
              {onCopyMessage && (
                  <Tooltip delayDuration={1000}>
                      <TooltipTrigger asChild>

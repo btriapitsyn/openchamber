@@ -28,6 +28,7 @@ import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { AboutDialog } from '@/components/ui/AboutDialog';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { VoiceProvider } from '@/components/voice';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
@@ -305,15 +306,17 @@ function App({ apis }: AppProps) {
       <RuntimeAPIProvider apis={apis}>
         <GitPollingProvider>
           <FireworksProvider>
-            <div className="h-full text-foreground bg-background">
-              <MainLayout />
-              <Toaster />
-              <ConfigUpdateOverlay />
-              <AboutDialogWrapper />
-              {showMemoryDebug && (
-                <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-              )}
-            </div>
+            <VoiceProvider>
+              <div className="h-full text-foreground bg-background">
+                <MainLayout />
+                <Toaster />
+                <ConfigUpdateOverlay />
+                <AboutDialogWrapper />
+                {showMemoryDebug && (
+                  <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                )}
+              </div>
+            </VoiceProvider>
           </FireworksProvider>
         </GitPollingProvider>
       </RuntimeAPIProvider>

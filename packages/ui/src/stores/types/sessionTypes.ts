@@ -105,6 +105,15 @@ export type NewSessionDraftState = {
     syntheticParts?: SyntheticContextPart[];
 };
 
+// Voice state types
+export type VoiceStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+export type VoiceMode = 'idle' | 'speaking' | 'listening';
+
+export interface VoiceState {
+    status: VoiceStatus;
+    mode: VoiceMode;
+}
+
 export interface SessionStore {
 
     sessions: Session[];
@@ -170,6 +179,14 @@ export interface SessionStore {
     pendingSyntheticParts: SyntheticContextPart[] | null;
 
     newSessionDraft: NewSessionDraftState;
+
+    // Voice state
+    voiceStatus: VoiceStatus;
+    voiceMode: VoiceMode;
+
+    // Voice actions
+    setVoiceStatus: (status: VoiceStatus) => void;
+    setVoiceMode: (mode: VoiceMode) => void;
 
     getSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => EditPermissionMode;
     toggleSessionAgentEditMode: (sessionId: string, agentName: string | undefined, defaultMode?: EditPermissionMode) => void;

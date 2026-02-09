@@ -2,6 +2,14 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -49,6 +57,9 @@ interface GitIdentitiesSidebarProps {
 }
 
 export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onItemSelect }) => {
+  const [deleteDialogProfile, setDeleteDialogProfile] = React.useState<GitIdentityProfile | null>(null);
+  const [isDeletePending, setIsDeletePending] = React.useState(false);
+
   const {
     selectedProfileId,
     defaultGitIdentityId,
@@ -99,14 +110,23 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
   };
 
   const handleDeleteProfile = async (profile: GitIdentityProfile) => {
-    if (window.confirm(`Are you sure you want to delete profile "${profile.name}"?`)) {
-      const success = await deleteProfile(profile.id);
-      if (success) {
-        toast.success(`Profile "${profile.name}" deleted successfully`);
-      } else {
-        toast.error('Failed to delete profile');
-      }
+    setDeleteDialogProfile(profile);
+  };
+
+  const handleConfirmDeleteProfile = async () => {
+    if (!deleteDialogProfile) {
+      return;
     }
+
+    setIsDeletePending(true);
+    const success = await deleteProfile(deleteDialogProfile.id);
+    if (success) {
+      toast.success(`Profile "${deleteDialogProfile.name}" deleted successfully`);
+      setDeleteDialogProfile(null);
+    } else {
+      toast.error('Failed to delete profile');
+    }
+    setIsDeletePending(false);
   };
 
   const handleToggleDefault = async (profileId: string) => {
@@ -216,6 +236,32 @@ export const GitIdentitiesSidebar: React.FC<GitIdentitiesSidebarProps> = ({ onIt
             </>
           )}
       </ScrollableOverlay>
+
+      <Dialog
+        open={deleteDialogProfile !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletePending) {
+            setDeleteDialogProfile(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Profile</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete profile "{deleteDialogProfile?.name}"?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteDialogProfile(null)} disabled={isDeletePending}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleConfirmDeleteProfile()} disabled={isDeletePending}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

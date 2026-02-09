@@ -32,6 +32,8 @@ interface SkillsSidebarProps {
 export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) => {
   const [renameDialogSkill, setRenameDialogSkill] = React.useState<DiscoveredSkill | null>(null);
   const [renameNewName, setRenameNewName] = React.useState('');
+  const [deleteDialogSkill, setDeleteDialogSkill] = React.useState<DiscoveredSkill | null>(null);
+  const [isDeletePending, setIsDeletePending] = React.useState(false);
 
   const {
     selectedSkillName,
@@ -76,14 +78,23 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
   };
 
   const handleDeleteSkill = async (skill: DiscoveredSkill) => {
-    if (window.confirm(`Are you sure you want to delete skill "${skill.name}"?`)) {
-      const success = await deleteSkill(skill.name);
-      if (success) {
-        toast.success(`Skill "${skill.name}" deleted successfully`);
-      } else {
-        toast.error('Failed to delete skill');
-      }
+    setDeleteDialogSkill(skill);
+  };
+
+  const handleConfirmDeleteSkill = async () => {
+    if (!deleteDialogSkill) {
+      return;
     }
+
+    setIsDeletePending(true);
+    const success = await deleteSkill(deleteDialogSkill.name);
+    if (success) {
+      toast.success(`Skill "${deleteDialogSkill.name}" deleted successfully`);
+      setDeleteDialogSkill(null);
+    } else {
+      toast.error('Failed to delete skill');
+    }
+    setIsDeletePending(false);
   };
 
   const handleDuplicateSkill = async (skill: DiscoveredSkill) => {
@@ -255,6 +266,37 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
           </>
         )}
       </ScrollableOverlay>
+
+      <Dialog
+        open={deleteDialogSkill !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletePending) {
+            setDeleteDialogSkill(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Skill</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete skill "{deleteDialogSkill?.name}"?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteDialogSkill(null)}
+              disabled={isDeletePending}
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <ButtonLarge onClick={handleConfirmDeleteSkill} disabled={isDeletePending}>
+              Delete
+            </ButtonLarge>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogSkill !== null} onOpenChange={(open) => !open && setRenameDialogSkill(null)}>

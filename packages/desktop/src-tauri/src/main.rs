@@ -1189,6 +1189,7 @@ async fn desktop_host_probe(url: String) -> Result<HostProbeResult, String> {
         .build()
         .map_err(|err| err.to_string())?;
     let started = std::time::Instant::now();
+
     match client.get(&health).send().await {
         Ok(resp) => {
             let status = resp.status();
@@ -2269,6 +2270,29 @@ fn main() {
                             initial_url = local_ui_url.clone();
                         } else if let Some(host) = cfg.hosts.into_iter().find(|h| h.id == default_id) {
                             initial_url = host.url;
+                        }
+                    }
+                }
+
+                if initial_url != local_ui_url {
+                    match desktop_host_probe(initial_url.clone()).await {
+                        Ok(probe) if probe.status != "unreachable" => {}
+                        Ok(_) => {
+                            log::warn!(
+                                "[desktop] startup host unreachable ({}), falling back to local ({})",
+                                initial_url,
+                                local_ui_url
+                            );
+                            initial_url = local_ui_url.clone();
+                        }
+                        Err(err) => {
+                            log::warn!(
+                                "[desktop] startup host probe failed ({}): {}, falling back to local ({})",
+                                initial_url,
+                                err,
+                                local_ui_url
+                            );
+                            initial_url = local_ui_url.clone();
                         }
                     }
                 }

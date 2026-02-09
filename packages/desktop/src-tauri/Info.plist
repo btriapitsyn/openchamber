@@ -14,5 +14,9 @@
 	<string>OpenChamber needs access to work with your projects.</string>
 	<key>NSDownloadsFolderUsageDescription</key>
 	<string>OpenChamber needs access to work with your projects.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OpenChamber needs microphone access for voice input.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>OpenChamber needs speech recognition to transcribe voice input.</string>
 </dict>
 </plist>

@@ -2,7 +2,7 @@ import React from 'react';
 
 import type { Extension } from '@codemirror/state';
 import { Compartment, EditorState, RangeSetBuilder, StateField } from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, WidgetType, gutters, keymap, lineNumbers } from '@codemirror/view';
+import { Decoration, type DecorationSet, EditorView, type KeyBinding, ViewPlugin, WidgetType, gutters, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands';
 import { indentUnit } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel, closeSearchPanel } from '@codemirror/search';
@@ -38,6 +38,13 @@ const externalExtensionsCompartment = new Compartment();
 const highlightLinesCompartment = new Compartment();
 const blockWidgetsCompartment = new Compartment();
 const searchCompartment = new Compartment();
+
+const toViewKeyBindings = (bindings: readonly unknown[]): readonly KeyBinding[] => {
+  return bindings as readonly KeyBinding[];
+};
+
+const openSearchPanelCompat = openSearchPanel as unknown as (view: EditorView) => void;
+const closeSearchPanelCompat = closeSearchPanel as unknown as (view: EditorView) => void;
 
 // BlockWidget class definition moved inside helper or adapted to take map
 class BlockWidget extends WidgetType {
@@ -198,7 +205,7 @@ export function CodeMirrorEditor({
         externalExtensionsCompartment.of(extensions ?? []),
         highlightLinesCompartment.of(createHighlightLinesExtension(highlightLines)),
         blockWidgetsCompartment.of(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)),
-        searchCompartment.of(enableSearch ? [search({ top: true }), keymap.of(searchKeymap)] : []),
+        searchCompartment.of(enableSearch ? [search({ top: true }), keymap.of(toViewKeyBindings(searchKeymap))] : []),
       ],
     });
 
@@ -232,7 +239,7 @@ export function CodeMirrorEditor({
         externalExtensionsCompartment.reconfigure(extensions ?? []),
         highlightLinesCompartment.reconfigure(createHighlightLinesExtension(highlightLines)),
         blockWidgetsCompartment.reconfigure(createBlockWidgetsExtension(blockWidgets, widgetContainersRef.current)),
-        searchCompartment.reconfigure(enableSearch ? [search({ top: true }), keymap.of(searchKeymap)] : []),
+        searchCompartment.reconfigure(enableSearch ? [search({ top: true }), keymap.of(toViewKeyBindings(searchKeymap))] : []),
       ],
     });
 
@@ -247,9 +254,9 @@ export function CodeMirrorEditor({
       return;
     }
     if (searchOpen) {
-      openSearchPanel(view);
+      openSearchPanelCompat(view);
     } else {
-      closeSearchPanel(view);
+      closeSearchPanelCompat(view);
     }
   }, [searchOpen, enableSearch]);
 

@@ -163,6 +163,7 @@ export function DesktopHostSwitcherDialog({
   const [isLoading, setIsLoading] = React.useState(false);
   const [isProbing, setIsProbing] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [switchingHostId, setSwitchingHostId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string>('');
 
   const [editingId, setEditingId] = React.useState<string | null>(null);
@@ -265,9 +266,25 @@ export function DesktopHostSwitcherDialog({
     void probeAll(allHosts);
   }, [open, allHosts, probeAll]);
 
-  const handleSwitch = React.useCallback((host: DesktopHost) => {
+  const handleSwitch = React.useCallback(async (host: DesktopHost) => {
     const origin = host.id === LOCAL_HOST_ID ? getLocalOrigin() : (normalizeHostUrl(host.url) || '');
     if (!origin) return;
+
+    if (host.id !== LOCAL_HOST_ID && isTauriShell()) {
+      setSwitchingHostId(host.id);
+      const probe = await desktopHostProbe(origin).catch((): HostProbeResult => ({ status: 'unreachable', latencyMs: 0 }));
+      setStatusById((prev) => ({
+        ...prev,
+        [host.id]: { status: probe.status, latencyMs: probe.latencyMs },
+      }));
+
+      if (probe.status === 'unreachable') {
+        toast.error(`Instance "${host.label}" is unreachable`);
+        setSwitchingHostId(null);
+        return;
+      }
+    }
+
     const target = toNavigationUrl(origin);
     onHostSwitched?.();
 
@@ -454,7 +471,8 @@ export function DesktopHostSwitcherDialog({
                         'flex items-center gap-2 flex-1 min-w-0 text-left',
                         isEditing && 'pointer-events-none opacity-70'
                       )}
-                      onClick={() => handleSwitch(host)}
+                      onClick={() => void handleSwitch(host)}
+                      disabled={switchingHostId === host.id}
                       aria-label={`Switch to ${host.label}`}
                     >
                       <span className={cn('h-2 w-2 rounded-full flex-shrink-0', statusDotClass(status?.status ?? null))} />
@@ -553,17 +571,25 @@ export function DesktopHostSwitcherDialog({
                         <TooltipTrigger asChild>
                           <button
                             type="button"
-                            className="h-8 w-8 rounded-md inline-flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-interactive-hover transition-colors"
+                            className={cn(
+                              'h-8 w-8 rounded-md inline-flex items-center justify-center hover:bg-interactive-hover transition-colors',
+                              status?.status === 'unreachable'
+                                ? 'text-muted-foreground/30 cursor-not-allowed'
+                                : 'text-muted-foreground/60 hover:text-foreground',
+                            )}
                             onClick={(e) => {
                               e.stopPropagation();
                               openInNewWindow(host);
                             }}
+                            disabled={status?.status === 'unreachable'}
                             aria-label="Open in new window"
                           >
                             <RiWindowLine className="h-4 w-4" />
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>Open in new window</TooltipContent>
+                        <TooltipContent sideOffset={6}>
+                          {status?.status === 'unreachable' ? 'Instance unreachable' : 'Open in new window'}
+                        </TooltipContent>
                       </Tooltip>
                     </div>
                   </div>

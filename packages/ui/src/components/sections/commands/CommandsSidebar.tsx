@@ -32,6 +32,9 @@ interface CommandsSidebarProps {
 export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }) => {
   const [renameDialogCommand, setRenameDialogCommand] = React.useState<Command | null>(null);
   const [renameNewName, setRenameNewName] = React.useState('');
+  const [confirmActionCommand, setConfirmActionCommand] = React.useState<Command | null>(null);
+  const [confirmActionType, setConfirmActionType] = React.useState<'delete' | 'reset' | null>(null);
+  const [isConfirmActionPending, setIsConfirmActionPending] = React.useState(false);
 
   const {
     selectedCommandName,
@@ -80,14 +83,8 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete command "${command.name}"?`)) {
-      const success = await deleteCommand(command.name);
-      if (success) {
-        toast.success(`Command "${command.name}" deleted successfully`);
-      } else {
-        toast.error('Failed to delete command');
-      }
-    }
+    setConfirmActionCommand(command);
+    setConfirmActionType('delete');
   };
 
   const handleResetCommand = async (command: Command) => {
@@ -95,14 +92,37 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       return;
     }
 
-    if (window.confirm(`Are you sure you want to reset command "${command.name}" to its default configuration?`)) {
-      const success = await deleteCommand(command.name);
-      if (success) {
-        toast.success(`Command "${command.name}" reset to default`);
-      } else {
-        toast.error('Failed to reset command');
-      }
+    setConfirmActionCommand(command);
+    setConfirmActionType('reset');
+  };
+
+  const closeConfirmActionDialog = () => {
+    setConfirmActionCommand(null);
+    setConfirmActionType(null);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!confirmActionCommand || !confirmActionType) {
+      return;
     }
+
+    setIsConfirmActionPending(true);
+    const success = await deleteCommand(confirmActionCommand.name);
+
+    if (success) {
+      if (confirmActionType === 'delete') {
+        toast.success(`Command "${confirmActionCommand.name}" deleted successfully`);
+      } else {
+        toast.success(`Command "${confirmActionCommand.name}" reset to default`);
+      }
+      closeConfirmActionDialog();
+    } else if (confirmActionType === 'delete') {
+      toast.error('Failed to delete command');
+    } else {
+      toast.error('Failed to reset command');
+    }
+
+    setIsConfirmActionPending(false);
   };
 
   const handleDuplicateCommand = (command: Command) => {
@@ -263,6 +283,39 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
           </>
         )}
       </ScrollableOverlay>
+
+      <Dialog
+        open={confirmActionCommand !== null && confirmActionType !== null}
+        onOpenChange={(open) => {
+          if (!open && !isConfirmActionPending) {
+            closeConfirmActionDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmActionType === 'delete' ? 'Delete Command' : 'Reset Command'}</DialogTitle>
+            <DialogDescription>
+              {confirmActionType === 'delete'
+                ? `Are you sure you want to delete command "${confirmActionCommand?.name}"?`
+                : `Are you sure you want to reset command "${confirmActionCommand?.name}" to its default configuration?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={closeConfirmActionDialog}
+              disabled={isConfirmActionPending}
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <ButtonLarge onClick={handleConfirmAction} disabled={isConfirmActionPending}>
+              {confirmActionType === 'delete' ? 'Delete' : 'Reset'}
+            </ButtonLarge>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogCommand !== null} onOpenChange={(open) => !open && setRenameDialogCommand(null)}>

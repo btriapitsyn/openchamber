@@ -701,6 +701,10 @@ export type GitHubPullRequestCreateInput = {
   base: string;
   body?: string;
   draft?: boolean;
+  /** Remote to create the PR against (target repo, e.g., 'upstream' for forks) */
+  remote?: string;
+  /** Remote where the head branch lives (source repo, e.g., 'origin' for forks) */
+  headRemote?: string;
 };
 
 export type GitHubPullRequestUpdateInput = {
@@ -816,7 +820,7 @@ export interface GitHubAPI {
   authActivate(accountId: string): Promise<GitHubAuthStatus>;
   me?(): Promise<GitHubUserSummary>;
 
-  prStatus(directory: string, branch: string): Promise<GitHubPullRequestStatus>;
+  prStatus(directory: string, branch: string, remote?: string): Promise<GitHubPullRequestStatus>;
   prCreate(payload: GitHubPullRequestCreateInput): Promise<GitHubPullRequest>;
   prUpdate(payload: GitHubPullRequestUpdateInput): Promise<GitHubPullRequest>;
   prMerge(payload: GitHubPullRequestMergeInput): Promise<GitHubPullRequestMergeResult>;

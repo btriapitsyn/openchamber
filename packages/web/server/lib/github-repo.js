@@ -43,8 +43,8 @@ export const parseGitHubRemoteUrl = (raw) => {
   }
 };
 
-export async function resolveGitHubRepoFromDirectory(directory) {
-  const remoteUrl = await getRemoteUrl(directory).catch(() => null);
+export async function resolveGitHubRepoFromDirectory(directory, remoteName = 'origin') {
+  const remoteUrl = await getRemoteUrl(directory, remoteName).catch(() => null);
   if (!remoteUrl) {
     return { repo: null, remoteUrl: null };
   }
