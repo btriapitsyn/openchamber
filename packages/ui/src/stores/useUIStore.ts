@@ -80,6 +80,7 @@ interface UIStore {
   isSessionCreateDialogOpen: boolean;
   isSettingsDialogOpen: boolean;
   isModelSelectorOpen: boolean;
+  isDeviceLoginOpen: boolean;
   sidebarSection: SidebarSection;
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
@@ -162,6 +163,7 @@ interface UIStore {
   setSessionCreateDialogOpen: (open: boolean) => void;
   setSettingsDialogOpen: (open: boolean) => void;
   setModelSelectorOpen: (open: boolean) => void;
+  setDeviceLoginOpen: (open: boolean) => void;
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
@@ -244,6 +246,7 @@ export const useUIStore = create<UIStore>()(
         isSessionCreateDialogOpen: false,
         isSettingsDialogOpen: false,
         isModelSelectorOpen: false,
+        isDeviceLoginOpen: false,
         sidebarSection: 'sessions',
         eventStreamStatus: 'idle',
         eventStreamHint: null,
@@ -528,6 +531,10 @@ export const useUIStore = create<UIStore>()(
 
         setModelSelectorOpen: (open) => {
           set({ isModelSelectorOpen: open });
+        },
+
+        setDeviceLoginOpen: (open) => {
+          set({ isDeviceLoginOpen: open });
         },
 
         setSidebarSection: (section) => {

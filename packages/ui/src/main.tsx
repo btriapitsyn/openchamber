@@ -4,6 +4,7 @@ import './styles/fonts'
 import './index.css'
 import App from './App.tsx'
 import { SessionAuthGate } from './components/auth/SessionAuthGate'
+import { DeviceLoginGate } from './components/auth/DeviceLoginGate'
 import { ThemeSystemProvider } from './contexts/ThemeSystemContext'
 import { ThemeProvider } from './components/providers/ThemeProvider'
 import './lib/debug'
@@ -93,7 +94,9 @@ createRoot(rootElement).render(
     <ThemeSystemProvider>
       <ThemeProvider>
         <SessionAuthGate>
-          <App apis={runtimeAPIs} />
+          <DeviceLoginGate>
+            <App apis={runtimeAPIs} />
+          </DeviceLoginGate>
         </SessionAuthGate>
       </ThemeProvider>
     </ThemeSystemProvider>

@@ -85,6 +85,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     setSidebarSection(tab);
   }, [setSidebarSection]);
   const [selectedOpenChamberSection, setSelectedOpenChamberSection] = React.useState<OpenChamberSection>('visual');
+  const [openChamberUserCode, setOpenChamberUserCode] = React.useState<string | null>(null);
   // Mobile drill-down state: show page content instead of sidebar
   const [showMobilePageContent, setShowMobilePageContent] = React.useState(false);
   const [sidebarWidth, setSidebarWidth] = React.useState(() => {
@@ -279,6 +280,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     setShowMobilePageContent(false);
   }, [setActiveTab]);
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || activeTab !== 'settings') {
+      return;
+    }
+
+    const applyRouteParams = () => {
+      const params = new URLSearchParams(window.location.search);
+      const section = (params.get('section') || '').trim().toLowerCase();
+      const devices = (params.get('devices') || '').trim() === '1';
+      const userCode = (params.get('user_code') || '').trim();
+
+      if (section === 'openchamber' && devices) {
+        setSelectedOpenChamberSection('devices');
+      }
+
+      setOpenChamberUserCode(userCode || null);
+    };
+
+    applyRouteParams();
+    window.addEventListener('popstate', applyRouteParams);
+    return () => window.removeEventListener('popstate', applyRouteParams);
+  }, [activeTab]);
+
   // Handle mobile sidebar item selection (drill-down to page)
   const handleMobileSidebarClick = React.useCallback(() => {
     if (isMobile) {
@@ -296,6 +320,21 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               onSelectSection={(section) => {
                 setSelectedOpenChamberSection(section);
                 handleMobileSidebarClick();
+
+                if (typeof window !== 'undefined') {
+                  const url = new URL(window.location.href);
+                  if (activeTab === 'settings') {
+                    url.searchParams.set('settings', 'settings');
+                    url.searchParams.set('section', 'openchamber');
+                    if (section === 'devices') {
+                      url.searchParams.set('devices', '1');
+                    } else {
+                      url.searchParams.delete('devices');
+                      url.searchParams.delete('user_code');
+                    }
+                    window.history.replaceState(window.history.state, '', url.toString());
+                  }
+                }
               }}
             />
           </div>
@@ -334,7 +373,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'git-identities':
         return <GitIdentitiesPage />;
       case 'settings':
-        return <OpenChamberPage section={selectedOpenChamberSection} />;
+        return <OpenChamberPage section={selectedOpenChamberSection} userCode={openChamberUserCode} />;
       default:
         return null;
     }

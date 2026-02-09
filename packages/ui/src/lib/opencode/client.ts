@@ -1,6 +1,9 @@
 import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk/v2";
 import type { FilesAPI, RuntimeAPIs } from "../api/types";
 import { getDesktopHomeDirectory } from "../desktop";
+import { resolveRuntimeApiBaseUrl } from "@/lib/instances/runtimeApiBaseUrl";
+import { resolveSelectedInstance } from "@/stores/useInstancesStore";
+import { getAccessToken } from "@/lib/auth/tokenStorage";
 import type {
   Session,
   Message,
@@ -27,9 +30,6 @@ export type RoutedOpencodeEvent = {
   payload: Event;
 };
 
-// Use relative path by default (works with both dev and nginx proxy server)
-// Can be overridden with VITE_OPENCODE_URL for absolute URLs in special deployments
-const DEFAULT_BASE_URL = import.meta.env.VITE_OPENCODE_URL || "/api";
 const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//;
 
 const ensureAbsoluteBaseUrl = (candidate: string): string => {
@@ -54,31 +54,6 @@ const ensureAbsoluteBaseUrl = (candidate: string): string => {
     console.warn("Failed to normalize OpenCode base URL:", error);
     return normalized;
   }
-};
-
-const resolveDesktopBaseUrl = (): string | null => {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  const desktopServer = (window as typeof window & {
-    __OPENCHAMBER_DESKTOP_SERVER__?: { origin: string; apiPrefix?: string };
-    __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
-  }).__OPENCHAMBER_DESKTOP_SERVER__;
-
-  const isDesktop = Boolean(
-    (window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__?.runtime?.isDesktop
-  );
-
-  if (!desktopServer || !isDesktop) {
-    return null;
-  }
-
-  const origin = typeof desktopServer.origin === "string" && desktopServer.origin.length > 0 ? desktopServer.origin : null;
-  if (!origin) {
-    return null;
-  }
-
-  return `${origin}/api`;
 };
 
 interface App {
@@ -153,11 +128,40 @@ class OpencodeService {
   private globalSseFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private globalSseLastFlushAt = 0;
 
-  constructor(baseUrl: string = DEFAULT_BASE_URL) {
-    const desktopBase = resolveDesktopBaseUrl();
-    const requestedBaseUrl = desktopBase || baseUrl;
+  private getAuthorizationHeader(): string | null {
+    const selectedInstance = resolveSelectedInstance();
+    if (!selectedInstance) {
+      return null;
+    }
+    const accessToken = getAccessToken(selectedInstance.id);
+    if (!accessToken) {
+      return null;
+    }
+    return `Bearer ${accessToken}`;
+  }
+
+  private mergeAuthHeaders(headers?: HeadersInit): Headers {
+    const nextHeaders = new Headers(headers ?? undefined);
+    if (!nextHeaders.has('Authorization')) {
+      const authorization = this.getAuthorizationHeader();
+      if (authorization) {
+        nextHeaders.set('Authorization', authorization);
+      }
+    }
+    return nextHeaders;
+  }
+
+  private fetchWithAuth = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
+    return fetch(input, {
+      ...init,
+      headers: this.mergeAuthHeaders(init.headers),
+    });
+  };
+
+  constructor(baseUrl: string = resolveRuntimeApiBaseUrl()) {
+    const requestedBaseUrl = baseUrl || resolveRuntimeApiBaseUrl();
     this.baseUrl = ensureAbsoluteBaseUrl(requestedBaseUrl);
-    this.client = createOpencodeClient({ baseUrl: this.baseUrl });
+    this.client = createOpencodeClient({ baseUrl: this.baseUrl, fetch: this.fetchWithAuth });
   }
 
   getBaseUrl(): string {
@@ -175,7 +179,7 @@ class OpencodeService {
     if (existing) {
       return existing;
     }
-    const scoped = createOpencodeClient({ baseUrl: this.baseUrl, directory: normalized });
+    const scoped = createOpencodeClient({ baseUrl: this.baseUrl, directory: normalized, fetch: this.fetchWithAuth });
     this.scopedClients.set(key, scoped);
     return scoped;
   }
@@ -417,7 +421,7 @@ class OpencodeService {
         url.searchParams.set("directory", this.currentDirectory);
       }
 
-      const response = await fetch(url.toString(), {
+      const response = await this.fetchWithAuth(url.toString(), {
         method: "GET",
         headers: {
           Accept: "application/json",
@@ -766,7 +770,7 @@ class OpencodeService {
         url.searchParams.set("directory", trimmedDirectory);
       }
 
-      const response = await fetch(url.toString(), {
+      const response = await this.fetchWithAuth(url.toString(), {
         method: "GET",
         headers: {
           Accept: "application/json",
@@ -807,7 +811,7 @@ class OpencodeService {
   > {
     try {
       // Web server endpoint - use relative path that works with both dev and prod
-      const response = await fetch('/api/session-activity', {
+      const response = await this.fetchWithAuth(`${this.baseUrl.replace(/\/+$/, '')}/session-activity`, {
         method: 'GET',
         headers: {
           Accept: 'application/json',
@@ -955,7 +959,7 @@ class OpencodeService {
     // The config should be global, not directory-specific
     const url = `${this.baseUrl}/config`;
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithAuth(url, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1284,7 +1288,7 @@ class OpencodeService {
           headers['Last-Event-ID'] = this.globalSseLastEventId;
         }
 
-        const response = await fetch(globalEndpoint, {
+        const response = await this.fetchWithAuth(globalEndpoint, {
           method: 'GET',
           headers,
           signal: abortController.signal,
@@ -1653,7 +1657,7 @@ class OpencodeService {
     try {
       // For now, we'll use a placeholder implementation
       // In a real implementation, this would call an API endpoint to read the file
-      const response = await fetch(`${this.baseUrl}/files/read`, {
+      const response = await this.fetchWithAuth(`${this.baseUrl}/files/read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1679,7 +1683,7 @@ class OpencodeService {
   async listFiles(directory?: string): Promise<Record<string, unknown>[]> {
     try {
       const targetDir = directory || this.currentDirectory || '/';
-      const response = await fetch(`${this.baseUrl}/files/list`, {
+      const response = await this.fetchWithAuth(`${this.baseUrl}/files/list`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1775,7 +1779,7 @@ class OpencodeService {
       } else {
         healthUrl = `${normalizedBase}/health`;
       }
-      const response = await fetch(healthUrl);
+      const response = await this.fetchWithAuth(healthUrl);
       if (!response.ok) {
         return false;
       }
@@ -1813,7 +1817,7 @@ class OpencodeService {
       ...(options?.allowOutsideWorkspace ? { allowOutsideWorkspace: true } : {}),
     };
 
-    const response = await fetch(`${this.baseUrl}/fs/mkdir`, {
+    const response = await this.fetchWithAuth(`${this.baseUrl}/fs/mkdir`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1860,7 +1864,7 @@ class OpencodeService {
         params.set('respectGitignore', 'true');
       }
       const query = params.toString();
-      const response = await fetch(`${this.baseUrl}/fs/list${query ? `?${query}` : ''}`);
+      const response = await this.fetchWithAuth(`${this.baseUrl}/fs/list${query ? `?${query}` : ''}`);
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         const message = typeof error.error === 'string' ? error.error : 'Failed to list directory';
@@ -1953,7 +1957,7 @@ class OpencodeService {
     }
 
     const searchUrl = `${this.baseUrl}/fs/search${params.toString() ? `?${params.toString()}` : ''}`;
-    const response = await fetch(searchUrl, {
+    const response = await this.fetchWithAuth(searchUrl, {
       method: 'GET',
       headers: {
         Accept: 'application/json'
@@ -1982,7 +1986,7 @@ class OpencodeService {
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/fs/home`, {
+      const response = await this.fetchWithAuth(`${this.baseUrl}/fs/home`, {
         method: 'GET',
         headers: {
           Accept: 'application/json'
@@ -2019,7 +2023,7 @@ class OpencodeService {
     console.log('[OpencodeClient] POST', url, 'with path:', directoryPath);
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithAuth(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
