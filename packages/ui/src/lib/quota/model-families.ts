@@ -7,17 +7,50 @@ export interface ModelFamily {
   order: number;
 }
 
+/**
+ * Strip auth source prefix from model name for display.
+ * e.g., "gemini/gemini-2.5-flash" -> "gemini-2.5-flash"
+ *       "antigravity/claude-sonnet" -> "claude-sonnet"
+ */
+export function getDisplayModelName(modelName: string): string {
+  // Handle prefixes like "gemini/", "antigravity/"
+  const slashIndex = modelName.indexOf('/');
+  if (slashIndex !== -1) {
+    const prefix = modelName.substring(0, slashIndex);
+    // Check if it's an auth source prefix
+    if (prefix === 'gemini' || prefix === 'antigravity') {
+      return modelName.substring(slashIndex + 1);
+    }
+  }
+  return modelName;
+}
+
+/**
+ * Get the auth source label from a model name prefix.
+ * e.g., "gemini/..." -> "Gemini"
+ *       "antigravity/..." -> "Antigravity"
+ */
+export function getAuthSourceLabel(modelName: string): string | null {
+  const slashIndex = modelName.indexOf('/');
+  if (slashIndex === -1) return null;
+  
+  const prefix = modelName.substring(0, slashIndex);
+  if (prefix === 'gemini') return 'Gemini';
+  if (prefix === 'antigravity') return 'Antigravity';
+  return null;
+}
+
 const GOOGLE_MODEL_FAMILIES: ModelFamily[] = [
   {
-    id: 'gemini',
+    id: 'gemini-auth',
     label: 'Gemini',
-    matcher: (modelName) => modelName.toLowerCase().startsWith('gemini-'),
+    matcher: (modelName) => modelName.startsWith('gemini/'),
     order: 1,
   },
   {
-    id: 'claude',
-    label: 'Claude',
-    matcher: (modelName) => modelName.toLowerCase().startsWith('claude-'),
+    id: 'antigravity-auth',
+    label: 'Antigravity',
+    matcher: (modelName) => modelName.startsWith('antigravity/'),
     order: 2,
   },
 ];
@@ -92,7 +125,8 @@ export function groupModelsByFamilyWithGetter<T>(
 
 /**
  * Get default models for a provider based on simple patterns.
- * - Gemini 3.x models (starting with gemini-3-)
+ * For Google provider with gemini/ and antigravity/ prefixes:
+ * - Gemini 3.x models
  * - All Claude models
  */
 export function getDefaultModels(
@@ -101,10 +135,12 @@ export function getDefaultModels(
 ): string[] {
   return availableModels.filter((model) => {
     const lower = model.toLowerCase();
+    // Handle gemini/ and antigravity/ prefixes
+    const modelName = lower.includes('/') ? lower.split('/')[1] : lower;
     // Gemini 3.x
-    if (lower.startsWith('gemini-3-')) return true;
+    if (modelName.startsWith('gemini-3-')) return true;
     // All Claude models
-    if (lower.startsWith('claude-')) return true;
+    if (modelName.startsWith('claude-')) return true;
     return false;
   });
 }

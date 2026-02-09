@@ -17,7 +17,8 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
-import { formatPercent, formatWindowLabel, QUOTA_PROVIDERS } from '@/lib/quota';
+import { PaceIndicator } from '@/components/sections/usage/PaceIndicator';
+import { formatPercent, formatWindowLabel, QUOTA_PROVIDERS, calculatePace, calculateExpectedUsagePercent } from '@/lib/quota';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { UsageWindow } from '@/types';
@@ -447,6 +448,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
       providerId: string;
       providerName: string;
       entries: Array<[string, UsageWindow]>;
+      error?: string;
     }> = [];
 
     for (const provider of QUOTA_PROVIDERS) {
@@ -456,8 +458,9 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
       const result = quotaResults.find((entry) => entry.providerId === provider.id);
       const windows = (result?.usage?.windows ?? {}) as Record<string, UsageWindow>;
       const entries = Object.entries(windows);
-      if (entries.length > 0) {
-        groups.push({ providerId: provider.id, providerName: provider.name, entries });
+      const error = (result && !result.ok && result.configured) ? result.error : undefined;
+      if (entries.length > 0 || error) {
+        groups.push({ providerId: provider.id, providerName: provider.name, entries, error });
       }
     }
 
@@ -527,8 +530,11 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
               <RiTimerLine className="h-5 w-5" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 max-h-[70vh] overflow-y-auto overflow-x-hidden p-0">
-            <div className="sticky top-0 z-20 bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
+          <DropdownMenuContent
+            align="end"
+            className="w-80 max-h-[70vh] overflow-y-auto overflow-x-hidden bg-[var(--surface-elevated)] p-0"
+          >
+            <div className="sticky top-0 z-20 bg-[var(--surface-elevated)]">
               <DropdownMenuLabel className="flex items-center justify-between gap-3 typography-ui-header font-semibold text-foreground">
                 <span>Rate limits</span>
                 <div className="flex items-center gap-1">
@@ -573,9 +579,9 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
                   </button>
                 </div>
               </DropdownMenuLabel>
-              <div className="px-2 pb-2 typography-micro text-muted-foreground text-[10px]">
-                Last updated {formatTime(quotaLastUpdated)}
-              </div>
+            </div>
+            <div className="border-b border-[var(--interactive-border)] px-2 pb-2 typography-micro text-muted-foreground text-[10px]">
+              Last updated {formatTime(quotaLastUpdated)}
             </div>
             {!hasRateLimits && (
               <DropdownMenuItem className="cursor-default" onSelect={(event) => event.preventDefault()}>
@@ -584,7 +590,7 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
             )}
             {rateLimitGroups.map((group, index) => (
               <React.Fragment key={group.providerId}>
-                <DropdownMenuLabel className="sticky top-[60px] z-10 flex items-center gap-2 bg-[var(--surface-elevated)] typography-ui-label text-foreground">
+                <DropdownMenuLabel className="flex items-center gap-2 bg-[var(--surface-elevated)] typography-ui-label text-foreground">
                   <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
                   {group.providerName}
                 </DropdownMenuLabel>
@@ -594,38 +600,50 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
                     className="cursor-default"
                     onSelect={(event) => event.preventDefault()}
                   >
-                    <span className="typography-ui-label text-muted-foreground">No rate limits reported.</span>
+                    <span className="typography-ui-label text-muted-foreground">
+                      {group.error ?? 'No rate limits reported.'}
+                    </span>
                   </DropdownMenuItem>
                 ) : (
-                  group.entries.map(([label, window]) => (
+                  group.entries.map(([label, window]) => {
+                    const displayPercent = quotaDisplayMode === 'remaining'
+                      ? window.remainingPercent
+                      : window.usedPercent;
+                    const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
+                    const expectedMarker = paceInfo?.dailyAllocationPercent != null
+                      ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                      : null;
+                    return (
                     <DropdownMenuItem
                       key={`${group.providerId}-${label}`}
                       className="cursor-default items-start"
                       onSelect={(event) => event.preventDefault()}
                     >
                       <span className="flex min-w-0 flex-1 flex-col gap-2">
-                        {(() => {
-                          const displayPercent = quotaDisplayMode === 'remaining'
-                            ? window.remainingPercent
-                            : window.usedPercent;
-                          return (
-                            <>
                               <span className="flex min-w-0 items-center justify-between gap-3">
                                 <span className="truncate typography-micro text-muted-foreground">{formatWindowLabel(label)}</span>
                                 <span className="typography-ui-label text-foreground tabular-nums">
                                   {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
                                 </span>
                               </span>
-                              <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="h-1" />
+                              <UsageProgressBar
+                                percent={displayPercent}
+                                tonePercent={window.usedPercent}
+                                className="h-1"
+                                expectedMarkerPercent={expectedMarker}
+                              />
+                              {paceInfo && (
+                                <div className="mt-0.5">
+                                  <PaceIndicator paceInfo={paceInfo} compact />
+                                </div>
+                              )}
                               <span className="flex items-center justify-between typography-micro text-muted-foreground text-[10px]">
                                 <span>{window.resetAfterFormatted ?? window.resetAtFormatted ?? ''}</span>
                               </span>
-                            </>
-                          );
-                        })()}
                       </span>
                     </DropdownMenuItem>
-                  ))
+                    );
+                  })
                 )}
                 {index < rateLimitGroups.length - 1 && <DropdownMenuSeparator />}
               </React.Fragment>

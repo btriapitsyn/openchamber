@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/collapsible';
 import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
 import type { UsageWindows, QuotaProviderId } from '@/types';
-import { getAllModelFamilies, sortModelFamilies, groupModelsByFamilyWithGetter } from '@/lib/quota/model-families';
+import { getAllModelFamilies, getDisplayModelName, sortModelFamilies, groupModelsByFamilyWithGetter } from '@/lib/quota/model-families';
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -257,7 +257,7 @@ export const UsagePage: React.FC = () => {
                         <UsageCard
                           key={model.name}
                           title={label}
-                          subtitle={model.name}
+                          subtitle={getDisplayModelName(model.name)}
                           window={window}
                           showToggle
                           toggleEnabled={isSelected}
@@ -306,7 +306,7 @@ export const UsagePage: React.FC = () => {
                         <UsageCard
                           key={model.name}
                           title={label}
-                          subtitle={model.name}
+                          subtitle={getDisplayModelName(model.name)}
                           window={window}
                           showToggle
                           toggleEnabled={isSelected}

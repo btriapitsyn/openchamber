@@ -30,11 +30,13 @@ import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
 import { McpDropdown, McpDropdownContent } from '@/components/mcp/McpDropdown';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { formatPercent, formatWindowLabel, QUOTA_PROVIDERS } from '@/lib/quota';
+import { formatPercent, formatWindowLabel, QUOTA_PROVIDERS, calculatePace, calculateExpectedUsagePercent } from '@/lib/quota';
 import { UsageProgressBar } from '@/components/sections/usage/UsageProgressBar';
+import { PaceIndicator } from '@/components/sections/usage/PaceIndicator';
 import { updateDesktopSettings } from '@/lib/persistence';
 import {
   getAllModelFamilies,
+  getDisplayModelName,
   groupModelsByFamily,
   sortModelFamilies,
 } from '@/lib/quota/model-families';
@@ -216,6 +218,7 @@ export const Header: React.FC = () => {
     providerId: string;
     providerName: string;
     entries: Array<[string, UsageWindow]>;
+    error?: string;
     modelFamilies?: Array<{
       familyId: string | null;
       familyLabel: string;
@@ -239,14 +242,15 @@ export const Header: React.FC = () => {
         providerId: provider.id,
         providerName: provider.name,
         entries,
+        error: (result && !result.ok && result.configured) ? result.error : undefined,
       };
 
       // Add model families if provider has per-model quotas
       if (models && Object.keys(models).length > 0) {
         const providerSelectedModels = selectedModels[provider.id] ?? [];
-        // hasExplicitSelection = true means user touched the selection (even if empty)
-        // hasExplicitSelection = false means no preference (key missing) → show all by default
-        const hasExplicitSelection = provider.id in selectedModels;
+        // hasExplicitSelection = true means user has selected specific models to show
+        // If the array exists but is empty, treat as "show all" (user cleared selection)
+        const hasExplicitSelection = providerSelectedModels.length > 0;
         const modelGroups = groupModelsByFamily(models, provider.id);
         const families = getAllModelFamilies(provider.id);
         const sortedFamilies = sortModelFamilies(families);
@@ -310,7 +314,7 @@ export const Header: React.FC = () => {
         }
       }
 
-      if (entries.length > 0 || (group.modelFamilies && group.modelFamilies.length > 0)) {
+      if (entries.length > 0 || (group.modelFamilies && group.modelFamilies.length > 0) || group.error) {
         groups.push(group);
       }
     }
@@ -826,7 +830,10 @@ export const Header: React.FC = () => {
                 <p>Instance / Usage / MCP</p>
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="end" className="w-[min(30rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto p-0">
+            <DropdownMenuContent
+              align="end"
+              className="w-[min(30rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto bg-[var(--surface-elevated)] p-0"
+            >
               <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-2">
                 <AnimatedTabs<'instance' | 'usage' | 'mcp'>
                   value={desktopServicesTab}
@@ -856,7 +863,7 @@ export const Header: React.FC = () => {
 
               {desktopServicesTab === 'usage' && (
                 <div className="overflow-x-hidden">
-                  <div className="sticky top-0 z-20 bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
+                  <div className="bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
                     <DropdownMenuLabel className="flex items-center justify-between gap-3 py-2.5">
                       <div className="flex min-w-0 items-center gap-2">
                         <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
@@ -901,7 +908,7 @@ export const Header: React.FC = () => {
 
                     return (
                       <React.Fragment key={group.providerId}>
-                        <DropdownMenuLabel className="sticky top-[44px] z-10 flex items-center gap-2 bg-[var(--surface-elevated)] typography-ui-label text-foreground">
+                        <DropdownMenuLabel className="flex items-center gap-2 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] typography-ui-label text-foreground">
                           <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
                           {group.providerName}
                         </DropdownMenuLabel>
@@ -912,23 +919,27 @@ export const Header: React.FC = () => {
                             className="cursor-default hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
                             onSelect={(event) => event.preventDefault()}
                           >
-                            <span className="typography-ui-label text-muted-foreground">No rate limits reported.</span>
+                            <span className="typography-ui-label text-muted-foreground">
+                              {group.error ?? 'No rate limits reported.'}
+                            </span>
                           </DropdownMenuItem>
                         ) : (
                           <>
-                            {group.entries.map(([label, window]) => (
+                            {group.entries.map(([label, window]) => {
+                              const displayPercent = quotaDisplayMode === 'remaining'
+                                ? window.remainingPercent
+                                : window.usedPercent;
+                              const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
+                              const expectedMarker = paceInfo?.dailyAllocationPercent != null
+                                ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                : null;
+                              return (
                               <DropdownMenuItem
                                 key={`${group.providerId}-${label}`}
                                 className="cursor-default items-start hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
                                 onSelect={(event) => event.preventDefault()}
                               >
                                 <span className="flex min-w-0 flex-1 flex-col gap-2">
-                                  {(() => {
-                                    const displayPercent = quotaDisplayMode === 'remaining'
-                                      ? window.remainingPercent
-                                      : window.usedPercent;
-                                    return (
-                                      <>
                                         <span className="flex min-w-0 items-center justify-between gap-3">
                                           <span className="min-w-0 flex items-center gap-2">
                                             <span className="truncate typography-ui-label text-foreground">{formatWindowLabel(label)}</span>
@@ -942,13 +953,21 @@ export const Header: React.FC = () => {
                                             {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
                                           </span>
                                         </span>
-                                        <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="h-1.5 mb-1.5" />
-                                      </>
-                                    );
-                                  })()}
+                                        <UsageProgressBar
+                                          percent={displayPercent}
+                                          tonePercent={window.usedPercent}
+                                          className="h-1.5"
+                                          expectedMarkerPercent={expectedMarker}
+                                        />
+                                        {paceInfo && (
+                                          <div className="mb-1">
+                                            <PaceIndicator paceInfo={paceInfo} compact />
+                                          </div>
+                                        )}
                                 </span>
                               </DropdownMenuItem>
-                            ))}
+                            );
+                            })}
 
                             {group.modelFamilies && group.modelFamilies.length > 0 && (
                               <div className="px-2 py-1">
@@ -973,36 +992,42 @@ export const Header: React.FC = () => {
                                       </CollapsibleTrigger>
                                       <CollapsibleContent>
                                         <div className="space-y-1 pl-2">
-                                          {family.models.map(([modelName, window]) => (
+                                          {family.models.map(([modelName, window]) => {
+                                            const displayPercent = quotaDisplayMode === 'remaining'
+                                              ? window.remainingPercent
+                                              : window.usedPercent;
+                                            // For model-level quotas, use '5h' as typical window label for Google models
+                                            const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, '5h');
+                                            const expectedMarker = paceInfo?.dailyAllocationPercent != null
+                                              ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                              : null;
+                                            return (
                                             <div
                                               key={`${group.providerId}-${modelName}`}
                                               className="py-1.5"
                                             >
                                               <div className="flex min-w-0 flex-col gap-1.5">
                                                 <span className="flex min-w-0 items-center justify-between gap-3">
-                                                  <span className="truncate typography-micro text-muted-foreground">{modelName}</span>
-                                                  {(() => {
-                                                    const displayPercent = quotaDisplayMode === 'remaining'
-                                                      ? window.remainingPercent
-                                                      : window.usedPercent;
-                                                    return (
-                                                      <span className="typography-ui-label text-foreground tabular-nums">
-                                                        {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
-                                                      </span>
-                                                    );
-                                                  })()}
+                                                  <span className="truncate typography-micro text-muted-foreground">{getDisplayModelName(modelName)}</span>
+                                                  <span className="typography-ui-label text-foreground tabular-nums">
+                                                    {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
+                                                  </span>
                                                 </span>
-                                                {(() => {
-                                                  const displayPercent = quotaDisplayMode === 'remaining'
-                                                    ? window.remainingPercent
-                                                    : window.usedPercent;
-                                                  return (
-                                                    <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="h-1.5 mb-1.5" />
-                                                  );
-                                                })()}
+                                                <UsageProgressBar
+                                                  percent={displayPercent}
+                                                  tonePercent={window.usedPercent}
+                                                  className="h-1.5"
+                                                  expectedMarkerPercent={expectedMarker}
+                                                />
+                                                {paceInfo && (
+                                                  <div className="mb-1">
+                                                    <PaceIndicator paceInfo={paceInfo} compact />
+                                                  </div>
+                                                )}
                                               </div>
                                             </div>
-                                          ))}
+                                            );
+                                          })}
                                         </div>
                                       </CollapsibleContent>
                                     </Collapsible>
@@ -1360,14 +1385,23 @@ export const Header: React.FC = () => {
                     )}
                     {rateLimitGroups.map((group) => (
                       <React.Fragment key={group.providerId}>
-                        <div className="sticky top-0 z-10 flex items-center gap-2 bg-[var(--surface-elevated)] px-3 py-2">
+                        <div className="flex items-center gap-2 bg-[var(--surface-elevated)] px-3 py-2">
                           <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
                           <span className="typography-ui-label text-foreground">{group.providerName}</span>
                         </div>
+                        {group.entries.length === 0 && (!group.modelFamilies || group.modelFamilies.length === 0) && (
+                          <div className="px-3 py-2 typography-ui-label text-muted-foreground">
+                            {group.error ?? 'No rate limits reported.'}
+                          </div>
+                        )}
                         {group.entries.map(([label, window]) => {
                           const displayPercent = quotaDisplayMode === 'remaining'
                             ? window.remainingPercent
                             : window.usedPercent;
+                          const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
+                          const expectedMarker = paceInfo?.dailyAllocationPercent != null
+                            ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                            : null;
                           return (
                             <div key={`${group.providerId}-${label}`} className="px-3 py-2">
                               <div className="flex items-center justify-between gap-3">
@@ -1378,7 +1412,17 @@ export const Header: React.FC = () => {
                                   {formatPercent(displayPercent)}
                                 </span>
                               </div>
-                              <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="mt-2 h-1" />
+                              <UsageProgressBar
+                                percent={displayPercent}
+                                tonePercent={window.usedPercent}
+                                className="mt-2 h-1"
+                                expectedMarkerPercent={expectedMarker}
+                              />
+                              {paceInfo && (
+                                <div className="mt-1.5">
+                                  <PaceIndicator paceInfo={paceInfo} compact />
+                                </div>
+                              )}
                               <div className="mt-1 typography-micro text-muted-foreground text-[10px]">
                                 {window.resetAfterFormatted ?? window.resetAtFormatted ?? ''}
                               </div>
@@ -1414,17 +1458,32 @@ export const Header: React.FC = () => {
                                         const displayPercent = quotaDisplayMode === 'remaining'
                                           ? window.remainingPercent
                                           : window.usedPercent;
+                                        // For model-level quotas, use '5h' as typical window label for Google models
+                                        const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, '5h');
+                                        const expectedMarker = paceInfo?.dailyAllocationPercent != null
+                                          ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                          : null;
                                         return (
                                           <div key={`${group.providerId}-${modelName}`} className="py-1.5">
                                             <div className="flex items-center justify-between gap-3">
                                               <span className="truncate typography-micro text-muted-foreground">
-                                                {modelName}
+                                                {getDisplayModelName(modelName)}
                                               </span>
                                               <span className="typography-ui-label text-foreground tabular-nums">
                                                 {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
                                               </span>
                                             </div>
-                                            <UsageProgressBar percent={displayPercent} tonePercent={window.usedPercent} className="mt-1.5 h-1" />
+                                            <UsageProgressBar
+                                              percent={displayPercent}
+                                              tonePercent={window.usedPercent}
+                                              className="mt-1.5 h-1"
+                                              expectedMarkerPercent={expectedMarker}
+                                            />
+                                            {paceInfo && (
+                                              <div className="mt-1">
+                                                <PaceIndicator paceInfo={paceInfo} compact />
+                                              </div>
+                                            )}
                                           </div>
                                         );
                                       })}
