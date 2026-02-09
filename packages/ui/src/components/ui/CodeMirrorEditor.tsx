@@ -29,6 +29,7 @@ type CodeMirrorEditorProps = {
   onViewDestroy?: () => void;
   enableSearch?: boolean;
   searchOpen?: boolean;
+  onSearchOpenChange?: (open: boolean) => void;
 };
 
 const lineNumbersCompartment = new Compartment();
