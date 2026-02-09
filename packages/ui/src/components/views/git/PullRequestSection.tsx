@@ -1597,7 +1597,7 @@ export const PullRequestSection: React.FC<{
                     disabled={isCreating || !isConnected}
                   >
                     <span className="inline-flex size-4 items-center justify-center">
-                      {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <span className="size-4" aria-hidden="true" />}
+                      {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <RiGitPullRequestLine className="size-4" />}
                     </span>
                     <span>Create PR</span>
                   </Button>
