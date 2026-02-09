@@ -7575,12 +7575,17 @@ async function main(options = {}) {
 
       const diffSummaries = diffs.map(({ path, diff }) => `FILE: ${path}\n${diff}`).join('\n\n');
 
-      let prompt = `You are drafting a GitHub Pull Request title + description. Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:
-- title: concise, sentence case, <= 80 chars, no trailing punctuation, no commit-style prefixes (no "feat:", "fix:")
-- body: GitHub-flavored markdown with these sections in this order: Summary, Testing, Notes
-- Summary: 3-6 bullet points describing user-visible changes; avoid internal helper function names
-- Testing: bullet list ("- Not tested" allowed)
-- Notes: bullet list; include breaking/rollout notes only when relevant
+      let prompt = `You are drafting a GitHub Pull Request title + description for a squash-merge workflow.
+Respond in JSON of the shape {"title": string, "body": string} (ONLY JSON in response, no markdown fences) with these rules:
+- Title format: conventional, outcome-first, <= 90 chars, no trailing punctuation.
+- Use: <type>(<scope>): <summary>. Types: feat, fix, refactor, perf, docs, test, chore.
+- Pick the most important user-facing outcome first; include a second major outcome only when needed.
+- Body: GitHub-flavored markdown with sections in this exact order: ## Summary, ## Why, ## Testing.
+- Summary: 3-6 bullets, concrete product/workflow impact, no vague filler, no internal helper names.
+- Why: 1-3 bullets explaining motivation/tradeoff (what problem this solves for users/devs).
+- Testing: checkbox list using "- [ ]"; include realistic manual/automated checks inferred from the diff.
+- If tests were not run, include "- [ ] Not run locally" as first testing item.
+- Keep language crisp and specific; avoid generic boilerplate.
 
 Context:
 - base branch: ${base}

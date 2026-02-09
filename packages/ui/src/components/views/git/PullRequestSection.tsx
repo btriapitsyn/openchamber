@@ -1095,7 +1095,7 @@ export const PullRequestSection: React.FC<{
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex size-5 shrink-0 items-center justify-center rounded-sm hover:bg-interactive-hover/50"
+                    className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border/60 bg-background/70 hover:bg-interactive-hover/60"
                     onClick={() => void openExternal(pr.url)}
                     aria-label="Open PR on GitHub"
                   >
@@ -1547,9 +1547,16 @@ export const PullRequestSection: React.FC<{
                     Generate
                   </Button>
                   <div className="flex-1" />
-                  <Button size="sm" onClick={createPr} disabled={isCreating || !isConnected}>
-                    {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : null}
-                    Create PR
+                  <Button
+                    size="sm"
+                    className="min-w-[7.5rem] justify-center gap-2"
+                    onClick={createPr}
+                    disabled={isCreating || !isConnected}
+                  >
+                    <span className="inline-flex size-4 items-center justify-center">
+                      {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <span className="size-4" aria-hidden="true" />}
+                    </span>
+                    <span>Create PR</span>
                   </Button>
                 </div>
               </div>
