@@ -156,11 +156,13 @@ export const PlanView: React.FC = () => {
   }, []);
   const isSelectingRef = React.useRef(false);
   const selectionStartRef = React.useRef<number | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
 
   React.useEffect(() => {
     const handleGlobalMouseUp = () => {
       isSelectingRef.current = false;
       selectionStartRef.current = null;
+      setIsDragging(false);
     };
     document.addEventListener('mouseup', handleGlobalMouseUp);
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
@@ -428,10 +430,10 @@ export const PlanView: React.FC = () => {
     });
 
     // Add new comment input if selecting AND not editing an existing draft
-    if (lineSelection && !editingDraftId) {
+    if (lineSelection && !editingDraftId && !isDragging) {
       widgets.push({
         afterLine: lineSelection.end,
-        id: 'new-comment-input',
+        id: 'plan-new-comment-input',
         content: (
           <InlineCommentInput
             fileLabel={fileLabel}
@@ -457,6 +459,7 @@ export const PlanView: React.FC = () => {
     handleSaveComment,
     handleCancelComment,
     removeDraft,
+    isDragging,
   ]);
 
   return (
@@ -593,11 +596,14 @@ export const PlanView: React.FC = () => {
                                 setLineSelection({ start, end });
                                 isSelectingRef.current = false;
                                 selectionStartRef.current = null;
+                                // Mobile tap-extend is atomic, so we don't start drag
+                                setIsDragging(false);
                                 return true;
                               }
 
                               isSelectingRef.current = true;
                               selectionStartRef.current = lineNumber;
+                              setIsDragging(true);
 
                               if (lineSelection && event.shiftKey) {
                                 const start = Math.min(lineSelection.start, lineNumber);
@@ -614,17 +620,19 @@ export const PlanView: React.FC = () => {
                               if (event.buttons !== 1) return false;
                               if (!isSelectingRef.current || selectionStartRef.current === null) return false;
                             const lineNumber = view.state.doc.lineAt(line.from).number;
-                            const start = Math.min(selectionStartRef.current, lineNumber);
-                            const end = Math.max(selectionStartRef.current, lineNumber);
-                            setLineSelection({ start, end });
-                            return false;
+                              const start = Math.min(selectionStartRef.current, lineNumber);
+                              const end = Math.max(selectionStartRef.current, lineNumber);
+                              setLineSelection({ start, end });
+                              setIsDragging(true);
+                              return false;
+                            },
+                            mouseup: () => {
+                              isSelectingRef.current = false;
+                              selectionStartRef.current = null;
+                              setIsDragging(false);
+                              return false;
+                            },
                           },
-                          mouseup: () => {
-                            isSelectingRef.current = false;
-                            selectionStartRef.current = null;
-                            return false;
-                          },
-                        },
                       }}
                     />
                   </div>
