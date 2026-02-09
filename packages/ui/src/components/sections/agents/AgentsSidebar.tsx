@@ -102,6 +102,9 @@ const rulesetToPermissionConfig = (ruleset: unknown): AgentDraft['permission'] =
 export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) => {
   const [renameDialogAgent, setRenameDialogAgent] = React.useState<Agent | null>(null);
   const [renameNewName, setRenameNewName] = React.useState('');
+  const [confirmActionAgent, setConfirmActionAgent] = React.useState<Agent | null>(null);
+  const [confirmActionType, setConfirmActionType] = React.useState<'delete' | 'reset' | null>(null);
+  const [isConfirmActionPending, setIsConfirmActionPending] = React.useState(false);
 
   const {
     selectedAgentName,
@@ -150,14 +153,8 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       return;
     }
 
-    if (window.confirm(`Are you sure you want to delete agent "${agent.name}"?`)) {
-      const success = await deleteAgent(agent.name);
-      if (success) {
-        toast.success(`Agent "${agent.name}" deleted successfully`);
-      } else {
-        toast.error('Failed to delete agent');
-      }
-    }
+    setConfirmActionAgent(agent);
+    setConfirmActionType('delete');
   };
 
   const handleResetAgent = async (agent: Agent) => {
@@ -165,14 +162,37 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       return;
     }
 
-    if (window.confirm(`Are you sure you want to reset agent "${agent.name}" to its default configuration?`)) {
-      const success = await deleteAgent(agent.name);
-      if (success) {
-        toast.success(`Agent "${agent.name}" reset to default`);
-      } else {
-        toast.error('Failed to reset agent');
-      }
+    setConfirmActionAgent(agent);
+    setConfirmActionType('reset');
+  };
+
+  const closeConfirmActionDialog = () => {
+    setConfirmActionAgent(null);
+    setConfirmActionType(null);
+  };
+
+  const handleConfirmAction = async () => {
+    if (!confirmActionAgent || !confirmActionType) {
+      return;
     }
+
+    setIsConfirmActionPending(true);
+    const success = await deleteAgent(confirmActionAgent.name);
+
+    if (success) {
+      if (confirmActionType === 'delete') {
+        toast.success(`Agent "${confirmActionAgent.name}" deleted successfully`);
+      } else {
+        toast.success(`Agent "${confirmActionAgent.name}" reset to default`);
+      }
+      closeConfirmActionDialog();
+    } else if (confirmActionType === 'delete') {
+      toast.error('Failed to delete agent');
+    } else {
+      toast.error('Failed to reset agent');
+    }
+
+    setIsConfirmActionPending(false);
   };
 
   const handleDuplicateAgent = (agent: Agent) => {
@@ -366,6 +386,39 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
           </>
         )}
       </ScrollableOverlay>
+
+      <Dialog
+        open={confirmActionAgent !== null && confirmActionType !== null}
+        onOpenChange={(open) => {
+          if (!open && !isConfirmActionPending) {
+            closeConfirmActionDialog();
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{confirmActionType === 'delete' ? 'Delete Agent' : 'Reset Agent'}</DialogTitle>
+            <DialogDescription>
+              {confirmActionType === 'delete'
+                ? `Are you sure you want to delete agent "${confirmActionAgent?.name}"?`
+                : `Are you sure you want to reset agent "${confirmActionAgent?.name}" to its default configuration?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={closeConfirmActionDialog}
+              disabled={isConfirmActionPending}
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <ButtonLarge onClick={handleConfirmAction} disabled={isConfirmActionPending}>
+              {confirmActionType === 'delete' ? 'Delete' : 'Reset'}
+            </ButtonLarge>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogAgent !== null} onOpenChange={(open) => !open && setRenameDialogAgent(null)}>

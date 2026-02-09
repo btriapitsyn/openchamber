@@ -19,6 +19,14 @@ import {
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const PROFILE_COLORS = [
   { key: 'keyword', label: 'Green', cssVar: 'var(--syntax-keyword)' },
@@ -70,6 +78,8 @@ export const GitIdentitiesPage: React.FC = () => {
   const [color, setColor] = React.useState('keyword');
   const [icon, setIcon] = React.useState('branch');
   const [isSaving, setIsSaving] = React.useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   React.useEffect(() => {
     if (importData) {
@@ -152,23 +162,31 @@ export const GitIdentitiesPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!selectedProfileId || isNewProfile) return;
 
-    if (!confirm('Are you sure you want to delete this profile?')) {
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedProfileId || isNewProfile) {
       return;
     }
 
+    setIsDeleting(true);
     try {
       const success = await deleteProfile(selectedProfileId);
       if (success) {
         toast.success('Profile deleted successfully');
+        setIsDeleteDialogOpen(false);
       } else {
         toast.error('Failed to delete profile');
       }
     } catch (error) {
       console.error('Error deleting profile:', error);
       toast.error('An error occurred while deleting');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -483,6 +501,32 @@ export const GitIdentitiesPage: React.FC = () => {
         </div>
         )}
       </div>
+
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting) {
+            setIsDeleteDialogOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Profile</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete profile "{selectedProfile?.name || name || 'this profile'}"?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleConfirmDelete()} disabled={isDeleting}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </ScrollableOverlay>
   );

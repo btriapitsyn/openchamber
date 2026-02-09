@@ -5,6 +5,14 @@ import { Input } from '@/components/ui/input';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { AnimatedTabs } from '@/components/ui/animated-tabs';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -75,6 +83,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
   const [installDialogOpen, setInstallDialogOpen] = React.useState(false);
   const [installItem, setInstallItem] = React.useState<SkillsCatalogItem | null>(null);
   const [isRemovingCatalog, setIsRemovingCatalog] = React.useState(false);
+  const [isRemoveCatalogDialogOpen, setIsRemoveCatalogDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
     void loadCatalog();
@@ -118,10 +127,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
       return;
     }
 
-    if (!window.confirm('Remove this catalog?')) {
-      return;
-    }
-
     setIsRemovingCatalog(true);
     try {
       const settings = await loadSettings();
@@ -129,6 +134,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
       const updated = catalogs.filter((c) => c.id !== selectedSourceId);
       await updateDesktopSettings({ skillCatalogs: updated });
       await loadCatalog({ refresh: true });
+      setIsRemoveCatalogDialogOpen(false);
     } finally {
       setIsRemovingCatalog(false);
     }
@@ -198,7 +204,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => void removeSelectedCatalog()}
+                onClick={() => setIsRemoveCatalogDialogOpen(true)}
                 disabled={isRemovingCatalog}
                 className="gap-2"
               >
@@ -337,6 +343,33 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
 
       <AddCatalogDialog open={addCatalogOpen} onOpenChange={setAddCatalogOpen} />
       <InstallSkillDialog open={installDialogOpen} onOpenChange={setInstallDialogOpen} item={installItem} />
+      <Dialog
+        open={isRemoveCatalogDialogOpen}
+        onOpenChange={(open) => {
+          if (!isRemovingCatalog) {
+            setIsRemoveCatalogDialogOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Remove Catalog</DialogTitle>
+            <DialogDescription>Are you sure you want to remove this catalog?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setIsRemoveCatalogDialogOpen(false)}
+              disabled={isRemovingCatalog}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       </div>
     </ScrollableOverlay>
   );

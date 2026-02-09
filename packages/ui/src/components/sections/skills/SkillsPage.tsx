@@ -91,6 +91,8 @@ export const SkillsPage: React.FC = () => {
   const [editingFilePath, setEditingFilePath] = React.useState<string | null>(null); // null = adding, string = editing
   const [isLoadingFile, setIsLoadingFile] = React.useState(false);
   const [originalFileContent, setOriginalFileContent] = React.useState(''); // Track original for change detection
+  const [deleteFilePath, setDeleteFilePath] = React.useState<string | null>(null);
+  const [isDeletingFile, setIsDeletingFile] = React.useState(false);
   
   // Detect if skill-level fields have changed
   const hasSkillChanges = isNewSkill 
@@ -306,7 +308,7 @@ export const SkillsPage: React.FC = () => {
     }
   };
 
-  const handleDeleteFile = async (filePath: string) => {
+  const handleDeleteFile = (filePath: string) => {
     // For new skills, remove from pending files
     if (isNewSkill) {
       setPendingFiles(prev => prev.filter(f => f.path !== filePath));
@@ -315,23 +317,34 @@ export const SkillsPage: React.FC = () => {
     }
 
     // For existing skills, delete from disk
-    if (!selectedSkillName) return;
-    
-    if (window.confirm(`Are you sure you want to delete "${filePath}"?`)) {
-      const { deleteSupportingFile } = useSkillsStore.getState();
-      const success = await deleteSupportingFile(selectedSkillName, filePath);
-      
-      if (success) {
-        toast.success(`File "${filePath}" deleted`);
-        // Refresh skill details
-        const detail = await getSkillDetail(selectedSkillName);
-        if (detail) {
-          setSupportingFiles(detail.sources.md.supportingFiles || []);
-        }
-      } else {
-        toast.error('Failed to delete file');
-      }
+    if (!selectedSkillName) {
+      return;
     }
+
+    setDeleteFilePath(filePath);
+  };
+
+  const handleConfirmDeleteFile = async () => {
+    if (!deleteFilePath || !selectedSkillName) {
+      return;
+    }
+
+    setIsDeletingFile(true);
+    const { deleteSupportingFile } = useSkillsStore.getState();
+    const success = await deleteSupportingFile(selectedSkillName, deleteFilePath);
+
+    if (success) {
+      toast.success(`File "${deleteFilePath}" deleted`);
+      const detail = await getSkillDetail(selectedSkillName);
+      if (detail) {
+        setSupportingFiles(detail.sources.md.supportingFiles || []);
+      }
+      setDeleteFilePath(null);
+    } else {
+      toast.error('Failed to delete file');
+    }
+
+    setIsDeletingFile(false);
   };
 
   if (isNewSkill && mode === 'external') {
@@ -554,6 +567,37 @@ export const SkillsPage: React.FC = () => {
       </div>
 
       {/* Add/Edit File Dialog */}
+      <Dialog
+        open={deleteFilePath !== null}
+        onOpenChange={(open) => {
+          if (!open && !isDeletingFile) {
+            setDeleteFilePath(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete Supporting File</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{deleteFilePath}"?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setDeleteFilePath(null)}
+              disabled={isDeletingFile}
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
+            >
+              Cancel
+            </Button>
+            <ButtonLarge onClick={handleConfirmDeleteFile} disabled={isDeletingFile}>
+              Delete
+            </ButtonLarge>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isFileDialogOpen} onOpenChange={(open) => {
         setIsFileDialogOpen(open);
         if (!open) setEditingFilePath(null);
