@@ -1765,7 +1765,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 )}
                 <div
                     className={cn(
-                        "flex flex-col relative overflow-visible overflow-hidden",
+                        "flex flex-col relative overflow-visible",
                         "border border-border/80",
                         "focus-within:ring-1 focus-within:ring-primary/50"
                     )}

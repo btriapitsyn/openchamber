@@ -15,14 +15,18 @@ interface MenuPosition {
   show: boolean;
 }
 
+const MENU_TRANSITION_MS = 200;
+
 export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerRef }) => {
   const [position, setPosition] = React.useState<MenuPosition>({ x: 0, y: 0, show: false });
   const [selectedText, setSelectedText] = React.useState('');
   const [isDragging, setIsDragging] = React.useState(false);
   const [isClosing, setIsClosing] = React.useState(false);
+  const [isOpening, setIsOpening] = React.useState(false);
   const menuRef = React.useRef<HTMLDivElement>(null);
   const pendingSelectionRef = React.useRef<{ text: string; rect: DOMRect } | null>(null);
   const hideTimeoutRef = React.useRef<number | null>(null);
+  const openRafRef = React.useRef<number | null>(null);
   const createSession = useSessionStore((state) => state.createSession);
   const setPendingInputText = useSessionStore((state) => state.setPendingInputText);
   const isMobile = useUIStore((state) => state.isMobile);
@@ -33,6 +37,10 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
         window.clearTimeout(hideTimeoutRef.current);
         hideTimeoutRef.current = null;
       }
+      if (openRafRef.current !== null) {
+        window.cancelAnimationFrame(openRafRef.current);
+        openRafRef.current = null;
+      }
     };
   }, []);
 
@@ -41,6 +49,11 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
       window.clearTimeout(hideTimeoutRef.current);
       hideTimeoutRef.current = null;
     }
+    if (openRafRef.current !== null) {
+      window.cancelAnimationFrame(openRafRef.current);
+      openRafRef.current = null;
+    }
+    setIsOpening(false);
 
     setIsClosing(true);
     hideTimeoutRef.current = window.setTimeout(() => {
@@ -49,7 +62,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
       pendingSelectionRef.current = null;
       setIsClosing(false);
       hideTimeoutRef.current = null;
-    }, 140);
+    }, MENU_TRANSITION_MS);
   }, []);
 
   const showMenu = React.useCallback(() => {
@@ -62,6 +75,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     setIsClosing(false);
 
     const { text, rect } = pendingSelectionRef.current;
+    const shouldAnimateIn = !position.show;
 
     // Position menu above the selection
     const menuX = rect.left + rect.width / 2;
@@ -73,7 +87,18 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
       y: menuY,
       show: true,
     });
-  }, []);
+
+    if (shouldAnimateIn) {
+      setIsOpening(true);
+      if (openRafRef.current !== null) {
+        window.cancelAnimationFrame(openRafRef.current);
+      }
+      openRafRef.current = window.requestAnimationFrame(() => {
+        setIsOpening(false);
+        openRafRef.current = null;
+      });
+    }
+  }, [position.show]);
 
   const handleSelectionChange = React.useCallback(() => {
     const selection = window.getSelection();
@@ -221,7 +246,12 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           'bg-[var(--surface-elevated)] border-t border-[var(--interactive-border)]',
           'px-3 py-2',
           'safe-area-bottom',
-          isClosing ? 'animate-out fade-out-0 duration-150 pointer-events-none' : 'animate-in fade-in-0 duration-150'
+          'transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform]',
+          isClosing
+            ? 'opacity-0 translate-y-[4px] pointer-events-none'
+            : isOpening
+              ? 'opacity-0 translate-y-[4px]'
+              : 'opacity-100 translate-y-0'
         )}
         style={{
           paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))',
@@ -280,52 +310,61 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   return createPortal(
     <div
       ref={menuRef}
-      className={cn(
-        'fixed z-50 flex items-center gap-1',
-        'rounded-lg border border-[var(--interactive-border)]',
-        'bg-[var(--surface-elevated)] shadow-lg',
-        'px-1.5 py-1',
-        isClosing ? 'animate-out fade-out-0 duration-150 pointer-events-none' : 'animate-in fade-in-0 duration-150'
-      )}
+      className="fixed z-50"
       style={{
         left: position.x,
         top: position.y,
         transform: 'translate(-50%, -100%)',
       }}
     >
-      <button
-        onClick={handleAddToChat}
+      <div
         className={cn(
-          'flex items-center gap-1.5 px-2 py-1 rounded-md',
-          'text-sm font-medium',
-          'text-[var(--surface-foreground)]',
-          'hover:bg-[var(--interactive-hover)]',
-          'transition-colors duration-150'
+          'flex items-center gap-1',
+          'rounded-lg border border-[var(--interactive-border)]',
+          'bg-[var(--surface-elevated)] shadow-lg',
+          'px-1.5 py-1',
+          'transition-[opacity,transform] duration-200 ease-out will-change-[opacity,transform]',
+          isClosing
+            ? 'opacity-0 translate-y-[4px] pointer-events-none'
+            : isOpening
+              ? 'opacity-0 translate-y-[4px]'
+              : 'opacity-100 translate-y-0'
         )}
-        title="Add to current chat"
-        type="button"
       >
-        <RiAddLine className="h-4 w-4" />
-        <span>Add to chat</span>
-      </button>
+        <button
+          onClick={handleAddToChat}
+          className={cn(
+            'flex items-center gap-1.5 px-2 py-1 rounded-md',
+            'text-sm font-medium',
+            'text-[var(--surface-foreground)]',
+            'hover:bg-[var(--interactive-hover)]',
+            'transition-colors duration-150'
+          )}
+          title="Add to current chat"
+          type="button"
+        >
+          <RiAddLine className="h-4 w-4" />
+          <span>Add to chat</span>
+        </button>
       
-      <div className="w-px h-4 bg-[var(--interactive-border)]" />
+        <div className="w-px h-4 bg-[var(--interactive-border)]" />
       
-      <button
-        onClick={handleCreateNewSession}
-        className={cn(
-          'flex items-center gap-1.5 px-2 py-1 rounded-md',
-          'text-sm font-medium',
-          'text-[var(--surface-foreground)]',
-          'hover:bg-[var(--interactive-hover)]',
-          'transition-colors duration-150'
-        )}
-        title="Create new session with selection"
-        type="button"
-      >
-        <RiChatNewLine className="h-4 w-4" />
-        <span>New session</span>
-      </button>
+        <button
+          onClick={handleCreateNewSession}
+          className={cn(
+            'flex items-center gap-1.5 px-2 py-1 rounded-md',
+            'text-sm font-medium',
+            'text-[var(--surface-foreground)]',
+            'hover:bg-[var(--interactive-hover)]',
+            'transition-colors duration-150'
+          )}
+          title="Create new session with selection"
+          type="button"
+        >
+          <RiChatNewLine className="h-4 w-4" />
+          <span>New session</span>
+        </button>
+      </div>
     </div>,
     document.body
   );
