@@ -264,7 +264,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       return;
     }
 
-    const fileLabel = fileName ? fileName.split('/').pop() || 'unknown' : 'unknown';
     // Pierre selection range: { start, end, side }
     // Store needs { startLine, endLine, side: 'original'|'modified' }
     // Pierre side: 'additions' (right) | 'deletions' (left)
