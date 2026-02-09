@@ -300,8 +300,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     setCommentText('');
     setSelection(null);
     setEditingDraftId(null);
-
-    toast.success(editingDraftId ? 'Comment updated' : 'Comment saved');
   }, [selection, fileName, language, original, modified, addDraft, updateDraft, getSessionKey, editingDraftId]);
 
 
