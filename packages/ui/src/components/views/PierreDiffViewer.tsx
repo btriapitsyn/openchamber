@@ -149,7 +149,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 }) => {
   const themeContext = useOptionalThemeSystem();
   
-  const isDark = themeContext?.themeMode === 'dark';
+  const isDark = themeContext?.currentTheme.metadata.variant === 'dark';
   const lightTheme = themeContext?.availableThemes.find(t => t.metadata.id === themeContext.lightThemeId) ?? getDefaultTheme(false);
   const darkTheme = themeContext?.availableThemes.find(t => t.metadata.id === themeContext.darkThemeId) ?? getDefaultTheme(true);
 
