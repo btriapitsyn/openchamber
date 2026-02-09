@@ -28,6 +28,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -219,16 +225,8 @@ export const PullRequestSection: React.FC<{
 
   const [isContextOpen, setIsContextOpen] = React.useState(false);
   const [isContextSheetOpen, setIsContextSheetOpen] = React.useState(false);
-  const [selectedRemote, setSelectedRemote] = React.useState<GitRemote | null>(() => remotes[0] ?? null);
 
   const hasMultipleRemotes = remotes.length > 1;
-
-  // Update selected remote when remotes change
-  React.useEffect(() => {
-    if (remotes.length > 0 && !selectedRemote) {
-      setSelectedRemote(remotes[0]);
-    }
-  }, [remotes, selectedRemote]);
 
   const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
   const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
@@ -950,7 +948,7 @@ export const PullRequestSection: React.FC<{
     }
   }, [baseBranch, branch, directory, isGenerating, additionalContext, onGeneratedDescription]);
 
-  const createPr = React.useCallback(async () => {
+  const createPr = React.useCallback(async (remote?: GitRemote) => {
     if (!github?.prCreate) {
       toast.error('GitHub runtime API unavailable');
       return;
@@ -970,7 +968,7 @@ export const PullRequestSection: React.FC<{
         base: baseBranch,
         ...(body.trim() ? { body } : {}),
         draft,
-        ...(selectedRemote ? { remote: selectedRemote.name } : {}),
+        ...(remote ? { remote: remote.name } : {}),
       });
       toast.success('PR created');
       setStatus((prev) => (prev ? { ...prev, pr } : prev));
@@ -981,7 +979,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsCreating(false);
     }
-  }, [baseBranch, body, branch, directory, draft, github, refresh, selectedRemote, title]);
+  }, [baseBranch, body, branch, directory, draft, github, refresh, title]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
@@ -1471,36 +1469,6 @@ export const PullRequestSection: React.FC<{
                   <span className="typography-ui-label text-foreground select-none">Draft</span>
                 </div>
 
-                {/* Remote selector when multiple remotes */}
-                {hasMultipleRemotes && (
-                  <label className="space-y-1">
-                    <div className="typography-micro text-muted-foreground">Remote</div>
-                    <Select
-                      value={selectedRemote?.name ?? ''}
-                      onValueChange={(value) => {
-                        const remote = remotes.find((r) => r.name === value);
-                        if (remote) setSelectedRemote(remote);
-                      }}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select remote" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {remotes.map((remote) => (
-                          <SelectItem key={remote.name} value={remote.name}>
-                            <div className="flex flex-col items-start">
-                              <span>{remote.name}</span>
-                              <span className="typography-micro text-muted-foreground truncate max-w-[200px]">
-                                {remote.pushUrl}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                )}
-
                 {/* Additional Context Section */}
                 {isMobile ? (
                   <div className="space-y-2">
@@ -1590,17 +1558,52 @@ export const PullRequestSection: React.FC<{
                     Generate
                   </Button>
                   <div className="flex-1" />
-                  <Button
-                    size="sm"
-                    className="min-w-[7.5rem] justify-center gap-2"
-                    onClick={createPr}
-                    disabled={isCreating || !isConnected}
-                  >
-                    <span className="inline-flex size-4 items-center justify-center">
-                      {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <RiGitPullRequestLine className="size-4" />}
-                    </span>
-                    <span>Create PR</span>
-                  </Button>
+                  {hasMultipleRemotes ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          size="sm"
+                          className="min-w-[7.5rem] justify-center gap-2"
+                          disabled={isCreating || !isConnected}
+                        >
+                          <span className="inline-flex size-4 items-center justify-center">
+                            {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <RiGitPullRequestLine className="size-4" />}
+                          </span>
+                          <span>Create PR</span>
+                          <RiArrowDownSLine className="size-4 opacity-60" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[200px]">
+                        {remotes.map((remote) => (
+                          <DropdownMenuItem
+                            key={remote.name}
+                            onSelect={() => createPr(remote)}
+                          >
+                            <div className="flex flex-col">
+                              <span className="typography-ui-label text-foreground">
+                                {remote.name}
+                              </span>
+                              <span className="typography-meta text-muted-foreground truncate">
+                                {remote.pushUrl}
+                              </span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <Button
+                      size="sm"
+                      className="min-w-[7.5rem] justify-center gap-2"
+                      onClick={() => createPr(remotes[0])}
+                      disabled={isCreating || !isConnected}
+                    >
+                      <span className="inline-flex size-4 items-center justify-center">
+                        {isCreating ? <RiLoader4Line className="size-4 animate-spin" /> : <RiGitPullRequestLine className="size-4" />}
+                      </span>
+                      <span>Create PR</span>
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
