@@ -9369,6 +9369,11 @@ Context:
         },
       }));
 
+      // Alias for PWA manifest (.webmanifest redirect → /site.webmanifest)
+      app.get('/manifest.webmanifest', (req, res) => {
+        res.redirect(301, '/site.webmanifest');
+      });
+
     app.get(/^(?!\/api|.*\.(js|css|svg|png|jpg|jpeg|gif|ico|woff|woff2|ttf|eot|map)).*$/, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });

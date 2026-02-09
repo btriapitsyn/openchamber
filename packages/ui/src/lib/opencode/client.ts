@@ -147,6 +147,11 @@ class OpencodeService {
   private globalSseListeners: Set<(event: RoutedOpencodeEvent) => void> = new Set();
   private globalSseOpenListeners: Set<() => void> = new Set();
   private globalSseErrorListeners: Set<(error: unknown) => void> = new Set();
+  private globalSseQueue: Array<RoutedOpencodeEvent | undefined> = [];
+  private globalSseBuffer: Array<RoutedOpencodeEvent | undefined> = [];
+  private globalSseCoalesced: Map<string, number> = new Map();
+  private globalSseFlushTimer: ReturnType<typeof setTimeout> | null = null;
+  private globalSseLastFlushAt = 0;
 
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     const desktopBase = resolveDesktopBaseUrl();
@@ -1166,13 +1171,7 @@ class OpencodeService {
   }
 
   private emitGlobalSseEvent(event: RoutedOpencodeEvent) {
-    for (const listener of this.globalSseListeners) {
-      try {
-        listener(event);
-      } catch (error) {
-        console.warn('[OpencodeClient] Global SSE listener error:', error);
-      }
-    }
+    this.enqueueGlobalSseEvent(event);
   }
 
   private notifyGlobalSseOpen() {
@@ -1228,6 +1227,110 @@ class OpencodeService {
       this.globalSseAbortController.abort();
     }
     this.globalSseAbortController = null;
+    this.clearGlobalSseQueue();
+  }
+
+  private clearGlobalSseQueue() {
+    if (this.globalSseFlushTimer) {
+      clearTimeout(this.globalSseFlushTimer);
+      this.globalSseFlushTimer = null;
+    }
+    this.globalSseQueue.length = 0;
+    this.globalSseBuffer.length = 0;
+    this.globalSseCoalesced.clear();
+  }
+
+  private getGlobalSseCoalesceKey(event: RoutedOpencodeEvent): string | null {
+    const payload = event.payload as unknown as Record<string, unknown>;
+    const eventType = typeof payload.type === 'string' ? payload.type : null;
+    if (!eventType) {
+      return null;
+    }
+
+    const properties =
+      typeof payload.properties === 'object' && payload.properties !== null
+        ? (payload.properties as Record<string, unknown>)
+        : null;
+
+    if (eventType === 'session.status') {
+      const sessionId = typeof properties?.sessionID === 'string'
+        ? properties.sessionID
+        : typeof properties?.sessionId === 'string'
+          ? properties.sessionId
+          : null;
+      if (!sessionId) {
+        return null;
+      }
+      return `session.status:${event.directory}:${sessionId}`;
+    }
+
+    if (eventType === 'openchamber:session-status') {
+      const sessionId = typeof properties?.sessionId === 'string'
+        ? properties.sessionId
+        : typeof properties?.sessionID === 'string'
+          ? properties.sessionID
+          : null;
+      if (!sessionId) {
+        return null;
+      }
+      return `openchamber:session-status:${sessionId}`;
+    }
+
+    return null;
+  }
+
+  private flushGlobalSseQueue = () => {
+    if (this.globalSseFlushTimer) {
+      clearTimeout(this.globalSseFlushTimer);
+      this.globalSseFlushTimer = null;
+    }
+
+    if (this.globalSseQueue.length === 0) {
+      return;
+    }
+
+    const events = this.globalSseQueue;
+    this.globalSseQueue = this.globalSseBuffer;
+    this.globalSseBuffer = events;
+    this.globalSseQueue.length = 0;
+    this.globalSseCoalesced.clear();
+    this.globalSseLastFlushAt = Date.now();
+
+    for (const event of events) {
+      if (!event) continue;
+      for (const listener of this.globalSseListeners) {
+        try {
+          listener(event);
+        } catch (error) {
+          console.warn('[OpencodeClient] Global SSE listener error:', error);
+        }
+      }
+    }
+
+    this.globalSseBuffer.length = 0;
+  };
+
+  private scheduleGlobalSseFlush() {
+    if (this.globalSseFlushTimer) {
+      return;
+    }
+    const elapsed = Date.now() - this.globalSseLastFlushAt;
+    const delay = Math.max(0, 16 - elapsed);
+    this.globalSseFlushTimer = setTimeout(this.flushGlobalSseQueue, delay);
+  }
+
+  private enqueueGlobalSseEvent(event: RoutedOpencodeEvent) {
+    const key = this.getGlobalSseCoalesceKey(event);
+    if (key) {
+      const existingIndex = this.globalSseCoalesced.get(key);
+      if (existingIndex !== undefined) {
+        this.globalSseQueue[existingIndex] = undefined;
+      }
+      this.globalSseCoalesced.set(key, this.globalSseQueue.length);
+    }
+
+    this.globalSseQueue.push(event);
+    this.scheduleGlobalSseFlush();
   }
 
   private async runGlobalSseLoop(abortController: AbortController): Promise<void> {
@@ -1319,6 +1422,8 @@ class OpencodeService {
       const delay = Math.min(3000 * Math.pow(2, attempt), 30000);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
+
+    this.flushGlobalSseQueue();
   }
 
   subscribeToGlobalEvents(
