@@ -6,6 +6,7 @@ import { getSafeStorage } from './utils/safeStorage';
 type RootTabsState = {
   openPaths: string[];
   selectedPath: string | null;
+  expandedPaths: string[];
   touchedAt: number;
 };
 
@@ -19,6 +20,9 @@ type FilesViewTabsActions = {
   removeOpenPathsByPrefix: (root: string, prefixPath: string) => void;
   setSelectedPath: (root: string, path: string | null) => void;
   ensureSelectedPath: (root: string) => void;
+  toggleExpandedPath: (root: string, path: string) => void;
+  expandPath: (root: string, path: string) => void;
+  expandPaths: (root: string, paths: string[]) => void;
 };
 
 export type FilesViewTabsStore = FilesViewTabsState & FilesViewTabsActions;
@@ -43,7 +47,7 @@ const touchRoot = (prev: RootTabsState | undefined): RootTabsState => {
   if (prev) {
     return { ...prev, touchedAt: Date.now() };
   }
-  return { openPaths: [], selectedPath: null, touchedAt: Date.now() };
+  return { openPaths: [], selectedPath: null, expandedPaths: [], touchedAt: Date.now() };
 };
 
 export const useFilesViewTabsStore = create<FilesViewTabsStore>()(
@@ -198,6 +202,92 @@ export const useFilesViewTabsStore = create<FilesViewTabsStore>()(
           }
 
           get().setSelectedPath(normalizedRoot, first);
+        },
+
+        toggleExpandedPath: (root, path) => {
+          const normalizedRoot = normalizePath((root || '').trim());
+          const normalizedPath = normalizePath((path || '').trim());
+          if (!normalizedRoot || !normalizedPath) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.byRoot[normalizedRoot];
+            const current = touchRoot(prev);
+            const isExpanded = current.expandedPaths.includes(normalizedPath);
+            const nextExpandedPaths = isExpanded
+              ? current.expandedPaths.filter((p) => p !== normalizedPath)
+              : [...current.expandedPaths, normalizedPath];
+
+            if (prev && prev.expandedPaths === nextExpandedPaths && prev.selectedPath === current.selectedPath && prev.openPaths === current.openPaths) {
+              return state;
+            }
+
+            const byRoot = {
+              ...state.byRoot,
+              [normalizedRoot]: {
+                ...current,
+                expandedPaths: nextExpandedPaths,
+              },
+            };
+            return { byRoot: clampRoots(byRoot, 20) };
+          });
+        },
+
+        expandPath: (root, path) => {
+          const normalizedRoot = normalizePath((root || '').trim());
+          const normalizedPath = normalizePath((path || '').trim());
+          if (!normalizedRoot || !normalizedPath) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.byRoot[normalizedRoot];
+            const current = touchRoot(prev);
+            const isExpanded = current.expandedPaths.includes(normalizedPath);
+
+            if (isExpanded && prev) {
+              return state;
+            }
+
+            const byRoot = {
+              ...state.byRoot,
+              [normalizedRoot]: {
+                ...current,
+                expandedPaths: [...current.expandedPaths, normalizedPath],
+              },
+            };
+            return { byRoot: clampRoots(byRoot, 20) };
+          });
+        },
+
+        expandPaths: (root, paths) => {
+          const normalizedRoot = normalizePath((root || '').trim());
+          if (!normalizedRoot || !paths || paths.length === 0) {
+            return;
+          }
+
+          const normalizedPaths = paths.map((p) => normalizePath((p || '').trim())).filter(Boolean);
+
+          set((state) => {
+            const prev = state.byRoot[normalizedRoot];
+            const current = touchRoot(prev);
+            const existingPaths = new Set(current.expandedPaths);
+            const newPaths = normalizedPaths.filter((p) => !existingPaths.has(p));
+
+            if (newPaths.length === 0) {
+              return state;
+            }
+
+            const byRoot = {
+              ...state.byRoot,
+              [normalizedRoot]: {
+                ...current,
+                expandedPaths: [...current.expandedPaths, ...newPaths],
+              },
+            };
+            return { byRoot: clampRoots(byRoot, 20) };
+          });
         },
       }),
       {

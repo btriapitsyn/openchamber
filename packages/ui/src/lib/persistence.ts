@@ -245,6 +245,30 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   if (typeof settings.notifyOnSubtasks === 'boolean' && settings.notifyOnSubtasks !== store.notifyOnSubtasks) {
     store.setNotifyOnSubtasks(settings.notifyOnSubtasks);
   }
+  if (typeof settings.notifyOnCompletion === 'boolean' && settings.notifyOnCompletion !== store.notifyOnCompletion) {
+    store.setNotifyOnCompletion(settings.notifyOnCompletion);
+  }
+  if (typeof settings.notifyOnError === 'boolean' && settings.notifyOnError !== store.notifyOnError) {
+    store.setNotifyOnError(settings.notifyOnError);
+  }
+  if (typeof settings.notifyOnQuestion === 'boolean' && settings.notifyOnQuestion !== store.notifyOnQuestion) {
+    store.setNotifyOnQuestion(settings.notifyOnQuestion);
+  }
+  if (settings.notificationTemplates && typeof settings.notificationTemplates === 'object') {
+    store.setNotificationTemplates(settings.notificationTemplates);
+  }
+  if (typeof settings.summarizeLastMessage === 'boolean' && settings.summarizeLastMessage !== store.summarizeLastMessage) {
+    store.setSummarizeLastMessage(settings.summarizeLastMessage);
+  }
+  if (typeof settings.summaryThreshold === 'number' && Number.isFinite(settings.summaryThreshold)) {
+    store.setSummaryThreshold(settings.summaryThreshold);
+  }
+  if (typeof settings.summaryLength === 'number' && Number.isFinite(settings.summaryLength)) {
+    store.setSummaryLength(settings.summaryLength);
+  }
+  if (typeof settings.maxLastMessageLength === 'number' && Number.isFinite(settings.maxLastMessageLength)) {
+    store.setMaxLastMessageLength(settings.maxLastMessageLength);
+  }
   if (typeof settings.toolCallExpansion === 'string'
     && (settings.toolCallExpansion === 'collapsed' || settings.toolCallExpansion === 'activity' || settings.toolCallExpansion === 'detailed')) {
     if (settings.toolCallExpansion !== store.toolCallExpansion) {
@@ -406,6 +430,50 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.notifyOnSubtasks === 'boolean') {
     result.notifyOnSubtasks = candidate.notifyOnSubtasks;
+  }
+  if (typeof candidate.notifyOnCompletion === 'boolean') {
+    result.notifyOnCompletion = candidate.notifyOnCompletion;
+  }
+  if (typeof candidate.notifyOnError === 'boolean') {
+    result.notifyOnError = candidate.notifyOnError;
+  }
+  if (typeof candidate.notifyOnQuestion === 'boolean') {
+    result.notifyOnQuestion = candidate.notifyOnQuestion;
+  }
+  if (candidate.notificationTemplates && typeof candidate.notificationTemplates === 'object') {
+    const templates = candidate.notificationTemplates as Record<string, unknown>;
+    const validateTemplate = (key: string): { title: string; message: string } | undefined => {
+      const value = templates[key];
+      if (!value || typeof value !== 'object') return undefined;
+      const obj = value as Record<string, unknown>;
+      const title = typeof obj.title === 'string' ? obj.title : '';
+      const message = typeof obj.message === 'string' ? obj.message : '';
+      return { title, message };
+    };
+    const completion = validateTemplate('completion');
+    const error = validateTemplate('error');
+    const question = validateTemplate('question');
+    const subtask = validateTemplate('subtask');
+    if (completion || error || question || subtask) {
+      result.notificationTemplates = {
+        completion: completion ?? { title: 'Task Complete', message: 'Your task has finished.' },
+        error: error ?? { title: 'Error Occurred', message: 'An error occurred while processing your task.' },
+        question: question ?? { title: 'Input Needed', message: 'Please provide input to continue.' },
+        subtask: subtask ?? { title: 'Subtask Complete', message: 'A subtask has finished.' },
+      };
+    }
+  }
+  if (typeof candidate.summarizeLastMessage === 'boolean') {
+    result.summarizeLastMessage = candidate.summarizeLastMessage;
+  }
+  if (typeof candidate.summaryThreshold === 'number' && Number.isFinite(candidate.summaryThreshold)) {
+    result.summaryThreshold = Math.max(0, Math.round(candidate.summaryThreshold));
+  }
+  if (typeof candidate.summaryLength === 'number' && Number.isFinite(candidate.summaryLength)) {
+    result.summaryLength = Math.max(10, Math.round(candidate.summaryLength));
+  }
+  if (typeof candidate.maxLastMessageLength === 'number' && Number.isFinite(candidate.maxLastMessageLength)) {
+    result.maxLastMessageLength = Math.max(10, Math.round(candidate.maxLastMessageLength));
   }
   if (typeof candidate.usageAutoRefresh === 'boolean') {
     result.usageAutoRefresh = candidate.usageAutoRefresh;

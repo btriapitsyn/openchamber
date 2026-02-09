@@ -5,6 +5,7 @@ import { Compartment, EditorState, RangeSetBuilder, StateField } from '@codemirr
 import { Decoration, type DecorationSet, EditorView, ViewPlugin, WidgetType, gutters, keymap, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, indentWithTab, history, historyKeymap } from '@codemirror/commands';
 import { indentUnit } from '@codemirror/language';
+import { search, searchKeymap, openSearchPanel, closeSearchPanel } from '@codemirror/search';
 import { createPortal } from 'react-dom';
 
 import { cn } from '@/lib/utils';
@@ -26,6 +27,9 @@ type CodeMirrorEditorProps = {
   blockWidgets?: BlockWidgetDef[];
   onViewReady?: (view: EditorView) => void;
   onViewDestroy?: () => void;
+  enableSearch?: boolean;
+  searchOpen?: boolean;
+  onSearchOpenChange?: (open: boolean) => void;
 };
 
 const lineNumbersCompartment = new Compartment();
@@ -33,6 +37,7 @@ const editableCompartment = new Compartment();
 const externalExtensionsCompartment = new Compartment();
 const highlightLinesCompartment = new Compartment();
 const blockWidgetsCompartment = new Compartment();
+const searchCompartment = new Compartment();
 
 // Map to store widget container elements by ID
 // This allows us to render portals into them even if they are created by CM
@@ -153,6 +158,8 @@ export function CodeMirrorEditor({
   onViewReady,
   onViewDestroy,
   blockWidgets,
+  enableSearch,
+  searchOpen,
 }: CodeMirrorEditorProps) {
   const hostRef = React.useRef<HTMLDivElement | null>(null);
   const viewRef = React.useRef<EditorView | null>(null);
@@ -203,6 +210,7 @@ export function CodeMirrorEditor({
         externalExtensionsCompartment.of(extensions ?? []),
         highlightLinesCompartment.of(createHighlightLinesExtension(highlightLines)),
         blockWidgetsCompartment.of(createBlockWidgetsExtension(blockWidgets)),
+        searchCompartment.of(enableSearch ? [search({ top: true }), keymap.of(searchKeymap)] : []),
       ],
     });
 
@@ -236,9 +244,22 @@ export function CodeMirrorEditor({
         externalExtensionsCompartment.reconfigure(extensions ?? []),
         highlightLinesCompartment.reconfigure(createHighlightLinesExtension(highlightLines)),
         blockWidgetsCompartment.reconfigure(createBlockWidgetsExtension(blockWidgets)),
+        searchCompartment.reconfigure(enableSearch ? [search({ top: true }), keymap.of(searchKeymap)] : []),
       ],
     });
-  }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets]);
+  }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets, enableSearch]);
+
+  React.useEffect(() => {
+    const view = viewRef.current;
+    if (!view || enableSearch === false) {
+      return;
+    }
+    if (searchOpen) {
+      openSearchPanel(view);
+    } else {
+      closeSearchPanel(view);
+    }
+  }, [searchOpen, enableSearch]);
 
   React.useEffect(() => {
     const view = viewRef.current;

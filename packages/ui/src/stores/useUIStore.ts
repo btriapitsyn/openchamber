@@ -16,6 +16,41 @@ export type EventStreamStatus =
   | 'offline'
   | 'error';
 
+const LEGACY_DEFAULT_NOTIFICATION_TEMPLATES = {
+  completion: { title: '{agent_name} is ready', message: '{last_message}' },
+  error: { title: 'Tool error', message: '{last_message}' },
+  question: { title: '{agent_name} needs input', message: '{last_message}' },
+  subtask: { title: 'Subtask complete', message: '{last_message}' },
+} as const;
+
+const EMPTY_NOTIFICATION_TEMPLATES = {
+  completion: { title: '', message: '' },
+  error: { title: '', message: '' },
+  question: { title: '', message: '' },
+  subtask: { title: '', message: '' },
+} as const;
+
+const isSameTemplateValue = (
+  a: { title: string; message: string } | undefined,
+  b: { title: string; message: string }
+) => {
+  if (!a) return false;
+  return a.title === b.title && a.message === b.message;
+};
+
+const isLegacyDefaultTemplates = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const candidate = value as Record<string, { title: string; message: string } | undefined>;
+  return (
+    isSameTemplateValue(candidate.completion, LEGACY_DEFAULT_NOTIFICATION_TEMPLATES.completion)
+    && isSameTemplateValue(candidate.error, LEGACY_DEFAULT_NOTIFICATION_TEMPLATES.error)
+    && isSameTemplateValue(candidate.question, LEGACY_DEFAULT_NOTIFICATION_TEMPLATES.question)
+    && isSameTemplateValue(candidate.subtask, LEGACY_DEFAULT_NOTIFICATION_TEMPLATES.subtask)
+  );
+};
+
 interface UIStore {
 
   theme: 'light' | 'dark' | 'system';
@@ -78,6 +113,25 @@ interface UIStore {
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
   notifyOnSubtasks: boolean;
+
+  // Event toggles (which events trigger notifications)
+  notifyOnCompletion: boolean;
+  notifyOnError: boolean;
+  notifyOnQuestion: boolean;
+
+  // Per-event notification templates
+  notificationTemplates: {
+    completion: { title: string; message: string };
+    error: { title: string; message: string };
+    question: { title: string; message: string };
+    subtask: { title: string; message: string };
+  };
+
+  // Summarization settings
+  summarizeLastMessage: boolean;
+  summaryThreshold: number;   // chars — messages longer than this get summarized
+  summaryLength: number;      // chars — target length for summary
+  maxLastMessageLength: number; // chars — truncate {last_message} when summarization is off
 
   showTerminalQuickKeysOnDesktop: boolean;
   persistChatDraft: boolean;
@@ -147,6 +201,14 @@ interface UIStore {
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
   setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
   setNotifyOnSubtasks: (value: boolean) => void;
+  setNotifyOnCompletion: (value: boolean) => void;
+  setNotifyOnError: (value: boolean) => void;
+  setNotifyOnQuestion: (value: boolean) => void;
+  setNotificationTemplates: (templates: UIStore['notificationTemplates']) => void;
+  setSummarizeLastMessage: (value: boolean) => void;
+  setSummaryThreshold: (value: number) => void;
+  setSummaryLength: (value: number) => void;
+  setMaxLastMessageLength: (value: number) => void;
   setPersistChatDraft: (value: boolean) => void;
   setIsMobileSessionStatusBarCollapsed: (value: boolean) => void;
   openMultiRunLauncher: () => void;
@@ -216,6 +278,23 @@ export const useUIStore = create<UIStore>()(
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
         notifyOnSubtasks: true,
+
+        // Event toggles (which events trigger notifications)
+        notifyOnCompletion: true,
+        notifyOnError: true,
+        notifyOnQuestion: true,
+        notificationTemplates: {
+          completion: { ...EMPTY_NOTIFICATION_TEMPLATES.completion },
+          error: { ...EMPTY_NOTIFICATION_TEMPLATES.error },
+          question: { ...EMPTY_NOTIFICATION_TEMPLATES.question },
+          subtask: { ...EMPTY_NOTIFICATION_TEMPLATES.subtask },
+        },
+
+        // Summarization settings
+        summarizeLastMessage: false,
+        summaryThreshold: 200,
+        summaryLength: 100,
+        maxLastMessageLength: 250,
 
         showTerminalQuickKeysOnDesktop: false,
         persistChatDraft: true,
@@ -784,6 +863,14 @@ export const useUIStore = create<UIStore>()(
           set({ notifyOnSubtasks: value });
         },
 
+        setNotifyOnCompletion: (value) => { set({ notifyOnCompletion: value }); },
+        setNotifyOnError: (value) => { set({ notifyOnError: value }); },
+        setNotifyOnQuestion: (value) => { set({ notifyOnQuestion: value }); },
+        setNotificationTemplates: (templates) => { set({ notificationTemplates: templates }); },
+        setSummarizeLastMessage: (value) => { set({ summarizeLastMessage: value }); },
+        setSummaryThreshold: (value) => { set({ summaryThreshold: value }); },
+        setSummaryLength: (value) => { set({ summaryLength: value }); },
+        setMaxLastMessageLength: (value) => { set({ maxLastMessageLength: value }); },
         setPersistChatDraft: (value) => {
           set({ persistChatDraft: value });
         },
@@ -794,6 +881,25 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createJSONStorage(() => getSafeStorage()),
+        version: 1,
+        migrate: (persistedState, version) => {
+          if (version >= 1 || !persistedState || typeof persistedState !== 'object') {
+            return persistedState;
+          }
+          const state = persistedState as Record<string, unknown>;
+          if (!isLegacyDefaultTemplates(state.notificationTemplates)) {
+            return persistedState;
+          }
+          return {
+            ...state,
+            notificationTemplates: {
+              completion: { ...EMPTY_NOTIFICATION_TEMPLATES.completion },
+              error: { ...EMPTY_NOTIFICATION_TEMPLATES.error },
+              question: { ...EMPTY_NOTIFICATION_TEMPLATES.question },
+              subtask: { ...EMPTY_NOTIFICATION_TEMPLATES.subtask },
+            },
+          };
+        },
         partialize: (state) => ({
           theme: state.theme,
           isSidebarOpen: state.isSidebarOpen,
@@ -831,6 +937,14 @@ export const useUIStore = create<UIStore>()(
           notificationMode: state.notificationMode,
           showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
           notifyOnSubtasks: state.notifyOnSubtasks,
+          notifyOnCompletion: state.notifyOnCompletion,
+          notifyOnError: state.notifyOnError,
+          notifyOnQuestion: state.notifyOnQuestion,
+          notificationTemplates: state.notificationTemplates,
+          summarizeLastMessage: state.summarizeLastMessage,
+          summaryThreshold: state.summaryThreshold,
+          summaryLength: state.summaryLength,
+          maxLastMessageLength: state.maxLastMessageLength,
           persistChatDraft: state.persistChatDraft,
           isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
         })

@@ -7,6 +7,13 @@ import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 
 import { GridLoader } from '@/components/ui/grid-loader';
 
+const DEFAULT_NOTIFICATION_TEMPLATES = {
+  completion: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
+  error: { title: 'Tool error', message: '{last_message}' },
+  question: { title: 'Input needed', message: '{last_message}' },
+  subtask: { title: '{agent_name} is ready', message: '{model_name} completed the task' },
+} as const;
+
 export const NotificationSettings: React.FC = () => {
   const isDesktop = React.useMemo(() => isDesktopShell(), []);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
@@ -17,6 +24,22 @@ export const NotificationSettings: React.FC = () => {
   const setNotificationMode = useUIStore(state => state.setNotificationMode);
   const notifyOnSubtasks = useUIStore(state => state.notifyOnSubtasks);
   const setNotifyOnSubtasks = useUIStore(state => state.setNotifyOnSubtasks);
+  const notifyOnCompletion = useUIStore(state => state.notifyOnCompletion);
+  const setNotifyOnCompletion = useUIStore(state => state.setNotifyOnCompletion);
+  const notifyOnError = useUIStore(state => state.notifyOnError);
+  const setNotifyOnError = useUIStore(state => state.setNotifyOnError);
+  const notifyOnQuestion = useUIStore(state => state.notifyOnQuestion);
+  const setNotifyOnQuestion = useUIStore(state => state.setNotifyOnQuestion);
+  const notificationTemplates = useUIStore(state => state.notificationTemplates);
+  const setNotificationTemplates = useUIStore(state => state.setNotificationTemplates);
+  const summarizeLastMessage = useUIStore(state => state.summarizeLastMessage);
+  const setSummarizeLastMessage = useUIStore(state => state.setSummarizeLastMessage);
+  const summaryThreshold = useUIStore(state => state.summaryThreshold);
+  const setSummaryThreshold = useUIStore(state => state.setSummaryThreshold);
+  const summaryLength = useUIStore(state => state.summaryLength);
+  const setSummaryLength = useUIStore(state => state.setSummaryLength);
+  const maxLastMessageLength = useUIStore(state => state.maxLastMessageLength);
+  const setMaxLastMessageLength = useUIStore(state => state.setMaxLastMessageLength);
 
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission>('default');
   const [pushSupported, setPushSupported] = React.useState(false);
@@ -95,6 +118,20 @@ export const NotificationSettings: React.FC = () => {
   };
 
   const canShowNotifications = isDesktop || (isBrowser && typeof Notification !== 'undefined' && Notification.permission === 'granted');
+
+  const updateTemplate = (
+    event: 'completion' | 'error' | 'question' | 'subtask',
+    field: 'title' | 'message',
+    value: string,
+  ) => {
+    setNotificationTemplates({
+      ...notificationTemplates,
+      [event]: {
+        ...notificationTemplates[event],
+        [field]: value,
+      },
+    });
+  };
 
   const base64UrlToUint8Array = (base64Url: string): Uint8Array<ArrayBuffer> => {
     const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
@@ -408,24 +445,6 @@ export const NotificationSettings: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <span className="typography-ui text-foreground">
-              Include subagent results
-            </span>
-            <p className="typography-micro text-muted-foreground">
-              Also notify for child sessions started by the main one.
-            </p>
-          </div>
-          <Switch
-            checked={notifyOnSubtasks}
-            onCheckedChange={(checked) => setNotifyOnSubtasks(checked)}
-            className="data-[state=checked]:bg-status-info"
-          />
-        </div>
-      )}
-
-      {nativeNotificationsEnabled && canShowNotifications && (
-        <div className="flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="typography-ui text-foreground">
               Notify while app is focused
             </span>
             <p className="typography-micro text-muted-foreground">
@@ -434,9 +453,212 @@ export const NotificationSettings: React.FC = () => {
           </div>
           <Switch
             checked={notificationMode === 'always'}
-            onCheckedChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
+            onCheckedChange={(checked: boolean) => setNotificationMode(checked ? 'always' : 'hidden-only')}
             className="data-[state=checked]:bg-status-info"
           />
+        </div>
+      )}
+
+      {nativeNotificationsEnabled && canShowNotifications && (
+        <div className="space-y-3 pt-2">
+          <div className="space-y-0.5">
+            <span className="typography-ui text-foreground font-medium">
+              Events
+            </span>
+            <p className="typography-micro text-muted-foreground">
+              Choose which events trigger notifications.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">Completion</span>
+              <p className="typography-micro text-muted-foreground">Agent finished its task.</p>
+            </div>
+            <Switch
+              checked={notifyOnCompletion}
+              onCheckedChange={setNotifyOnCompletion}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">Errors</span>
+              <p className="typography-micro text-muted-foreground">A tool call failed.</p>
+            </div>
+            <Switch
+              checked={notifyOnError}
+              onCheckedChange={setNotifyOnError}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">Questions</span>
+              <p className="typography-micro text-muted-foreground">Agent is asking for input or permission.</p>
+            </div>
+            <Switch
+              checked={notifyOnQuestion}
+              onCheckedChange={setNotifyOnQuestion}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">Subagents</span>
+              <p className="typography-micro text-muted-foreground">Also notify for child sessions started by the main one.</p>
+            </div>
+            <Switch
+              checked={notifyOnSubtasks}
+              onCheckedChange={(checked: boolean) => setNotifyOnSubtasks(checked)}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
+        </div>
+      )}
+
+      {nativeNotificationsEnabled && canShowNotifications && (
+        <div className="space-y-4 pt-4">
+          <div className="space-y-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Customize content
+            </h3>
+            <p className="typography-micro text-muted-foreground">
+              Use template variables: <code className="text-accent-foreground">{'{project_name}'}</code>{' '}
+              <code className="text-accent-foreground">{'{worktree}'}</code>{' '}
+              <code className="text-accent-foreground">{'{branch}'}</code>{' '}
+              <code className="text-accent-foreground">{'{session_name}'}</code>{' '}
+              <code className="text-accent-foreground">{'{agent_name}'}</code>{' '}
+              <code className="text-accent-foreground">{'{last_message}'}</code>
+            </p>
+          </div>
+
+          {(['completion', 'error', 'question', 'subtask'] as const).map((event) => (
+            <div key={event} className="space-y-2">
+              <span className="typography-ui text-foreground font-medium capitalize">{event}</span>
+              <div className="space-y-1.5">
+                <div>
+                  <label className="typography-micro text-muted-foreground block mb-1">Title</label>
+                  <input
+                    type="text"
+                    value={notificationTemplates[event].title}
+                    onChange={(e) => updateTemplate(event, 'title', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-1.5 typography-ui text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    placeholder={DEFAULT_NOTIFICATION_TEMPLATES[event].title}
+                  />
+                </div>
+                <div>
+                  <label className="typography-micro text-muted-foreground block mb-1">Message</label>
+                  <input
+                    type="text"
+                    value={notificationTemplates[event].message}
+                    onChange={(e) => updateTemplate(event, 'message', e.target.value)}
+                    className="w-full rounded-md border border-border bg-background px-3 py-1.5 typography-ui text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                    placeholder={DEFAULT_NOTIFICATION_TEMPLATES[event].message}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {nativeNotificationsEnabled && canShowNotifications && (
+        <div className="space-y-3 pt-4">
+          <div className="space-y-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Summarization
+            </h3>
+            <p className="typography-micro text-muted-foreground">
+              Summarize long messages in notifications using AI.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <span className="typography-ui text-foreground">
+                Summarize last message
+              </span>
+              <p className="typography-micro text-muted-foreground">
+                Uses AI to shorten the {'{last_message}'} variable.
+              </p>
+            </div>
+            <Switch
+              checked={summarizeLastMessage}
+              onCheckedChange={setSummarizeLastMessage}
+              className="data-[state=checked]:bg-status-info"
+            />
+          </div>
+
+          {summarizeLastMessage ? (
+            <>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="typography-ui text-foreground">
+                    Summary threshold
+                  </label>
+                  <span className="typography-micro text-muted-foreground tabular-nums">{summaryThreshold} chars</span>
+                </div>
+                <p className="typography-micro text-muted-foreground">
+                  Messages longer than this will be summarized.
+                </p>
+                <input
+                  type="range"
+                  min={50}
+                  max={2000}
+                  step={50}
+                  value={summaryThreshold}
+                  onChange={(e) => setSummaryThreshold(Number(e.target.value))}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="typography-ui text-foreground">
+                    Summary length
+                  </label>
+                  <span className="typography-micro text-muted-foreground tabular-nums">{summaryLength} chars</span>
+                </div>
+                <p className="typography-micro text-muted-foreground">
+                  Target length of the summary.
+                </p>
+                <input
+                  type="range"
+                  min={20}
+                  max={500}
+                  step={10}
+                  value={summaryLength}
+                  onChange={(e) => setSummaryLength(Number(e.target.value))}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="typography-ui text-foreground">
+                  Max last message length
+                </label>
+                <span className="typography-micro text-muted-foreground tabular-nums">{maxLastMessageLength} chars</span>
+              </div>
+              <p className="typography-micro text-muted-foreground">
+                Truncate {'{last_message}'} to this many characters.
+              </p>
+              <input
+                type="range"
+                min={50}
+                max={1000}
+                step={10}
+                value={maxLastMessageLength}
+                onChange={(e) => setMaxLastMessageLength(Number(e.target.value))}
+                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0"
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -494,7 +716,7 @@ export const NotificationSettings: React.FC = () => {
                 <Switch
                   checked={pushSubscribed}
                   disabled={pushBusy}
-                  onCheckedChange={(checked) => {
+                  onCheckedChange={(checked: boolean) => {
                     if (checked) {
                       void handleEnableBackgroundNotifications();
                     } else {
