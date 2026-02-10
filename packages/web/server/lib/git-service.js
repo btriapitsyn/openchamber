@@ -248,10 +248,16 @@ const generateOpenCodeRandomName = () => `${pickRandom(OPENCODE_ADJECTIVES)}-${p
 const slugWorktreeName = (value) => {
   return String(value || '')
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^refs\/heads\//, '')
+    .replace(/^heads\//, '')
+    .replace(/\s+/g, '-')
+    .replace(/^\/+|\/+$/g, '')
+    .split('/').join('-')
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
     .replace(/^-+/, '')
-    .replace(/-+$/, '');
+    .replace(/-+$/, '')
+    .slice(0, 80);
 };
 
 const parseWorktreePorcelain = (raw) => {
