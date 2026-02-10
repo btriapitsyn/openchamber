@@ -882,19 +882,23 @@ export const Header: React.FC = () => {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label={`Open instance, usage and MCP (current: ${currentInstanceLabel})`}
+                    aria-label={isDesktopApp
+                      ? `Open instance, usage and MCP (current: ${currentInstanceLabel})`
+                      : 'Open services, usage and MCP'}
                     className={cn(
                       headerIconButtonClass,
-                      'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5'
+                      isDesktopApp
+                        ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5'
+                        : 'h-9 w-9'
                     )}
                   >
                     <RiStackLine className="h-5 w-5" />
-                    <span className="truncate text-base font-normal">{currentInstanceLabel}</span>
+                    {isDesktopApp && <span className="truncate text-base font-normal">{currentInstanceLabel}</span>}
                   </button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Current instance: {currentInstanceLabel}</p>
+                <p>{isDesktopApp ? `Current instance: ${currentInstanceLabel}` : 'Services'}</p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent
