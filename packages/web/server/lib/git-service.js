@@ -237,15 +237,7 @@ const OPENCODE_NOUNS = [
 const OPENCODE_WORKTREE_ATTEMPTS = 26;
 
 const getOpenCodeDataPath = () => {
-  const home = os.homedir();
-  if (process.platform === 'darwin') {
-    return path.join(home, 'Library', 'Application Support', 'opencode');
-  }
-  if (process.platform === 'win32') {
-    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-    return path.join(appData, 'opencode');
-  }
-  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(home, '.local', 'share');
+  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
   return path.join(xdgDataHome, 'opencode');
 };
 
