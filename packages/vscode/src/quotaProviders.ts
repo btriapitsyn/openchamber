@@ -91,6 +91,14 @@ const ANTIGRAVITY_ACCOUNTS_PATHS = [
   path.join(OPENCODE_DATA_DIR, 'antigravity-accounts.json'),
 ];
 
+// OAuth Secret value used to init client
+// Note: It's ok to save this in git because this is an installed application
+// as described here: https://developers.google.com/identity/protocols/oauth2#installed
+// "The process results in a client ID and, in some cases, a client secret,
+// which you embed in the source code of your application. (In this context,
+// the client secret is obviously not treated as a secret.)"
+// ref: https://github.com/opgginc/opencode-bar
+
 const ANTIGRAVITY_GOOGLE_CLIENT_ID =
   '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
 const ANTIGRAVITY_GOOGLE_CLIENT_SECRET = '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';
