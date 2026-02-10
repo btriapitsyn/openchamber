@@ -22,7 +22,7 @@ interface SyncActionsProps {
   remotes: GitRemote[];
   onFetch: (remote: GitRemote) => void;
   onPull: (remote: GitRemote) => void;
-  onPush: (remote: GitRemote) => void;
+  onPush: () => void;
   disabled: boolean;
   iconOnly?: boolean;
   tooltipDelayMs?: number;
@@ -61,9 +61,8 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   };
 
   const handlePush = () => {
-    const remote = remotes[0];
-    if (remotes.length === 1 && remote) {
-      onPush(remote);
+    if (remotes.length >= 1) {
+      onPush();
     }
   };
 
@@ -202,25 +201,15 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
             behindCount
           )}
 
-      {hasMultipleRemotes
-        ? renderDropdownButton(
-            'push',
-            <RiArrowUpLine className="size-4" />,
-            <RiLoader4Line className="size-4 animate-spin" />,
-            'Push',
-            onPush,
-            aheadCount > 0 ? `Push changes (${aheadCount} ahead)` : 'Push changes',
-            aheadCount
-          )
-        : renderButton(
-            'push',
-            <RiArrowUpLine className="size-4" />,
-            <RiLoader4Line className="size-4 animate-spin" />,
-            'Push',
-            handlePush,
-            aheadCount > 0 ? `Push changes (${aheadCount} ahead)` : 'Push changes',
-            aheadCount
-          )}
+      {renderButton(
+        'push',
+        <RiArrowUpLine className="size-4" />,
+        <RiLoader4Line className="size-4 animate-spin" />,
+        'Push',
+        handlePush,
+        aheadCount > 0 ? `Push changes (${aheadCount} ahead)` : 'Push changes',
+        aheadCount
+      )}
     </div>
   );
 };

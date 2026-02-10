@@ -38,7 +38,7 @@ interface GitHeaderProps {
   remotes: GitRemote[];
   onFetch: (remote: GitRemote) => void;
   onPull: (remote: GitRemote) => void;
-  onPush: (remote: GitRemote) => void;
+  onPush: () => void;
   onCheckoutBranch: (branch: string) => void;
   onCreateBranch: (name: string, remote?: GitRemote) => Promise<void>;
   onRenameBranch?: (oldName: string, newName: string) => Promise<void>;

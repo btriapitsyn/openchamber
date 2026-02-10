@@ -1050,7 +1050,7 @@ export async function gitPush(
   options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }
 ): Promise<{ success: boolean; pushed: Array<{ local: string; remote: string }>; repo: string; ref: unknown }> {
   const repo = await getRepository(directory);
-  const remote = options?.remote || 'origin';
+  const remote = options?.remote?.trim();
   const branch = options?.branch;
   const gitOptions = options?.options;
 
@@ -1068,14 +1068,36 @@ export async function gitPush(
   const setUpstream = gitOptions 
     ? hasOption(gitOptions, '--set-upstream') || hasOption(gitOptions, '-u')
     : true;
+
+  if (!remote && !branch) {
+    const args = ['push'];
+    const normalizedOptions = normalizeGitOptions(gitOptions);
+    if (normalizedOptions.length > 0) {
+      args.push(...normalizedOptions);
+    }
+
+    const result = await execGit(args, directory);
+    if (result.exitCode !== 0) {
+      throw new Error(describePushFailure(result));
+    }
+
+    return {
+      success: true,
+      pushed: [{ local: '', remote: '' }],
+      repo: directory,
+      ref: null,
+    };
+  }
+
+  const remoteName = remote || 'origin';
   
   if (repo) {
     try {
-      await repo.push(remote, branch, setUpstream);
+      await repo.push(remoteName, branch, setUpstream);
       
       return {
         success: true,
-        pushed: [{ local: branch || '', remote }],
+        pushed: [{ local: branch || '', remote: remoteName }],
         repo: directory,
         ref: null,
       };
@@ -1098,7 +1120,7 @@ export async function gitPush(
   }
   
   // Add remote and branch
-  args.push(remote);
+  args.push(remoteName);
   if (branch) args.push(branch);
 
   const result = await execGit(args, directory);
@@ -1109,7 +1131,7 @@ export async function gitPush(
   
   return {
     success: true,
-    pushed: [{ local: branch || '', remote }],
+    pushed: [{ local: branch || '', remote: remoteName }],
     repo: directory,
     ref: null,
   };
