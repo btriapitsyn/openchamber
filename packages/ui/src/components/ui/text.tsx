@@ -13,13 +13,13 @@ const variants = [
   {
     variant: "shine",
     component: ({ children, className, ...props }) => (
-      <motion.span
-        {...props}
-        className={cn(
-          "bg-[linear-gradient(110deg,#bfbfbf,35%,#000,50%,#bfbfbf,75%,#bfbfbf)] dark:bg-[linear-gradient(110deg,#404040,35%,#fff,50%,#404040,75%,#404040)]",
-          "bg-[length:200%_100%] bg-clip-text text-transparent",
-          className
-        )}
+        <motion.span
+          {...props}
+          className={cn(
+            "bg-[linear-gradient(110deg,color-mix(in_srgb,var(--surface-muted-foreground)_45%,transparent),35%,var(--surface-foreground),50%,color-mix(in_srgb,var(--surface-muted-foreground)_45%,transparent),75%,color-mix(in_srgb,var(--surface-muted-foreground)_45%,transparent))]",
+            "bg-[length:200%_100%] bg-clip-text text-transparent",
+            className
+          )}
         initial={{ backgroundPosition: "200% 0" }}
         animate={{ backgroundPosition: "-200% 0" }}
         transition={{
