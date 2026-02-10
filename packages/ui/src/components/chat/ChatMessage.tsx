@@ -888,7 +888,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 className={cn(
                     'group w-full',
                     shouldShowHeader ? 'pt-6' : 'pt-0',
-                    isUser ? 'pb-4' : isFollowedByAssistant ? 'pb-0' : 'pb-8'
+                    isUser ? 'pb-0' : isFollowedByAssistant ? 'pb-0' : 'pb-8'
                 )}
                 data-message-id={message.info.id}
                 ref={messageContainerRef}

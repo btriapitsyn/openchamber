@@ -53,7 +53,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
 }
 
 const CHAT_INPUT_DRAFT_KEY = 'openchamber_chat_input_draft';
