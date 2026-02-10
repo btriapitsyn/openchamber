@@ -25,7 +25,6 @@ interface SessionMemoryState {
     isZombie?: boolean;
 }
 
-
 interface UseChatScrollManagerOptions {
     currentSessionId: string | null;
     sessionMessages: ChatMessageRecord[];
@@ -87,16 +86,10 @@ export const useChatScrollManager = ({
     const [isPinned, setIsPinned] = React.useState(true);
 
     const lastSessionIdRef = React.useRef<string | null>(null);
-    const currentSessionIdRef = React.useRef<string | null>(currentSessionId ?? null);
     const suppressUserScrollUntilRef = React.useRef<number>(0);
     const lastDirectScrollIntentAtRef = React.useRef<number>(0);
     const isPinnedRef = React.useRef(true);
     const lastScrollTopRef = React.useRef<number>(0);
-
-
-    React.useEffect(() => {
-        currentSessionIdRef.current = currentSessionId ?? null;
-    }, [currentSessionId]);
 
     const markProgrammaticScroll = React.useCallback(() => {
         suppressUserScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_SUPPRESS_MS;
@@ -330,8 +323,8 @@ export const useChatScrollManager = ({
             }
         }
     }, [getDistanceFromBottom, getPinThreshold, scrollToBottomInternal, updateScrollButtonVisibility]);
- 
-     const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
+
+    const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
         const existing = animationHandlersRef.current.get(messageId);
         if (existing) {
             return existing;
