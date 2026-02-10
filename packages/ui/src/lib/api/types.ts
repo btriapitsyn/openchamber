@@ -684,6 +684,7 @@ export type GitHubPullRequestHeadRepo = {
   repo: string;
   url: string;
   cloneUrl?: string;
+  sshUrl?: string;
 };
 
 export type GitHubPullRequestSummary = GitHubPullRequest & {

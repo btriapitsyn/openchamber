@@ -1379,6 +1379,22 @@ export async function pull(directory, options = {}) {
 export async function push(directory, options = {}) {
   const git = await createGit(directory);
 
+  const describePushError = (error) => {
+    const fromNestedGit = error?.git && typeof error.git === 'object'
+      ? [error.git.message, error.git.stderr, error.git.stdout]
+      : [];
+    const candidates = [
+      error?.message,
+      error?.stderr,
+      error?.stdout,
+      ...fromNestedGit,
+    ]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
+
+    return candidates[0] || 'Failed to push to remote';
+  };
+
   const buildUpstreamOptions = (raw) => {
     if (Array.isArray(raw)) {
       return raw.includes('--set-upstream') ? raw : [...raw, '--set-upstream'];
@@ -1434,8 +1450,9 @@ export async function push(directory, options = {}) {
   } catch (error) {
     // Last-resort fallback: retry with upstream if the error suggests it's missing.
     if (!looksLikeMissingUpstream(error)) {
+      const message = describePushError(error);
       console.error('Failed to push:', error);
-      throw error;
+      throw new Error(message);
     }
 
     try {
@@ -1449,8 +1466,9 @@ export async function push(directory, options = {}) {
       const result = await git.push(remote, branch, buildUpstreamOptions(options.options));
       return normalizePushResult(result);
     } catch (fallbackError) {
+      const message = describePushError(fallbackError);
       console.error('Failed to push (including upstream fallback):', fallbackError);
-      throw fallbackError;
+      throw new Error(message);
     }
   }
 }

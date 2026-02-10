@@ -7665,6 +7665,7 @@ async function main(options = {}) {
               repo: pr.head.repo.name,
               url: pr.head.repo.html_url,
               cloneUrl: pr.head.repo.clone_url,
+              sshUrl: pr.head.repo.ssh_url,
             }
           : null;
         return {
@@ -7732,6 +7733,7 @@ async function main(options = {}) {
             repo: prData.head.repo.name,
             url: prData.head.repo.html_url,
             cloneUrl: prData.head.repo.clone_url,
+            sshUrl: prData.head.repo.ssh_url,
           }
         : null;
 

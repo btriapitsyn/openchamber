@@ -29,7 +29,14 @@ import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { createWorktreeSessionForNewBranchExact } from '@/lib/worktreeSessionCreator';
 import { validateSdkWorktree } from '@/lib/worktrees/worktreeManager';
-import type { GitHubPullRequestContextResult, GitHubPullRequestSummary, GitHubPullRequestsListResult } from '@/lib/api/types';
+import { getRemotes } from '@/lib/gitApi';
+import type {
+  GitHubPullRequestContextResult,
+  GitHubPullRequestHeadRepo,
+  GitHubPullRequestSummary,
+  GitHubPullRequestsListResult,
+  GitRemote,
+} from '@/lib/api/types';
 
 const parsePullRequestNumber = (value: string): number | null => {
   const trimmed = value.trim();
@@ -61,6 +68,35 @@ const sanitizeGitRemoteName = (value: string): string => {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 64);
+};
+
+const looksLikeSshUrl = (value: string): boolean => {
+  const trimmed = value.trim();
+  return /^git@/i.test(trimmed) || /^ssh:\/\//i.test(trimmed);
+};
+
+const resolvePreferredPushTransport = (remotes: GitRemote[]): 'ssh' | 'https' => {
+  const candidates = remotes.length > 0
+    ? remotes
+    : [];
+  const preferredByName = candidates.find((remote) => remote.name === 'origin')
+    || candidates.find((remote) => remote.name === 'upstream')
+    || candidates[0];
+
+  const sample = preferredByName?.pushUrl || preferredByName?.fetchUrl || '';
+  return looksLikeSshUrl(sample) ? 'ssh' : 'https';
+};
+
+const resolveForkRemoteUrl = (headRepo: GitHubPullRequestHeadRepo | null | undefined, preferredTransport: 'ssh' | 'https'): string => {
+  if (!headRepo) {
+    return '';
+  }
+
+  if (preferredTransport === 'ssh') {
+    return headRepo.sshUrl || headRepo.cloneUrl || headRepo.url || '';
+  }
+
+  return headRepo.cloneUrl || headRepo.sshUrl || headRepo.url || '';
 };
 
 export function GitHubPullRequestPickerDialog({
@@ -99,7 +135,13 @@ export function GitHubPullRequestPickerDialog({
   const [isLoading, setIsLoading] = React.useState(false);
   const [isLoadingMore, setIsLoadingMore] = React.useState(false);
   const [existingBranchHeads, setExistingBranchHeads] = React.useState<Map<string, boolean>>(new Map());
+  const [projectRemotes, setProjectRemotes] = React.useState<GitRemote[]>([]);
   const [error, setError] = React.useState<string | null>(null);
+
+  const preferredPushTransport = React.useMemo(
+    () => resolvePreferredPushTransport(projectRemotes),
+    [projectRemotes]
+  );
 
   const refresh = React.useCallback(async () => {
     if (!projectDirectory) {
@@ -174,10 +216,34 @@ export function GitHubPullRequestPickerDialog({
       setIsLoading(false);
       setError(null);
       setExistingBranchHeads(new Map());
+      setProjectRemotes([]);
       return;
     }
     void refresh();
   }, [open, refresh]);
+
+  React.useEffect(() => {
+    if (!open || !projectDirectory) {
+      return;
+    }
+
+    let cancelled = false;
+    void getRemotes(projectDirectory)
+      .then((remotes) => {
+        if (!cancelled) {
+          setProjectRemotes(Array.isArray(remotes) ? remotes : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProjectRemotes([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectDirectory]);
 
   const checkLocalBranchExists = React.useCallback(async (heads: string[]) => {
     if (!projectRef) return;
@@ -323,7 +389,7 @@ export function GitHubPullRequestPickerDialog({
     const remoteName = isFork
       ? (sanitizeGitRemoteName(`pr-${headRepo?.owner || 'fork'}-${headRepo?.repo || ''}`) || `pr-${pr.number}`)
       : 'origin';
-    const remoteUrl = isFork ? (headRepo?.cloneUrl || headRepo?.url || '') : '';
+    const remoteUrl = isFork ? resolveForkRemoteUrl(headRepo, preferredPushTransport) : '';
 
     if (isFork && !remoteUrl) {
       throw new Error('PR fork remote URL missing');
@@ -389,7 +455,7 @@ export function GitHubPullRequestPickerDialog({
     });
 
     return { id: session.id };
-  }, [projectDirectory, projectRef, existingBranchHeads]);
+  }, [projectDirectory, projectRef, existingBranchHeads, preferredPushTransport]);
 
   const startSession = React.useCallback(async (number: number) => {
     if (!projectDirectory) {
