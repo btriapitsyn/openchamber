@@ -290,6 +290,54 @@ export interface GitWorktreeInfo {
   branch?: string;
 }
 
+export interface GitWorktreeValidationError {
+  code: string;
+  message: string;
+}
+
+export interface GitWorktreeValidationResult {
+  ok: boolean;
+  errors: GitWorktreeValidationError[];
+  resolved?: {
+    mode?: 'new' | 'existing';
+    localBranch?: string | null;
+  };
+}
+
+export interface CreateGitWorktreePayload {
+  mode?: 'new' | 'existing';
+  /** Worktree folder name (falls back to OpenCode name generation when omitted). */
+  worktreeName?: string;
+  /** Backward-compatible alias for worktreeName. */
+  name?: string;
+  /** New local branch name for mode=new. */
+  branchName?: string;
+  /** Existing local/remote branch for mode=existing. */
+  existingBranch?: string;
+  /** Start ref for mode=new (local/remote branch or commit SHA). */
+  startRef?: string;
+  /** Additional startup script to run after project startup script. */
+  startCommand?: string;
+  /** Configure upstream tracking for the created/attached local branch. */
+  setUpstream?: boolean;
+  upstreamRemote?: string;
+  upstreamBranch?: string;
+  /** Optional remote provisioning (used for fork PR workflows). */
+  ensureRemoteName?: string;
+  ensureRemoteUrl?: string;
+}
+
+export interface GitWorktreeCreateResult {
+  name: string;
+  branch: string;
+  directory: string;
+}
+
+export interface RemoveGitWorktreePayload {
+  directory: string;
+  deleteLocalBranch?: boolean;
+}
+
 export interface GitDeleteBranchPayload {
   branch: string;
   force?: boolean;
@@ -338,6 +386,9 @@ export interface GitAPI {
     payload: { base: string; head: string; context?: string }
   ): Promise<GeneratedPullRequestDescription>;
   listGitWorktrees(directory: string): Promise<GitWorktreeInfo[]>;
+  validateGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
+  createGitWorktree?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
+  deleteGitWorktree?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult>;
   gitPush(directory: string, options?: { remote?: string; branch?: string; options?: string[] | Record<string, unknown> }): Promise<GitPushResult>;
   gitPull(directory: string, options?: { remote?: string; branch?: string }): Promise<GitPullResult>;

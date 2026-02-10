@@ -9028,6 +9028,74 @@ Context:
     }
   });
 
+  app.post('/api/git/worktrees/validate', async (req, res) => {
+    const { validateWorktreeCreate } = await getGitLibraries();
+    if (typeof validateWorktreeCreate !== 'function') {
+      return res.status(501).json({ error: 'Worktree validation is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const result = await validateWorktreeCreate(directory, req.body || {});
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to validate worktree creation:', error);
+      res.status(500).json({ error: error.message || 'Failed to validate worktree creation' });
+    }
+  });
+
+  app.post('/api/git/worktrees', async (req, res) => {
+    const { createWorktree } = await getGitLibraries();
+    if (typeof createWorktree !== 'function') {
+      return res.status(501).json({ error: 'Worktree creation is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const created = await createWorktree(directory, req.body || {});
+      res.json(created);
+    } catch (error) {
+      console.error('Failed to create worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to create worktree' });
+    }
+  });
+
+  app.delete('/api/git/worktrees', async (req, res) => {
+    const { removeWorktree } = await getGitLibraries();
+    if (typeof removeWorktree !== 'function') {
+      return res.status(501).json({ error: 'Worktree removal is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const worktreeDirectory = typeof req.body?.directory === 'string' ? req.body.directory : '';
+      if (!worktreeDirectory) {
+        return res.status(400).json({ error: 'worktree directory is required' });
+      }
+
+      const result = await removeWorktree(directory, {
+        directory: worktreeDirectory,
+        deleteLocalBranch: req.body?.deleteLocalBranch === true,
+      });
+      res.json({ success: Boolean(result) });
+    } catch (error) {
+      console.error('Failed to remove worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to remove worktree' });
+    }
+  });
+
   app.get('/api/git/worktree-type', async (req, res) => {
     const { isLinkedWorktree } = await getGitLibraries();
     try {

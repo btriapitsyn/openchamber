@@ -28,8 +28,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { createWorktreeSessionForNewBranchExact } from '@/lib/worktreeSessionCreator';
-import { gitFetch } from '@/lib/gitApi';
-import { execCommand, execCommands } from '@/lib/execCommands';
+import { validateSdkWorktree } from '@/lib/worktrees/worktreeManager';
 import type { GitHubPullRequestContextResult, GitHubPullRequestSummary, GitHubPullRequestsListResult } from '@/lib/api/types';
 
 const parsePullRequestNumber = (value: string): number | null => {
@@ -79,6 +78,15 @@ export function GitHubPullRequestPickerDialog({
   const activeProject = useProjectsStore((state) => state.getActiveProject());
 
   const projectDirectory = activeProject?.path ?? null;
+  const projectRef = React.useMemo(() => {
+    if (!projectDirectory) {
+      return null;
+    }
+    return {
+      id: activeProject?.id ?? `path:${projectDirectory}`,
+      path: projectDirectory,
+    };
+  }, [activeProject?.id, projectDirectory]);
 
   const [query, setQuery] = React.useState('');
   const [createInWorktree, setCreateInWorktree] = React.useState(false);
@@ -172,7 +180,7 @@ export function GitHubPullRequestPickerDialog({
   }, [open, refresh]);
 
   const checkLocalBranchExists = React.useCallback(async (heads: string[]) => {
-    if (!projectDirectory) return;
+    if (!projectRef) return;
     const unique = Array.from(new Set(heads.map((h) => (h || '').trim()).filter(Boolean)));
     if (unique.length === 0) return;
 
@@ -180,28 +188,36 @@ export function GitHubPullRequestPickerDialog({
     const unknown = unique.filter((h) => !existingBranchHeads.has(h));
     if (unknown.length === 0) return;
 
-    // optimistic UI: no spinner; disable once results arrive
-    {
-      // Avoid shell wrappers; rely on exit code only.
-      const commands = unknown.map((h) => `git show-ref --verify --quiet ${JSON.stringify(`refs/heads/${h}`)}`);
-      const res = await execCommands(commands, projectDirectory);
-      setExistingBranchHeads((prev) => {
-        const next = new Map(prev);
-        for (let i = 0; i < unknown.length; i += 1) {
-          const head = unknown[i];
-          next.set(head, Boolean(res.results[i]?.success));
-        }
-        return next;
-      });
-    }
-  }, [projectDirectory, existingBranchHeads]);
+    const results = await Promise.all(
+      unknown.map(async (head) => {
+        const validation = await validateSdkWorktree(projectRef, {
+          mode: 'new',
+          branchName: head,
+          worktreeName: head,
+        }).catch(() => ({ ok: false, errors: [{ code: 'validation_failed', message: 'Validation failed' }] }));
+
+        const blockedByBranch = validation.errors.some((entry) =>
+          entry.code === 'branch_in_use' || entry.code === 'branch_exists'
+        );
+        return { head, blocked: blockedByBranch };
+      })
+    );
+
+    setExistingBranchHeads((prev) => {
+      const next = new Map(prev);
+      for (const item of results) {
+        next.set(item.head, item.blocked);
+      }
+      return next;
+    });
+  }, [projectRef, existingBranchHeads]);
 
   React.useEffect(() => {
     if (!open) return;
-    if (!projectDirectory) return;
+    if (!projectRef) return;
     if (!createInWorktree) return;
     void checkLocalBranchExists(prs.map((pr) => pr.head));
-  }, [open, projectDirectory, createInWorktree, prs, checkLocalBranchExists]);
+  }, [open, projectRef, createInWorktree, prs, checkLocalBranchExists]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -290,7 +306,7 @@ export function GitHubPullRequestPickerDialog({
     baseRepo: GitHubPullRequestsListResult['repo'] | undefined,
     pr: GitHubPullRequestSummary,
   ): Promise<{ id: string } | null> => {
-    if (!projectDirectory) return null;
+    if (!projectDirectory || !projectRef) return null;
     const headRef = pr.head;
     const headRepo = pr.headRepo;
     if (!headRef) {
@@ -303,33 +319,53 @@ export function GitHubPullRequestPickerDialog({
       (headRepo.owner !== baseRepo.owner || headRepo.repo !== baseRepo.repo)
     );
 
-    const fetchRemote = isFork
-      ? (headRepo?.cloneUrl || headRepo?.url || '')
-      : 'origin';
-    if (!fetchRemote) {
-      throw new Error('PR head remote URL missing');
-    }
-
-    const fetchRef = `refs/heads/${headRef}`;
-    const fetchResult = await gitFetch(projectDirectory, { remote: fetchRemote, branch: fetchRef });
-    if (!fetchResult?.success) {
-      throw new Error('Failed to fetch PR head');
-    }
-
-    const headCommitish = pr.headSha?.trim() || (await execCommand('git rev-parse FETCH_HEAD', projectDirectory)).stdout?.trim() || '';
-    if (!headCommitish) {
-      throw new Error('PR head commit not resolvable');
-    }
-
     const preferredBranch = pr.head;
+    const remoteName = isFork
+      ? (sanitizeGitRemoteName(`pr-${headRepo?.owner || 'fork'}-${headRepo?.repo || ''}`) || `pr-${pr.number}`)
+      : 'origin';
+    const remoteUrl = isFork ? (headRepo?.cloneUrl || headRepo?.url || '') : '';
+
+    if (isFork && !remoteUrl) {
+      throw new Error('PR fork remote URL missing');
+    }
+
+    const startRef = `${remoteName}/${preferredBranch}`;
+    const validation = await validateSdkWorktree(projectRef, {
+      mode: 'new',
+      branchName: preferredBranch,
+      worktreeName: preferredBranch,
+      startRef,
+      setUpstream: true,
+      upstreamRemote: remoteName,
+      upstreamBranch: preferredBranch,
+      ensureRemoteName: isFork ? remoteName : undefined,
+      ensureRemoteUrl: isFork ? remoteUrl : undefined,
+    });
+
+    if (!validation.ok) {
+      const branchError = validation.errors.find((entry) =>
+        entry.code === 'branch_in_use' || entry.code === 'branch_exists'
+      );
+      if (branchError) {
+        throw new Error(branchError.message);
+      }
+      throw new Error(validation.errors[0]?.message || 'PR worktree validation failed');
+    }
 
     // Prevent clobbering/removing an existing local branch when using PR worktree mode.
     if (existingBranchHeads.get(preferredBranch) === true) {
       throw new Error(`Local branch already exists: ${preferredBranch}`);
     }
 
-    const session = await createWorktreeSessionForNewBranchExact(projectDirectory, preferredBranch, headCommitish, {
+    const session = await createWorktreeSessionForNewBranchExact(projectDirectory, preferredBranch, startRef, {
       kind: 'pr',
+      worktreeName: preferredBranch,
+      setUpstream: true,
+      upstreamRemote: remoteName,
+      upstreamBranch: preferredBranch,
+      ensureRemoteName: isFork ? remoteName : undefined,
+      ensureRemoteUrl: isFork ? remoteUrl : undefined,
+      createdFromBranch: pr.base,
     });
     if (!session?.id) {
       throw new Error('Failed to create PR worktree session');
@@ -339,53 +375,6 @@ export function GitHubPullRequestPickerDialog({
     const worktreeDir = meta?.path;
     if (!worktreeDir) {
       throw new Error('Worktree directory not found');
-    }
-
-    // Switch the new worktree to the PR branch and delete the SDK-created opencode/* branch immediately.
-    // This makes the worktree directly operate on the PR branch.
-    const commands: string[] = [
-      // Create local branch from the fetched PR head commit.
-      `git -C ${JSON.stringify(worktreeDir)} switch -c ${JSON.stringify(preferredBranch)} ${JSON.stringify(headCommitish)}`,
-    ];
-    const originalBranch = (meta?.branch || session.branch || '').replace(/^refs\/heads\//, '').trim();
-    if (meta?.kind === 'pr' && originalBranch && originalBranch.startsWith('opencode/')) {
-      commands.push(`git -C ${JSON.stringify(projectDirectory)} branch -D ${JSON.stringify(originalBranch)}`);
-    }
-
-    const result = await execCommands(commands, projectDirectory);
-    if (!result.success) {
-      const failed = result.results.find((r) => !r.success);
-      throw new Error(failed?.stderr || failed?.stdout || 'Failed to switch worktree to PR branch');
-    }
-
-    // Best-effort: set upstream for PR branch (without pushing).
-    try {
-      const remoteName = isFork
-        ? sanitizeGitRemoteName(`pr-${headRepo?.owner || 'fork'}-${headRepo?.repo || ''}`)
-        : 'origin';
-      const remoteUrl = isFork ? (headRepo?.cloneUrl || headRepo?.url || '') : '';
-      const fetchRefspec = `+refs/heads/${preferredBranch}:refs/remotes/${remoteName}/${preferredBranch}`;
-
-      const upstreamCommands: string[] = [];
-      if (isFork && remoteUrl) {
-        upstreamCommands.push(
-          `git -C ${JSON.stringify(projectDirectory)} remote add ${JSON.stringify(remoteName)} ${JSON.stringify(remoteUrl)} 2>/dev/null || git -C ${JSON.stringify(projectDirectory)} remote set-url ${JSON.stringify(remoteName)} ${JSON.stringify(remoteUrl)}`
-        );
-      }
-      upstreamCommands.push(
-        `git -C ${JSON.stringify(projectDirectory)} fetch ${JSON.stringify(remoteName)} ${JSON.stringify(fetchRefspec)}`
-      );
-      upstreamCommands.push(
-        `git -C ${JSON.stringify(worktreeDir)} branch --set-upstream-to=${JSON.stringify(`${remoteName}/${preferredBranch}`)} ${JSON.stringify(preferredBranch)}`
-      );
-
-      const upstreamResult = await execCommands(upstreamCommands, projectDirectory);
-      if (!upstreamResult.success) {
-        const failed = upstreamResult.results.find((r) => !r.success);
-        toast.message('PR upstream not set', { description: failed?.stderr || failed?.stdout || 'Configure remote manually if needed.' });
-      }
-    } catch {
-      toast.message('PR upstream not set', { description: 'Configure remote manually if needed.' });
     }
 
     // Update stored metadata for better UX + reintegration target.
@@ -400,7 +389,7 @@ export function GitHubPullRequestPickerDialog({
     });
 
     return { id: session.id };
-  }, [projectDirectory, existingBranchHeads]);
+  }, [projectDirectory, projectRef, existingBranchHeads]);
 
   const startSession = React.useCallback(async (number: number) => {
     if (!projectDirectory) {
@@ -433,14 +422,8 @@ export function GitHubPullRequestPickerDialog({
 
       const sessionId = await (async () => {
         if (createInWorktree) {
-          try {
-            const worktreeSession = await createPrWorktreeSession(prContext.repo, pr);
-            return worktreeSession?.id || null;
-          } catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            toast.error('PR worktree failed', { description: msg });
-            // fall back to normal session
-          }
+          const worktreeSession = await createPrWorktreeSession(prContext.repo, pr);
+          return worktreeSession?.id || null;
         }
         const session = await useSessionStore.getState().createSession(sessionTitle, projectDirectory, null);
         return session?.id || null;
@@ -572,7 +555,7 @@ Nice-to-have:
       toast.success('Session created from PR');
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      toast.error('Failed to start session', { description: message });
+      toast.error(createInWorktree ? 'PR worktree failed' : 'Failed to start session', { description: message });
     } finally {
       setStartingNumber(null);
     }
@@ -690,7 +673,7 @@ Nice-to-have:
                   <p className="typography-small text-foreground truncate ml-0.5">{pr.title}</p>
                   {createInWorktree && disabledByWorktree ? (
                     <p className="typography-micro text-muted-foreground mt-0.5 ml-0.5">
-                      PR worktree disabled: local branch exists ({pr.head})
+                      PR worktree disabled: branch already exists or is in use ({pr.head})
                     </p>
                   ) : null}
                 </div>

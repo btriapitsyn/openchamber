@@ -11,6 +11,10 @@ import type {
   GitDeleteRemoteBranchPayload,
   GeneratedCommitMessage,
   GitWorktreeInfo,
+  CreateGitWorktreePayload,
+  GitWorktreeCreateResult,
+  RemoveGitWorktreePayload,
+  GitWorktreeValidationResult,
   CreateGitCommitOptions,
   GitCommitResult,
   GitPushResult,
@@ -287,6 +291,51 @@ export async function listGitWorktrees(directory: string): Promise<GitWorktreeIn
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || 'Failed to list worktrees');
   }
+  return response.json();
+}
+
+export async function validateGitWorktree(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult> {
+  const response = await fetch(buildUrl(`${API_BASE}/worktrees/validate`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to validate worktree');
+  }
+
+  return response.json();
+}
+
+export async function createGitWorktree(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult> {
+  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to create worktree');
+  }
+
+  return response.json();
+}
+
+export async function deleteGitWorktree(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }> {
+  const response = await fetch(buildUrl(`${API_BASE}/worktrees`, directory), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to delete worktree');
+  }
+
   return response.json();
 }
 

@@ -43,6 +43,7 @@ const toViewKeyBindings = (bindings: readonly unknown[]): readonly KeyBinding[] 
   return bindings as readonly KeyBinding[];
 };
 
+const forceParsingCompat = forceParsing as unknown as (view: EditorView, upto?: number, timeout?: number) => boolean;
 const openSearchPanelCompat = openSearchPanel as unknown as (view: EditorView) => void;
 const closeSearchPanelCompat = closeSearchPanel as unknown as (view: EditorView) => void;
 
@@ -223,7 +224,7 @@ export function CodeMirrorEditor({
       parent: hostRef.current,
     });
 
-    forceParsing(viewRef.current, viewRef.current.state.doc.length, 200);
+    forceParsingCompat(viewRef.current, viewRef.current.state.doc.length, 200);
     viewRef.current.requestMeasure();
 
     if (viewRef.current) {
@@ -255,7 +256,7 @@ export function CodeMirrorEditor({
       ],
     });
 
-    forceParsing(view, view.state.doc.length, 200);
+    forceParsingCompat(view, view.state.doc.length, 200);
     view.requestMeasure();
 
     // Force a re-render to ensure Portals can find the new widget containers in the DOM

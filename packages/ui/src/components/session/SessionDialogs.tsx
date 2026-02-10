@@ -53,6 +53,7 @@ export const SessionDialogs: React.FC = () => {
     const [deleteDialog, setDeleteDialog] = React.useState<DeleteDialogState | null>(null);
     const [deleteDialogSummaries, setDeleteDialogSummaries] = React.useState<Array<{ session: Session; metadata: WorktreeMetadata }>>([]);
     const [deleteDialogShouldRemoveRemote, setDeleteDialogShouldRemoveRemote] = React.useState(false);
+    const [deleteDialogShouldDeleteLocalBranch, setDeleteDialogShouldDeleteLocalBranch] = React.useState(false);
     const [isProcessingDelete, setIsProcessingDelete] = React.useState(false);
     const [hasCompletedDirtyCheck, setHasCompletedDirtyCheck] = React.useState(false);
     const [dirtyWorktreePaths, setDirtyWorktreePaths] = React.useState<Set<string>>(new Set());
@@ -102,6 +103,7 @@ export const SessionDialogs: React.FC = () => {
     const shouldArchiveWorktree = isWorktreeDelete;
     const removeRemoteOptionDisabled =
         isProcessingDelete || !isWorktreeDelete || !canRemoveRemoteBranches;
+    const deleteLocalOptionDisabled = isProcessingDelete || !isWorktreeDelete;
 
     React.useEffect(() => {
         loadSessions();
@@ -186,6 +188,7 @@ export const SessionDialogs: React.FC = () => {
         setDeleteDialog(null);
         setDeleteDialogSummaries([]);
         setDeleteDialogShouldRemoveRemote(false);
+        setDeleteDialogShouldDeleteLocalBranch(false);
         setIsProcessingDelete(false);
         setHasCompletedDirtyCheck(false);
         setDirtyWorktreePaths(new Set());
@@ -207,6 +210,7 @@ export const SessionDialogs: React.FC = () => {
         if (!deleteDialog) {
             setDeleteDialogSummaries([]);
             setDeleteDialogShouldRemoveRemote(false);
+            setDeleteDialogShouldDeleteLocalBranch(false);
             setHasCompletedDirtyCheck(false);
             setDirtyWorktreePaths(new Set());
             return;
@@ -335,6 +339,7 @@ export const SessionDialogs: React.FC = () => {
         try {
             const shouldArchive = shouldArchiveWorktree;
             const removeRemoteBranch = shouldArchive && deleteDialogShouldRemoveRemote;
+            const deleteLocalBranch = shouldArchive && deleteDialogShouldDeleteLocalBranch;
 
             if (deleteDialog.sessions.length === 0 && isWorktreeDelete && deleteDialog.worktree) {
                 const shouldRemoveRemote = deleteDialogShouldRemoveRemote && canRemoveRemoteBranches;
@@ -342,7 +347,7 @@ export const SessionDialogs: React.FC = () => {
                     await removeProjectWorktree(
                         getProjectRefForWorktree(deleteDialog.worktree),
                         deleteDialog.worktree,
-                        { deleteRemoteBranch: shouldRemoveRemote, force: true }
+                        { deleteRemoteBranch: shouldRemoveRemote, deleteLocalBranch, force: true }
                     );
                 } catch (error) {
                     toast.error('Failed to remove worktree', {
@@ -367,6 +372,7 @@ export const SessionDialogs: React.FC = () => {
                     // Don't try to derive worktree removal from per-session metadata (may be missing).
                     archiveWorktree: isWorktreeDelete ? false : shouldArchive,
                     deleteRemoteBranch: removeRemoteBranch,
+                    deleteLocalBranch,
                 });
                 if (!success) {
                     toast.error('Failed to delete session');
@@ -390,6 +396,7 @@ export const SessionDialogs: React.FC = () => {
                 const { deletedIds, failedIds } = await deleteSessions(ids, {
                     archiveWorktree: isWorktreeDelete ? false : shouldArchive,
                     deleteRemoteBranch: removeRemoteBranch,
+                    deleteLocalBranch,
                 });
 
                 if (isWorktreeDelete && deleteDialog.worktree && failedIds.length === 0) {
@@ -400,7 +407,7 @@ export const SessionDialogs: React.FC = () => {
                         await removeProjectWorktree(
                             getProjectRefForWorktree(deleteDialog.worktree),
                             deleteDialog.worktree,
-                            { deleteRemoteBranch: shouldRemoveRemote, force: true }
+                            { deleteRemoteBranch: shouldRemoveRemote, deleteLocalBranch, force: true }
                         );
                         await loadSessions();
                     } catch (error) {
@@ -449,7 +456,7 @@ export const SessionDialogs: React.FC = () => {
                     await removeProjectWorktree(
                         getProjectRefForWorktree(deleteDialog.worktree),
                         deleteDialog.worktree,
-                        { deleteRemoteBranch: shouldRemoveRemote, force: true }
+                        { deleteRemoteBranch: shouldRemoveRemote, deleteLocalBranch, force: true }
                     );
                     await loadSessions();
                 } catch (error) {
@@ -466,6 +473,7 @@ export const SessionDialogs: React.FC = () => {
     }, [
         deleteDialog,
         deleteDialogShouldRemoveRemote,
+        deleteDialogShouldDeleteLocalBranch,
         deleteSession,
         deleteSessions,
         closeDeleteDialog,
@@ -590,9 +598,36 @@ export const SessionDialogs: React.FC = () => {
         )
     ) : null;
 
+    const deleteLocalBranchAction = isWorktreeDelete ? (
+        <button
+            type="button"
+            onClick={() => {
+                if (deleteLocalOptionDisabled) {
+                    return;
+                }
+                setDeleteDialogShouldDeleteLocalBranch((prev) => !prev);
+            }}
+            disabled={deleteLocalOptionDisabled}
+            className={cn(
+                'flex items-center gap-2 rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors',
+                deleteLocalOptionDisabled
+                    ? 'cursor-not-allowed opacity-60'
+                    : 'hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+            )}
+        >
+            {deleteDialogShouldDeleteLocalBranch ? (
+                <RiCheckboxLine className="size-4 text-primary" />
+            ) : (
+                <RiCheckboxBlankLine className="size-4" />
+            )}
+            Delete local branch
+        </button>
+    ) : null;
+
     const deleteDialogActions = isWorktreeDelete ? (
         <div className="flex w-full items-center justify-between gap-3">
             <div className="flex flex-col items-start gap-1">
+                {deleteLocalBranchAction}
                 {deleteRemoteBranchAction}
             </div>
             <div className="flex items-center gap-2">

@@ -160,6 +160,10 @@ export const useMultiRunStore = create<MultiRunStore>()(
             try {
               const worktreeMetadata = await createSdkWorktree(project, {
                 preferredName,
+                mode: 'new',
+                branchName: preferredName,
+                worktreeName: preferredName,
+                startRef: params.worktreeBaseBranch || 'HEAD',
                 setupCommands: commandsToRun,
               });
 

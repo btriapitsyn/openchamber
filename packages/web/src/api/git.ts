@@ -18,6 +18,9 @@ export const createWebGitAPI = (): GitAPI => ({
   generateCommitMessage: gitApiHttp.generateCommitMessage,
   generatePullRequestDescription: gitApiHttp.generatePullRequestDescription,
   listGitWorktrees: gitApiHttp.listGitWorktrees,
+  validateGitWorktree: gitApiHttp.validateGitWorktree,
+  createGitWorktree: gitApiHttp.createGitWorktree,
+  deleteGitWorktree: gitApiHttp.deleteGitWorktree,
   createGitCommit(directory: string, message: string, options?: CreateGitCommitOptions) {
     return gitApiHttp.createGitCommit(directory, message, options);
   },

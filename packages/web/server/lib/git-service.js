@@ -168,6 +168,571 @@ const cleanBranchName = (branch) => {
   return branch;
 };
 
+const OPENCODE_ADJECTIVES = [
+  'brave',
+  'calm',
+  'clever',
+  'cosmic',
+  'crisp',
+  'curious',
+  'eager',
+  'gentle',
+  'glowing',
+  'happy',
+  'hidden',
+  'jolly',
+  'kind',
+  'lucky',
+  'mighty',
+  'misty',
+  'neon',
+  'nimble',
+  'playful',
+  'proud',
+  'quick',
+  'quiet',
+  'shiny',
+  'silent',
+  'stellar',
+  'sunny',
+  'swift',
+  'tidy',
+  'witty',
+];
+
+const OPENCODE_NOUNS = [
+  'cabin',
+  'cactus',
+  'canyon',
+  'circuit',
+  'comet',
+  'eagle',
+  'engine',
+  'falcon',
+  'forest',
+  'garden',
+  'harbor',
+  'island',
+  'knight',
+  'lagoon',
+  'meadow',
+  'moon',
+  'mountain',
+  'nebula',
+  'orchid',
+  'otter',
+  'panda',
+  'pixel',
+  'planet',
+  'river',
+  'rocket',
+  'sailor',
+  'squid',
+  'star',
+  'tiger',
+  'wizard',
+  'wolf',
+];
+
+const OPENCODE_WORKTREE_ATTEMPTS = 26;
+
+const getOpenCodeDataPath = () => {
+  const home = os.homedir();
+  if (process.platform === 'darwin') {
+    return path.join(home, 'Library', 'Application Support', 'opencode');
+  }
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    return path.join(appData, 'opencode');
+  }
+  const xdgDataHome = process.env.XDG_DATA_HOME || path.join(home, '.local', 'share');
+  return path.join(xdgDataHome, 'opencode');
+};
+
+const pickRandom = (values) => values[Math.floor(Math.random() * values.length)];
+
+const generateOpenCodeRandomName = () => `${pickRandom(OPENCODE_ADJECTIVES)}-${pickRandom(OPENCODE_NOUNS)}`;
+
+const slugWorktreeName = (value) => {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+};
+
+const parseWorktreePorcelain = (raw) => {
+  const lines = String(raw || '').split('\n').map((line) => line.trim());
+  const entries = [];
+  let current = null;
+
+  for (const line of lines) {
+    if (!line) {
+      if (current?.worktree) {
+        entries.push(current);
+      }
+      current = null;
+      continue;
+    }
+
+    if (line.startsWith('worktree ')) {
+      if (current?.worktree) {
+        entries.push(current);
+      }
+      current = { worktree: line.substring('worktree '.length).trim() };
+      continue;
+    }
+
+    if (!current) {
+      continue;
+    }
+
+    if (line.startsWith('HEAD ')) {
+      current.head = line.substring('HEAD '.length).trim();
+      continue;
+    }
+
+    if (line.startsWith('branch ')) {
+      const branchRef = line.substring('branch '.length).trim();
+      current.branchRef = branchRef;
+      current.branch = cleanBranchName(branchRef);
+    }
+  }
+
+  if (current?.worktree) {
+    entries.push(current);
+  }
+
+  return entries;
+};
+
+const canonicalPath = async (input) => {
+  const absolutePath = path.resolve(input);
+  const realPath = await fsp.realpath(absolutePath).catch(() => absolutePath);
+  const normalized = path.normalize(realPath);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+};
+
+const checkPathExists = async (targetPath) => {
+  try {
+    await fsp.stat(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const normalizeStartRef = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) {
+    return 'HEAD';
+  }
+  return trimmed;
+};
+
+const parseRemoteBranchRef = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith('refs/remotes/')) {
+    const rest = trimmed.substring('refs/remotes/'.length);
+    const slashIndex = rest.indexOf('/');
+    if (slashIndex <= 0 || slashIndex === rest.length - 1) {
+      return null;
+    }
+    return {
+      remote: rest.slice(0, slashIndex),
+      branch: rest.slice(slashIndex + 1),
+      remoteRef: rest,
+      fullRef: `refs/remotes/${rest}`,
+    };
+  }
+
+  if (trimmed.startsWith('remotes/')) {
+    return parseRemoteBranchRef(`refs/${trimmed}`);
+  }
+
+  const slashIndex = trimmed.indexOf('/');
+  if (slashIndex <= 0 || slashIndex === trimmed.length - 1) {
+    return null;
+  }
+
+  return {
+    remote: trimmed.slice(0, slashIndex),
+    branch: trimmed.slice(slashIndex + 1),
+    remoteRef: trimmed,
+    fullRef: `refs/remotes/${trimmed}`,
+  };
+};
+
+const normalizeUpstreamTarget = (remote, branch) => {
+  const remoteName = String(remote || '').trim();
+  const branchName = String(branch || '').trim();
+  if (!remoteName || !branchName) {
+    return null;
+  }
+  return {
+    remote: remoteName,
+    branch: branchName,
+    full: `${remoteName}/${branchName}`,
+  };
+};
+
+const parseGitErrorText = (error) => {
+  const stderr = typeof error?.stderr === 'string' ? error.stderr : '';
+  const stdout = typeof error?.stdout === 'string' ? error.stdout : '';
+  const message = typeof error?.message === 'string' ? error.message : '';
+  return [stderr, stdout, message]
+    .map((chunk) => String(chunk || '').trim())
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+};
+
+const runGitCommand = async (cwd, args) => {
+  try {
+    const { stdout, stderr } = await execFileAsync('git', args, {
+      cwd,
+      env: await buildGitEnv(),
+      maxBuffer: 20 * 1024 * 1024,
+    });
+    return {
+      success: true,
+      exitCode: 0,
+      stdout: String(stdout || ''),
+      stderr: String(stderr || ''),
+    };
+  } catch (error) {
+    return {
+      success: false,
+      exitCode: typeof error?.code === 'number' ? error.code : 1,
+      stdout: String(error?.stdout || ''),
+      stderr: String(error?.stderr || ''),
+      message: parseGitErrorText(error),
+    };
+  }
+};
+
+const runGitCommandOrThrow = async (cwd, args, fallbackMessage) => {
+  const result = await runGitCommand(cwd, args);
+  if (!result.success) {
+    throw new Error(result.message || fallbackMessage || 'Git command failed');
+  }
+  return result;
+};
+
+const ensureOpenCodeProjectId = async (primaryWorktree) => {
+  const gitDir = path.join(primaryWorktree, '.git');
+  const idFile = path.join(gitDir, 'opencode');
+  const existing = await fsp.readFile(idFile, 'utf8').then((value) => value.trim()).catch(() => '');
+  if (existing) {
+    return existing;
+  }
+
+  const rootsResult = await runGitCommandOrThrow(
+    primaryWorktree,
+    ['rev-list', '--max-parents=0', '--all'],
+    'Failed to resolve repository roots'
+  );
+
+  const roots = rootsResult.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  const projectId = roots[0] || '';
+  if (!projectId) {
+    throw new Error('Failed to derive OpenCode project ID');
+  }
+
+  await fsp.mkdir(gitDir, { recursive: true }).catch(() => undefined);
+  await fsp.writeFile(idFile, projectId, 'utf8').catch(() => undefined);
+
+  return projectId;
+};
+
+const resolveWorktreeProjectContext = async (directory) => {
+  const directoryPath = normalizeDirectoryPath(directory);
+  if (!directoryPath) {
+    throw new Error('Directory is required');
+  }
+
+  const topResult = await runGitCommandOrThrow(
+    directoryPath,
+    ['rev-parse', '--show-toplevel'],
+    'Failed to resolve git top-level directory'
+  );
+  const sandbox = path.resolve(directoryPath, topResult.stdout.trim());
+
+  const commonResult = await runGitCommandOrThrow(
+    sandbox,
+    ['rev-parse', '--git-common-dir'],
+    'Failed to resolve git common directory'
+  );
+  const commonDir = path.resolve(sandbox, commonResult.stdout.trim());
+  const primaryWorktree = path.dirname(commonDir);
+  const projectID = await ensureOpenCodeProjectId(primaryWorktree);
+  const worktreeRoot = path.join(getOpenCodeDataPath(), 'worktree', projectID);
+
+  return {
+    projectID,
+    sandbox,
+    primaryWorktree,
+    worktreeRoot,
+  };
+};
+
+const listWorktreeEntries = async (directory) => {
+  const rawResult = await runGitCommandOrThrow(
+    directory,
+    ['worktree', 'list', '--porcelain'],
+    'Failed to list git worktrees'
+  );
+  return parseWorktreePorcelain(rawResult.stdout);
+};
+
+const resolveWorktreeNameCandidates = (baseName) => {
+  const normalizedBase = slugWorktreeName(baseName || '');
+  if (!normalizedBase) {
+    return Array.from({ length: OPENCODE_WORKTREE_ATTEMPTS }, () => generateOpenCodeRandomName());
+  }
+  return Array.from({ length: OPENCODE_WORKTREE_ATTEMPTS }, (_, index) => {
+    if (index === 0) {
+      return normalizedBase;
+    }
+    return `${normalizedBase}-${generateOpenCodeRandomName()}`;
+  });
+};
+
+const resolveCandidateDirectory = async (worktreeRoot, preferredName, explicitBranchName, primaryWorktree) => {
+  const candidates = resolveWorktreeNameCandidates(preferredName);
+
+  for (const name of candidates) {
+    const directory = path.join(worktreeRoot, name);
+    if (await checkPathExists(directory)) {
+      continue;
+    }
+
+    if (explicitBranchName) {
+      return { name, directory, branch: explicitBranchName };
+    }
+
+    const branch = `opencode/${name}`;
+    const branchRef = `refs/heads/${branch}`;
+    const branchExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', branchRef]);
+    if (branchExists.success) {
+      continue;
+    }
+
+    return { name, directory, branch };
+  }
+
+  throw new Error('Failed to generate a unique worktree name');
+};
+
+const resolveBranchForExistingMode = async (primaryWorktree, existingBranch, preferredBranchName) => {
+  const requested = String(existingBranch || '').trim();
+  if (!requested) {
+    throw new Error('existingBranch is required in existing mode');
+  }
+
+  const normalizedLocal = cleanBranchName(requested);
+  const localRef = `refs/heads/${normalizedLocal}`;
+  const localExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', localRef]);
+  if (localExists.success) {
+    return {
+      localBranch: normalizedLocal,
+      checkoutRef: normalizedLocal,
+      createLocalBranch: false,
+      remoteRef: null,
+    };
+  }
+
+  const remoteRef = parseRemoteBranchRef(requested);
+  if (!remoteRef) {
+    throw new Error(`Branch not found: ${requested}`);
+  }
+
+  const remoteExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', remoteRef.fullRef]);
+  if (!remoteExists.success) {
+    await fetchRemoteBranchRef(primaryWorktree, remoteRef.remote, remoteRef.branch).catch(() => undefined);
+    const recheck = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', remoteRef.fullRef]);
+    if (!recheck.success) {
+      throw new Error(`Remote branch not found: ${requested}`);
+    }
+  }
+
+  const localBranch = cleanBranchName(preferredBranchName || remoteRef.branch || requested);
+  if (!localBranch) {
+    throw new Error('Failed to resolve local branch name for existing branch worktree');
+  }
+
+  return {
+    localBranch,
+    checkoutRef: remoteRef.remoteRef,
+    createLocalBranch: true,
+    remoteRef,
+  };
+};
+
+const findBranchInUse = async (primaryWorktree, localBranchName) => {
+  if (!localBranchName) {
+    return null;
+  }
+  const entries = await listWorktreeEntries(primaryWorktree);
+  const targetRef = `refs/heads/${localBranchName}`;
+  const targetClean = cleanBranchName(targetRef);
+  return entries.find((entry) => {
+    const entryRef = String(entry.branchRef || '').trim();
+    const entryClean = cleanBranchName(entryRef || entry.branch || '');
+    return entryRef === targetRef || entryClean === targetClean;
+  }) || null;
+};
+
+const runWorktreeStartCommand = async (directory, command) => {
+  const text = String(command || '').trim();
+  if (!text) {
+    return { success: true };
+  }
+
+  if (process.platform === 'win32') {
+    const result = await execFileAsync('cmd', ['/c', text], {
+      cwd: directory,
+      env: await buildGitEnv(),
+      maxBuffer: 20 * 1024 * 1024,
+    }).then(({ stdout, stderr }) => ({ success: true, stdout, stderr })).catch((error) => ({
+      success: false,
+      stdout: error?.stdout,
+      stderr: error?.stderr,
+      message: parseGitErrorText(error),
+    }));
+    return result;
+  }
+
+  const result = await execFileAsync('bash', ['-lc', text], {
+    cwd: directory,
+    env: await buildGitEnv(),
+    maxBuffer: 20 * 1024 * 1024,
+  }).then(({ stdout, stderr }) => ({ success: true, stdout, stderr })).catch((error) => ({
+    success: false,
+    stdout: error?.stdout,
+    stderr: error?.stderr,
+    message: parseGitErrorText(error),
+  }));
+  return result;
+};
+
+const loadProjectStartCommand = async (projectID) => {
+  const storagePath = path.join(getOpenCodeDataPath(), 'storage', 'project', `${projectID}.json`);
+  try {
+    const raw = await fsp.readFile(storagePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const start = typeof parsed?.commands?.start === 'string' ? parsed.commands.start.trim() : '';
+    return start || '';
+  } catch {
+    return '';
+  }
+};
+
+const queueWorktreeStartScripts = (directory, projectID, startCommand) => {
+  setTimeout(() => {
+    const run = async () => {
+      const projectStart = await loadProjectStartCommand(projectID);
+      if (projectStart) {
+        const projectResult = await runWorktreeStartCommand(directory, projectStart);
+        if (!projectResult.success) {
+          console.warn('Worktree project start command failed:', projectResult.message || projectResult.stderr || projectResult.stdout);
+          return;
+        }
+      }
+
+      const extraCommand = String(startCommand || '').trim();
+      if (!extraCommand) {
+        return;
+      }
+      const extraResult = await runWorktreeStartCommand(directory, extraCommand);
+      if (!extraResult.success) {
+        console.warn('Worktree start command failed:', extraResult.message || extraResult.stderr || extraResult.stdout);
+      }
+    };
+
+    void run().catch((error) => {
+      console.warn('Worktree start script task failed:', error instanceof Error ? error.message : String(error));
+    });
+  }, 0);
+};
+
+const ensureRemoteWithUrl = async (primaryWorktree, remoteName, remoteUrl) => {
+  const name = String(remoteName || '').trim();
+  const url = String(remoteUrl || '').trim();
+  if (!name || !url) {
+    return;
+  }
+
+  const getUrl = await runGitCommand(primaryWorktree, ['remote', 'get-url', name]);
+  if (getUrl.success) {
+    const currentUrl = String(getUrl.stdout || '').trim();
+    if (currentUrl !== url) {
+      await runGitCommandOrThrow(primaryWorktree, ['remote', 'set-url', name, url], 'Failed to update git remote URL');
+    }
+    return;
+  }
+
+  await runGitCommandOrThrow(primaryWorktree, ['remote', 'add', name, url], 'Failed to add git remote');
+};
+
+const fetchRemoteBranchRef = async (primaryWorktree, remoteName, branchName) => {
+  const remote = String(remoteName || '').trim();
+  const branch = String(branchName || '').trim();
+  if (!remote || !branch) {
+    return;
+  }
+
+  const refspec = `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`;
+  await runGitCommandOrThrow(
+    primaryWorktree,
+    ['fetch', remote, refspec],
+    `Failed to fetch ${remote}/${branch}`
+  );
+};
+
+const applyUpstreamConfiguration = async (args) => {
+  const {
+    primaryWorktree,
+    worktreeDirectory,
+    localBranch,
+    setUpstream,
+    upstreamRemote,
+    upstreamBranch,
+    ensureRemoteName,
+    ensureRemoteUrl,
+  } = args;
+
+  if (!setUpstream) {
+    return;
+  }
+
+  if (ensureRemoteName && ensureRemoteUrl) {
+    await ensureRemoteWithUrl(primaryWorktree, ensureRemoteName, ensureRemoteUrl);
+  }
+
+  const upstream = normalizeUpstreamTarget(upstreamRemote, upstreamBranch);
+  if (!upstream || !localBranch) {
+    return;
+  }
+
+  await fetchRemoteBranchRef(primaryWorktree, upstream.remote, upstream.branch);
+  await runGitCommandOrThrow(
+    worktreeDirectory,
+    ['branch', `--set-upstream-to=${upstream.full}`, localBranch],
+    `Failed to set upstream to ${upstream.full}`
+  );
+};
+
 export async function isGitRepository(directory) {
   const directoryPath = normalizeDirectoryPath(directory);
   if (!directoryPath || !fs.existsSync(directoryPath)) {
@@ -1041,43 +1606,353 @@ export async function getWorktrees(directory) {
   if (!directoryPath || !fs.existsSync(directoryPath) || !fs.existsSync(path.join(directoryPath, '.git'))) {
     return [];
   }
-
-  const git = await createGit(directoryPath);
-
   try {
-    const result = await git.raw(['worktree', 'list', '--porcelain']);
-
-    const worktrees = [];
-    const lines = result.split('\n');
-    let current = {};
-
-    for (const line of lines) {
-      if (line.startsWith('worktree ')) {
-        if (current.worktree) {
-          worktrees.push(current);
-        }
-        current = { worktree: line.substring(9) };
-      } else if (line.startsWith('HEAD ')) {
-        current.head = line.substring(5);
-      } else if (line.startsWith('branch ')) {
-        current.branch = cleanBranchName(line.substring(7));
-      } else if (line === '') {
-        if (current.worktree) {
-          worktrees.push(current);
-          current = {};
-        }
-      }
-    }
-
-    if (current.worktree) {
-      worktrees.push(current);
-    }
-
-    return worktrees;
+    const result = await runGitCommandOrThrow(
+      directoryPath,
+      ['worktree', 'list', '--porcelain'],
+      'Failed to list git worktrees'
+    );
+    return parseWorktreePorcelain(result.stdout).map((entry) => ({
+      worktree: entry.worktree,
+      head: entry.head,
+      branch: entry.branch,
+    }));
   } catch (error) {
     console.warn('Failed to list worktrees, returning empty list:', error?.message || error);
     return [];
   }
+}
+
+export async function validateWorktreeCreate(directory, input = {}) {
+  const mode = input?.mode === 'existing' ? 'existing' : 'new';
+  const errors = [];
+
+  try {
+    const context = await resolveWorktreeProjectContext(directory);
+    const preferredBranchName = cleanBranchName(String(input?.branchName || '').trim());
+    const startRef = normalizeStartRef(input?.startRef);
+    const ensureRemoteName = String(input?.ensureRemoteName || '').trim();
+    const ensureRemoteUrl = String(input?.ensureRemoteUrl || '').trim();
+
+    let localBranch = '';
+    let inferredUpstream = null;
+
+    if (mode === 'existing') {
+      try {
+        const requestedExistingBranch = String(input?.existingBranch || '').trim();
+        const parsedExistingRemote = parseRemoteBranchRef(requestedExistingBranch);
+        if (parsedExistingRemote && ensureRemoteName && ensureRemoteUrl && ensureRemoteName === parsedExistingRemote.remote) {
+          const lsRemote = await runGitCommand(
+            context.primaryWorktree,
+            ['ls-remote', '--heads', ensureRemoteUrl, `refs/heads/${parsedExistingRemote.branch}`]
+          );
+          if (!lsRemote.success) {
+            throw new Error(`Unable to query remote ${ensureRemoteName}`);
+          }
+          if (!String(lsRemote.stdout || '').trim()) {
+            throw new Error(`Remote branch not found: ${parsedExistingRemote.remoteRef}`);
+          }
+          localBranch = cleanBranchName(preferredBranchName || parsedExistingRemote.branch);
+          inferredUpstream = {
+            remote: parsedExistingRemote.remote,
+            branch: parsedExistingRemote.branch,
+          };
+        } else {
+          const resolved = await resolveBranchForExistingMode(context.primaryWorktree, requestedExistingBranch, preferredBranchName);
+          localBranch = resolved.localBranch || '';
+          if (resolved.remoteRef) {
+            inferredUpstream = {
+              remote: resolved.remoteRef.remote,
+              branch: resolved.remoteRef.branch,
+            };
+          }
+        }
+      } catch (error) {
+        errors.push({
+          code: 'branch_not_found',
+          message: error instanceof Error ? error.message : 'Existing branch not found',
+        });
+      }
+    } else {
+      if (preferredBranchName) {
+        const exists = await runGitCommand(context.primaryWorktree, ['show-ref', '--verify', '--quiet', `refs/heads/${preferredBranchName}`]);
+        if (exists.success) {
+          errors.push({
+            code: 'branch_exists',
+            message: `Branch already exists: ${preferredBranchName}`,
+          });
+        }
+        localBranch = preferredBranchName;
+      }
+
+      const parsedRemoteRef = parseRemoteBranchRef(startRef);
+      if (startRef && startRef !== 'HEAD') {
+        if (parsedRemoteRef && ensureRemoteName && ensureRemoteUrl && ensureRemoteName === parsedRemoteRef.remote) {
+          const lsRemote = await runGitCommand(
+            context.primaryWorktree,
+            ['ls-remote', '--heads', ensureRemoteUrl, `refs/heads/${parsedRemoteRef.branch}`]
+          );
+          if (!lsRemote.success) {
+            errors.push({
+              code: 'remote_unreachable',
+              message: `Unable to query remote ${ensureRemoteName}`,
+            });
+          } else if (!String(lsRemote.stdout || '').trim()) {
+            errors.push({
+              code: 'start_ref_not_found',
+              message: `Remote branch not found: ${parsedRemoteRef.remoteRef}`,
+            });
+          }
+        } else {
+          const startRefExists = await runGitCommand(context.primaryWorktree, ['rev-parse', '--verify', '--quiet', startRef]);
+          if (!startRefExists.success) {
+            errors.push({
+              code: 'start_ref_not_found',
+              message: `Start ref not found: ${startRef}`,
+            });
+          }
+        }
+      }
+
+      if (parsedRemoteRef) {
+        inferredUpstream = {
+          remote: parsedRemoteRef.remote,
+          branch: parsedRemoteRef.branch,
+        };
+      }
+    }
+
+    if (localBranch) {
+      const inUse = await findBranchInUse(context.primaryWorktree, localBranch);
+      if (inUse) {
+        errors.push({
+          code: 'branch_in_use',
+          message: `Branch is already checked out in ${inUse.worktree}`,
+        });
+      }
+    }
+
+    if ((ensureRemoteName && !ensureRemoteUrl) || (!ensureRemoteName && ensureRemoteUrl)) {
+      errors.push({
+        code: 'invalid_remote_config',
+        message: 'Both ensureRemoteName and ensureRemoteUrl are required together',
+      });
+    }
+
+    const shouldSetUpstream = Boolean(input?.setUpstream);
+    if (shouldSetUpstream) {
+      const upstreamRemote = String(input?.upstreamRemote || inferredUpstream?.remote || '').trim();
+      const upstreamBranch = String(input?.upstreamBranch || inferredUpstream?.branch || '').trim();
+
+      if (!upstreamRemote || !upstreamBranch) {
+        errors.push({
+          code: 'upstream_incomplete',
+          message: 'upstreamRemote and upstreamBranch are required when setUpstream is true',
+        });
+      } else {
+        const remoteExists = await runGitCommand(context.primaryWorktree, ['remote', 'get-url', upstreamRemote]);
+        if (!remoteExists.success && (!ensureRemoteName || ensureRemoteName !== upstreamRemote)) {
+          errors.push({
+            code: 'remote_not_found',
+            message: `Remote not found: ${upstreamRemote}`,
+          });
+        }
+      }
+    }
+
+    return {
+      ok: errors.length === 0,
+      errors,
+      resolved: {
+        mode,
+        localBranch: localBranch || null,
+      },
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [{
+        code: 'validation_failed',
+        message: error instanceof Error ? error.message : 'Failed to validate worktree creation',
+      }],
+    };
+  }
+}
+
+export async function createWorktree(directory, input = {}) {
+  const mode = input?.mode === 'existing' ? 'existing' : 'new';
+  const context = await resolveWorktreeProjectContext(directory);
+  await fsp.mkdir(context.worktreeRoot, { recursive: true });
+
+  const preferredName = String(input?.worktreeName || input?.name || '').trim();
+  const preferredBranchName = cleanBranchName(String(input?.branchName || '').trim());
+  const startRef = normalizeStartRef(input?.startRef);
+  const ensureRemoteName = String(input?.ensureRemoteName || '').trim();
+  const ensureRemoteUrl = String(input?.ensureRemoteUrl || '').trim();
+
+  const candidate = await resolveCandidateDirectory(
+    context.worktreeRoot,
+    preferredName,
+    mode === 'new' && preferredBranchName ? preferredBranchName : '',
+    context.primaryWorktree
+  );
+
+  let localBranch = '';
+  let inferredUpstream = null;
+  const worktreeAddArgs = ['worktree', 'add', '--no-checkout'];
+
+  if (mode === 'existing') {
+    const requestedExistingBranch = String(input?.existingBranch || '').trim();
+    const parsedExistingRemote = parseRemoteBranchRef(requestedExistingBranch);
+    if (parsedExistingRemote && ensureRemoteName && ensureRemoteUrl && parsedExistingRemote.remote === ensureRemoteName) {
+      await ensureRemoteWithUrl(context.primaryWorktree, ensureRemoteName, ensureRemoteUrl);
+      await fetchRemoteBranchRef(context.primaryWorktree, parsedExistingRemote.remote, parsedExistingRemote.branch);
+    }
+
+    const resolved = await resolveBranchForExistingMode(context.primaryWorktree, requestedExistingBranch, preferredBranchName);
+    localBranch = resolved.localBranch;
+
+    const inUse = await findBranchInUse(context.primaryWorktree, localBranch);
+    if (inUse) {
+      throw new Error(`Branch is already checked out in ${inUse.worktree}`);
+    }
+
+    if (resolved.createLocalBranch) {
+      worktreeAddArgs.push('-b', localBranch);
+    }
+    worktreeAddArgs.push(candidate.directory, resolved.checkoutRef);
+
+    if (resolved.remoteRef) {
+      inferredUpstream = {
+        remote: resolved.remoteRef.remote,
+        branch: resolved.remoteRef.branch,
+      };
+    }
+  } else {
+    localBranch = candidate.branch;
+    if (!localBranch) {
+      throw new Error('Failed to resolve branch name for new worktree');
+    }
+
+    const branchExists = await runGitCommand(context.primaryWorktree, ['show-ref', '--verify', '--quiet', `refs/heads/${localBranch}`]);
+    if (branchExists.success) {
+      throw new Error(`Branch already exists: ${localBranch}`);
+    }
+
+    const inUse = await findBranchInUse(context.primaryWorktree, localBranch);
+    if (inUse) {
+      throw new Error(`Branch is already checked out in ${inUse.worktree}`);
+    }
+
+    worktreeAddArgs.push('-b', localBranch, candidate.directory);
+    if (startRef && startRef !== 'HEAD') {
+      worktreeAddArgs.push(startRef);
+    }
+
+    const parsedRemoteStartRef = parseRemoteBranchRef(startRef);
+    if (parsedRemoteStartRef) {
+      inferredUpstream = {
+        remote: parsedRemoteStartRef.remote,
+        branch: parsedRemoteStartRef.branch,
+      };
+    }
+  }
+
+  if (ensureRemoteName && ensureRemoteUrl) {
+    await ensureRemoteWithUrl(context.primaryWorktree, ensureRemoteName, ensureRemoteUrl);
+  }
+
+  if (mode === 'new') {
+    const parsedRemoteStartRef = parseRemoteBranchRef(startRef);
+    if (parsedRemoteStartRef) {
+      await fetchRemoteBranchRef(context.primaryWorktree, parsedRemoteStartRef.remote, parsedRemoteStartRef.branch);
+    }
+  }
+
+  await runGitCommandOrThrow(context.primaryWorktree, worktreeAddArgs, 'Failed to create git worktree');
+  await runGitCommandOrThrow(candidate.directory, ['reset', '--hard'], 'Failed to populate worktree');
+
+  const shouldSetUpstream = Boolean(input?.setUpstream);
+  const upstreamRemote = String(input?.upstreamRemote || inferredUpstream?.remote || '').trim();
+  const upstreamBranch = String(input?.upstreamBranch || inferredUpstream?.branch || '').trim();
+
+  if (shouldSetUpstream) {
+    await applyUpstreamConfiguration({
+      primaryWorktree: context.primaryWorktree,
+      worktreeDirectory: candidate.directory,
+      localBranch,
+      setUpstream: shouldSetUpstream,
+      upstreamRemote,
+      upstreamBranch,
+      ensureRemoteName,
+      ensureRemoteUrl,
+    });
+  }
+
+  queueWorktreeStartScripts(candidate.directory, context.projectID, input?.startCommand);
+
+  return {
+    name: candidate.name,
+    branch: localBranch,
+    directory: candidate.directory,
+  };
+}
+
+export async function removeWorktree(directory, input = {}) {
+  const targetDirectory = normalizeDirectoryPath(input?.directory);
+  if (!targetDirectory) {
+    throw new Error('Worktree directory is required');
+  }
+
+  const context = await resolveWorktreeProjectContext(directory);
+  const deleteLocalBranch = input?.deleteLocalBranch === true;
+
+  const targetCanonical = await canonicalPath(targetDirectory);
+  const primaryCanonical = await canonicalPath(context.primaryWorktree);
+  if (targetCanonical === primaryCanonical) {
+    throw new Error('Cannot remove the primary workspace');
+  }
+
+  const entries = await listWorktreeEntries(context.primaryWorktree);
+  const matchedEntry = await (async () => {
+    for (const entry of entries) {
+      if (!entry?.worktree) {
+        continue;
+      }
+      const entryCanonical = await canonicalPath(entry.worktree);
+      if (entryCanonical === targetCanonical) {
+        return entry;
+      }
+    }
+    return null;
+  })();
+
+  if (!matchedEntry?.worktree) {
+    const targetExists = await checkPathExists(targetDirectory);
+    if (targetExists) {
+      await fsp.rm(targetDirectory, { recursive: true, force: true });
+    }
+    return true;
+  }
+
+  await runGitCommandOrThrow(
+    context.primaryWorktree,
+    ['worktree', 'remove', '--force', matchedEntry.worktree],
+    'Failed to remove git worktree'
+  );
+
+  if (deleteLocalBranch) {
+    const branchName = cleanBranchName(String(matchedEntry.branchRef || matchedEntry.branch || '').trim());
+    if (branchName) {
+      await runGitCommandOrThrow(
+        context.primaryWorktree,
+        ['branch', '-D', branchName],
+        `Failed to delete local branch ${branchName}`
+      );
+    }
+  }
+
+  return true;
 }
 
 export async function deleteBranch(directory, branch, options = {}) {

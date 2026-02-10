@@ -100,6 +100,9 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
     const rootBranch = await getRootBranch(projectRef.path);
     const metadata = await createSdkWorktree(projectRef, {
       preferredName,
+      mode: 'new',
+      branchName: preferredName,
+      worktreeName: preferredName,
       setupCommands,
     });
 
@@ -118,7 +121,7 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
     const session = await sessionStore.createSession(undefined, metadata.path);
     if (!session) {
       // Clean up the worktree if session creation failed
-      await removeProjectWorktree(projectRef, metadata).catch(() => undefined);
+      await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined);
       toast.error('Failed to create session', {
         description: 'Could not create a session for the worktree.',
       });
@@ -266,6 +269,9 @@ export async function createWorktreeOnly(): Promise<string | null> {
     const setupCommands = await getWorktreeSetupCommands(projectRef);
     const metadata = await createSdkWorktree(projectRef, {
       preferredName,
+      mode: 'new',
+      branchName: preferredName,
+      worktreeName: preferredName,
       setupCommands,
     });
 
@@ -303,7 +309,18 @@ export async function createWorktreeOnly(): Promise<string | null> {
  */
 export async function createWorktreeSessionForBranch(
   projectDirectory: string,
-  branchName: string
+  branchName: string,
+  options?: {
+    kind?: 'pr' | 'standard';
+    existingBranch?: string;
+    worktreeName?: string;
+    setUpstream?: boolean;
+    upstreamRemote?: string;
+    upstreamBranch?: string;
+    ensureRemoteName?: string;
+    ensureRemoteUrl?: string;
+    createdFromBranch?: string;
+  }
 ): Promise<{ id: string } | null> {
   if (isCreatingWorktreeSession) {
     return null;
@@ -337,13 +354,23 @@ export async function createWorktreeSessionForBranch(
     const rootBranch = await getRootBranch(projectRef.path);
     const metadata = await createSdkWorktree(projectRef, {
       preferredName: branchName,
+      mode: 'existing',
+      existingBranch: options?.existingBranch || branchName,
+      branchName,
+      worktreeName: options?.worktreeName || branchName,
+      setUpstream: options?.setUpstream,
+      upstreamRemote: options?.upstreamRemote,
+      upstreamBranch: options?.upstreamBranch,
+      ensureRemoteName: options?.ensureRemoteName,
+      ensureRemoteUrl: options?.ensureRemoteUrl,
       setupCommands,
     });
 
+    const kind = options?.kind ?? 'standard';
     const createdMetadata = {
       ...metadata,
-      createdFromBranch: rootBranch,
-      kind: 'standard' as const,
+      createdFromBranch: options?.createdFromBranch || rootBranch,
+      kind,
     };
 
     // Get worktree status
@@ -355,7 +382,7 @@ export async function createWorktreeSessionForBranch(
     const session = await sessionStore.createSession(undefined, metadata.path);
     if (!session) {
       // Clean up the worktree if session creation failed
-      await removeProjectWorktree(projectRef, metadata).catch(() => undefined);
+      await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined);
       toast.error('Failed to create session', {
         description: 'Could not create a session for the worktree.',
       });
@@ -467,7 +494,16 @@ export async function createWorktreeSessionForNewBranch(
   projectDirectory: string,
   preferredBranchName: string,
   startPoint?: string,
-  options?: { kind?: 'pr' | 'standard' }
+  options?: {
+    kind?: 'pr' | 'standard';
+    worktreeName?: string;
+    setUpstream?: boolean;
+    upstreamRemote?: string;
+    upstreamBranch?: string;
+    ensureRemoteName?: string;
+    ensureRemoteUrl?: string;
+    createdFromBranch?: string;
+  }
 ): Promise<{ id: string; branch: string } | null> {
   if (isCreatingWorktreeSession) {
     return null;
@@ -510,11 +546,20 @@ export async function createWorktreeSessionForNewBranch(
     try {
       const metadata = await createSdkWorktree(projectRef, {
         preferredName: base,
+        mode: 'new',
+        branchName: base,
+        worktreeName: options?.worktreeName || base,
+        startRef: start,
+        setUpstream: options?.setUpstream,
+        upstreamRemote: options?.upstreamRemote,
+        upstreamBranch: options?.upstreamBranch,
+        ensureRemoteName: options?.ensureRemoteName,
+        ensureRemoteUrl: options?.ensureRemoteUrl,
         setupCommands,
       });
       const createdMetadata = {
         ...metadata,
-        createdFromBranch: rootBranch || start,
+        createdFromBranch: options?.createdFromBranch || rootBranch || start,
         kind,
       };
 
@@ -524,7 +569,7 @@ export async function createWorktreeSessionForNewBranch(
         const sessionStore = useSessionStore.getState();
         const session = await sessionStore.createSession(undefined, metadata.path);
         if (!session) {
-          await removeProjectWorktree(projectRef, metadata).catch(() => undefined);
+          await removeProjectWorktree(projectRef, metadata, { deleteLocalBranch: true }).catch(() => undefined);
           throw new Error('Could not create a session for the worktree.');
         }
 
@@ -616,9 +661,25 @@ export async function createWorktreeSessionForNewBranchExact(
   projectDirectory: string,
   branchName: string,
   startPoint: string,
-  options?: { kind?: 'pr' | 'standard' }
+  options?: {
+    kind?: 'pr' | 'standard';
+    worktreeName?: string;
+    setUpstream?: boolean;
+    upstreamRemote?: string;
+    upstreamBranch?: string;
+    ensureRemoteName?: string;
+    ensureRemoteUrl?: string;
+    createdFromBranch?: string;
+  }
 ): Promise<{ id: string; branch: string } | null> {
   return createWorktreeSessionForNewBranch(projectDirectory, branchName, startPoint, {
     kind: options?.kind,
+    worktreeName: options?.worktreeName,
+    setUpstream: options?.setUpstream,
+    upstreamRemote: options?.upstreamRemote,
+    upstreamBranch: options?.upstreamBranch,
+    ensureRemoteName: options?.ensureRemoteName,
+    ensureRemoteUrl: options?.ensureRemoteUrl,
+    createdFromBranch: options?.createdFromBranch,
   });
 }

@@ -18,6 +18,11 @@ export type {
   GitLogEntry,
   GitLogResponse,
   GitWorktreeInfo,
+  CreateGitWorktreePayload,
+  GitWorktreeCreateResult,
+  RemoveGitWorktreePayload,
+  GitWorktreeValidationError,
+  GitWorktreeValidationResult,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
   DiscoveredGitCredential,
@@ -121,6 +126,39 @@ export async function listGitWorktrees(directory: string): Promise<import('./api
   const runtime = getRuntimeGit();
   if (runtime) return runtime.listGitWorktrees(directory);
   return gitHttp.listGitWorktrees(directory);
+}
+
+export async function validateGitWorktree(
+  directory: string,
+  payload: import('./api/types').CreateGitWorktreePayload
+): Promise<import('./api/types').GitWorktreeValidationResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.validateGitWorktree) {
+    return runtime.validateGitWorktree(directory, payload);
+  }
+  return gitHttp.validateGitWorktree(directory, payload);
+}
+
+export async function createGitWorktree(
+  directory: string,
+  payload: import('./api/types').CreateGitWorktreePayload
+): Promise<import('./api/types').GitWorktreeCreateResult> {
+  const runtime = getRuntimeGit();
+  if (runtime?.createGitWorktree) {
+    return runtime.createGitWorktree(directory, payload);
+  }
+  return gitHttp.createGitWorktree(directory, payload);
+}
+
+export async function deleteGitWorktree(
+  directory: string,
+  payload: import('./api/types').RemoveGitWorktreePayload
+): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime?.deleteGitWorktree) {
+    return runtime.deleteGitWorktree(directory, payload);
+  }
+  return gitHttp.deleteGitWorktree(directory, payload);
 }
 
 export async function createGitCommit(

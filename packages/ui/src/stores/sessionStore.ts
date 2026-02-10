@@ -29,8 +29,8 @@ interface SessionState {
 interface SessionActions {
     loadSessions: () => Promise<void>;
     createSession: (title?: string, directoryOverride?: string | null, parentID?: string | null) => Promise<Session | null>;
-    deleteSession: (id: string, options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; remoteName?: string }) => Promise<boolean>;
-    deleteSessions: (ids: string[], options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; remoteName?: string; silent?: boolean }) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
+    deleteSession: (id: string, options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; deleteLocalBranch?: boolean; remoteName?: string }) => Promise<boolean>;
+    deleteSessions: (ids: string[], options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; deleteLocalBranch?: boolean; remoteName?: string; silent?: boolean }) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
     updateSessionTitle: (id: string, title: string) => Promise<void>;
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;
@@ -132,7 +132,7 @@ const clearInvalidSessionSelection = (directory: string | null | undefined, vali
 
 const archiveSessionWorktree = async (
     metadata: WorktreeMetadata,
-    options?: { deleteRemoteBranch?: boolean; remoteName?: string }
+    options?: { deleteRemoteBranch?: boolean; deleteLocalBranch?: boolean; remoteName?: string }
 ) => {
     const status = metadata.status ?? (await getWorktreeStatus(metadata.path).catch(() => undefined));
 
@@ -150,6 +150,7 @@ const archiveSessionWorktree = async (
         status ? ({ ...metadata, status } as WorktreeMetadata) : metadata,
         {
             deleteRemoteBranch: options?.deleteRemoteBranch,
+            deleteLocalBranch: options?.deleteLocalBranch,
             remoteName: options?.remoteName,
             force: Boolean(status?.isDirty),
         }
@@ -955,6 +956,7 @@ export const useSessionStore = create<SessionStore>()(
                             try {
                                 await archiveSessionWorktree(metadata, {
                                     deleteRemoteBranch: options?.deleteRemoteBranch,
+                                    deleteLocalBranch: options?.deleteLocalBranch,
                                     remoteName: options?.remoteName,
                                 });
                                 archiveSucceeded = true;
@@ -1012,7 +1014,7 @@ export const useSessionStore = create<SessionStore>()(
 
                 deleteSessions: async (
                     ids: string[],
-                    options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; remoteName?: string; silent?: boolean }
+                    options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; deleteLocalBranch?: boolean; remoteName?: string; silent?: boolean }
                 ) => {
                     const uniqueIds = Array.from(new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)));
                     if (uniqueIds.length === 0) {
@@ -1064,6 +1066,7 @@ export const useSessionStore = create<SessionStore>()(
                             try {
                                 await archiveSessionWorktree(metadata, {
                                     deleteRemoteBranch: options?.deleteRemoteBranch,
+                                    deleteLocalBranch: options?.deleteLocalBranch,
                                     remoteName: options?.remoteName,
                                 });
                                 archivedWorktrees.push({ path: metadata.path, projectDirectory: metadata.projectDirectory });
