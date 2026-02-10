@@ -57,7 +57,7 @@ type GitHubCheckRun = {
   }>;
 };
 
-type GitHubPullRequestHeadRepo = { owner: string; repo: string; url: string; cloneUrl?: string };
+type GitHubPullRequestHeadRepo = { owner: string; repo: string; url: string; cloneUrl?: string; sshUrl?: string };
 
 type GitHubPullRequestSummary = {
   number: number;
@@ -188,6 +188,7 @@ const mapHeadRepo = (raw: unknown): GitHubPullRequestHeadRepo | null => {
     repo,
     url,
     cloneUrl: readString(rec?.clone_url) || undefined,
+    sshUrl: readString(rec?.ssh_url) || undefined,
   };
 };
 

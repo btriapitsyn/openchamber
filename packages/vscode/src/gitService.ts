@@ -1053,6 +1053,16 @@ export async function gitPush(
   const remote = options?.remote || 'origin';
   const branch = options?.branch;
   const gitOptions = options?.options;
+
+  const describePushFailure = (value: unknown): string => {
+    const message = String(
+      (value as { message?: string } | undefined)?.message ||
+      (value as { stderr?: string } | undefined)?.stderr ||
+      (value as { stdout?: string } | undefined)?.stdout ||
+      ''
+    ).trim();
+    return message || 'Failed to push to remote';
+  };
   
   // Determine if we should set upstream (default true if no options specified)
   const setUpstream = gitOptions 
@@ -1092,10 +1102,14 @@ export async function gitPush(
   if (branch) args.push(branch);
 
   const result = await execGit(args, directory);
+
+  if (result.exitCode !== 0) {
+    throw new Error(describePushFailure(result));
+  }
   
   return {
-    success: result.exitCode === 0,
-    pushed: result.exitCode === 0 ? [{ local: branch || '', remote }] : [],
+    success: true,
+    pushed: [{ local: branch || '', remote }],
     repo: directory,
     ref: null,
   };
