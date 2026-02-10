@@ -245,8 +245,14 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({ view, readOnly, onClose }) 
   const handleFindChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setFindText(value);
+    const currentQuery = getSearchQuery(view.state);
     view.dispatch({
-      effects: setSearchQuery.of(new SearchQuery({ search: value, caseSensitive: false, literal: true }))
+      effects: setSearchQuery.of(new SearchQuery({ 
+        search: value, 
+        replace: currentQuery.replace,
+        caseSensitive: false, 
+        literal: true 
+      }))
     });
   };
 
