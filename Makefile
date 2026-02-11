@@ -1,4 +1,7 @@
-.PHONY: package
+.PHONY: package dev
+
+dev:
+	bun run dev
 
 # Detect platform and set appropriate bundle types
 UNAME_S := $(shell uname -s)
