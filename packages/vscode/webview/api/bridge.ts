@@ -107,6 +107,15 @@ export async function proxyApiRequest(options: {
   return sendBridgeMessageWithOptions<ProxiedApiResponse>('api:proxy', options, { timeoutMs: 0 });
 }
 
+export async function proxySessionMessageRequest(options: {
+  path: string;
+  headers?: Record<string, string>;
+  bodyText: string;
+}): Promise<ProxiedApiResponse> {
+  // Keep parity with server-side direct forwarder: let extension host control timeout.
+  return sendBridgeMessageWithOptions<ProxiedApiResponse>('api:session:message', options, { timeoutMs: 0 });
+}
+
 export type ProxiedSseStartResponse = {
   status: number;
   headers: Record<string, string>;

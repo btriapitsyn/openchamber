@@ -1843,6 +1843,65 @@ fn desktop_new_window_at_url(app: tauri::AppHandle, url: String) -> Result<(), S
     create_window(&app, &url, &local_origin).map_err(|e| e.to_string())
 }
 
+/// Read a file and return its content as base64 with mime type detection.
+/// Used for drag-drop file attachments in desktop app.
+#[tauri::command]
+fn desktop_read_file(path: String) -> Result<FileContent, String> {
+    use std::path::Path;
+
+    let path = Path::new(&path);
+
+    // Check file size (max 50MB)
+    let metadata = std::fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {e}"))?;
+    let size = metadata.len();
+    if size > 50 * 1024 * 1024 {
+        return Err("File is too large. Maximum size is 50MB.".to_string());
+    }
+
+    // Read file bytes
+    let bytes = std::fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+
+    // Detect mime type from extension
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let mime = match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "ico" => "image/x-icon",
+        "pdf" => "application/pdf",
+        "txt" => "text/plain",
+        "md" => "text/markdown",
+        "json" => "application/json",
+        "js" => "text/javascript",
+        "ts" => "text/typescript",
+        "tsx" => "text/typescript-jsx",
+        "jsx" => "text/javascript-jsx",
+        "html" => "text/html",
+        "css" => "text/css",
+        "py" => "text/x-python",
+        _ => "application/octet-stream",
+    };
+
+    // Encode as base64
+    let base64 = general_purpose::STANDARD.encode(&bytes);
+
+    Ok(FileContent {
+        mime: mime.to_string(),
+        base64,
+        size: bytes.len(),
+    })
+}
+
+#[derive(Serialize)]
+struct FileContent {
+    mime: String,
+    base64: String,
+    size: usize,
+}
+
 #[cfg(target_os = "macos")]
 fn macos_major_version() -> Option<u32> {
     fn cmd_stdout(cmd: &str, args: &[&str]) -> Option<String> {
@@ -2222,6 +2281,7 @@ fn main() {
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,
+            desktop_read_file,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

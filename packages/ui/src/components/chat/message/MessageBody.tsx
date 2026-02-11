@@ -181,7 +181,7 @@ const UserMessageBody: React.FC<{
                     );
                 })}
             </div>
-            <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
+            <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} compact />
             {(canCopyMessage && hasCopyableText) || onRevert || onFork ? (
                 <div className={cn(
                     "absolute top-full left-0 right-0 z-10 pt-5 group/user-actions"

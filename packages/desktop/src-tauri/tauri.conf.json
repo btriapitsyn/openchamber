@@ -27,6 +27,7 @@
           "x": 17,
           "y": 26
         },
+        "dragDropEnabled": false,
         "visible": false,
         "backgroundThrottling": "disabled"
       }

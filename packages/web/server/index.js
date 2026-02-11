@@ -4710,6 +4710,48 @@ function setupProxy(app) {
     }
   });
 
+  // Dedicated forwarder for large session message payloads.
+  // This avoids edge-cases in generic proxy streaming for multi-file attachments.
+  app.post('/api/session/:sessionId/message', express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
+    try {
+      const upstreamPath = req.originalUrl.replace(/^\/api/, '');
+      const targetUrl = buildOpenCodeUrl(upstreamPath, '');
+      const authHeaders = getOpenCodeAuthHeaders();
+
+      const headers = {
+        ...(typeof req.headers['content-type'] === 'string' ? { 'content-type': req.headers['content-type'] } : { 'content-type': 'application/json' }),
+        ...(typeof req.headers.accept === 'string' ? { accept: req.headers.accept } : {}),
+        ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
+      };
+
+      const bodyBuffer = Buffer.isBuffer(req.body)
+        ? req.body
+        : Buffer.from(typeof req.body === 'string' ? req.body : '');
+
+      const upstreamResponse = await fetch(targetUrl, {
+        method: 'POST',
+        headers,
+        body: bodyBuffer,
+        signal: AbortSignal.timeout(45000),
+      });
+
+      const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer());
+
+      if (upstreamResponse.headers.has('content-type')) {
+        res.setHeader('content-type', upstreamResponse.headers.get('content-type'));
+      }
+
+      res.status(upstreamResponse.status).send(upstreamBody);
+    } catch (error) {
+      if (!res.headersSent) {
+        const isTimeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+        res.status(isTimeout ? 504 : 503).json({
+          error: isTimeout ? 'OpenCode message forward timed out' : 'OpenCode message forward failed',
+        });
+      }
+    }
+  });
+
   app.use('/api', proxyMiddleware);
 }
 

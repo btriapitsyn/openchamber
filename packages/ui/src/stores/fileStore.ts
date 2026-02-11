@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
-import { opencodeClient } from "@/lib/opencode/client";
 import type { AttachedFile } from "./types/sessionTypes";
 import { getSafeStorage } from "./utils/safeStorage";
 
@@ -41,7 +40,7 @@ const guessMimeTypeFromName = (filename: string): string => {
         case "pdf":
             return "application/pdf";
         default:
-            return "text/plain";
+            return "application/octet-stream";
     }
 };
 
@@ -91,29 +90,30 @@ const guessMimeType = (file: File): string => {
     }
 };
 
-const base64ByteLength = (base64: string): number => {
-    const cleaned = base64.replace(/\s+/g, "");
-    if (!cleaned) {
-        return 0;
+const normalizeServerPath = (inputPath: string): string => inputPath.replace(/\\/g, "/").trim();
+
+const toFileUrl = (inputPath: string): string => {
+    const normalized = normalizeServerPath(inputPath);
+    if (normalized.startsWith("file://")) {
+        return normalized;
     }
-    const padding = cleaned.endsWith("==") ? 2 : cleaned.endsWith("=") ? 1 : 0;
-    return Math.floor((cleaned.length * 3) / 4) - padding;
+
+    const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+    return `file://${encodeURI(withLeadingSlash)}`;
 };
 
-const base64EncodeBytes = (bytes: Uint8Array): string => {
-    const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let output = "";
-    for (let i = 0; i < bytes.length; i += 3) {
-        const a = bytes[i] ?? 0;
-        const b = bytes[i + 1];
-        const c = bytes[i + 2];
-        const triple = (a << 16) | ((b ?? 0) << 8) | (c ?? 0);
-        output += alphabet[(triple >> 18) & 63];
-        output += alphabet[(triple >> 12) & 63];
-        output += typeof b === "number" ? alphabet[(triple >> 6) & 63] : "=";
-        output += typeof c === "number" ? alphabet[triple & 63] : "=";
+const readRawFileAsDataUrl = async (absolutePath: string): Promise<string> => {
+    const response = await fetch(`/api/fs/raw?path=${encodeURIComponent(absolutePath)}`);
+    if (!response.ok) {
+        throw new Error(`Failed to read raw file: ${response.status}`);
     }
-    return output;
+    const blob = await response.blob();
+    return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
 };
 
 export const useFileStore = create<FileStore>()(
@@ -196,66 +196,33 @@ export const useFileStore = create<FileStore>()(
 
                 addServerFile: async (path: string, name: string, content?: string) => {
 
+                        const normalizedPath = normalizeServerPath(path);
                         const { attachedFiles } = get();
-                        const isDuplicate = attachedFiles.some((f) => f.serverPath === path && f.source === "server");
+                        const isDuplicate = attachedFiles.some((f) => normalizeServerPath(f.serverPath || "") === normalizedPath && f.source === "server");
                         if (isDuplicate) {
                             console.log(`Server file "${name}" is already attached`);
                             return;
                         }
 
-                        let fileContent = content;
-                        let encoding: "base64" | undefined;
-                        let resolvedMimeType: string | undefined;
-                        if (!fileContent) {
-                            try {
-
-                                const tempClient = opencodeClient.getApiClient();
-
-                                const lastSlashIndex = path.lastIndexOf("/");
-                                const directory = lastSlashIndex > 0 ? path.substring(0, lastSlashIndex) : "/";
-                                const filename = lastSlashIndex > 0 ? path.substring(lastSlashIndex + 1) : path;
-
-                                const response = await tempClient.file.read({
-                                    path: filename,
-                                    directory: directory,
-                                });
-
-                                if (response.data && "content" in response.data) {
-                                    fileContent = response.data.content;
-                                    encoding = response.data.encoding ?? undefined;
-                                    resolvedMimeType = response.data.mimeType ?? undefined;
-                                } else {
-                                    fileContent = "";
-                                }
-                            } catch (error) {
-                                console.error("Failed to read server file:", error);
-
-                                fileContent = `[File: ${name}]`;
-                            }
-                        }
-
-                        const inferredMime = resolvedMimeType || guessMimeTypeFromName(name);
+                        const inferredMime = guessMimeTypeFromName(name);
                         const safeMimeType = inferredMime && inferredMime.trim().length > 0 ? inferredMime : "application/octet-stream";
 
-                        const base64 = (() => {
-                            if (encoding === "base64") {
-                                return fileContent || "";
+                        const shouldInlineBinary = safeMimeType !== "text/plain" && safeMimeType !== "application/x-directory";
+
+                        let dataUrl = toFileUrl(normalizedPath);
+                        if (shouldInlineBinary) {
+                            try {
+                                dataUrl = await readRawFileAsDataUrl(normalizedPath);
+                            } catch (error) {
+                                console.warn("Failed to inline binary server file, falling back to file://", error);
                             }
-                            const encoder = new TextEncoder();
-                            const data = encoder.encode(fileContent || "");
-                            return base64EncodeBytes(data);
-                        })();
-
-                        const sizeBytes = encoding === "base64"
-                            ? base64ByteLength(base64)
-                            : new TextEncoder().encode(fileContent || "").length;
-
-                        if (sizeBytes > MAX_ATTACHMENT_SIZE) {
-                            throw new Error(`File "${name}" is too large. Maximum size is 50MB.`);
                         }
 
+                        const sizeBytes = typeof content === "string"
+                            ? new TextEncoder().encode(content).length
+                            : 0;
+
                         const file = new File([], name, { type: safeMimeType });
-                        const dataUrl = `data:${safeMimeType};base64,${base64}`;
 
                         const attachedFile: AttachedFile = {
                             id: `server-file-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -265,7 +232,7 @@ export const useFileStore = create<FileStore>()(
                             filename: name,
                             size: sizeBytes,
                             source: "server",
-                            serverPath: path,
+                            serverPath: normalizedPath,
                         };
 
                         set((state) => ({
@@ -286,6 +253,12 @@ export const useFileStore = create<FileStore>()(
             {
                 name: "file-store",
                 storage: createJSONStorage(() => getSafeStorage()),
+                version: 3,
+                migrate: (persistedState) => {
+                    const state = persistedState as { attachedFiles?: AttachedFile[] } | undefined;
+                    return { attachedFiles: Array.isArray(state?.attachedFiles) ? state.attachedFiles : [] };
+                },
+                // Keep unsent draft attachments across restarts.
                 partialize: (state) => ({
                     attachedFiles: state.attachedFiles,
                 }),

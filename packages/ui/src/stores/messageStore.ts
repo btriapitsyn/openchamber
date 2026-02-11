@@ -102,6 +102,15 @@ const computePartsTextLength = (parts: Part[] | undefined): number => {
     }, 0);
 };
 
+const toFileUrl = (inputPath: string): string => {
+    const normalized = inputPath.replace(/\\/g, "/").trim();
+    if (normalized.startsWith("file://")) {
+        return normalized;
+    }
+    const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+    return `file://${encodeURI(withLeadingSlash)}`;
+};
+
 const hasFinishStop = (info: { finish?: string } | undefined): boolean => {
     return info?.finish === "stop";
 };
@@ -663,7 +672,12 @@ export const useMessageStore = create<MessageStore>()(
                                     type: "file" as const,
                                     mime: file.mimeType,
                                     filename: file.filename,
-                                    url: file.dataUrl,
+                                    url:
+                                        file.source === "server" &&
+                                        file.serverPath &&
+                                        (file.mimeType === "text/plain" || file.mimeType === "application/x-directory")
+                                            ? toFileUrl(file.serverPath)
+                                            : file.dataUrl,
                                 }));
 
                                 set((state) => {
@@ -687,7 +701,12 @@ export const useMessageStore = create<MessageStore>()(
                                         type: "file" as const,
                                         mime: file.mimeType,
                                         filename: file.filename,
-                                        url: file.dataUrl,
+                                        url:
+                                            file.source === "server" &&
+                                            file.serverPath &&
+                                            (file.mimeType === "text/plain" || file.mimeType === "application/x-directory")
+                                                ? toFileUrl(file.serverPath)
+                                                : file.dataUrl,
                                     })),
                                 }));
 
