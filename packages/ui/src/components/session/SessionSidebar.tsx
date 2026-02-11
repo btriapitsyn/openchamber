@@ -464,10 +464,11 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     e.stopPropagation();
                     onNewSession();
                   }}
-                  className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="inline-flex h-6 items-center gap-1 px-1.5 text-primary border border-primary/40 hover:bg-primary/10 flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 typography-meta font-medium"
                   aria-label="New session"
                 >
-                  <RiAddLine className="h-4 w-4" />
+                  <RiAddLine className="h-3.5 w-3.5" />
+                  <span>New</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>
@@ -1841,7 +1842,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                           toggleParent(session.id);
                         }
                       }}
-                      className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 flex-shrink-0 rounded-sm"
+                      className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 flex-shrink-0 rounded-sm"
                       aria-label={isExpanded ? 'Collapse subsessions' : 'Expand subsessions'}
                     >
                       {isExpanded ? (

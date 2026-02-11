@@ -7,6 +7,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* All interactive elements should show pointer cursor */
+button,
+[role="button"],
+[type="button"],
+[type="submit"],
+[type="reset"],
+summary,
+a[href] {
+  cursor: pointer;
+}
+
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 /* Suppress WebKit-specific hover/focus adornments on the chat textarea */
 textarea[data-chat-input="true"] {
   -webkit-appearance: none;
