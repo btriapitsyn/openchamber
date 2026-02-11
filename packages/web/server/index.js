@@ -8724,7 +8724,36 @@ async function main(options = {}) {
         })
         .join('\n\n');
 
-      const prompt = `You are drafting git commit notes for this codebase. Respond in JSON of the shape {"subject": string, "highlights": string[]} (ONLY the JSON in response, no markdown wrappers or anything except JSON) with these rules:\n- subject follows our convention: type[optional-scope]: summary (examples: "feat: add diff virtualization", "fix(chat): restore enter key handling")\n- allowed types: feat, fix, chore, style, refactor, perf, docs, test, build, ci (choose the best match or fallback to chore)\n- summary must be imperative, concise, <= 70 characters, no trailing punctuation\n- scope is optional; include only when obvious from filenames/folders; do not invent scopes\n- focus on the most impactful user-facing change; if multiple capabilities ship together, align the subject with the dominant theme and use highlights to cover the other major outcomes\n- highlights array should contain 2-3 plain sentences (<= 90 chars each) that describe distinct features or UI changes users will notice (e.g. "Add per-file revert action in Changes list"). Avoid subjective benefit statements, marketing tone, repeating the subject, or referencing helper function names. Highlight additions such as new controls/buttons, new actions (e.g. revert), or stored state changes explicitly. Skip highlights if fewer than two meaningful points exist.\n- text must be plain (no markdown bullets); each highlight should start with an uppercase verb\n\nDiff summary:\n${diffSummaries}`;
+      const prompt = `You are generating a Conventional Commits subject line from the provided diff.
+
+Return EXACTLY one JSON object (no code fences, no extra keys, no extra text):
+{"subject": string, "highlights": string[]}
+
+Non-negotiable:
+- Output must be valid JSON (double quotes).
+- Only claim what is supported by the diff. If unsure, be more general; do not guess.
+
+subject:
+- Format: <type>: <summary> (NO scope; never write type(scope))
+- Allowed types: feat, fix, refactor, perf, docs, test, build, ci, chore, style, revert
+- Choose type (prefer fix when ambiguous):
+  - fix: any bug/regression/wrong behavior (state, selection, navigation, persistence, crash)
+  - feat: new user-facing capability or new workflow (not just guardrails/defaults)
+  - refactor/perf/docs/test/build/ci/style/chore/revert: only when clearly the primary change
+- Summary style:
+  - imperative, present tense, outcome-first
+  - <= 72 characters, no trailing period
+  - avoid filenames, internal function names, and implementation details
+
+highlights:
+- 0-3 items; it is OK to return [].
+- Each item: one plain sentence, <= 90 chars, starts with an Uppercase verb.
+- Must add information not already in the subject.
+- Prefer user-observable behaviors (UI flow, navigation, selection, default view, persistence).
+- No markdown bullets, no file paths, no helper names.
+
+Diff summary (may be truncated):
+${diffSummaries}`;
 
       const model = 'gpt-5-nano';
 

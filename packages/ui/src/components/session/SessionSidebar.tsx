@@ -632,6 +632,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const sessions = useSessionStore((state) => state.sessions);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const newSessionDraftOpen = useSessionStore((state) => Boolean(state.newSessionDraft?.open));
   const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
   const updateSessionTitle = useSessionStore((state) => state.updateSessionTitle);
   const shareSession = useSessionStore((state) => state.shareSession);
@@ -882,8 +883,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setSessionSwitcherOpen(false);
       }
 
-      if (!allowReselect && sessionId === currentSessionId) {
-        onSessionSelected?.(sessionId);
+      // Always return early if same session is selected to avoid unnecessary store operations
+      if (sessionId === currentSessionId) {
+        if (!allowReselect) {
+          onSessionSelected?.(sessionId);
+        }
         return;
       }
       setCurrentSession(sessionId);
@@ -1458,6 +1462,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const previousActiveProjectRef = React.useRef<string | null>(null);
   React.useLayoutEffect(() => {
+    // While a new session draft is open, keep the sidebar from auto-selecting remembered/fallback sessions.
+    // This is especially important in VS Code where the sidebar view is frequently mounted/unmounted.
+    if (newSessionDraftOpen) {
+      return;
+    }
     if (!activeProjectId || previousActiveProjectRef.current === activeProjectId) {
       return;
     }
@@ -1467,6 +1476,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
     previousActiveProjectRef.current = activeProjectId;
     const projectMap = projectSessionMeta.metaByProject.get(activeProjectId);
+
+    // If we already have an active session that belongs to this project (eg user just selected it,
+    // or sidebar remounted after "back"), do NOT override it with remembered/fallback session.
+    if (currentSessionId && projectMap && projectMap.has(currentSessionId)) {
+      setActiveSessionByProject((prev) => {
+        if (prev.get(activeProjectId) === currentSessionId) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.set(activeProjectId, currentSessionId);
+        return next;
+      });
+      return;
+    }
+
     if (!projectMap || projectMap.size === 0) {
       setActiveMainTab('chat');
       if (mobileVariant) {
@@ -1492,6 +1516,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     activeSessionByProject,
     currentSessionId,
     handleSessionSelect,
+    newSessionDraftOpen,
     mobileVariant,
     openNewSessionDraft,
     projectSections,
@@ -1967,7 +1992,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const renderGroupSessions = React.useCallback(
-    (group: SessionGroup, groupKey: string, projectId?: string | null) => {
+    (group: SessionGroup, groupKey: string, projectId?: string | null, hideGroupLabel?: boolean) => {
       const isExpanded = expandedSessionGroups.has(groupKey);
       const isCollapsed = collapsedGroups.has(groupKey);
       const maxVisible = hideDirectoryControls ? 10 : 5;
@@ -1997,11 +2022,49 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           && normalizedGroupDirectory === currentSessionDirectory,
       );
 
+      // VS Code sessions list uses a separate header (Agent Manager / New Session).
+      // When the caller requests a flat list (hideGroupLabel), omit the per-group header entirely.
+      if (hideGroupLabel) {
+        return (
+          <div className="oc-group">
+            <div className="oc-group-body pb-3">
+              {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
+              {totalSessions === 0 ? (
+                <div className="py-1 text-left typography-micro text-muted-foreground">
+                  No sessions in this workspace yet.
+                </div>
+              ) : null}
+              {remainingCount > 0 && !isExpanded ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSessionLimit(groupKey)}
+                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                >
+                  Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
+                </button>
+              ) : null}
+              {isExpanded && totalSessions > maxVisible ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSessionLimit(groupKey)}
+                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                >
+                  Show fewer sessions
+                </button>
+              ) : null}
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="oc-group">
           <div
-            className="group/gh flex items-center justify-between gap-2 py-1 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
-            onClick={() => {
+            className={cn(
+              "group/gh flex items-center justify-between gap-2 py-1 min-w-0 rounded-sm",
+              !hideGroupLabel && "hover:bg-interactive-hover/50 cursor-pointer"
+            )}
+            onClick={!hideGroupLabel ? () => {
               setCollapsedGroups((prev) => {
                 const next = new Set(prev);
                 if (next.has(groupKey)) {
@@ -2011,10 +2074,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 }
                 return next;
               });
-            }}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(event) => {
+            } : undefined}
+            role={!hideGroupLabel ? "button" : undefined}
+            tabIndex={!hideGroupLabel ? 0 : undefined}
+            onKeyDown={!hideGroupLabel ? (event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 setCollapsedGroups((prev) => {
@@ -2027,29 +2090,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   return next;
                 });
               }
-            }}
-            aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
+            } : undefined}
+            aria-label={!hideGroupLabel ? (isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`) : undefined}
           >
-            <div className="min-w-0 flex items-center gap-1.5 px-0">
-              {isCollapsed ? (
-                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-              ) : (
-                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-              )}
-              {!group.isMain || isGitProject ? (
-                <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-              ) : null}
-              <div className="min-w-0 flex flex-col justify-center">
-                <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
-                  {group.label}
-                </p>
-                {showBranchSubtitle ? (
-                  <span className="text-[10px] sm:text-[11px] text-muted-foreground/80 truncate leading-tight">
-                    {group.branch}
-                  </span>
+            {!hideGroupLabel ? (
+              <div className="min-w-0 flex items-center gap-1.5 px-0">
+                {isCollapsed ? (
+                  <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                ) : (
+                  <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                )}
+                {!group.isMain || isGitProject ? (
+                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                 ) : null}
+                <div className="min-w-0 flex flex-col justify-center">
+                  <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
+                    {group.label}
+                  </p>
+                  {showBranchSubtitle ? (
+                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/80 truncate leading-tight">
+                      {group.branch}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            ) : <div />}
             {group.directory ? (
               <div className="flex items-center gap-1 px-0.5">
                 {!group.isMain && group.worktree ? (
@@ -2404,7 +2469,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 );
               }
               const groupKey = `${activeSection.project.id}:${group.id}`;
-              return renderGroupSessions(group, groupKey, activeSection.project.id);
+              // In VS Code mode with showOnlyMainWorkspace, hide the group header to show a flat session list
+              return renderGroupSessions(group, groupKey, activeSection.project.id, showOnlyMainWorkspace);
             })()}
           </div>
         ) : (

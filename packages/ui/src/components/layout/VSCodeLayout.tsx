@@ -69,7 +69,15 @@ export const VSCodeLayout: React.FC = () => {
 
   const hasAppliedInitialSession = React.useRef(false);
 
-  const [currentView, setCurrentView] = React.useState<VSCodeView>('sessions');
+  const bootDraftOpen = React.useMemo(() => {
+    try {
+      return Boolean(useSessionStore.getState().newSessionDraft?.open);
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const [currentView, setCurrentView] = React.useState<VSCodeView>(() => (bootDraftOpen ? 'chat' : 'sessions'));
   const [containerWidth, setContainerWidth] = React.useState<number>(0);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
