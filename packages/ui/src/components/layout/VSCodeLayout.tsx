@@ -615,7 +615,9 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
                       : window.usedPercent;
                     const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
                     const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                      ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                      ? (quotaDisplayMode === 'remaining'
+                          ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                          : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                       : null;
                     return (
                     <DropdownMenuItem
