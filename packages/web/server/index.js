@@ -1,5 +1,4 @@
 import express from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
@@ -4630,6 +4629,157 @@ function setupProxy(app) {
     next();
   });
 
+  const isSseApiPath = (path) => path === '/event' || path === '/global/event';
+
+  const forwardSseRequest = async (req, res) => {
+    const startedAt = Date.now();
+    const upstreamPath = req.originalUrl.replace(/^\/api/, '');
+    const targetUrl = buildOpenCodeUrl(upstreamPath, '');
+    const authHeaders = getOpenCodeAuthHeaders();
+
+    const requestHeaders = {
+      ...(typeof req.headers.accept === 'string' ? { accept: req.headers.accept } : { accept: 'text/event-stream' }),
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+      ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
+    };
+
+    const controller = new AbortController();
+    let connectTimer = null;
+    let idleTimer = null;
+    let heartbeatTimer = null;
+    let endedBy = 'upstream-end';
+
+    const cleanup = () => {
+      if (connectTimer) {
+        clearTimeout(connectTimer);
+        connectTimer = null;
+      }
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
+      }
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+      req.off('close', onClientClose);
+    };
+
+    const resetIdleTimeout = () => {
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+      }
+      idleTimer = setTimeout(() => {
+        endedBy = 'idle-timeout';
+        controller.abort();
+      }, 5 * 60 * 1000);
+    };
+
+    const onClientClose = () => {
+      endedBy = 'client-disconnect';
+      controller.abort();
+    };
+
+    req.on('close', onClientClose);
+
+    try {
+      connectTimer = setTimeout(() => {
+        endedBy = 'connect-timeout';
+        controller.abort();
+      }, 10 * 1000);
+
+      const upstreamResponse = await fetch(targetUrl, {
+        method: 'GET',
+        headers: requestHeaders,
+        signal: controller.signal,
+      });
+
+      if (connectTimer) {
+        clearTimeout(connectTimer);
+        connectTimer = null;
+      }
+
+      if (!upstreamResponse.ok || !upstreamResponse.body) {
+        const body = await upstreamResponse.text().catch(() => '');
+        cleanup();
+        if (!res.headersSent) {
+          if (upstreamResponse.headers.has('content-type')) {
+            res.setHeader('content-type', upstreamResponse.headers.get('content-type'));
+          }
+          res.status(upstreamResponse.status).send(body);
+        }
+        return;
+      }
+
+      const upstreamContentType = upstreamResponse.headers.get('content-type') || 'text/event-stream';
+      res.status(upstreamResponse.status);
+      res.setHeader('content-type', upstreamContentType);
+      res.setHeader('cache-control', 'no-cache');
+      res.setHeader('connection', 'keep-alive');
+      res.setHeader('x-accel-buffering', 'no');
+      res.setHeader('x-content-type-options', 'nosniff');
+      if (typeof res.flushHeaders === 'function') {
+        res.flushHeaders();
+      }
+
+      resetIdleTimeout();
+      heartbeatTimer = setInterval(() => {
+        if (res.writableEnded || controller.signal.aborted) {
+          return;
+        }
+        try {
+          res.write(': ping\n\n');
+          resetIdleTimeout();
+        } catch {
+        }
+      }, 30 * 1000);
+
+      const reader = upstreamResponse.body.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            endedBy = endedBy === 'upstream-end' ? 'upstream-finished' : endedBy;
+            break;
+          }
+          if (controller.signal.aborted) {
+            break;
+          }
+          if (value && value.length > 0) {
+            res.write(Buffer.from(value));
+            resetIdleTimeout();
+          }
+        }
+      } finally {
+        try {
+          reader.releaseLock();
+        } catch {
+        }
+      }
+
+      cleanup();
+      if (!res.writableEnded) {
+        res.end();
+      }
+      console.log(`SSE forward ${upstreamPath} closed (${endedBy}) in ${Date.now() - startedAt}ms`);
+    } catch (error) {
+      cleanup();
+      const isTimeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+      if (!res.headersSent) {
+        res.status(isTimeout ? 504 : 503).json({
+          error: isTimeout ? 'OpenCode SSE forward timed out' : 'OpenCode SSE forward failed',
+        });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+      console.warn(`SSE forward ${upstreamPath} failed (${endedBy}):`, error?.message || error);
+    }
+  };
+
+  app.get('/api/event', forwardSseRequest);
+  app.get('/api/global/event', forwardSseRequest);
+
   app.use('/api', (_req, _res, next) => {
     ensureOpenCodeApiPrefix();
     next();
@@ -4651,64 +4801,108 @@ function setupProxy(app) {
   });
 
 
-  const proxyMiddleware = createProxyMiddleware({
-    target: openCodePort ? `http://localhost:${openCodePort}` : 'http://127.0.0.1:0',
-    router: () => {
-      if (!openCodePort) {
-        return 'http://127.0.0.1:0';
+  const hopByHopRequestHeaders = new Set([
+    'host',
+    'connection',
+    'content-length',
+    'transfer-encoding',
+    'keep-alive',
+    'te',
+    'trailer',
+    'upgrade',
+  ]);
+
+  const hopByHopResponseHeaders = new Set([
+    'connection',
+    'content-length',
+    'transfer-encoding',
+    'keep-alive',
+    'te',
+    'trailer',
+    'upgrade',
+    'www-authenticate',
+  ]);
+
+  const collectForwardHeaders = (req) => {
+    const authHeaders = getOpenCodeAuthHeaders();
+    const headers = {};
+
+    for (const [key, value] of Object.entries(req.headers || {})) {
+      if (!value) continue;
+      const lowerKey = key.toLowerCase();
+      if (hopByHopRequestHeaders.has(lowerKey)) continue;
+      headers[lowerKey] = Array.isArray(value) ? value.join(', ') : String(value);
+    }
+
+    if (authHeaders.Authorization) {
+      headers.Authorization = authHeaders.Authorization;
+    }
+
+    return headers;
+  };
+
+  const collectRequestBodyBuffer = async (req) => {
+    if (Buffer.isBuffer(req.body)) {
+      return req.body;
+    }
+
+    if (typeof req.body === 'string') {
+      return Buffer.from(req.body);
+    }
+
+    if (req.body && typeof req.body === 'object') {
+      return Buffer.from(JSON.stringify(req.body));
+    }
+
+    if (req.readableEnded) {
+      return Buffer.alloc(0);
+    }
+
+    return await new Promise((resolve, reject) => {
+      const chunks = [];
+      req.on('data', (chunk) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      req.on('end', () => resolve(Buffer.concat(chunks)));
+      req.on('error', reject);
+    });
+  };
+
+  const forwardGenericApiRequest = async (req, res) => {
+    try {
+      const upstreamPath = req.originalUrl.replace(/^\/api/, '');
+      const targetUrl = buildOpenCodeUrl(upstreamPath, '');
+      const headers = collectForwardHeaders(req);
+      const method = String(req.method || 'GET').toUpperCase();
+      const hasBody = method !== 'GET' && method !== 'HEAD';
+      const bodyBuffer = hasBody ? await collectRequestBodyBuffer(req) : null;
+
+      const upstreamResponse = await fetch(targetUrl, {
+        method,
+        headers,
+        body: hasBody ? bodyBuffer : undefined,
+        signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
+      });
+
+      for (const [key, value] of upstreamResponse.headers.entries()) {
+        const lowerKey = key.toLowerCase();
+        if (hopByHopResponseHeaders.has(lowerKey)) {
+          continue;
+        }
+        res.setHeader(key, value);
       }
-      return `http://localhost:${openCodePort}`;
-    },
-    changeOrigin: true,
-    pathRewrite: (path) => {
-      if (!path.startsWith('/api')) {
-        return path;
-      }
 
-      const suffix = path.slice(4) || '/';
-
-      return suffix;
-    },
-    ws: false,
-    // v3.x API: callbacks go in 'on' object
-    on: {
-      error: (err, req, res) => {
-        console.error(`Proxy error: ${err.message}`);
-        if (!res.headersSent) {
-          res.status(503).json({ error: 'OpenCode service unavailable' });
-        }
-      },
-      proxyReq: (proxyReq, req, res) => {
-        console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
-        const authHeaders = getOpenCodeAuthHeaders();
-        if (authHeaders.Authorization) {
-          proxyReq.setHeader('Authorization', authHeaders.Authorization);
-        }
-
-        if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
-          proxyReq.setHeader('Accept', 'text/event-stream');
-          proxyReq.setHeader('Cache-Control', 'no-cache');
-          proxyReq.setHeader('Connection', 'keep-alive');
-        }
-      },
-      proxyRes: (proxyRes, req, res) => {
-        // Strip WWW-Authenticate to prevent browser's native Basic Auth popup
-        if (proxyRes.headers['www-authenticate']) {
-          delete proxyRes.headers['www-authenticate'];
-        }
-
-        if (req.url?.includes('/event')) {
-          proxyRes.headers['Access-Control-Allow-Origin'] = '*';
-          proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
-          proxyRes.headers['Content-Type'] = 'text/event-stream';
-          proxyRes.headers['Cache-Control'] = 'no-cache';
-          proxyRes.headers['Connection'] = 'keep-alive';
-          proxyRes.headers['X-Accel-Buffering'] = 'no';
-          proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
-        }
+      const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer());
+      res.status(upstreamResponse.status).send(upstreamBody);
+    } catch (error) {
+      if (!res.headersSent) {
+        const isTimeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
+        res.status(isTimeout ? 504 : 503).json({
+          error: isTimeout ? 'OpenCode request timed out' : 'OpenCode service unavailable',
+        });
       }
     }
-  });
+  };
 
   // Dedicated forwarder for large session message payloads.
   // This avoids edge-cases in generic proxy streaming for multi-file attachments.
@@ -4752,7 +4946,17 @@ function setupProxy(app) {
     }
   });
 
-  app.use('/api', proxyMiddleware);
+  app.use('/api', (req, res, next) => {
+    if (isSseApiPath(req.path)) {
+      return next();
+    }
+
+    if (req.method === 'POST' && /\/session\/[^/]+\/message$/.test(req.path || '')) {
+      return next();
+    }
+
+    return forwardGenericApiRequest(req, res);
+  });
 }
 
 function startHealthMonitoring() {
