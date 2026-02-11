@@ -1493,6 +1493,17 @@ async fn wait_for_health(url: &str) -> bool {
 #[serde(rename_all = "camelCase")]
 struct SidecarHealthPayload {
     open_code_port: Option<u16>,
+    open_code_pid: Option<u32>,
+    open_code_managed: Option<bool>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopRuntimeSessionRecord {
+    desktop_pid: Option<u32>,
+    sidecar_pid: Option<u32>,
+    open_code_pid: Option<u32>,
+    open_code_port: Option<u16>,
     open_code_managed: Option<bool>,
 }
 
@@ -1563,6 +1574,200 @@ fn command_for_pid(pid: u32) -> Option<String> {
     }
 }
 
+fn openchamber_data_dir() -> PathBuf {
+    if let Ok(dir) = env::var("OPENCHAMBER_DATA_DIR") {
+        let trimmed = dir.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    let home = env::var("HOME").unwrap_or_default();
+    PathBuf::from(home).join(".config").join("openchamber")
+}
+
+fn runtime_dir_path() -> PathBuf {
+    openchamber_data_dir().join("runtime")
+}
+
+fn runtime_session_file_path(session_id: &str) -> PathBuf {
+    runtime_dir_path().join(format!("desktop-session-{session_id}.json"))
+}
+
+fn pid_exists(pid: u32) -> bool {
+    Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+fn process_tree_pids(root_pid: u32) -> Vec<u32> {
+    let output = Command::new("ps").args(["-axo", "pid=,ppid="]).output();
+
+    let Ok(output) = output else {
+        return vec![root_pid];
+    };
+
+    if !output.status.success() {
+        return vec![root_pid];
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut by_parent: HashMap<u32, Vec<u32>> = HashMap::new();
+    for line in stdout.lines() {
+        let mut parts = line.split_whitespace();
+        let Some(pid_raw) = parts.next() else {
+            continue;
+        };
+        let Some(ppid_raw) = parts.next() else {
+            continue;
+        };
+        let Some(pid) = pid_raw.parse::<u32>().ok() else {
+            continue;
+        };
+        let Some(ppid) = ppid_raw.parse::<u32>().ok() else {
+            continue;
+        };
+        by_parent.entry(ppid).or_default().push(pid);
+    }
+
+    let mut all = vec![root_pid];
+    let mut stack = vec![root_pid];
+    while let Some(parent) = stack.pop() {
+        if let Some(children) = by_parent.get(&parent) {
+            for child in children {
+                all.push(*child);
+                stack.push(*child);
+            }
+        }
+    }
+
+    all
+}
+
+fn kill_pid_soft_then_hard(pid: u32) {
+    let _ = Command::new("kill")
+        .args(["-TERM", &pid.to_string()])
+        .status();
+}
+
+fn kill_process_tree(root_pid: u32) {
+    let mut tree = process_tree_pids(root_pid);
+    tree.sort_unstable();
+    tree.dedup();
+    tree.retain(|pid| *pid != std::process::id());
+
+    for pid in tree.iter().rev() {
+        kill_pid_soft_then_hard(*pid);
+    }
+
+    std::thread::sleep(Duration::from_millis(250));
+
+    for pid in tree.iter().rev() {
+        let _ = Command::new("kill")
+            .args(["-KILL", &pid.to_string()])
+            .status();
+    }
+}
+
+fn process_command_matches(pid: u32, needles: &[&str]) -> bool {
+    let cmd = command_for_pid(pid).unwrap_or_default();
+    needles.iter().any(|needle| cmd.contains(needle))
+}
+
+fn read_runtime_session_record(session_id: &str) -> Option<DesktopRuntimeSessionRecord> {
+    let file = runtime_session_file_path(session_id);
+    let raw = fs::read_to_string(file).ok()?;
+    serde_json::from_str::<DesktopRuntimeSessionRecord>(&raw).ok()
+}
+
+fn remove_runtime_session_file(session_id: &str) {
+    let file = runtime_session_file_path(session_id);
+    let _ = fs::remove_file(file);
+}
+
+fn cleanup_runtime_record(record: &DesktopRuntimeSessionRecord) {
+    let managed = record.open_code_managed.unwrap_or(true);
+
+    if let Some(sidecar_pid) = record.sidecar_pid {
+        if process_command_matches(sidecar_pid, &["openchamber-server"]) {
+            kill_process_tree(sidecar_pid);
+        }
+    }
+
+    if !managed {
+        return;
+    }
+
+    if let Some(open_code_pid) = record.open_code_pid {
+        if process_command_matches(open_code_pid, &["opencode serve"]) {
+            kill_process_tree(open_code_pid);
+        }
+    }
+
+    if let Some(open_code_port) = record.open_code_port {
+        for pid in pids_listening_on_port(open_code_port) {
+            if pid == std::process::id() {
+                continue;
+            }
+            if process_command_matches(pid, &["opencode serve"]) {
+                kill_process_tree(pid);
+            }
+        }
+    }
+}
+
+fn cleanup_runtime_session(session_id: &str) {
+    if let Some(record) = read_runtime_session_record(session_id) {
+        cleanup_runtime_record(&record);
+    }
+    remove_runtime_session_file(session_id);
+}
+
+fn cleanup_stale_runtime_sessions() {
+    let runtime_dir = runtime_dir_path();
+    let entries = match fs::read_dir(&runtime_dir) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Some(name) = path.file_name().and_then(|v| v.to_str()) else {
+            continue;
+        };
+
+        if !name.starts_with("desktop-session-") || !name.ends_with(".json") {
+            continue;
+        }
+
+        let raw = match fs::read_to_string(&path) {
+            Ok(raw) => raw,
+            Err(_) => {
+                let _ = fs::remove_file(&path);
+                continue;
+            }
+        };
+
+        let record = match serde_json::from_str::<DesktopRuntimeSessionRecord>(&raw) {
+            Ok(record) => record,
+            Err(_) => {
+                let _ = fs::remove_file(&path);
+                continue;
+            }
+        };
+
+        let is_desktop_alive = record.desktop_pid.map(pid_exists).unwrap_or(false);
+        if is_desktop_alive {
+            continue;
+        }
+
+        cleanup_runtime_record(&record);
+        let _ = fs::remove_file(&path);
+    }
+}
+
 fn kill_pid(pid: u32) {
     let _ = Command::new("kill")
         .args(["-TERM", &pid.to_string()])
@@ -1613,6 +1818,11 @@ fn kill_sidecar(app: tauri::AppHandle) {
     };
 
     let sidecar_url = state.url.lock().expect("sidecar url mutex").clone();
+    let session_id = state
+        .session_id
+        .lock()
+        .expect("sidecar session mutex")
+        .clone();
     let health = sidecar_url
         .as_deref()
         .and_then(|url| tauri::async_runtime::block_on(fetch_sidecar_health(url)));
@@ -1632,10 +1842,19 @@ fn kill_sidecar(app: tauri::AppHandle) {
     if let Some(payload) = health {
         let managed = payload.open_code_managed.unwrap_or(true);
         if managed {
+            if let Some(pid) = payload.open_code_pid {
+                if process_command_matches(pid, &["opencode serve"]) {
+                    kill_process_tree(pid);
+                }
+            }
             if let Some(port) = payload.open_code_port {
                 kill_processes_on_port(port);
             }
         }
+    }
+
+    if let Some(session_id) = session_id.as_deref() {
+        cleanup_runtime_session(session_id);
     }
 
     *state.url.lock().expect("sidecar url mutex") = None;
@@ -1659,6 +1878,8 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     let no_proxy = "localhost,127.0.0.1";
     let desktop_session_id = create_desktop_session_id();
     let desktop_parent_pid = std::process::id().to_string();
+
+    cleanup_stale_runtime_sessions();
 
     // macOS app launch env often lacks user PATH entries.
     let mut path_segments: Vec<String> = Vec::new();

@@ -1010,6 +1010,8 @@ const persistDesktopRuntimeState = async (extra = {}) => {
     desktopPid: DESKTOP_PARENT_PID,
     sidecarPid: process.pid,
     openCodePort,
+    openCodePid,
+    openCodeManaged: !ENV_SKIP_OPENCODE_START,
     updatedAt: new Date().toISOString(),
     ...extra,
   };
@@ -2692,6 +2694,7 @@ const getHmrState = () => {
     globalThis[HMR_STATE_KEY] = {
       openCodeProcess: null,
       openCodePort: null,
+      openCodePid: null,
       openCodeWorkingDirectory: os.homedir(),
       isShuttingDown: false,
       signalsAttached: false,
@@ -2724,6 +2727,7 @@ let terminalInputWsServer = null;
 const syncToHmrState = () => {
   hmrState.openCodeProcess = openCodeProcess;
   hmrState.openCodePort = openCodePort;
+  hmrState.openCodePid = openCodePid;
   hmrState.isShuttingDown = isShuttingDown;
   hmrState.signalsAttached = signalsAttached;
   hmrState.openCodeWorkingDirectory = openCodeWorkingDirectory;
@@ -2733,6 +2737,7 @@ const syncToHmrState = () => {
 const syncFromHmrState = () => {
   openCodeProcess = hmrState.openCodeProcess;
   openCodePort = hmrState.openCodePort;
+  openCodePid = hmrState.openCodePid;
   isShuttingDown = hmrState.isShuttingDown;
   signalsAttached = hmrState.signalsAttached;
   openCodeWorkingDirectory = hmrState.openCodeWorkingDirectory;
@@ -2742,6 +2747,7 @@ const syncFromHmrState = () => {
 // These are synced to/from hmrState to survive HMR reloads
 let openCodeProcess = hmrState.openCodeProcess;
 let openCodePort = hmrState.openCodePort;
+let openCodePid = hmrState.openCodePid;
 let isShuttingDown = hmrState.isShuttingDown;
 let signalsAttached = hmrState.signalsAttached;
 let openCodeWorkingDirectory = hmrState.openCodeWorkingDirectory;
@@ -3416,6 +3422,7 @@ function setOpenCodePort(port) {
 
   if (portChanged || openCodePort === null) {
     openCodePort = numericPort;
+    openCodePid = detectOpenCodePidOnPort(numericPort);
     syncToHmrState();
     void persistDesktopRuntimeState();
     console.log(`Detected OpenCode port: ${openCodePort}`);
@@ -4287,16 +4294,57 @@ function parseArgs(argv = process.argv.slice(2)) {
   return options;
 }
 
+function pidsListeningOnPort(port) {
+  if (!port) {
+    return [];
+  }
+
+  try {
+    const result = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8', timeout: 5000 });
+    const output = result.stdout || '';
+    return output
+      .split(/\s+/)
+      .map((value) => parseInt(value.trim(), 10))
+      .filter((pid) => Number.isFinite(pid) && pid > 0);
+  } catch {
+    return [];
+  }
+}
+
+function commandForPid(pid) {
+  if (!pid) {
+    return '';
+  }
+
+  try {
+    const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], {
+      encoding: 'utf8',
+      timeout: 5000,
+    });
+    return (result.stdout || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+function detectOpenCodePidOnPort(port) {
+  for (const pid of pidsListeningOnPort(port)) {
+    const command = commandForPid(pid);
+    if (command.includes('opencode serve')) {
+      return pid;
+    }
+  }
+
+  return null;
+}
+
 function killProcessOnPort(port) {
   if (!port) return;
   try {
     // SDK's proc.kill() only kills the Node wrapper, not the actual opencode binary.
     // Kill any process listening on our port to clean up orphaned children.
-    const result = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8', timeout: 5000 });
-    const output = result.stdout || '';
     const myPid = process.pid;
-    for (const pidStr of output.split(/\s+/)) {
-      const pid = parseInt(pidStr.trim(), 10);
+    for (const pid of pidsListeningOnPort(port)) {
       if (pid && pid !== myPid) {
         try {
           spawnSync('kill', ['-9', String(pid)], { stdio: 'ignore', timeout: 2000 });
@@ -4344,6 +4392,8 @@ async function startOpenCode() {
     if (await waitForReady(serverInstance.url, 10000)) {
       setOpenCodePort(port);
       setDetectedOpenCodeApiPrefix(prefix); // SDK URL typically includes the prefix if any
+      openCodePid = detectOpenCodePidOnPort(port);
+      void persistDesktopRuntimeState();
 
       isOpenCodeReady = true;
       lastOpenCodeError = null;
@@ -4362,6 +4412,8 @@ async function startOpenCode() {
     const message = error instanceof Error ? error.message : String(error);
     lastOpenCodeError = message;
     openCodePort = null;
+    openCodePid = null;
+    void persistDesktopRuntimeState();
     syncToHmrState();
     console.error(`Failed to start OpenCode: ${message}`);
     throw error;
@@ -4382,6 +4434,7 @@ async function restartOpenCode() {
     console.log('Restarting OpenCode process...');
 
     const portToKill = openCodePort;
+    const pidToKill = openCodePid;
 
     if (openCodeProcess) {
       console.log('Stopping existing OpenCode process...');
@@ -4391,10 +4444,19 @@ async function restartOpenCode() {
         console.warn('Error closing OpenCode process:', error);
       }
       openCodeProcess = null;
+      openCodePid = null;
+      void persistDesktopRuntimeState();
       syncToHmrState();
     }
 
     killProcessOnPort(portToKill);
+    if (pidToKill) {
+      try {
+        spawnSync('kill', ['-9', String(pidToKill)], { stdio: 'ignore', timeout: 2000 });
+      } catch {
+        // ignore
+      }
+    }
 
     // Brief delay to allow port release
     await new Promise((resolve) => setTimeout(resolve, 250));
@@ -4404,6 +4466,8 @@ async function restartOpenCode() {
       setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
     } else {
       openCodePort = null;
+      openCodePid = null;
+      void persistDesktopRuntimeState();
       syncToHmrState();
     }
 
@@ -4432,6 +4496,8 @@ async function restartOpenCode() {
     lastOpenCodeError = error.message;
     if (!ENV_CONFIGURED_OPENCODE_PORT) {
       openCodePort = null;
+      openCodePid = null;
+      void persistDesktopRuntimeState();
       syncToHmrState();
     }
     openCodeApiPrefixDetected = true;
@@ -4816,6 +4882,7 @@ async function gracefulShutdown(options = {}) {
   // Only stop OpenCode if we started it ourselves (not when using external server)
   if (!ENV_SKIP_OPENCODE_START) {
     const portToKill = openCodePort;
+    const pidToKill = openCodePid;
 
     if (openCodeProcess) {
       console.log('Stopping OpenCode process...');
@@ -4825,9 +4892,19 @@ async function gracefulShutdown(options = {}) {
         console.warn('Error closing OpenCode process:', error);
       }
       openCodeProcess = null;
+      openCodePid = null;
     }
 
     killProcessOnPort(portToKill);
+    if (pidToKill) {
+      try {
+        spawnSync('kill', ['-9', String(pidToKill)], { stdio: 'ignore', timeout: 2000 });
+      } catch {
+        // ignore
+      }
+    }
+    openCodePid = null;
+    void persistDesktopRuntimeState();
   } else {
     console.log('Skipping OpenCode shutdown (external server)');
   }
@@ -4918,6 +4995,7 @@ async function main(options = {}) {
       status: 'ok',
       timestamp: new Date().toISOString(),
       openCodePort: openCodePort,
+      openCodePid: openCodePid,
       openCodeManaged: !ENV_SKIP_OPENCODE_START,
       openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
       openCodeApiPrefix: '',
@@ -10378,6 +10456,8 @@ Context:
   try {
     syncFromHmrState();
     if (await isOpenCodeProcessHealthy()) {
+      openCodePid = detectOpenCodePidOnPort(openCodePort);
+      void persistDesktopRuntimeState();
       console.log(`[HMR] Reusing existing OpenCode process on port ${openCodePort}`);
     } else if (ENV_SKIP_OPENCODE_START && ENV_CONFIGURED_OPENCODE_PORT) {
       console.log(`Using external OpenCode server on port ${ENV_CONFIGURED_OPENCODE_PORT} (skip-start mode)`);
@@ -10392,6 +10472,8 @@ Context:
         setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
       } else {
         openCodePort = null;
+        openCodePid = null;
+        void persistDesktopRuntimeState();
         syncToHmrState();
       }
 
