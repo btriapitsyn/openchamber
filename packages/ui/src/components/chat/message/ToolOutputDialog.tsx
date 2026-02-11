@@ -112,6 +112,7 @@ const ImagePreviewDialog: React.FC<{
     const [imageNaturalSize, setImageNaturalSize] = React.useState<{ width: number; height: number } | null>(null);
     const [isRendered, setIsRendered] = React.useState(popup.open);
     const [isVisible, setIsVisible] = React.useState(popup.open);
+    const [isTransitioning, setIsTransitioning] = React.useState(false);
     const [viewport, setViewport] = React.useState<{ width: number; height: number }>({
         width: typeof window !== 'undefined' ? window.innerWidth : 0,
         height: typeof window !== 'undefined' ? window.innerHeight : 0,
@@ -151,6 +152,7 @@ const ImagePreviewDialog: React.FC<{
     React.useEffect(() => {
         if (popup.open) {
             setIsRendered(true);
+            setIsTransitioning(true);
             if (typeof window === 'undefined') {
                 setIsVisible(true);
                 return;
@@ -160,12 +162,18 @@ const ImagePreviewDialog: React.FC<{
                 setIsVisible(true);
             });
 
+            const doneId = window.setTimeout(() => {
+                setIsTransitioning(false);
+            }, IMAGE_PREVIEW_ANIMATION_MS);
+
             return () => {
                 window.cancelAnimationFrame(raf);
+                window.clearTimeout(doneId);
             };
         }
 
         setIsVisible(false);
+        setIsTransitioning(true);
         if (typeof window === 'undefined') {
             setIsRendered(false);
             return;
@@ -173,6 +181,7 @@ const ImagePreviewDialog: React.FC<{
 
         const timeoutId = window.setTimeout(() => {
             setIsRendered(false);
+            setIsTransitioning(false);
         }, IMAGE_PREVIEW_ANIMATION_MS);
 
         return () => {
@@ -259,8 +268,9 @@ const ImagePreviewDialog: React.FC<{
             <div
                 aria-hidden="true"
                 className={cn(
-                    'absolute inset-0 bg-black/25 backdrop-blur-md transition-opacity ease-out',
-                    isVisible ? 'opacity-100 duration-150' : 'opacity-0 duration-100'
+                    'absolute inset-0 bg-black/25 backdrop-blur-md',
+                    isTransitioning && 'transition-opacity duration-150 ease-out',
+                    isVisible ? 'opacity-100' : 'opacity-0'
                 )}
                 onMouseDown={() => onOpenChange(false)}
             />
@@ -296,10 +306,9 @@ const ImagePreviewDialog: React.FC<{
             >
                 <div
                     className={cn(
-                        'pointer-events-auto flex flex-col gap-2 transition-all ease-out will-change-transform',
-                        isVisible
-                            ? 'opacity-100 translate-y-0 scale-100 duration-150'
-                            : 'opacity-0 translate-y-1 scale-[0.985] duration-100'
+                        'pointer-events-auto flex flex-col gap-2',
+                        isTransitioning && 'transition-opacity duration-150 ease-out',
+                        isVisible ? 'opacity-100' : 'opacity-0'
                     )}
                     style={{ width: `${imageDisplaySize.width}px` }}
                 >
