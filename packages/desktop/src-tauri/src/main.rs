@@ -1961,7 +1961,7 @@ fn build_init_script(local_origin: &str) -> String {
     init_script.push_str("\ntry{var old=document.getElementById('__oc-instance-switcher');if(old)old.remove();}catch(_e){}");
 
     if !cfg!(debug_assertions) {
-        init_script.push_str("\ntry{document.addEventListener('contextmenu',function(e){e.preventDefault();},true);}catch(_e){}");
+        init_script.push_str("\ntry{document.addEventListener('contextmenu',function(e){var t=e&&e.target;if(!t||typeof t.closest!=='function'){e.preventDefault();return;}if(t.closest('.terminal-viewport-container,[data-oc-allow-native-contextmenu],input,textarea,[contenteditable=\"true\"]')){return;}e.preventDefault();},true);}catch(_e){}");
     }
 
     init_script

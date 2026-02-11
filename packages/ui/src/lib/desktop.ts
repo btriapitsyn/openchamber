@@ -201,8 +201,8 @@ export const getDesktopHomeDirectory = async (): Promise<string | null> => {
 export const requestDirectoryAccess = async (
   directoryPath: string
 ): Promise<{ success: boolean; path?: string; projectId?: string; error?: string }> => {
-  // Desktop shell: use native folder picker.
-  if (isTauriShell()) {
+  // Desktop shell on local instance: use native folder picker.
+  if (isTauriShell() && isDesktopLocalOriginActive()) {
     try {
       const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
       const selected = await tauri?.dialog?.open?.({

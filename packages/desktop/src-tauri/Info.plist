@@ -18,5 +18,10 @@
 	<string>OpenChamber needs microphone access for voice input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>OpenChamber needs speech recognition to transcribe voice input.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
