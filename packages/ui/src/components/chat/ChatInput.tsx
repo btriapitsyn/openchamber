@@ -374,7 +374,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const canAbort = working.isWorking;
 
     // Keep a ref to handleSubmit so callbacks don't depend on it.
-    const handleSubmitRef = React.useRef<(e?: React.FormEvent) => Promise<void>>(async () => {});
+    type SubmitOptions = {
+        queuedOnly?: boolean;
+    };
+    const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
 
     // Add message to queue instead of sending
     const handleQueueMessage = React.useCallback(() => {
@@ -404,10 +407,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [hasContent, currentSessionId, message, attachedFiles, addToQueue, clearAttachedFiles, isMobile, consumeDrafts]);
 
-    const handleSubmit = async (e?: React.FormEvent) => {
-        e?.preventDefault();
+    const handleSubmit = async (options?: SubmitOptions) => {
+        const queuedOnly = options?.queuedOnly ?? false;
 
-        if (!canSend || (!currentSessionId && !newSessionDraftOpen)) return;
+        if (queuedOnly) {
+            if (!hasQueuedMessages || !currentSessionId) return;
+        } else if (!canSend || (!currentSessionId && !newSessionDraftOpen)) {
+            return;
+        }
 
         // Re-pin and scroll to bottom when sending
         scrollToBottom?.({ instant: true, force: true });
@@ -449,8 +456,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }
         }
 
-        // Add current input
-        if (hasContent) {
+        // Add current input (skip for queued-only auto-send)
+        if (!queuedOnly && hasContent) {
             const messageToSend = message.replace(/^\n+|\n+$/g, '');
             const { sanitizedText, mention } = parseAgentMentions(messageToSend, agents);
             const attachmentsToSend = attachedFiles.map((file) => ({ ...file }));
@@ -474,7 +481,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
         let drafts: InlineCommentDraft[] = [];
-        if (sessionKey) {
+        if (!queuedOnly && sessionKey) {
             drafts = consumeDrafts(sessionKey);
         }
 
@@ -505,12 +512,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (currentSessionId && hasQueuedMessages) {
             clearQueue(currentSessionId);
         }
-        setMessage('');
-        // Reset message history navigation state
-        setHistoryIndex(-1);
-        setDraftMessage('');
-        if (attachedFiles.length > 0) {
-            clearAttachedFiles();
+        if (!queuedOnly) {
+            setMessage('');
+            // Reset message history navigation state
+            setHistoryIndex(-1);
+            setDraftMessage('');
+            if (attachedFiles.length > 0) {
+                clearAttachedFiles();
+            }
         }
 
         if (isMobile) {
@@ -667,7 +676,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             // Use setTimeout to avoid calling during render
             setTimeout(() => {
                 if (currentSessionId && currentProviderId && currentModelId) {
-                    void handleSubmitRef.current();
+                    void handleSubmitRef.current({ queuedOnly: true });
                 }
                 autoSendTriggeredRef.current = false;
             }, 100);
