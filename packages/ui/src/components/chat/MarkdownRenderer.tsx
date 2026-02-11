@@ -9,6 +9,9 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getStreamdownThemePair } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useUIStore } from '@/stores/useUIStore';
+import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 
 const withStableStringId = <T extends object>(value: T, id: string): T => {
   const existingPrimitive = (value as Record<symbol, unknown>)[Symbol.toPrimitive];
@@ -437,9 +440,96 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
   );
 };
 
+// Known file extensions that indicate a file path
+const FILE_EXTENSIONS = new Set([
+  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'mts', 'cts',
+  'py', 'pyw', 'rb', 'rs', 'go', 'java', 'kt', 'kts', 'scala',
+  'c', 'h', 'cpp', 'cc', 'cxx', 'hpp', 'cs', 'fs', 'swift', 'dart',
+  'lua', 'pl', 'pm', 'r', 'jl', 'hs', 'ex', 'exs', 'erl',
+  'clj', 'cljs', 'ml', 'nim', 'zig', 'v', 'cr',
+  'html', 'htm', 'css', 'scss', 'sass', 'less', 'vue', 'svelte', 'astro',
+  'json', 'jsonc', 'json5', 'yaml', 'yml', 'toml', 'xml', 'ini', 'cfg', 'env',
+  'md', 'mdx', 'txt', 'rst', 'tex',
+  'sql', 'graphql', 'gql', 'proto',
+  'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
+  'tf', 'nix', 'gradle', 'mk',
+  'lock', 'csv', 'tsv', 'svg',
+]);
+
+const looksLikeFilePath = (text: string): boolean => {
+  // Must contain a path separator
+  if (!text.includes('/')) return false;
+  // Must not be a URL
+  if (text.includes('://')) return false;
+  // Must not start with a protocol-like prefix
+  if (/^[a-z]+:\/\//i.test(text)) return false;
+  // Must have a file extension
+  const lastSegment = text.split('/').pop() ?? '';
+  const dotIndex = lastSegment.lastIndexOf('.');
+  if (dotIndex <= 0) return false;
+  const ext = lastSegment.slice(dotIndex + 1).toLowerCase();
+  // Strip trailing :lineNumber if present (e.g. "src/foo.ts:42")
+  const cleanExt = ext.replace(/:\d+$/, '');
+  return FILE_EXTENSIONS.has(cleanExt);
+};
+
+type FilePathCodeProps = React.HTMLAttributes<HTMLElement> & {
+  children?: React.ReactNode;
+  node?: unknown;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const FilePathCode: React.FC<FilePathCodeProps> = ({ children, className, node, ...props }) => {
+  const currentDirectory = useEffectiveDirectory() ?? '';
+
+  // Code blocks have a language className (e.g. "language-ts") — don't intercept those
+  if (className) {
+    return <code className={className} {...props}>{children}</code>;
+  }
+
+  // Extract text from children
+  const text = typeof children === 'string'
+    ? children
+    : (Array.isArray(children) && children.length === 1 && typeof children[0] === 'string')
+      ? children[0]
+      : null;
+
+  if (!text || !currentDirectory || !looksLikeFilePath(text)) {
+    return <code {...props}>{children}</code>;
+  }
+
+  // Strip trailing :lineNumber for path resolution
+  const cleanPath = text.replace(/:\d+$/, '');
+  const absolutePath = cleanPath.startsWith('/')
+    ? cleanPath
+    : `${currentDirectory}/${cleanPath}`;
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const { setSelectedPath } = useFilesViewTabsStore.getState();
+    setSelectedPath(currentDirectory, absolutePath);
+    useUIStore.getState().navigateToFile(absolutePath);
+  };
+
+  return (
+    <code
+      {...props}
+      role="link"
+      tabIndex={0}
+      onClick={handleClick}
+      onKeyDown={(e) => { if (e.key === 'Enter') handleClick(e as unknown as React.MouseEvent); }}
+      className="cursor-pointer underline decoration-dotted underline-offset-2 hover:decoration-solid"
+      title={`Open ${cleanPath} in files tab`}
+    >
+      {children}
+    </code>
+  );
+};
+
 const streamdownComponents = {
   pre: CodeBlockWrapper,
   table: TableWrapper,
+  code: FilePathCode,
 };
 
 export type MarkdownVariant = 'assistant' | 'tool';

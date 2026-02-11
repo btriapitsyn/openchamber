@@ -1,6 +1,7 @@
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { updateDesktopSettings } from '@/lib/persistence';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -88,11 +89,13 @@ export const NotificationSettings: React.FC = () => {
   const handleToggleChange = async (checked: boolean) => {
     if (isDesktop) {
       setNativeNotificationsEnabled(checked);
+      await updateDesktopSettings({ nativeNotificationsEnabled: checked });
       return;
     }
 
     if (!isBrowser) {
       setNativeNotificationsEnabled(checked);
+      await updateDesktopSettings({ nativeNotificationsEnabled: checked });
       return;
     }
     if (checked && typeof Notification !== 'undefined' && Notification.permission === 'default') {
@@ -101,6 +104,7 @@ export const NotificationSettings: React.FC = () => {
         setNotificationPermission(permission);
         if (permission === 'granted') {
           setNativeNotificationsEnabled(true);
+          await updateDesktopSettings({ nativeNotificationsEnabled: true });
         } else {
           toast.error('Notification permission denied', {
             description: 'Please enable notifications in your browser settings.',
@@ -112,8 +116,10 @@ export const NotificationSettings: React.FC = () => {
       }
     } else if (checked && notificationPermission === 'granted') {
       setNativeNotificationsEnabled(true);
+      await updateDesktopSettings({ nativeNotificationsEnabled: true });
     } else {
       setNativeNotificationsEnabled(false);
+      await updateDesktopSettings({ nativeNotificationsEnabled: false });
     }
   };
 
@@ -408,6 +414,77 @@ export const NotificationSettings: React.FC = () => {
     }
   };
 
+  const handleTestNotification = () => {
+    if (!nativeNotificationsEnabled) {
+      toast.error('Notifications are disabled', {
+        description: 'Enable notifications first to test them.',
+      });
+      return;
+    }
+
+    if (isBrowser && typeof Notification !== 'undefined') {
+      if (Notification.permission !== 'granted') {
+        toast.error('Notification permission denied', {
+          description: 'Please enable notifications in your browser settings.',
+        });
+        return;
+      }
+
+      // Fire a test notification using the native Notification API
+      try {
+        const notification = new Notification('OpenChamber Test', {
+          body: 'This is a test notification. If you can see this, notifications are working!',
+          icon: '/favicon.ico',
+          tag: 'test-notification',
+        });
+
+        // Auto-close after 5 seconds
+        setTimeout(() => {
+          notification.close();
+        }, 5000);
+
+        toast.success('Test notification sent', {
+          description: 'Check your system notifications.',
+        });
+      } catch (error) {
+        console.error('Failed to send test notification:', error);
+        toast.error('Failed to send test notification', {
+          description: String(error),
+        });
+      }
+    } else if (isDesktop) {
+      // For desktop, use the runtime API
+      const apis = getRegisteredRuntimeAPIs();
+      if (apis?.notifications) {
+        void apis.notifications.notifyAgentCompletion({
+          title: 'OpenChamber Test',
+          body: 'This is a test notification. If you can see this, notifications are working!',
+          tag: 'test-notification',
+        });
+        toast.success('Test notification sent', {
+          description: 'Check your system notifications.',
+        });
+      } else {
+        toast.error('Notification API not available');
+      }
+    } else if (isVSCode) {
+      // For VS Code, use the runtime API
+      const apis = getRegisteredRuntimeAPIs();
+      if (apis?.notifications) {
+        void apis.notifications.notifyAgentCompletion({
+          title: 'OpenChamber Test',
+          body: 'This is a test notification. If you can see this, notifications are working!',
+          tag: 'test-notification',
+        });
+        toast.success('Test notification sent', {
+          description: 'Check your VS Code notifications.',
+        });
+      } else {
+        toast.error('Notification API not available');
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-1 pt-2">
@@ -429,16 +506,50 @@ export const NotificationSettings: React.FC = () => {
           </p>
         </div>
         <Switch
-          checked={nativeNotificationsEnabled && canShowNotifications}
+          checked={nativeNotificationsEnabled}
           onCheckedChange={handleToggleChange}
           className="data-[state=checked]:bg-status-info"
         />
       </div>
 
-      {isBrowser && (
+      {isBrowser && notificationPermission === 'denied' && (
+        <div 
+          className="typography-micro px-3 py-2 rounded-md"
+          style={{
+            color: 'var(--color-status-warning-foreground)',
+            backgroundColor: 'var(--color-status-warning-background)',
+            border: '1px solid var(--color-status-warning-border)',
+          }}
+        >
+          Browser notification permission is denied. You can still enable the preference, but to receive notifications, please allow them in your browser settings.
+        </div>
+      )}
+
+      {isBrowser && notificationPermission !== 'denied' && (
         <p className="typography-micro text-muted-foreground">
           Your browser may ask for permission the first time.
         </p>
+      )}
+
+      {nativeNotificationsEnabled && canShowNotifications && (
+        <div className="pt-2">
+          <button
+            onClick={handleTestNotification}
+            className="typography-ui px-4 py-2 rounded-md font-medium transition-colors"
+            style={{
+              backgroundColor: 'var(--color-accent)',
+              color: 'var(--color-accent-foreground)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = '0.9';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = '1';
+            }}
+          >
+            Test Notification
+          </button>
+        </div>
       )}
 
       {nativeNotificationsEnabled && canShowNotifications && (

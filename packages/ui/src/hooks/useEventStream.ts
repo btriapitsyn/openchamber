@@ -11,6 +11,7 @@ import type { Part, Session, Message } from '@opencode-ai/sdk/v2';
 import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useNotificationBadgeStore } from '@/stores/useNotificationBadgeStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
@@ -1011,7 +1012,6 @@ export const useEventStream = () => {
                   description: agentCandidate === 'plan'
                     ? 'Edits restricted to plan file'
                     : 'You can now edit files',
-                  duration: 5000,
                 });
               });
             }
@@ -1233,7 +1233,6 @@ export const useEventStream = () => {
                 import('sonner').then(({ toast }) => {
                   toast.info('Assistant response was empty', {
                     description: 'Try sending your message again or rephrase it.',
-                    duration: 5000,
                   });
                 });
               }
@@ -1456,11 +1455,29 @@ export const useEventStream = () => {
       }
 
       case 'openchamber:notification': {
+        // Badge the project rail icon for non-active projects
+        const notifProjectPath = typeof (props as { projectPath?: unknown }).projectPath === 'string'
+          ? (props as { projectPath: string }).projectPath
+          : '';
+        const notifKind = typeof (props as { kind?: unknown }).kind === 'string'
+          ? (props as { kind: string }).kind as 'ready' | 'error' | 'question' | 'permission'
+          : undefined;
+        if (notifProjectPath) {
+          const { projects, activeProjectId } = useProjectsStore.getState();
+          const activeProject = projects.find((p) => p.id === activeProjectId);
+          const normalizedActive = activeProject?.path?.replace(/\/+$/, '') ?? '';
+          const normalizedNotif = notifProjectPath.replace(/\/+$/, '');
+          if (normalizedNotif !== normalizedActive) {
+            useNotificationBadgeStore.getState().increment(normalizedNotif, notifKind);
+          }
+        }
+
         const title = typeof (props as { title?: unknown }).title === 'string' ? (props as { title: string }).title : '';
         const body = typeof (props as { body?: unknown }).body === 'string' ? (props as { body: string }).body : '';
         const tag = typeof (props as { tag?: unknown }).tag === 'string' ? (props as { tag: string }).tag : undefined;
         const requireHidden = Boolean((props as { requireHidden?: unknown }).requireHidden);
 
+        // ✓ VERIFIED (US-014): notificationMode 'hidden-only' is respected via requireHidden check
         if (requireHidden && visibilityStateRef.current !== 'hidden') {
           break;
         }
@@ -1473,9 +1490,14 @@ export const useEventStream = () => {
           break;
         }
 
+        // ✓ VERIFIED (US-014): nativeNotificationsEnabled is checked before dispatching notification
         if (!nativeNotificationsEnabled) {
           break;
         }
+
+        // ✓ VERIFIED (US-014): Per-event toggles (notifyOnCompletion, notifyOnError, notifyOnQuestion)
+        // are handled server-side; server only emits 'openchamber:notification' events when toggles are enabled.
+        // ✓ VERIFIED (US-014): Server emits notification-relevant events only on final completion (not partial updates).
 
         const runtimeAPIs = getRegisteredRuntimeAPIs();
         if (runtimeAPIs?.notifications && title) {

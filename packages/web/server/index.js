@@ -56,6 +56,9 @@ const FILE_SEARCH_EXCLUDED_DIRS = new Set([
 // Lock to prevent race conditions in persistSettings
 let persistSettingsLock = Promise.resolve();
 
+// Per-session locks for transcript writes to prevent race conditions
+const transcriptLocks = new Map();
+
 const normalizeDirectoryPath = (value) => {
   if (typeof value !== 'string') {
     return value;
@@ -959,6 +962,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
+const TRANSCRIPTS_DIR = path.join(OPENCHAMBER_DATA_DIR, 'transcripts');
 
 const readSettingsFromDisk = async () => {
   try {
@@ -1257,8 +1261,66 @@ const sanitizeProjects = (input) => {
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       project.sidebarCollapsed = candidate.sidebarCollapsed;
     }
+    if (typeof candidate.badge === 'string' && candidate.badge.trim().length > 0) {
+      project.badge = candidate.badge.trim();
+    }
+    if (typeof candidate.group === 'string' && candidate.group.trim().length > 0) {
+      project.group = candidate.group.trim();
+    }
 
     result.push(project);
+  }
+
+  return result;
+};
+
+const sanitizeConnections = (input) => {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+
+  const result = [];
+  const seenIds = new Set();
+
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') continue;
+
+    const candidate = entry;
+    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+    const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+    const baseUrl = typeof candidate.baseUrl === 'string' ? candidate.baseUrl.trim() : '';
+    const type = candidate.type === 'local' || candidate.type === 'remote' ? candidate.type : null;
+
+    if (!id || !label || !baseUrl || !type) continue;
+    if (seenIds.has(id)) continue;
+
+    // Validate URL format for remote connections
+    // Local connections can use relative paths like '/api'
+    if (type === 'remote') {
+      try {
+        new URL(baseUrl);
+      } catch {
+        continue; // Skip invalid URLs
+      }
+    } else if (type === 'local') {
+      // For local connections, allow relative paths starting with '/'
+      if (!baseUrl.startsWith('/')) {
+        try {
+          new URL(baseUrl);
+        } catch {
+          continue; // Skip invalid URLs
+        }
+      }
+    }
+
+    seenIds.add(id);
+
+    result.push({
+      id,
+      label,
+      baseUrl,
+      type,
+    });
   }
 
   return result;
@@ -1309,6 +1371,27 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.activeProjectId === 'string' && candidate.activeProjectId.length > 0) {
     result.activeProjectId = candidate.activeProjectId;
+  }
+
+  if (Array.isArray(candidate.connections)) {
+    const connections = sanitizeConnections(candidate.connections);
+    if (connections) {
+      result.connections = connections;
+    }
+  }
+  if (typeof candidate.activeConnectionId === 'string' && candidate.activeConnectionId.length > 0) {
+    // If connections were updated in this payload, validate the activeConnectionId
+    // If connections weren't in this payload, we can't validate - accept as-is
+    if (result.connections) {
+      // Connections were just updated, validate against the new list
+      if (result.connections.some(c => c.id === candidate.activeConnectionId)) {
+        result.activeConnectionId = candidate.activeConnectionId;
+      }
+      // Otherwise, silently skip the invalid activeConnectionId
+    } else {
+      // Connections weren't updated, can't validate, accept the value
+      result.activeConnectionId = candidate.activeConnectionId;
+    }
   }
 
   if (Array.isArray(candidate.approvedDirectories)) {
@@ -1609,6 +1692,46 @@ const sanitizeSettingsUpdate = (payload) => {
     }
     if (Object.keys(sanitized).length > 0) {
       result.usageModelGroups = sanitized;
+    }
+  }
+
+  // Scratch pads - per-project scratch pad content
+  if (candidate.scratchPads && typeof candidate.scratchPads === 'object') {
+    const sanitized = {};
+    for (const [projectId, content] of Object.entries(candidate.scratchPads)) {
+      if (typeof projectId === 'string' && typeof content === 'string' && content.length > 0) {
+        sanitized[projectId] = content;
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.scratchPads = sanitized;
+    }
+  }
+
+  // Project todos - per-project todo items (separate from per-session AI todos)
+  if (candidate.projectTodos && typeof candidate.projectTodos === 'object') {
+    const sanitized = {};
+    for (const [projectId, todos] of Object.entries(candidate.projectTodos)) {
+      if (typeof projectId === 'string' && Array.isArray(todos)) {
+        const validTodos = todos
+          .filter((t) => t && typeof t === 'object')
+          .map((t) => ({
+            id: typeof t.id === 'string' ? t.id : '',
+            content: typeof t.content === 'string' ? t.content : '',
+            status: (t.status === 'pending' || t.status === 'in_progress' || t.status === 'done') ? t.status : 'pending',
+            priority: (t.priority === 'high' || t.priority === 'medium' || t.priority === 'low') ? t.priority : 'medium',
+            createdAt: typeof t.createdAt === 'number' && Number.isFinite(t.createdAt) ? t.createdAt : Date.now(),
+            updatedAt: typeof t.updatedAt === 'number' && Number.isFinite(t.updatedAt) ? t.updatedAt : Date.now(),
+          }))
+          .filter((t) => t.id && t.content);
+        
+        if (validTodos.length > 0) {
+          sanitized[projectId] = validTodos;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.projectTodos = sanitized;
     }
   }
 
@@ -2349,7 +2472,9 @@ const sessionAttentionStates = new Map(); // sessionId -> {
 //   lastUserMessageAt: number | null,
 //   lastStatusChangeAt: number,
 //   viewedByClients: Set<clientId>,
-//   status: 'idle' | 'busy' | 'retry'
+//   status: 'idle' | 'busy' | 'retry',
+//   notificationKind: 'ready' | 'error' | 'question' | 'permission' | null,
+//   projectPath: string | null
 // }
 const SESSION_ATTENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -3610,6 +3735,148 @@ function broadcastUiNotification(payload) {
   }
 }
 
+/**
+ * Capture finalized message to transcript file.
+ * Only captures user messages and finalized assistant messages (finish === 'stop').
+ * Writes to ~/.config/openchamber/transcripts/<sessionId>.jsonl
+ */
+async function captureTranscript(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+
+  // Only process message.created and message.updated events
+  if (payload.type !== 'message.created' && payload.type !== 'message.updated') {
+    return;
+  }
+
+  const info = payload.properties?.info;
+  if (!info || typeof info !== 'object') {
+    return;
+  }
+
+  const sessionId = info.sessionID ?? info.sessionId;
+  const role = info.role;
+  const messageId = info.id;
+
+  if (!sessionId || !role || !messageId) {
+    return;
+  }
+
+  // Add path traversal protection
+  const sanitizedSessionId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!sanitizedSessionId || sanitizedSessionId !== sessionId) {
+    console.warn('[Transcript] Invalid sessionId format, skipping:', sessionId);
+    return;
+  }
+
+  // Only capture user messages and finalized assistant messages
+  if (role === 'user') {
+    // User messages are finalized immediately
+  } else if (role === 'assistant' && info.finish === 'stop') {
+    // Assistant messages are only captured when complete
+  } else {
+    return; // Skip partial streaming updates
+  }
+
+  try {
+    // Extract text content from the message
+    let content = '';
+    let parts = info.parts || payload.properties?.parts || [];
+    
+    // Assistant message.updated events don't include parts inline
+    // Fetch from API to get the complete message
+    if (role === 'assistant' && Array.isArray(parts) && parts.length === 0) {
+      try {
+        const url = buildOpenCodeUrl(`/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(messageId)}`, '');
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
+          signal: AbortSignal.timeout(3000),
+        });
+        
+        if (response.ok) {
+          const message = await response.json().catch(() => null);
+          if (message && Array.isArray(message.parts)) {
+            parts = message.parts;
+          }
+        }
+      } catch (err) {
+        console.warn('[Transcript] Failed to fetch assistant message parts:', err?.message);
+        return; // Skip this message if we can't get the content
+      }
+    }
+    
+    if (Array.isArray(parts)) {
+      const textParts = [];
+      for (const part of parts) {
+        if (!part || typeof part !== 'object') continue;
+        
+        const partType = part.type;
+        if (partType === 'text') {
+          const text = part.text || part.content;
+          if (typeof text === 'string' && text.length > 0) {
+            textParts.push(text);
+          }
+        } else if (partType === 'file') {
+          // Record filename only, not content
+          const filename = part.name || part.filename || part.path;
+          if (typeof filename === 'string' && filename.length > 0) {
+            textParts.push(`[file: ${filename}]`);
+          }
+        } else if (partType === 'tool') {
+          // Record tool call ID reference, not output
+          const toolName = part.name || part.tool;
+          const toolCallId = part.id || part.toolCallId;
+          if (toolName && toolCallId) {
+            textParts.push(`[tool: ${toolName} (${toolCallId})]`);
+          } else if (toolName) {
+            textParts.push(`[tool: ${toolName}]`);
+          }
+        }
+      }
+      content = textParts.join('\n').trim();
+    }
+
+    // Skip if no content to record
+    if (!content) {
+      return;
+    }
+
+    // Create transcript entry
+    const entry = {
+      timestamp: Date.now(),
+      role: role,
+      content: content,
+    };
+
+    // Ensure transcripts directory exists
+    await fsPromises.mkdir(TRANSCRIPTS_DIR, { recursive: true });
+
+    // Append to session transcript file with per-session write lock
+    const transcriptPath = path.join(TRANSCRIPTS_DIR, `${sanitizedSessionId}.jsonl`);
+    const line = JSON.stringify(entry) + '\n';
+    
+    // Get or create lock for this session
+    const getLock = (sessionId) => {
+      if (!transcriptLocks.has(sessionId)) {
+        transcriptLocks.set(sessionId, Promise.resolve());
+      }
+      return transcriptLocks.get(sessionId);
+    };
+
+    const lock = getLock(sanitizedSessionId);
+    const nextLock = lock.then(async () => {
+      await fsPromises.appendFile(transcriptPath, line, 'utf8');
+    });
+    transcriptLocks.set(sanitizedSessionId, nextLock);
+    await nextLock;
+  } catch (err) {
+    // Silent failure - transcript capture should not disrupt the SSE stream
+    console.warn('[Transcript] Failed to capture message:', err?.message || err);
+  }
+}
+
 function isStreamingAssistantPart(properties) {
   if (!properties || typeof properties !== 'object') {
     return false;
@@ -3771,6 +4038,14 @@ const maybeSendPushForTrigger = async (payload) => {
 
   const sessionId = extractSessionIdFromPayload(payload);
 
+  // Extract project directory from the payload so UI can badge the correct project rail icon.
+  const notificationProjectPath = (() => {
+    const infoPath = payload.properties?.info?.path;
+    if (typeof infoPath?.root === 'string' && infoPath.root.length > 0) return infoPath.root.replace(/\/+$/, '');
+    if (typeof infoPath?.cwd === 'string' && infoPath.cwd.length > 0) return infoPath.cwd.replace(/\/+$/, '');
+    return '';
+  })();
+
   const formatMode = (raw) => {
     const value = typeof raw === 'string' ? raw.trim() : '';
     const normalized = value.length > 0 ? value : 'agent';
@@ -3885,6 +4160,7 @@ const maybeSendPushForTrigger = async (payload) => {
           tag: `ready-${sessionId}`,
           kind: 'ready',
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         };
         emitDesktopNotification(notificationPayload);
@@ -3953,6 +4229,7 @@ const maybeSendPushForTrigger = async (payload) => {
           tag: `error-${sessionId}`,
           kind: 'error',
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         };
         emitDesktopNotification(notificationPayload);
@@ -4035,6 +4312,7 @@ const maybeSendPushForTrigger = async (payload) => {
           body,
           tag: `question-${sessionId}`,
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         });
 
@@ -4044,6 +4322,7 @@ const maybeSendPushForTrigger = async (payload) => {
           body,
           tag: `question-${sessionId}`,
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         });
       }
@@ -4127,6 +4406,17 @@ const maybeSendPushForTrigger = async (payload) => {
           body,
           tag: requestKey ? `permission-${requestKey}` : `permission-${sessionId}`,
           sessionId,
+          projectPath: notificationProjectPath,
+          requireHidden: settings.notificationMode !== 'always',
+        });
+
+        broadcastUiNotification({
+          kind: 'permission',
+          title,
+          body,
+          tag: requestKey ? `permission-${requestKey}` : `permission-${sessionId}`,
+          sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         });
 
@@ -5378,6 +5668,170 @@ async function main(options = {}) {
     });
   });
 
+  // GET /api/transcripts/search - Search across all transcript files
+  app.get('/api/transcripts/search', async (req, res) => {
+    try {
+      // Validate query parameter
+      const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+      if (!query) {
+        return res.status(400).json({ error: 'Query parameter "q" is required and cannot be empty' });
+      }
+
+      // Parse limit and offset with defaults
+      const rawLimit = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+      const rawOffset = Array.isArray(req.query.offset) ? req.query.offset[0] : req.query.offset;
+      
+      const limit = Math.min(
+        Math.max(1, parseInt(rawLimit, 10) || 50),
+        200
+      );
+      const offset = Math.max(0, parseInt(rawOffset, 10) || 0);
+
+      // Check if transcripts directory exists
+      let transcriptFiles = [];
+      try {
+        const entries = await fsPromises.readdir(TRANSCRIPTS_DIR, { withFileTypes: true });
+        transcriptFiles = entries
+          .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+          .map((entry) => entry.name);
+      } catch (error) {
+        // Directory doesn't exist or can't be read - return empty results
+        if (error && typeof error === 'object' && error.code === 'ENOENT') {
+          return res.json({ results: [], total: 0, hasMore: false });
+        }
+        throw error;
+      }
+
+      // Search across all transcript files
+      const allMatches = [];
+      // SECURITY: Using .includes() not regex — no ReDoS risk. If switching to regex, escape query first.
+      const queryLower = query.toLowerCase();
+      const MAX_TRANSCRIPT_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+      const MAX_TOTAL_MATCHES = 1000;
+
+      for (const filename of transcriptFiles) {
+        // Check if client disconnected
+        if (req.destroyed) {
+          console.log('[Transcript Search] Request aborted, stopping search');
+          return;
+        }
+
+        // Stop if we've accumulated enough matches
+        if (allMatches.length >= MAX_TOTAL_MATCHES) {
+          break;
+        }
+
+        const sessionId = filename.replace(/\.jsonl$/, '');
+        
+        // Validate sessionId from filename
+        if (!sessionId || sessionId.includes('..') || sessionId.includes('/')) {
+          console.warn(`[Transcript Search] Invalid session ID from filename: ${filename}`);
+          continue;
+        }
+
+        const transcriptPath = path.join(TRANSCRIPTS_DIR, filename);
+
+        try {
+          // Check file size before reading
+          const stat = await fsPromises.stat(transcriptPath);
+          if (stat.size > MAX_TRANSCRIPT_FILE_BYTES) {
+            console.warn(`[Transcript Search] Skipping large file ${filename}: ${stat.size} bytes`);
+            continue;
+          }
+
+          const content = await fsPromises.readFile(transcriptPath, 'utf8');
+          const lines = content.split('\n').filter((line) => line.trim().length > 0);
+
+          for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+            try {
+              const entry = JSON.parse(lines[lineNumber]);
+              const entryContent = typeof entry.content === 'string' ? entry.content : '';
+              
+              // Case-insensitive substring matching
+              if (entryContent.toLowerCase().includes(queryLower)) {
+                // Find match position for snippet highlighting
+                const matchIndex = entryContent.toLowerCase().indexOf(queryLower);
+                
+                // Create snippet: 200 chars total, centered around the match
+                let snippet = entryContent;
+                const maxSnippetLength = 200;
+                
+                if (entryContent.length > maxSnippetLength) {
+                  // Calculate start position to center the match
+                  const halfSnippet = Math.floor(maxSnippetLength / 2);
+                  let snippetStart = Math.max(0, matchIndex - halfSnippet);
+                  let snippetEnd = snippetStart + maxSnippetLength;
+                  
+                  // Adjust if we'd go past the end
+                  if (snippetEnd > entryContent.length) {
+                    snippetEnd = entryContent.length;
+                    snippetStart = Math.max(0, snippetEnd - maxSnippetLength);
+                  }
+                  
+                  snippet = entryContent.slice(snippetStart, snippetEnd);
+                  
+                  // Add ellipsis if truncated
+                  if (snippetStart > 0) snippet = '...' + snippet;
+                  if (snippetEnd < entryContent.length) snippet = snippet + '...';
+                }
+                
+                // Highlight the matched text with ** markers using case-insensitive regex
+                // Query is escaped to prevent ReDoS
+                const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const highlightRegex = new RegExp(escapedQuery, 'i');
+                snippet = snippet.replace(highlightRegex, '**$&**');
+
+                allMatches.push({
+                  sessionId,
+                  timestamp: typeof entry.timestamp === 'number' ? entry.timestamp : 0,
+                  role: typeof entry.role === 'string' ? entry.role : 'unknown',
+                  snippet,
+                  lineNumber: lineNumber + 1 // 1-indexed for display
+                });
+
+                // Stop if we've hit the match limit
+                if (allMatches.length >= MAX_TOTAL_MATCHES) {
+                  break;
+                }
+              }
+            } catch (parseError) {
+              // Skip lines that fail to parse
+              continue;
+            }
+          }
+
+          // Check match limit again after processing file
+          if (allMatches.length >= MAX_TOTAL_MATCHES) {
+            break;
+          }
+        } catch (readError) {
+          // Skip files that fail to read
+          console.warn(`[Transcript Search] Failed to read ${filename}:`, readError?.message || readError);
+          continue;
+        }
+      }
+
+      // Sort by timestamp descending (newest first)
+      allMatches.sort((a, b) => b.timestamp - a.timestamp);
+
+      // Apply pagination
+      const total = allMatches.length;
+      const paginatedResults = allMatches.slice(offset, offset + limit);
+      const hasMore = offset + limit < total;
+
+      res.json({
+        results: paginatedResults,
+        total,
+        hasMore
+      });
+    } catch (error) {
+      console.error('Failed to search transcripts:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to search transcripts' 
+      });
+    }
+  });
+
   app.get('/api/openchamber/update-check', async (_req, res) => {
     try {
       const { checkForUpdates } = await import('./lib/package-manager.js');
@@ -5628,6 +6082,13 @@ async function main(options = {}) {
       const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (global stream)
       maybeCacheSessionInfoFromEvent(payload);
+      // Capture transcript entries for finalized messages
+      if (payload) {
+        // Fire-and-forget: intentionally not awaited to avoid blocking SSE stream
+        captureTranscript(payload).catch(() => {
+          // Silent failure - transcript capture should not disrupt the stream
+        });
+      }
       const transitions = deriveSessionActivityTransitions(payload);
       if (transitions && transitions.length > 0) {
         for (const activity of transitions) {
@@ -5756,6 +6217,13 @@ async function main(options = {}) {
       const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (per-session stream)
       maybeCacheSessionInfoFromEvent(payload);
+      // Capture transcript entries for finalized messages
+      if (payload) {
+        // Fire-and-forget: intentionally not awaited to avoid blocking SSE stream
+        captureTranscript(payload).catch(() => {
+          // Silent failure - transcript capture should not disrupt the stream
+        });
+      }
       const transitions = deriveSessionActivityTransitions(payload);
       if (transitions && transitions.length > 0) {
         for (const activity of transitions) {

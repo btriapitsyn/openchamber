@@ -3,10 +3,12 @@ import { devtools } from 'zustand/middleware';
 import { opencodeClient } from '@/lib/opencode/client';
 import type { ProjectEntry } from '@/lib/api/types';
 import type { DesktopSettings } from '@/lib/desktop';
+import { useNotificationBadgeStore } from '@/stores/useNotificationBadgeStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getSafeStorage } from './utils/safeStorage';
 import { useDirectoryStore } from './useDirectoryStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
+import { getFirstTwoGraphemes } from '@/lib/text-utils';
 
 interface ProjectPathValidationResult {
   ok: boolean;
@@ -23,6 +25,8 @@ interface ProjectsStore {
   setActiveProject: (id: string) => void;
   setActiveProjectIdOnly: (id: string) => void;
   renameProject: (id: string, label: string) => void;
+  setBadge: (projectId: string, badge: string) => void;
+  setGroup: (projectId: string, group: string) => void;
   reorderProjects: (fromIndex: number, toIndex: number) => void;
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings) => void;
@@ -75,6 +79,23 @@ const deriveProjectLabel = (path: string): string => {
   return segments[segments.length - 1] || normalized;
 };
 
+/**
+ * Validate and truncate badge to max 2 grapheme clusters
+ */
+const validateBadge = (badge: string): string => {
+  if (typeof badge !== 'string') {
+    return '';
+  }
+  const trimmed = badge.trim();
+  if (!trimmed) {
+    return '';
+  }
+  
+  // Use shared utility to get first two graphemes
+  const result = getFirstTwoGraphemes(trimmed);
+  return result;
+};
+
 const createProjectId = (): string => {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -122,6 +143,15 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     }
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       project.sidebarCollapsed = candidate.sidebarCollapsed;
+    }
+    if (typeof candidate.badge === 'string') {
+      const validatedBadge = validateBadge(candidate.badge);
+      if (validatedBadge) {
+        project.badge = validatedBadge;
+      }
+    }
+    if (typeof candidate.group === 'string' && candidate.group.trim().length > 0) {
+      project.group = candidate.group.trim();
     }
     result.push(project);
   }
@@ -334,6 +364,11 @@ export const useProjectsStore = create<ProjectsStore>()(
       set({ projects: nextProjects, activeProjectId: id });
       persistProjects(nextProjects, id);
 
+      // Clear notification badge for the project being switched to
+      if (target.path) {
+        useNotificationBadgeStore.getState().clear(target.path);
+      }
+
       opencodeClient.setDirectory(target.path);
       useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false });
     },
@@ -373,6 +408,50 @@ export const useProjectsStore = create<ProjectsStore>()(
       const nextProjects = projects.map((project) =>
         project.id === id ? { ...project, label: trimmed } : project
       );
+      set({ projects: nextProjects });
+      persistProjects(nextProjects, activeProjectId);
+    },
+
+    setBadge: (projectId: string, badge: string) => {
+      if (vscodeWorkspace) {
+        return;
+      }
+      const validatedBadge = validateBadge(badge);
+      
+      const { projects, activeProjectId } = get();
+      const nextProjects = projects.map((project) => {
+        if (project.id === projectId) {
+          if (validatedBadge) {
+            return { ...project, badge: validatedBadge };
+          } else {
+            return { ...project, badge: undefined };
+          }
+        }
+        return project;
+      });
+      set({ projects: nextProjects });
+      persistProjects(nextProjects, activeProjectId);
+    },
+
+    setGroup: (projectId: string, group: string) => {
+      if (vscodeWorkspace) {
+        return;
+      }
+      const trimmed = group.trim();
+      
+      const { projects, activeProjectId } = get();
+      const nextProjects = projects.map((project) => {
+        if (project.id === projectId) {
+          if (trimmed) {
+            return { ...project, group: trimmed };
+          } else {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { group: _, ...rest } = project;
+            return rest;
+          }
+        }
+        return project;
+      });
       set({ projects: nextProjects });
       persistProjects(nextProjects, activeProjectId);
     },

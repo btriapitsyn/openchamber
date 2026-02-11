@@ -26,6 +26,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -48,6 +55,7 @@ import {
 
   RiMore2Line,
   RiPencilAiLine,
+  RiSearchLine,
   RiShare2Line,
   RiShieldLine,
 } from '@remixicon/react';
@@ -59,6 +67,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
@@ -70,6 +79,9 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
+import { TranscriptSearch } from './TranscriptSearch';
+import { SidebarTodos } from './SidebarTodos';
+import { SidebarScratchPad } from './SidebarScratchPad';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -552,6 +564,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
+  const [searchPanelOpen, setSearchPanelOpen] = React.useState(false);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
     try {
       const raw = getSafeStorage().getItem(GROUP_COLLAPSE_STORAGE_KEY);
@@ -628,6 +641,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const gitDirectories = useGitStore((state) => state.directories);
+
+  const connections = useConnectionsStore((state) => state.connections);
+  const activeConnectionId = useConnectionsStore((state) => state.activeConnectionId);
+  const setActiveConnection = useConnectionsStore((state) => state.setActiveConnection);
+  const connectionHealth = useConnectionsStore((state) => state.connectionHealth);
 
   const sessions = useSessionStore((state) => state.sessions);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
@@ -2174,6 +2192,64 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         mobileVariant ? '' : 'bg-sidebar',
       )}
     >
+      {!hideDirectoryControls && connections.length > 1 && (
+        <div className="select-none pl-3.5 pr-2 pt-2 pb-1.5 flex-shrink-0 border-b border-border/60">
+          <Select value={activeConnectionId} onValueChange={setActiveConnection}>
+            <SelectTrigger size="sm" className="w-full h-7 justify-between">
+              <SelectValue>
+                {(() => {
+                  const activeConn = connections.find(conn => conn.id === activeConnectionId);
+                  if (!activeConn) return 'Select Connection';
+                  const health = connectionHealth[activeConn.id];
+                  const statusColor = 
+                    health?.status === 'connected' ? 'var(--status-success)' :
+                    health?.status === 'disconnected' ? 'var(--status-error)' :
+                    health?.status === 'checking' ? 'var(--status-warning)' :
+                    'var(--surface-muted-foreground)';
+                  return (
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: statusColor }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{activeConn.label}</span>
+                      {health?.latencyMs !== undefined && health.status === 'connected' && (
+                        <span className="text-muted-foreground">({health.latencyMs}ms)</span>
+                      )}
+                    </span>
+                  );
+                })()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((conn) => {
+                const health = connectionHealth[conn.id];
+                const statusColor = 
+                  health?.status === 'connected' ? 'var(--status-success)' :
+                  health?.status === 'disconnected' ? 'var(--status-error)' :
+                  health?.status === 'checking' ? 'var(--status-warning)' :
+                  'var(--surface-muted-foreground)';
+                return (
+                  <SelectItem key={conn.id} value={conn.id}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: statusColor }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{conn.label}</span>
+                      {health?.latencyMs !== undefined && health.status === 'connected' && (
+                        <span className="text-muted-foreground">({health.latencyMs}ms)</span>
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       {!hideDirectoryControls && (
         <div className="select-none pl-3.5 pr-2 py-1.5 flex-shrink-0 border-b border-border/60">
           <div className="flex h-8 items-center justify-between gap-2">
@@ -2251,9 +2327,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                             setIsProjectRenameInline(false);
                             return;
                           }
-                          if (event.key === ' ' || event.key === 'Enter') {
-                            event.stopPropagation();
-                          }
+                          event.stopPropagation();
                         }}
                       />
                       <button type="submit" className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground">
@@ -2283,18 +2357,39 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <button
-              type="button"
-              onClick={handleOpenDirectoryDialog}
-              className={cn(
-                'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                    !isDesktopShellRuntime && 'bg-sidebar/60 hover:bg-sidebar',
-              )}
-              aria-label="Add project"
-              title="Add project"
-            >
-              <RiFolderAddLine className="h-4.5 w-4.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleOpenDirectoryDialog}
+                className={cn(
+                  'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      !isDesktopShellRuntime && 'bg-sidebar/60 hover:bg-sidebar',
+                )}
+                aria-label="Add project"
+                title="Add project"
+              >
+                <RiFolderAddLine className="h-4.5 w-4.5" />
+              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setSearchPanelOpen((prev) => !prev)}
+                    className={cn(
+                      'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      searchPanelOpen && 'bg-interactive-hover text-foreground',
+                      !isDesktopShellRuntime && 'bg-sidebar/60 hover:bg-sidebar',
+                    )}
+                    aria-label="Search transcripts"
+                  >
+                    <RiSearchLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  <p>Search transcripts</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
           {reserveHeaderActionsSpace ? (
             <div className="mt-1 h-8 pl-1">
@@ -2375,7 +2470,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         </div>
       )}
 
-      <ScrollableOverlay
+      {searchPanelOpen ? (
+        <TranscriptSearch
+          onClose={() => setSearchPanelOpen(false)}
+          onSessionSelected={onSessionSelected}
+        />
+      ) : (
+        <ScrollableOverlay
         outerClassName="flex-1 min-h-0"
         className={cn('space-y-1 pb-1 pl-2.5 pr-1', mobileVariant ? '' : '')}
       >
@@ -2567,6 +2668,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </>
         )}
       </ScrollableOverlay>
+      )}
+
+      <SidebarTodos />
+      <SidebarScratchPad />
 
       <GitHubIssuePickerDialog
         open={issuePickerOpen}

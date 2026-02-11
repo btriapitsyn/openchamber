@@ -152,6 +152,7 @@ interface UIStore {
   setMainTabGuard: (guard: MainTabGuard | null) => void;
   setPendingDiffFile: (filePath: string | null) => void;
   navigateToDiff: (filePath: string) => void;
+  navigateToFile: (filePath: string) => void;
   consumePendingDiffFile: () => string | null;
   setIsMobile: (isMobile: boolean) => void;
   toggleCommandPalette: () => void;
@@ -481,6 +482,28 @@ export const useUIStore = create<UIStore>()(
             });
           } else {
             set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
+          }
+        },
+
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        navigateToFile: (_filePath) => {
+          const guard = get().mainTabGuard;
+          if (guard && !guard('files')) {
+            return;
+          }
+          const state = get();
+          const currentTab = state.activeMainTab;
+          const fullscreenTabs: MainTab[] = ['files', 'diff'];
+          const isEnteringFullscreen = !fullscreenTabs.includes(currentTab);
+
+          if (isEnteringFullscreen) {
+            set({
+              activeMainTab: 'files',
+              sidebarOpenBeforeFullscreenTab: state.isSidebarOpen,
+              isSidebarOpen: false,
+            });
+          } else {
+            set({ activeMainTab: 'files' });
           }
         },
 

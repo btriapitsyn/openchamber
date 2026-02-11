@@ -10,6 +10,8 @@ import { NotificationSettings } from './NotificationSettings';
 import { GitHubSettings } from './GitHubSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { OpenCodeCliSettings } from './OpenCodeCliSettings';
+import { ConnectionsSettings } from './ConnectionsSettings';
+import { ProjectTodos } from './ProjectTodos';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
@@ -65,6 +67,10 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <ChatSectionContent />;
             case 'sessions':
                 return <SessionsSectionContent />;
+            case 'connections':
+                return <ConnectionsSectionContent />;
+            case 'todos':
+                return <TodosSectionContent />;
             case 'git':
                 return <GitSectionContent />;
             case 'github':
@@ -159,4 +165,14 @@ const VoiceSectionContent: React.FC = () => {
         return null;
     }
     return <VoiceSettings />;
+};
+
+// Connections section: Manage local and remote OpenCode endpoints
+const ConnectionsSectionContent: React.FC = () => {
+    return <ConnectionsSettings />;
+};
+
+// Todos section: Per-project todo list
+const TodosSectionContent: React.FC = () => {
+    return <ProjectTodos />;
 };

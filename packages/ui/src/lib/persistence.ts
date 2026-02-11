@@ -160,6 +160,12 @@ const sanitizeProjects = (value: unknown): DesktopSettings['projects'] | undefin
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       (project as unknown as Record<string, unknown>).sidebarCollapsed = candidate.sidebarCollapsed;
     }
+    if (typeof candidate.badge === 'string' && candidate.badge.trim().length > 0) {
+      project.badge = candidate.badge.trim();
+    }
+    if (typeof candidate.group === 'string' && candidate.group.trim().length > 0) {
+      project.group = candidate.group.trim();
+    }
     result.push(project);
   }
 
@@ -657,6 +663,62 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);
   if (skillCatalogs) {
     result.skillCatalogs = skillCatalogs;
+  }
+
+  // Parse projectTodos (Record<string, ProjectTodoItem[]>)
+  if (candidate.projectTodos && typeof candidate.projectTodos === 'object') {
+    const projectTodos: Record<string, Array<{
+      id: string;
+      content: string;
+      status: 'pending' | 'in_progress' | 'done';
+      priority: 'high' | 'medium' | 'low';
+      createdAt: number;
+      updatedAt: number;
+    }>> = {};
+    
+    for (const [projectId, todos] of Object.entries(candidate.projectTodos)) {
+      if (Array.isArray(todos)) {
+        const validTodos = todos
+          .filter((t): t is Record<string, unknown> => t && typeof t === 'object')
+          .map((t) => {
+            const status: 'pending' | 'in_progress' | 'done' = 
+              (t.status === 'pending' || t.status === 'in_progress' || t.status === 'done') ? t.status : 'pending';
+            const priority: 'high' | 'medium' | 'low' = 
+              (t.priority === 'high' || t.priority === 'medium' || t.priority === 'low') ? t.priority : 'medium';
+            
+            return {
+              id: typeof t.id === 'string' ? t.id : '',
+              content: typeof t.content === 'string' ? t.content : '',
+              status,
+              priority,
+              createdAt: typeof t.createdAt === 'number' && Number.isFinite(t.createdAt) ? t.createdAt : Date.now(),
+              updatedAt: typeof t.updatedAt === 'number' && Number.isFinite(t.updatedAt) ? t.updatedAt : Date.now(),
+            };
+          })
+          .filter((t) => t.id && t.content);
+        
+        if (validTodos.length > 0) {
+          projectTodos[projectId] = validTodos;
+        }
+      }
+    }
+    
+    if (Object.keys(projectTodos).length > 0) {
+      result.projectTodos = projectTodos;
+    }
+  }
+
+  // Parse scratchPads (Record<string, string>)
+  if (candidate.scratchPads && typeof candidate.scratchPads === 'object') {
+    const scratchPads: Record<string, string> = {};
+    for (const [projectId, content] of Object.entries(candidate.scratchPads)) {
+      if (typeof content === 'string' && content.length > 0) {
+        scratchPads[projectId] = content;
+      }
+    }
+    if (Object.keys(scratchPads).length > 0) {
+      result.scratchPads = scratchPads;
+    }
   }
 
   return result;

@@ -1,6 +1,7 @@
 import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk/v2";
-import type { FilesAPI, RuntimeAPIs } from "../api/types";
+import type { FilesAPI, RuntimeAPIs, Connection } from "../api/types";
 import { getDesktopHomeDirectory } from "../desktop";
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import type {
   Session,
   Message,
@@ -153,6 +154,11 @@ class OpencodeService {
   private globalSseFlushTimer: ReturnType<typeof setTimeout> | null = null;
   private globalSseLastFlushAt = 0;
 
+  // Multi-connection support
+  private connectionClients: Map<string, OpencodeClient> = new Map();
+  private connectionBaseUrls: Map<string, string> = new Map();
+  private connectionSseAbortControllers: Map<string, AbortController> = new Map();
+
   constructor(baseUrl: string = DEFAULT_BASE_URL) {
     const desktopBase = resolveDesktopBaseUrl();
     const requestedBaseUrl = desktopBase || baseUrl;
@@ -178,6 +184,254 @@ class OpencodeService {
     const scoped = createOpencodeClient({ baseUrl: this.baseUrl, directory: normalized });
     this.scopedClients.set(key, scoped);
     return scoped;
+  }
+
+  /**
+   * Returns an SDK client for a specific connection.
+   * Creates and caches client instances per connection ID.
+   * The local connection ('local') uses the existing this.client instance.
+   * 
+   * @param connectionId - The connection ID
+   * @param baseUrl - Base URL for non-local, non-cached connections (required for new connections)
+   */
+  getClientForConnection(connectionId: string, baseUrl?: string): OpencodeClient {
+    // Local connection uses the default client
+    if (connectionId === 'local') {
+      return this.client;
+    }
+
+    // Check cache first
+    const existing = this.connectionClients.get(connectionId);
+    if (existing) {
+      return existing;
+    }
+
+    // SSR fallback
+    if (typeof window === 'undefined') {
+      return this.client;
+    }
+
+    // For new connections, baseUrl must be provided
+    if (!baseUrl) {
+      console.warn(`[OpencodeService] Base URL not provided for connection ${connectionId}, falling back to local`);
+      return this.client;
+    }
+
+    // Create new client with provided baseUrl
+    const absoluteBaseUrl = ensureAbsoluteBaseUrl(baseUrl);
+    const client = createOpencodeClient({ baseUrl: absoluteBaseUrl });
+    this.connectionClients.set(connectionId, client);
+    this.connectionBaseUrls.set(connectionId, absoluteBaseUrl);
+    
+    return client;
+  }
+
+  /**
+   * Clean up cached resources for a removed connection.
+   * Should be called when a connection is removed from the store.
+   */
+  cleanupConnection(connectionId: string): void {
+    if (connectionId === 'local') {
+      return; // Never clean up local connection
+    }
+
+    // Abort and clean up SSE subscription
+    const sseController = this.connectionSseAbortControllers.get(connectionId);
+    if (sseController) {
+      sseController.abort();
+      this.connectionSseAbortControllers.delete(connectionId);
+    }
+
+    // Remove cached client and baseUrl
+    this.connectionClients.delete(connectionId);
+    this.connectionBaseUrls.delete(connectionId);
+  }
+
+  /**
+   * Resolves the appropriate SDK client for a given connectionId.
+   * When connectionId is omitted or 'local', returns this.client.
+   * When connectionId is provided and not 'local', looks up the connection from the store
+   * and returns a client for that connection's baseUrl.
+   * 
+   * @param connectionId - Optional connection ID to resolve
+   * @returns OpencodeClient instance for the connection
+   */
+  private resolveClient(connectionId?: string): OpencodeClient {
+    // Default to local client when no connectionId specified or when it's explicitly 'local'
+    if (!connectionId || connectionId === 'local') {
+      return this.client;
+    }
+
+    // Check if we already have a cached client for this connection
+    const cached = this.connectionClients.get(connectionId);
+    if (cached) {
+      return cached;
+    }
+
+    // SSR fallback
+    if (typeof window === 'undefined') {
+      return this.client;
+    }
+
+    // Look up the connection from the store to get its baseUrl
+    try {
+      const store = useConnectionsStore.getState();
+      const connection = store.connections.find(conn => conn.id === connectionId);
+      
+      if (!connection) {
+        console.warn(`[OpencodeService] Connection ${connectionId} not found, falling back to local`);
+        return this.client;
+      }
+
+      // Create and cache the client for this connection
+      return this.getClientForConnection(connectionId, connection.baseUrl);
+    } catch (error) {
+      console.warn(`[OpencodeService] Failed to resolve connection ${connectionId}:`, error);
+      return this.client;
+    }
+  }
+
+  /**
+   * Subscribe to SSE events from a specific connection.
+   * Creates an independent SSE loop for the connection with its own AbortController.
+   * The global SSE subscription (runGlobalSseLoop) handles only the local connection.
+   */
+  subscribeToConnectionEvents(
+    connectionId: string,
+    onEvent: (event: RoutedOpencodeEvent) => void,
+    onError?: (error: unknown) => void,
+    onOpen?: () => void
+  ): () => void {
+    // Local connection should use the global SSE subscription
+    if (connectionId === 'local') {
+      return this.subscribeToGlobalEvents(onEvent, onError, onOpen);
+    }
+
+    // Ensure client is cached before starting SSE
+    this.getClientForConnection(connectionId);
+    const baseUrl = this.connectionBaseUrls.get(connectionId);
+    
+    if (!baseUrl) {
+      console.warn(`[OpencodeService] Base URL not found for connection ${connectionId}`);
+      return () => {}; // no-op cleanup
+    }
+    
+    // Stop any existing SSE for this connection
+    const existingController = this.connectionSseAbortControllers.get(connectionId);
+    if (existingController) {
+      existingController.abort();
+    }
+
+    const abortController = new AbortController();
+    this.connectionSseAbortControllers.set(connectionId, abortController);
+
+    // Start SSE loop for this connection
+    const startSseLoop = async () => {
+      const globalEndpoint = `${baseUrl.replace(/\/+$/, '')}/global/event`;
+      let attempt = 0;
+      let lastEventId: string | undefined;
+
+      while (!abortController.signal.aborted) {
+        try {
+          const headers: Record<string, string> = {
+            Accept: 'text/event-stream',
+            'Cache-Control': 'no-cache',
+          };
+          if (lastEventId) {
+            headers['Last-Event-ID'] = lastEventId;
+          }
+
+          const response = await fetch(globalEndpoint, {
+            method: 'GET',
+            headers,
+            signal: abortController.signal,
+          });
+
+          if (!response.ok || !response.body) {
+            throw new Error(`SSE connect failed with status ${response.status}`);
+          }
+
+          attempt = 0;
+          if (!abortController.signal.aborted && onOpen) {
+            onOpen();
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (abortController.signal.aborted) break;
+              if (!value || value.length === 0) continue;
+
+              buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+              const blocks = buffer.split('\n\n');
+              buffer = blocks.pop() ?? '';
+
+              for (const block of blocks) {
+                const parsed = this.parseSseBlock(block);
+                if (!parsed) continue;
+                if (parsed.id) {
+                  lastEventId = parsed.id;
+                }
+
+                const routed = this.normalizeRoutedSsePayload(parsed.data);
+                if (routed && !abortController.signal.aborted) {
+                  onEvent(routed);
+                }
+              }
+            }
+
+            const remaining = buffer.trim();
+            if (remaining && !abortController.signal.aborted) {
+              const parsed = this.parseSseBlock(remaining);
+              if (parsed?.id) {
+                lastEventId = parsed.id;
+              }
+              const routed = parsed ? this.normalizeRoutedSsePayload(parsed.data) : null;
+              if (routed) {
+                onEvent(routed);
+              }
+            }
+          } finally {
+            // Always release the reader, even on error/abort
+            try {
+              reader.releaseLock();
+            } catch {
+              // Already closed
+            }
+          }
+        } catch (error: unknown) {
+          if ((error as Error)?.name === 'AbortError' || abortController.signal.aborted) {
+            return;
+          }
+          console.error(`[OpencodeService] SSE error for connection ${connectionId}:`, error);
+          if (onError && !abortController.signal.aborted) {
+            onError(error);
+          }
+        }
+
+        if (abortController.signal.aborted) {
+          break;
+        }
+
+        attempt += 1;
+        const delay = Math.min(3000 * Math.pow(2, attempt), 30000);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    };
+
+    // Start the loop
+    void startSseLoop();
+
+    // Return cleanup function
+    return () => {
+      this.connectionSseAbortControllers.delete(connectionId);
+      abortController.abort();
+    };
   }
 
   private normalizeCandidatePath(path?: string | null): string | null {
@@ -355,25 +609,28 @@ class OpencodeService {
   }
 
   // Session Management
-  async listSessions(): Promise<Session[]> {
-    const response = await this.client.session.list(
+  async listSessions(connectionId?: string): Promise<Session[]> {
+    const client = this.resolveClient(connectionId);
+    const response = await client.session.list(
       this.currentDirectory ? { directory: this.currentDirectory } : undefined
     );
     return Array.isArray(response.data) ? response.data : [];
   }
 
-  async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
-    const response = await this.client.session.create({
+  async createSession(params?: { parentID?: string; title?: string; connectionId?: string }): Promise<Session> {
+    const { connectionId, ...sessionParams } = params ?? {};
+    const client = this.resolveClient(connectionId);
+    const response = await client.session.create({
       ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
-      parentID: params?.parentID,
-      title: params?.title
+      ...sessionParams
     });
     if (!response.data) throw new Error('Failed to create session');
     return response.data;
   }
 
-  async getSession(id: string): Promise<Session> {
-    const response = await this.client.session.get({
+  async getSession(id: string, connectionId?: string): Promise<Session> {
+    const client = this.resolveClient(connectionId);
+    const response = await client.session.get({
       sessionID: id,
       ...(this.currentDirectory ? { directory: this.currentDirectory } : {})
     });
@@ -381,8 +638,9 @@ class OpencodeService {
     return response.data;
   }
 
-  async deleteSession(id: string): Promise<boolean> {
-    const response = await this.client.session.delete({
+  async deleteSession(id: string, connectionId?: string): Promise<boolean> {
+    const client = this.resolveClient(connectionId);
+    const response = await client.session.delete({
       sessionID: id,
       ...(this.currentDirectory ? { directory: this.currentDirectory } : {})
     });
@@ -665,11 +923,15 @@ class OpencodeService {
     }>;
     messageId?: string;
     agentMentions?: Array<{ name: string; source?: { value: string; start: number; end: number } }>;
+    connectionId?: string;
   }): Promise<string> {
     // Generate a temporary client-side ID for optimistic UI
     // This ID won't be sent to the server - server will generate its own
     const baseTimestamp = Date.now();
     const tempMessageId = params.messageId ?? `temp_${baseTimestamp}_${Math.random().toString(36).substring(2, 9)}`;
+
+    // Resolve the appropriate client for this connection
+    const client = this.resolveClient(params.connectionId);
 
     // Build parts array using SDK types (TextPartInput | FilePartInput) plus lightweight agent parts
     const parts: Array<TextPartInput | FilePartInput | AgentPartInputLite> = [];
@@ -748,7 +1010,7 @@ class OpencodeService {
 
     // Use SDK session.prompt() method
     // DON'T send messageID - let server generate it (fixes Claude empty response issue)
-    await this.client.session.prompt({
+    await client.session.prompt({
       sessionID: params.id,
       ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
       // messageID intentionally omitted - server will generate
