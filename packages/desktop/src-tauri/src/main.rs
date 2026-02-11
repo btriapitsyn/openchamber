@@ -2526,6 +2526,10 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            log::info!("[desktop] second launch detected; opening new window in primary instance");
+            open_new_window(app);
+        }))
         .plugin(log_builder.build())
         .on_page_load(|window, _payload| {
             if let Some(state) = window.app_handle().try_state::<DesktopUiInjectionState>() {
@@ -2724,6 +2728,7 @@ fn main() {
                             Ok(local) => local,
                             Err(err) => {
                                 log::error!("[desktop] failed to start local server: {err}");
+                                handle.exit(1);
                                 return;
                             }
                         }
@@ -2733,6 +2738,7 @@ fn main() {
                         Ok(local) => local,
                         Err(err) => {
                             log::error!("[desktop] failed to start local server: {err}");
+                            handle.exit(1);
                             return;
                         }
                     }

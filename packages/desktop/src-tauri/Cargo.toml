@@ -24,6 +24,7 @@ tauri-plugin-dialog = "2.4.2"
 tauri-plugin-log = "2.7.1"
 tauri-plugin-shell = "2.3.3"
 tauri-plugin-notification = "2.3.3"
+tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tokio = { version = "1.38", features = ["rt-multi-thread", "time"] }
 url = "2.5"
