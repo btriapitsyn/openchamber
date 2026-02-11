@@ -519,7 +519,7 @@ const resolveCandidateDirectory = async (worktreeRoot, preferredName, explicitBr
       return { name, directory, branch: explicitBranchName };
     }
 
-    const branch = `opencode/${name}`;
+    const branch = `openchamber/${name}`;
     const branchRef = `refs/heads/${branch}`;
     const branchExists = await runGitCommand(primaryWorktree, ['show-ref', '--verify', '--quiet', branchRef]);
     if (branchExists.success) {
@@ -1691,9 +1691,10 @@ export async function getWorktrees(directory) {
       'Failed to list git worktrees'
     );
     return parseWorktreePorcelain(result.stdout).map((entry) => ({
-      worktree: entry.worktree,
-      head: entry.head,
-      branch: entry.branch,
+      head: entry.head || '',
+      name: path.basename(entry.worktree || ''),
+      branch: entry.branch || '',
+      path: entry.worktree,
     }));
   } catch (error) {
     console.warn('Failed to list worktrees, returning empty list:', error?.message || error);
@@ -1969,10 +1970,14 @@ export async function createWorktree(directory, input = {}) {
 
   queueWorktreeStartScripts(candidate.directory, context.projectID, input?.startCommand);
 
+  const headResult = await runGitCommand(candidate.directory, ['rev-parse', 'HEAD']);
+  const head = String(headResult.stdout || '').trim();
+
   return {
+    head,
     name: candidate.name,
     branch: localBranch,
-    directory: candidate.directory,
+    path: candidate.directory,
   };
 }
 

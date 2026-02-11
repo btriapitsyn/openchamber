@@ -285,9 +285,10 @@ export interface GitCommitFilesResponse {
 }
 
 export interface GitWorktreeInfo {
-  worktree: string;
-  head?: string;
-  branch?: string;
+  head: string;
+  name: string;
+  branch: string;
+  path: string;
 }
 
 export interface GitWorktreeValidationError {
@@ -328,9 +329,10 @@ export interface CreateGitWorktreePayload {
 }
 
 export interface GitWorktreeCreateResult {
+  head: string;
   name: string;
   branch: string;
-  directory: string;
+  path: string;
 }
 
 export interface RemoveGitWorktreePayload {

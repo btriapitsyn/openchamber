@@ -121,16 +121,18 @@ export async function listProjectWorktrees(project: ProjectRef): Promise<Worktre
 
   const worktrees = await listGitWorktrees(projectDirectory).catch(() => []);
   const results: WorktreeMetadata[] = worktrees
-    .filter((entry) => typeof entry.worktree === 'string' && entry.worktree.trim().length > 0)
+    .filter((entry) => typeof entry.path === 'string' && entry.path.trim().length > 0)
     .map((entry) => {
-      const worktreePath = normalizePath(entry.worktree);
+      const worktreePath = normalizePath(entry.path);
+      const branch = (entry.branch || '').replace(/^refs\/heads\//, '').trim();
+      const name = (entry.name || '').trim();
       return {
         source: 'sdk' as const,
-        name: deriveSdkWorktreeNameFromDirectory(worktreePath),
+        name: name || deriveSdkWorktreeNameFromDirectory(worktreePath),
         path: worktreePath,
         projectDirectory,
-        branch: (entry.branch || '').replace(/^refs\/heads\//, '').trim(),
-        label: (entry.branch || '').replace(/^refs\/heads\//, '').trim() || deriveSdkWorktreeNameFromDirectory(worktreePath),
+        branch,
+        label: branch || name || deriveSdkWorktreeNameFromDirectory(worktreePath),
       };
     })
     .filter((entry) => normalizePath(entry.path) !== normalizedProjectDirectory);
@@ -164,16 +166,16 @@ export async function createSdkWorktree(project: ProjectRef, args: CreateSdkWork
   const created = await createGitWorktree(projectDirectory, payload);
   const returnedName = typeof created?.name === 'string' ? created.name : '';
   const returnedBranch = typeof created?.branch === 'string' ? created.branch : '';
-  const returnedDirectory = typeof created?.directory === 'string' ? created.directory : '';
+  const returnedPath = typeof created?.path === 'string' ? created.path : '';
 
-  if (!returnedName || !returnedDirectory) {
-    throw new Error('Worktree create missing name/directory');
+  if (!returnedName || !returnedPath) {
+    throw new Error('Worktree create missing name/path');
   }
 
   const metadata: WorktreeMetadata = {
     source: 'sdk',
     name: returnedName,
-    path: normalizePath(returnedDirectory),
+    path: normalizePath(returnedPath),
     projectDirectory,
     branch: returnedBranch,
     label: returnedBranch || returnedName,
