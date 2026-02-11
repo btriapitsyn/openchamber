@@ -30,6 +30,7 @@ import {
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { GridLoader } from '@/components/ui/grid-loader';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -42,6 +43,7 @@ import {
   RiFolderAddLine,
   RiGitBranchLine,
   RiGitPullRequestLine,
+  RiStickyNoteLine,
   RiLinkUnlinkM,
 
   RiGithubLine,
@@ -66,10 +68,12 @@ import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { createWorktreeOnly, createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { useGitStore } from '@/stores/useGitStore';
+import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
+import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -550,6 +554,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
   const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
+  const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
@@ -623,6 +628,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const renameProject = useProjectsStore((state) => state.renameProject);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
@@ -1405,16 +1411,28 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     () => normalizedProjects.find((project) => project.id === activeProjectId) ?? normalizedProjects[0] ?? null,
     [normalizedProjects, activeProjectId],
   );
+  const activeProjectRefForHeader = React.useMemo(
+    () => (activeProjectForHeader
+      ? {
+        id: activeProjectForHeader.id,
+        path: activeProjectForHeader.normalizedPath,
+      }
+      : null),
+    [activeProjectForHeader],
+  );
 
   const activeProjectIsRepo = React.useMemo(
     () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
     [activeProjectForHeader, projectRepoStatus],
   );
-  const activeProjectRepoState = React.useMemo(
-    () => (activeProjectForHeader ? projectRepoStatus.get(activeProjectForHeader.id) : undefined),
-    [activeProjectForHeader, projectRepoStatus],
-  );
-  const reserveHeaderActionsSpace = activeProjectRepoState !== false;
+  const reserveHeaderActionsSpace = Boolean(activeProjectForHeader);
+  const useMobileNotesPanel = mobileVariant || deviceInfo.isMobile;
+
+  React.useEffect(() => {
+    if (!activeProjectForHeader) {
+      setProjectNotesPanelOpen(false);
+    }
+  }, [activeProjectForHeader]);
 
   const projectSessionMeta = React.useMemo(() => {
     const metaByProject = new Map<string, Map<string, { directory: string | null }>>();
@@ -2298,8 +2316,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </div>
           {reserveHeaderActionsSpace ? (
             <div className="mt-1 h-8 pl-1">
-              {activeProjectIsRepo ? (
+              {activeProjectForHeader ? (
               <div className="inline-flex h-8 items-center gap-1.5 rounded-md pl-0 pr-1">
+              {activeProjectIsRepo ? (
+                <>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -2368,6 +2388,47 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
               </Tooltip>
+                </>
+              ) : null}
+              {useMobileNotesPanel ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setProjectNotesPanelOpen(true)}
+                      className={headerActionButtonClass}
+                      aria-label="Project notes and todos"
+                    >
+                      <RiStickyNoteLine className="h-4.5 w-4.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}><p>Project notes</p></TooltipContent>
+                </Tooltip>
+              ) : (
+                <DropdownMenu open={projectNotesPanelOpen} onOpenChange={setProjectNotesPanelOpen} modal={false}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className={headerActionButtonClass}
+                          aria-label="Project notes and todos"
+                        >
+                          <RiStickyNoteLine className="h-4.5 w-4.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={4}><p>Project notes</p></TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="start" className="w-[340px] p-0">
+                    <ProjectNotesTodoPanel
+                      projectRef={activeProjectRefForHeader}
+                      canCreateWorktree={activeProjectIsRepo}
+                      onActionComplete={() => setProjectNotesPanelOpen(false)}
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               </div>
               ) : null}
             </div>
@@ -2589,6 +2650,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           }
         }}
       />
+
+      {useMobileNotesPanel ? (
+        <MobileOverlayPanel
+          open={projectNotesPanelOpen}
+          onClose={() => setProjectNotesPanelOpen(false)}
+          title="Project notes"
+        >
+          <ProjectNotesTodoPanel
+            projectRef={activeProjectRefForHeader}
+            canCreateWorktree={activeProjectIsRepo}
+            onActionComplete={() => setProjectNotesPanelOpen(false)}
+            className="p-0"
+          />
+        </MobileOverlayPanel>
+      ) : null}
     </div>
   );
 };
