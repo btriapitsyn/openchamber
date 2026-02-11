@@ -959,6 +959,20 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
+const DESKTOP_SESSION_ID = typeof process.env.OPENCHAMBER_DESKTOP_SESSION_ID === 'string'
+  ? process.env.OPENCHAMBER_DESKTOP_SESSION_ID.trim()
+  : '';
+const DESKTOP_PARENT_PID = (() => {
+  const raw = typeof process.env.OPENCHAMBER_DESKTOP_PARENT_PID === 'string'
+    ? process.env.OPENCHAMBER_DESKTOP_PARENT_PID.trim()
+    : '';
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+})();
+const RUNTIME_DIR = path.join(OPENCHAMBER_DATA_DIR, 'runtime');
+const DESKTOP_RUNTIME_FILE_PATH = DESKTOP_SESSION_ID
+  ? path.join(RUNTIME_DIR, `desktop-session-${DESKTOP_SESSION_ID}.json`)
+  : null;
 
 const readSettingsFromDisk = async () => {
   try {
@@ -984,6 +998,39 @@ const writeSettingsToDisk = async (settings) => {
   } catch (error) {
     console.warn('Failed to write settings file:', error);
     throw error;
+  }
+};
+
+const persistDesktopRuntimeState = async (extra = {}) => {
+  if (!DESKTOP_RUNTIME_FILE_PATH) {
+    return;
+  }
+  const payload = {
+    sessionId: DESKTOP_SESSION_ID,
+    desktopPid: DESKTOP_PARENT_PID,
+    sidecarPid: process.pid,
+    openCodePort,
+    updatedAt: new Date().toISOString(),
+    ...extra,
+  };
+  try {
+    await fsPromises.mkdir(path.dirname(DESKTOP_RUNTIME_FILE_PATH), { recursive: true });
+    await fsPromises.writeFile(DESKTOP_RUNTIME_FILE_PATH, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('Failed to persist desktop runtime state:', error);
+  }
+};
+
+const removeDesktopRuntimeState = async () => {
+  if (!DESKTOP_RUNTIME_FILE_PATH) {
+    return;
+  }
+  try {
+    await fsPromises.unlink(DESKTOP_RUNTIME_FILE_PATH);
+  } catch (error) {
+    if (!error || typeof error !== 'object' || error.code !== 'ENOENT') {
+      console.warn('Failed to remove desktop runtime state:', error);
+    }
   }
 };
 
@@ -3370,6 +3417,7 @@ function setOpenCodePort(port) {
   if (portChanged || openCodePort === null) {
     openCodePort = numericPort;
     syncToHmrState();
+    void persistDesktopRuntimeState();
     console.log(`Detected OpenCode port: ${openCodePort}`);
 
     if (portChanged) {
@@ -4812,6 +4860,8 @@ async function gracefulShutdown(options = {}) {
     cloudflareTunnelController = null;
   }
 
+  await removeDesktopRuntimeState();
+
   console.log('Graceful shutdown complete');
   if (exitProcess) {
     process.exit(0);
@@ -4861,12 +4911,14 @@ async function main(options = {}) {
   app.set('trust proxy', true);
   expressApp = app;
   server = http.createServer(app);
+  void persistDesktopRuntimeState({ startedAt: new Date().toISOString() });
 
   app.get('/health', (req, res) => {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
       openCodePort: openCodePort,
+      openCodeManaged: !ENV_SKIP_OPENCODE_START,
       openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
       openCodeApiPrefix: '',
       openCodeApiPrefixDetected: true,
@@ -4878,6 +4930,26 @@ async function main(options = {}) {
       nodeBinaryResolved: resolvedNodeBinary || null,
       bunBinaryResolved: resolvedBunBinary || null,
     });
+  });
+
+  app.post('/desktop/shutdown', (req, res) => {
+    if (!ENV_DESKTOP_NOTIFY) {
+      return res.status(404).json({ error: 'Not available' });
+    }
+
+    const remoteAddress = req.socket?.remoteAddress || '';
+    const isLocalRequest = remoteAddress === '127.0.0.1' ||
+      remoteAddress === '::1' ||
+      remoteAddress === '::ffff:127.0.0.1';
+    if (!isLocalRequest) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    res.status(202).json({ status: 'accepted' });
+    setTimeout(() => {
+      void gracefulShutdown({ exitProcess: true });
+    }, 10);
+    return undefined;
   });
 
   app.use((req, res, next) => {
