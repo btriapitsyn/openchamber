@@ -24,7 +24,6 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   hideIcon = false,
 }) => {
   const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState(false);
-  const longPressTimerRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
 
   const formatTokens = (tokens: number) => {
     if (tokens >= 1_000_000) {
@@ -49,29 +48,6 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     `Output limit: ${formatTokens(safeOutputLimit)}`,
   ];
 
-  const handleLongPressStart = React.useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-    }
-    longPressTimerRef.current = setTimeout(() => {
-      setMobileTooltipOpen(true);
-    }, 500);
-  }, []);
-
-  const handleLongPressEnd = React.useCallback(() => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    return () => {
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-      }
-    };
-  }, []);
-
   const contextElement = (
     <div
       className={cn(
@@ -79,8 +55,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
         size === 'compact' ? 'typography-micro' : 'typography-meta',
       )}
       aria-label="Context usage"
-      onTouchStart={isMobile ? handleLongPressStart : undefined}
-      onTouchEnd={isMobile ? handleLongPressEnd : undefined}
+      onClick={isMobile ? () => setMobileTooltipOpen(true) : undefined}
     >
       {!isMobile && !hideIcon && <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />}
       <span className={cn(getPercentageColor(percentage), 'font-medium')}>
