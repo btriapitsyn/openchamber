@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AnimatedTabs } from '@/components/ui/animated-tabs';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiSettings3Line, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiNotification3Line, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiSettings3Line, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -52,6 +52,8 @@ import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitc
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { isDesktopShell } from '@/lib/desktop';
 import { desktopHostsGet } from '@/lib/desktopHosts';
+import { NotificationCenter } from '@/components/notification/NotificationCenter';
+import { useNotificationCenterStore, getUnreadCount } from '@/stores/useNotificationCenterStore';
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -134,6 +136,7 @@ export const Header: React.FC = () => {
   const diffFileCount = useDiffFileCount();
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus);
+  const unreadNotificationCount = useNotificationCenterStore((state) => getUnreadCount(state));
 
   const headerRef = React.useRef<HTMLElement | null>(null);
 
@@ -200,6 +203,7 @@ export const Header: React.FC = () => {
   const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false);
   const [isUsageRefreshSpinning, setIsUsageRefreshSpinning] = React.useState(false);
   const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState('Local');
+  const [isNotificationCenterOpen, setIsNotificationCenterOpen] = React.useState(false);
   const [desktopServicesTab, setDesktopServicesTab] = React.useState<'instance' | 'usage' | 'mcp'>(
     isDesktopApp ? 'instance' : 'usage'
   );
@@ -1141,6 +1145,38 @@ export const Header: React.FC = () => {
             <p>Git sidebar</p>
           </TooltipContent>
         </Tooltip>
+
+        <DropdownMenu
+          open={isNotificationCenterOpen}
+          onOpenChange={setIsNotificationCenterOpen}
+        >
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Notifications"
+                  className={cn(headerIconButtonClass, 'relative')}
+                >
+                  <RiNotification3Line className="h-5 w-5" />
+                  {unreadNotificationCount > 0 && (
+                    <span
+                      className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full"
+                      style={{ backgroundColor: 'var(--status-info)' }}
+                      aria-label={`${unreadNotificationCount} unread notifications`}
+                    />
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Notifications</p>
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="p-0">
+            <NotificationCenter />
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {githubAuthStatus?.connected && !isMobile ? (
           githubAccounts.length > 1 ? (
