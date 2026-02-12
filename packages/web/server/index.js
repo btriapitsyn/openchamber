@@ -9,6 +9,7 @@ import os from 'os';
 import crypto from 'crypto';
 import { createUiAuth } from './lib/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
+import { prepareNotificationLastMessage } from './lib/notification-message.js';
 import {
   TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
   TERMINAL_INPUT_WS_PATH,
@@ -571,6 +572,22 @@ const resolveNotificationTemplate = (template, variables) => {
   });
 };
 
+const shouldApplyResolvedTemplateMessage = (template, resolved, variables) => {
+  if (!resolved) {
+    return false;
+  }
+
+  if (typeof template !== 'string') {
+    return true;
+  }
+
+  if (template.includes('{last_message}')) {
+    return typeof variables?.last_message === 'string' && variables.last_message.trim().length > 0;
+  }
+
+  return true;
+};
+
 const summarizeText = async (text, targetLength) => {
   if (!text || typeof text !== 'string' || text.trim().length === 0) return text;
 
@@ -678,7 +695,10 @@ const fetchLastAssistantMessageText = async (sessionId, messageId, maxLength = N
     const url = buildOpenCodeUrl(`/session/${encodeURIComponent(sessionId)}/message`, '');
     const response = await fetch(`${url}?limit=5`, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: {
+        Accept: 'application/json',
+        ...getOpenCodeAuthHeaders(),
+      },
       signal: AbortSignal.timeout(3000),
     });
 
@@ -3856,23 +3876,16 @@ const maybeSendPushForTrigger = async (payload) => {
           lastMessage = await fetchLastAssistantMessageText(sessionId, messageId);
         }
 
-        // Summarize if enabled and above threshold, otherwise truncate to maxLastMessageLength
-        if (settings.summarizeLastMessage && lastMessage.length > (settings.summaryThreshold || 200)) {
-          lastMessage = await summarizeText(lastMessage, settings.summaryLength || 100);
-        } else {
-          const maxLen = typeof settings.maxLastMessageLength === 'number' && settings.maxLastMessageLength > 0
-            ? settings.maxLastMessageLength
-            : 250;
-          if (lastMessage.length > maxLen) {
-            lastMessage = lastMessage.slice(0, maxLen) + '...';
-          }
-        }
-        variables.last_message = lastMessage;
+        variables.last_message = await prepareNotificationLastMessage({
+          message: lastMessage,
+          settings,
+          summarize: summarizeText,
+        });
 
         const resolvedTitle = resolveNotificationTemplate(completionTemplate.title, variables);
         const resolvedBody = resolveNotificationTemplate(completionTemplate.message, variables);
         if (resolvedTitle) title = resolvedTitle;
-        if (resolvedBody) body = resolvedBody;
+        if (shouldApplyResolvedTemplateMessage(completionTemplate.message, resolvedBody, variables)) body = resolvedBody;
       } catch (err) {
         console.warn('[Notification] Template resolution failed, using defaults:', err?.message || err);
       }
@@ -3923,24 +3936,17 @@ const maybeSendPushForTrigger = async (payload) => {
           lastMessage = await fetchLastAssistantMessageText(sessionId, errorMessageId);
         }
 
-        // Summarize if enabled and above threshold, otherwise truncate to maxLastMessageLength
-        if (settings.summarizeLastMessage && lastMessage.length > (settings.summaryThreshold || 200)) {
-          lastMessage = await summarizeText(lastMessage, settings.summaryLength || 100);
-        } else {
-          const maxLen = typeof settings.maxLastMessageLength === 'number' && settings.maxLastMessageLength > 0
-            ? settings.maxLastMessageLength
-            : 250;
-          if (lastMessage.length > maxLen) {
-            lastMessage = lastMessage.slice(0, maxLen) + '...';
-          }
-        }
-        variables.last_message = lastMessage;
+        variables.last_message = await prepareNotificationLastMessage({
+          message: lastMessage,
+          settings,
+          summarize: summarizeText,
+        });
 
         const errorTemplate = (settings.notificationTemplates || {}).error || { title: 'Tool error', message: '{last_message}' };
         const resolvedTitle = resolveNotificationTemplate(errorTemplate.title, variables);
         const resolvedBody = resolveNotificationTemplate(errorTemplate.message, variables);
         if (resolvedTitle) title = resolvedTitle;
-        if (resolvedBody) body = resolvedBody;
+        if (shouldApplyResolvedTemplateMessage(errorTemplate.message, resolvedBody, variables)) body = resolvedBody;
       } catch (err) {
         console.warn('[Notification] Error template resolution failed, using defaults:', err?.message || err);
       }
@@ -4022,7 +4028,7 @@ const maybeSendPushForTrigger = async (payload) => {
         const resolvedTitle = resolveNotificationTemplate(questionTemplate.title, variables);
         const resolvedBody = resolveNotificationTemplate(questionTemplate.message, variables);
         if (resolvedTitle) title = resolvedTitle;
-        if (resolvedBody) body = resolvedBody;
+        if (shouldApplyResolvedTemplateMessage(questionTemplate.message, resolvedBody, variables)) body = resolvedBody;
       } catch (err) {
         console.warn('[Notification] Question template resolution failed, using defaults:', err?.message || err);
       }
@@ -4114,7 +4120,7 @@ const maybeSendPushForTrigger = async (payload) => {
         const resolvedTitle = resolveNotificationTemplate(questionTemplate.title, variables);
         const resolvedBody = resolveNotificationTemplate(questionTemplate.message, variables);
         if (resolvedTitle) title = resolvedTitle;
-        if (resolvedBody) body = resolvedBody;
+        if (shouldApplyResolvedTemplateMessage(questionTemplate.message, resolvedBody, variables)) body = resolvedBody;
       } catch (err) {
         console.warn('[Notification] Permission template resolution failed, using defaults:', err?.message || err);
       }
