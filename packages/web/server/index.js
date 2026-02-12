@@ -281,7 +281,10 @@ const resolveWorkspacePathFromWorktrees = async (targetPath, baseDirectory) => {
     const worktrees = await getWorktrees(resolvedBase);
 
     for (const worktree of worktrees) {
-      const candidate = typeof worktree?.worktree === 'string' ? normalizeDirectoryPath(worktree.worktree) : '';
+      const candidatePath = typeof worktree?.path === 'string'
+        ? worktree.path
+        : (typeof worktree?.worktree === 'string' ? worktree.worktree : '');
+      const candidate = normalizeDirectoryPath(candidatePath);
       if (!candidate) {
         continue;
       }

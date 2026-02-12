@@ -765,6 +765,29 @@ const fetchRemoteBranchRef = async (primaryWorktree, remoteName, branchName) => 
   );
 };
 
+const checkRemoteBranchExists = async (primaryWorktree, remoteName, branchName, remoteUrl = '') => {
+  const remote = String(remoteName || '').trim();
+  const branch = String(branchName || '').trim();
+  const url = String(remoteUrl || '').trim();
+  if (!remote || !branch) {
+    return { success: false, found: false };
+  }
+
+  const target = url || remote;
+  const lsRemote = await runGitCommand(
+    primaryWorktree,
+    ['ls-remote', '--heads', target, `refs/heads/${branch}`]
+  );
+  if (!lsRemote.success) {
+    return { success: false, found: false };
+  }
+
+  return {
+    success: true,
+    found: Boolean(String(lsRemote.stdout || '').trim()),
+  };
+};
+
 const setBranchTrackingFallback = async (worktreeDirectory, localBranch, upstream) => {
   await runGitCommandOrThrow(
     worktreeDirectory,
@@ -1834,16 +1857,35 @@ export async function validateWorktreeCreate(directory, input = {}) {
       const parsedRemoteRef = parseRemoteBranchRef(startRef);
       if (startRef && startRef !== 'HEAD') {
         if (parsedRemoteRef && ensureRemoteName && ensureRemoteUrl && ensureRemoteName === parsedRemoteRef.remote) {
-          const lsRemote = await runGitCommand(
+          const remoteCheck = await checkRemoteBranchExists(
             context.primaryWorktree,
-            ['ls-remote', '--heads', ensureRemoteUrl, `refs/heads/${parsedRemoteRef.branch}`]
+            parsedRemoteRef.remote,
+            parsedRemoteRef.branch,
+            ensureRemoteUrl
           );
-          if (!lsRemote.success) {
+          if (!remoteCheck.success) {
             errors.push({
               code: 'remote_unreachable',
               message: `Unable to query remote ${ensureRemoteName}`,
             });
-          } else if (!String(lsRemote.stdout || '').trim()) {
+          } else if (!remoteCheck.found) {
+            errors.push({
+              code: 'start_ref_not_found',
+              message: `Remote branch not found: ${parsedRemoteRef.remoteRef}`,
+            });
+          }
+        } else if (parsedRemoteRef) {
+          const remoteCheck = await checkRemoteBranchExists(
+            context.primaryWorktree,
+            parsedRemoteRef.remote,
+            parsedRemoteRef.branch
+          );
+          if (!remoteCheck.success) {
+            errors.push({
+              code: 'remote_unreachable',
+              message: `Unable to query remote ${parsedRemoteRef.remote}`,
+            });
+          } else if (!remoteCheck.found) {
             errors.push({
               code: 'start_ref_not_found',
               message: `Remote branch not found: ${parsedRemoteRef.remoteRef}`,
