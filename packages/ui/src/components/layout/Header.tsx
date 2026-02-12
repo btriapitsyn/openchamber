@@ -1373,7 +1373,7 @@ export const Header: React.FC = () => {
               <DropdownMenuContent
                 align="end"
                 sideOffset={0}
-                className="h-[100vh] w-[100vw] max-h-none rounded-none border-0 p-0"
+                className="h-dvh w-[100vw] max-h-none rounded-none border-0 p-0 overflow-hidden"
               >
                 <div className="flex h-full flex-col bg-[var(--surface-elevated)]">
                   <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)]">
@@ -1431,11 +1431,11 @@ export const Header: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="px-3 pb-3 typography-micro text-muted-foreground text-[10px]">
+                    <div className="px-3 pb-3 text-right typography-micro text-muted-foreground text-[8px]">
                       Last updated {formatTime(quotaLastUpdated)}
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))]">
                     {!hasRateLimits && (
                       <div className="px-3 py-4 typography-ui-label text-muted-foreground">
                         No rate limits available.
