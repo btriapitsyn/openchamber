@@ -50,6 +50,7 @@ import {
   RiFolderAddLine,
   RiGitBranchLine,
   RiGitPullRequestLine,
+  RiInboxUnarchiveLine,
   RiLinkUnlinkM,
 
   RiGithubLine,
@@ -1152,6 +1153,34 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [], // toast and setState are stable
   );
 
+  const handleUnarchiveSession = React.useCallback(
+    (session: Session) => {
+      const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+      if (!sessionDirectory) {
+        toast.error('Cannot unarchive session without directory');
+        return;
+      }
+
+      setArchivedSessionsByDirectory((prev) => {
+        const next = new Map(prev);
+        const archivedSet = next.get(sessionDirectory);
+        if (archivedSet) {
+          const nextSet = new Set(archivedSet);
+          nextSet.delete(session.id);
+          if (nextSet.size === 0) {
+            next.delete(sessionDirectory);
+          } else {
+            next.set(sessionDirectory, nextSet);
+          }
+        }
+        return next;
+      });
+
+      toast.success('Session restored');
+    },
+    [], // toast and setState are stable
+  );
+
   const handleOpenDirectoryDialog = React.useCallback(() => {
     if (!tauriIpcAvailable) {
       sessionEvents.requestDirectoryDialog();
@@ -2072,10 +2101,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         </DropdownMenuItem>
                       </>
                     )}
-                    <DropdownMenuItem onClick={() => handleArchiveSession(session)} className="[&>svg]:mr-1">
-                      <RiArchiveLine className="mr-1 h-4 w-4" />
-                      Archive
-                    </DropdownMenuItem>
+                    {showArchivedView ? (
+                      <DropdownMenuItem onClick={() => handleUnarchiveSession(session)} className="[&>svg]:mr-1">
+                        <RiInboxUnarchiveLine className="mr-1 h-4 w-4" />
+                        Unarchive
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => handleArchiveSession(session)} className="[&>svg]:mr-1">
+                        <RiArchiveLine className="mr-1 h-4 w-4" />
+                        Archive
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive [&>svg]:mr-1"
                       onClick={() => handleDeleteSession(session)}
@@ -2114,10 +2150,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       handleCopyShareUrl,
       handleUnshareSession,
       handleArchiveSession,
+      handleUnarchiveSession,
       handleDeleteSession,
       copiedSessionId,
       mobileVariant,
       openMenuSessionId,
+      showArchivedView,
     ],
   );
 
