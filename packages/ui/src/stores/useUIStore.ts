@@ -256,9 +256,9 @@ export const useUIStore = create<UIStore>()(
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
         autoDeleteLastRunAt: null,
-        memoryLimitHistorical: 90,
+        memoryLimitHistorical: 200,
         memoryLimitViewport: 120,
-        memoryLimitActiveSession: 180,
+        memoryLimitActiveSession: 220,
         toolCallExpansion: 'collapsed',
         fontSize: 100,
         terminalFontSize: 13,
@@ -881,24 +881,37 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 1,
+        version: 2,
         migrate: (persistedState, version) => {
-          if (version >= 1 || !persistedState || typeof persistedState !== 'object') {
+          if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
           }
           const state = persistedState as Record<string, unknown>;
-          if (!isLegacyDefaultTemplates(state.notificationTemplates)) {
-            return persistedState;
+
+          // v0 -> v1: reset legacy notification templates
+          if (version < 1) {
+            if (isLegacyDefaultTemplates(state.notificationTemplates)) {
+              state.notificationTemplates = {
+                completion: { ...EMPTY_NOTIFICATION_TEMPLATES.completion },
+                error: { ...EMPTY_NOTIFICATION_TEMPLATES.error },
+                question: { ...EMPTY_NOTIFICATION_TEMPLATES.question },
+                subtask: { ...EMPTY_NOTIFICATION_TEMPLATES.subtask },
+              };
+            }
           }
-          return {
-            ...state,
-            notificationTemplates: {
-              completion: { ...EMPTY_NOTIFICATION_TEMPLATES.completion },
-              error: { ...EMPTY_NOTIFICATION_TEMPLATES.error },
-              question: { ...EMPTY_NOTIFICATION_TEMPLATES.question },
-              subtask: { ...EMPTY_NOTIFICATION_TEMPLATES.subtask },
-            },
-          };
+
+          // v1 -> v2: clear stale memory limit defaults so new defaults (200/120/220) take effect.
+          // Only clear if the value matches the old hardcoded default — user-customised values are preserved.
+          if (version < 2) {
+            if (state.memoryLimitHistorical === 90) {
+              delete state.memoryLimitHistorical;
+            }
+            if (state.memoryLimitActiveSession === 180) {
+              delete state.memoryLimitActiveSession;
+            }
+          }
+
+          return state;
         },
         partialize: (state) => ({
           theme: state.theme,

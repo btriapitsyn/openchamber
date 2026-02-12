@@ -25,6 +25,8 @@ interface MessageListProps {
     hasMoreAbove: boolean;
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
+    hasRenderEarlier?: boolean;
+    onRenderEarlier?: () => void;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
@@ -198,6 +200,8 @@ const MessageList: React.FC<MessageListProps> = ({
     hasMoreAbove,
     isLoadingOlder,
     onLoadOlder,
+    hasRenderEarlier,
+    onRenderEarlier,
     scrollToBottom,
 }) => {
     React.useEffect(() => {
@@ -256,6 +260,18 @@ const MessageList: React.FC<MessageListProps> = ({
     return (
         <TurnGroupingProvider messages={displayMessages}>
             <div>
+                {hasRenderEarlier && (
+                    <div className="flex justify-center py-3">
+                        <button
+                            type="button"
+                            onClick={onRenderEarlier}
+                            className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground"
+                        >
+                            Render earlier messages
+                        </button>
+                    </div>
+                )}
+
                 {hasMoreAbove && (
                     <div className="flex justify-center py-3">
                         {isLoadingOlder ? (

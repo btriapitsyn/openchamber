@@ -301,7 +301,12 @@ export const useSessionStore = create<SessionStore>()(
                     if (id) {
 
                         const existingMessages = get().messages.get(id);
-                        if (!existingMessages) {
+                        const memoryState = get().sessionMemoryState.get(id);
+                        const needsHistoryBootstrap =
+                            !memoryState ||
+                            memoryState.historyComplete === undefined;
+
+                        if (!existingMessages || needsHistoryBootstrap) {
 
                             await get().loadMessages(id);
                         }

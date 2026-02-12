@@ -1,5 +1,7 @@
 import React from 'react';
 import { RiArrowDownLine } from '@remixicon/react';
+import { useShallow } from 'zustand/react/shallow';
+import type { Message, Part } from '@opencode-ai/sdk/v2';
 
 import { ChatInput } from './ChatInput';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -10,39 +12,99 @@ import MessageList from './MessageList';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
+import { getMemoryLimits } from '@/stores/types/sessionTypes';
 import { Button } from '@/components/ui/button';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 import { TimelineDialog } from './TimelineDialog';
+import type { PermissionRequest } from '@/types/permission';
+import type { QuestionRequest } from '@/types/question';
+
+const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
+const EMPTY_PERMISSIONS: PermissionRequest[] = [];
+const EMPTY_QUESTIONS: QuestionRequest[] = [];
+const IDLE_SESSION_STATUS = { type: 'idle' as const };
 
 export const ChatContainer: React.FC = () => {
     const {
         currentSessionId,
-        messages,
-        permissions,
-        questions,
-        streamingMessageIds,
         isLoading,
         loadMessages,
         loadMoreMessages,
         updateViewportAnchor,
-        sessionMemoryState,
         openNewSessionDraft,
-        isSyncing,
-        messageStreamStates,
         trimToViewportWindow,
-        sessionStatus,
         newSessionDraft,
-    } = useSessionStore();
+    } = useSessionStore(
+        useShallow((state) => ({
+            currentSessionId: state.currentSessionId,
+            isLoading: state.isLoading,
+            loadMessages: state.loadMessages,
+            loadMoreMessages: state.loadMoreMessages,
+            updateViewportAnchor: state.updateViewportAnchor,
+            openNewSessionDraft: state.openNewSessionDraft,
+            trimToViewportWindow: state.trimToViewportWindow,
+            newSessionDraft: state.newSessionDraft,
+        }))
+    );
+
+    const { isSyncing, messageStreamStates, sessionMemoryStateMap } = useSessionStore(
+        useShallow((state) => ({
+            isSyncing: state.isSyncing,
+            messageStreamStates: state.messageStreamStates,
+            sessionMemoryStateMap: state.sessionMemoryState,
+        }))
+    );
 
     const {
         isTimelineDialogOpen,
         setTimelineDialogOpen,
     } = useUIStore();
 
-    const streamingMessageId = React.useMemo(() => {
-        if (!currentSessionId) return null;
-        return streamingMessageIds.get(currentSessionId) ?? null;
-    }, [currentSessionId, streamingMessageIds]);
+    const sessionMessages = useSessionStore(
+        React.useCallback(
+            (state) => (currentSessionId ? state.messages.get(currentSessionId) ?? EMPTY_MESSAGES : EMPTY_MESSAGES),
+            [currentSessionId]
+        )
+    );
+
+    const sessionPermissions = useSessionStore(
+        React.useCallback(
+            (state) => (currentSessionId ? state.permissions.get(currentSessionId) ?? EMPTY_PERMISSIONS : EMPTY_PERMISSIONS),
+            [currentSessionId]
+        )
+    );
+
+    const sessionQuestions = useSessionStore(
+        React.useCallback(
+            (state) => (currentSessionId ? state.questions.get(currentSessionId) ?? EMPTY_QUESTIONS : EMPTY_QUESTIONS),
+            [currentSessionId]
+        )
+    );
+
+    const memoryState = useSessionStore(
+        React.useCallback(
+            (state) => (currentSessionId ? state.sessionMemoryState.get(currentSessionId) ?? null : null),
+            [currentSessionId]
+        )
+    );
+
+    const streamingMessageId = useSessionStore(
+        React.useCallback(
+            (state) => (currentSessionId ? state.streamingMessageIds.get(currentSessionId) ?? null : null),
+            [currentSessionId]
+        )
+    );
+
+    const sessionStatusForCurrent = useSessionStore(
+        React.useCallback(
+            (state) => (currentSessionId ? state.sessionStatus?.get(currentSessionId) ?? IDLE_SESSION_STATUS : IDLE_SESSION_STATUS),
+            [currentSessionId]
+        )
+    );
+
+    const hasSessionMessagesEntry = useSessionStore(
+        React.useCallback((state) => (currentSessionId ? state.messages.has(currentSessionId) : false), [currentSessionId])
+    );
 
     const { isMobile } = useDeviceInfo();
     const draftOpen = Boolean(newSessionDraft?.open);
@@ -53,18 +115,90 @@ export const ChatContainer: React.FC = () => {
         }
     }, [currentSessionId, draftOpen, openNewSessionDraft]);
 
-    const sessionMessages = React.useMemo(() => {
+    const [turnStart, setTurnStart] = React.useState(0);
+    const turnHandleRef = React.useRef<number | null>(null);
+    const turnIdleRef = React.useRef(false);
+    const TURN_INIT = 20;
+    const TURN_BATCH = 20;
 
-        return currentSessionId ? messages.get(currentSessionId) || [] : [];
-    }, [currentSessionId, messages]);
+    const userTurnIndexes = React.useMemo(() => {
+        const indexes: number[] = [];
+        for (let i = 0; i < sessionMessages.length; i += 1) {
+            const message = sessionMessages[i];
+            const role = (message.info as { clientRole?: string | null | undefined }).clientRole ?? message.info.role;
+            if (role === 'user') {
+                indexes.push(i);
+            }
+        }
+        return indexes;
+    }, [sessionMessages]);
 
-    const sessionPermissions = React.useMemo(() => {
-        return currentSessionId ? permissions.get(currentSessionId) || [] : [];
-    }, [currentSessionId, permissions]);
+    const cancelTurnBackfill = React.useCallback(() => {
+        const handle = turnHandleRef.current;
+        if (handle === null) {
+            return;
+        }
+        turnHandleRef.current = null;
+        if (turnIdleRef.current && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+            window.cancelIdleCallback(handle);
+            return;
+        }
+        if (typeof window !== 'undefined') {
+            window.clearTimeout(handle);
+        }
+    }, []);
 
-    const sessionQuestions = React.useMemo(() => {
-        return currentSessionId ? questions.get(currentSessionId) || [] : [];
-    }, [currentSessionId, questions]);
+    const renderedSessionMessages = React.useMemo(() => {
+        if (turnStart <= 0 || userTurnIndexes.length === 0) {
+            return sessionMessages;
+        }
+        const startIndex = userTurnIndexes[turnStart] ?? 0;
+        return sessionMessages.slice(startIndex);
+    }, [sessionMessages, turnStart, userTurnIndexes]);
+
+    const backfillTurns = React.useCallback(() => {
+        if (turnStart <= 0) {
+            return;
+        }
+
+        const container = typeof document !== 'undefined'
+            ? (document.querySelector('[data-scrollbar="chat"]') as HTMLDivElement | null)
+            : null;
+        const beforeTop = container?.scrollTop ?? null;
+        const beforeHeight = container?.scrollHeight ?? null;
+
+        setTurnStart((prev) => (prev - TURN_BATCH > 0 ? prev - TURN_BATCH : 0));
+
+        if (container && beforeTop !== null && beforeHeight !== null) {
+            window.requestAnimationFrame(() => {
+                const delta = container.scrollHeight - beforeHeight;
+                if (delta !== 0) {
+                    container.scrollTop = beforeTop + delta;
+                }
+            });
+        }
+    }, [turnStart]);
+
+    const scheduleTurnBackfill = React.useCallback(() => {
+        if (turnHandleRef.current !== null || turnStart <= 0) {
+            return;
+        }
+
+        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+            turnIdleRef.current = true;
+            turnHandleRef.current = window.requestIdleCallback(() => {
+                turnHandleRef.current = null;
+                backfillTurns();
+            });
+            return;
+        }
+
+        turnIdleRef.current = false;
+        turnHandleRef.current = window.setTimeout(() => {
+            turnHandleRef.current = null;
+            backfillTurns();
+        }, 0);
+    }, [backfillTurns, turnStart]);
 
     const sessionBlockingCards = React.useMemo(() => {
         return [...sessionPermissions, ...sessionQuestions];
@@ -80,9 +214,9 @@ export const ChatContainer: React.FC = () => {
         isPinned,
     } = useChatScrollManager({
         currentSessionId,
-        sessionMessages,
+        sessionMessages: renderedSessionMessages,
         streamingMessageId,
-        sessionMemoryState,
+        sessionMemoryState: sessionMemoryStateMap,
         updateViewportAnchor,
         isSyncing,
         isMobile,
@@ -91,13 +225,46 @@ export const ChatContainer: React.FC = () => {
         trimToViewportWindow,
     });
 
-    const memoryState = React.useMemo(() => {
+    React.useEffect(() => {
+        cancelTurnBackfill();
         if (!currentSessionId) {
-            return null;
+            setTurnStart(0);
+            return;
         }
-        return sessionMemoryState.get(currentSessionId) ?? null;
-    }, [currentSessionId, sessionMemoryState]);
-    const hasMoreAbove = Boolean(memoryState?.hasMoreAbove);
+
+        const turnCount = userTurnIndexes.length;
+        const start = turnCount > TURN_INIT ? turnCount - TURN_INIT : 0;
+        setTurnStart(start);
+    }, [cancelTurnBackfill, currentSessionId, userTurnIndexes.length]);
+
+    React.useEffect(() => {
+        scheduleTurnBackfill();
+        return () => {
+            cancelTurnBackfill();
+        };
+    }, [cancelTurnBackfill, scheduleTurnBackfill, turnStart]);
+
+    const hasMoreAbove = React.useMemo(() => {
+        if (!memoryState) {
+            return false;
+        }
+        if (memoryState.historyComplete === true) {
+            return false;
+        }
+        if (memoryState.hasMoreAbove) {
+            return true;
+        }
+        if (memoryState.historyComplete === false) {
+            return true;
+        }
+
+        // Backward compatibility: older persisted sessions may miss history flags.
+        if (memoryState.hasMoreAbove === undefined && memoryState.historyComplete === undefined) {
+            return sessionMessages.length >= getMemoryLimits().HISTORICAL_MESSAGES;
+        }
+
+        return false;
+    }, [memoryState, sessionMessages.length]);
     const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
     React.useEffect(() => {
         setIsLoadingOlder(false);
@@ -107,6 +274,9 @@ export const ChatContainer: React.FC = () => {
         if (!currentSessionId || isLoadingOlder) {
             return;
         }
+
+        cancelTurnBackfill();
+        setTurnStart(0);
 
         const container = scrollRef.current;
         const prevHeight = container?.scrollHeight ?? null;
@@ -122,7 +292,12 @@ export const ChatContainer: React.FC = () => {
         } finally {
             setIsLoadingOlder(false);
         }
-    }, [currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef, scrollToPosition]);
+    }, [cancelTurnBackfill, currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef, scrollToPosition]);
+
+    const handleRenderEarlier = React.useCallback(() => {
+        cancelTurnBackfill();
+        setTurnStart(0);
+    }, [cancelTurnBackfill]);
 
     // Scroll to a specific message by ID (for timeline dialog)
     const scrollToMessage = React.useCallback((messageId: string) => {
@@ -150,7 +325,7 @@ export const ChatContainer: React.FC = () => {
             return;
         }
 
-        const hasSessionMessages = messages.has(currentSessionId);
+        const hasSessionMessages = hasSessionMessagesEntry;
         if (hasSessionMessages) {
             return;
         }
@@ -159,7 +334,7 @@ export const ChatContainer: React.FC = () => {
             try {
                 await loadMessages(currentSessionId);
             } finally {
-                const statusType = sessionStatus?.get(currentSessionId)?.type ?? 'idle';
+                const statusType = sessionStatusForCurrent.type ?? 'idle';
                 const isActivePhase = statusType === 'busy' || statusType === 'retry';
                 // When pinned and active, scroll is already maintained automatically
                 const shouldSkipScroll = isActivePhase && isPinned;
@@ -177,7 +352,7 @@ export const ChatContainer: React.FC = () => {
         };
 
         void load();
-    }, [currentSessionId, isPinned, loadMessages, messages, scrollToBottom, sessionStatus]);
+    }, [currentSessionId, hasSessionMessagesEntry, isPinned, loadMessages, scrollToBottom, sessionMessages.length, sessionStatusForCurrent.type]);
 
     if (!currentSessionId && !draftOpen) {
         return (
@@ -211,7 +386,7 @@ export const ChatContainer: React.FC = () => {
     }
 
     if (isLoading && sessionMessages.length === 0 && !streamingMessageId) {
-        const hasMessagesEntry = messages.has(currentSessionId);
+        const hasMessagesEntry = hasSessionMessagesEntry;
         if (!hasMessagesEntry) {
             return (
                 <div
@@ -270,7 +445,7 @@ export const ChatContainer: React.FC = () => {
                     >
                         <div className="relative z-0 min-h-full">
                             <MessageList
-                                messages={sessionMessages}
+                                messages={renderedSessionMessages}
                                 permissions={sessionPermissions}
                                 questions={sessionQuestions}
                                 onMessageContentChange={handleMessageContentChange}
@@ -278,6 +453,8 @@ export const ChatContainer: React.FC = () => {
                                 hasMoreAbove={hasMoreAbove}
                                 isLoadingOlder={isLoadingOlder}
                                 onLoadOlder={handleLoadOlder}
+                                hasRenderEarlier={turnStart > 0}
+                                onRenderEarlier={handleRenderEarlier}
                                 scrollToBottom={scrollToBottom}
                             />
                         </div>

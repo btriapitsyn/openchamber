@@ -217,14 +217,26 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     }
   }
 
+  // Apply server-persisted memory limits, but skip values that match the previous
+  // hardcoded defaults (90 / 180) — those are stale and should not override the new
+  // in-code defaults (200 / 120 / 220). Users who intentionally customised to other
+  // values will still have their choice respected.
+  const STALE_MEMORY_DEFAULTS: Record<string, number> = {
+    memoryLimitHistorical: 90,
+    memoryLimitActiveSession: 180,
+  };
   if (typeof settings.memoryLimitHistorical === 'number' && Number.isFinite(settings.memoryLimitHistorical)) {
-    store.setMemoryLimitHistorical(settings.memoryLimitHistorical);
+    if (settings.memoryLimitHistorical !== STALE_MEMORY_DEFAULTS.memoryLimitHistorical) {
+      store.setMemoryLimitHistorical(settings.memoryLimitHistorical);
+    }
   }
   if (typeof settings.memoryLimitViewport === 'number' && Number.isFinite(settings.memoryLimitViewport)) {
     store.setMemoryLimitViewport(settings.memoryLimitViewport);
   }
   if (typeof settings.memoryLimitActiveSession === 'number' && Number.isFinite(settings.memoryLimitActiveSession)) {
-    store.setMemoryLimitActiveSession(settings.memoryLimitActiveSession);
+    if (settings.memoryLimitActiveSession !== STALE_MEMORY_DEFAULTS.memoryLimitActiveSession) {
+      store.setMemoryLimitActiveSession(settings.memoryLimitActiveSession);
+    }
   }
 
   if (typeof settings.queueModeEnabled === 'boolean' && settings.queueModeEnabled !== queueStore.queueModeEnabled) {

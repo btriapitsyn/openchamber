@@ -33,6 +33,9 @@ export interface SessionMemoryState {
     isZombie?: boolean;
     totalAvailableMessages?: number;
     hasMoreAbove?: boolean;
+    historyLoading?: boolean;
+    historyComplete?: boolean;
+    historyLimit?: number;
     trimmedHeadMaxId?: string;
     streamingCooldownUntil?: number;
     lastUserMessageAt?: number; // Timestamp when user last sent a message
@@ -52,14 +55,15 @@ export interface SessionContextUsage {
 export const DEFAULT_MEMORY_LIMITS = {
     MAX_SESSIONS: 3,
     VIEWPORT_MESSAGES: 120,
-    HISTORICAL_MESSAGES: 90,
+    HISTORICAL_MESSAGES: 200,
     FETCH_BUFFER: 20,
+    HISTORY_CHUNK: 200,
     STREAMING_BUFFER: Infinity,
     BACKGROUND_STREAMING_BUFFER: 120,
     ZOMBIE_TIMEOUT: 10 * 60 * 1000,
 } as const;
 
-export const DEFAULT_ACTIVE_SESSION_WINDOW = 180;
+export const DEFAULT_ACTIVE_SESSION_WINDOW = 220;
 
 // Dynamic memory limits accessor - reads directly from UI store.
 // NOTE: do not use require() here (breaks in browser/desktop runtime bundles).
