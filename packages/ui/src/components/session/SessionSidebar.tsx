@@ -54,6 +54,7 @@ import {
   RiGithubLine,
 
   RiMore2Line,
+  RiPauseLine,
   RiPencilAiLine,
   RiSearchLine,
   RiShare2Line,
@@ -663,6 +664,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
+  const isSessionPaused = useSessionStore((state) => state.isSessionPaused);
 
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
@@ -1731,6 +1733,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 {session.share ? (
                   <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
                 ) : null}
+                {isSessionPaused(session.id) ? (
+                  <RiPauseLine className="h-3 w-3 flex-shrink-0" style={{ color: 'var(--status-warning)' }} />
+                ) : null}
                 {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
                   <span className="flex-shrink-0 text-[0.7rem] leading-none">
                     <span className="text-[color:var(--status-success)]">+{Math.max(0, additions ?? 0)}</span>
@@ -1855,6 +1860,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
                   {session.share ? (
                     <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
+                  ) : null}
+                  {isSessionPaused(session.id) ? (
+                    <RiPauseLine className="h-3 w-3 flex-shrink-0" style={{ color: 'var(--status-warning)' }} />
                   ) : null}
                   {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
                     <span className="flex-shrink-0 text-[0.7rem] leading-none">
