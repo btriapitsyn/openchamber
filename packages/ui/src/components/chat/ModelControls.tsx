@@ -522,7 +522,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     // currentProviderId/currentModelId; include providers to avoid stale variants.
     const availableVariants = React.useMemo(() => {
         return getCurrentModelVariants();
-    }, [getCurrentModelVariants, currentProviderId, currentModelId, providers]);
+    }, [getCurrentModelVariants]);
     const hasVariants = availableVariants.length > 0;
 
     const costRows = [
