@@ -16,6 +16,7 @@ This plan validates startup resilience and process cleanup behavior after reliab
 - Terminal tools available: `lsof`, `ps`, `pgrep`, `curl`.
 - Desktop binary path known, for example:
   - `/Applications/OpenChamber.app/Contents/MacOS/openchamber-desktop`
+- Keep external OpenCode on `http://127.0.0.1:2606` alive during tests (exclude from termination steps).
 
 ## Handy Commands
 
@@ -76,10 +77,10 @@ Run this after Phase A for a strict baseline.
 
 ```bash
 pkill -TERM -f "openchamber-desktop|openchamber-server" || true
-pkill -TERM -x opencode || true
+pkill -TERM -f "opencode serve --hostname=127.0.0.1 --port=0" || true
 sleep 2
 pkill -KILL -f "openchamber-desktop|openchamber-server" || true
-pkill -KILL -x opencode || true
+pkill -KILL -f "opencode serve --hostname=127.0.0.1 --port=0" || true
 ```
 
 Verify no listeners remain:
@@ -87,6 +88,11 @@ Verify no listeners remain:
 ```bash
 lsof -nP -iTCP -sTCP:LISTEN | grep -E "openchamber|opencode" || true
 ```
+
+Expected for B0 cleanup:
+- No `openchamber` listeners remain.
+- No desktop-managed `opencode serve --port=0` listeners remain.
+- External `opencode` on `127.0.0.1:2606` may remain and should not be terminated.
 
 #### B1. Baseline launch opens window
 
