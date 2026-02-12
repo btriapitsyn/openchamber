@@ -1065,7 +1065,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
       .then((result) => {
         if (result.success && result.path) {
-          const added = addProject(result.path, { id: result.projectId });
+          const added = addProject(result.path, { id: result.projectId, connectionId: activeConnectionId });
           if (!added) {
             toast.error('Failed to add project', {
               description: 'Please select a valid directory.',
