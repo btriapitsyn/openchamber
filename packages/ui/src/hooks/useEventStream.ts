@@ -12,6 +12,7 @@ import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useNotificationBadgeStore } from '@/stores/useNotificationBadgeStore';
+import { useNotificationCenterStore } from '@/stores/useNotificationCenterStore';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
@@ -655,6 +656,23 @@ export const useEventStream = () => {
                 message: typeof statusInfo.message === 'string' ? statusInfo.message : undefined,
                 next: typeof statusInfo.next === 'number' ? statusInfo.next : undefined,
               }, 'sse:session.status');
+
+              // Add 'stuck' notification to notification center (US-002)
+              const sessions = useSessionStore.getState().sessions;
+              const session = sessions.find(s => s.id === sessionId);
+              if (session) {
+                const sessionDirectory = resolveSessionDirectoryForStatus(sessionId);
+                if (sessionDirectory) {
+                  const sessionTitle = session.title || session.slug || 'Session';
+                  useNotificationCenterStore.getState().addNotification({
+                    sessionId: sessionId,
+                    projectPath: sessionDirectory,
+                    kind: 'stuck',
+                    title: sessionTitle,
+                    body: 'Session is retrying',
+                  });
+                }
+              }
             } else {
               updateSessionStatus(sessionId, { type: 'idle' }, 'sse:session.status');
             }
@@ -682,6 +700,23 @@ export const useEventStream = () => {
                 message: typeof metadata.message === 'string' ? metadata.message : undefined,
                 next: typeof metadata.next === 'number' ? metadata.next : undefined,
               }, 'sse:openchamber:session-status');
+
+              // Add 'stuck' notification to notification center (US-002)
+              const sessions = useSessionStore.getState().sessions;
+              const session = sessions.find(s => s.id === sessionId);
+              if (session) {
+                const sessionDirectory = resolveSessionDirectoryForStatus(sessionId);
+                if (sessionDirectory) {
+                  const sessionTitle = session.title || session.slug || 'Session';
+                  useNotificationCenterStore.getState().addNotification({
+                    sessionId: sessionId,
+                    projectPath: sessionDirectory,
+                    kind: 'stuck',
+                    title: sessionTitle,
+                    body: 'Session is retrying',
+                  });
+                }
+              }
             } else {
               updateSessionStatus(sessionId, { type: 'idle' }, 'sse:openchamber:session-status');
             }
@@ -1476,6 +1511,22 @@ export const useEventStream = () => {
         const body = typeof (props as { body?: unknown }).body === 'string' ? (props as { body: string }).body : '';
         const tag = typeof (props as { tag?: unknown }).tag === 'string' ? (props as { tag: string }).tag : undefined;
         const requireHidden = Boolean((props as { requireHidden?: unknown }).requireHidden);
+
+        // Add to notification center (US-002)
+        const sessionID = typeof (props as { sessionID?: unknown }).sessionID === 'string' ? (props as { sessionID: string }).sessionID : '';
+        if (title && body && notifProjectPath && sessionID && notifKind) {
+          // Map 'ready' -> 'completed', 'error' -> 'error' for notification center
+          const centerKind = notifKind === 'ready' ? 'completed' : notifKind === 'error' ? 'error' : null;
+          if (centerKind) {
+            useNotificationCenterStore.getState().addNotification({
+              sessionId: sessionID,
+              projectPath: notifProjectPath,
+              kind: centerKind,
+              title,
+              body,
+            });
+          }
+        }
 
         // ✓ VERIFIED (US-014): notificationMode 'hidden-only' is respected via requireHidden check
         if (requireHidden && visibilityStateRef.current !== 'hidden') {
