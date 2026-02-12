@@ -1223,7 +1223,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const filteredSessions = projectSessions.filter((session) => {
         const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
         if (!sessionDirectory) {
-          return !showArchivedViewFilter; // Unarchived by default when no directory
+          return !showArchivedViewFilter; // Sessions without a directory can't be archived (no directory key for storage)
         }
         const archivedSet = archivedSessionsByDirectory.get(sessionDirectory);
         const isArchived = archivedSet && archivedSet.has(session.id);
@@ -2607,14 +2607,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     onClick={() => setShowArchivedView((prev) => !prev)}
                     className={cn(
                       headerActionButtonClass,
-                      showArchivedView && 'text-primary'
+                      showArchivedView && 'text-primary bg-primary/10'
                     )}
                     aria-label="Archived sessions"
                   >
                     <RiArchiveLine className="h-4.5 w-4.5" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>Archived sessions</p></TooltipContent>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  <p>{showArchivedView ? 'Show active sessions' : 'Show archived sessions'}</p>
+                </TooltipContent>
               </Tooltip>
               </div>
               ) : null}
