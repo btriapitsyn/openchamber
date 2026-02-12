@@ -887,7 +887,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             <div
                 className={cn(
                     'group w-full',
-                    shouldShowHeader ? 'pt-6' : 'pt-0',
+                    shouldShowHeader ? (isMobile ? 'pt-10' : 'pt-6') : 'pt-0',
                     isUser ? 'pb-0' : isFollowedByAssistant ? 'pb-0' : 'pb-8'
                 )}
                 data-message-id={message.info.id}

@@ -184,7 +184,8 @@ const UserMessageBody: React.FC<{
             <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} compact />
             {(canCopyMessage && hasCopyableText) || onRevert || onFork ? (
                 <div className={cn(
-                    "absolute top-full left-0 right-0 z-10 pt-5 group/user-actions"
+                    "absolute top-full left-0 right-0 z-10 group/user-actions",
+                    isMobile ? "pt-2 pb-3" : "pt-5"
                 )}>
                     <div
                         className={cn(
