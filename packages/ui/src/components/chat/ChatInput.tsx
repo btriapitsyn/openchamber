@@ -6,6 +6,7 @@ import {
     RiAttachment2,
     RiCommandLine,
     RiFileUploadLine,
+    RiPauseLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
 import { BrowserVoiceButton } from '@/components/voice';
@@ -116,6 +117,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const consumePendingInputText = useSessionStore((state) => state.consumePendingInputText);
     const pendingInputText = useSessionStore((state) => state.pendingInputText);
     const consumePendingSyntheticParts = useSessionStore((state) => state.consumePendingSyntheticParts);
+    const pauseSession = useSessionStore((state) => state.pauseSession);
 
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
@@ -812,6 +814,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         void abortCurrentOperation();
     }, [abortCurrentOperation, clearAbortPrompt, startAbortIndicator]);
+
+    const handlePause = React.useCallback(() => {
+        if (!currentSessionId) return;
+        void pauseSession(currentSessionId);
+    }, [pauseSession, currentSessionId]);
 
     const handleCycleAgent = React.useCallback(() => {
         if (primaryAgents.length <= 1) return;
@@ -1542,11 +1549,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         </button>
     );
 
-    // Action buttons area: either send button, or stop (+ optional queue button floating above)
+    // Pause button appears next to stop button when working
+    const pauseButton = (
+        <button
+            type="button"
+            onClick={handlePause}
+            className={cn(
+                footerIconButtonClass,
+                'text-foreground hover:text-foreground'
+            )}
+            aria-label="Pause session"
+        >
+            <RiPauseLine className={cn(stopIconSizeClass)} />
+        </button>
+    );
+
+    // Action buttons area: either send button, or stop + pause (+ optional queue button floating above)
     const actionButtons = canAbort ? (
         <div className="relative">
             {hasContent && queueButton}
-            {stopButton}
+            <div className="flex gap-1">
+                {stopButton}
+                {pauseButton}
+            </div>
         </div>
     ) : (
         sendButton
