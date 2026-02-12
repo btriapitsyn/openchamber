@@ -1,6 +1,7 @@
 import React from 'react';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useNotificationBadgeStore, type NotificationKind } from '@/stores/useNotificationBadgeStore';
+import { useNotificationCenterStore, type NotificationCenterKind } from '@/stores/useNotificationCenterStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -115,13 +116,14 @@ interface ProjectIconProps {
   isIdle: boolean;
   hasNotification: boolean;
   notificationKind?: NotificationKind;
+  notificationCenterKind?: NotificationCenterKind;
   onSelectProject: (id: string) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   dragAttributes?: React.HTMLAttributes<HTMLButtonElement>;
   dragListeners?: any;
 }
 
-const ProjectIcon = React.memo<ProjectIconProps>(({ projectId, badge, label, projectPath, isActive, isIdle, hasNotification, notificationKind, onSelectProject, onContextMenu, dragAttributes, dragListeners }) => {
+const ProjectIcon = React.memo<ProjectIconProps>(({ projectId, badge, label, projectPath, isActive, isIdle, hasNotification, notificationKind, notificationCenterKind, onSelectProject, onContextMenu, dragAttributes, dragListeners }) => {
   const handleClick = React.useCallback(() => {
     onSelectProject(projectId);
   }, [projectId, onSelectProject]);
@@ -137,7 +139,22 @@ const ProjectIcon = React.memo<ProjectIconProps>(({ projectId, badge, label, pro
     }
   }, [notificationKind]);
 
+  // Map notification center kind to color
+  const notificationCenterColor = React.useMemo(() => {
+    switch (notificationCenterKind) {
+      case 'completed': return 'bg-[var(--status-success)]';
+      case 'error': return 'bg-[var(--status-error)]';
+      case 'stuck': return 'bg-[var(--status-warning)]';
+      default: return 'bg-[var(--status-success)]';
+    }
+  }, [notificationCenterKind]);
+
   const isQuestion = notificationKind === 'question' || notificationKind === 'permission';
+
+  // Determine which notification to show based on priority
+  // Badge notifications (question/permission) take precedence over notification center
+  const showBadgeNotification = hasNotification && !isActive;
+  const showNotificationCenterDot = notificationCenterKind && !showBadgeNotification;
 
   return (
     <Tooltip delayDuration={300}>
@@ -172,8 +189,8 @@ const ProjectIcon = React.memo<ProjectIconProps>(({ projectId, badge, label, pro
             />
           )}
           <span className="select-none">{badge}</span>
-          {/* Notification badge dot */}
-          {hasNotification && !isActive && (
+          {/* Badge notification dot (question/permission) - only when not active */}
+          {showBadgeNotification && (
             isQuestion ? (
               <div
                 className={cn(
@@ -192,8 +209,15 @@ const ProjectIcon = React.memo<ProjectIconProps>(({ projectId, badge, label, pro
               />
             )
           )}
+          {/* Notification center status dot - shows even when active */}
+          {showNotificationCenterDot && (
+            <div
+              className={cn("absolute top-0.5 right-0.5 w-2 h-2 rounded-full", notificationCenterColor)}
+              aria-label="Notification center status"
+            />
+          )}
           {/* Running spinner for active working projects */}
-          {!isIdle && !isActive && !hasNotification && (
+          {!isIdle && !isActive && !hasNotification && !notificationCenterKind && (
             <div className="absolute -top-0.5 -right-0.5" aria-label="Running">
               <GridLoader size="xs" className="text-[var(--color-primary)]" />
             </div>
@@ -267,6 +291,7 @@ export const ProjectRail: React.FC = () => {
   const setGroup = useProjectsStore((state) => state.setGroup);
   const unreadByPath = useNotificationBadgeStore((state) => state.unreadByPath);
   const kindByPath = useNotificationBadgeStore((state) => state.kindByPath);
+  const notificationCenterNotifications = useNotificationCenterStore((state) => state.notifications);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
   const sessionAttentionStates = useSessionStore((state) => state.sessionAttentionStates);
   
@@ -323,6 +348,29 @@ export const ProjectRail: React.FC = () => {
     }
     return result;
   }, [sessionsByDirectory, sessionAttentionStates]);
+
+  // Derive per-project notification center status from undismissed notifications
+  // Use the 'worst' kind as the status: error > stuck > completed
+  const notificationCenterKindByPath = React.useMemo(() => {
+    const result: Record<string, NotificationCenterKind> = {};
+    
+    // Group undismissed notifications by project path
+    const undismissedNotifications = notificationCenterNotifications.filter(n => n);
+    
+    for (const notification of undismissedNotifications) {
+      const key = notification.projectPath.replace(/\/+$/, '');
+      const currentKind = result[key];
+      
+      // Priority: error > stuck > completed
+      if (!currentKind || 
+          notification.kind === 'error' || 
+          (notification.kind === 'stuck' && currentKind === 'completed')) {
+        result[key] = notification.kind;
+      }
+    }
+    
+    return result;
+  }, [notificationCenterNotifications]);
 
   // Memoize derived data to avoid recalculating on every render
   const projectsWithBadges = React.useMemo(() => {
@@ -638,6 +686,7 @@ export const ProjectRail: React.FC = () => {
                           isIdle={isIdleByPath[normalizedPath] !== false}
                           hasNotification={Boolean(unreadByPath[normalizedPath]) || Boolean(hasAttentionByPath[normalizedPath])}
                           notificationKind={kindByPath[normalizedPath]}
+                          notificationCenterKind={notificationCenterKindByPath[normalizedPath]}
                           onSelectProject={setActiveProject}
                           onContextMenu={handleContextMenu(project.id)}
                         />
