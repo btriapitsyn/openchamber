@@ -154,7 +154,7 @@ const ProjectIcon = React.memo<ProjectIconProps>(({ projectId, badge, label, pro
   // Determine which notification to show based on priority
   // Badge notifications (question/permission) take precedence over notification center
   const showBadgeNotification = hasNotification && !isActive;
-  const showNotificationCenterDot = notificationCenterKind && !showBadgeNotification;
+  const showNotificationCenterDot = notificationCenterKind && isIdle && !showBadgeNotification;
 
   return (
     <Tooltip delayDuration={300}>
@@ -349,22 +349,18 @@ export const ProjectRail: React.FC = () => {
     return result;
   }, [sessionsByDirectory, sessionAttentionStates]);
 
-  // Derive per-project notification center status from undismissed notifications
+  // Derive per-project notification center status from notifications
   // Use the 'worst' kind as the status: error > stuck > completed
   const notificationCenterKindByPath = React.useMemo(() => {
     const result: Record<string, NotificationCenterKind> = {};
     
-    // Group undismissed notifications by project path
-    const undismissedNotifications = notificationCenterNotifications.filter(n => n);
-    
-    for (const notification of undismissedNotifications) {
+    for (const notification of notificationCenterNotifications) {
       const key = notification.projectPath.replace(/\/+$/, '');
       const currentKind = result[key];
       
       // Priority: error > stuck > completed
-      if (!currentKind || 
-          notification.kind === 'error' || 
-          (notification.kind === 'stuck' && currentKind === 'completed')) {
+      const priority: Record<string, number> = { error: 3, stuck: 2, completed: 1 };
+      if (!currentKind || priority[notification.kind] > priority[currentKind]) {
         result[key] = notification.kind;
       }
     }
