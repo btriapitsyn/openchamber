@@ -17,7 +17,6 @@ import { AnimatedTabs } from '@/components/ui/animated-tabs';
 import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiSettings3Line, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
-import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
@@ -133,7 +132,6 @@ export const Header: React.FC = () => {
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const { isMobile } = useDeviceInfo();
   const diffFileCount = useDiffFileCount();
-  const updateAvailable = useUpdateStore((state) => state.available);
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus);
 
@@ -1561,16 +1559,10 @@ export const Header: React.FC = () => {
                   className={cn(headerIconButtonClass, 'relative')}
                 >
                   <RiSettings3Line className="h-5 w-5" />
-                  {updateAvailable && (
-                    <span
-                      className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-primary"
-                      aria-label="Update available"
-                    />
-                  )}
                 </button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>{updateAvailable ? 'Settings (Update available)' : 'Settings'}</p>
+                <p>Settings</p>
               </TooltipContent>
             </Tooltip>
             </div>
