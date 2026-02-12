@@ -427,16 +427,10 @@ const FileRow: React.FC<FileRowProps> = ({
     }
   }, [isDir, node, onSelect, onToggle]);
 
-  const longPressHandlers = useLongPress({
-    onLongPress: handleContextMenu,
-    onTap: handleInteraction,
-    enableHaptic: true,
-  });
-
-  const interactionProps = isMobile ? longPressHandlers : {
-    onClick: handleInteraction,
-    onContextMenu: handleContextMenu,
-  };
+  const handleMenuButtonClick = React.useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    setContextMenuPath(node.path);
+  }, [node.path, setContextMenuPath]);
 
   return (
     <div
@@ -445,7 +439,8 @@ const FileRow: React.FC<FileRowProps> = ({
     >
       <button
         type="button"
-        {...interactionProps}
+        onClick={handleInteraction}
+        onContextMenu={!isMobile ? handleContextMenu : undefined}
         className={cn(
           'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8 select-none',
           isActive ? 'bg-interactive-selection/70' : 'hover:bg-interactive-hover/40'
@@ -478,27 +473,25 @@ const FileRow: React.FC<FileRowProps> = ({
       </button>
       {(canRename || canCreateFile || canCreateFolder || canDelete) && (
         <div className={cn(
-          "absolute right-1 top-1/2 -translate-y-1/2 opacity-0 focus-within:opacity-100",
-          !isMobile && "group-hover:opacity-100",
-          (isMobile && contextMenuPath === node.path) && "opacity-100"
+          "absolute right-1 top-1/2 -translate-y-1/2",
+          !isMobile && "opacity-0 focus-within:opacity-100 group-hover:opacity-100",
+          isMobile && "opacity-100"
         )}>
           <DropdownMenu
             open={contextMenuPath === node.path}
             onOpenChange={(open) => setContextMenuPath(open ? node.path : null)}
           >
-            {!isMobile && (
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <RiMore2Fill className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-            )}
-            {isMobile && (
-              <DropdownMenuTrigger asChild>
-                <span className="hidden" />
-              </DropdownMenuTrigger>
-            )}
-            <DropdownMenuContent align="end" onCloseAutoFocus={() => setContextMenuPath(null)}>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6"
+                onClick={handleMenuButtonClick}
+              >
+                <RiMore2Fill className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side={isMobile ? "bottom" : "bottom"} onCloseAutoFocus={() => setContextMenuPath(null)}>
               {canRename && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenDialog('rename', node); }}>
                   <RiEditLine className="mr-2 h-4 w-4" /> Rename
