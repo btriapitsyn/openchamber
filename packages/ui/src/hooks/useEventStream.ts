@@ -3,7 +3,7 @@ import { opencodeClient, type RoutedOpencodeEvent } from '@/lib/opencode/client'
 import { saveSessionCursor } from '@/lib/messageCursorPersistence';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useMessageStore } from '@/stores/messageStore';
-import { getActiveSessionWindow } from '@/stores/types/sessionTypes';
+import { getMessageLimit } from '@/stores/types/sessionTypes';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore, type EventStreamStatus } from '@/stores/useUIStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -295,7 +295,7 @@ export const useEventStream = () => {
         console.info('[useEventStream] Bootstrapping state:', reason);
       }
       try {
-        const activeLimit = getActiveSessionWindow();
+        const activeLimit = getMessageLimit();
         await Promise.all([
           loadSessions(),
           currentSessionId ? resyncMessages(currentSessionId, reason, activeLimit) : Promise.resolve(),
@@ -308,7 +308,7 @@ export const useEventStream = () => {
   );
 
   const scheduleSoftResync = React.useCallback(
-    (sessionId: string, reason: string, limit = getActiveSessionWindow()): Promise<void> => {
+    (sessionId: string, reason: string, limit = getMessageLimit()): Promise<void> => {
       if (!sessionId) return Promise.resolve();
 
       const memory = useSessionStore.getState().sessionMemoryState.get(sessionId);
@@ -542,7 +542,7 @@ export const useEventStream = () => {
         }
 
         lastMessageStallRecoveryBySessionRef.current.set(sessionId, Date.now());
-        void scheduleSoftResyncRef.current(sessionId, 'status_busy_no_message', getActiveSessionWindow())
+        void scheduleSoftResyncRef.current(sessionId, 'status_busy_no_message', getMessageLimit())
           .finally(() => {
             scheduleReconnectRef.current('No message events after busy status');
           });
@@ -1619,7 +1619,7 @@ export const useEventStream = () => {
          const sessionId = currentSessionIdRef.current;
          if (sessionId) {
            setTimeout(() => {
-            scheduleSoftResync(sessionId, 'sse_reconnected', getActiveSessionWindow())
+            scheduleSoftResync(sessionId, 'sse_reconnected', getMessageLimit())
               .then(() => requestSessionMetadataRefresh(sessionId))
               .catch((error: unknown) => {
                 console.warn('[useEventStream] Failed to resync messages after reconnect:', error);
@@ -1778,7 +1778,7 @@ export const useEventStream = () => {
         console.info('[useEventStream] Visibility restored, triggering soft refresh...');
         const sessionId = currentSessionIdRef.current;
         if (sessionId) {
-          scheduleSoftResync(sessionId, 'visibility_restore', getActiveSessionWindow());
+          scheduleSoftResync(sessionId, 'visibility_restore', getMessageLimit());
           requestSessionMetadataRefresh(sessionId);
         }
 
@@ -1807,7 +1807,7 @@ export const useEventStream = () => {
           const sessionId = currentSessionIdRef.current;
            if (sessionId) {
              requestSessionMetadataRefresh(sessionId);
-             scheduleSoftResync(sessionId, 'window_focus', getActiveSessionWindow());
+             scheduleSoftResync(sessionId, 'window_focus', getMessageLimit());
            }
            // Removed: void refreshSessionStatus();
            triggerSessionStatusPoll();
@@ -1848,7 +1848,7 @@ export const useEventStream = () => {
         if (visibilityStateRef.current === 'visible') {
           const sessionId = currentSessionIdRef.current;
           if (sessionId) {
-            void scheduleSoftResync(sessionId, 'page_show', getActiveSessionWindow());
+            void scheduleSoftResync(sessionId, 'page_show', getMessageLimit());
             requestSessionMetadataRefresh(sessionId);
           }
           // Removed: void refreshSessionStatus();

@@ -591,11 +591,24 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
     }, [defaultActivityExpanded, messages, showTextJustificationActivity, structureKey]);
 
     const lastTurnActivityInfo = React.useMemo<TurnActivityInfo | undefined>(() => {
-        const turns = detectTurns(messages);
+        const lastTurnId = staticValue.lastTurnId;
+        if (!lastTurnId) return undefined;
+        // Find the last turn's user message in the current messages array to pick up
+        // streaming content changes without a second full detectTurns() pass.
+        const turns = staticValue.turns;
         const lastTurn = turns.length > 0 ? turns[turns.length - 1] : undefined;
         if (!lastTurn) return undefined;
-        return getTurnActivityInfo(lastTurn, showTextJustificationActivity);
-    }, [messages, showTextJustificationActivity]);
+        // Re-slice assistant messages from the live `messages` array so that
+        // streamed part updates are reflected without re-detecting all turns.
+        const userIdx = messages.findIndex((m) => m.info.id === lastTurn.userMessage.info.id);
+        if (userIdx < 0) return getTurnActivityInfo(lastTurn, showTextJustificationActivity);
+        const liveAssistant = messages.slice(userIdx + 1).filter((m) => {
+            const role = (m.info as { clientRole?: string | null }).clientRole ?? m.info.role;
+            return role === 'assistant';
+        });
+        const liveTurn: Turn = { ...lastTurn, assistantMessages: liveAssistant };
+        return getTurnActivityInfo(liveTurn, showTextJustificationActivity);
+    }, [staticValue, messages, showTextJustificationActivity]);
 
     // UI state for expansion toggles
     const [turnUiStates, setTurnUiStates] = React.useState<Map<string, { isExpanded: boolean }>>(

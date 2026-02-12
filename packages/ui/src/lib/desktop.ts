@@ -105,10 +105,8 @@ export type DesktopSettings = {
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
 
-  // Memory limits for message viewport management
-  memoryLimitHistorical?: number;   // Default fetch limit when loading/syncing (default: 200)
-  memoryLimitViewport?: number;     // Trim target when leaving session (default: 120)
-  memoryLimitActiveSession?: number; // Trim target for active session (default: 220)
+  // Message limit — controls fetch, trim, and Load More chunk size (default: 200)
+  messageLimit?: number;
 
   // User-added skills catalogs (persisted to ~/.config/openchamber/settings.json)
   skillCatalogs?: SkillCatalogConfig[];

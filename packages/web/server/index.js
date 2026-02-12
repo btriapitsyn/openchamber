@@ -1487,15 +1487,9 @@ const sanitizeSettingsUpdate = (payload) => {
     }
   }
 
-  // Memory limits for message viewport management
-  if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {
-    result.memoryLimitHistorical = Math.max(10, Math.min(500, Math.round(candidate.memoryLimitHistorical)));
-  }
-  if (typeof candidate.memoryLimitViewport === 'number' && Number.isFinite(candidate.memoryLimitViewport)) {
-    result.memoryLimitViewport = Math.max(20, Math.min(500, Math.round(candidate.memoryLimitViewport)));
-  }
-  if (typeof candidate.memoryLimitActiveSession === 'number' && Number.isFinite(candidate.memoryLimitActiveSession)) {
-    result.memoryLimitActiveSession = Math.max(30, Math.min(1000, Math.round(candidate.memoryLimitActiveSession)));
+  // Message limit — single setting for fetch / trim / Load More chunk
+  if (typeof candidate.messageLimit === 'number' && Number.isFinite(candidate.messageLimit)) {
+    result.messageLimit = Math.max(10, Math.min(500, Math.round(candidate.messageLimit)));
   }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);

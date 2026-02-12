@@ -6,24 +6,16 @@ import { useDeviceInfo } from '@/lib/device';
 import { useUIStore } from '@/stores/useUIStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { DEFAULT_MEMORY_LIMITS, DEFAULT_ACTIVE_SESSION_WINDOW } from '@/stores/types/sessionTypes';
+import { DEFAULT_MESSAGE_LIMIT } from '@/stores/types/sessionTypes';
 
-const MIN_HISTORICAL = 10;
-const MAX_HISTORICAL = 500;
-const MIN_VIEWPORT = 20;
-const MAX_VIEWPORT = 500;
-const MIN_ACTIVE = 30;
-const MAX_ACTIVE = 1000;
+const MIN_LIMIT = 10;
+const MAX_LIMIT = 500;
 
 export const MemoryLimitsSettings: React.FC = () => {
   const { isMobile } = useDeviceInfo();
-  
-  const memoryLimitHistorical = useUIStore((state) => state.memoryLimitHistorical);
-  const memoryLimitViewport = useUIStore((state) => state.memoryLimitViewport);
-  const memoryLimitActiveSession = useUIStore((state) => state.memoryLimitActiveSession);
-  const setMemoryLimitHistorical = useUIStore((state) => state.setMemoryLimitHistorical);
-  const setMemoryLimitViewport = useUIStore((state) => state.setMemoryLimitViewport);
-  const setMemoryLimitActiveSession = useUIStore((state) => state.setMemoryLimitActiveSession);
+
+  const messageLimit = useUIStore((state) => state.messageLimit);
+  const setMessageLimit = useUIStore((state) => state.setMessageLimit);
 
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -31,7 +23,7 @@ export const MemoryLimitsSettings: React.FC = () => {
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
-        let data: { memoryLimitHistorical?: number; memoryLimitViewport?: number; memoryLimitActiveSession?: number } | null = null;
+        let data: { messageLimit?: number } | null = null;
 
         // 1. Runtime settings API (VSCode)
         if (!data) {
@@ -42,9 +34,7 @@ export const MemoryLimitsSettings: React.FC = () => {
               const settings = result?.settings as Record<string, unknown> | undefined;
               if (settings) {
                 data = {
-                  memoryLimitHistorical: typeof settings.memoryLimitHistorical === 'number' ? settings.memoryLimitHistorical : undefined,
-                  memoryLimitViewport: typeof settings.memoryLimitViewport === 'number' ? settings.memoryLimitViewport : undefined,
-                  memoryLimitActiveSession: typeof settings.memoryLimitActiveSession === 'number' ? settings.memoryLimitActiveSession : undefined,
+                  messageLimit: typeof settings.messageLimit === 'number' ? settings.messageLimit : undefined,
                 };
               }
             } catch {
@@ -64,16 +54,8 @@ export const MemoryLimitsSettings: React.FC = () => {
           }
         }
 
-        if (data) {
-          if (typeof data.memoryLimitHistorical === 'number') {
-            setMemoryLimitHistorical(data.memoryLimitHistorical);
-          }
-          if (typeof data.memoryLimitViewport === 'number') {
-            setMemoryLimitViewport(data.memoryLimitViewport);
-          }
-          if (typeof data.memoryLimitActiveSession === 'number') {
-            setMemoryLimitActiveSession(data.memoryLimitActiveSession);
-          }
+        if (data && typeof data.messageLimit === 'number') {
+          setMessageLimit(data.messageLimit);
         }
       } catch (error) {
         console.warn('Failed to load memory limits settings:', error);
@@ -82,34 +64,20 @@ export const MemoryLimitsSettings: React.FC = () => {
       }
     };
     loadSettings();
-  }, [setMemoryLimitHistorical, setMemoryLimitViewport, setMemoryLimitActiveSession]);
+  }, [setMessageLimit]);
 
-  const persistSetting = React.useCallback(async (key: string, value: number) => {
-    try {
-      await updateDesktopSettings({ [key]: value });
-    } catch (error) {
-      console.warn(`Failed to save ${key}:`, error);
-    }
-  }, []);
-
-  const handleHistoricalChange = React.useCallback((value: number) => {
-    setMemoryLimitHistorical(value);
-    persistSetting('memoryLimitHistorical', value);
-  }, [setMemoryLimitHistorical, persistSetting]);
-
-  const handleViewportChange = React.useCallback((value: number) => {
-    setMemoryLimitViewport(value);
-    persistSetting('memoryLimitViewport', value);
-  }, [setMemoryLimitViewport, persistSetting]);
-
-  const handleActiveSessionChange = React.useCallback((value: number) => {
-    setMemoryLimitActiveSession(value);
-    persistSetting('memoryLimitActiveSession', value);
-  }, [setMemoryLimitActiveSession, persistSetting]);
+  const handleChange = React.useCallback((value: number) => {
+    setMessageLimit(value);
+    void updateDesktopSettings({ messageLimit: value }).catch((error: unknown) => {
+      console.warn('Failed to save messageLimit:', error);
+    });
+  }, [setMessageLimit]);
 
   if (isLoading) {
     return null;
   }
+
+  const isDefault = messageLimit === DEFAULT_MESSAGE_LIMIT;
 
   return (
     <div className="space-y-4">
@@ -121,71 +89,49 @@ export const MemoryLimitsSettings: React.FC = () => {
               <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
-              Control how many messages are kept in memory for performance optimization.<br />
-              Lower values use less memory but may require reloading older messages.
+              How many messages to keep in view per session.<br />
+              Older messages are available via "Load more". Background sessions are trimmed automatically.
             </TooltipContent>
           </Tooltip>
         </div>
       </div>
 
       <div className="space-y-3">
-        <MemoryLimitRow
-          label="Initial load limit"
-          description="Messages loaded when opening a session"
-          value={memoryLimitHistorical}
-          defaultValue={DEFAULT_MEMORY_LIMITS.HISTORICAL_MESSAGES}
-          min={MIN_HISTORICAL}
-          max={MAX_HISTORICAL}
-          onChange={handleHistoricalChange}
-          isMobile={isMobile}
-        />
-
-        <MemoryLimitRow
-          label="Background trim limit"
-          description="Max messages kept when switching away"
-          value={memoryLimitViewport}
-          defaultValue={DEFAULT_MEMORY_LIMITS.VIEWPORT_MESSAGES}
-          min={MIN_VIEWPORT}
-          max={MAX_VIEWPORT}
-          onChange={handleViewportChange}
-          isMobile={isMobile}
-        />
-
-        <MemoryLimitRow
-          label="Active session limit"
-          description="Max messages for active session"
-          value={memoryLimitActiveSession}
-          defaultValue={DEFAULT_ACTIVE_SESSION_WINDOW}
-          min={MIN_ACTIVE}
-          max={MAX_ACTIVE}
-          onChange={handleActiveSessionChange}
-          isMobile={isMobile}
-        />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col">
+              <span className="typography-ui-label text-foreground">Message limit</span>
+              <span className="typography-meta text-muted-foreground">Messages loaded per session</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isDefault && (
+                <span className="typography-meta text-muted-foreground/60">(default: {DEFAULT_MESSAGE_LIMIT})</span>
+              )}
+              {isMobile ? (
+                <MobileInput value={messageLimit} min={MIN_LIMIT} max={MAX_LIMIT} onChange={handleChange} />
+              ) : (
+                <NumberInput
+                  value={messageLimit}
+                  onValueChange={handleChange}
+                  min={MIN_LIMIT}
+                  max={MAX_LIMIT}
+                  step={10}
+                  aria-label="Message limit"
+                />
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-interface MemoryLimitRowProps {
-  label: string;
-  description: string;
-  value: number;
-  defaultValue: number;
-  min: number;
-  max: number;
-  onChange: (value: number) => void;
-  isMobile: boolean;
-}
-
-const MemoryLimitRow: React.FC<MemoryLimitRowProps> = ({
-  label,
-  description,
+const MobileInput: React.FC<{ value: number; min: number; max: number; onChange: (v: number) => void }> = ({
   value,
-  defaultValue,
   min,
   max,
   onChange,
-  isMobile,
 }) => {
   const [draft, setDraft] = React.useState(String(value));
 
@@ -193,21 +139,16 @@ const MemoryLimitRow: React.FC<MemoryLimitRowProps> = ({
     setDraft(String(value));
   }, [value]);
 
-  const handleMobileChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = React.useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const nextValue = e.target.value;
     setDraft(nextValue);
-    if (nextValue.trim() === '') {
-      return;
-    }
+    if (nextValue.trim() === '') return;
     const parsed = Number(nextValue);
-    if (!Number.isFinite(parsed)) {
-      return;
-    }
-    const clamped = Math.min(max, Math.max(min, Math.round(parsed)));
-    onChange(clamped);
+    if (!Number.isFinite(parsed)) return;
+    onChange(Math.min(max, Math.max(min, Math.round(parsed))));
   }, [min, max, onChange]);
 
-  const handleMobileBlur = React.useCallback(() => {
+  const handleBlur = React.useCallback(() => {
     if (draft.trim() === '') {
       setDraft(String(value));
       return;
@@ -222,41 +163,15 @@ const MemoryLimitRow: React.FC<MemoryLimitRowProps> = ({
     setDraft(String(clamped));
   }, [draft, value, min, max, onChange]);
 
-  const isDefault = value === defaultValue;
-
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-col">
-          <span className="typography-ui-label text-foreground">{label}</span>
-          <span className="typography-meta text-muted-foreground">{description}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {!isDefault && (
-            <span className="typography-meta text-muted-foreground/60">(default: {defaultValue})</span>
-          )}
-          {isMobile ? (
-            <input
-              type="number"
-              inputMode="numeric"
-              value={draft}
-              onChange={handleMobileChange}
-              onBlur={handleMobileBlur}
-              aria-label={label}
-              className="h-8 w-20 rounded-lg border border-border bg-background px-2 text-center typography-ui-label text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/50"
-            />
-          ) : (
-            <NumberInput
-              value={value}
-              onValueChange={onChange}
-              min={min}
-              max={max}
-              step={10}
-              aria-label={label}
-            />
-          )}
-        </div>
-      </div>
-    </div>
+    <input
+      type="number"
+      inputMode="numeric"
+      value={draft}
+      onChange={handleChange}
+      onBlur={handleBlur}
+      aria-label="Message limit"
+      className="h-8 w-20 rounded-lg border border-border bg-background px-2 text-center typography-ui-label text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/50"
+    />
   );
 };

@@ -88,9 +88,7 @@ interface UIStore {
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
   autoDeleteLastRunAt: number | null;
-  memoryLimitHistorical: number;
-  memoryLimitViewport: number;
-  memoryLimitActiveSession: number;
+  messageLimit: number;
 
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
   fontSize: number;
@@ -172,9 +170,7 @@ interface UIStore {
   setAutoDeleteEnabled: (value: boolean) => void;
   setAutoDeleteAfterDays: (days: number) => void;
   setAutoDeleteLastRunAt: (timestamp: number | null) => void;
-  setMemoryLimitHistorical: (value: number) => void;
-  setMemoryLimitViewport: (value: number) => void;
-  setMemoryLimitActiveSession: (value: number) => void;
+  setMessageLimit: (value: number) => void;
   setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed') => void;
   setFontSize: (size: number) => void;
   setTerminalFontSize: (size: number) => void;
@@ -256,9 +252,7 @@ export const useUIStore = create<UIStore>()(
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
         autoDeleteLastRunAt: null,
-        memoryLimitHistorical: 200,
-        memoryLimitViewport: 120,
-        memoryLimitActiveSession: 220,
+        messageLimit: 200,
         toolCallExpansion: 'collapsed',
         fontSize: 100,
         terminalFontSize: 13,
@@ -568,19 +562,9 @@ export const useUIStore = create<UIStore>()(
           set({ autoDeleteLastRunAt: timestamp });
         },
 
-        setMemoryLimitHistorical: (value) => {
+        setMessageLimit: (value) => {
           const clamped = Math.max(10, Math.min(500, Math.round(value)));
-          set({ memoryLimitHistorical: clamped });
-        },
-
-        setMemoryLimitViewport: (value) => {
-          const clamped = Math.max(20, Math.min(500, Math.round(value)));
-          set({ memoryLimitViewport: clamped });
-        },
-
-        setMemoryLimitActiveSession: (value) => {
-          const clamped = Math.max(30, Math.min(1000, Math.round(value)));
-          set({ memoryLimitActiveSession: clamped });
+          set({ messageLimit: clamped });
         },
 
         setToolCallExpansion: (value) => {
@@ -881,7 +865,7 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 2,
+        version: 3,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
@@ -900,15 +884,25 @@ export const useUIStore = create<UIStore>()(
             }
           }
 
-          // v1 -> v2: clear stale memory limit defaults so new defaults (200/120/220) take effect.
-          // Only clear if the value matches the old hardcoded default — user-customised values are preserved.
-          if (version < 2) {
-            if (state.memoryLimitHistorical === 90) {
-              delete state.memoryLimitHistorical;
+          // v2 -> v3: collapse 3 memory-limit fields into single messageLimit.
+          // Pick the best user-customised value (prefer historical, fall back to active).
+          // Discard old defaults (90/120/180) — they become the new single default (200).
+          if (version < 3) {
+            const OLD_DEFAULTS = new Set([90, 120, 180, 220]);
+            const hist = state.memoryLimitHistorical as number | undefined;
+            const active = state.memoryLimitActiveSession as number | undefined;
+
+            // If user had a non-default custom value, keep it as the new messageLimit.
+            if (typeof hist === 'number' && !OLD_DEFAULTS.has(hist)) {
+              state.messageLimit = hist;
+            } else if (typeof active === 'number' && !OLD_DEFAULTS.has(active)) {
+              state.messageLimit = active;
             }
-            if (state.memoryLimitActiveSession === 180) {
-              delete state.memoryLimitActiveSession;
-            }
+            // Otherwise leave undefined → Zustand uses the initial default (200).
+
+            delete state.memoryLimitHistorical;
+            delete state.memoryLimitViewport;
+            delete state.memoryLimitActiveSession;
           }
 
           return state;
@@ -931,9 +925,7 @@ export const useUIStore = create<UIStore>()(
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoDeleteAfterDays: state.autoDeleteAfterDays,
           autoDeleteLastRunAt: state.autoDeleteLastRunAt,
-          memoryLimitHistorical: state.memoryLimitHistorical,
-          memoryLimitViewport: state.memoryLimitViewport,
-          memoryLimitActiveSession: state.memoryLimitActiveSession,
+          messageLimit: state.messageLimit,
           toolCallExpansion: state.toolCallExpansion,
           fontSize: state.fontSize,
           terminalFontSize: state.terminalFontSize,

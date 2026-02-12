@@ -5,7 +5,7 @@ import type { Message, Part } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { isExecutionForkMetaText } from "@/lib/messages/executionMeta";
 import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
-import { MEMORY_LIMITS, getMemoryLimits } from "./types/sessionTypes";
+import { MEMORY_LIMITS, getMemoryLimits, getBackgroundTrimLimit } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
     removeLifecycleEntries,
@@ -397,15 +397,15 @@ export const useMessageStore = create<MessageStore>()(
                         const memLimits = getMemoryLimits();
                         const noLimit = limit === Infinity;
                         const previousMemoryState = get().sessionMemoryState.get(sessionId);
-                        const desiredHistoryLimit =
+                        // Use explicit limit if provided, otherwise current messageLimit.
+                        // historyLimit is only respected when it's ABOVE messageLimit
+                        // (i.e. user pressed Load More to expand beyond the default).
+                        const baseLimit = memLimits.HISTORICAL_MESSAGES;
+                        const userExpandedLimit = previousMemoryState?.historyLimit;
+                        const targetLimit =
                             typeof limit === 'number' && Number.isFinite(limit)
                                 ? limit
-                                : (previousMemoryState?.historyLimit ?? memLimits.HISTORICAL_MESSAGES);
-
-                        const isStreaming = previousMemoryState?.isStreaming;
-                        const targetLimit = isStreaming
-                            ? Math.min(memLimits.VIEWPORT_MESSAGES, desiredHistoryLimit)
-                            : desiredHistoryLimit;
+                                : Math.max(baseLimit, userExpandedLimit ?? 0);
 
                         // Don't pass Infinity to API - use undefined for "fetch all".
                         // For finite loads, overfetch by 1 so hasMoreAbove is accurate.
@@ -2252,7 +2252,7 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 trimToViewportWindow: (sessionId: string, targetSize?: number, currentSessionId?: string) => {
-                    const effectiveTargetSize = targetSize ?? getMemoryLimits().VIEWPORT_MESSAGES;
+                    const effectiveTargetSize = targetSize ?? getBackgroundTrimLimit();
                     const state = get();
                     const sessionMessages = state.messages.get(sessionId);
                     if (!sessionMessages || sessionMessages.length <= effectiveTargetSize) {
