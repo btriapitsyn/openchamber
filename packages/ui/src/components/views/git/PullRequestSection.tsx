@@ -1253,6 +1253,9 @@ export const PullRequestSection: React.FC<{
                           onChange={(e) => setEditBody(e.target.value)}
                           className="min-h-[120px] bg-background/80"
                           placeholder="Describe this PR"
+                          autoCorrect={hasTouchInput ? "on" : "off"}
+                          autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                          spellCheck={hasTouchInput}
                         />
                       </div>
                     ) : (
@@ -1496,6 +1499,9 @@ export const PullRequestSection: React.FC<{
                     onChange={(e) => setBody(e.target.value)}
                     className="min-h-[110px] bg-background/80"
                     placeholder="What changed and why"
+                    autoCorrect={hasTouchInput ? "on" : "off"}
+                    autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                    spellCheck={hasTouchInput}
                   />
                 </label>
 
