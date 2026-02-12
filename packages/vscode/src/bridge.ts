@@ -2282,12 +2282,61 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:git/worktrees': {
+        const { directory, method } = (payload || {}) as {
+          directory?: string;
+          method?: string;
+          body?: unknown;
+          directoryPath?: string;
+          deleteLocalBranch?: boolean;
+        };
+        if (!directory) {
+          return { id, type, success: false, error: 'Directory is required' };
+        }
+
+        const normalizedMethod = typeof method === 'string' ? method.toUpperCase() : 'GET';
+
+        if (normalizedMethod === 'GET') {
+          const worktrees = await gitService.listGitWorktrees(directory);
+          return { id, type, success: true, data: worktrees };
+        }
+
+        if (normalizedMethod === 'POST') {
+          const created = await gitService.createWorktree(directory, (payload || {}) as gitService.CreateGitWorktreePayload);
+          return { id, type, success: true, data: created };
+        }
+
+        if (normalizedMethod === 'DELETE') {
+          const removePayload = payload as {
+            body?: { directory?: string; deleteLocalBranch?: boolean };
+            directory?: string;
+            deleteLocalBranch?: boolean;
+          };
+          const bodyDirectory = typeof removePayload?.body?.directory === 'string'
+            ? removePayload.body.directory
+            : '';
+          const legacyDirectory = typeof removePayload?.directory === 'string' ? removePayload.directory : '';
+          const worktreeDirectory = bodyDirectory || legacyDirectory || '';
+
+          if (!worktreeDirectory) {
+            return { id, type, success: false, error: 'Worktree directory is required' };
+          }
+          const removed = await gitService.removeWorktree(directory, {
+            directory: worktreeDirectory,
+            deleteLocalBranch: removePayload?.body?.deleteLocalBranch === true || removePayload?.deleteLocalBranch === true,
+          });
+          return { id, type, success: true, data: { success: Boolean(removed) } };
+        }
+
+        return { id, type, success: false, error: `Unsupported method: ${normalizedMethod}` };
+      }
+
+      case 'api:git/worktrees/validate': {
         const { directory } = (payload || {}) as { directory?: string };
         if (!directory) {
           return { id, type, success: false, error: 'Directory is required' };
         }
-        const worktrees = await gitService.listGitWorktrees(directory);
-        return { id, type, success: true, data: worktrees };
+        const result = await gitService.validateWorktreeCreate(directory, (payload || {}) as gitService.CreateGitWorktreePayload);
+        return { id, type, success: true, data: result };
       }
 
       case 'api:git/diff': {

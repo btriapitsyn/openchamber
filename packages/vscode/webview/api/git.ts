@@ -17,6 +17,10 @@ import type {
   GeneratedCommitMessage,
   GeneratedPullRequestDescription,
   GitWorktreeInfo,
+  CreateGitWorktreePayload,
+  GitWorktreeValidationResult,
+  GitWorktreeCreateResult,
+  RemoveGitWorktreePayload,
   GitCommitResult,
   CreateGitCommitOptions,
   GitPushResult,
@@ -111,6 +115,32 @@ export const createVSCodeGitAPI = (): GitAPI => ({
 
   listGitWorktrees: async (directory: string): Promise<GitWorktreeInfo[]> => {
     return sendBridgeMessage<GitWorktreeInfo[]>('api:git/worktrees', { directory, method: 'GET' });
+  },
+
+  validateGitWorktree: async (directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult> => {
+    return sendBridgeMessage<GitWorktreeValidationResult>('api:git/worktrees/validate', {
+      directory,
+      ...(payload || {}),
+    });
+  },
+
+  createGitWorktree: async (directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult> => {
+    return sendBridgeMessage<GitWorktreeCreateResult>('api:git/worktrees', {
+      directory,
+      method: 'POST',
+      ...(payload || {}),
+    });
+  },
+
+  deleteGitWorktree: async (directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }> => {
+    return sendBridgeMessage<{ success: boolean }>('api:git/worktrees', {
+      directory,
+      method: 'DELETE',
+      body: {
+        directory: payload.directory,
+        deleteLocalBranch: payload.deleteLocalBranch === true,
+      },
+    });
   },
 
   createGitCommit: async (directory: string, message: string, options?: CreateGitCommitOptions): Promise<GitCommitResult> => {
@@ -285,6 +315,29 @@ export const createVSCodeGitAPI = (): GitAPI => ({
   worktree: {
     list: async (directory: string): Promise<GitWorktreeInfo[]> => {
       return sendBridgeMessage<GitWorktreeInfo[]>('api:git/worktrees', { directory, method: 'GET' });
+    },
+    validate: async (directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult> => {
+      return sendBridgeMessage<GitWorktreeValidationResult>('api:git/worktrees/validate', {
+        directory,
+        ...(payload || {}),
+      });
+    },
+    create: async (directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult> => {
+      return sendBridgeMessage<GitWorktreeCreateResult>('api:git/worktrees', {
+        directory,
+        method: 'POST',
+        ...(payload || {}),
+      });
+    },
+    remove: async (directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }> => {
+      return sendBridgeMessage<{ success: boolean }>('api:git/worktrees', {
+        directory,
+        method: 'DELETE',
+        body: {
+          directory: payload.directory,
+          deleteLocalBranch: payload.deleteLocalBranch === true,
+        },
+      });
     },
   },
 });
