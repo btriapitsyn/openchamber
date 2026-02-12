@@ -38,6 +38,8 @@ interface DirectoryTreeProps {
   isRootReady?: boolean;
   /** Always show action icons (add, pin) instead of only on hover */
   alwaysShowActions?: boolean;
+  /** Connection ID for remote filesystem access */
+  connectionId?: string;
 }
 
 export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
@@ -52,6 +54,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   rootDirectory = null,
   isRootReady,
   alwaysShowActions = false,
+  connectionId,
 }) => {
   const { isMobile } = useDeviceInfo();
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
@@ -183,7 +186,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
     const resolveHomeDirectory = async () => {
       try {
-        const fsHome = await opencodeClient.getFilesystemHome();
+        const fsHome = await opencodeClient.getFilesystemHome(connectionId);
         if (!cancelled && applyRootDirectory(fsHome)) {
           return;
         }
@@ -208,7 +211,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [rootDirectory, stripTrailingSlashes]);
+  }, [rootDirectory, stripTrailingSlashes, connectionId]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -372,7 +375,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     }
 
     try {
-      const filesystemEntries = await opencodeClient.listLocalDirectory(path);
+      const filesystemEntries = await opencodeClient.listLocalDirectory(path, { connectionId });
       return filesystemEntries
         .filter((entry) => {
           if (!entry.isDirectory) {
@@ -429,7 +432,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         return [];
       }
     }
-  }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady]);
+  }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady, connectionId]);
 
   const hasLoadedOnce = React.useRef(false);
 
@@ -668,20 +671,22 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           </span>
         </button>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            startCreatingDirectory(item);
-          }}
-          className={cn(
-            "hover:bg-interactive-hover rounded transition-opacity",
-            isMobile ? "p-1.5" : "p-1",
-            alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
-          )}
-          title="Create new directory"
-        >
-          <RiAddLine className={cn("text-muted-foreground", isMobile ? "h-3.5 w-3.5" : "h-3 w-3")} />
-        </button>
+        {(!connectionId || connectionId === 'local') && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              startCreatingDirectory(item);
+            }}
+            className={cn(
+              "hover:bg-interactive-hover rounded transition-opacity",
+              isMobile ? "p-1.5" : "p-1",
+              alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
+            )}
+            title="Create new directory"
+          >
+            <RiAddLine className={cn("text-muted-foreground", isMobile ? "h-3.5 w-3.5" : "h-3 w-3")} />
+          </button>
+        )}
 
         <button
           onClick={(e) => {
