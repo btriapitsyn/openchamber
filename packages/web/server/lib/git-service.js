@@ -636,6 +636,73 @@ const loadProjectStartCommand = async (projectID) => {
   }
 };
 
+const getProjectStoragePath = (projectID) => {
+  return path.join(getOpenCodeDataPath(), 'storage', 'project', `${projectID}.json`);
+};
+
+const updateProjectSandboxes = async (projectID, primaryWorktree, updater) => {
+  const storagePath = getProjectStoragePath(projectID);
+  await fsp.mkdir(path.dirname(storagePath), { recursive: true });
+
+  const now = Date.now();
+  const base = {
+    id: projectID,
+    worktree: primaryWorktree,
+    vcs: 'git',
+    sandboxes: [],
+    time: {
+      created: now,
+      updated: now,
+    },
+  };
+
+  const parsed = await fsp.readFile(storagePath, 'utf8').then((raw) => JSON.parse(raw)).catch(() => null);
+  const current = parsed && typeof parsed === 'object' ? { ...base, ...parsed } : base;
+  current.id = String(current.id || projectID);
+  current.worktree = String(current.worktree || primaryWorktree);
+  current.vcs = current.vcs || 'git';
+  current.sandboxes = Array.isArray(current.sandboxes)
+    ? current.sandboxes.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  const createdAt = Number(current?.time?.created);
+  current.time = {
+    created: Number.isFinite(createdAt) && createdAt > 0 ? createdAt : now,
+    updated: now,
+  };
+
+  updater(current);
+
+  current.sandboxes = [...new Set(
+    (Array.isArray(current.sandboxes) ? current.sandboxes : [])
+      .map((entry) => String(entry || '').trim())
+      .filter(Boolean)
+  )];
+
+  await fsp.writeFile(storagePath, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
+};
+
+const syncProjectSandboxAdd = async (projectID, primaryWorktree, sandboxPath) => {
+  const sandbox = String(sandboxPath || '').trim();
+  if (!sandbox) {
+    return;
+  }
+  await updateProjectSandboxes(projectID, primaryWorktree, (project) => {
+    if (!project.sandboxes.includes(sandbox)) {
+      project.sandboxes.push(sandbox);
+    }
+  });
+};
+
+const syncProjectSandboxRemove = async (projectID, primaryWorktree, sandboxPath) => {
+  const sandbox = String(sandboxPath || '').trim();
+  if (!sandbox) {
+    return;
+  }
+  await updateProjectSandboxes(projectID, primaryWorktree, (project) => {
+    project.sandboxes = project.sandboxes.filter((entry) => entry !== sandbox);
+  });
+};
+
 const queueWorktreeStartScripts = (directory, projectID, startCommand) => {
   setTimeout(() => {
     const run = async () => {
@@ -1951,6 +2018,12 @@ export async function createWorktree(directory, input = {}) {
   await runGitCommandOrThrow(context.primaryWorktree, worktreeAddArgs, 'Failed to create git worktree');
   await runGitCommandOrThrow(candidate.directory, ['reset', '--hard'], 'Failed to populate worktree');
 
+  try {
+    await syncProjectSandboxAdd(context.projectID, context.primaryWorktree, candidate.directory);
+  } catch (error) {
+    console.warn('Failed to sync OpenCode sandbox metadata (add):', error instanceof Error ? error.message : String(error));
+  }
+
   const shouldSetUpstream = Boolean(input?.setUpstream);
   const upstreamRemote = String(input?.upstreamRemote || inferredUpstream?.remote || '').trim();
   const upstreamBranch = String(input?.upstreamBranch || inferredUpstream?.branch || '').trim();
@@ -2015,6 +2088,13 @@ export async function removeWorktree(directory, input = {}) {
     if (targetExists) {
       await fsp.rm(targetDirectory, { recursive: true, force: true });
     }
+
+    try {
+      await syncProjectSandboxRemove(context.projectID, context.primaryWorktree, targetDirectory);
+    } catch (error) {
+      console.warn('Failed to sync OpenCode sandbox metadata (remove):', error instanceof Error ? error.message : String(error));
+    }
+
     return true;
   }
 
@@ -2033,6 +2113,12 @@ export async function removeWorktree(directory, input = {}) {
         `Failed to delete local branch ${branchName}`
       );
     }
+  }
+
+  try {
+    await syncProjectSandboxRemove(context.projectID, context.primaryWorktree, matchedEntry.worktree);
+  } catch (error) {
+    console.warn('Failed to sync OpenCode sandbox metadata (remove):', error instanceof Error ? error.message : String(error));
   }
 
   return true;
