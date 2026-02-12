@@ -4,6 +4,7 @@ import { opencodeClient } from '@/lib/opencode/client';
 import type { ProjectEntry } from '@/lib/api/types';
 import type { DesktopSettings } from '@/lib/desktop';
 import { useNotificationBadgeStore } from '@/stores/useNotificationBadgeStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getSafeStorage } from './utils/safeStorage';
 import { useDirectoryStore } from './useDirectoryStore';
@@ -383,6 +384,13 @@ export const useProjectsStore = create<ProjectsStore>()(
       // Clear notification badge for the project being switched to
       if (target.path) {
         useNotificationBadgeStore.getState().clear(target.path);
+      }
+
+      // Switch to the project's connection if it differs from the current active connection
+      const projectConnectionId = target.connectionId || 'local';
+      const currentActiveConnectionId = useConnectionsStore.getState().activeConnectionId;
+      if (projectConnectionId !== currentActiveConnectionId) {
+        useConnectionsStore.getState().setActiveConnection(projectConnectionId);
       }
 
       opencodeClient.setDirectory(target.path);
