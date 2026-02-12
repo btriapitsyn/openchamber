@@ -2667,6 +2667,7 @@ let openCodeApiDetectionTimer = null;
 let lastOpenCodeError = null;
 let isOpenCodeReady = false;
 let openCodeNotReadySince = 0;
+let isExternalOpenCode = false;
 let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
@@ -2715,6 +2716,36 @@ async function isOpenCodeProcessHealthy() {
       signal: AbortSignal.timeout(2000),
     });
     return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Probe if an external OpenCode instance is already running on the given port.
+ * Unlike isOpenCodeProcessHealthy(), this doesn't require openCodeProcess to be set.
+ * Used to auto-detect and connect to an existing OpenCode instance on startup.
+ */
+async function probeExternalOpenCode(port) {
+  if (!port || port <= 0) {
+    return false;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const response = await fetch(`http://127.0.0.1:${port}/global/health`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...getOpenCodeAuthHeaders(),
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!response.ok) return false;
+    const body = await response.json().catch(() => null);
+    return body?.healthy === true;
   } catch {
     return false;
   }
@@ -4332,6 +4363,31 @@ async function restartOpenCode() {
     openCodeNotReadySince = Date.now();
     console.log('Restarting OpenCode process...');
 
+    // For external OpenCode servers, re-probe instead of kill + respawn
+    if (isExternalOpenCode) {
+      console.log('Re-probing external OpenCode server...');
+      const probePort = openCodePort || ENV_CONFIGURED_OPENCODE_PORT || 4096;
+      const healthy = await probeExternalOpenCode(probePort);
+      if (healthy) {
+        console.log(`External OpenCode server on port ${probePort} is healthy`);
+        setOpenCodePort(probePort);
+        isOpenCodeReady = true;
+        lastOpenCodeError = null;
+        openCodeNotReadySince = 0;
+        syncToHmrState();
+      } else {
+        lastOpenCodeError = `External OpenCode server on port ${probePort} is not responding`;
+        console.error(lastOpenCodeError);
+        throw new Error(lastOpenCodeError);
+      }
+
+      if (expressApp) {
+        setupProxy(expressApp);
+        ensureOpenCodeApiPrefix();
+      }
+      return;
+    }
+
     const portToKill = openCodePort;
 
     if (openCodeProcess) {
@@ -5012,7 +5068,7 @@ async function gracefulShutdown(options = {}) {
   }
 
   // Only stop OpenCode if we started it ourselves (not when using external server)
-  if (!ENV_SKIP_OPENCODE_START) {
+  if (!ENV_SKIP_OPENCODE_START && !isExternalOpenCode) {
     const portToKill = openCodePort;
 
     if (openCodeProcess) {
@@ -10586,6 +10642,23 @@ Context:
       console.log(`Using external OpenCode server on port ${ENV_CONFIGURED_OPENCODE_PORT} (skip-start mode)`);
       setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
       isOpenCodeReady = true;
+      isExternalOpenCode = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
+      syncToHmrState();
+    } else if (ENV_CONFIGURED_OPENCODE_PORT && await probeExternalOpenCode(ENV_CONFIGURED_OPENCODE_PORT)) {
+      console.log(`Auto-detected existing OpenCode server on port ${ENV_CONFIGURED_OPENCODE_PORT}`);
+      setOpenCodePort(ENV_CONFIGURED_OPENCODE_PORT);
+      isOpenCodeReady = true;
+      isExternalOpenCode = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
+      syncToHmrState();
+    } else if (!ENV_CONFIGURED_OPENCODE_PORT && await probeExternalOpenCode(4096)) {
+      console.log('Auto-detected existing OpenCode server on default port 4096');
+      setOpenCodePort(4096);
+      isOpenCodeReady = true;
+      isExternalOpenCode = true;
       lastOpenCodeError = null;
       openCodeNotReadySince = 0;
       syncToHmrState();
