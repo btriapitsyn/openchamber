@@ -185,7 +185,7 @@ export const PullRequestSection: React.FC<{
   const setSidebarSection = useUIStore((state) => state.setSidebarSection);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
-  const { isMobile } = useDeviceInfo();
+  const { isMobile, hasTouchInput } = useDeviceInfo();
 
   const openGitHubSettings = React.useCallback(() => {
     setSidebarSection('settings');
@@ -1244,6 +1244,9 @@ export const PullRequestSection: React.FC<{
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
                           placeholder="PR title"
+                          autoCorrect={hasTouchInput ? "on" : "off"}
+                          autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                          spellCheck={hasTouchInput}
                         />
                         <Textarea
                           value={editBody}
@@ -1480,6 +1483,9 @@ export const PullRequestSection: React.FC<{
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="PR title"
+                    autoCorrect={hasTouchInput ? "on" : "off"}
+                    autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                    spellCheck={hasTouchInput}
                   />
                 </label>
 
