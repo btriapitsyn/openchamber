@@ -19,7 +19,7 @@ import {
   RiSearchLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
-import { deleteGitBranch, getGitBranches, listGitWorktrees, renameBranch } from '@/lib/gitApi';
+import { deleteGitBranch, getGitBranches, git, renameBranch } from '@/lib/gitApi';
 import type { GitBranch, GitWorktreeInfo } from '@/lib/api/types';
 
 export interface BranchPickerProject {
@@ -59,7 +59,7 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
     try {
       const [b, w] = await Promise.all([
         getGitBranches(project.path),
-        listGitWorktrees(project.path),
+        git.worktree.list(project.path),
       ]);
       setBranches(b);
       setWorktrees(w);
