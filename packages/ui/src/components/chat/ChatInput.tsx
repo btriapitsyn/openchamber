@@ -2119,7 +2119,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     </div>
 
                     {/* Mobile Session Status Bar - 在输入框上方 */}
-                    {isMobile && <MobileSessionStatusBar />}
+                    {isMobile && <MobileSessionStatusBar cornerRadius={cornerRadius} />}
                 </div>
             </div>
         </form>
