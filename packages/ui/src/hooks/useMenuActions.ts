@@ -3,6 +3,7 @@ import { toast } from '@/components/ui';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { isTauriShell } from '@/lib/desktop';
@@ -57,10 +58,17 @@ export const useMenuActions = (
     setAboutDialogOpen,
   } = useUIStore();
   const { addProject } = useProjectsStore();
+  const { activeConnectionId } = useConnectionsStore();
   const { requestAccess, startAccessing } = useFileSystemAccess();
   const { setThemeMode } = useThemeSystem();
 
   const handleChangeWorkspace = React.useCallback(() => {
+    // When remote connection is active, use the remote filesystem browser
+    if (activeConnectionId !== 'local') {
+      sessionEvents.requestDirectoryDialog();
+      return;
+    }
+
     if (isTauriShell()) {
       requestAccess('')
         .then(async (result) => {
@@ -92,10 +100,11 @@ export const useMenuActions = (
           console.error('Desktop: Error selecting directory:', error);
           toast.error('Failed to select directory');
         });
+      return;
     }
 
     sessionEvents.requestDirectoryDialog();
-  }, [addProject, requestAccess, startAccessing]);
+  }, [activeConnectionId, addProject, requestAccess, startAccessing]);
 
   const handleAction = React.useCallback(
     (action: MenuAction) => {

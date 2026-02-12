@@ -116,7 +116,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         }
       }
 
-      const added = addProject(resolvedPath, { id: projectId });
+      const added = addProject(resolvedPath, { id: projectId, connectionId: activeConnectionId });
       if (!added) {
         toast.error('Failed to add project', {
           description: 'Please select a valid directory path.',
@@ -139,6 +139,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     requestAccess,
     startAccessing,
     isConfirming,
+    activeConnectionId,
   ]);
 
   const handleConfirm = React.useCallback(async () => {

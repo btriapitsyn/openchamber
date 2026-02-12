@@ -1050,6 +1050,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
+    // When remote connection is active, use the remote filesystem browser
+    if (activeConnectionId !== 'local') {
+      sessionEvents.requestDirectoryDialog();
+      return;
+    }
+
     if (!tauriIpcAvailable) {
       sessionEvents.requestDirectoryDialog();
       return;
@@ -1075,7 +1081,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         console.error('Desktop: Error selecting directory:', error);
         toast.error('Failed to select directory');
       });
-  }, [addProject, tauriIpcAvailable]);
+  }, [addProject, activeConnectionId, tauriIpcAvailable]);
 
   const toggleParent = React.useCallback((sessionId: string) => {
     setExpandedParents((prev) => {
