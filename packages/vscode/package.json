@@ -2,7 +2,7 @@
   "name": "openchamber",
   "displayName": "OpenChamber",
   "description": "AI coding assistant powered by OpenCode",
-  "version": "1.6.7",
+  "version": "1.6.8",
   "publisher": "fedaykindev",
   "private": true,
   "repository": {

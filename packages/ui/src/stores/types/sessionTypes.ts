@@ -33,6 +33,9 @@ export interface SessionMemoryState {
     isZombie?: boolean;
     totalAvailableMessages?: number;
     hasMoreAbove?: boolean;
+    historyLoading?: boolean;
+    historyComplete?: boolean;
+    historyLimit?: number;
     trimmedHeadMaxId?: string;
     streamingCooldownUntil?: number;
     lastUserMessageAt?: number; // Timestamp when user last sent a message
@@ -48,44 +51,57 @@ export interface SessionContextUsage {
     lastMessageId?: string;
 }
 
-// Default memory limits (can be overridden via settings)
-export const DEFAULT_MEMORY_LIMITS = {
+// Default message limit (can be overridden via settings).
+// Single value controls: fetch from server, active session ceiling, Load More chunk.
+// Background trim is derived automatically as Math.round(limit * 0.6).
+export const DEFAULT_MESSAGE_LIMIT = 200;
+
+export const MEMORY_CONSTANTS = {
     MAX_SESSIONS: 3,
-    VIEWPORT_MESSAGES: 120,
-    HISTORICAL_MESSAGES: 90,
-    FETCH_BUFFER: 20,
-    STREAMING_BUFFER: Infinity,
     BACKGROUND_STREAMING_BUFFER: 120,
     ZOMBIE_TIMEOUT: 10 * 60 * 1000,
 } as const;
 
-export const DEFAULT_ACTIVE_SESSION_WINDOW = 180;
-
-// Dynamic memory limits accessor - reads directly from UI store.
+// Dynamic accessors — read user setting from UI store.
 // NOTE: do not use require() here (breaks in browser/desktop runtime bundles).
 import { useUIStore } from "../useUIStore";
 
-export const getMemoryLimits = () => {
+/** User-configured (or default) message limit. */
+export const getMessageLimit = (): number => {
     const state = useUIStore.getState?.();
-    if (!state) {
-        return DEFAULT_MEMORY_LIMITS;
-    }
+    return state?.messageLimit ?? DEFAULT_MESSAGE_LIMIT;
+};
+
+/** Background trim target — automatic, not user-facing. */
+export const getBackgroundTrimLimit = (): number =>
+    Math.round(getMessageLimit() * 0.6);
+
+// --- Backward-compat shims (avoid mass refactor of non-critical callers) ---
+export const DEFAULT_MEMORY_LIMITS = {
+    MAX_SESSIONS: MEMORY_CONSTANTS.MAX_SESSIONS,
+    VIEWPORT_MESSAGES: Math.round(DEFAULT_MESSAGE_LIMIT * 0.6),
+    HISTORICAL_MESSAGES: DEFAULT_MESSAGE_LIMIT,
+    FETCH_BUFFER: 20,
+    HISTORY_CHUNK: DEFAULT_MESSAGE_LIMIT,
+    STREAMING_BUFFER: Infinity,
+    BACKGROUND_STREAMING_BUFFER: MEMORY_CONSTANTS.BACKGROUND_STREAMING_BUFFER,
+    ZOMBIE_TIMEOUT: MEMORY_CONSTANTS.ZOMBIE_TIMEOUT,
+} as const;
+
+export const getMemoryLimits = () => {
+    const limit = getMessageLimit();
+    const bgTrim = getBackgroundTrimLimit();
     return {
         ...DEFAULT_MEMORY_LIMITS,
-        HISTORICAL_MESSAGES: state.memoryLimitHistorical ?? DEFAULT_MEMORY_LIMITS.HISTORICAL_MESSAGES,
-        VIEWPORT_MESSAGES: state.memoryLimitViewport ?? DEFAULT_MEMORY_LIMITS.VIEWPORT_MESSAGES,
+        HISTORICAL_MESSAGES: limit,
+        VIEWPORT_MESSAGES: bgTrim,
+        HISTORY_CHUNK: limit,
     };
 };
 
-export const getActiveSessionWindow = () => {
-    const state = useUIStore.getState?.();
-    if (!state) {
-        return DEFAULT_ACTIVE_SESSION_WINDOW;
-    }
-    return state.memoryLimitActiveSession ?? DEFAULT_ACTIVE_SESSION_WINDOW;
-};
+export const getActiveSessionWindow = () => getMessageLimit();
 
-// Legacy exports for backward compatibility (use getMemoryLimits() for dynamic values)
+export const DEFAULT_ACTIVE_SESSION_WINDOW = DEFAULT_MESSAGE_LIMIT;
 export const MEMORY_LIMITS = DEFAULT_MEMORY_LIMITS;
 export const ACTIVE_SESSION_WINDOW = DEFAULT_ACTIVE_SESSION_WINDOW;
 

@@ -56,29 +56,31 @@ const createSafeStorage = (): Storage => {
                 return;
             } catch {
                 disableStorage();
+                // Prevent stale previous value from surviving when writes fail (e.g. quota).
+                try {
+                    baseStorage.removeItem(key);
+                } catch {
+                    // noop
+                }
             }
         }
         fallback.setItem(key, value);
     };
 
     const safeRemove = (key: string) => {
-        if (storageAvailable) {
-            try {
-                baseStorage.removeItem(key);
-            } catch {
-                disableStorage();
-            }
+        try {
+            baseStorage.removeItem(key);
+        } catch {
+            disableStorage();
         }
         fallback.removeItem(key);
     };
 
     const safeClear = () => {
-        if (storageAvailable) {
-            try {
-                baseStorage.clear();
-            } catch {
-                disableStorage();
-            }
+        try {
+            baseStorage.clear();
+        } catch {
+            disableStorage();
         }
         fallback.clear();
     };
@@ -155,29 +157,31 @@ const createSafeSessionStorage = (): Storage => {
                 return;
             } catch {
                 disableStorage();
+                // Prevent stale previous value from surviving when writes fail (e.g. quota).
+                try {
+                    baseStorage.removeItem(key);
+                } catch {
+                    // noop
+                }
             }
         }
         fallback.setItem(key, value);
     };
 
     const safeRemove = (key: string) => {
-        if (storageAvailable) {
-            try {
-                baseStorage.removeItem(key);
-            } catch {
-                disableStorage();
-            }
+        try {
+            baseStorage.removeItem(key);
+        } catch {
+            disableStorage();
         }
         fallback.removeItem(key);
     };
 
     const safeClear = () => {
-        if (storageAvailable) {
-            try {
-                baseStorage.clear();
-            } catch {
-                disableStorage();
-            }
+        try {
+            baseStorage.clear();
+        } catch {
+            disableStorage();
         }
         fallback.clear();
     };

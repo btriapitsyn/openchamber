@@ -141,6 +141,7 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   };
 
   const formatFileSize = (bytes: number) => {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '...';
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
@@ -157,6 +158,32 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
   };
 
   const displayName = extractFilename(file.filename);
+  const isLocalImagePreview =
+    file.source !== 'server' &&
+    file.mimeType.startsWith('image/') &&
+    typeof file.dataUrl === 'string' &&
+    file.dataUrl.startsWith('data:image/');
+
+  if (isLocalImagePreview) {
+    return (
+      <div className="relative h-12 w-12 sm:h-14 sm:w-14 overflow-hidden rounded-lg border border-border/40 bg-muted/10 flex-shrink-0">
+        <img
+          src={file.dataUrl}
+          alt={displayName}
+          className="h-full w-full object-cover"
+          loading="lazy"
+        />
+        <button
+          onClick={onRemove}
+          className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/80 text-foreground hover:text-destructive flex items-center justify-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          title="Remove image"
+          aria-label={`Remove ${displayName}`}
+        >
+          <RiCloseLine className="h-3 w-3" />
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full sm:inline-flex sm:w-auto items-center gap-1.5 px-3 sm:px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta max-w-full min-w-0">
@@ -195,7 +222,6 @@ export const AttachedFilesList = memo(() => {
   return (
     <div className="pb-2 overflow-hidden">
       <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-xl border border-border/30">
-        <span className="typography-meta text-muted-foreground font-medium flex-shrink-0">Attached:</span>
         {attachedFiles.map((file) => (
           <FileChip
             key={file.id}
@@ -219,9 +245,10 @@ interface FilePart {
 interface MessageFilesDisplayProps {
   files: FilePart[];
   onShowPopup?: (content: ToolPopupContent) => void;
+  compact?: boolean;
 }
 
-export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDisplayProps) => {
+export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }: MessageFilesDisplayProps) => {
 
   const fileItems = files.filter(f => f.type === 'file' && (f.mime || f.url));
 
@@ -251,12 +278,30 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
   const imageFiles = fileItems.filter(f => f.mime?.startsWith('image/') && f.url);
   const otherFiles = fileItems.filter(f => !f.mime?.startsWith('image/'));
 
-  const handleImageClick = React.useCallback((file: { filename?: string; mime?: string; size?: number; url?: string }) => {
-    if (!onShowPopup || !file?.url) {
+  const imageGallery = React.useMemo(
+    () =>
+      imageFiles.flatMap((file) => {
+          if (!file.url) return [];
+          const filename = extractFilename(file.filename) || 'Image';
+          return [{
+            url: file.url,
+            mimeType: file.mime,
+            filename,
+            size: file.size,
+          }];
+        }),
+    [imageFiles]
+  );
+
+  const handleImageClick = React.useCallback((index: number) => {
+    if (!onShowPopup) {
       return;
     }
 
-    const filename = extractFilename(file.filename) || 'Image';
+    const file = imageGallery[index];
+    if (!file?.url) return;
+
+    const filename = file.filename || 'Image';
 
     const popupPayload: ToolPopupContent = {
       open: true,
@@ -265,33 +310,39 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
       metadata: {
         tool: 'image-preview',
         filename,
-        mime: file.mime,
+        mime: file.mimeType,
         size: file.size,
       },
       image: {
         url: file.url,
-        mimeType: file.mime,
+        mimeType: file.mimeType,
         filename,
+        size: file.size,
+        gallery: imageGallery,
+        index,
       },
     };
 
     onShowPopup(popupPayload);
-  }, [onShowPopup]);
+  }, [imageGallery, onShowPopup]);
 
   if (fileItems.length === 0) return null;
 
   return (
-    <div className="space-y-2 mt-2">
+    <div className={cn(compact ? 'space-y-1.5 mt-1.5' : 'space-y-2 mt-2')}>
       {}
       {otherFiles.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className={cn('flex flex-wrap', compact ? 'gap-1.5' : 'gap-2')}>
           {otherFiles.map((file, index) => (
             <div
               key={`file-${index}`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted/30 border border-border/30 rounded-xl typography-meta"
+              className={cn(
+                'inline-flex items-center bg-muted/30 border border-border/30 typography-meta',
+                compact ? 'gap-1 px-2 py-0.5 rounded-lg' : 'gap-1.5 px-2.5 py-1 rounded-xl'
+              )}
             >
               {getFileIcon(file.mime)}
-              <div className="overflow-hidden max-w-[200px]">
+              <div className={cn('overflow-hidden', compact ? 'max-w-[140px]' : 'max-w-[200px]')}>
                 <span className="truncate block" title={extractFilename(file.filename)}>
                   {extractFilename(file.filename)}
                 </span>
@@ -303,8 +354,8 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
 
       {}
       {imageFiles.length > 0 && (
-        <div className="overflow-x-auto -mx-1 px-1 py-1 scrollbar-thin">
-          <div className="flex gap-3 snap-x snap-mandatory">
+        <div className={cn('overflow-x-auto -mx-1 px-1 scrollbar-thin', compact ? 'py-0.5' : 'py-1')}>
+          <div className={cn('flex snap-x snap-mandatory', compact ? 'gap-2' : 'gap-3')}>
             {imageFiles.map((file, index) => {
     const filename = extractFilename(file.filename) || 'Image';
 
@@ -313,8 +364,13 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup }: MessageFilesDis
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={() => handleImageClick(file)}
-                      className="relative flex-none w-16 sm:w-20 md:w-24 aspect-square rounded-xl border border-border/40 bg-muted/10 overflow-hidden snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary"
+                      onClick={() => handleImageClick(index)}
+                      className={cn(
+                        'relative flex-none border border-border/40 bg-muted/10 overflow-hidden snap-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-primary',
+                        compact
+                          ? 'h-12 w-12 sm:h-14 sm:w-14 md:h-16 md:w-16 rounded-lg'
+                          : 'aspect-square w-16 sm:w-20 md:w-24 rounded-xl'
+                      )}
                       aria-label={filename}
                     >
                       {file.url ? (

@@ -7,6 +7,7 @@ interface CommitInputProps {
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  hasTouchInput?: boolean;
 }
 
 const MIN_HEIGHT = 38; // Single line height
@@ -17,6 +18,7 @@ export const CommitInput: React.FC<CommitInputProps> = ({
   onChange,
   placeholder = 'Commit message',
   disabled = false,
+  hasTouchInput = false,
 }) => {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -39,6 +41,9 @@ export const CommitInput: React.FC<CommitInputProps> = ({
       placeholder={placeholder}
       rows={1}
       disabled={disabled}
+      autoCorrect={hasTouchInput ? 'on' : 'off'}
+      autoCapitalize={hasTouchInput ? 'sentences' : 'off'}
+      spellCheck={hasTouchInput ? true : false}
       className={cn(
         'rounded-lg bg-background/80 resize-none overflow-y-auto',
         disabled && 'opacity-50'

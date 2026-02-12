@@ -65,11 +65,24 @@ interface TerminalViewportProps {
   className?: string;
   enableTouchScroll?: boolean;
   autoFocus?: boolean;
+  keyboardAvoidTargetId?: string;
 }
 
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
   (
-    { sessionKey, chunks, onInput, onResize, theme, fontFamily, fontSize, className, enableTouchScroll, autoFocus = true },
+    {
+      sessionKey,
+      chunks,
+      onInput,
+      onResize,
+      theme,
+      fontFamily,
+      fontSize,
+      className,
+      enableTouchScroll,
+      autoFocus = true,
+      keyboardAvoidTargetId,
+    },
     ref
   ) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -375,6 +388,36 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       } catch {
         return;
       }
+    }, []);
+
+    const hasCopyableSelectionInViewport = React.useCallback((): boolean => {
+      if (typeof window === 'undefined') {
+        return false;
+      }
+      const selection = window.getSelection();
+      if (!selection) {
+        return false;
+      }
+      const text = selection.toString();
+      if (!text.trim()) {
+        return false;
+      }
+
+      const container = containerRef.current;
+      if (!container) {
+        return false;
+      }
+
+      const anchorNode = selection.anchorNode;
+      const focusNode = selection.focusNode;
+      if (anchorNode && !container.contains(anchorNode)) {
+        return false;
+      }
+      if (focusNode && !container.contains(focusNode)) {
+        return false;
+      }
+
+      return true;
     }, []);
 
     const resetWriteState = React.useCallback(() => {
@@ -1229,6 +1272,18 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
     const handleHiddenKeyDown = React.useCallback(
       (event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         event.stopPropagation();
+
+        const normalizedKey = event.key.toLowerCase();
+        const isMacCopyShortcut = event.metaKey && !event.ctrlKey && !event.altKey && normalizedKey === 'c';
+        const isWindowsLinuxCopyShortcut =
+          event.ctrlKey && event.shiftKey && !event.metaKey && !event.altKey && normalizedKey === 'c';
+
+        if ((isMacCopyShortcut || isWindowsLinuxCopyShortcut) && hasCopyableSelectionInViewport()) {
+          event.preventDefault();
+          void copySelectionToClipboard();
+          return;
+        }
+
         const target = event.currentTarget as HTMLElement;
         const nativeEvent = event.nativeEvent as KeyboardEvent | undefined;
         if (nativeEvent?.isComposing) {
@@ -1272,7 +1327,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
 
         scheduleKeyProbe(target);
       },
-      [clearEditableValue, readEditableValue, scheduleKeyProbe]
+      [clearEditableValue, copySelectionToClipboard, hasCopyableSelectionInViewport, readEditableValue, scheduleKeyProbe]
     );
 
     const handleHiddenKeyUp = React.useCallback(
@@ -1401,6 +1456,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
+                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
                 aria-label="Terminal input"
                 aria-hidden="true"
                 style={{
@@ -1428,6 +1484,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
+                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
                 aria-label="Terminal input"
                 aria-hidden="true"
                 style={{

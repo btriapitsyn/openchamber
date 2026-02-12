@@ -122,6 +122,81 @@ export function createFlexokiCodeMirrorTheme(theme: Theme): Extension {
     '.cm-activeLine': {
       backgroundColor: theme.colors.surface.overlay,
     },
+    '.cm-panels': {
+      backgroundColor: theme.colors.surface.elevated,
+      color: theme.colors.surface.foreground,
+    },
+    '.cm-panels-top': {
+      borderBottom: `1px solid ${theme.colors.interactive.border}`,
+      boxShadow: `0 1px 0 ${theme.colors.surface.subtle}`,
+    },
+    '.cm-panel.cm-search': {
+      padding: '0.625rem 0.75rem',
+      backgroundColor: theme.colors.surface.elevated,
+    },
+    '.cm-search': {
+      display: 'flex',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      gap: '0.5rem',
+      color: theme.colors.surface.foreground,
+      fontSize: '0.8125rem',
+    },
+    '.cm-search .cm-textfield': {
+      minHeight: '2rem',
+      padding: '0.375rem 0.625rem',
+      borderRadius: '0.5rem',
+      border: `1px solid ${theme.colors.interactive.border}`,
+      backgroundColor: theme.colors.surface.background,
+      color: theme.colors.surface.foreground,
+      outline: 'none',
+      transition: 'border-color 120ms ease, box-shadow 120ms ease',
+    },
+    '.cm-search .cm-textfield:hover': {
+      borderColor: theme.colors.interactive.borderHover,
+    },
+    '.cm-search .cm-textfield:focus, .cm-search .cm-textfield:focus-visible': {
+      borderColor: theme.colors.interactive.borderFocus,
+      boxShadow: `0 0 0 2px ${theme.colors.interactive.focusRing}`,
+    },
+    '.cm-search .cm-button': {
+      minHeight: '2rem',
+      padding: '0.375rem 0.625rem',
+      borderRadius: '0.5rem',
+      border: `1px solid ${theme.colors.interactive.border}`,
+      backgroundColor: theme.colors.surface.background,
+      color: theme.colors.surface.foreground,
+      cursor: 'pointer',
+      transition: 'background-color 120ms ease, border-color 120ms ease, color 120ms ease',
+    },
+    '.cm-search .cm-button:hover': {
+      backgroundColor: theme.colors.interactive.hover,
+      borderColor: theme.colors.interactive.borderHover,
+    },
+    '.cm-search .cm-button:active': {
+      backgroundColor: theme.colors.interactive.active,
+      borderColor: theme.colors.interactive.borderFocus,
+    },
+    '.cm-search .cm-button:focus, .cm-search .cm-button:focus-visible': {
+      outline: 'none',
+      boxShadow: `0 0 0 2px ${theme.colors.interactive.focusRing}`,
+    },
+    '.cm-search .cm-button:disabled': {
+      opacity: 0.55,
+      cursor: 'not-allowed',
+      backgroundColor: theme.colors.surface.muted,
+      color: theme.colors.surface.mutedForeground,
+    },
+    '.cm-searchMatch': {
+      backgroundColor: theme.colors.status.infoBackground,
+      boxShadow: `inset 0 0 0 1px ${theme.colors.status.infoBorder}`,
+      borderRadius: '2px',
+    },
+    '.cm-searchMatch.cm-searchMatch-selected': {
+      backgroundColor: theme.colors.interactive.selection,
+      color: theme.colors.interactive.selectionForeground,
+      boxShadow: `inset 0 0 0 1px ${theme.colors.interactive.borderFocus}`,
+    },
     '&.cm-focused': {
       outline: 'none',
     },

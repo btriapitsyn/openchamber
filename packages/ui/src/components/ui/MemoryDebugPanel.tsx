@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSessionStore, MEMORY_LIMITS } from '@/stores/useSessionStore';
+import { getMessageLimit, getBackgroundTrimLimit } from '@/stores/types/sessionTypes';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -85,7 +86,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
         <div className="typography-meta space-y-1 border-t pt-2">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Viewport Window:</span>
-            <span>{MEMORY_LIMITS.VIEWPORT_MESSAGES} messages</span>
+            <span>{getBackgroundTrimLimit()} messages</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Background Stream Limit:</span>
@@ -119,7 +120,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`font-mono ${
-                    stat.messageCount > MEMORY_LIMITS.VIEWPORT_MESSAGES ? 'text-status-warning' : ''
+                    stat.messageCount > getMessageLimit() ? 'text-status-warning' : ''
                   }`}>
                     {stat.messageCount} msgs
                   </span>

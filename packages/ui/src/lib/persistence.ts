@@ -217,14 +217,12 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     }
   }
 
-  if (typeof settings.memoryLimitHistorical === 'number' && Number.isFinite(settings.memoryLimitHistorical)) {
-    store.setMemoryLimitHistorical(settings.memoryLimitHistorical);
-  }
-  if (typeof settings.memoryLimitViewport === 'number' && Number.isFinite(settings.memoryLimitViewport)) {
-    store.setMemoryLimitViewport(settings.memoryLimitViewport);
-  }
-  if (typeof settings.memoryLimitActiveSession === 'number' && Number.isFinite(settings.memoryLimitActiveSession)) {
-    store.setMemoryLimitActiveSession(settings.memoryLimitActiveSession);
+  // Apply server-persisted message limit. Ignore stale legacy values.
+  const STALE_LIMITS = new Set([90, 120, 180, 220]);
+  if (typeof settings.messageLimit === 'number' && Number.isFinite(settings.messageLimit)) {
+    if (!STALE_LIMITS.has(settings.messageLimit)) {
+      store.setMessageLimit(settings.messageLimit);
+    }
   }
 
   if (typeof settings.queueModeEnabled === 'boolean' && settings.queueModeEnabled !== queueStore.queueModeEnabled) {
@@ -644,14 +642,8 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     result.openInAppId = candidate.openInAppId;
   }
 
-  if (typeof candidate.memoryLimitHistorical === 'number' && Number.isFinite(candidate.memoryLimitHistorical)) {
-    result.memoryLimitHistorical = candidate.memoryLimitHistorical;
-  }
-  if (typeof candidate.memoryLimitViewport === 'number' && Number.isFinite(candidate.memoryLimitViewport)) {
-    result.memoryLimitViewport = candidate.memoryLimitViewport;
-  }
-  if (typeof candidate.memoryLimitActiveSession === 'number' && Number.isFinite(candidate.memoryLimitActiveSession)) {
-    result.memoryLimitActiveSession = candidate.memoryLimitActiveSession;
+  if (typeof candidate.messageLimit === 'number' && Number.isFinite(candidate.messageLimit)) {
+    result.messageLimit = candidate.messageLimit;
   }
 
   const skillCatalogs = sanitizeSkillCatalogs(candidate.skillCatalogs);

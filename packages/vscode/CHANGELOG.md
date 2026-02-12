@@ -1,3 +1,11 @@
+## [1.6.8] - 2026-02-12
+
+- Chat: added drag-and-drop attachments with inline image previews, so sending screenshots and files from the editor is faster and much more reliable.
+- Sessions: fixed previously selected session carry-over when navigating from chat / session draft and list of sessions.
+- Chat: improved picker search with fuzzy matching on names and descriptions to speed up finding the right agent/model.
+- Usage: corrected Gemini and Antigravity quota source mapping and labels for more reliable usage metrics (thanks to @gsxdsm).
+- Usage: remaining-quota mode now inverts usage markers, making trend direction clearer at a glance (thanks to @gsxdsm).
+
 ## [1.6.7] - 2026-02-10
 
 - Added usage pace and prediction indicators in the header and settings to make quota usage trends easier to track (thanks to @gsxdsm).

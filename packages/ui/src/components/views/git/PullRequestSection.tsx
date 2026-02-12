@@ -185,7 +185,7 @@ export const PullRequestSection: React.FC<{
   const setSidebarSection = useUIStore((state) => state.setSidebarSection);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
-  const { isMobile } = useDeviceInfo();
+  const { isMobile, hasTouchInput } = useDeviceInfo();
 
   const openGitHubSettings = React.useCallback(() => {
     setSidebarSection('settings');
@@ -1244,12 +1244,18 @@ export const PullRequestSection: React.FC<{
                           value={editTitle}
                           onChange={(e) => setEditTitle(e.target.value)}
                           placeholder="PR title"
+                          autoCorrect={hasTouchInput ? "on" : "off"}
+                          autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                          spellCheck={hasTouchInput}
                         />
                         <Textarea
                           value={editBody}
                           onChange={(e) => setEditBody(e.target.value)}
                           className="min-h-[120px] bg-background/80"
                           placeholder="Describe this PR"
+                          autoCorrect={hasTouchInput ? "on" : "off"}
+                          autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                          spellCheck={hasTouchInput}
                         />
                       </div>
                     ) : (
@@ -1480,6 +1486,9 @@ export const PullRequestSection: React.FC<{
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="PR title"
+                    autoCorrect={hasTouchInput ? "on" : "off"}
+                    autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                    spellCheck={hasTouchInput}
                   />
                 </label>
 
@@ -1490,6 +1499,9 @@ export const PullRequestSection: React.FC<{
                     onChange={(e) => setBody(e.target.value)}
                     className="min-h-[110px] bg-background/80"
                     placeholder="What changed and why"
+                    autoCorrect={hasTouchInput ? "on" : "off"}
+                    autoCapitalize={hasTouchInput ? "sentences" : "off"}
+                    spellCheck={hasTouchInput}
                   />
                 </label>
 

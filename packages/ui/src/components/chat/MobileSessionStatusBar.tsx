@@ -183,6 +183,7 @@ function SessionItem({
   getSessionAgentName,
   getSessionTitle,
   onClick,
+  onDoubleClick,
   needsAttention
 }: {
   session: SessionWithStatus;
@@ -190,6 +191,7 @@ function SessionItem({
   getSessionAgentName: (s: Session) => string;
   getSessionTitle: (s: Session) => string;
   onClick: () => void;
+  onDoubleClick?: () => void;
   needsAttention: (sessionId: string) => boolean;
 }) {
   const agentName = getSessionAgentName(session);
@@ -200,6 +202,10 @@ function SessionItem({
     <button
       type="button"
       onClick={onClick}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onDoubleClick?.();
+      }}
       className={cn(
         "flex items-center gap-0.5 px-1.5 py-px text-left transition-colors",
         "hover:bg-[var(--interactive-hover)] active:bg-[var(--interactive-selection)]",
@@ -339,6 +345,7 @@ function ExpandedView({
   onToggleExpand,
   onNewSession,
   onSessionClick,
+  onSessionDoubleClick,
   getSessionAgentName,
   getSessionTitle,
   needsAttention
@@ -353,6 +360,7 @@ function ExpandedView({
   onToggleExpand: () => void;
   onNewSession: () => void;
   onSessionClick: (id: string) => void;
+  onSessionDoubleClick?: () => void;
   getSessionAgentName: (s: Session) => string;
   getSessionTitle: (s: Session) => string;
   needsAttention: (sessionId: string) => boolean;
@@ -419,6 +427,7 @@ function ExpandedView({
             getSessionAgentName={getSessionAgentName}
             getSessionTitle={getSessionTitle}
             onClick={() => onSessionClick(session.id)}
+            onDoubleClick={onSessionDoubleClick}
             needsAttention={needsAttention}
           />
         ))}
@@ -438,6 +447,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const createSession = useSessionStore((state) => state.createSession);
   const agents = useConfigStore((state) => state.agents);
   const { isMobile, isMobileSessionStatusBarCollapsed, setIsMobileSessionStatusBarCollapsed } = useUIStore();
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const [isExpanded, setIsExpanded] = React.useState(false);
 
   const { sessions: sortedSessions, totalRunning, totalUnread, totalCount } = useSessionGrouping(sessions, sessionStatus, sessionAttentionStates);
@@ -454,6 +464,11 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     setCurrentSession(sessionId);
     onSessionSwitch?.(sessionId);
     setIsExpanded(false);
+  };
+
+  const handleSessionDoubleClick = () => {
+    // On double-tap, switch to the Chat tab
+    setActiveMainTab('chat');
   };
 
   const handleCreateSession = async () => {
@@ -491,6 +506,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       onToggleExpand={() => setIsExpanded(!isExpanded)}
       onNewSession={handleCreateSession}
       onSessionClick={handleSessionClick}
+      onSessionDoubleClick={handleSessionDoubleClick}
       getSessionAgentName={getSessionAgentName}
       getSessionTitle={getSessionTitle}
       needsAttention={needsAttention}

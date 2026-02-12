@@ -36,7 +36,7 @@ import { useCurrentSessionActivity } from '@/hooks/useSessionActivity';
 import { toast } from '@/components/ui';
 import { useFileStore } from '@/stores/fileStore';
 import { useMessageStore } from '@/stores/messageStore';
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isTauriShell, isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { StopIcon } from '@/components/icons/StopIcon';
 import type { MobileControlsPanel } from './mobileControlsUtils';
@@ -53,7 +53,7 @@ const EMPTY_QUEUE: QueuedMessage[] = [];
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
-    scrollToBottom?: (options?: { instant?: boolean; force?: boolean; clearAnchor?: boolean }) => void;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
 }
 
 const CHAT_INPUT_DRAFT_KEY = 'openchamber_chat_input_draft';
@@ -95,6 +95,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [draftMessage, setDraftMessage] = React.useState(''); // Preserves input when entering history mode
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
+    const canAcceptDropRef = React.useRef(false);
     const mentionRef = React.useRef<FileMentionHandle>(null);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
     const agentRef = React.useRef<AgentMentionAutocompleteHandle>(null);
@@ -222,6 +223,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }
         }
     }, [currentSessionId, persistChatDraft, message]);
+
+    // Focus textarea when new session draft is opened
+    const prevNewSessionDraftOpenRef = React.useRef(newSessionDraftOpen);
+    React.useEffect(() => {
+        if (!prevNewSessionDraftOpenRef.current && newSessionDraftOpen) {
+            // New session draft just opened - focus the textarea
+            requestAnimationFrame(() => {
+                if (isMobile) {
+                    // On mobile, use preventScroll to avoid viewport jumping
+                    textareaRef.current?.focus({ preventScroll: true });
+                } else {
+                    textareaRef.current?.focus();
+                }
+            });
+        }
+        prevNewSessionDraftOpenRef.current = newSessionDraftOpen;
+    }, [newSessionDraftOpen, isMobile]);
 
     // Persist chat input draft to localStorage (only if setting enabled)
     React.useEffect(() => {
@@ -373,7 +391,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const canAbort = working.isWorking;
 
     // Keep a ref to handleSubmit so callbacks don't depend on it.
-    const handleSubmitRef = React.useRef<(e?: React.FormEvent) => Promise<void>>(async () => {});
+    type SubmitOptions = {
+        queuedOnly?: boolean;
+    };
+    const handleSubmitRef = React.useRef<(options?: SubmitOptions) => Promise<void>>(async () => {});
 
     // Add message to queue instead of sending
     const handleQueueMessage = React.useCallback(() => {
@@ -403,10 +424,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [hasContent, currentSessionId, message, attachedFiles, addToQueue, clearAttachedFiles, isMobile, consumeDrafts]);
 
-    const handleSubmit = async (e?: React.FormEvent) => {
-        e?.preventDefault();
+    const handleSubmit = async (options?: SubmitOptions) => {
+        const queuedOnly = options?.queuedOnly ?? false;
 
-        if (!canSend || (!currentSessionId && !newSessionDraftOpen)) return;
+        if (queuedOnly) {
+            if (!hasQueuedMessages || !currentSessionId) return;
+        } else if (!canSend || (!currentSessionId && !newSessionDraftOpen)) {
+            return;
+        }
 
         // Re-pin and scroll to bottom when sending
         scrollToBottom?.({ instant: true, force: true });
@@ -448,8 +473,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }
         }
 
-        // Add current input
-        if (hasContent) {
+        // Add current input (skip for queued-only auto-send)
+        if (!queuedOnly && hasContent) {
             const messageToSend = message.replace(/^\n+|\n+$/g, '');
             const { sanitizedText, mention } = parseAgentMentions(messageToSend, agents);
             const attachmentsToSend = attachedFiles.map((file) => ({ ...file }));
@@ -473,7 +498,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
         const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
         let drafts: InlineCommentDraft[] = [];
-        if (sessionKey) {
+        if (!queuedOnly && sessionKey) {
             drafts = consumeDrafts(sessionKey);
         }
 
@@ -504,12 +529,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (currentSessionId && hasQueuedMessages) {
             clearQueue(currentSessionId);
         }
-        setMessage('');
-        // Reset message history navigation state
-        setHistoryIndex(-1);
-        setDraftMessage('');
-        if (attachedFiles.length > 0) {
-            clearAttachedFiles();
+        if (!queuedOnly) {
+            setMessage('');
+            // Reset message history navigation state
+            setHistoryIndex(-1);
+            setDraftMessage('');
+            if (attachedFiles.length > 0) {
+                clearAttachedFiles();
+            }
         }
 
         if (isMobile) {
@@ -615,6 +642,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }
 
             if (isSoftNetworkError) {
+                if (allAttachments.length > 0) {
+                    useFileStore.setState({ attachedFiles: allAttachments });
+                    toast.error('Failed to send attachments. Try fewer files or smaller images.');
+                }
                 return;
             }
 
@@ -662,7 +693,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             // Use setTimeout to avoid calling during render
             setTimeout(() => {
                 if (currentSessionId && currentProviderId && currentModelId) {
-                    void handleSubmitRef.current();
+                    void handleSubmitRef.current({ queuedOnly: true });
                 }
                 autoSendTriggeredRef.current = false;
             }, 100);
@@ -1278,9 +1309,73 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [abortPromptSessionId, currentSessionId, clearAbortPrompt]);
 
-    const handleDragOver = (e: React.DragEvent) => {
+    React.useEffect(() => {
+        canAcceptDropRef.current = Boolean(currentSessionId || newSessionDraftOpen);
+    }, [currentSessionId, newSessionDraftOpen]);
+
+    const hasDraggedFiles = React.useCallback((dataTransfer: DataTransfer | null | undefined): boolean => {
+        if (!dataTransfer) return false;
+        if (dataTransfer.files && dataTransfer.files.length > 0) return true;
+        if (!dataTransfer.types) return false;
+        return Array.from(dataTransfer.types).includes('Files');
+    }, []);
+
+    const collectDroppedFiles = React.useCallback((dataTransfer: DataTransfer | null | undefined): File[] => {
+        if (!dataTransfer) return [];
+
+        const directFiles = Array.from(dataTransfer.files || []);
+        if (directFiles.length > 0) {
+            return directFiles;
+        }
+
+        const fromItems = Array.from(dataTransfer.items || [])
+            .filter((item) => item.kind === 'file')
+            .map((item) => item.getAsFile())
+            .filter((file): file is File => Boolean(file));
+
+        return fromItems;
+    }, []);
+
+    const normalizeDroppedPath = React.useCallback((rawPath: string): string => {
+        const input = rawPath.trim();
+        if (!input.toLowerCase().startsWith('file://')) {
+            return input;
+        }
+
+        try {
+            let pathname = decodeURIComponent(new URL(input).pathname || '');
+            if (/^\/[A-Za-z]:\//.test(pathname)) {
+                pathname = pathname.slice(1);
+            }
+            return pathname || input;
+        } catch {
+            const stripped = input.replace(/^file:\/\//i, '');
+            try {
+                return decodeURIComponent(stripped);
+            } catch {
+                return stripped;
+            }
+        }
+    }, []);
+
+    const handleDragEnter = (e: React.DragEvent) => {
+        if (!hasDraggedFiles(e.dataTransfer)) {
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
+        if ((currentSessionId || newSessionDraftOpen) && !isDragging) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        if (!hasDraggedFiles(e.dataTransfer)) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = 'copy';
         if ((currentSessionId || newSessionDraftOpen) && !isDragging) {
             setIsDragging(true);
         }
@@ -1295,26 +1390,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     };
 
     const handleDrop = async (e: React.DragEvent) => {
+        if (!hasDraggedFiles(e.dataTransfer)) {
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
         setIsDragging(false);
 
         if (!currentSessionId && !newSessionDraftOpen) return;
 
-        const files = Array.from(e.dataTransfer.files);
+        const files = collectDroppedFiles(e.dataTransfer);
         let attachedCount = 0;
 
-        for (const file of files) {
-            const sizeBefore = useSessionStore.getState().attachedFiles.length;
-            try {
-                await addAttachedFile(file);
-                const sizeAfter = useSessionStore.getState().attachedFiles.length;
-                if (sizeAfter > sizeBefore) {
-                    attachedCount += 1;
+        if (files.length > 0) {
+            for (const file of files) {
+                const sizeBefore = useSessionStore.getState().attachedFiles.length;
+                try {
+                    await addAttachedFile(file);
+                    const sizeAfter = useSessionStore.getState().attachedFiles.length;
+                    if (sizeAfter > sizeBefore) {
+                        attachedCount += 1;
+                    }
+                } catch (error) {
+                    console.error('File attach failed', error);
+                    toast.error(error instanceof Error ? error.message : 'Failed to attach file');
                 }
-            } catch (error) {
-                console.error('File attach failed', error);
-                toast.error(error instanceof Error ? error.message : 'Failed to attach file');
             }
         }
 
@@ -1322,6 +1422,120 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             toast.success(`Attached ${attachedCount} file${attachedCount > 1 ? 's' : ''}`);
         }
     };
+
+    // Tauri desktop: handle native file drops via onDragDropEvent
+    React.useEffect(() => {
+        if (!isTauriShell()) return;
+        let cancelled = false;
+        let unlisten: (() => void) | null = null;
+
+        void (async () => {
+            try {
+                const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
+                const webviewWindow = getCurrentWebviewWindow();
+                const removeListener = await webviewWindow.onDragDropEvent(async (event) => {
+                    if (!canAcceptDropRef.current) return;
+
+                    const payload = (event as { payload?: unknown }).payload;
+                    if (!payload || typeof payload !== 'object') return;
+
+                    const typed = payload as { type?: string; paths?: string[]; position?: { x?: number; y?: number } };
+                    const type = typed.type;
+                    const x = typed.position?.x;
+                    const y = typed.position?.y;
+
+                    // Check if drop is inside the chat input area
+                    const zone = dropZoneRef.current;
+                    let inZone = false;
+                    if (zone && typeof x === 'number' && typeof y === 'number') {
+                        const rect = zone.getBoundingClientRect();
+                        inZone = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+                        // Handle retina displays where Tauri might report physical pixels
+                        if (!inZone && window.devicePixelRatio > 1) {
+                            const sx = x / window.devicePixelRatio;
+                            const sy = y / window.devicePixelRatio;
+                            inZone = sx >= rect.left && sx <= rect.right && sy >= rect.top && sy <= rect.bottom;
+                        }
+                    }
+
+                    if (type === 'enter' || type === 'over') {
+                        setIsDragging(inZone);
+                        return;
+                    }
+                    if (type === 'leave') {
+                        setIsDragging(false);
+                        return;
+                    }
+                    if (type === 'drop') {
+                        setIsDragging(false);
+                        if (!inZone) return;
+
+                        const paths = Array.isArray(typed.paths)
+                            ? typed.paths.filter((p): p is string => typeof p === 'string')
+                            : [];
+                        if (paths.length === 0) return;
+
+                        let attachedCount = 0;
+                        for (const path of paths) {
+                            const sizeBefore = useSessionStore.getState().attachedFiles.length;
+                            try {
+                                const normalizedPath = normalizeDroppedPath(path);
+                                const fileName = normalizedPath.split(/[\\/]/).pop() || normalizedPath;
+                                let file: File;
+
+                                // In desktop shell on remote origin, local file paths are not readable via /api/fs/raw.
+                                // Read bytes from local machine via Tauri command.
+                                if (isTauriShell() && !isDesktopLocalOriginActive()) {
+                                    const { invoke } = await import('@tauri-apps/api/core');
+                                    const result = await invoke<{ mime: string; base64: string }>('desktop_read_file', { path: normalizedPath });
+                                    const byteCharacters = atob(result.base64);
+                                    const byteNumbers = new Array(byteCharacters.length);
+                                    for (let i = 0; i < byteCharacters.length; i++) {
+                                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                                    }
+                                    const byteArray = new Uint8Array(byteNumbers);
+                                    const blob = new Blob([byteArray], { type: result.mime || 'application/octet-stream' });
+                                    file = new File([blob], fileName, { type: result.mime || 'application/octet-stream' });
+                                } else {
+                                    const response = await fetch(`/api/fs/raw?path=${encodeURIComponent(normalizedPath)}`);
+                                    if (!response.ok) {
+                                        throw new Error(`Failed to read dropped file (${response.status})`);
+                                    }
+                                    const blob = await response.blob();
+                                    file = new File([blob], fileName, { type: blob.type || 'application/octet-stream' });
+                                }
+
+                                await addAttachedFile(file);
+                                const sizeAfter = useSessionStore.getState().attachedFiles.length;
+                                if (sizeAfter > sizeBefore) attachedCount++;
+                            } catch (error) {
+                                console.error('Failed to attach dropped file:', path, error);
+                                toast.error(`Failed to attach ${path.split(/[\\/]/).pop() || 'file'}`);
+                            }
+                        }
+                        if (attachedCount > 0) {
+                            toast.success(`Attached ${attachedCount} file${attachedCount > 1 ? 's' : ''}`);
+                        }
+                    }
+                });
+
+                if (cancelled) {
+                    removeListener();
+                    return;
+                }
+                unlisten = removeListener;
+            } catch (error) {
+                if (!cancelled) {
+                    console.warn('Failed to register Tauri drag-drop listener:', error);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+            if (unlisten) unlisten();
+        };
+    }, [addAttachedFile, normalizeDroppedPath]);
 
     const handleServerFilesSelected = React.useCallback(async (files: Array<{ path: string; name: string }>) => {
         let attachedCount = 0;
@@ -1708,35 +1922,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     showAbortStatus={showAbortStatus}
                 />
             </div>
-            <div
-                ref={dropZoneRef}
-                className={cn(
-                    "chat-column relative overflow-visible",
-                    isDragging && "ring-2 ring-primary ring-offset-2 rounded-xl"
-                )}
-
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-            >
-                {isDragging && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
-                        <div className="text-center">
-                            <div className="inline-flex justify-center">
-                                <button
-                                    type="button"
-                                    className={iconButtonBaseClass}
-                                    onClick={() => handlePickLocalFiles()}
-                                    title="Attach files"
-                                    aria-label="Attach files"
-                                >
-                                    <RiAttachment2 className={cn(iconSizeClass, 'text-current')} />
-                                </button>
-                            </div>
-                            <p className="mt-2 typography-ui-label text-muted-foreground">Drop files here to attach</p>
-                        </div>
-                    </div>
-                )}
+            <div className="chat-column relative overflow-visible">
                 <AttachedFilesList />
                 <QueuedMessageChips
                     onEditMessage={(content) => {
@@ -1766,13 +1952,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     className={cn(
                         "flex flex-col relative overflow-visible",
                         "border border-border/80",
-                        "focus-within:ring-1 focus-within:ring-primary/50"
+                        "focus-within:ring-1 focus-within:ring-primary/50",
+                        isDragging && "ring-2 ring-primary ring-offset-2"
                     )}
                     style={{
                         borderRadius: cornerRadius,
                         backgroundColor: currentTheme?.colors?.surface?.subtle,
                     }}
+                    ref={dropZoneRef}
+                    onDragEnter={handleDragEnter}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
                 >
+                    {isDragging && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+                            <div className="text-center">
+                                <div className="inline-flex justify-center">
+                                    <button
+                                        type="button"
+                                        className={iconButtonBaseClass}
+                                        onClick={() => handlePickLocalFiles()}
+                                        title="Attach files"
+                                        aria-label="Attach files"
+                                    >
+                                        <RiAttachment2 className={cn(iconSizeClass, 'text-current')} />
+                                    </button>
+                                </div>
+                                <p className="mt-2 typography-ui-label text-muted-foreground">Drop files here to attach</p>
+                            </div>
+                        </div>
+                    )}
 
                     {showCommandAutocomplete && (
                         <CommandAutocomplete
@@ -1826,6 +2036,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         onChange={handleTextChange}
                         onKeyDown={handleKeyDown}
                         onPaste={handlePaste}
+                        onDragEnter={handleDragEnter}
+                        onDragOver={handleDragOver}
+                        onDrop={handleDrop}
                         onPointerDownCapture={handleTextareaPointerDownCapture}
                         placeholder={currentSessionId || newSessionDraftOpen
                             ? "# for agents; @ for files; / for commands"

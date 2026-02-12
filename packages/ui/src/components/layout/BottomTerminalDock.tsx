@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiFullscreenExitLine, RiFullscreenLine } from '@remixicon/react';
+import { RiCloseLine, RiFullscreenExitLine, RiFullscreenLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 
@@ -157,15 +157,26 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
       )}
 
       {isOpen && (
-        <button
-          type="button"
-          onClick={toggleFullscreen}
-          className="absolute right-2 top-2 z-30 inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--surface-muted-foreground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-          title={isFullscreen ? 'Restore terminal panel height' : 'Expand terminal panel'}
-          aria-label={isFullscreen ? 'Restore terminal panel height' : 'Expand terminal panel'}
-        >
-          {isFullscreen ? <RiFullscreenExitLine className="h-5 w-5" /> : <RiFullscreenLine className="h-5 w-5" />}
-        </button>
+        <div className="absolute right-2 top-2 z-30 inline-flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--surface-muted-foreground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            title={isFullscreen ? 'Restore terminal panel height' : 'Expand terminal panel'}
+            aria-label={isFullscreen ? 'Restore terminal panel height' : 'Expand terminal panel'}
+          >
+            {isFullscreen ? <RiFullscreenExitLine className="h-5 w-5" /> : <RiFullscreenLine className="h-5 w-5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setBottomTerminalOpen(false)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--surface-muted-foreground)] transition-colors hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            title="Close terminal panel"
+            aria-label="Close terminal panel"
+          >
+            <RiCloseLine className="h-6 w-6" />
+          </button>
+        </div>
       )}
 
       <div

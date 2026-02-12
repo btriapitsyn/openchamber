@@ -56,7 +56,6 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
-import { useLongPress } from '@/hooks/useLongPress';
 import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -427,16 +426,10 @@ const FileRow: React.FC<FileRowProps> = ({
     }
   }, [isDir, node, onSelect, onToggle]);
 
-  const longPressHandlers = useLongPress({
-    onLongPress: handleContextMenu,
-    onTap: handleInteraction,
-    enableHaptic: true,
-  });
-
-  const interactionProps = isMobile ? longPressHandlers : {
-    onClick: handleInteraction,
-    onContextMenu: handleContextMenu,
-  };
+  const handleMenuButtonClick = React.useCallback((event: React.MouseEvent) => {
+    event.stopPropagation();
+    setContextMenuPath(node.path);
+  }, [node.path, setContextMenuPath]);
 
   return (
     <div
@@ -445,7 +438,8 @@ const FileRow: React.FC<FileRowProps> = ({
     >
       <button
         type="button"
-        {...interactionProps}
+        onClick={handleInteraction}
+        onContextMenu={!isMobile ? handleContextMenu : undefined}
         className={cn(
           'flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left text-foreground transition-colors pr-8 select-none',
           isActive ? 'bg-interactive-selection/70' : 'hover:bg-interactive-hover/40'
@@ -478,27 +472,25 @@ const FileRow: React.FC<FileRowProps> = ({
       </button>
       {(canRename || canCreateFile || canCreateFolder || canDelete) && (
         <div className={cn(
-          "absolute right-1 top-1/2 -translate-y-1/2 opacity-0 focus-within:opacity-100",
-          !isMobile && "group-hover:opacity-100",
-          (isMobile && contextMenuPath === node.path) && "opacity-100"
+          "absolute right-1 top-1/2 -translate-y-1/2",
+          !isMobile && "opacity-0 focus-within:opacity-100 group-hover:opacity-100",
+          isMobile && "opacity-100"
         )}>
           <DropdownMenu
             open={contextMenuPath === node.path}
             onOpenChange={(open) => setContextMenuPath(open ? node.path : null)}
           >
-            {!isMobile && (
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <RiMore2Fill className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-            )}
-            {isMobile && (
-              <DropdownMenuTrigger asChild>
-                <span className="hidden" />
-              </DropdownMenuTrigger>
-            )}
-            <DropdownMenuContent align="end" onCloseAutoFocus={() => setContextMenuPath(null)}>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="h-6 w-6"
+                onClick={handleMenuButtonClick}
+              >
+                <RiMore2Fill className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side={isMobile ? "bottom" : "bottom"} onCloseAutoFocus={() => setContextMenuPath(null)}>
               {canRename && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenDialog('rename', node); }}>
                   <RiEditLine className="mr-2 h-4 w-4" /> Rename
@@ -619,6 +611,7 @@ export const FilesView: React.FC = () => {
   const skipDirtyOnceRef = React.useRef(false);
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const copiedPathTimeoutRef = React.useRef<number | null>(null);
+  const editorViewRef = React.useRef<EditorView | null>(null);
 
   const [activeDialog, setActiveDialog] = React.useState<'createFile' | 'createFolder' | 'rename' | 'delete' | null>(null);
   const [dialogData, setDialogData] = React.useState<{ path: string; name?: string; type?: 'file' | 'directory' } | null>(null);
@@ -1626,6 +1619,63 @@ export const FilesView: React.FC = () => {
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
   const canEdit = Boolean(selectedFile && !isSelectedImage && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
 
+  const nudgeEditorSelectionAboveKeyboard = React.useCallback((view: EditorView | null) => {
+    if (!isMobile || !view || !view.hasFocus || typeof window === 'undefined') {
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    if (!viewport) {
+      return;
+    }
+
+    const rootStyles = getComputedStyle(document.documentElement);
+    const keyboardInset = Number.parseFloat(rootStyles.getPropertyValue('--oc-keyboard-inset')) || 0;
+    const keyboardHomeIndicator = Number.parseFloat(rootStyles.getPropertyValue('--oc-keyboard-home-indicator')) || 0;
+    const occludedBottom = keyboardInset + keyboardHomeIndicator;
+    if (occludedBottom <= 0) {
+      return;
+    }
+
+    const head = view.state.selection.main.head;
+    const cursorRect = view.coordsAtPos(head);
+    if (!cursorRect) {
+      return;
+    }
+
+    const visibleBottom = Math.round(viewport.offsetTop + viewport.height);
+    const clearance = 20;
+    const overlap = cursorRect.bottom + clearance - visibleBottom;
+    if (overlap <= 0) {
+      return;
+    }
+
+    view.scrollDOM.scrollTop += overlap;
+  }, [isMobile]);
+
+  React.useEffect(() => {
+    if (!isMobile || typeof window === 'undefined') {
+      return;
+    }
+
+    const runNudge = () => {
+      window.requestAnimationFrame(() => {
+        nudgeEditorSelectionAboveKeyboard(editorViewRef.current);
+      });
+    };
+
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', runNudge);
+    viewport?.addEventListener('scroll', runNudge);
+    document.addEventListener('selectionchange', runNudge);
+
+    return () => {
+      viewport?.removeEventListener('resize', runNudge);
+      viewport?.removeEventListener('scroll', runNudge);
+      document.removeEventListener('selectionchange', runNudge);
+    };
+  }, [isMobile, nudgeEditorSelectionAboveKeyboard]);
+
   const editorExtensions = React.useMemo(() => {
     if (!selectedFile?.path) {
       return [createFlexokiCodeMirrorTheme(currentTheme)];
@@ -1639,8 +1689,22 @@ export const FilesView: React.FC = () => {
     if (wrapLines) {
       extensions.push(EditorView.lineWrapping);
     }
+    if (isMobile) {
+      extensions.push(EditorView.updateListener.of((update) => {
+        if (!update.view.hasFocus) {
+          return;
+        }
+        if (!(update.selectionSet || update.focusChanged || update.viewportChanged || update.geometryChanged)) {
+          return;
+        }
+
+        window.requestAnimationFrame(() => {
+          nudgeEditorSelectionAboveKeyboard(update.view);
+        });
+      }));
+    }
     return extensions;
-  }, [currentTheme, selectedFile?.path, wrapLines]);
+  }, [currentTheme, selectedFile?.path, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
 
   const imageSrc = selectedFile?.path && isSelectedImage
     ? (runtime.isDesktop
@@ -2172,15 +2236,27 @@ export const FilesView: React.FC = () => {
               </ErrorBoundary>
             </div>
           ) : (
-            <div className="h-full">
+            <div
+              className="h-full"
+              data-keyboard-avoid="none"
+              style={isMobile ? { height: 'calc(100% - var(--oc-keyboard-inset, 0px))' } : undefined}
+            >
               <CodeMirrorEditor
                 value={draftContent}
                 onChange={setDraftContent}
                 extensions={editorExtensions}
-                className={cn(
-                  "h-full",
-                  isMobile && "[&_.cm-scroller]:pb-[var(--oc-keyboard-inset,0px)]"
-                )}
+                className="h-full"
+                onViewReady={(view) => {
+                  editorViewRef.current = view;
+                  window.requestAnimationFrame(() => {
+                    nudgeEditorSelectionAboveKeyboard(view);
+                  });
+                }}
+                onViewDestroy={() => {
+                  if (editorViewRef.current) {
+                    editorViewRef.current = null;
+                  }
+                }}
                 enableSearch
                 searchOpen={isSearchOpen}
                 onSearchOpenChange={setIsSearchOpen}
@@ -2543,6 +2619,17 @@ export const FilesView: React.FC = () => {
                 onChange={setDraftContent}
                 extensions={editorExtensions}
                 className="h-full"
+                onViewReady={(view) => {
+                  editorViewRef.current = view;
+                  window.requestAnimationFrame(() => {
+                    nudgeEditorSelectionAboveKeyboard(view);
+                  });
+                }}
+                onViewDestroy={() => {
+                  if (editorViewRef.current) {
+                    editorViewRef.current = null;
+                  }
+                }}
               />
             </div>
           )}

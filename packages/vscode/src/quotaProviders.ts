@@ -49,6 +49,14 @@ type GoogleModelsPayload = {
   }>;
 };
 
+type GoogleQuotaBucketsPayload = {
+  buckets?: Array<{
+    modelId?: string;
+    remainingFraction?: number;
+    resetTime?: string;
+  }>;
+};
+
 type ZaiLimit = {
   type?: string;
   number?: number;
@@ -83,16 +91,29 @@ const ANTIGRAVITY_ACCOUNTS_PATHS = [
   path.join(OPENCODE_DATA_DIR, 'antigravity-accounts.json'),
 ];
 
-const GOOGLE_CLIENT_ID =
+// OAuth Secret value used to init client
+// Note: It's ok to save this in git because this is an installed application
+// as described here: https://developers.google.com/identity/protocols/oauth2#installed
+// "The process results in a client ID and, in some cases, a client secret,
+// which you embed in the source code of your application. (In this context,
+// the client secret is obviously not treated as a secret.)"
+// ref: https://github.com/opgginc/opencode-bar
+
+const ANTIGRAVITY_GOOGLE_CLIENT_ID =
   '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = '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';
+const ANTIGRAVITY_GOOGLE_CLIENT_SECRET = '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';
+const GEMINI_GOOGLE_CLIENT_ID =
+  '681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com';
+const GEMINI_GOOGLE_CLIENT_SECRET = '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';
 const DEFAULT_PROJECT_ID = 'rising-fact-p41fc';
-const GOOGLE_WINDOW_SECONDS = 5 * 60 * 60;
+const GOOGLE_FIVE_HOUR_WINDOW_SECONDS = 5 * 60 * 60;
+const GOOGLE_DAILY_WINDOW_SECONDS = 24 * 60 * 60;
+const GOOGLE_PRIMARY_ENDPOINT = 'https://cloudcode-pa.googleapis.com';
 
 const GOOGLE_ENDPOINTS = [
   'https://daily-cloudcode-pa.sandbox.googleapis.com',
   'https://autopush-cloudcode-pa.sandbox.googleapis.com',
-  'https://cloudcode-pa.googleapis.com',
+  GOOGLE_PRIMARY_ENDPOINT,
 ];
 
 const GOOGLE_HEADERS = {
@@ -100,6 +121,26 @@ const GOOGLE_HEADERS = {
   'X-Goog-Api-Client': 'google-cloud-sdk vscode_cloudshelleditor/0.1',
   'Client-Metadata':
     '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}',
+};
+
+const resolveGoogleWindow = (sourceId: GoogleAuthSource['sourceId'], resetAt: number | null) => {
+  if (sourceId === 'gemini') {
+    return { label: 'daily', seconds: GOOGLE_DAILY_WINDOW_SECONDS } as const;
+  }
+
+  if (sourceId === 'antigravity') {
+    const remainingSeconds = typeof resetAt === 'number'
+      ? Math.max(0, Math.round((resetAt - Date.now()) / 1000))
+      : null;
+
+    if (remainingSeconds !== null && remainingSeconds > 10 * 60 * 60) {
+      return { label: 'daily', seconds: GOOGLE_DAILY_WINDOW_SECONDS } as const;
+    }
+
+    return { label: '5h', seconds: GOOGLE_FIVE_HOUR_WINDOW_SECONDS } as const;
+  }
+
+  return { label: 'daily', seconds: GOOGLE_DAILY_WINDOW_SECONDS } as const;
 };
 
 const ZAI_TOKEN_WINDOW_SECONDS: Record<number, number> = { 3: 3600 };
@@ -156,6 +197,30 @@ const normalizeAuthEntry = (entry: AuthEntry | null) => {
     return entry;
   }
   return null;
+};
+
+const asObject = (value: unknown): Record<string, unknown> | null => (
+  value && typeof value === 'object' ? value as Record<string, unknown> : null
+);
+
+const asNonEmptyString = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const parseGoogleRefreshToken = (rawRefreshToken: unknown) => {
+  const refreshToken = asNonEmptyString(rawRefreshToken);
+  if (!refreshToken) {
+    return { refreshToken: null, projectId: null, managedProjectId: null };
+  }
+
+  const [rawToken = '', rawProject = '', rawManagedProject = ''] = refreshToken.split('|');
+  return {
+    refreshToken: asNonEmptyString(rawToken),
+    projectId: asNonEmptyString(rawProject),
+    managedProjectId: asNonEmptyString(rawManagedProject),
+  };
 };
 
 const toNumber = (value: unknown): number | null => {
@@ -281,8 +346,7 @@ export const listConfiguredQuotaProviders = () => {
     configured.add('codex');
   }
 
-  const googleAuth = normalizeAuthEntry(getAuthEntry(auth, ['google', 'antigravity']));
-  if (googleAuth && ((googleAuth as Record<string, unknown>).access || (googleAuth as Record<string, unknown>).token || (googleAuth as Record<string, unknown>).refresh)) {
+  if (resolveGeminiCliAuth(auth) || resolveAntigravityAuth()) {
     configured.add('google');
   }
 
@@ -305,15 +369,6 @@ export const listConfiguredQuotaProviders = () => {
   if (copilotAuth && ((copilotAuth as Record<string, unknown>).access || (copilotAuth as Record<string, unknown>).token)) {
     configured.add('github-copilot');
     configured.add('github-copilot-addon');
-  }
-
-  for (const filePath of ANTIGRAVITY_ACCOUNTS_PATHS) {
-    const data = readJsonFile(filePath);
-    const accounts = data?.accounts;
-    if (Array.isArray(accounts) && accounts.length > 0) {
-      configured.add('google');
-      break;
-    }
   }
 
   return Array.from(configured);
@@ -409,26 +464,42 @@ export const fetchCodexQuota = async (): Promise<ProviderResult> => {
   }
 };
 
-const resolveGoogleAuth = () => {
-  const auth = readAuthFile();
-  const entry = normalizeAuthEntry(getAuthEntry(auth, ['google', 'antigravity'])) as Record<string, unknown> | null;
-  if (entry) {
-    const accessToken = (entry.access as string | undefined) ?? (entry.token as string | undefined);
-    let refreshToken = entry.refresh as string | undefined;
-    let projectId: string | undefined;
-    if (refreshToken && refreshToken.includes('|')) {
-      const [first, second] = refreshToken.split('|');
-      refreshToken = first;
-      projectId = second;
-    }
-    return {
-      accessToken,
-      refreshToken,
-      expires: entry.expires as number | undefined,
-      projectId,
-    };
+type GoogleAuthSource = {
+  sourceId: 'gemini' | 'antigravity';
+  sourceLabel: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expires?: number;
+  projectId?: string;
+  email?: string;
+};
+
+const resolveGeminiCliAuth = (auth: AuthFile): GoogleAuthSource | null => {
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['google', 'google.oauth'])) as Record<string, unknown> | null;
+  const entryObject = asObject(entry);
+  if (!entryObject) {
+    return null;
   }
 
+  const oauthObject = asObject(entryObject.oauth) ?? entryObject;
+  const accessToken = asNonEmptyString(oauthObject.access) ?? asNonEmptyString(oauthObject.token);
+  const refreshParts = parseGoogleRefreshToken(oauthObject.refresh);
+
+  if (!accessToken && !refreshParts.refreshToken) {
+    return null;
+  }
+
+  return {
+    sourceId: 'gemini',
+    sourceLabel: 'Gemini',
+    accessToken: accessToken ?? undefined,
+    refreshToken: refreshParts.refreshToken ?? undefined,
+    projectId: (refreshParts.projectId ?? refreshParts.managedProjectId) ?? undefined,
+    expires: toTimestamp(oauthObject.expires) ?? undefined,
+  };
+};
+
+const resolveAntigravityAuth = (): GoogleAuthSource | null => {
   for (const filePath of ANTIGRAVITY_ACCOUNTS_PATHS) {
     const data = readJsonFile(filePath);
     const accounts = data?.accounts;
@@ -438,10 +509,17 @@ const resolveGoogleAuth = () => {
         : 0;
       const account = (accounts[index] as Record<string, unknown> | undefined) ?? (accounts[0] as Record<string, unknown> | undefined);
       if (account?.refreshToken) {
+        const refreshParts = parseGoogleRefreshToken(account.refreshToken);
         return {
-          refreshToken: account.refreshToken as string,
-          projectId: (account.projectId as string | undefined) ?? (account.managedProjectId as string | undefined),
-          email: account.email as string | undefined,
+          sourceId: 'antigravity',
+          sourceLabel: 'Antigravity',
+          refreshToken: refreshParts.refreshToken ?? undefined,
+          projectId: asNonEmptyString(account.projectId)
+            ?? asNonEmptyString(account.managedProjectId)
+            ?? refreshParts.projectId
+            ?? refreshParts.managedProjectId
+            ?? undefined,
+          email: asNonEmptyString(account.email) ?? undefined,
         };
       }
     }
@@ -450,13 +528,44 @@ const resolveGoogleAuth = () => {
   return null;
 };
 
-const refreshGoogleAccessToken = async (refreshToken: string) => {
+const resolveGoogleAuthSources = (): GoogleAuthSource[] => {
+  const auth = readAuthFile();
+  const sources: GoogleAuthSource[] = [];
+
+  const geminiAuth = resolveGeminiCliAuth(auth);
+  if (geminiAuth) {
+    sources.push(geminiAuth);
+  }
+
+  const antigravityAuth = resolveAntigravityAuth();
+  if (antigravityAuth) {
+    sources.push(antigravityAuth);
+  }
+
+  return sources;
+};
+
+const resolveGoogleOAuthClient = (sourceId: GoogleAuthSource['sourceId']) => {
+  if (sourceId === 'gemini') {
+    return {
+      clientId: GEMINI_GOOGLE_CLIENT_ID,
+      clientSecret: GEMINI_GOOGLE_CLIENT_SECRET,
+    };
+  }
+
+  return {
+    clientId: ANTIGRAVITY_GOOGLE_CLIENT_ID,
+    clientSecret: ANTIGRAVITY_GOOGLE_CLIENT_SECRET,
+  };
+};
+
+const refreshGoogleAccessToken = async (refreshToken: string, clientId: string, clientSecret: string) => {
   const response = await fetch('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      client_id: GOOGLE_CLIENT_ID,
-      client_secret: GOOGLE_CLIENT_SECRET,
+      client_id: clientId,
+      client_secret: clientSecret,
       refresh_token: refreshToken,
       grant_type: 'refresh_token',
     }),
@@ -468,6 +577,35 @@ const refreshGoogleAccessToken = async (refreshToken: string) => {
 
   const data = await response.json() as Record<string, unknown>;
   return typeof data?.access_token === 'string' ? data.access_token : null;
+};
+
+const fetchGoogleQuotaBuckets = async (accessToken: string, projectId?: string) => {
+  const body = projectId ? { project: projectId } : {};
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), 15000) : null;
+  try {
+    const response = await fetch(`${GOOGLE_PRIMARY_ENDPOINT}/v1internal:retrieveUserQuota`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: controller?.signal,
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return await response.json() as GoogleQuotaBucketsPayload;
+  } catch {
+    return null;
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 };
 
 const fetchGoogleModels = async (accessToken: string, projectId?: string) => {
@@ -504,8 +642,8 @@ const fetchGoogleModels = async (accessToken: string, projectId?: string) => {
 };
 
 export const fetchGoogleQuota = async (): Promise<ProviderResult> => {
-  const auth = resolveGoogleAuth();
-  if (!auth) {
+  const authSources = resolveGoogleAuthSources();
+  if (!authSources.length) {
     return buildResult({
       providerId: 'google',
       providerName: 'Google',
@@ -515,64 +653,108 @@ export const fetchGoogleQuota = async (): Promise<ProviderResult> => {
     });
   }
 
-  const now = Date.now();
-  let accessToken: string | undefined = auth.accessToken;
-  if (!accessToken || (typeof auth.expires === 'number' && auth.expires <= now)) {
-    if (!auth.refreshToken) {
-      return buildResult({
-        providerId: 'google',
-        providerName: 'Google',
-        ok: false,
-        configured: true,
-        error: 'Missing refresh token',
-      });
-    }
-    accessToken = (await refreshGoogleAccessToken(auth.refreshToken)) ?? undefined;
-  }
-
-  if (!accessToken) {
-    return buildResult({
-      providerId: 'google',
-      providerName: 'Google',
-      ok: false,
-      configured: true,
-      error: 'Failed to refresh OAuth token',
-    });
-  }
-
-  const projectId = auth.projectId ?? DEFAULT_PROJECT_ID;
-  const payload = await fetchGoogleModels(accessToken, projectId);
-  if (!payload || typeof payload !== 'object') {
-    return buildResult({
-      providerId: 'google',
-      providerName: 'Google',
-      ok: false,
-      configured: true,
-      error: 'Failed to fetch models',
-    });
-  }
-
   const models: Record<string, ProviderUsage> = {};
-  const payloadModels = (payload as GoogleModelsPayload).models ?? {};
-  for (const [modelName, modelData] of Object.entries(payloadModels)) {
-    const quotaInfo = modelData?.quotaInfo;
-    const remainingFraction = quotaInfo?.remainingFraction;
-    const remainingPercent = typeof remainingFraction === 'number'
-      ? Math.round(remainingFraction * 100)
-      : null;
-    const usedPercent = remainingPercent !== null ? Math.max(0, 100 - remainingPercent) : null;
-    const resetAt = quotaInfo?.resetTime
-      ? new Date(quotaInfo.resetTime).getTime()
-      : null;
-    models[modelName] = {
-      windows: {
-        '5h': toUsageWindow({
-          usedPercent,
-          windowSeconds: GOOGLE_WINDOW_SECONDS,
-          resetAt,
-        }),
-      },
-    };
+  const sourceErrors: string[] = [];
+
+  for (const source of authSources) {
+    const now = Date.now();
+    let accessToken = source.accessToken;
+
+    if (!accessToken || (typeof source.expires === 'number' && source.expires <= now)) {
+      if (!source.refreshToken) {
+        sourceErrors.push(`${source.sourceLabel}: Missing refresh token`);
+        continue;
+      }
+      const { clientId, clientSecret } = resolveGoogleOAuthClient(source.sourceId);
+      accessToken = (await refreshGoogleAccessToken(source.refreshToken, clientId, clientSecret)) ?? undefined;
+    }
+
+    if (!accessToken) {
+      sourceErrors.push(`${source.sourceLabel}: Failed to refresh OAuth token`);
+      continue;
+    }
+
+    const projectId = source.projectId ?? DEFAULT_PROJECT_ID;
+    let mergedAnyModel = false;
+
+    if (source.sourceId === 'gemini') {
+      const quotaPayload = await fetchGoogleQuotaBuckets(accessToken, projectId);
+      const buckets = Array.isArray(quotaPayload?.buckets) ? quotaPayload.buckets : [];
+
+      for (const bucket of buckets) {
+        const modelId = asNonEmptyString(bucket.modelId);
+        if (!modelId) {
+          continue;
+        }
+
+        const scopedName = modelId.startsWith(`${source.sourceId}/`)
+          ? modelId
+          : `${source.sourceId}/${modelId}`;
+
+        const remainingFraction = toNumber(bucket.remainingFraction);
+        const remainingPercent = remainingFraction !== null
+          ? Math.round(remainingFraction * 100)
+          : null;
+        const usedPercent = remainingPercent !== null ? Math.max(0, 100 - remainingPercent) : null;
+        const resetAt = toTimestamp(bucket.resetTime);
+        const window = resolveGoogleWindow(source.sourceId, resetAt);
+
+        models[scopedName] = {
+          windows: {
+            [window.label]: toUsageWindow({
+              usedPercent,
+              windowSeconds: window.seconds,
+              resetAt,
+            }),
+          },
+        };
+        mergedAnyModel = true;
+      }
+    }
+
+    const payload = await fetchGoogleModels(accessToken, projectId);
+    if (payload && typeof payload === 'object') {
+      const payloadModels = (payload as GoogleModelsPayload).models ?? {};
+      for (const [modelName, modelData] of Object.entries(payloadModels)) {
+        const scopedName = modelName.startsWith(`${source.sourceId}/`)
+          ? modelName
+          : `${source.sourceId}/${modelName}`;
+        const quotaInfo = modelData?.quotaInfo;
+        const remainingFraction = quotaInfo?.remainingFraction;
+        const remainingPercent = typeof remainingFraction === 'number'
+          ? Math.round(remainingFraction * 100)
+          : null;
+        const usedPercent = remainingPercent !== null ? Math.max(0, 100 - remainingPercent) : null;
+        const resetAt = quotaInfo?.resetTime
+          ? new Date(quotaInfo.resetTime).getTime()
+          : null;
+        const window = resolveGoogleWindow(source.sourceId, resetAt);
+        models[scopedName] = {
+          windows: {
+            [window.label]: toUsageWindow({
+              usedPercent,
+              windowSeconds: window.seconds,
+              resetAt,
+            }),
+          },
+        };
+        mergedAnyModel = true;
+      }
+    }
+
+    if (!mergedAnyModel) {
+      sourceErrors.push(`${source.sourceLabel}: Failed to fetch models`);
+    }
+  }
+
+  if (!Object.keys(models).length) {
+    return buildResult({
+      providerId: 'google',
+      providerName: 'Google',
+      ok: false,
+      configured: true,
+      error: sourceErrors[0] ?? 'Failed to fetch models',
+    });
   }
 
   return buildResult({

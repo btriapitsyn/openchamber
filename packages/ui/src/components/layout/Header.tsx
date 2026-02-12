@@ -882,19 +882,23 @@ export const Header: React.FC = () => {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    aria-label={`Open instance, usage and MCP (current: ${currentInstanceLabel})`}
+                    aria-label={isDesktopApp
+                      ? `Open instance, usage and MCP (current: ${currentInstanceLabel})`
+                      : 'Open services, usage and MCP'}
                     className={cn(
                       headerIconButtonClass,
-                      'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5'
+                      isDesktopApp
+                        ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5'
+                        : 'h-9 w-9'
                     )}
                   >
                     <RiStackLine className="h-5 w-5" />
-                    <span className="truncate text-base font-normal">{currentInstanceLabel}</span>
+                    {isDesktopApp && <span className="truncate text-base font-normal">{currentInstanceLabel}</span>}
                   </button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Current instance: {currentInstanceLabel}</p>
+                <p>{isDesktopApp ? `Current instance: ${currentInstanceLabel}` : 'Services'}</p>
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent
@@ -998,7 +1002,9 @@ export const Header: React.FC = () => {
                                 : window.usedPercent;
                               const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
                               const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                ? (quotaDisplayMode === 'remaining' 
+                                    ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                    : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                                 : null;
                               return (
                               <DropdownMenuItem
@@ -1063,10 +1069,11 @@ export const Header: React.FC = () => {
                                             const displayPercent = quotaDisplayMode === 'remaining'
                                               ? window.remainingPercent
                                               : window.usedPercent;
-                                            // For model-level quotas, use '5h' as typical window label for Google models
-                                            const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, '5h');
+                                            const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
                                             const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                              ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                              ? (quotaDisplayMode === 'remaining'
+                                                  ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                                  : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                                               : null;
                                             return (
                                             <div
@@ -1366,7 +1373,7 @@ export const Header: React.FC = () => {
               <DropdownMenuContent
                 align="end"
                 sideOffset={0}
-                className="h-[100vh] w-[100vw] max-h-none rounded-none border-0 p-0"
+                className="h-dvh w-[100vw] max-h-none rounded-none border-0 p-0 overflow-hidden"
               >
                 <div className="flex h-full flex-col bg-[var(--surface-elevated)]">
                   <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)]">
@@ -1424,11 +1431,11 @@ export const Header: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="px-3 pb-3 typography-micro text-muted-foreground text-[10px]">
+                    <div className="px-3 pb-3 text-right typography-micro text-muted-foreground text-[8px]">
                       Last updated {formatTime(quotaLastUpdated)}
                     </div>
                   </div>
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden">
+                  <div className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))]">
                     {!hasRateLimits && (
                       <div className="px-3 py-4 typography-ui-label text-muted-foreground">
                         No rate limits available.
@@ -1451,7 +1458,9 @@ export const Header: React.FC = () => {
                             : window.usedPercent;
                           const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
                           const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                            ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                            ? (quotaDisplayMode === 'remaining'
+                                ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                             : null;
                           return (
                             <div key={`${group.providerId}-${label}`} className="px-3 py-2">
@@ -1509,10 +1518,11 @@ export const Header: React.FC = () => {
                                         const displayPercent = quotaDisplayMode === 'remaining'
                                           ? window.remainingPercent
                                           : window.usedPercent;
-                                        // For model-level quotas, use '5h' as typical window label for Google models
-                                        const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, '5h');
+                                        const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
                                         const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                          ? calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                          ? (quotaDisplayMode === 'remaining'
+                                              ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                              : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                                           : null;
                                         return (
                                           <div key={`${group.providerId}-${modelName}`} className="py-1.5">

@@ -19,20 +19,45 @@ const buildMentionUrl = (name: string): string => {
 };
 
 const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMention }) => {
+    const CLAMP_LINES = 2;
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
     const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
 
     const [isExpanded, setIsExpanded] = React.useState(false);
     const [isTruncated, setIsTruncated] = React.useState(false);
+    const [collapseZoneHeight, setCollapseZoneHeight] = React.useState<number>(0);
     const textRef = React.useRef<HTMLDivElement>(null);
+
+    const hasActiveSelectionInElement = React.useCallback((element: HTMLElement): boolean => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+            return false;
+        }
+
+        const range = selection.getRangeAt(0);
+        return element.contains(range.startContainer) || element.contains(range.endContainer);
+    }, []);
 
     React.useEffect(() => {
         const el = textRef.current;
-        if (!el || isExpanded) return;
+        if (!el) return;
 
         const checkTruncation = () => {
-            setIsTruncated(el.scrollHeight > el.clientHeight);
+            if (!isExpanded) {
+                setIsTruncated(el.scrollHeight > el.clientHeight);
+            }
+
+            const styles = window.getComputedStyle(el);
+            const lineHeight = Number.parseFloat(styles.lineHeight);
+            const fontSize = Number.parseFloat(styles.fontSize);
+            const fallbackLineHeight = Number.isFinite(fontSize) ? fontSize * 1.4 : 20;
+            const resolvedLineHeight = Number.isFinite(lineHeight) ? lineHeight : fallbackLineHeight;
+            setCollapseZoneHeight(Math.max(1, Math.round(resolvedLineHeight * CLAMP_LINES)));
         };
 
         checkTruncation();
@@ -43,11 +68,28 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
         return () => resizeObserver.disconnect();
     }, [textContent, isExpanded]);
 
-    const handleClick = React.useCallback(() => {
-        if (isTruncated || isExpanded) {
-            setIsExpanded((prev) => !prev);
+    const handleClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        const element = textRef.current;
+        if (!element) {
+            return;
         }
-    }, [isTruncated, isExpanded]);
+
+        if (hasActiveSelectionInElement(element)) {
+            return;
+        }
+
+        if (!isExpanded) {
+            if (isTruncated) {
+                setIsExpanded(true);
+            }
+            return;
+        }
+
+        const clickY = event.clientY - element.getBoundingClientRect().top;
+        if (clickY <= collapseZoneHeight) {
+            setIsExpanded(false);
+        }
+    }, [collapseZoneHeight, hasActiveSelectionInElement, isExpanded, isTruncated]);
 
     if (!textContent || textContent.trim().length === 0) {
         return null;
@@ -79,17 +121,18 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     };
 
     return (
-        <div
-            className={cn(
-                "break-words whitespace-pre-wrap font-sans typography-markdown",
-                !isExpanded && "line-clamp-3",
-                (isTruncated || isExpanded) && "cursor-pointer"
-            )}
-            ref={textRef}
-            onClick={handleClick}
-            key={part.id || `${messageId}-user-text`}
-        >
-            {renderContent()}
+        <div className="relative" key={part.id || `${messageId}-user-text`}>
+            <div
+                className={cn(
+                    "break-words whitespace-pre-wrap font-sans typography-markdown",
+                    !isExpanded && "line-clamp-2",
+                    isTruncated && !isExpanded && "cursor-pointer"
+                )}
+                ref={textRef}
+                onClick={handleClick}
+            >
+                {renderContent()}
+            </div>
         </div>
     );
 };

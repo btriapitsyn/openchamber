@@ -57,7 +57,24 @@ function getRuntimeFilesAPI(): FilesAPI | null {
 
 export interface OpenChamberConfig {
   'setup-worktree'?: string[];
+  projectNotes?: string;
+  projectTodos?: OpenChamberProjectTodoItem[];
 }
+
+export interface OpenChamberProjectTodoItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  createdAt: number;
+}
+
+export interface OpenChamberProjectNotesTodos {
+  notes: string;
+  todos: OpenChamberProjectTodoItem[];
+}
+
+export const OPENCHAMBER_PROJECT_NOTES_MAX_LENGTH = 1000;
+export const OPENCHAMBER_PROJECT_TODO_TEXT_MAX_LENGTH = 120;
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -270,6 +287,73 @@ const getUserConfigPath = async (project: ProjectRef): Promise<string | null> =>
   return joinPath(base, `${safeId}.json`);
 };
 
+const trimToMaxLength = (value: string, maxLength: number): string => {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  return value.slice(0, maxLength);
+};
+
+const sanitizeProjectNotes = (value: unknown): string => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return trimToMaxLength(value, OPENCHAMBER_PROJECT_NOTES_MAX_LENGTH);
+};
+
+const sanitizeProjectTodoItems = (value: unknown): OpenChamberProjectTodoItem[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const sanitized: OpenChamberProjectTodoItem[] = [];
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    const record = entry as {
+      id?: unknown;
+      text?: unknown;
+      completed?: unknown;
+      createdAt?: unknown;
+    };
+
+    const id = typeof record.id === 'string' ? record.id.trim() : '';
+    const textRaw = typeof record.text === 'string' ? record.text : '';
+    const text = trimToMaxLength(textRaw.trim(), OPENCHAMBER_PROJECT_TODO_TEXT_MAX_LENGTH);
+    if (!id || !text) {
+      continue;
+    }
+
+    const completed = Boolean(record.completed);
+    const createdAt =
+      typeof record.createdAt === 'number' && Number.isFinite(record.createdAt) && record.createdAt >= 0
+        ? record.createdAt
+        : Date.now();
+
+    sanitized.push({
+      id,
+      text,
+      completed,
+      createdAt,
+    });
+
+  }
+
+  return sanitized;
+};
+
+const sanitizeProjectNotesAndTodos = (value: {
+  notes?: unknown;
+  todos?: unknown;
+} | null | undefined): OpenChamberProjectNotesTodos => {
+  return {
+    notes: sanitizeProjectNotes(value?.notes),
+    todos: sanitizeProjectTodoItems(value?.todos),
+  };
+};
+
 /**
  * Read the config for a project.
  * Returns null if file doesn't exist or is invalid.
@@ -395,6 +479,29 @@ export async function getWorktreeSetupCommands(project: ProjectRef): Promise<str
 export async function saveWorktreeSetupCommands(project: ProjectRef, commands: string[]): Promise<boolean> {
   const filtered = commands.filter((cmd) => cmd.trim().length > 0);
   return updateOpenChamberConfig(project, { 'setup-worktree': filtered });
+}
+
+export async function getProjectNotesAndTodos(project: ProjectRef): Promise<OpenChamberProjectNotesTodos> {
+  const config = await readOpenChamberConfig(project);
+  return sanitizeProjectNotesAndTodos({
+    notes: config?.projectNotes,
+    todos: config?.projectTodos,
+  });
+}
+
+export async function saveProjectNotesAndTodos(
+  project: ProjectRef,
+  value: OpenChamberProjectNotesTodos
+): Promise<boolean> {
+  const sanitized = sanitizeProjectNotesAndTodos({
+    notes: value.notes,
+    todos: value.todos,
+  });
+
+  return updateOpenChamberConfig(project, {
+    projectNotes: sanitized.notes,
+    projectTodos: sanitized.todos,
+  });
 }
 
 /**

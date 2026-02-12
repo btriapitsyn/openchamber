@@ -27,11 +27,12 @@ export const resolveUsageTone = (percent: number | null): 'safe' | 'warn' | 'cri
 };
 
 export const formatWindowLabel = (label: string): string => {
-  if (label === '5h') return '5-Hour Limit';
+  if (label === '5h') return '5-Hour';
   if (label === '7d') return '7-Day Limit';
   if (label === '7d-sonnet') return '7-Day Sonnet Limit';
   if (label === '7d-opus') return '7-Day Opus Limit';
   if (label === 'weekly') return 'Weekly Limit';
+  if (label === 'daily') return 'Daily';
   if (label === 'monthly') return 'Monthly Limit';
   if (label === 'credits') return 'Credits';
   if (label === 'premium') return 'Premium Interactions';

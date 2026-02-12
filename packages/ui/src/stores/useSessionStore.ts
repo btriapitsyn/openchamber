@@ -5,7 +5,7 @@ import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest, PermissionResponse } from "@/types/permission";
 import type { QuestionRequest } from "@/types/question";
 import type { SessionStore, AttachedFile, EditPermissionMode, SyntheticContextPart } from "./types/sessionTypes";
-import { getActiveSessionWindow, getMemoryLimits } from "./types/sessionTypes";
+import { getMessageLimit, getBackgroundTrimLimit } from "./types/sessionTypes";
 
 import { useSessionStore as useSessionManagementStore } from "./sessionStore";
 import { useMessageStore } from "./messageStore";
@@ -292,7 +292,7 @@ export const useSessionStore = create<SessionStore>()(
                                 get().updateViewportAnchor(previousSessionId, previousMessages.length - 1);
                             }
 
-                            get().trimToViewportWindow(previousSessionId, getMemoryLimits().VIEWPORT_MESSAGES);
+                            get().trimToViewportWindow(previousSessionId, getBackgroundTrimLimit());
                         }
                     }
 
@@ -301,12 +301,17 @@ export const useSessionStore = create<SessionStore>()(
                     if (id) {
 
                         const existingMessages = get().messages.get(id);
-                        if (!existingMessages) {
+                        const memoryState = get().sessionMemoryState.get(id);
+                        const needsHistoryBootstrap =
+                            !memoryState ||
+                            memoryState.historyComplete === undefined;
+
+                        if (!existingMessages || needsHistoryBootstrap) {
 
                             await get().loadMessages(id);
                         }
 
-                        get().trimToViewportWindow(id, getActiveSessionWindow());
+                        get().trimToViewportWindow(id, getMessageLimit());
 
                         // Analyze session messages to extract agent/model/variant choices
                         // This ensures context is available even when ModelControls isn't mounted

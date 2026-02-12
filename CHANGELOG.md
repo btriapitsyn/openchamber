@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+## [1.6.8] - 2026-02-12
+
+- Chat: added drag-and-drop attachments with inline image previews, so sharing screenshots and files in prompts feels much faster and more reliable.
+- Sessions: fixed a sidebar issue where draft input could carry over when switching projects, so each workspace keeps cleaner chat context.
+- Chat: improved quick navigation from the sessions list by adding double-click to jump into chat and auto-focus the draft input; also fixed mobile session return behavior (thanks to @gsxdsm).
+- Chat: improved agent/model picking with fuzzy search across names and descriptions, making long lists easier to filter.
+- Usage: corrected Gemini and Antigravity quota source mapping and labels for more accurate usage tracking (thanks to @gsxdsm).
+- Usage: when using remaining-quota mode, usage markers now invert direction to better match how remaining capacity is interpreted (thanks to @gsxdsm).
+ - Desktop: fixed project selection in opened remote instances.  
+- Desktop: fixed opened remote instances that use HTTP (helpful for instances under tunneling).
+
+
 ## [1.6.7] - 2026-02-10
 
 - Voice: added built-in voice input and read-aloud responses with multiple providers, so you can drive chats hands-free when typing is slower (thanks to @gsxdsm).

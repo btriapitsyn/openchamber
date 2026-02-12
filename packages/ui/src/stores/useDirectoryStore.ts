@@ -71,15 +71,48 @@ const resolveDirectoryPath = (path: string, homeDir?: string | null): string => 
   return normalizeDirectoryPath(expanded);
 };
 
+const getStoredHomeDirectory = (): string | null => {
+  const raw = safeStorage.getItem('homeDirectory');
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return null;
+  }
+  const normalized = normalizeDirectoryPath(raw);
+  return normalized.length > 0 ? normalized : null;
+};
+
+const getStoredLastDirectory = (): string | null => {
+  const raw = safeStorage.getItem('lastDirectory');
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return null;
+  }
+  const normalized = normalizeDirectoryPath(raw);
+  return normalized.length > 0 ? normalized : null;
+};
+
+const getProcessHomeDirectory = (): string | null => {
+  if (typeof process === 'undefined') {
+    return null;
+  }
+
+  const env = process?.env;
+  const nodeHome = env?.HOME || env?.USERPROFILE || ((env?.HOMEDRIVE && env?.HOMEPATH) ? `${env.HOMEDRIVE}${env.HOMEPATH}` : undefined);
+  if (typeof nodeHome === 'string' && nodeHome.trim().length > 0) {
+    const normalized = normalizeDirectoryPath(nodeHome);
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  const cwd = process?.cwd?.();
+  if (typeof cwd === 'string' && cwd.trim().length > 0) {
+    const normalized = normalizeDirectoryPath(cwd);
+    return normalized.length > 0 ? normalized : null;
+  }
+
+  return null;
+};
+
 const getHomeDirectory = () => {
 
   if (typeof window !== 'undefined') {
-    const storedHome = safeStorage.getItem('homeDirectory') || cachedHomeDirectory || null;
-    const saved = safeStorage.getItem('lastDirectory');
-    if (saved && !isVSCodeRuntime()) {
-      return resolveDirectoryPath(saved, storedHome);
-    }
-
     if (cachedHomeDirectory) return cachedHomeDirectory;
 
     const desktopHome =
@@ -93,17 +126,18 @@ const getHomeDirectory = () => {
       return desktopHome;
     }
 
+    const storedHome = getStoredHomeDirectory();
     if (storedHome && !isVSCodeRuntime()) {
       cachedHomeDirectory = storedHome;
       return storedHome;
     }
   }
 
-  const nodeHome = typeof process !== 'undefined' && process?.env?.HOME;
-  if (nodeHome) {
-    return nodeHome;
+  const processHome = getProcessHomeDirectory();
+  if (processHome) {
+    return processHome;
   }
-  return process?.cwd?.() || '/';
+  return '/';
 };
 
 
@@ -198,8 +232,16 @@ const getVsCodeWorkspaceFolder = (): string | null => {
 };
 
 const initialHomeDirectory = getVsCodeWorkspaceFolder() || getHomeDirectory();
-if (initialHomeDirectory) {
-  opencodeClient.setDirectory(initialHomeDirectory);
+const initialCurrentDirectory = (() => {
+  const persisted = getStoredLastDirectory();
+  if (persisted && !isVSCodeRuntime()) {
+    return resolveDirectoryPath(persisted, initialHomeDirectory);
+  }
+  return initialHomeDirectory;
+})();
+
+if (initialCurrentDirectory) {
+  opencodeClient.setDirectory(initialCurrentDirectory);
 }
 const initialIsHomeReady = Boolean(initialHomeDirectory && initialHomeDirectory !== '/');
 
@@ -207,8 +249,8 @@ export const useDirectoryStore = create<DirectoryStore>()(
   devtools(
     (set, get) => ({
 
-      currentDirectory: initialHomeDirectory,
-      directoryHistory: [initialHomeDirectory],
+      currentDirectory: initialCurrentDirectory,
+      directoryHistory: [initialCurrentDirectory],
       historyIndex: 0,
       homeDirectory: initialHomeDirectory,
       hasPersistedDirectory: initialHasPersistedDirectory,

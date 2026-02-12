@@ -105,10 +105,8 @@ export type DesktopSettings = {
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
 
-  // Memory limits for message viewport management
-  memoryLimitHistorical?: number;   // Default fetch limit when loading/syncing (default: 90)
-  memoryLimitViewport?: number;     // Trim target when leaving session (default: 120)
-  memoryLimitActiveSession?: number; // Trim target for active session (default: 180)
+  // Message limit — controls fetch, trim, and Load More chunk size (default: 200)
+  messageLimit?: number;
 
   // User-added skills catalogs (persisted to ~/.config/openchamber/settings.json)
   skillCatalogs?: SkillCatalogConfig[];
@@ -201,8 +199,8 @@ export const getDesktopHomeDirectory = async (): Promise<string | null> => {
 export const requestDirectoryAccess = async (
   directoryPath: string
 ): Promise<{ success: boolean; path?: string; projectId?: string; error?: string }> => {
-  // Desktop shell: use native folder picker.
-  if (isTauriShell()) {
+  // Desktop shell on local instance: use native folder picker.
+  if (isTauriShell() && isDesktopLocalOriginActive()) {
     try {
       const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
       const selected = await tauri?.dialog?.open?.({

@@ -5,7 +5,7 @@ import type { Message, Part } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { isExecutionForkMetaText } from "@/lib/messages/executionMeta";
 import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
-import { MEMORY_LIMITS, getMemoryLimits } from "./types/sessionTypes";
+import { MEMORY_LIMITS, getMemoryLimits, getBackgroundTrimLimit } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
     removeLifecycleEntries,
@@ -100,6 +100,15 @@ const computePartsTextLength = (parts: Part[] | undefined): number => {
         }
         return sum;
     }, 0);
+};
+
+const toFileUrl = (inputPath: string): string => {
+    const normalized = inputPath.replace(/\\/g, "/").trim();
+    if (normalized.startsWith("file://")) {
+        return normalized;
+    }
+    const withLeadingSlash = normalized.startsWith("/") ? normalized : `/${normalized}`;
+    return `file://${encodeURI(withLeadingSlash)}`;
 };
 
 const hasFinishStop = (info: { finish?: string } | undefined): boolean => {
@@ -387,20 +396,31 @@ export const useMessageStore = create<MessageStore>()(
                 loadMessages: async (sessionId: string, limit?: number) => {
                         const memLimits = getMemoryLimits();
                         const noLimit = limit === Infinity;
-                        const effectiveLimit = noLimit ? Infinity : (limit ?? memLimits.HISTORICAL_MESSAGES);
-                        const isStreaming = get().sessionMemoryState.get(sessionId)?.isStreaming;
-                        const targetLimit = isStreaming ? memLimits.VIEWPORT_MESSAGES : effectiveLimit;
-                        // Don't pass Infinity to API - use undefined for "fetch all"
-                        const fetchLimit = isStreaming || noLimit ? undefined : targetLimit + memLimits.FETCH_BUFFER;
+                        const previousMemoryState = get().sessionMemoryState.get(sessionId);
+                        // Use explicit limit if provided, otherwise current messageLimit.
+                        // historyLimit is only respected when it's ABOVE messageLimit
+                        // (i.e. user pressed Load More to expand beyond the default).
+                        const baseLimit = memLimits.HISTORICAL_MESSAGES;
+                        const userExpandedLimit = previousMemoryState?.historyLimit;
+                        const targetLimit =
+                            typeof limit === 'number' && Number.isFinite(limit)
+                                ? limit
+                                : Math.max(baseLimit, userExpandedLimit ?? 0);
+
+                        // Don't pass Infinity to API - use undefined for "fetch all".
+                        // For finite loads, overfetch by 1 so hasMoreAbove is accurate.
+                        const fetchLimit = noLimit ? undefined : targetLimit + 1;
                         const allMessages = await executeWithSessionDirectory(sessionId, () => opencodeClient.getSessionMessages(sessionId, fetchLimit));
 
                         // Filter out reverted messages first
                         const revertMessageId = getSessionRevertMessageId(sessionId);
                         const messagesWithoutReverted = filterRevertedMessages(allMessages, revertMessageId);
 
-                        // If we fetched more than we keep (usually via buffer), there are older messages above.
-                        // This intentionally ignores watermark filtering so "Load older" can remain available.
-                        const hasMoreAbove = messagesWithoutReverted.length > targetLimit;
+                        // Accurate older-history detection for finite loads.
+                        // If server returns > targetLimit, there are older messages above current window.
+                        const hasMoreAbove = typeof fetchLimit === 'number'
+                            ? messagesWithoutReverted.length > targetLimit
+                            : false;
 
                         const watermark = get().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
 
@@ -482,7 +502,6 @@ export const useMessageStore = create<MessageStore>()(
                             newMessages.set(sessionId, mergedMessages);
 
                             const newMemoryState = new Map(state.sessionMemoryState);
-                            const previousMemoryState = state.sessionMemoryState.get(sessionId);
                             newMemoryState.set(sessionId, {
                                 ...previousMemoryState,
                                 viewportAnchor: mergedMessages.length - 1,
@@ -491,6 +510,9 @@ export const useMessageStore = create<MessageStore>()(
                                 backgroundMessageCount: 0,
                                 totalAvailableMessages: previousMemoryState?.totalAvailableMessages,
                                 hasMoreAbove,
+                                historyLoading: false,
+                                historyComplete: !hasMoreAbove,
+                                historyLimit: targetLimit,
                                 trimmedHeadMaxId: previousMemoryState?.trimmedHeadMaxId,
                                 streamingCooldownUntil: undefined,
                             });
@@ -663,7 +685,12 @@ export const useMessageStore = create<MessageStore>()(
                                     type: "file" as const,
                                     mime: file.mimeType,
                                     filename: file.filename,
-                                    url: file.dataUrl,
+                                    url:
+                                        file.source === "server" &&
+                                        file.serverPath &&
+                                        (file.mimeType === "text/plain" || file.mimeType === "application/x-directory")
+                                            ? toFileUrl(file.serverPath)
+                                            : file.dataUrl,
                                 }));
 
                                 set((state) => {
@@ -687,7 +714,12 @@ export const useMessageStore = create<MessageStore>()(
                                         type: "file" as const,
                                         mime: file.mimeType,
                                         filename: file.filename,
-                                        url: file.dataUrl,
+                                        url:
+                                            file.source === "server" &&
+                                            file.serverPath &&
+                                            (file.mimeType === "text/plain" || file.mimeType === "application/x-directory")
+                                                ? toFileUrl(file.serverPath)
+                                                : file.dataUrl,
                                     })),
                                 }));
 
@@ -2220,7 +2252,7 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 trimToViewportWindow: (sessionId: string, targetSize?: number, currentSessionId?: string) => {
-                    const effectiveTargetSize = targetSize ?? getMemoryLimits().VIEWPORT_MESSAGES;
+                    const effectiveTargetSize = targetSize ?? getBackgroundTrimLimit();
                     const state = get();
                     const sessionMessages = state.messages.get(sessionId);
                     if (!sessionMessages || sessionMessages.length <= effectiveTargetSize) {
@@ -2409,44 +2441,67 @@ export const useMessageStore = create<MessageStore>()(
                         return;
                     }
 
-                    const memLimits = getMemoryLimits();
-                    // OpenCode may default to "last N" when limit is omitted.
-                    // For "Load older" we progressively increase the tail window.
-                    const desiredLimit = Math.max(
-                        currentMessages.length + memLimits.VIEWPORT_MESSAGES + memLimits.FETCH_BUFFER,
-                        memLimits.HISTORICAL_MESSAGES + memLimits.FETCH_BUFFER,
-                    );
+                    if (memoryState.historyLoading) {
+                        return;
+                    }
 
-                    const allMessages = await executeWithSessionDirectory(
-                        sessionId,
-                        () => opencodeClient.getSessionMessages(sessionId, desiredLimit)
+                    const memLimits = getMemoryLimits();
+                    const baseLimit = memoryState.historyLimit ?? Math.max(
+                        memLimits.HISTORICAL_MESSAGES + memLimits.FETCH_BUFFER,
+                        currentMessages.length + memLimits.FETCH_BUFFER,
                     );
+                    const desiredLimit = direction === "up" ? baseLimit + memLimits.HISTORY_CHUNK : baseLimit;
+
+                    set((snapshot) => {
+                        const nextMemory = new Map(snapshot.sessionMemoryState);
+                        const current = nextMemory.get(sessionId);
+                        if (!current) return snapshot;
+                        nextMemory.set(sessionId, {
+                            ...current,
+                            historyLoading: true,
+                            historyLimit: desiredLimit,
+                        });
+                        return { sessionMemoryState: nextMemory };
+                    });
+
+                    try {
+                        const fetchLimit = desiredLimit + 1;
+                        const allMessages = await executeWithSessionDirectory(
+                            sessionId,
+                            () => opencodeClient.getSessionMessages(sessionId, fetchLimit)
+                        );
 
                         if (direction === "up" && currentMessages.length > 0) {
                             const dedupedMessages = dedupeMessagesById(allMessages);
+                            const hasPotentialMore = allMessages.length >= fetchLimit;
                             const firstCurrentMessage = currentMessages[0];
                             const indexInAll = dedupedMessages.findIndex((message) => message.info.id === firstCurrentMessage.info.id);
 
                             if (indexInAll > 0) {
-                                const loadCount = Math.min(MEMORY_LIMITS.VIEWPORT_MESSAGES, indexInAll);
+                                const loadCount = Math.min(memLimits.HISTORY_CHUNK, indexInAll);
                                 const newMessages = dedupedMessages.slice(indexInAll - loadCount, indexInAll);
 
-                                set((state) => {
-                                    const updatedMessages = [...newMessages, ...currentMessages];
+                                set((snapshot) => {
+                                    const latestCurrent = snapshot.messages.get(sessionId) ?? currentMessages;
+                                    const latestMemory = snapshot.sessionMemoryState.get(sessionId) ?? memoryState;
+                                    const updatedMessages = [...newMessages, ...latestCurrent];
                                     const mergedMessages = dedupeMessagesById(updatedMessages);
-                                    const addedCount = Math.max(0, mergedMessages.length - currentMessages.length);
+                                    const addedCount = Math.max(0, mergedMessages.length - latestCurrent.length);
 
-                                    const newMessagesMap = new Map(state.messages);
+                                    const newMessagesMap = new Map(snapshot.messages);
                                     newMessagesMap.set(sessionId, mergedMessages);
 
-                                    const newMemoryState = new Map(state.sessionMemoryState);
+                                    const newMemoryState = new Map(snapshot.sessionMemoryState);
                                     newMemoryState.set(sessionId, {
-                                        ...memoryState,
-                                        viewportAnchor: memoryState.viewportAnchor + addedCount,
-                                        hasMoreAbove: indexInAll - loadCount > 0,
+                                        ...latestMemory,
+                                        viewportAnchor: latestMemory.viewportAnchor + addedCount,
+                                        hasMoreAbove: indexInAll - loadCount > 0 || hasPotentialMore,
+                                        historyLoading: false,
+                                        historyLimit: desiredLimit,
+                                        historyComplete: !(indexInAll - loadCount > 0 || hasPotentialMore),
                                         totalAvailableMessages: Math.max(
-                                            memoryState.totalAvailableMessages ?? 0,
-                                            dedupedMessages.length
+                                            latestMemory.totalAvailableMessages ?? 0,
+                                            dedupedMessages.length,
                                         ),
                                     });
 
@@ -2455,21 +2510,83 @@ export const useMessageStore = create<MessageStore>()(
                                         sessionMemoryState: newMemoryState,
                                     };
                                 });
-                            } else if (indexInAll === 0) {
-                                set((state) => {
-                                    const newMemoryState = new Map(state.sessionMemoryState);
+                                return;
+                            }
+
+                            if (indexInAll === 0) {
+                                set((snapshot) => {
+                                    const latestMemory = snapshot.sessionMemoryState.get(sessionId) ?? memoryState;
+                                    const newMemoryState = new Map(snapshot.sessionMemoryState);
                                     newMemoryState.set(sessionId, {
-                                        ...memoryState,
-                                        hasMoreAbove: false,
+                                        ...latestMemory,
+                                        hasMoreAbove: hasPotentialMore,
+                                        historyLoading: false,
+                                        historyLimit: desiredLimit,
+                                        historyComplete: !hasPotentialMore,
                                         totalAvailableMessages: Math.max(
-                                            memoryState.totalAvailableMessages ?? 0,
-                                            dedupedMessages.length
+                                            latestMemory.totalAvailableMessages ?? 0,
+                                            dedupedMessages.length,
                                         ),
                                     });
                                     return { sessionMemoryState: newMemoryState };
                                 });
+                                return;
+                            }
+
+                            // Fallback for edge-cases where current head message is no longer present
+                            // in fetched history window (e.g. filters/watermarks/reverts). We still
+                            // merge any older unseen messages and keep "load older" discoverable.
+                            if (indexInAll < 0) {
+                                set((snapshot) => {
+                                    const latestCurrent = snapshot.messages.get(sessionId) ?? currentMessages;
+                                    const latestMemory = snapshot.sessionMemoryState.get(sessionId) ?? memoryState;
+                                    const currentIds = new Set(latestCurrent.map((message) => message.info.id));
+                                    const unseenMessages = dedupedMessages.filter((message) => !currentIds.has(message.info.id));
+                                    const mergedMessages = dedupeMessagesById([...unseenMessages, ...latestCurrent]);
+                                    const addedCount = Math.max(0, mergedMessages.length - latestCurrent.length);
+                                    const hasMoreAbove = unseenMessages.length > 0 || hasPotentialMore;
+
+                                    const newMessagesMap = new Map(snapshot.messages);
+                                    if (addedCount > 0) {
+                                        newMessagesMap.set(sessionId, mergedMessages);
+                                    }
+
+                                    const newMemoryState = new Map(snapshot.sessionMemoryState);
+                                    newMemoryState.set(sessionId, {
+                                        ...latestMemory,
+                                        viewportAnchor: latestMemory.viewportAnchor + addedCount,
+                                        hasMoreAbove,
+                                        historyLoading: false,
+                                        historyLimit: desiredLimit,
+                                        historyComplete: !hasMoreAbove,
+                                        totalAvailableMessages: Math.max(
+                                            latestMemory.totalAvailableMessages ?? 0,
+                                            dedupedMessages.length,
+                                        ),
+                                    });
+
+                                    return {
+                                        messages: newMessagesMap,
+                                        sessionMemoryState: newMemoryState,
+                                    };
+                                });
+                                return;
                             }
                         }
+                    } finally {
+                        set((snapshot) => {
+                            const latestMemory = snapshot.sessionMemoryState.get(sessionId);
+                            if (!latestMemory || !latestMemory.historyLoading) {
+                                return snapshot;
+                            }
+                            const newMemoryState = new Map(snapshot.sessionMemoryState);
+                            newMemoryState.set(sessionId, {
+                                ...latestMemory,
+                                historyLoading: false,
+                            });
+                            return { sessionMemoryState: newMemoryState };
+                        });
+                    }
                 },
 
                 getLastMessageModel: (sessionId: string) => {
@@ -2507,6 +2624,9 @@ export const useMessageStore = create<MessageStore>()(
                             backgroundMessageCount: memory.backgroundMessageCount,
                             totalAvailableMessages: memory.totalAvailableMessages,
                             hasMoreAbove: memory.hasMoreAbove,
+                            historyLoading: memory.historyLoading,
+                            historyComplete: memory.historyComplete,
+                            historyLimit: memory.historyLimit,
                             trimmedHeadMaxId: memory.trimmedHeadMaxId,
                         },
                     ]),
@@ -2523,7 +2643,18 @@ export const useMessageStore = create<MessageStore>()(
                     let restoredMemoryState = currentState.sessionMemoryState;
                     if (Array.isArray(persistedState.sessionMemoryState)) {
                         restoredMemoryState = new Map<string, SessionMemoryState>(
-                            persistedState.sessionMemoryState.map((entry: [string, SessionMemoryState]) => entry)
+                            persistedState.sessionMemoryState.map((entry: [string, SessionMemoryState]) => {
+                                const [id, memory] = entry;
+                                // Never trust persisted history flags — they must be
+                                // recomputed from a fresh API fetch on session open.
+                                return [id, {
+                                    ...memory,
+                                    hasMoreAbove: undefined,
+                                    historyComplete: undefined,
+                                    historyLimit: undefined,
+                                    historyLoading: false,
+                                }] as [string, SessionMemoryState];
+                            })
                         );
                     }
 

@@ -55,7 +55,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
 }) => {
   const hasSelectedFiles = selectedCount > 0;
   const canCommit = commitMessage.trim() && hasSelectedFiles && commitAction === null;
-  const { isMobile } = useDeviceInfo();
+  const { isMobile, hasTouchInput } = useDeviceInfo();
 
   const containerClassName =
     variant === 'framed'
@@ -104,6 +104,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
             onChange={onCommitMessageChange}
             placeholder="Commit message"
             disabled={commitAction !== null}
+            hasTouchInput={hasTouchInput}
           />
 
           {gitmojiEnabled && (

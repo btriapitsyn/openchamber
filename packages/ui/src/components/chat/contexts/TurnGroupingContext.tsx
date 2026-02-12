@@ -52,6 +52,7 @@ interface TurnGroupingUiStateData {
 // Streaming state that changes frequently during assistant response
 interface TurnGroupingStreamingData {
     sessionIsWorking: boolean;
+    lastTurnActivityInfo?: TurnActivityInfo;
 }
 
 // Separate contexts to prevent unnecessary re-renders
@@ -86,6 +87,9 @@ export const useTurnGroupingContextForMessage = (messageId: string): TurnGroupin
         if (!isAssistantMessage) return undefined;
         
         const isLastTurn = staticData.lastTurnId === turn.turnId;
+        const lastTurnActivityVersion = isLastTurn
+            ? `${streamingData.lastTurnActivityInfo?.activityParts.length ?? 0}:${streamingData.lastTurnActivityInfo?.summaryBody ?? ''}`
+            : '';
         
         // Get UI state early - needed for cache key to ensure expand/collapse updates propagate
         const uiState = uiStateData.turnUiStates.get(turn.turnId) ?? { isExpanded: staticData.defaultActivityExpanded };
@@ -96,13 +100,15 @@ export const useTurnGroupingContextForMessage = (messageId: string): TurnGroupin
         // - isExpanded: UI state for this turn's activity group
         // - sessionIsWorking (last turn only): streaming state affects "working" indicator
         const cacheKey = isLastTurn 
-            ? `${messageId}-${isExpanded}-${streamingData.sessionIsWorking}`
+            ? `${messageId}-${isExpanded}-${streamingData.sessionIsWorking}-${lastTurnActivityVersion}`
             : `${messageId}-${isExpanded}`;
         
         const cached = contextCache.get(cacheKey);
         if (cached) return cached;
         
-        const activityInfo = staticData.turnActivityInfo.get(turn.turnId);
+        const activityInfo = isLastTurn
+            ? streamingData.lastTurnActivityInfo
+            : staticData.turnActivityInfo.get(turn.turnId);
         const activityParts = activityInfo?.activityParts ?? [];
         const activityGroupSegments = activityInfo?.activityGroupSegments ?? [];
         const hasTools = Boolean(activityInfo?.hasTools);
@@ -498,14 +504,43 @@ const buildNeighborMap = (messages: ChatMessageEntry[]): Map<string, NeighborInf
     return map;
 };
 
+const getMessageRole = (message: ChatMessageEntry): string => {
+    const role = (message.info as { clientRole?: string | null | undefined }).clientRole ?? message.info.role;
+    return typeof role === 'string' ? role : '';
+};
+
+const getStructureKey = (messages: ChatMessageEntry[]): string => {
+    if (messages.length === 0) return '';
+    return messages
+        .map((message) => `${message.info?.id ?? ''}:${getMessageRole(message)}`)
+        .join('|');
+};
+
 export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ messages, children }) => {
     const { isWorking: sessionIsWorking } = useCurrentSessionActivity();
     const toolCallExpansion = useUIStore((state) => state.toolCallExpansion);
     const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
     const defaultActivityExpanded = toolCallExpansion === 'activity' || toolCallExpansion === 'detailed';
+    const structureKey = React.useMemo(() => getStructureKey(messages), [messages]);
+    const staticCacheRef = React.useRef<{
+        structureKey: string;
+        defaultActivityExpanded: boolean;
+        showTextJustificationActivity: boolean;
+        value: TurnGroupingStaticData;
+    } | null>(null);
 
-    // Static data - only changes when messages change or justification setting changes
+    // Static data - avoid identity churn while assistant streams within existing turn structure.
     const staticValue = React.useMemo<TurnGroupingStaticData>(() => {
+        const cached = staticCacheRef.current;
+        if (
+            cached &&
+            cached.structureKey === structureKey &&
+            cached.defaultActivityExpanded === defaultActivityExpanded &&
+            cached.showTextJustificationActivity === showTextJustificationActivity
+        ) {
+            return cached.value;
+        }
+
         const turns = detectTurns(messages);
         const lastTurnId = turns.length > 0 ? turns[turns.length - 1]!.turnId : null;
         
@@ -519,6 +554,7 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
 
         const turnActivityInfo = new Map<string, TurnActivityInfo>();
         turns.forEach((turn) => {
+            if (turn.turnId === lastTurnId) return;
             turnActivityInfo.set(turn.turnId, getTurnActivityInfo(turn, showTextJustificationActivity));
         });
 
@@ -534,7 +570,7 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
             });
         }
 
-        return {
+        const value: TurnGroupingStaticData = {
             turns,
             messageToTurn,
             turnActivityInfo,
@@ -543,7 +579,36 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
             defaultActivityExpanded,
             messageNeighbors,
         };
-    }, [messages, defaultActivityExpanded, showTextJustificationActivity]);
+
+        staticCacheRef.current = {
+            structureKey,
+            defaultActivityExpanded,
+            showTextJustificationActivity,
+            value,
+        };
+
+        return value;
+    }, [defaultActivityExpanded, messages, showTextJustificationActivity, structureKey]);
+
+    const lastTurnActivityInfo = React.useMemo<TurnActivityInfo | undefined>(() => {
+        const lastTurnId = staticValue.lastTurnId;
+        if (!lastTurnId) return undefined;
+        // Find the last turn's user message in the current messages array to pick up
+        // streaming content changes without a second full detectTurns() pass.
+        const turns = staticValue.turns;
+        const lastTurn = turns.length > 0 ? turns[turns.length - 1] : undefined;
+        if (!lastTurn) return undefined;
+        // Re-slice assistant messages from the live `messages` array so that
+        // streamed part updates are reflected without re-detecting all turns.
+        const userIdx = messages.findIndex((m) => m.info.id === lastTurn.userMessage.info.id);
+        if (userIdx < 0) return getTurnActivityInfo(lastTurn, showTextJustificationActivity);
+        const liveAssistant = messages.slice(userIdx + 1).filter((m) => {
+            const role = (m.info as { clientRole?: string | null }).clientRole ?? m.info.role;
+            return role === 'assistant';
+        });
+        const liveTurn: Turn = { ...lastTurn, assistantMessages: liveAssistant };
+        return getTurnActivityInfo(liveTurn, showTextJustificationActivity);
+    }, [staticValue, messages, showTextJustificationActivity]);
 
     // UI state for expansion toggles
     const [turnUiStates, setTurnUiStates] = React.useState<Map<string, { isExpanded: boolean }>>(
@@ -573,7 +638,8 @@ export const TurnGroupingProvider: React.FC<TurnGroupingProviderProps> = ({ mess
     // Streaming state - changes frequently during assistant response
     const streamingValue = React.useMemo<TurnGroupingStreamingData>(() => ({
         sessionIsWorking,
-    }), [sessionIsWorking]);
+        lastTurnActivityInfo,
+    }), [lastTurnActivityInfo, sessionIsWorking]);
 
     return (
         <TurnGroupingStaticContext.Provider value={staticValue}>

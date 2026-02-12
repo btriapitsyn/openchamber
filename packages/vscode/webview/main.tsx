@@ -1,5 +1,5 @@
 import { createVSCodeAPIs } from './api';
-import { onCommand, onThemeChange, proxyApiRequest, sendBridgeMessage, startSseProxy, stopSseProxy } from './api/bridge';
+import { onCommand, onThemeChange, proxyApiRequest, proxySessionMessageRequest, sendBridgeMessage, startSseProxy, stopSseProxy } from './api/bridge';
 import type { RuntimeAPIs } from '@openchamber/ui/lib/api/types';
 import {
   buildVSCodeThemeFromPalette,
@@ -343,7 +343,35 @@ const extractBodyBase64 = async (input: RequestInfo | URL, init: RequestInit | u
   return undefined;
 };
 
+const extractBodyText = async (input: RequestInfo | URL, init: RequestInit | undefined, method: string): Promise<string> => {
+  if (method === 'GET' || method === 'HEAD') return '';
+
+  if (input instanceof Request) {
+    const cloned = input.clone();
+    return await cloned.text();
+  }
+
+  const body = init?.body;
+  if (!body) return '';
+
+  if (typeof body === 'string') {
+    return body;
+  }
+
+  if (body instanceof URLSearchParams) {
+    return body.toString();
+  }
+
+  if (body instanceof Blob) {
+    return await body.text();
+  }
+
+  console.warn('[OpenChamber] Unsupported request body type for direct session proxy:', body);
+  return '';
+};
+
 const isSseApiPath = (pathname: string) => pathname === '/api/event' || pathname === '/api/global/event';
+const isSessionMessageApiPath = (pathname: string) => /^\/api\/session\/[^/]+\/message$/.test(pathname);
 
 const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
   const pathname = url.pathname;
@@ -759,6 +787,16 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       });
 
       return new Response(stream, { status: start.status || 200, headers: start.headers || { 'content-type': 'text/event-stream' } });
+    }
+
+    if (method === 'POST' && isSessionMessageApiPath(targetUrl.pathname)) {
+      const bodyText = await extractBodyText(input, init, method);
+      const proxied = await proxySessionMessageRequest({ path: suffixPath, headers, bodyText });
+      const body = proxied.bodyBase64 ? decodeBase64(proxied.bodyBase64) : new Uint8Array();
+      const response = new Response(body, { status: proxied.status, headers: proxied.headers });
+      recordBootstrapFetch(targetUrl.pathname, response.ok);
+      maybeHideLoadingOverlay();
+      return response;
     }
 
     const bodyBase64 = await extractBodyBase64(input, init, method);

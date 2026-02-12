@@ -8,6 +8,7 @@ import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
+import { detectTurns, type Turn } from './hooks/useTurnGrouping';
 import { TurnGroupingProvider, useMessageNeighbors, useTurnGroupingContextForMessage, useTurnGroupingContextStatic, useLastTurnMessageIds } from './contexts/TurnGroupingContext';
 
 interface ChatMessageEntry {
@@ -24,6 +25,8 @@ interface MessageListProps {
     hasMoreAbove: boolean;
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
+    hasRenderEarlier?: boolean;
+    onRenderEarlier?: () => void;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
@@ -87,31 +90,103 @@ const DynamicMessageRow = React.memo<MessageRowProps>(({
 
 DynamicMessageRow.displayName = 'DynamicMessageRow';
 
-// Inner component that renders messages with access to context hooks
-const MessageListContent: React.FC<{
-    displayMessages: ChatMessageEntry[];
+interface TurnBlockProps {
+    turn: Turn;
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
-}> = ({ displayMessages, onMessageContentChange, getAnimationHandlers, scrollToBottom }) => {
+}
+
+const TurnBlock: React.FC<TurnBlockProps> = ({
+    turn,
+    onMessageContentChange,
+    getAnimationHandlers,
+    scrollToBottom,
+}) => {
     const lastTurnMessageIds = useLastTurnMessageIds();
+
+    const renderMessage = React.useCallback(
+        (message: ChatMessageEntry) => {
+            const role = (message.info as { clientRole?: string | null | undefined }).clientRole ?? message.info.role;
+            const isInLastTurn = role !== 'user' && lastTurnMessageIds.has(message.info.id);
+            const RowComponent = isInLastTurn ? DynamicMessageRow : StaticMessageRow;
+
+            return (
+                <RowComponent
+                    key={message.info.id}
+                    message={message}
+                    onContentChange={onMessageContentChange}
+                    animationHandlers={getAnimationHandlers(message.info.id)}
+                    scrollToBottom={scrollToBottom}
+                />
+            );
+        },
+        [getAnimationHandlers, lastTurnMessageIds, onMessageContentChange, scrollToBottom]
+    );
+
+    return (
+        <section className="relative w-full" data-turn-id={turn.turnId}>
+            <div className="sticky top-0 z-20 relative bg-[var(--surface-background)] [overflow-anchor:none]">
+                <div className="relative z-10">
+                    {renderMessage(turn.userMessage)}
+                </div>
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-x-0 top-full z-0 h-8 bg-gradient-to-b from-[var(--surface-background)] to-transparent"
+                />
+            </div>
+
+            <div className="relative z-0">
+                {turn.assistantMessages.map((message) => renderMessage(message))}
+            </div>
+        </section>
+    );
+};
+
+TurnBlock.displayName = 'TurnBlock';
+
+// Inner component that renders messages with access to context hooks
+const MessageListContent: React.FC<{
+    turns: Turn[];
+    ungroupedMessages: ChatMessageEntry[];
+    onMessageContentChange: (reason?: ContentChangeReason) => void;
+    getAnimationHandlers: (messageId: string) => AnimationHandlers;
+    scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
+}> = ({ turns, ungroupedMessages, onMessageContentChange, getAnimationHandlers, scrollToBottom }) => {
+    const lastTurnMessageIds = useLastTurnMessageIds();
+
+    const renderUngroupedMessage = React.useCallback(
+        (message: ChatMessageEntry) => {
+            const role = (message.info as { clientRole?: string | null | undefined }).clientRole ?? message.info.role;
+            const isInLastTurn = role !== 'user' && lastTurnMessageIds.has(message.info.id);
+            const RowComponent = isInLastTurn ? DynamicMessageRow : StaticMessageRow;
+
+            return (
+                <RowComponent
+                    key={message.info.id}
+                    message={message}
+                    onContentChange={onMessageContentChange}
+                    animationHandlers={getAnimationHandlers(message.info.id)}
+                    scrollToBottom={scrollToBottom}
+                />
+            );
+        },
+        [getAnimationHandlers, lastTurnMessageIds, onMessageContentChange, scrollToBottom]
+    );
     
     return (
         <>
-            {displayMessages.map((message) => {
-                const isInLastTurn = lastTurnMessageIds.has(message.info.id);
-                const RowComponent = isInLastTurn ? DynamicMessageRow : StaticMessageRow;
-                
-                return (
-                    <RowComponent
-                        key={message.info.id}
-                        message={message}
-                        onContentChange={onMessageContentChange}
-                        animationHandlers={getAnimationHandlers(message.info.id)}
-                        scrollToBottom={scrollToBottom}
-                    />
-                );
-            })}
+            {ungroupedMessages.map((message) => renderUngroupedMessage(message))}
+
+            {turns.map((turn) => (
+                <TurnBlock
+                    key={turn.turnId}
+                    turn={turn}
+                    onMessageContentChange={onMessageContentChange}
+                    getAnimationHandlers={getAnimationHandlers}
+                    scrollToBottom={scrollToBottom}
+                />
+            ))}
         </>
     );
 };
@@ -125,6 +200,8 @@ const MessageList: React.FC<MessageListProps> = ({
     hasMoreAbove,
     isLoadingOlder,
     onLoadOlder,
+    hasRenderEarlier,
+    onRenderEarlier,
     scrollToBottom,
 }) => {
     React.useEffect(() => {
@@ -161,9 +238,40 @@ const MessageList: React.FC<MessageListProps> = ({
             });
     }, [messages]);
 
+    const { turns, ungroupedMessages } = React.useMemo(() => {
+        const groupedTurns = detectTurns(displayMessages);
+        const groupedMessageIds = new Set<string>();
+
+        groupedTurns.forEach((turn) => {
+            groupedMessageIds.add(turn.userMessage.info.id);
+            turn.assistantMessages.forEach((message) => {
+                groupedMessageIds.add(message.info.id);
+            });
+        });
+
+        const ungrouped = displayMessages.filter((message) => !groupedMessageIds.has(message.info.id));
+
+        return {
+            turns: groupedTurns,
+            ungroupedMessages: ungrouped,
+        };
+    }, [displayMessages]);
+
     return (
         <TurnGroupingProvider messages={displayMessages}>
             <div>
+                {hasRenderEarlier && (
+                    <div className="flex justify-center py-3">
+                        <button
+                            type="button"
+                            onClick={onRenderEarlier}
+                            className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground"
+                        >
+                            Render earlier messages
+                        </button>
+                    </div>
+                )}
+
                 {hasMoreAbove && (
                     <div className="flex justify-center py-3">
                         {isLoadingOlder ? (
@@ -183,7 +291,8 @@ const MessageList: React.FC<MessageListProps> = ({
                 )}
 
                 <MessageListContent
-                    displayMessages={displayMessages}
+                    turns={turns}
+                    ungroupedMessages={ungroupedMessages}
                     onMessageContentChange={onMessageContentChange}
                     getAnimationHandlers={getAnimationHandlers}
                     scrollToBottom={scrollToBottom}

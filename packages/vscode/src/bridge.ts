@@ -67,6 +67,12 @@ type ApiProxyRequestPayload = {
   bodyBase64?: string;
 };
 
+type ApiSessionMessageRequestPayload = {
+  path?: string;
+  headers?: Record<string, string>;
+  bodyText?: string;
+};
+
 type ApiProxyResponsePayload = {
   status: number;
   headers: Record<string, string>;
@@ -760,6 +766,23 @@ const collectHeaders = (headers: Headers): Record<string, string> => {
   return result;
 };
 
+const buildUnavailableApiResponse = (): ApiProxyResponsePayload => {
+  const body = JSON.stringify({ error: 'OpenCode API unavailable' });
+  return {
+    status: 503,
+    headers: { 'content-type': 'application/json' },
+    bodyBase64: base64EncodeUtf8(body),
+  };
+};
+
+const sanitizeForwardHeaders = (input: Record<string, string> | undefined): Record<string, string> => {
+  const headers: Record<string, string> = { ...(input || {}) };
+  delete headers['content-length'];
+  delete headers['host'];
+  delete headers['connection'];
+  return headers;
+};
+
 export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeContext): Promise<BridgeResponse> {
   const { id, type, payload } = message;
 
@@ -768,12 +791,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       case 'api:proxy': {
         const apiUrl = ctx?.manager?.getApiUrl();
         if (!apiUrl) {
-          const body = JSON.stringify({ error: 'OpenCode API unavailable' });
-          const data: ApiProxyResponsePayload = {
-            status: 503,
-            headers: { 'content-type': 'application/json' },
-            bodyBase64: base64EncodeUtf8(body),
-          };
+          const data = buildUnavailableApiResponse();
           return { id, type, success: true, data };
         }
 
@@ -788,7 +806,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
         const base = `${apiUrl.replace(/\/+$/, '')}/`;
         const targetUrl = new URL(normalizedPath.replace(/^\/+/, ''), base).toString();
-        const requestHeaders: Record<string, string> = { ...(headers || {}) };
+        const requestHeaders: Record<string, string> = sanitizeForwardHeaders(headers);
 
         // Ensure SSE requests are negotiated correctly.
         if (normalizedPath === '/event' || normalizedPath === '/global/event') {
@@ -823,6 +841,68 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           });
           const data: ApiProxyResponsePayload = {
             status: 502,
+            headers: { 'content-type': 'application/json' },
+            bodyBase64: base64EncodeUtf8(body),
+          };
+          return { id, type, success: true, data };
+        }
+      }
+
+      case 'api:session:message': {
+        const apiUrl = ctx?.manager?.getApiUrl();
+        if (!apiUrl) {
+          const data = buildUnavailableApiResponse();
+          return { id, type, success: true, data };
+        }
+
+        const { path: requestPath, headers, bodyText } = (payload || {}) as ApiSessionMessageRequestPayload;
+        const normalizedPath =
+          typeof requestPath === 'string' && requestPath.trim().length > 0
+            ? requestPath.trim().startsWith('/')
+              ? requestPath.trim()
+              : `/${requestPath.trim()}`
+            : '/';
+
+        if (!/^\/session\/[^/]+\/message(?:\?.*)?$/.test(normalizedPath)) {
+          const body = JSON.stringify({ error: 'Invalid session message proxy path' });
+          const data: ApiProxyResponsePayload = {
+            status: 400,
+            headers: { 'content-type': 'application/json' },
+            bodyBase64: base64EncodeUtf8(body),
+          };
+          return { id, type, success: true, data };
+        }
+
+        const base = `${apiUrl.replace(/\/+$/, '')}/`;
+        const targetUrl = new URL(normalizedPath.replace(/^\/+/, ''), base).toString();
+        const requestHeaders: Record<string, string> = sanitizeForwardHeaders(headers);
+
+        try {
+          const response = await fetch(targetUrl, {
+            method: 'POST',
+            headers: requestHeaders,
+            body: typeof bodyText === 'string' ? bodyText : '',
+            signal: AbortSignal.timeout(45000),
+          });
+
+          const arrayBuffer = await response.arrayBuffer();
+          const data: ApiProxyResponsePayload = {
+            status: response.status,
+            headers: collectHeaders(response.headers),
+            bodyBase64: Buffer.from(arrayBuffer).toString('base64'),
+          };
+
+          return { id, type, success: true, data };
+        } catch (error) {
+          const isTimeout =
+            error instanceof Error &&
+            ((error as Error & { name?: string }).name === 'TimeoutError' ||
+              (error as Error & { name?: string }).name === 'AbortError');
+          const body = JSON.stringify({
+            error: isTimeout ? 'OpenCode message forward timed out' : error instanceof Error ? error.message : 'OpenCode message forward failed',
+          });
+          const data: ApiProxyResponsePayload = {
+            status: isTimeout ? 504 : 503,
             headers: { 'content-type': 'application/json' },
             bodyBase64: base64EncodeUtf8(body),
           };

@@ -441,8 +441,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return sorted;
         }
         return sorted.filter((agent) =>
-            fuzzyMatch(agentSearchQuery, agent.name) ||
-            (agent.description && fuzzyMatch(agentSearchQuery, agent.description))
+            fuzzyMatch(agent.name, agentSearchQuery) ||
+            (agent.description && fuzzyMatch(agent.description, agentSearchQuery))
         );
     }, [selectableDesktopAgents, agentSearchQuery]);
 
@@ -518,13 +518,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const inputModalityIcons = getModalityIcons(currentMetadata, 'input');
     const outputModalityIcons = getModalityIcons(currentMetadata, 'output');
 
+    // Providers/models can reload (directory switch/config sync) without changing
+    // currentProviderId/currentModelId; include providers to avoid stale variants.
     const availableVariants = React.useMemo(() => {
-        const variantKey = `${currentProviderId}/${currentModelId}`;
-        if (!variantKey) {
-            return [];
-        }
         return getCurrentModelVariants();
-    }, [getCurrentModelVariants, currentProviderId, currentModelId]);
+    }, [getCurrentModelVariants]);
     const hasVariants = availableVariants.length > 0;
 
     const costRows = [
@@ -1383,6 +1381,39 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
+    const normalizeModelSearchValue = React.useCallback((value: string) => {
+        const lower = value.toLowerCase().trim();
+        const compact = lower.replace(/[^a-z0-9]/g, '');
+        const tokens = lower.split(/[^a-z0-9]+/).filter(Boolean);
+        return { lower, compact, tokens };
+    }, []);
+
+    const matchesModelSearch = React.useCallback((candidate: string, query: string) => {
+        const normalizedQuery = normalizeModelSearchValue(query);
+        if (!normalizedQuery.lower) {
+            return true;
+        }
+
+        const normalizedCandidate = normalizeModelSearchValue(candidate);
+        if (normalizedCandidate.lower.includes(normalizedQuery.lower)) {
+            return true;
+        }
+
+        if (normalizedQuery.compact.length >= 2 && normalizedCandidate.compact.includes(normalizedQuery.compact)) {
+            return true;
+        }
+
+        if (normalizedQuery.tokens.length === 0) {
+            return false;
+        }
+
+        return normalizedQuery.tokens.every((queryToken) =>
+            normalizedCandidate.tokens.some((candidateToken) =>
+                candidateToken.startsWith(queryToken) || candidateToken.includes(queryToken)
+            )
+        );
+    }, [normalizeModelSearchValue]);
+
     const renderMobileModelPanel = () => {
         if (!isCompact) return null;
 
@@ -1392,13 +1423,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
                 const matchesProvider = normalizedQuery.length === 0
                     ? true
-                    : fuzzyMatch(provider.name, normalizedQuery) || fuzzyMatch(provider.id, normalizedQuery);
+                    : matchesModelSearch(provider.name, normalizedQuery) || matchesModelSearch(provider.id, normalizedQuery);
                 const matchingModels = normalizedQuery.length === 0
                     ? providerModels
                     : providerModels.filter((model: ProviderModel) => {
                         const name = getModelDisplayName(model);
                         const id = typeof model.id === 'string' ? model.id : '';
-                        return fuzzyMatch(name, normalizedQuery) || fuzzyMatch(id, normalizedQuery);
+                        return matchesModelSearch(name, normalizedQuery) || matchesModelSearch(id, normalizedQuery);
                     });
                 return { provider, providerModels: matchingModels, matchesProvider };
             })
@@ -1964,12 +1995,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         );
     };
 
-    // Filter models based on search query (fuzzy match)
+    // Filter models based on search query
     const filterByQuery = (modelName: string, providerName: string, query: string) => {
         if (!query.trim()) return true;
         return (
-            fuzzyMatch(modelName, query) ||
-            fuzzyMatch(providerName, query)
+            matchesModelSearch(modelName, query) ||
+            matchesModelSearch(providerName, query)
         );
     };
 
@@ -2024,9 +2055,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
         // Handle keyboard navigation
         const handleModelKeyDown = (e: React.KeyboardEvent) => {
+            e.stopPropagation();
+
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                e.stopPropagation();
                 setModelSelectedIndex((prev) => (prev + 1) % Math.max(1, totalItems));
                 // Scroll into view
                 setTimeout(() => {
@@ -2035,7 +2067,6 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 }, 0);
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                e.stopPropagation();
                 setModelSelectedIndex((prev) => (prev - 1 + Math.max(1, totalItems)) % Math.max(1, totalItems));
                 // Scroll into view
                 setTimeout(() => {
@@ -2044,14 +2075,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 }, 0);
             } else if (e.key === 'Enter') {
                 e.preventDefault();
-                e.stopPropagation();
                 const selectedItem = flatModelList[modelSelectedIndex];
                 if (selectedItem) {
                     handleProviderAndModelChange(selectedItem.providerID, selectedItem.modelID);
                 }
             } else if (e.key === 'Escape') {
                 e.preventDefault();
-                e.stopPropagation();
                 setAgentMenuOpen(false);
             }
         };
@@ -2492,6 +2521,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                             placeholder="Search agents"
                                             value={agentSearchQuery}
                                             onChange={(e) => setAgentSearchQuery(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                e.stopPropagation();
+                                            }}
                                             className="pl-8 h-8 typography-meta"
                                             autoFocus
                                         />

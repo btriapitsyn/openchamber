@@ -541,9 +541,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
                             // Handle keyboard navigation
                             const handleKeyDown = (e: React.KeyboardEvent) => {
+                                e.stopPropagation();
+
                                 if (e.key === 'ArrowDown') {
                                     e.preventDefault();
-                                    e.stopPropagation();
                                     const nextIndex = (selectedIndex + 1) % Math.max(1, totalItems);
                                     setSelectedIndex(nextIndex);
                                     setTimeout(() => {
@@ -551,7 +552,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                     }, 0);
                                 } else if (e.key === 'ArrowUp') {
                                     e.preventDefault();
-                                    e.stopPropagation();
                                     const prevIndex = (selectedIndex - 1 + Math.max(1, totalItems)) % Math.max(1, totalItems);
                                     setSelectedIndex(prevIndex);
                                     setTimeout(() => {
@@ -559,14 +559,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                                     }, 0);
                                 } else if (e.key === 'Enter') {
                                     e.preventDefault();
-                                    e.stopPropagation();
                                     const selectedItem = flatModelList[selectedIndex];
                                     if (selectedItem) {
                                         handleProviderAndModelChange(selectedItem.providerID, selectedItem.modelID);
                                     }
                                 } else if (e.key === 'Escape') {
                                     e.preventDefault();
-                                    e.stopPropagation();
                                     setIsDropdownOpen(false);
                                 }
                             };

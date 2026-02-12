@@ -137,6 +137,7 @@ export const TerminalView: React.FC = () => {
     const [isFatalError, setIsFatalError] = React.useState(false);
     const [activeModifier, setActiveModifier] = React.useState<Modifier | null>(null);
     const [isRestarting, setIsRestarting] = React.useState(false);
+    const keyboardAvoidTargetId = React.useId();
 
     const streamCleanupRef = React.useRef<(() => void) | null>(null);
     const activeTerminalIdRef = React.useRef<string | null>(null);
@@ -890,7 +891,7 @@ export const TerminalView: React.FC = () => {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
-            <div className="px-5 py-2 text-xs bg-[var(--surface-background)]">
+            <div className="sticky top-0 z-20 shrink-0 bg-[var(--surface-background)] px-5 py-2 text-xs">
                 {enableTabs && directoryTerminalState ? (
                     <div className="mt-2 pl-1 pr-1 flex items-center gap-2">
                         <div className="min-w-0 flex-1 overflow-x-auto pb-1">
@@ -962,6 +963,7 @@ export const TerminalView: React.FC = () => {
             <div
                 className="relative flex-1 overflow-hidden"
                 style={{ backgroundColor: xtermTheme.background }}
+                id={keyboardAvoidTargetId}
                 data-keyboard-avoid="true"
             >
                 <div className="h-full w-full box-border pl-7 pr-5 pt-3 pb-4">
@@ -981,6 +983,7 @@ export const TerminalView: React.FC = () => {
                                 fontSize={terminalFontSize}
                                 enableTouchScroll={hasTouchInput}
                                 autoFocus={isTerminalVisible}
+                                keyboardAvoidTargetId={keyboardAvoidTargetId}
                             />
                         ) : (
                             <ScrollableOverlay outerClassName="h-full" className="h-full w-full" disableHorizontal>
@@ -998,6 +1001,7 @@ export const TerminalView: React.FC = () => {
                                     fontSize={terminalFontSize}
                                     enableTouchScroll={hasTouchInput}
                                     autoFocus={isTerminalVisible}
+                                    keyboardAvoidTargetId={keyboardAvoidTargetId}
                                 />
                             </ScrollableOverlay>
                         )

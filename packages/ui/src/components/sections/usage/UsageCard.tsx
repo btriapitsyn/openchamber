@@ -42,8 +42,10 @@ export const UsageCard: React.FC<UsageCardProps> = ({
       return null;
     }
     // Show marker based on elapsed time ratio
-    return calculateExpectedUsagePercent(paceInfo.elapsedRatio);
-  }, [paceInfo]);
+    const expectedUsed = calculateExpectedUsagePercent(paceInfo.elapsedRatio);
+    // If displaying remaining, invert the marker position
+    return displayMode === 'remaining' ? 100 - expectedUsed : expectedUsed;
+  }, [paceInfo, displayMode]);
 
   return (
     <div className="rounded-xl border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 shadow-sm">

@@ -100,7 +100,6 @@ export const QueuedMessageChips = memo(({ onEditMessage }: QueuedMessageChipsPro
     return (
         <div className="pb-2">
             <div className="flex items-center flex-wrap gap-2 px-3 py-2 bg-muted/30 rounded-xl border border-border/30">
-                <span className="typography-meta text-muted-foreground font-medium">Queued:</span>
                 {queuedMessages.map((message) => (
                     <QueuedMessageChip
                         key={message.id}

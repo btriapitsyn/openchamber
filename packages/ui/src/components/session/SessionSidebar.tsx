@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
-import { isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
 import {
   DndContext,
   DragOverlay,
@@ -30,6 +30,7 @@ import {
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { GridLoader } from '@/components/ui/grid-loader';
+import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -42,6 +43,7 @@ import {
   RiFolderAddLine,
   RiGitBranchLine,
   RiGitPullRequestLine,
+  RiStickyNoteLine,
   RiLinkUnlinkM,
 
   RiGithubLine,
@@ -66,10 +68,12 @@ import { getSafeStorage } from '@/stores/utils/safeStorage';
 import { createWorktreeOnly, createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { useGitStore } from '@/stores/useGitStore';
+import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
+import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -550,6 +554,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
   const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
+  const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
@@ -623,6 +628,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const renameProject = useProjectsStore((state) => state.renameProject);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+  const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
@@ -632,6 +638,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const sessions = useSessionStore((state) => state.sessions);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const newSessionDraftOpen = useSessionStore((state) => Boolean(state.newSessionDraft?.open));
   const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
   const updateSessionTitle = useSessionStore((state) => state.updateSessionTitle);
   const shareSession = useSessionStore((state) => state.shareSession);
@@ -882,8 +889,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setSessionSwitcherOpen(false);
       }
 
-      if (!allowReselect && sessionId === currentSessionId) {
-        onSessionSelected?.(sessionId);
+      // Always return early if same session is selected to avoid unnecessary store operations
+      if (sessionId === currentSessionId) {
+        if (!allowReselect) {
+          onSessionSelected?.(sessionId);
+        }
         return;
       }
       setCurrentSession(sessionId);
@@ -903,6 +913,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       setSessionSwitcherOpen,
     ],
   );
+
+  const handleSessionDoubleClick = React.useCallback(() => {
+    // On double-click/tap, switch to the Chat tab
+    setActiveMainTab('chat');
+  }, [setActiveMainTab]);
 
   const handleSaveEdit = React.useCallback(async () => {
     if (editingId && editTitle.trim()) {
@@ -1031,7 +1046,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
-    if (!tauriIpcAvailable) {
+    if (!tauriIpcAvailable || !isDesktopLocalOriginActive()) {
       sessionEvents.requestDirectoryDialog();
       return;
     }
@@ -1405,16 +1420,28 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     () => normalizedProjects.find((project) => project.id === activeProjectId) ?? normalizedProjects[0] ?? null,
     [normalizedProjects, activeProjectId],
   );
+  const activeProjectRefForHeader = React.useMemo(
+    () => (activeProjectForHeader
+      ? {
+        id: activeProjectForHeader.id,
+        path: activeProjectForHeader.normalizedPath,
+      }
+      : null),
+    [activeProjectForHeader],
+  );
 
   const activeProjectIsRepo = React.useMemo(
     () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
     [activeProjectForHeader, projectRepoStatus],
   );
-  const activeProjectRepoState = React.useMemo(
-    () => (activeProjectForHeader ? projectRepoStatus.get(activeProjectForHeader.id) : undefined),
-    [activeProjectForHeader, projectRepoStatus],
-  );
-  const reserveHeaderActionsSpace = activeProjectRepoState !== false;
+  const reserveHeaderActionsSpace = Boolean(activeProjectForHeader);
+  const useMobileNotesPanel = mobileVariant || deviceInfo.isMobile;
+
+  React.useEffect(() => {
+    if (!activeProjectForHeader) {
+      setProjectNotesPanelOpen(false);
+    }
+  }, [activeProjectForHeader]);
 
   const projectSessionMeta = React.useMemo(() => {
     const metaByProject = new Map<string, Map<string, { directory: string | null }>>();
@@ -1457,8 +1484,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [projectSections]);
 
   const previousActiveProjectRef = React.useRef<string | null>(null);
+  const lastSeenActiveProjectRef = React.useRef<string | null>(null);
   React.useLayoutEffect(() => {
-    if (!activeProjectId || previousActiveProjectRef.current === activeProjectId) {
+    if (!activeProjectId) {
+      return;
+    }
+
+    const previousSeenProjectId = lastSeenActiveProjectRef.current;
+    const isProjectSwitch = Boolean(previousSeenProjectId && previousSeenProjectId !== activeProjectId);
+    // Always record the active project so we can detect real project switches even if we early-return.
+    lastSeenActiveProjectRef.current = activeProjectId;
+
+    // While a new session draft is open, keep the sidebar from auto-selecting remembered/fallback sessions.
+    // Exception (web/desktop only): when the user switches projects, prefer the last selected session
+    // for the target project instead of carrying the draft across.
+    // In VS Code, keep existing behavior (sidebar frequently mounts/unmounts and draft should stay put).
+    if (newSessionDraftOpen && (isVSCode || !isProjectSwitch)) {
+      return;
+    }
+
+    if (previousActiveProjectRef.current === activeProjectId) {
       return;
     }
     const section = projectSections.find((item) => item.project.id === activeProjectId);
@@ -1467,6 +1512,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
     previousActiveProjectRef.current = activeProjectId;
     const projectMap = projectSessionMeta.metaByProject.get(activeProjectId);
+
+    // If we already have an active session that belongs to this project (eg user just selected it,
+    // or sidebar remounted after "back"), do NOT override it with remembered/fallback session.
+    if (currentSessionId && projectMap && projectMap.has(currentSessionId)) {
+      setActiveSessionByProject((prev) => {
+        if (prev.get(activeProjectId) === currentSessionId) {
+          return prev;
+        }
+        const next = new Map(prev);
+        next.set(activeProjectId, currentSessionId);
+        return next;
+      });
+      return;
+    }
+
     if (!projectMap || projectMap.size === 0) {
       setActiveMainTab('chat');
       if (mobileVariant) {
@@ -1492,6 +1552,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     activeSessionByProject,
     currentSessionId,
     handleSessionSelect,
+    isVSCode,
+    newSessionDraftOpen,
     mobileVariant,
     openNewSessionDraft,
     projectSections,
@@ -1763,6 +1825,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 type="button"
                 disabled={isMissingDirectory}
                 onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  handleSessionDoubleClick();
+                }}
                 className={cn(
                   'flex min-w-0 flex-1 flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none',
                 )}
@@ -1956,6 +2022,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       handleCancelEdit,
       toggleParent,
       handleSessionSelect,
+      handleSessionDoubleClick,
       handleShareSession,
       handleCopyShareUrl,
       handleUnshareSession,
@@ -1967,7 +2034,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const renderGroupSessions = React.useCallback(
-    (group: SessionGroup, groupKey: string, projectId?: string | null) => {
+    (group: SessionGroup, groupKey: string, projectId?: string | null, hideGroupLabel?: boolean) => {
       const isExpanded = expandedSessionGroups.has(groupKey);
       const isCollapsed = collapsedGroups.has(groupKey);
       const maxVisible = hideDirectoryControls ? 10 : 5;
@@ -1997,11 +2064,49 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           && normalizedGroupDirectory === currentSessionDirectory,
       );
 
+      // VS Code sessions list uses a separate header (Agent Manager / New Session).
+      // When the caller requests a flat list (hideGroupLabel), omit the per-group header entirely.
+      if (hideGroupLabel) {
+        return (
+          <div className="oc-group">
+            <div className="oc-group-body pb-3">
+              {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
+              {totalSessions === 0 ? (
+                <div className="py-1 text-left typography-micro text-muted-foreground">
+                  No sessions in this workspace yet.
+                </div>
+              ) : null}
+              {remainingCount > 0 && !isExpanded ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSessionLimit(groupKey)}
+                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                >
+                  Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
+                </button>
+              ) : null}
+              {isExpanded && totalSessions > maxVisible ? (
+                <button
+                  type="button"
+                  onClick={() => toggleGroupSessionLimit(groupKey)}
+                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                >
+                  Show fewer sessions
+                </button>
+              ) : null}
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="oc-group">
           <div
-            className="group/gh flex items-center justify-between gap-2 py-1 min-w-0 rounded-sm hover:bg-interactive-hover/50 cursor-pointer"
-            onClick={() => {
+            className={cn(
+              "group/gh flex items-center justify-between gap-2 py-1 min-w-0 rounded-sm",
+              !hideGroupLabel && "hover:bg-interactive-hover/50 cursor-pointer"
+            )}
+            onClick={!hideGroupLabel ? () => {
               setCollapsedGroups((prev) => {
                 const next = new Set(prev);
                 if (next.has(groupKey)) {
@@ -2011,10 +2116,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 }
                 return next;
               });
-            }}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(event) => {
+            } : undefined}
+            role={!hideGroupLabel ? "button" : undefined}
+            tabIndex={!hideGroupLabel ? 0 : undefined}
+            onKeyDown={!hideGroupLabel ? (event) => {
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
                 setCollapsedGroups((prev) => {
@@ -2027,29 +2132,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   return next;
                 });
               }
-            }}
-            aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
+            } : undefined}
+            aria-label={!hideGroupLabel ? (isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`) : undefined}
           >
-            <div className="min-w-0 flex items-center gap-1.5 px-0">
-              {isCollapsed ? (
-                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-              ) : (
-                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-              )}
-              {!group.isMain || isGitProject ? (
-                <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-              ) : null}
-              <div className="min-w-0 flex flex-col justify-center">
-                <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
-                  {group.label}
-                </p>
-                {showBranchSubtitle ? (
-                  <span className="text-[10px] sm:text-[11px] text-muted-foreground/80 truncate leading-tight">
-                    {group.branch}
-                  </span>
+            {!hideGroupLabel ? (
+              <div className="min-w-0 flex items-center gap-1.5 px-0">
+                {isCollapsed ? (
+                  <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                ) : (
+                  <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                )}
+                {!group.isMain || isGitProject ? (
+                  <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                 ) : null}
+                <div className="min-w-0 flex flex-col justify-center">
+                  <p className={cn('text-[15px] font-semibold truncate', isActiveGroup ? 'text-primary' : 'text-muted-foreground')}>
+                    {group.label}
+                  </p>
+                  {showBranchSubtitle ? (
+                    <span className="text-[10px] sm:text-[11px] text-muted-foreground/80 truncate leading-tight">
+                      {group.branch}
+                    </span>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            ) : <div />}
             {group.directory ? (
               <div className="flex items-center gap-1 px-0.5">
                 {!group.isMain && group.worktree ? (
@@ -2298,8 +2405,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </div>
           {reserveHeaderActionsSpace ? (
             <div className="mt-1 h-8 pl-1">
-              {activeProjectIsRepo ? (
+              {activeProjectForHeader ? (
               <div className="inline-flex h-8 items-center gap-1.5 rounded-md pl-0 pr-1">
+              {activeProjectIsRepo ? (
+                <>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -2368,6 +2477,47 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
               </Tooltip>
+                </>
+              ) : null}
+              {useMobileNotesPanel ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setProjectNotesPanelOpen(true)}
+                      className={headerActionButtonClass}
+                      aria-label="Project notes and todos"
+                    >
+                      <RiStickyNoteLine className="h-4.5 w-4.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}><p>Project notes</p></TooltipContent>
+                </Tooltip>
+              ) : (
+                <DropdownMenu open={projectNotesPanelOpen} onOpenChange={setProjectNotesPanelOpen} modal={false}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className={headerActionButtonClass}
+                          aria-label="Project notes and todos"
+                        >
+                          <RiStickyNoteLine className="h-4.5 w-4.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={4}><p>Project notes</p></TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="start" className="w-[340px] p-0">
+                    <ProjectNotesTodoPanel
+                      projectRef={activeProjectRefForHeader}
+                      canCreateWorktree={activeProjectIsRepo}
+                      onActionComplete={() => setProjectNotesPanelOpen(false)}
+                    />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               </div>
               ) : null}
             </div>
@@ -2404,7 +2554,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 );
               }
               const groupKey = `${activeSection.project.id}:${group.id}`;
-              return renderGroupSessions(group, groupKey, activeSection.project.id);
+              // In VS Code mode with showOnlyMainWorkspace, hide the group header to show a flat session list
+              return renderGroupSessions(group, groupKey, activeSection.project.id, showOnlyMainWorkspace);
             })()}
           </div>
         ) : (
@@ -2589,6 +2740,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           }
         }}
       />
+
+      {useMobileNotesPanel ? (
+        <MobileOverlayPanel
+          open={projectNotesPanelOpen}
+          onClose={() => setProjectNotesPanelOpen(false)}
+          title="Project notes"
+        >
+          <ProjectNotesTodoPanel
+            projectRef={activeProjectRefForHeader}
+            canCreateWorktree={activeProjectIsRepo}
+            onActionComplete={() => setProjectNotesPanelOpen(false)}
+            className="p-0"
+          />
+        </MobileOverlayPanel>
+      ) : null}
     </div>
   );
 };
