@@ -1,11 +1,8 @@
 import { substituteCommandVariables } from '@/lib/openchamberConfig';
 import type { WorktreeMetadata } from '@/types/worktree';
 import {
-  createGitWorktree,
-  deleteGitWorktree,
   deleteRemoteBranch,
-  listGitWorktrees,
-  validateGitWorktree,
+  git,
 } from '@/lib/gitApi';
 import type {
   CreateGitWorktreePayload,
@@ -119,7 +116,7 @@ export async function listProjectWorktrees(project: ProjectRef): Promise<Worktre
   const projectDirectory = project.path;
   const normalizedProjectDirectory = normalizePath(projectDirectory);
 
-  const worktrees = await listGitWorktrees(projectDirectory).catch(() => []);
+  const worktrees = await git.worktree.list(projectDirectory).catch(() => []);
   const results: WorktreeMetadata[] = worktrees
     .filter((entry) => typeof entry.path === 'string' && entry.path.trim().length > 0)
     .map((entry) => {
@@ -163,7 +160,7 @@ export async function createSdkWorktree(project: ProjectRef, args: CreateSdkWork
   const projectDirectory = project.path;
   const payload = toCreatePayload(args, projectDirectory);
 
-  const created = await createGitWorktree(projectDirectory, payload);
+  const created = await git.worktree.create(projectDirectory, payload);
   const returnedName = typeof created?.name === 'string' ? created.name : '';
   const returnedBranch = typeof created?.branch === 'string' ? created.branch : '';
   const returnedPath = typeof created?.path === 'string' ? created.path : '';
@@ -187,7 +184,7 @@ export async function createSdkWorktree(project: ProjectRef, args: CreateSdkWork
 export async function validateSdkWorktree(project: ProjectRef, args: CreateSdkWorktreeArgs): Promise<GitWorktreeValidationResult> {
   const projectDirectory = project.path;
   const payload = toCreatePayload(args, projectDirectory);
-  return validateGitWorktree(projectDirectory, payload);
+  return git.worktree.validate(projectDirectory, payload);
 }
 
 export async function removeProjectWorktree(project: ProjectRef, worktree: WorktreeMetadata, options?: {
@@ -201,7 +198,7 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   const deleteRemote = Boolean(options?.deleteRemoteBranch);
   const deleteLocalBranch = options?.deleteLocalBranch === true;
   const remoteName = options?.remoteName;
-  const raw = await deleteGitWorktree(projectDirectory, {
+  const raw = await git.worktree.remove(projectDirectory, {
     directory: worktree.path,
     deleteLocalBranch,
   });

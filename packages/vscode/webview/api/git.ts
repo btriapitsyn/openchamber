@@ -281,4 +281,10 @@ export const createVSCodeGitAPI = (): GitAPI => ({
       operation: 'merge' | 'rebase';
     }>('api:git/conflict-details', { directory });
   },
+
+  worktree: {
+    list: async (directory: string): Promise<GitWorktreeInfo[]> => {
+      return sendBridgeMessage<GitWorktreeInfo[]>('api:git/worktrees', { directory, method: 'GET' });
+    },
+  },
 });

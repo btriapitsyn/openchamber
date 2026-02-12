@@ -372,6 +372,13 @@ export interface GeneratedPullRequestDescription {
   body: string;
 }
 
+export interface GitWorktreeAPI {
+  list(directory: string): Promise<GitWorktreeInfo[]>;
+  validate?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeValidationResult>;
+  create?(directory: string, payload: CreateGitWorktreePayload): Promise<GitWorktreeCreateResult>;
+  remove?(directory: string, payload: RemoveGitWorktreePayload): Promise<{ success: boolean }>;
+}
+
 export interface GitAPI {
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string): Promise<GitStatus>;
@@ -420,6 +427,7 @@ export interface GitAPI {
   stash(directory: string, options?: { message?: string; includeUntracked?: boolean }): Promise<{ success: boolean }>;
   stashPop(directory: string): Promise<{ success: boolean }>;
   getConflictDetails(directory: string): Promise<MergeConflictDetails>;
+  worktree?: GitWorktreeAPI;
 }
 
 export interface FileListEntry {

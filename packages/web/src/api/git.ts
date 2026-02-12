@@ -51,4 +51,10 @@ export const createWebGitAPI = (): GitAPI => ({
   stash: gitApiHttp.stash,
   stashPop: gitApiHttp.stashPop,
   getConflictDetails: gitApiHttp.getConflictDetails,
+  worktree: {
+    list: gitApiHttp.listGitWorktrees,
+    validate: gitApiHttp.validateGitWorktree,
+    create: gitApiHttp.createGitWorktree,
+    remove: gitApiHttp.deleteGitWorktree,
+  },
 });
