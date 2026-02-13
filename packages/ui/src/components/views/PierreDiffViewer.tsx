@@ -130,8 +130,10 @@ const extractSelectedCode = (original: string, modified: string, range: Selected
   const lines = content.split('\n');
 
   // Ensure bounds
-  const startLine = Math.max(1, range.start);
-  const endLine = Math.min(lines.length, range.end);
+  const from = Math.min(range.start, range.end);
+  const to = Math.max(range.start, range.end);
+  const startLine = Math.max(1, from);
+  const endLine = Math.min(lines.length, to);
 
   if (startLine > endLine) return '';
 
@@ -352,6 +354,14 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     const targetRange = rangeOverride ?? selection;
     if (!targetRange || !textToSave.trim()) return;
 
+    const normalizedStart = Math.min(targetRange.start, targetRange.end);
+    const normalizedEnd = Math.max(targetRange.start, targetRange.end);
+    const normalizedRange: SelectedLineRange = {
+      ...targetRange,
+      start: normalizedStart,
+      end: normalizedEnd,
+    };
+
     const sessionKey = getSessionKey();
     if (!sessionKey) {
       toast.error('Select a session to save comment');
@@ -361,16 +371,16 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     // Pierre selection range: { start, end, side }
     // Store needs { startLine, endLine, side: 'original'|'modified' }
     // Pierre side: 'additions' (right) | 'deletions' (left)
-    const storeSide = targetRange.side === 'deletions' ? 'original' : 'modified';
+    const storeSide = normalizedRange.side === 'deletions' ? 'original' : 'modified';
 
     // Use deterministic code extraction instead of instance.getSelectedText()
-    const selectedText = extractSelectedCode(original, modified, targetRange);
+    const selectedText = extractSelectedCode(original, modified, normalizedRange);
 
     if (editingDraftId) {
       updateDraft(sessionKey, editingDraftId, {
         fileLabel: fileName || 'unknown',
-        startLine: targetRange.start,
-        endLine: targetRange.end,
+        startLine: normalizedRange.start,
+        endLine: normalizedRange.end,
         side: storeSide,
         code: selectedText,
         language: language,
@@ -381,8 +391,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         sessionKey,
         source: 'diff',
         fileLabel: fileName || 'unknown',
-        startLine: targetRange.start,
-        endLine: targetRange.end,
+        startLine: normalizedRange.start,
+        endLine: normalizedRange.end,
         side: storeSide,
         code: selectedText,
         language: language,

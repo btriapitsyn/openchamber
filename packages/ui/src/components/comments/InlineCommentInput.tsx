@@ -38,24 +38,66 @@ export function InlineCommentInput({
     }
   }, [lineRange]);
 
+  const normalizeRange = (range?: { start: number; end: number; side?: 'additions' | 'deletions' }) => {
+    if (!range) return undefined;
+    const start = Math.min(range.start, range.end);
+    const end = Math.max(range.start, range.end);
+    return { ...range, start, end };
+  };
+
+  const displayRange = normalizeRange(lineRange);
+
   // Focus on mount (desktop only) or when becoming visible
   useEffect(() => {
-    if (!isMobile && textareaRef.current) {
-      textareaRef.current.focus();
-      // Move cursor to end
-      const len = textareaRef.current.value.length;
-      textareaRef.current.setSelectionRange(len, len);
-    } else if (isMobile && textareaRef.current) {
-      // Scroll into view on mobile
-      textareaRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Prevent focus() from causing scroll jumps in scroll containers.
+    // (notably in diff views where the input is rendered via portals)
+    const scrollContainer = textarea.closest('.overlay-scrollbar-container') as HTMLElement | null;
+    const prevScrollTop = scrollContainer?.scrollTop ?? window.scrollY;
+    const prevScrollLeft = scrollContainer?.scrollLeft ?? window.scrollX;
+
+    if (isMobile) {
+      textarea.scrollIntoView({ behavior: 'auto', block: 'nearest' });
+      try {
+        textarea.focus({ preventScroll: true });
+      } catch {
+        textarea.focus();
+      }
+      return;
     }
+
+    try {
+      textarea.focus({ preventScroll: true });
+    } catch {
+      textarea.focus();
+    }
+
+    // Move cursor to end
+    const len = textarea.value.length;
+    try {
+      textarea.setSelectionRange(len, len);
+    } catch {
+      // ignore
+    }
+
+    // Restore scroll position in case the browser scrolled anyway.
+    requestAnimationFrame(() => {
+      if (scrollContainer) {
+        scrollContainer.scrollTop = prevScrollTop;
+        scrollContainer.scrollLeft = prevScrollLeft;
+      } else {
+        window.scrollTo({ top: prevScrollTop, left: prevScrollLeft });
+      }
+    });
   }, [isMobile]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
       if (text.trim()) {
-        onSave(text, stableRangeRef.current);
+        onSave(text, normalizeRange(stableRangeRef.current));
       }
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -67,7 +109,7 @@ export function InlineCommentInput({
     // Stop propagation to prevent parent selection clearing before save
     e.stopPropagation();
     if (text.trim()) {
-      onSave(text, stableRangeRef.current);
+      onSave(text, normalizeRange(stableRangeRef.current));
     }
   };
 
@@ -90,7 +132,7 @@ export function InlineCommentInput({
           <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground mb-2">
             {fileLabel && <span className="truncate max-w-[200px]">{fileLabel}</span>}
             {fileLabel && lineRange && <span>•</span>}
-            {lineRange && <span>Lines {lineRange.start}-{lineRange.end}</span>}
+            {displayRange && <span>Lines {displayRange.start}-{displayRange.end}</span>}
           </div>
         )}
         
