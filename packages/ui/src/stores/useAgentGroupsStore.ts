@@ -272,6 +272,39 @@ const collectDeleteCandidates = async (params: {
   return results;
 };
 
+const deleteGroupWorktreeSessions = async (params: {
+  group: AgentGroup;
+  projectDirectory: string;
+  worktreePaths: string[];
+}) => {
+  const apiClient = opencodeClient.getApiClient();
+  const candidates = await collectDeleteCandidates({
+    apiClient,
+    group: params.group,
+    projectDirectory: params.projectDirectory,
+    worktreePaths: params.worktreePaths,
+  });
+
+  const sessionStore = useSessionStore.getState();
+  const ids = new Set<string>();
+
+  candidates.forEach(({ worktreePath, sessionIds, metadata }) => {
+    sessionIds.forEach((id) => {
+      ids.add(id);
+      if (metadata) {
+        sessionStore.setWorktreeMetadata(id, metadata);
+        sessionStore.setSessionDirectory(id, worktreePath);
+      }
+    });
+  });
+
+  if (ids.size === 0) {
+    return { failedIds: [] as string[] };
+  }
+
+  return sessionStore.deleteSessions(Array.from(ids), { archiveWorktree: true, silent: true });
+};
+
 /**
  * Parse a session title to extract group, provider, model, and index.
  * Title format: groupSlug/provider/model[/index]
@@ -555,27 +588,11 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
         set({ isLoading: true, error: null });
         try {
-          const apiClient = opencodeClient.getApiClient();
-          const candidates = await collectDeleteCandidates({
-            apiClient,
+          const { failedIds } = await deleteGroupWorktreeSessions({
             group,
             projectDirectory: normalize(projectDirectory),
             worktreePaths: group.sessions.map((s) => s.path),
           });
-
-          const sessionStore = useSessionStore.getState();
-          const ids = new Set<string>();
-          candidates.forEach(({ worktreePath, sessionIds, metadata }) => {
-            sessionIds.forEach((id) => {
-              ids.add(id);
-              if (metadata) {
-                sessionStore.setWorktreeMetadata(id, metadata);
-                sessionStore.setSessionDirectory(id, worktreePath);
-              }
-            });
-          });
-
-          const { failedIds } = await sessionStore.deleteSessions(Array.from(ids), { archiveWorktree: true, silent: true });
           if (failedIds.length > 0) {
             set({ error: 'Failed to delete some sessions' });
           }
@@ -613,27 +630,11 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
         set({ isLoading: true, error: null });
         try {
-          const apiClient = opencodeClient.getApiClient();
-          const candidates = await collectDeleteCandidates({
-            apiClient,
+          const { failedIds } = await deleteGroupWorktreeSessions({
             group,
             projectDirectory: normalize(projectDirectory),
             worktreePaths: [normalizedWorktreePath],
           });
-
-          const sessionStore = useSessionStore.getState();
-          const ids = new Set<string>();
-          candidates.forEach(({ worktreePath: resolvedPath, sessionIds, metadata }) => {
-            sessionIds.forEach((id) => {
-              ids.add(id);
-              if (metadata) {
-                sessionStore.setWorktreeMetadata(id, metadata);
-                sessionStore.setSessionDirectory(id, resolvedPath);
-              }
-            });
-          });
-
-          const { failedIds } = await sessionStore.deleteSessions(Array.from(ids), { archiveWorktree: true, silent: true });
           if (failedIds.length > 0) {
             set({ error: 'Failed to delete some sessions' });
           }
@@ -690,27 +691,11 @@ export const useAgentGroupsStore = create<AgentGroupsStore>()(
 
         set({ isLoading: true, error: null });
         try {
-          const apiClient = opencodeClient.getApiClient();
-          const candidates = await collectDeleteCandidates({
-            apiClient,
+          const { failedIds } = await deleteGroupWorktreeSessions({
             group,
             projectDirectory: normalize(projectDirectory),
             worktreePaths: toDelete,
           });
-
-          const sessionStore = useSessionStore.getState();
-          const ids = new Set<string>();
-          candidates.forEach(({ worktreePath, sessionIds, metadata }) => {
-            sessionIds.forEach((id) => {
-              ids.add(id);
-              if (metadata) {
-                sessionStore.setWorktreeMetadata(id, metadata);
-                sessionStore.setSessionDirectory(id, worktreePath);
-              }
-            });
-          });
-
-          const { failedIds } = await sessionStore.deleteSessions(Array.from(ids), { archiveWorktree: true, silent: true });
           if (failedIds.length > 0) {
             set({ error: 'Failed to delete some sessions' });
           }

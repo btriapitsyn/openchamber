@@ -4,7 +4,7 @@ import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multiru
 import { opencodeClient } from '@/lib/opencode/client';
 import { saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
-import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
+import { createWorktreeWithDefaults, resolveRootTrackingRemote } from '@/lib/worktrees/worktreeCreate';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
@@ -32,8 +32,8 @@ const toModelSlug = (providerID: string, modelID: string): string => {
 };
 
 /**
- * Seed name for SDK worktree creation.
- * Uses slashes for readability; SDK will slugify.
+ * Seed name for worktree creation.
+ * Uses slashes for readability; create payload will slugify.
  */
 const generateWorktreeNameSeed = (groupSlug: string, modelSlug: string): string => {
   return `${groupSlug}/${modelSlug}`;
@@ -124,6 +124,7 @@ export const useMultiRunStore = create<MultiRunStore>()(
 
           const groupSlug = toGitSafeSlug(groupName);
           const rootBranch = await getRootBranch(directory);
+          const rootTrackingRemote = await resolveRootTrackingRemote(directory);
 
           const createdRuns: Array<{
             sessionId: string;
@@ -165,6 +166,8 @@ export const useMultiRunStore = create<MultiRunStore>()(
                 worktreeName: preferredName,
                 startRef: params.worktreeBaseBranch || 'HEAD',
                 setupCommands: commandsToRun,
+              }, {
+                resolvedRootTrackingRemote: rootTrackingRemote,
               });
 
               const enrichedMetadata = {

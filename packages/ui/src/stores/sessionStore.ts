@@ -152,7 +152,6 @@ const archiveSessionWorktree = async (
             deleteRemoteBranch: options?.deleteRemoteBranch,
             deleteLocalBranch: options?.deleteLocalBranch,
             remoteName: options?.remoteName,
-            force: Boolean(status?.isDirty),
         }
     );
 };

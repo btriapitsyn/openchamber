@@ -191,7 +191,6 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   deleteRemoteBranch?: boolean;
   deleteLocalBranch?: boolean;
   remoteName?: string;
-  force?: boolean;
 }): Promise<void> {
   const projectDirectory = project.path;
 

@@ -84,10 +84,20 @@ export const resolveWorktreeUpstreamDefaults = async (
 
 export const withWorktreeUpstreamDefaults = async (
   projectDirectory: string,
-  args: CreateWorktreeArgs
+  args: CreateWorktreeArgs,
+  options?: { resolvedRootTrackingRemote?: string | null }
 ): Promise<CreateWorktreeArgs> => {
   const localBranch = resolveLocalBranchName(args);
-  const defaults = await resolveWorktreeUpstreamDefaults(projectDirectory, localBranch);
+  const resolvedRemote = options?.resolvedRootTrackingRemote;
+  const defaults = resolvedRemote === undefined
+    ? await resolveWorktreeUpstreamDefaults(projectDirectory, localBranch)
+    : (resolvedRemote && normalizeBranchName(localBranch)
+      ? {
+          setUpstream: true as const,
+          upstreamRemote: resolvedRemote,
+          upstreamBranch: normalizeBranchName(localBranch),
+        }
+      : null);
   if (!defaults) {
     return args;
   }
@@ -102,8 +112,9 @@ export const withWorktreeUpstreamDefaults = async (
 
 export const createWorktreeWithDefaults = async (
   project: ProjectRef,
-  args: CreateWorktreeArgs
+  args: CreateWorktreeArgs,
+  options?: { resolvedRootTrackingRemote?: string | null }
 ) => {
-  const resolvedArgs = await withWorktreeUpstreamDefaults(project.path, args);
+  const resolvedArgs = await withWorktreeUpstreamDefaults(project.path, args, options);
   return createWorktree(project, resolvedArgs);
 };
