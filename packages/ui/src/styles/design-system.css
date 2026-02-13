@@ -18,7 +18,7 @@
 
     /* Semantic typography defaults (must match SEMANTIC_TYPOGRAPHY) */
     --text-markdown: 0.9375rem;
-    --text-code: 0.9063rem;
+    --text-code: 0.8125rem;
     --text-ui-header: 0.9375rem;
     --text-ui-label: 0.8750rem;
     --text-meta: 0.875rem;

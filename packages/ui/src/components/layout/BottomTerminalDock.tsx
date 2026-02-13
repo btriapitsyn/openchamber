@@ -15,9 +15,10 @@ interface BottomTerminalDockProps {
 
 export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, isMobile, children }) => {
   const bottomTerminalHeight = useUIStore((state) => state.bottomTerminalHeight);
+  const isFullscreen = useUIStore((state) => state.isBottomTerminalExpanded);
   const setBottomTerminalHeight = useUIStore((state) => state.setBottomTerminalHeight);
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen);
-  const [isFullscreen, setIsFullscreen] = React.useState(false);
+  const setBottomTerminalExpanded = useUIStore((state) => state.setBottomTerminalExpanded);
   const [fullscreenHeight, setFullscreenHeight] = React.useState<number | null>(null);
   const [isResizing, setIsResizing] = React.useState(false);
   const dockRef = React.useRef<HTMLElement | null>(null);
@@ -32,7 +33,6 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
 
   React.useEffect(() => {
     if (!isOpen) {
-      setIsFullscreen(false);
       setFullscreenHeight(null);
       setIsResizing(false);
     }
@@ -118,14 +118,14 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
     if (!isOpen) return;
 
     if (isFullscreen) {
-      setIsFullscreen(false);
+      setBottomTerminalExpanded(false);
       const restoreHeight = Math.min(BOTTOM_DOCK_MAX_HEIGHT, Math.max(BOTTOM_DOCK_MIN_HEIGHT, previousHeightRef.current));
       setBottomTerminalHeight(restoreHeight);
       return;
     }
 
     previousHeightRef.current = standardHeight;
-    setIsFullscreen(true);
+    setBottomTerminalExpanded(true);
   };
 
   return (

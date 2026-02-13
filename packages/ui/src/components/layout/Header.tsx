@@ -1140,14 +1140,14 @@ export const Header: React.FC = () => {
             <button
               type="button"
               onClick={toggleRightSidebar}
-              aria-label="Toggle git sidebar"
+              aria-label="Toggle right sidebar"
               className={headerIconButtonClass}
             >
               <RiLayoutRightLine className="h-5 w-5" />
             </button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Git sidebar</p>
+            <p>Right sidebar</p>
           </TooltipContent>
         </Tooltip>
 

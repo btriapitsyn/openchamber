@@ -1700,7 +1700,13 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                         onToggleFile={toggleFileSelection}
                         onSelectAll={selectAll}
                         onClearSelection={clearSelection}
-                        onViewDiff={(path) => useUIStore.getState().navigateToDiff(path)}
+                        onViewDiff={(path) => {
+                          if (isSidebarMode && currentDirectory) {
+                            useUIStore.getState().openContextDiff(currentDirectory, path);
+                            return;
+                          }
+                          useUIStore.getState().navigateToDiff(path);
+                        }}
                         onRevertFile={handleRevertFile}
                       />
 

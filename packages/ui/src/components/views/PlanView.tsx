@@ -1,6 +1,6 @@
 import React from 'react';
-import { CodeMirrorEditor, type BlockWidgetDef } from '@/components/ui/CodeMirrorEditor';
-import { InlineCommentCard, InlineCommentInput } from '@/components/comments';
+import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
+import { useFloatingComments } from '@/components/comments/useFloatingComments';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -130,6 +130,8 @@ export const PlanView: React.FC = () => {
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = React.useState('');
   const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
+  const editorViewRef = React.useRef<EditorView | null>(null);
+  const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
 
   const MD_VIEWER_MODE_KEY = 'openchamber:plan:md-viewer-mode';
 
@@ -377,88 +379,33 @@ export const PlanView: React.FC = () => {
     };
   }, []);
 
-  const blockWidgets = React.useMemo(() => {
-    if (mdViewMode === 'preview') return [];
+  const planFileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
 
+  const planFileDrafts = React.useMemo(() => {
     const sessionKey = getSessionKey();
     if (!sessionKey) return [];
-
     const sessionDrafts = allDrafts[sessionKey] ?? [];
-    const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
-    const fileDrafts = sessionDrafts.filter((d) => d.source === 'plan' && d.fileLabel === fileLabel);
+    return sessionDrafts.filter((d) => d.source === 'plan' && d.fileLabel === planFileLabel);
+  }, [getSessionKey, allDrafts, planFileLabel]);
 
-    const widgets: BlockWidgetDef[] = [];
-
-    // Add saved drafts
-    fileDrafts.forEach((draft) => {
-      if (draft.id === editingDraftId) {
-        // Always show edit input (even on mobile)
-        widgets.push({
-          afterLine: draft.endLine,
-          id: `edit-${draft.id}`,
-          content: (
-            <InlineCommentInput
-              fileLabel={fileLabel}
-              lineRange={{ start: draft.startLine, end: draft.endLine }}
-              initialText={commentText}
-              onSave={handleSaveComment}
-              onCancel={handleCancelComment}
-              isEditing={true}
-            />
-          ),
-        });
-      } else {
-        // Show saved cards on all devices
-        widgets.push({
-          afterLine: draft.endLine,
-          id: `draft-${draft.id}`,
-          content: (
-            <InlineCommentCard
-              draft={draft}
-              onEdit={() => {
-                setLineSelection({ start: draft.startLine, end: draft.endLine });
-                setCommentText(draft.text);
-                setEditingDraftId(draft.id);
-              }}
-              onDelete={() => removeDraft(draft.sessionKey, draft.id)}
-            />
-          ),
-        });
-      }
-    });
-
-    // Add new comment input if selecting AND not editing an existing draft
-    if (lineSelection && !editingDraftId && !isDragging) {
-      widgets.push({
-        afterLine: lineSelection.end,
-        id: 'plan-new-comment-input',
-        content: (
-          <InlineCommentInput
-            fileLabel={fileLabel}
-            lineRange={lineSelection}
-            initialText={commentText} // Usually empty for new, unless restored?
-            onSave={handleSaveComment}
-            onCancel={handleCancelComment}
-            isEditing={false}
-          />
-        ),
-      });
-    }
-
-    return widgets;
-  }, [
-    mdViewMode,
-    getSessionKey,
-    allDrafts,
-    displayPath,
+  const floatingComments = useFloatingComments({
+    editorView: editorViewRef.current,
+    wrapperRef: editorWrapperRef,
+    fileDrafts: planFileDrafts,
     editingDraftId,
-    lineSelection,
     commentText,
-    handleSaveComment,
-    handleCancelComment,
-    removeDraft,
+    lineSelection,
     isDragging,
-  ]);
+    fileLabel: planFileLabel,
+    onSaveComment: handleSaveComment,
+    onCancelComment: handleCancelComment,
+    onEditDraft: (draft) => {
+      setLineSelection({ start: draft.startLine, end: draft.endLine });
+      setCommentText(draft.text);
+      setEditingDraftId(draft.id);
+    },
+    onDeleteDraft: (draft) => removeDraft(draft.sessionKey, draft.id),
+  });
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background">
@@ -564,7 +511,7 @@ export const PlanView: React.FC = () => {
                       </ErrorBoundary>
                     </div>
                   ) : (
-                    <div className="relative h-full">
+                    <div className="relative h-full" ref={editorWrapperRef}>
                       <CodeMirrorEditor
                         value={content}
                         onChange={() => {
@@ -573,13 +520,14 @@ export const PlanView: React.FC = () => {
                         readOnly={true}
                         className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)] [&_.cm-scroller]:relative"
                         extensions={editorExtensions}
+                        onViewReady={(view) => { editorViewRef.current = view; }}
+                        onViewDestroy={() => { editorViewRef.current = null; }}
                         highlightLines={lineSelection
                           ? {
                             start: Math.min(lineSelection.start, lineSelection.end),
                             end: Math.max(lineSelection.start, lineSelection.end),
                           }
                           : undefined}
-                        blockWidgets={blockWidgets}
                         lineNumbersConfig={{
                           domEventHandlers: {
                             mousedown: (view, line, event) => {
@@ -633,6 +581,7 @@ export const PlanView: React.FC = () => {
                           },
                       }}
                     />
+                      {floatingComments}
                   </div>
                   )}
                 </div>

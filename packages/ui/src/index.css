@@ -564,7 +564,6 @@ html:not(.dark) .chat-scroll {
 /* Pierre diff viewer styling */
 .pierre-diff-wrapper {
   --diffs-font-family: var(--font-mono, 'IBM Plex Mono', monospace);
-  --diffs-font-size: var(--text-code, 13px);
   --diffs-line-height: 1.5;
   --diffs-tab-size: 2;
   --diffs-header-font-family: var(--font-sans, 'IBM Plex Sans', sans-serif);
@@ -574,9 +573,7 @@ html:not(.dark) .chat-scroll {
 }
 
 /* Desktop: slightly smaller diff code text */
-:root:not(.mobile-pointer) .pierre-diff-wrapper {
-  --diffs-font-size: 0.8125rem;
-}
+ 
 
 /* WebKit scroll rendering optimizations */
 /* Note: avoid will-change and contain as they break resize behavior */

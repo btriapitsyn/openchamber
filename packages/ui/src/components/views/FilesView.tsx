@@ -39,7 +39,7 @@ import {
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { CodeMirrorEditor, type BlockWidgetDef } from '@/components/ui/CodeMirrorEditor';
+import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { languageByExtension } from '@/lib/codemirror/languageByExtension';
@@ -66,7 +66,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStatus } from '@/stores/useGitStore';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
-import { InlineCommentCard, InlineCommentInput } from '@/components/comments';
+import { useFloatingComments } from '@/components/comments/useFloatingComments';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
@@ -537,7 +537,11 @@ const FileRow: React.FC<FileRowProps> = ({
   );
 };
 
-export const FilesView: React.FC = () => {
+interface FilesViewProps {
+  mode?: 'full' | 'editor-only';
+}
+
+export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const { files, runtime } = useRuntimeAPIs();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
@@ -612,6 +616,7 @@ export const FilesView: React.FC = () => {
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
   const copiedPathTimeoutRef = React.useRef<number | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
+  const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
 
   const [activeDialog, setActiveDialog] = React.useState<'createFile' | 'createFolder' | 'rename' | 'delete' | null>(null);
   const [dialogData, setDialogData] = React.useState<{ path: string; name?: string; type?: 'file' | 'directory' } | null>(null);
@@ -1798,9 +1803,9 @@ export const FilesView: React.FC = () => {
                 }
               }}
               autoFocus
-            />
-          </div>
-        )}
+              />
+            </div>
+          )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setActiveDialog(null)} disabled={isDialogSubmitting}>
@@ -1820,71 +1825,30 @@ export const FilesView: React.FC = () => {
       </Dialog>
     );
 
-  const blockWidgets = React.useMemo(() => {
+  const filesFileDrafts = React.useMemo(() => {
     if (!selectedFile) return [];
-
     const sessionKey = currentSessionId ?? 'draft';
     const sessionDrafts = allDrafts[sessionKey] ?? [];
-    // Filter drafts for current file
-    const fileDrafts = sessionDrafts.filter(
-      (d) => d.source === 'file' && d.fileLabel === selectedFile.path
-    );
+    return sessionDrafts.filter((d) => d.source === 'file' && d.fileLabel === selectedFile.path);
+  }, [selectedFile, currentSessionId, allDrafts]);
 
-    const widgets: BlockWidgetDef[] = [];
-
-    // Add cards for existing drafts
-    fileDrafts.forEach((draft) => {
-      const isEditing = editingDraftId === draft.id;
-
-      if (isEditing) {
-        widgets.push({
-          afterLine: draft.endLine,
-          id: `edit-${draft.id}`,
-          content: (
-            <InlineCommentInput
-              initialText={draft.text}
-              lineRange={{ start: draft.startLine, end: draft.endLine }}
-              onSave={(text) => handleSaveComment(text, { start: draft.startLine, end: draft.endLine })}
-              onCancel={() => setEditingDraftId(null)}
-              isEditing={true}
-            />
-          ),
-        });
-      } else {
-        widgets.push({
-          afterLine: draft.endLine,
-          id: `card-${draft.id}`,
-          content: (
-            <InlineCommentCard
-              draft={draft}
-              onEdit={() => {
-                setEditingDraftId(draft.id);
-                setLineSelection(null);
-              }}
-              onDelete={() => removeDraft(sessionKey, draft.id)}
-            />
-          ),
-        });
-      }
-    });
-
-    // Add input for new comment
-    if (lineSelection && !editingDraftId && !isDragging) {
-      widgets.push({
-        afterLine: lineSelection.end,
-        id: 'files-new-comment-input',
-        content: (
-          <InlineCommentInput
-            lineRange={lineSelection}
-            onSave={(text) => handleSaveComment(text)}
-            onCancel={() => setLineSelection(null)}
-          />
-        ),
-      });
-    }
-
-    return widgets;
-  }, [selectedFile, currentSessionId, allDrafts, editingDraftId, lineSelection, handleSaveComment, removeDraft, isDragging]);
+  const floatingComments = useFloatingComments({
+    editorView: editorViewRef.current,
+    wrapperRef: editorWrapperRef,
+    fileDrafts: filesFileDrafts,
+    editingDraftId,
+    commentText: '',
+    lineSelection,
+    isDragging,
+    fileLabel: selectedFile?.path ?? '',
+    onSaveComment: handleSaveComment,
+    onCancelComment: () => setLineSelection(null),
+    onEditDraft: (draft) => {
+      setEditingDraftId(draft.id);
+      setLineSelection(null);
+    },
+    onDeleteDraft: (draft) => removeDraft(draft.sessionKey, draft.id),
+  });
 
   const fileViewer = (
     <div
@@ -2174,7 +2138,7 @@ export const FilesView: React.FC = () => {
             </Button>
           )}
 
-          {selectedFile && !isMobile && (
+          {selectedFile && !isMobile && mode === 'full' && (
             <>
               <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
               <Button
@@ -2237,7 +2201,8 @@ export const FilesView: React.FC = () => {
             </div>
           ) : (
             <div
-              className="h-full"
+              className="relative h-full"
+              ref={editorWrapperRef}
               data-keyboard-avoid="none"
               style={isMobile ? { height: 'calc(100% - var(--oc-keyboard-inset, 0px))' } : undefined}
             >
@@ -2260,7 +2225,6 @@ export const FilesView: React.FC = () => {
                 enableSearch
                 searchOpen={isSearchOpen}
                 onSearchOpenChange={setIsSearchOpen}
-                blockWidgets={blockWidgets}
                 highlightLines={lineSelection
                   ? {
                     start: Math.min(lineSelection.start, lineSelection.end),
@@ -2332,6 +2296,7 @@ export const FilesView: React.FC = () => {
                     },
                 }}
               />
+              {floatingComments}
             </div>
           )}
         </ScrollableOverlay>
@@ -2438,7 +2403,7 @@ export const FilesView: React.FC = () => {
   );
 
   // Fullscreen file viewer overlay
-  const fullscreenViewer = isFullscreen && selectedFile && (
+  const fullscreenViewer = mode === 'full' && isFullscreen && selectedFile && (
     <div className="absolute inset-0 z-50 flex flex-col bg-background">
       {/* Fullscreen header */}
       <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-4 py-2 flex-shrink-0">
@@ -2648,10 +2613,16 @@ export const FilesView: React.FC = () => {
         ) : (
           treePanel
         )
+       ) : mode === 'editor-only' ? (
+         <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden p-2">
+           <div className="flex-1 min-h-0 min-w-0 overflow-hidden rounded-xl border border-border/60 bg-background">
+             {fileViewer}
+           </div>
+         </div>
        ) : (
          <div className="flex flex-1 min-h-0 min-w-0 gap-3 px-3 pb-3 pt-2">
-           {screenWidth >= 700 && (
-             <div className="w-72 flex-shrink-0 min-h-0 overflow-hidden">
+            {screenWidth >= 700 && (
+              <div className="w-72 flex-shrink-0 min-h-0 overflow-hidden">
                {treePanel}
              </div>
            )}

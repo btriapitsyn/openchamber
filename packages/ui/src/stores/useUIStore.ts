@@ -5,6 +5,17 @@ import { getSafeStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files';
+export type RightSidebarTab = 'git' | 'files';
+export type ContextPanelMode = 'diff' | 'file';
+
+type ContextPanelDirectoryState = {
+  isOpen: boolean;
+  expanded: boolean;
+  mode: ContextPanelMode | null;
+  targetPath: string | null;
+  width: number;
+  touchedAt: number;
+};
 
 export type MainTabGuard = (nextTab: MainTab) => boolean;
 export type EventStreamStatus =
@@ -51,6 +62,69 @@ const isLegacyDefaultTemplates = (value: unknown): boolean => {
   );
 };
 
+const CONTEXT_PANEL_DEFAULT_WIDTH = 520;
+const CONTEXT_PANEL_MIN_WIDTH = 360;
+const CONTEXT_PANEL_MAX_WIDTH = 1400;
+
+const normalizeDirectoryPath = (value: string): string => {
+  if (!value) return '';
+
+  const raw = value.replace(/\\/g, '/');
+  const hadUncPrefix = raw.startsWith('//');
+  let normalized = raw.replace(/\/+$/g, '');
+  normalized = normalized.replace(/\/+/g, '/');
+
+  if (hadUncPrefix && !normalized.startsWith('//')) {
+    normalized = `/${normalized}`;
+  }
+
+  if (normalized === '') {
+    return raw.startsWith('/') ? '/' : '';
+  }
+
+  return normalized;
+};
+
+const clampContextPanelWidth = (width: number): number => {
+  if (!Number.isFinite(width)) {
+    return CONTEXT_PANEL_DEFAULT_WIDTH;
+  }
+
+  return Math.min(CONTEXT_PANEL_MAX_WIDTH, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)));
+};
+
+const touchContextPanelState = (prev?: ContextPanelDirectoryState): ContextPanelDirectoryState => {
+  if (prev) {
+    return { ...prev, touchedAt: Date.now() };
+  }
+
+  return {
+    isOpen: false,
+    expanded: false,
+    mode: null,
+    targetPath: null,
+    width: CONTEXT_PANEL_DEFAULT_WIDTH,
+    touchedAt: Date.now(),
+  };
+};
+
+const clampContextPanelRoots = (
+  byDirectory: Record<string, ContextPanelDirectoryState>,
+  maxRoots: number
+): Record<string, ContextPanelDirectoryState> => {
+  const entries = Object.entries(byDirectory);
+  if (entries.length <= maxRoots) {
+    return byDirectory;
+  }
+
+  entries.sort((a, b) => (b[1]?.touchedAt ?? 0) - (a[1]?.touchedAt ?? 0));
+  const next: Record<string, ContextPanelDirectoryState> = {};
+  for (const [directory, state] of entries.slice(0, maxRoots)) {
+    next[directory] = state;
+  }
+  return next;
+};
+
 interface UIStore {
 
   theme: 'light' | 'dark' | 'system';
@@ -62,7 +136,10 @@ interface UIStore {
   isRightSidebarOpen: boolean;
   rightSidebarWidth: number;
   hasManuallyResizedRightSidebar: boolean;
+  rightSidebarTab: RightSidebarTab;
+  contextPanelByDirectory: Record<string, ContextPanelDirectoryState>;
   isBottomTerminalOpen: boolean;
+  isBottomTerminalExpanded: boolean;
   bottomTerminalHeight: number;
   hasManuallyResizedBottomTerminal: boolean;
   isSessionSwitcherOpen: boolean;
@@ -142,8 +219,15 @@ interface UIStore {
   toggleRightSidebar: () => void;
   setRightSidebarOpen: (open: boolean) => void;
   setRightSidebarWidth: (width: number) => void;
+  setRightSidebarTab: (tab: RightSidebarTab) => void;
+  openContextDiff: (directory: string, filePath: string) => void;
+  openContextFile: (directory: string, filePath: string) => void;
+  closeContextPanel: (directory: string) => void;
+  toggleContextPanelExpanded: (directory: string) => void;
+  setContextPanelWidth: (directory: string, width: number) => void;
   toggleBottomTerminal: () => void;
   setBottomTerminalOpen: (open: boolean) => void;
+  setBottomTerminalExpanded: (expanded: boolean) => void;
   setBottomTerminalHeight: (height: number) => void;
   setSessionSwitcherOpen: (open: boolean) => void;
   setActiveMainTab: (tab: MainTab) => void;
@@ -226,7 +310,10 @@ export const useUIStore = create<UIStore>()(
         isRightSidebarOpen: false,
         rightSidebarWidth: 420,
         hasManuallyResizedRightSidebar: false,
+        rightSidebarTab: 'git',
+        contextPanelByDirectory: {},
         isBottomTerminalOpen: false,
+        isBottomTerminalExpanded: false,
         bottomTerminalHeight: 300,
         hasManuallyResizedBottomTerminal: false,
         isSessionSwitcherOpen: false,
@@ -368,6 +455,125 @@ export const useUIStore = create<UIStore>()(
           set({ rightSidebarWidth: width, hasManuallyResizedRightSidebar: true });
         },
 
+        setRightSidebarTab: (tab) => {
+          set({ rightSidebarTab: tab });
+        },
+
+        openContextDiff: (directory, filePath) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          const normalizedFilePath = (filePath || '').trim();
+          if (!normalizedDirectory || !normalizedFilePath) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            const current = touchContextPanelState(prev);
+            const byDirectory = {
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: {
+                ...current,
+                isOpen: true,
+                mode: 'diff' as const,
+                targetPath: normalizedFilePath,
+              },
+            };
+
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+          });
+          get().setPendingDiffFile(normalizedFilePath);
+        },
+
+        openContextFile: (directory, filePath) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          const normalizedFilePath = (filePath || '').trim();
+          if (!normalizedDirectory || !normalizedFilePath) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            const current = touchContextPanelState(prev);
+            const byDirectory = {
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: {
+                ...current,
+                isOpen: true,
+                mode: 'file' as const,
+                targetPath: normalizedFilePath,
+              },
+            };
+
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+          });
+        },
+
+        closeContextPanel: (directory) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          if (!normalizedDirectory) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            if (!prev || !prev.isOpen) {
+              return state;
+            }
+
+            const byDirectory = {
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: {
+                ...touchContextPanelState(prev),
+                isOpen: false,
+              },
+            };
+
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+          });
+        },
+
+        toggleContextPanelExpanded: (directory) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          if (!normalizedDirectory) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            const current = touchContextPanelState(prev);
+            const byDirectory = {
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: {
+                ...current,
+                expanded: !current.expanded,
+              },
+            };
+
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+          });
+        },
+
+        setContextPanelWidth: (directory, width) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          if (!normalizedDirectory) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            const current = touchContextPanelState(prev);
+            const byDirectory = {
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: {
+                ...current,
+                width: clampContextPanelWidth(width),
+              },
+            };
+
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+          });
+        },
+
         toggleBottomTerminal: () => {
           set((state) => {
             const newOpen = !state.isBottomTerminalOpen;
@@ -398,6 +604,10 @@ export const useUIStore = create<UIStore>()(
 
             return { isBottomTerminalOpen: open };
           });
+        },
+
+        setBottomTerminalExpanded: (expanded) => {
+          set({ isBottomTerminalExpanded: expanded });
         },
 
         setBottomTerminalHeight: (height) => {
@@ -865,7 +1075,7 @@ export const useUIStore = create<UIStore>()(
       {
         name: 'ui-store',
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 3,
+        version: 4,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
@@ -905,6 +1115,14 @@ export const useUIStore = create<UIStore>()(
             delete state.memoryLimitActiveSession;
           }
 
+          if (typeof state.rightSidebarTab !== 'string' || (state.rightSidebarTab !== 'git' && state.rightSidebarTab !== 'files')) {
+            state.rightSidebarTab = 'git';
+          }
+
+          if (!state.contextPanelByDirectory || typeof state.contextPanelByDirectory !== 'object') {
+            state.contextPanelByDirectory = {};
+          }
+
           return state;
         },
         partialize: (state) => ({
@@ -913,7 +1131,10 @@ export const useUIStore = create<UIStore>()(
           sidebarWidth: state.sidebarWidth,
           isRightSidebarOpen: state.isRightSidebarOpen,
           rightSidebarWidth: state.rightSidebarWidth,
+          rightSidebarTab: state.rightSidebarTab,
+          contextPanelByDirectory: state.contextPanelByDirectory,
           isBottomTerminalOpen: state.isBottomTerminalOpen,
+          isBottomTerminalExpanded: state.isBottomTerminalExpanded,
           bottomTerminalHeight: state.bottomTerminalHeight,
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
           activeMainTab: state.activeMainTab,

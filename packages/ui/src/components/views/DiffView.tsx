@@ -564,6 +564,8 @@ interface MultiFileDiffEntryProps {
     registerSectionRef: (path: string, node: HTMLDivElement | null) => void;
     /** Start collapsed to reduce memory with many files */
     defaultCollapsed?: boolean;
+    expandRequestPath?: string | null;
+    expandRequestNonce?: number;
 }
 
 const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
@@ -576,6 +578,8 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     onSelect,
     registerSectionRef,
     defaultCollapsed = false,
+    expandRequestPath = null,
+    expandRequestNonce = 0,
 }) => {
     const { git } = useRuntimeAPIs();
     const cachedDiff = useGitStore(
@@ -643,6 +647,15 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     }, [hasBeenVisible, isExpanded, scrollRootRef]);
 
     React.useEffect(() => {
+        if (expandRequestNonce <= 0 || expandRequestPath !== file.path) {
+            return;
+        }
+
+        setIsExpanded(true);
+        setHasBeenVisible(true);
+    }, [expandRequestNonce, expandRequestPath, file.path]);
+
+    React.useEffect(() => {
         if (!isExpanded || !hasBeenVisible) return;
         if (!directory || diffData) {
             lastDiffRequestRef.current = null;
@@ -705,14 +718,11 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                             'relative flex w-full items-center gap-2 px-3 py-1.5 transition-colors rounded-t-xl border border-border/60 overflow-hidden',
                             'bg-background hover:bg-background',
                             isExpanded ? 'rounded-b-none' : 'rounded-b-xl',
-                            isSelected
-                                ? 'text-foreground'
-                                : 'text-muted-foreground hover:text-foreground'
+                            'text-muted-foreground hover:text-foreground'
                         )}
                     >
                         <div className={cn(
-                            'absolute inset-0 pointer-events-none transition-colors',
-                            isSelected ? 'bg-interactive-selection' : 'group-hover:bg-interactive-hover'
+                            'absolute inset-0 pointer-events-none transition-colors group-hover:bg-interactive-hover'
                         )} />
                         <div className="relative flex min-w-0 flex-1 items-center gap-2">
                             <span className="flex size-5 items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
@@ -792,7 +802,19 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     );
 });
 
-export const DiffView: React.FC = () => {
+interface DiffViewProps {
+    hideStackedFileSidebar?: boolean;
+    stackedDefaultCollapsedAll?: boolean;
+    hideFileSelector?: boolean;
+    pinSelectedFileHeaderToTopOnNavigate?: boolean;
+}
+
+export const DiffView: React.FC<DiffViewProps> = ({
+    hideStackedFileSidebar = false,
+    stackedDefaultCollapsedAll = false,
+    hideFileSelector = false,
+    pinSelectedFileHeaderToTopOnNavigate = false,
+}) => {
     const { git } = useRuntimeAPIs();
     const effectiveDirectory = useEffectiveDirectory();
     const { screenWidth, isMobile } = useDeviceInfo();
@@ -803,6 +825,9 @@ export const DiffView: React.FC = () => {
     const { setActiveDirectory, fetchStatus, setDiff } = useGitStore();
 	 
     const [selectedFile, setSelectedFile] = React.useState<string | null>(null);
+    const [stackedExpandTarget, setStackedExpandTarget] = React.useState<string | null>(null);
+    const [stackedExpandRequestNonce, setStackedExpandRequestNonce] = React.useState(0);
+    const [pinnedStackedTarget, setPinnedStackedTarget] = React.useState<string | null>(null);
     const [diffRetryNonce, setDiffRetryNonce] = React.useState(0);
     const [diffLoadError, setDiffLoadError] = React.useState<string | null>(null);
     const lastDiffRequestRef = React.useRef<string | null>(null);
@@ -821,10 +846,80 @@ export const DiffView: React.FC = () => {
 
     const isStackedView = diffViewMode === 'stacked';
     const isMobileLayout = isMobile || screenWidth <= 768;
-    const showFileSidebar = !isMobileLayout && screenWidth >= 1024;
+    const showFileSidebar = !hideStackedFileSidebar && !isMobileLayout && screenWidth >= 1024;
     const diffScrollRef = React.useRef<HTMLElement | null>(null);
     const fileSectionRefs = React.useRef(new Map<string, HTMLDivElement | null>());
     const pendingScrollTargetRef = React.useRef<string | null>(null);
+    const pendingScrollFrameRef = React.useRef<number | null>(null);
+    const settleScrollTimeoutsRef = React.useRef<Array<number>>([]);
+
+    React.useEffect(() => {
+        if (!pinSelectedFileHeaderToTopOnNavigate || !isStackedView || !pinnedStackedTarget) {
+            return;
+        }
+
+        const scrollRoot = diffScrollRef.current;
+        if (!scrollRoot) {
+            return;
+        }
+
+        let rafId: number | null = null;
+        const stopAt = Date.now() + 8000;
+
+        const stop = () => {
+            setPinnedStackedTarget(null);
+        };
+
+        const handleCancel = () => {
+            stop();
+        };
+
+        window.addEventListener('wheel', handleCancel, { passive: true, capture: true });
+        window.addEventListener('touchstart', handleCancel, { passive: true, capture: true });
+        window.addEventListener('keydown', handleCancel, { capture: true });
+
+        const tick = () => {
+            if (!diffScrollRef.current || Date.now() > stopAt) {
+                stop();
+                return;
+            }
+
+            const currentScrollRoot = diffScrollRef.current;
+            const node = fileSectionRefs.current.get(pinnedStackedTarget);
+            if (!currentScrollRoot || !node) {
+                stop();
+                return;
+            }
+
+            const rootRect = currentScrollRoot.getBoundingClientRect();
+            const nodeRect = node.getBoundingClientRect();
+            const delta = nodeRect.top - rootRect.top;
+
+            if (Math.abs(delta) > 1) {
+                const maxTop = Math.max(0, currentScrollRoot.scrollHeight - currentScrollRoot.clientHeight);
+                const nextTop = Math.min(maxTop, Math.max(0, currentScrollRoot.scrollTop + delta));
+                const didMove = Math.abs(nextTop - currentScrollRoot.scrollTop) > 0.5;
+                currentScrollRoot.scrollTop = nextTop;
+                if (!didMove) {
+                    stop();
+                    return;
+                }
+            }
+
+            rafId = window.requestAnimationFrame(tick);
+        };
+
+        rafId = window.requestAnimationFrame(tick);
+
+        return () => {
+            if (rafId !== null) {
+                window.cancelAnimationFrame(rafId);
+            }
+            window.removeEventListener('wheel', handleCancel, { capture: true } as AddEventListenerOptions);
+            window.removeEventListener('touchstart', handleCancel, { capture: true } as AddEventListenerOptions);
+            window.removeEventListener('keydown', handleCancel, { capture: true } as AddEventListenerOptions);
+        };
+    }, [isStackedView, pinSelectedFileHeaderToTopOnNavigate, pinnedStackedTarget]);
 
     const changedFiles: FileEntry[] = React.useMemo(() => {
         if (!status?.files) return [];
@@ -888,6 +983,8 @@ export const DiffView: React.FC = () => {
             setPendingDiffFile(null);
             if (isStackedView) {
                 pendingScrollTargetRef.current = pendingDiffFile;
+                setStackedExpandTarget(pendingDiffFile);
+                setStackedExpandRequestNonce((nonce) => nonce + 1);
             }
         }
     }, [isStackedView, pendingDiffFile, setPendingDiffFile]);
@@ -898,22 +995,6 @@ export const DiffView: React.FC = () => {
             setSelectedFile(changedFiles[0].path);
         }
     }, [changedFiles, selectedFile, pendingDiffFile]);
-
-    React.useEffect(() => {
-        if (!isStackedView) {
-            pendingScrollTargetRef.current = null;
-            return;
-        }
-
-        const target = pendingScrollTargetRef.current;
-        if (!target) return;
-
-        const node = fileSectionRefs.current.get(target);
-        if (!node) return;
-
-        node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        pendingScrollTargetRef.current = null;
-    }, [changedFiles, isStackedView]);
 
     // Clear selection if file no longer exists
     React.useEffect(() => {
@@ -936,10 +1017,125 @@ export const DiffView: React.FC = () => {
 
     const scrollToFile = React.useCallback((path: string, behavior: ScrollBehavior = 'smooth') => {
         const node = fileSectionRefs.current.get(path);
-        if (!node) return false;
-        node.scrollIntoView({ behavior, block: 'start' });
+        const scrollRoot = diffScrollRef.current;
+        if (!node || !scrollRoot) return false;
+
+        const rootRect = scrollRoot.getBoundingClientRect();
+        const nodeRect = node.getBoundingClientRect();
+        const nextTop = scrollRoot.scrollTop + (nodeRect.top - rootRect.top);
+
+        scrollRoot.scrollTo({
+            top: Math.max(0, nextTop),
+            behavior,
+        });
         return true;
     }, []);
+
+    const clearSettleScrollTimeouts = React.useCallback(() => {
+        if (settleScrollTimeoutsRef.current.length === 0) {
+            return;
+        }
+
+        for (const timeoutId of settleScrollTimeoutsRef.current) {
+            window.clearTimeout(timeoutId);
+        }
+        settleScrollTimeoutsRef.current = [];
+    }, []);
+
+    const scheduleSettleAlignment = React.useCallback((path: string) => {
+        clearSettleScrollTimeouts();
+
+        const delays = [60, 140, 260, 420, 700];
+        settleScrollTimeoutsRef.current = delays.map((delayMs) => {
+            return window.setTimeout(() => {
+                // Re-align after late layout shifts (eg async syntax/highlight paint)
+                scrollToFile(path, 'auto');
+            }, delayMs);
+        });
+    }, [clearSettleScrollTimeouts, scrollToFile]);
+
+    React.useEffect(() => {
+        return () => {
+            clearSettleScrollTimeouts();
+        };
+    }, [clearSettleScrollTimeouts]);
+
+    React.useEffect(() => {
+        if (!isStackedView) {
+            pendingScrollTargetRef.current = null;
+            clearSettleScrollTimeouts();
+            if (pendingScrollFrameRef.current !== null) {
+                window.cancelAnimationFrame(pendingScrollFrameRef.current);
+                pendingScrollFrameRef.current = null;
+            }
+            return;
+        }
+
+        const target = pendingScrollTargetRef.current;
+        if (!target) return;
+
+        let attempts = 0;
+        const maxAttempts = 24;
+
+        const tryAlign = () => {
+            const currentTarget = pendingScrollTargetRef.current;
+            if (!currentTarget) {
+                pendingScrollFrameRef.current = null;
+                return;
+            }
+
+            const didScroll = scrollToFile(currentTarget, 'auto');
+            if (!didScroll) {
+                attempts += 1;
+                if (attempts < maxAttempts) {
+                    pendingScrollFrameRef.current = window.requestAnimationFrame(tryAlign);
+                } else {
+                    pendingScrollTargetRef.current = null;
+                    pendingScrollFrameRef.current = null;
+                }
+                return;
+            }
+
+            const node = fileSectionRefs.current.get(currentTarget);
+            const scrollRoot = diffScrollRef.current;
+            if (!node || !scrollRoot) {
+                pendingScrollTargetRef.current = null;
+                pendingScrollFrameRef.current = null;
+                return;
+            }
+
+            const rootRect = scrollRoot.getBoundingClientRect();
+            const nodeRect = node.getBoundingClientRect();
+            const aligned = Math.abs(nodeRect.top - rootRect.top) <= 2;
+
+            if (aligned) {
+                scheduleSettleAlignment(currentTarget);
+                if (pinSelectedFileHeaderToTopOnNavigate) {
+                    setPinnedStackedTarget(currentTarget);
+                }
+                pendingScrollTargetRef.current = null;
+                pendingScrollFrameRef.current = null;
+                return;
+            }
+
+            attempts += 1;
+            if (attempts < maxAttempts) {
+                pendingScrollFrameRef.current = window.requestAnimationFrame(tryAlign);
+            } else {
+                pendingScrollTargetRef.current = null;
+                pendingScrollFrameRef.current = null;
+            }
+        };
+
+        pendingScrollFrameRef.current = window.requestAnimationFrame(tryAlign);
+
+        return () => {
+            if (pendingScrollFrameRef.current !== null) {
+                window.cancelAnimationFrame(pendingScrollFrameRef.current);
+                pendingScrollFrameRef.current = null;
+            }
+        };
+    }, [changedFiles, clearSettleScrollTimeouts, isStackedView, scheduleSettleAlignment, scrollToFile, selectedFile, stackedExpandRequestNonce]);
 
     const handleSelectFile = React.useCallback((value: string) => {
         setSelectedFile(value);
@@ -948,7 +1144,7 @@ export const DiffView: React.FC = () => {
     const handleSelectFileAndScroll = React.useCallback((value: string) => {
         setSelectedFile(value);
 
-        if (isStackedView && !scrollToFile(value)) {
+        if (isStackedView && !scrollToFile(value, 'auto')) {
             pendingScrollTargetRef.current = value;
         }
     }, [isStackedView, scrollToFile]);
@@ -976,7 +1172,7 @@ export const DiffView: React.FC = () => {
     }, [changedFiles, isStackedView, selectedFileEntry, setDiffFileLayout]);
 
     const renderSideBySide = (currentLayoutForSelectedFile ?? 'side-by-side') === 'side-by-side';
-    const showFileSelector = !isStackedView || !showFileSidebar;
+    const showFileSelector = !hideFileSelector && (!isStackedView || !showFileSidebar);
 
     const selectedCachedDiff = useGitStore(React.useCallback((state) => {
         if (!effectiveDirectory || !selectedFile) return null;
@@ -1097,7 +1293,9 @@ export const DiffView: React.FC = () => {
                                 isSelected={file.path === selectedFile}
                                 onSelect={handleSelectFile}
                                 registerSectionRef={registerSectionRef}
-                                defaultCollapsed={index >= defaultExpandedCount}
+                                defaultCollapsed={stackedDefaultCollapsedAll ? true : index >= defaultExpandedCount}
+                                expandRequestPath={stackedExpandTarget}
+                                expandRequestNonce={stackedExpandRequestNonce}
                             />
                         ))}
                     </div>

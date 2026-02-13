@@ -3,6 +3,8 @@ import { Header } from './Header';
 import { BottomTerminalDock } from './BottomTerminalDock';
 import { Sidebar } from './Sidebar';
 import { RightSidebar } from './RightSidebar';
+import { RightSidebarTabs } from './RightSidebarTabs';
+import { ContextPanel } from './ContextPanel';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { CommandPalette } from '../ui/CommandPalette';
 import { HelpDialog } from '../ui/HelpDialog';
@@ -512,18 +514,21 @@ export const MainLayout: React.FC = () => {
                                 </Sidebar>
                                 <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
                                     <div className="flex flex-1 min-h-0 overflow-hidden">
-                                        <main className="flex-1 overflow-hidden bg-background relative">
-                                            <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                                <ErrorBoundary><ChatView /></ErrorBoundary>
-                                            </div>
-                                            {secondaryView && (
-                                                <div className="absolute inset-0">
-                                                    <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                                        <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                                            <main className="flex-1 overflow-hidden bg-background relative">
+                                                <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
+                                                    <ErrorBoundary><ChatView /></ErrorBoundary>
                                                 </div>
-                                            )}
-                                        </main>
+                                                {secondaryView && (
+                                                    <div className="absolute inset-0">
+                                                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
+                                                    </div>
+                                                )}
+                                            </main>
+                                            <ContextPanel />
+                                        </div>
                                         <RightSidebar isOpen={isRightSidebarOpen} isMobile={isMobile}>
-                                            <ErrorBoundary><GitView mode="sidebar" /></ErrorBoundary>
+                                            <ErrorBoundary><RightSidebarTabs /></ErrorBoundary>
                                         </RightSidebar>
                                     </div>
                                     <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
