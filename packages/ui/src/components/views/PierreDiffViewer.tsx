@@ -247,11 +247,10 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const removeDraft = useInlineCommentDraftStore((state) => state.removeDraft);
   const allDrafts = useInlineCommentDraftStore((state) => state.drafts);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
-  const newSessionDraftOpen = useSessionStore((state) => state.newSessionDraft?.open);
 
   const getSessionKey = useCallback(() => {
-    return currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
-  }, [currentSessionId, newSessionDraftOpen]);
+    return currentSessionId ?? 'draft';
+  }, [currentSessionId]);
 
   const [selection, setSelection] = useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = useState('');
@@ -644,7 +643,17 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     if (!instance) return;
 
     instance.setLineAnnotations(lineAnnotations);
-    requestAnimationFrame(() => forceUpdate());
+    // `setLineAnnotations` only updates internal state; it does not apply DOM.
+    // We must rerender to materialize annotation slot nodes.
+    requestAnimationFrame(() => {
+      if (diffInstanceRef.current !== instance) return;
+      try {
+        instance.rerender();
+      } catch {
+        // ignore
+      }
+      forceUpdate();
+    });
   }, [lineAnnotations]);
 
   useEffect(() => {
@@ -673,6 +682,64 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       isApplyingSelectionRef.current = false;
     }
   }, [selection]);
+
+  useEffect(() => {
+    const container = diffContainerRef.current;
+    if (!container) return;
+
+    let rafId: number | null = null;
+    let cleanup = () => {};
+
+    const setup = () => {
+      const host = container.querySelector('diffs-container');
+      const shadowRoot = host?.shadowRoot;
+      if (!shadowRoot) {
+        rafId = requestAnimationFrame(setup);
+        return;
+      }
+
+      const onClickCapture = (event: Event) => {
+        if (!(event instanceof MouseEvent) || event.button !== 0) return;
+        if (!(event.target instanceof Element)) return;
+
+        const numberCell = event.target.closest('[data-column-number]');
+        if (!(numberCell instanceof HTMLElement)) return;
+
+        const lineRaw = numberCell.getAttribute('data-column-number');
+        const lineNumber = lineRaw ? parseInt(lineRaw, 10) : NaN;
+        if (Number.isNaN(lineNumber)) return;
+
+        const lineType =
+          numberCell.closest('[data-line-type]')?.getAttribute('data-line-type')
+          ?? numberCell.getAttribute('data-line-type');
+
+        const side: AnnotationSide = lineType === 'change-deletion' ? 'deletions' : 'additions';
+
+        handleSelectionChange({
+          start: lineNumber,
+          end: lineNumber,
+          side,
+        });
+
+        event.preventDefault();
+        event.stopPropagation();
+      };
+
+      shadowRoot.addEventListener('click', onClickCapture, true);
+      cleanup = () => {
+        shadowRoot.removeEventListener('click', onClickCapture, true);
+      };
+    };
+
+    setup();
+
+    return () => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+      }
+      cleanup();
+    };
+  }, [diffThemeKey, fileName, handleSelectionChange]);
 
   // MutationObserver to trigger re-renders when annotation DOM nodes are added/removed
   useEffect(() => {
