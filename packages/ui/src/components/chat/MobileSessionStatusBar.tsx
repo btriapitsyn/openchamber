@@ -9,6 +9,7 @@ import { RiLoader4Line } from '@remixicon/react';
 
 interface MobileSessionStatusBarProps {
   onSessionSwitch?: (sessionId: string) => void;
+  cornerRadius?: number;
 }
 
 interface SessionWithStatus extends Session {
@@ -302,16 +303,24 @@ function CollapsedView({
   unreadCount,
   currentSessionTitle,
   onToggle,
-  onNewSession
+  onNewSession,
+  cornerRadius,
 }: {
   runningCount: number;
   unreadCount: number;
   currentSessionTitle: string;
   onToggle: () => void;
   onNewSession: () => void;
+  cornerRadius?: number;
 }) {
   return (
-    <div className="w-full flex items-center justify-between px-2 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left">
+    <div
+      className="w-full flex items-center justify-between px-2 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left overflow-hidden"
+      style={{
+        borderTopLeftRadius: cornerRadius,
+        borderTopRightRadius: cornerRadius,
+      }}
+    >
       <div className="flex-1 min-w-0 mr-2">
         <SessionStatusHeader
           currentSessionTitle={currentSessionTitle}
@@ -348,7 +357,8 @@ function ExpandedView({
   onSessionDoubleClick,
   getSessionAgentName,
   getSessionTitle,
-  needsAttention
+  needsAttention,
+  cornerRadius,
 }: {
   sessions: SessionWithStatus[];
   currentSessionId: string;
@@ -364,6 +374,7 @@ function ExpandedView({
   getSessionAgentName: (s: Session) => string;
   getSessionTitle: (s: Session) => string;
   needsAttention: (sessionId: string) => boolean;
+  cornerRadius?: number;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [collapsedHeight, setCollapsedHeight] = React.useState<number | null>(null);
@@ -380,7 +391,13 @@ function ExpandedView({
   const displaySessions = hasMeasured || isExpanded ? sessions : sessions.slice(0, 3);
 
   return (
-    <div className="w-full border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first">
+    <div
+      className="w-full border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first overflow-hidden"
+      style={{
+        borderTopLeftRadius: cornerRadius,
+        borderTopRightRadius: cornerRadius,
+      }}
+    >
       <div className="flex items-center justify-between px-2 py-0">
         <div className="flex-1 min-w-0 mr-2">
           <SessionStatusHeader
@@ -438,6 +455,7 @@ function ExpandedView({
 
 export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   onSessionSwitch,
+  cornerRadius,
 }) => {
   const sessions = useSessionStore((state) => state.sessions);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -487,6 +505,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         currentSessionTitle={currentSessionTitle}
         onToggle={() => setIsMobileSessionStatusBarCollapsed(false)}
         onNewSession={handleCreateSession}
+        cornerRadius={cornerRadius}
       />
     );
   }
@@ -510,6 +529,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       getSessionAgentName={getSessionAgentName}
       getSessionTitle={getSessionTitle}
       needsAttention={needsAttention}
+      cornerRadius={cornerRadius}
     />
   );
 };
