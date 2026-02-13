@@ -1082,6 +1082,8 @@ export const DiffView: React.FC = () => {
                     outerClassName="flex-1 min-h-0 h-full"
                     className="pr-2"
                     disableHorizontal
+                    data-diff-virtual-root
+                    data-diff-virtual-content
                 >
                     <div className="flex flex-col gap-3">
                         {changedFiles.map((file, index) => (
@@ -1144,7 +1146,7 @@ export const DiffView: React.FC = () => {
         }
 
         return (
-            <div className="flex flex-1 min-h-0 overflow-hidden px-3 py-3 relative">
+            <div className="flex flex-1 min-h-0 overflow-hidden px-3 py-3 relative" data-diff-virtual-root data-diff-virtual-content>
                 {renderSelectedDiffViewer()}
                 {isCurrentFileLoading && !hasCurrentDiff && (
                     <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">

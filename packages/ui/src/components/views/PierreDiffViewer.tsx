@@ -1,6 +1,16 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { FileDiff as PierreFileDiff, type FileContents, type FileDiffOptions, type SelectedLineRange, type DiffLineAnnotation, type AnnotationSide } from '@pierre/diffs';
+import {
+  FileDiff as PierreFileDiff,
+  VirtualizedFileDiff,
+  Virtualizer,
+  type FileContents,
+  type FileDiffOptions,
+  type SelectedLineRange,
+  type DiffLineAnnotation,
+  type AnnotationSide,
+  type VirtualFileMetrics,
+} from '@pierre/diffs';
 import { InlineCommentCard, InlineCommentInput } from '@/components/comments';
 
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
@@ -138,6 +148,82 @@ type AnnotationData =
   | { type: 'saved' | 'edit'; draft: InlineCommentDraft }
   | { type: 'new'; selection: SelectedLineRange };
 
+type SharedVirtualizer = {
+  virtualizer: Virtualizer;
+  release: () => void;
+};
+
+type VirtualizerTarget = {
+  key: Document | HTMLElement;
+  root: Document | HTMLElement;
+  content: HTMLElement | undefined;
+};
+
+type VirtualizerEntry = {
+  virtualizer: Virtualizer;
+  refs: number;
+};
+
+const virtualizerCache = new WeakMap<Document | HTMLElement, VirtualizerEntry>();
+
+const VIRTUAL_METRICS: Partial<VirtualFileMetrics> = {
+  lineHeight: 24,
+  hunkSeparatorHeight: 24,
+  fileGap: 0,
+};
+
+function resolveVirtualizerTarget(container: HTMLElement): VirtualizerTarget {
+  const root = container.closest('[data-diff-virtual-root]');
+  if (root instanceof HTMLElement) {
+    const content = root.querySelector('[data-diff-virtual-content]');
+    return {
+      key: root,
+      root,
+      content: content instanceof HTMLElement ? content : undefined,
+    };
+  }
+
+  return {
+    key: document,
+    root: document,
+    content: undefined,
+  };
+}
+
+function acquireSharedVirtualizer(container: HTMLElement): SharedVirtualizer | null {
+  if (typeof document === 'undefined') return null;
+
+  const target = resolveVirtualizerTarget(container);
+  let entry = virtualizerCache.get(target.key);
+
+  if (!entry) {
+    const virtualizer = new Virtualizer();
+    virtualizer.setup(target.root, target.content);
+    entry = { virtualizer, refs: 0 };
+    virtualizerCache.set(target.key, entry);
+  }
+
+  entry.refs += 1;
+  let released = false;
+
+  return {
+    virtualizer: entry.virtualizer,
+    release: () => {
+      if (released) return;
+      released = true;
+
+      const current = virtualizerCache.get(target.key);
+      if (!current) return;
+
+      current.refs -= 1;
+      if (current.refs > 0) return;
+
+      current.virtualizer.cleanUp();
+      virtualizerCache.delete(target.key);
+    },
+  };
+}
+
 export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   original,
   modified,
@@ -170,37 +256,46 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const [selection, setSelection] = useState<SelectedLineRange | null>(null);
   const [commentText, setCommentText] = useState('');
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const selectionRef = useRef<SelectedLineRange | null>(null);
+  const editingDraftIdRef = useRef<string | null>(null);
 
   // Use a ref to track if we're currently applying a selection programmatically
   // to avoid loop with onLineSelected callback
   const isApplyingSelectionRef = useRef(false);
   const lastAppliedSelectionRef = useRef<SelectedLineRange | null>(null);
 
+  useEffect(() => {
+    selectionRef.current = selection;
+  }, [selection]);
+
+  useEffect(() => {
+    editingDraftIdRef.current = editingDraftId;
+  }, [editingDraftId]);
+
   const handleSelectionChange = useCallback((range: SelectedLineRange | null) => {
     // Ignore callbacks while we're programmatically applying selection
     if (isApplyingSelectionRef.current) {
       return;
     }
-    
+
+    const prevSelection = selectionRef.current;
+
     // Mobile tap-to-extend: if selection exists and new tap is on same side, extend range
-    if (isMobile && selection && range && range.side === selection.side) {
-      const start = Math.min(selection.start, range.start);
-      const end = Math.max(selection.end, range.end);
+    if (isMobile && prevSelection && range && range.side === prevSelection.side) {
+      const start = Math.min(prevSelection.start, range.start);
+      const end = Math.max(prevSelection.end, range.end);
       setSelection({ ...range, start, end });
-      return;
+    } else {
+      setSelection(range);
     }
-    
-    setSelection(range);
-    
+
     // Clear editing state when selection changes user-driven
     if (range) {
-      // Don't clear if we're just updating the selection for the same draft?
-      // For now, simple behavior: new selection = new comment flow
-      if (!editingDraftId) {
+      if (!editingDraftIdRef.current) {
         setCommentText('');
       }
     }
-  }, [editingDraftId, isMobile, selection]);
+  }, [isMobile]);
 
   const handleCancelComment = useCallback(() => {
     setCommentText('');
@@ -325,6 +420,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const diffRootRef = useRef<HTMLDivElement | null>(null);
   const diffContainerRef = useRef<HTMLDivElement | null>(null);
   const diffInstanceRef = useRef<PierreFileDiff<unknown> | null>(null);
+  const sharedVirtualizerRef = useRef<SharedVirtualizer | null>(null);
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
   const workerPool = useWorkerPool();
 
@@ -417,6 +513,9 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     hunkSeparators: 'line-info' as const,
     // Perf: disable intra-line diff (word-level) globally.
     lineDiffType: 'none' as const,
+    maxLineDiffLength: 1000,
+    maxLineLengthForHighlighting: 1000,
+    expansionLineCount: 20,
     overflow: wrapLines ? ('wrap' as const) : ('scroll' as const),
     disableFileHeader: true,
     enableLineSelection: true,
@@ -469,6 +568,12 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     return anns;
   }, [allDrafts, getSessionKey, fileName, editingDraftId, selection]);
 
+  const lineAnnotationsRef = useRef(lineAnnotations);
+
+  useEffect(() => {
+    lineAnnotationsRef.current = lineAnnotations;
+  }, [lineAnnotations]);
+
   // Imperative render (like upstream OpenCode): avoids `parseDiffFromFile` on main thread.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -480,9 +585,21 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     // Dispose previous instance
     diffInstanceRef.current?.cleanUp();
     diffInstanceRef.current = null;
+    sharedVirtualizerRef.current?.release();
+    sharedVirtualizerRef.current = null;
     container.innerHTML = '';
 
-    const instance = new PierreFileDiff(options as unknown as FileDiffOptions<unknown>, workerPool);
+    const sharedVirtualizer = acquireSharedVirtualizer(container);
+    sharedVirtualizerRef.current = sharedVirtualizer;
+
+    const instance = sharedVirtualizer
+      ? new VirtualizedFileDiff(
+          options as unknown as FileDiffOptions<unknown>,
+          sharedVirtualizer.virtualizer,
+          VIRTUAL_METRICS,
+          workerPool,
+        )
+      : new PierreFileDiff(options as unknown as FileDiffOptions<unknown>, workerPool);
     diffInstanceRef.current = instance;
     lastAppliedSelectionRef.current = null;
 
@@ -502,7 +619,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     instance.render({
       oldFile,
       newFile,
-      lineAnnotations,
+      lineAnnotations: lineAnnotationsRef.current,
       containerWrapper: container,
     });
 
@@ -514,9 +631,21 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       if (diffInstanceRef.current === instance) {
         diffInstanceRef.current = null;
       }
+      sharedVirtualizer?.release();
+      if (sharedVirtualizer && sharedVirtualizerRef.current === sharedVirtualizer) {
+        sharedVirtualizerRef.current = null;
+      }
       container.innerHTML = '';
     };
-  }, [diffThemeKey, fileName, language, modified, options, original, workerPool, lineAnnotations]);
+  }, [diffThemeKey, fileName, language, modified, options, original, workerPool]);
+
+  useEffect(() => {
+    const instance = diffInstanceRef.current;
+    if (!instance) return;
+
+    instance.setLineAnnotations(lineAnnotations);
+    requestAnimationFrame(() => forceUpdate());
+  }, [lineAnnotations]);
 
   useEffect(() => {
     const instance = diffInstanceRef.current;
@@ -669,12 +798,13 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   if (layout === 'fill') {
     return (
-      <div className={cn("flex flex-col relative", "size-full")}>
+      <div className={cn("flex flex-col relative", "size-full")} data-diff-virtual-root>
         <div className="flex-1 relative min-h-0">
           <ScrollableOverlay
             outerClassName="pierre-diff-wrapper size-full"
             disableHorizontal={false}
             fillContainer={true}
+            data-diff-virtual-content
           >
             <div ref={diffRootRef} className="size-full relative">
               <div ref={diffContainerRef} className="size-full" />
@@ -696,5 +826,3 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     </div>
   );
 };
-
-
