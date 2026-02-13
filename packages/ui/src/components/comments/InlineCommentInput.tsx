@@ -52,8 +52,6 @@ export function InlineCommentInput({
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    // Prevent focus() from causing scroll jumps in scroll containers.
-    // (notably in diff views where the input is rendered via portals)
     const scrollContainer = textarea.closest('.overlay-scrollbar-container') as HTMLElement | null;
     const prevScrollTop = scrollContainer?.scrollTop ?? window.scrollY;
     const prevScrollLeft = scrollContainer?.scrollLeft ?? window.scrollX;
@@ -74,15 +72,13 @@ export function InlineCommentInput({
       textarea.focus();
     }
 
-    // Move cursor to end
     const len = textarea.value.length;
     try {
       textarea.setSelectionRange(len, len);
-    } catch {
-      // ignore
+    } catch (err) {
+      void err;
     }
 
-    // Restore scroll position in case the browser scrolled anyway.
     requestAnimationFrame(() => {
       if (scrollContainer) {
         scrollContainer.scrollTop = prevScrollTop;

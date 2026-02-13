@@ -583,7 +583,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     lineAnnotationsRef.current = lineAnnotations;
   }, [lineAnnotations]);
 
-  // Imperative render (like upstream OpenCode): avoids `parseDiffFromFile` on main thread.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -653,14 +652,12 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     if (!instance) return;
 
     instance.setLineAnnotations(lineAnnotations);
-    // `setLineAnnotations` only updates internal state; it does not apply DOM.
-    // We must rerender to materialize annotation slot nodes.
     requestAnimationFrame(() => {
       if (diffInstanceRef.current !== instance) return;
       try {
         instance.rerender();
-      } catch {
-        // ignore
+      } catch (err) {
+        void err;
       }
       forceUpdate();
     });
