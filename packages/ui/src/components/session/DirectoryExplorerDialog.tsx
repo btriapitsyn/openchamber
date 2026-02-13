@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { DirectoryTree } from './DirectoryTree';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { toast } from '@/components/ui';
@@ -38,6 +39,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 }) => {
   const { currentDirectory, homeDirectory, isHomeReady } = useDirectoryStore();
   const { addProject, getActiveProject } = useProjectsStore();
+  const { activeConnectionId } = useConnectionsStore();
   const [pendingPath, setPendingPath] = React.useState<string | null>(null);
   const [pathInputValue, setPathInputValue] = React.useState('');
   const [hasUserSelection, setHasUserSelection] = React.useState(false);
@@ -114,7 +116,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         }
       }
 
-      const added = addProject(resolvedPath, { id: projectId });
+      const added = addProject(resolvedPath, { id: projectId, connectionId: activeConnectionId });
       if (!added) {
         toast.error('Failed to add project', {
           description: 'Please select a valid directory path.',
@@ -137,6 +139,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     requestAccess,
     startAccessing,
     isConfirming,
+    activeConnectionId,
   ]);
 
   const handleConfirm = React.useCallback(async () => {
@@ -252,6 +255,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         visible={autocompleteVisible}
         onClose={handleAutocompleteClose}
         showHidden={showHidden}
+        connectionId={activeConnectionId}
       />
     </div>
   );
@@ -268,6 +272,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         showHidden={showHidden}
         rootDirectory={isHomeReady ? homeDirectory : null}
         isRootReady={isHomeReady}
+        connectionId={activeConnectionId}
       />
     </div>
   );
@@ -291,6 +296,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           rootDirectory={isHomeReady ? homeDirectory : null}
           isRootReady={isHomeReady}
           alwaysShowActions
+          connectionId={activeConnectionId}
         />
       </div>
     </div>

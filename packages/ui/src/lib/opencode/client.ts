@@ -2155,7 +2155,57 @@ class OpencodeService {
     return result;
   }
 
-  async listLocalDirectory(directoryPath: string | null | undefined, options?: { respectGitignore?: boolean }): Promise<FilesystemEntry[]> {
+  /**
+   * List directory contents on a remote OpenCode server via the SDK's file.list API.
+   * @param connectionId - The connection ID for the remote server
+   * @param path - The directory path to list
+   * @param options - Optional listing options
+   * @returns Array of filesystem entries
+   */
+  async listRemoteDirectory(connectionId: string, path: string): Promise<FilesystemEntry[]> {
+    const client = this.resolveClient(connectionId);
+    
+    try {
+      const response = await client.file.list({
+        path: path || '.',
+        directory: path
+      });
+
+      if (!response.data) {
+        return [];
+      }
+
+      return response.data
+        .filter((item: { type?: string; name?: string }) => {
+          // Filter for directories and respect options
+          if (item.type !== 'directory' && item.type !== 'file') {
+            return false;
+          }
+          if (!item.name) {
+            return false;
+          }
+          return true;
+        })
+        .map((item: { name?: string; absolute?: string; path?: string; type?: string }) => ({
+          name: item.name || '',
+          path: normalizeFsPath(String(item.absolute || item.path || item.name)),
+          isDirectory: item.type === 'directory',
+          isFile: item.type === 'file',
+          isSymbolicLink: false,
+        }))
+        .filter((item) => item.name !== '');
+    } catch (error) {
+      console.error('Failed to list remote directory contents:', error);
+      throw error;
+    }
+  }
+
+  async listLocalDirectory(directoryPath: string | null | undefined, options?: { respectGitignore?: boolean; connectionId?: string }): Promise<FilesystemEntry[]> {
+    // Route to remote when connectionId is provided and not 'local'
+    if (options?.connectionId && options.connectionId !== 'local') {
+      return this.listRemoteDirectory(options.connectionId, directoryPath || '');
+    }
+
     const desktopFiles = getDesktopFilesApi();
     if (desktopFiles) {
       try {
@@ -2298,7 +2348,51 @@ class OpencodeService {
     return result.files as ProjectFileSearchHit[];
   }
 
-  async getFilesystemHome(): Promise<string | null> {
+  /**
+   * Get the home directory of a remote OpenCode server via the resolved client's path/session info.
+   * @param connectionId - The connection ID for the remote server
+   * @returns The home directory path or null if unavailable
+   */
+  async getRemoteHome(connectionId: string): Promise<string | null> {
+    const client = this.resolveClient(connectionId);
+
+    try {
+      // Try path.get first (most reliable for current directory info)
+      const pathResponse = await client.path.get();
+      if (pathResponse.data?.directory) {
+        const directory = String(pathResponse.data.directory);
+        if (directory && directory.length > 0) {
+          return directory;
+        }
+      }
+    } catch (error) {
+      console.debug('Failed to get remote home via path.get:', error);
+    }
+
+    try {
+      // Fall back to session list and derive home from first session
+      const sessionResponse = await client.session.list();
+      const sessions = Array.isArray(sessionResponse.data) ? sessionResponse.data : [];
+      if (sessions.length > 0 && sessions[0].directory) {
+        const directory = String(sessions[0].directory);
+        if (directory && directory.length > 0) {
+          return directory;
+        }
+      }
+    } catch (error) {
+      console.debug('Failed to get remote home via session.list:', error);
+    }
+
+    console.warn('Failed to resolve remote home directory for connection:', connectionId);
+    return null;
+  }
+
+  async getFilesystemHome(connectionId?: string): Promise<string | null> {
+    // Route to remote when connectionId is provided and not 'local'
+    if (connectionId && connectionId !== 'local') {
+      return this.getRemoteHome(connectionId);
+    }
+
     // Optimization: Check for desktop runtime first to avoid unnecessary network calls
     // and fix the "SyntaxError" warning when the endpoint is missing
     const desktopHome = await getDesktopHomeDirectory();

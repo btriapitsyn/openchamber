@@ -21,6 +21,7 @@ import { removeProjectWorktree } from '@/lib/worktrees/worktreeManager';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { isTauriShell } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
@@ -65,6 +66,7 @@ export const SessionDialogs: React.FC = () => {
     } = useSessionStore();
     const { currentDirectory, homeDirectory, isHomeReady } = useDirectoryStore();
     const { projects, addProject, activeProjectId } = useProjectsStore();
+    const { activeConnectionId } = useConnectionsStore();
     const { requestAccess, startAccessing } = useFileSystemAccess();
     const { isMobile, isTablet, hasTouchInput } = useDeviceInfo();
     const useMobileOverlay = isMobile || isTablet || hasTouchInput;
@@ -129,6 +131,12 @@ export const SessionDialogs: React.FC = () => {
 
         setHasShownInitialDirectoryPrompt(true);
 
+        // When remote connection is active, use the remote filesystem browser
+        if (activeConnectionId !== 'local') {
+            setIsDirectoryDialogOpen(true);
+            return;
+        }
+
         if (isTauriShell()) {
             requestAccess('')
                 .then(async (result) => {
@@ -149,7 +157,7 @@ export const SessionDialogs: React.FC = () => {
                         return;
                     }
 
-                    const added = addProject(result.path, { id: result.projectId });
+                    const added = addProject(result.path, { id: result.projectId, connectionId: activeConnectionId });
                     if (!added) {
                         toast.error('Failed to add project', {
                             description: 'Please select a valid directory path.',
@@ -165,6 +173,7 @@ export const SessionDialogs: React.FC = () => {
 
         setIsDirectoryDialogOpen(true);
     }, [
+        activeConnectionId,
         addProject,
         hasShownInitialDirectoryPrompt,
         isHomeReady,

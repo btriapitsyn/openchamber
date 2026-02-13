@@ -4,6 +4,7 @@ import { opencodeClient } from '@/lib/opencode/client';
 import type { ProjectEntry } from '@/lib/api/types';
 import type { DesktopSettings } from '@/lib/desktop';
 import { useNotificationBadgeStore } from '@/stores/useNotificationBadgeStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getSafeStorage } from './utils/safeStorage';
 import { useDirectoryStore } from './useDirectoryStore';
@@ -20,7 +21,7 @@ interface ProjectsStore {
   projects: ProjectEntry[];
   activeProjectId: string | null;
 
-  addProject: (path: string, options?: { label?: string; id?: string }) => ProjectEntry | null;
+  addProject: (path: string, options?: { label?: string; id?: string; connectionId?: string }) => ProjectEntry | null;
   removeProject: (id: string) => void;
   setActiveProject: (id: string) => void;
   setActiveProjectIdOnly: (id: string) => void;
@@ -31,6 +32,7 @@ interface ProjectsStore {
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings) => void;
   getActiveProject: () => ProjectEntry | null;
+  getProjectsForConnection: (connectionId: string) => ProjectEntry[];
 }
 
 const safeStorage = getSafeStorage();
@@ -110,7 +112,7 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
 
   const result: ProjectEntry[] = [];
   const seenIds = new Set<string>();
-  const seenPaths = new Set<string>();
+  const seenPathConnectionPairs = new Set<string>();
 
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') continue;
@@ -123,13 +125,22 @@ const sanitizeProjects = (value: unknown): ProjectEntry[] => {
     const normalizedPath = normalizeProjectPath(rawPath);
     if (!normalizedPath) continue;
 
-    if (seenIds.has(id) || seenPaths.has(normalizedPath)) continue;
+    // Handle connectionId: default to 'local' if missing (backward compatible)
+    const connectionId = typeof candidate.connectionId === 'string' && candidate.connectionId.trim().length > 0
+      ? candidate.connectionId.trim()
+      : 'local';
+
+    // Deduplication key is (connectionId, path)
+    const pathConnectionKey = `${connectionId}::${normalizedPath}`;
+    
+    if (seenIds.has(id) || seenPathConnectionPairs.has(pathConnectionKey)) continue;
     seenIds.add(id);
-    seenPaths.add(normalizedPath);
+    seenPathConnectionPairs.add(pathConnectionKey);
 
     const project: ProjectEntry = {
       id,
       path: normalizedPath,
+      connectionId,
     };
 
     if (typeof candidate.label === 'string' && candidate.label.trim().length > 0) {
@@ -275,7 +286,7 @@ export const useProjectsStore = create<ProjectsStore>()(
       return { ok: true, normalizedPath: normalized };
     },
 
-    addProject: (path: string, options?: { label?: string; id?: string }) => {
+    addProject: (path: string, options?: { label?: string; id?: string; connectionId?: string }) => {
       if (vscodeWorkspace) {
         return null;
       }
@@ -286,7 +297,12 @@ export const useProjectsStore = create<ProjectsStore>()(
       }
 
       const normalizedPath = validation.normalizedPath;
-      const existing = get().projects.find((project) => project.path === normalizedPath);
+      const connectionId = options?.connectionId?.trim() || 'local';
+      
+      // Check for duplicate (connectionId, path) pair
+      const existing = get().projects.find(
+        (project) => project.path === normalizedPath && (project.connectionId || 'local') === connectionId
+      );
       if (existing) {
         get().setActiveProject(existing.id);
         return existing;
@@ -304,6 +320,7 @@ export const useProjectsStore = create<ProjectsStore>()(
         label,
         addedAt: now,
         lastOpenedAt: now,
+        connectionId,
       };
 
       const nextProjects = [...get().projects, entry];
@@ -367,6 +384,13 @@ export const useProjectsStore = create<ProjectsStore>()(
       // Clear notification badge for the project being switched to
       if (target.path) {
         useNotificationBadgeStore.getState().clear(target.path);
+      }
+
+      // Switch to the project's connection if it differs from the current active connection
+      const projectConnectionId = target.connectionId || 'local';
+      const currentActiveConnectionId = useConnectionsStore.getState().activeConnectionId;
+      if (projectConnectionId !== currentActiveConnectionId) {
+        useConnectionsStore.getState().setActiveConnection(projectConnectionId);
       }
 
       opencodeClient.setDirectory(target.path);
@@ -514,6 +538,12 @@ export const useProjectsStore = create<ProjectsStore>()(
         return null;
       }
       return projects.find((project) => project.id === activeProjectId) ?? null;
+    },
+
+    getProjectsForConnection: (connectionId: string) => {
+      const { projects } = get();
+      // Entries without connectionId are treated as 'local' (backward compatible)
+      return projects.filter((project) => (project.connectionId || 'local') === connectionId);
     },
 
   }), { name: 'projects-store' })

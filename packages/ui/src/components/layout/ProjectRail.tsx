@@ -1,5 +1,6 @@
 import React from 'react';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { useNotificationBadgeStore, type NotificationKind } from '@/stores/useNotificationBadgeStore';
 import { useNotificationCenterStore, type NotificationCenterKind } from '@/stores/useNotificationCenterStore';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -281,7 +282,9 @@ const SortableProjectIcon = React.memo<SortableProjectIconProps>((props) => {
 SortableProjectIcon.displayName = 'SortableProjectIcon';
 
 export const ProjectRail: React.FC = () => {
-  const projects = useProjectsStore((state) => state.projects);
+  const activeConnectionId = useConnectionsStore((state) => state.activeConnectionId);
+  const getProjectsForConnection = useProjectsStore((state) => state.getProjectsForConnection);
+  const projects = getProjectsForConnection(activeConnectionId);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const reorderProjects = useProjectsStore((state) => state.reorderProjects);

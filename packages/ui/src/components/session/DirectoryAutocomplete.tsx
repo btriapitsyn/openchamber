@@ -11,6 +11,7 @@ interface DirectoryAutocompleteProps {
   visible: boolean;
   onClose: () => void;
   showHidden: boolean;
+  connectionId?: string;
 }
 
 export interface DirectoryAutocompleteHandle {
@@ -24,6 +25,7 @@ export const DirectoryAutocomplete = React.forwardRef<DirectoryAutocompleteHandl
   visible,
   onClose,
   showHidden,
+  connectionId,
 }, ref) => {
   const [suggestions, setSuggestions] = React.useState<FilesystemEntry[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -134,7 +136,7 @@ export const DirectoryAutocomplete = React.forwardRef<DirectoryAutocompleteHandl
     let cancelled = false;
     setLoading(true);
 
-    opencodeClient.listLocalDirectory(parentDir)
+    opencodeClient.listLocalDirectory(parentDir, { connectionId })
       .then((entries) => {
         if (cancelled) return;
         
@@ -174,7 +176,7 @@ export const DirectoryAutocomplete = React.forwardRef<DirectoryAutocompleteHandl
     return () => {
       cancelled = true;
     };
-  }, [visible, debouncedInputValue, getParentDir, getPartialName, showHidden, fuzzyScore]);
+  }, [visible, debouncedInputValue, getParentDir, getPartialName, showHidden, fuzzyScore, connectionId]);
 
   // Scroll selected item into view
   React.useEffect(() => {
