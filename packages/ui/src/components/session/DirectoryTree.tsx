@@ -69,6 +69,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const { requestAccess, startAccessing, isDesktop } = useFileSystemAccess();
   const previousShowHidden = React.useRef(showHidden);
+  const hasLoadedOnce = React.useRef(false);
 
   const stripTrailingSlashes = React.useCallback((value: string | null | undefined) => {
     if (!value) {
@@ -112,6 +113,20 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     }
     return Boolean(effectiveRoot);
   }, [isRootReady, effectiveRoot]);
+
+  // Reset tree state when connectionId changes so stale local data is never
+  // visible while the remote home directory is being resolved.
+  const prevConnectionId = React.useRef(connectionId);
+  React.useEffect(() => {
+    if (prevConnectionId.current !== connectionId) {
+      prevConnectionId.current = connectionId;
+      setHomeDirectory('');
+      setDirectories([]);
+      setExpandedPaths(new Set());
+      setIsLoading(true);
+      hasLoadedOnce.current = false;
+    }
+  }, [connectionId]);
 
   React.useEffect(() => {
     if (!rootReady) {
@@ -192,6 +207,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         }
       } catch (error) {
         console.warn('Failed to resolve filesystem home directory:', error);
+      }
+
+      // For remote connections, don't fall back to local system info —
+      // that would resolve the local home directory instead of the remote one.
+      if (connectionId && connectionId !== 'local') {
+        return;
       }
 
       try {
@@ -396,6 +417,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
     } catch {
+      // For remote connections, don't fall back to the local API client —
+      // that would silently show local files instead of remote ones.
+      if (connectionId && connectionId !== 'local') {
+        return [];
+      }
+
       try {
 
         const tempClient = opencodeClient.getApiClient();
@@ -433,8 +460,6 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
       }
     }
   }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady, connectionId]);
-
-  const hasLoadedOnce = React.useRef(false);
 
   const loadInitialDirectories = React.useCallback(async () => {
     if (!rootReady || !effectiveRoot) {

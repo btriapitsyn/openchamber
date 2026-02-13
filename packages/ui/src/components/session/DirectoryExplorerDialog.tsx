@@ -95,8 +95,11 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     try {
       let resolvedPath = targetPath;
       let projectId: string | undefined;
+      const isRemote = activeConnectionId && activeConnectionId !== 'local';
 
-      if (isDesktop) {
+      // Skip native desktop file access for remote connections — the path
+      // lives on the remote server, not the local filesystem.
+      if (isDesktop && !isRemote) {
         const accessResult = await requestAccess(targetPath);
         if (!accessResult.success) {
           toast.error('Unable to access directory', {
@@ -260,6 +263,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     </div>
   );
 
+  // For remote connections, don't pass local homeDirectory as rootDirectory.
+  // Let DirectoryTree fetch the remote home directory itself — omit isRootReady
+  // so DirectoryTree derives readiness from its own resolved effectiveRoot.
+  const isRemoteConnection = activeConnectionId && activeConnectionId !== 'local';
+  const treeRootDirectory = isRemoteConnection ? undefined : (isHomeReady ? homeDirectory : null);
+  const treeIsRootReady = isRemoteConnection ? undefined : isHomeReady;
+
   const treeSection = (
     <div className="flex-1 min-h-0 rounded-xl border border-border/40 bg-sidebar/70 overflow-hidden flex flex-col">
       <DirectoryTree
@@ -270,8 +280,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         className="flex-1 min-h-0 sm:min-h-[280px] sm:max-h-[380px]"
         selectionBehavior="deferred"
         showHidden={showHidden}
-        rootDirectory={isHomeReady ? homeDirectory : null}
-        isRootReady={isHomeReady}
+        rootDirectory={treeRootDirectory}
+        isRootReady={treeIsRootReady}
         connectionId={activeConnectionId}
       />
     </div>
@@ -293,8 +303,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           className="flex-1 min-h-0"
           selectionBehavior="deferred"
           showHidden={showHidden}
-          rootDirectory={isHomeReady ? homeDirectory : null}
-          isRootReady={isHomeReady}
+          rootDirectory={treeRootDirectory}
+          isRootReady={treeIsRootReady}
           alwaysShowActions
           connectionId={activeConnectionId}
         />

@@ -381,6 +381,35 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     result.activeProjectId = candidate.activeProjectId;
   }
 
+  // Parse connections array
+  if (Array.isArray(candidate.connections)) {
+    const connections: DesktopSettings['connections'] = [];
+    const seenIds = new Set<string>();
+
+    for (const entry of candidate.connections) {
+      if (!entry || typeof entry !== 'object') continue;
+      const conn = entry as Record<string, unknown>;
+
+      const id = typeof conn.id === 'string' ? conn.id.trim() : '';
+      const label = typeof conn.label === 'string' ? conn.label.trim() : '';
+      const baseUrl = typeof conn.baseUrl === 'string' ? conn.baseUrl.trim() : '';
+      const type = conn.type === 'local' || conn.type === 'remote' ? conn.type : null;
+
+      if (!id || !label || !baseUrl || !type) continue;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
+      connections.push({ id, label, baseUrl, type });
+    }
+
+    if (connections.length > 0) {
+      result.connections = connections;
+    }
+  }
+  if (typeof candidate.activeConnectionId === 'string' && candidate.activeConnectionId.length > 0) {
+    result.activeConnectionId = candidate.activeConnectionId;
+  }
+
   if (Array.isArray(candidate.approvedDirectories)) {
     result.approvedDirectories = candidate.approvedDirectories.filter(
       (entry): entry is string => typeof entry === 'string' && entry.length > 0

@@ -227,6 +227,23 @@ class OpencodeService {
   }
 
   /**
+   * Returns the base URL for a connection. For local connections, returns the
+   * default base URL. For remote connections, returns the cached absolute URL.
+   */
+  getBaseUrlForConnection(connectionId: string): string {
+    if (!connectionId || connectionId === 'local') {
+      return this.baseUrl;
+    }
+    const cached = this.connectionBaseUrls.get(connectionId);
+    if (cached) {
+      return cached;
+    }
+    // Trigger client creation which also caches the base URL
+    this.resolveClient(connectionId);
+    return this.connectionBaseUrls.get(connectionId) ?? this.baseUrl;
+  }
+
+  /**
    * Clean up cached resources for a removed connection.
    * Should be called when a connection is removed from the store.
    */
@@ -2166,9 +2183,10 @@ class OpencodeService {
     const client = this.resolveClient(connectionId);
     
     try {
+      // path param is relative within directory; use '.' to list the directory itself
       const response = await client.file.list({
-        path: path || '.',
-        directory: path
+        path: '.',
+        directory: path || undefined
       });
 
       if (!response.data) {
@@ -2357,8 +2375,17 @@ class OpencodeService {
     const client = this.resolveClient(connectionId);
 
     try {
-      // Try path.get first (most reliable for current directory info)
+      // Use path.get to retrieve the remote server's home directory.
+      // The Path object has both `home` (user home) and `directory` (CWD);
+      // prefer `home` so the directory browser can navigate to any project.
       const pathResponse = await client.path.get();
+      if (pathResponse.data?.home) {
+        const home = String(pathResponse.data.home);
+        if (home && home.length > 0) {
+          return home;
+        }
+      }
+      // Fall back to CWD if home is not available
       if (pathResponse.data?.directory) {
         const directory = String(pathResponse.data.directory);
         if (directory && directory.length > 0) {

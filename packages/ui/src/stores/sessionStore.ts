@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Session } from "@opencode-ai/sdk/v2";
+import type { OpencodeClient } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { getSafeStorage } from "./utils/safeStorage";
 import type { WorktreeMetadata } from "@/types/worktree";
@@ -402,7 +403,8 @@ export const useSessionStore = create<SessionStore>()(
 
                         const canonicalDirectoryCache = new Map<string, string>();
 
-                        const resolveCanonicalDirectory = async (directory: string): Promise<string> => {
+                        const resolveCanonicalDirectory = async (directory: string, client?: OpencodeClient): Promise<string> => {
+                            const effectiveClient = client ?? apiClient;
                             const normalizedRequested = normalizePath(directory) ?? directory;
                             const cacheKey = normalizedRequested;
                             const cached = canonicalDirectoryCache.get(cacheKey);
@@ -411,7 +413,7 @@ export const useSessionStore = create<SessionStore>()(
                             }
 
                             try {
-                                const info = await apiClient.path.get({ directory });
+                                const info = await effectiveClient.path.get({ directory });
                                 const canonical = normalizePath((info.data as { directory?: string | null } | null)?.directory ?? null);
                                 const resolved = canonical ?? normalizedRequested;
                                 canonicalDirectoryCache.set(cacheKey, resolved);
@@ -482,11 +484,12 @@ export const useSessionStore = create<SessionStore>()(
                             });
                         };
 
-                        const fetchSessionsForDirectory = async (directoryParam?: string | null): Promise<Session[]> => {
+                        const fetchSessionsForDirectory = async (directoryParam?: string | null, client?: OpencodeClient): Promise<Session[]> => {
+                            const effectiveClient = client ?? apiClient;
                             const requestedDirectory = normalizePath(directoryParam);
                             if (!requestedDirectory) {
                                 try {
-                                    const response = await apiClient.session.list(undefined);
+                                    const response = await effectiveClient.session.list(undefined);
                                     return Array.isArray(response.data) ? response.data : [];
                                 } catch (error) {
                                     console.debug("Failed to list sessions (global):", error);
@@ -494,10 +497,10 @@ export const useSessionStore = create<SessionStore>()(
                                 }
                             }
 
-                            const canonicalDirectory = await resolveCanonicalDirectory(requestedDirectory);
+                            const canonicalDirectory = await resolveCanonicalDirectory(requestedDirectory, client);
 
                             const listFromDirectoryScopedCall = async (): Promise<Session[]> => {
-                                const response = await apiClient.session.list({ directory: requestedDirectory });
+                                const response = await effectiveClient.session.list({ directory: requestedDirectory });
                                 return Array.isArray(response.data) ? response.data : [];
                             };
 
@@ -517,7 +520,7 @@ export const useSessionStore = create<SessionStore>()(
                             if (sessions.length === 0) {
                                 usedGlobalFallback = true;
                                 try {
-                                    const globalResponse = await apiClient.session.list(undefined);
+                                    const globalResponse = await effectiveClient.session.list(undefined);
                                     const globalList = Array.isArray(globalResponse.data) ? globalResponse.data : [];
                                     sessions = filterSessionsToDirectory(globalList, canonicalDirectory, {
                                         includeDescendants,
@@ -551,7 +554,7 @@ export const useSessionStore = create<SessionStore>()(
 
                         const legacyRoot = activeProjectRoot ?? normalizedFallback ?? null;
 
-                        const projectEntries: Array<Pick<ProjectEntry, 'id' | 'path'>> = projectsStore.projects.length > 0
+                        const projectEntries: Array<Pick<ProjectEntry, 'id' | 'path' | 'connectionId'>> = projectsStore.projects.length > 0
                             ? projectsStore.projects
                             : (legacyRoot ? [{ id: 'legacy', path: legacyRoot }] : []);
 
@@ -578,7 +581,7 @@ export const useSessionStore = create<SessionStore>()(
                         }
 
                         const projectResults: ProjectSessionResult[] = await Promise.all(
-                            projectEntries.map(async (project: Pick<ProjectEntry, 'id' | 'path'>) => {
+                            projectEntries.map(async (project: Pick<ProjectEntry, 'id' | 'path' | 'connectionId'>) => {
                                 const normalizedProject = normalizePath(project.path);
                                 if (!normalizedProject) {
                                     return {
@@ -590,8 +593,17 @@ export const useSessionStore = create<SessionStore>()(
                                     };
                                 }
 
-                                const isGitRepo = await checkIsGitRepository(normalizedProject).catch(() => false);
-                                const parentSessions = await fetchSessionsForDirectory(normalizedProject || null);
+                                const projectConnectionId = project.connectionId ?? 'local';
+                                const isRemote = projectConnectionId !== 'local';
+                                const projectClient = isRemote
+                                    ? opencodeClient.getClientForConnection(projectConnectionId)
+                                    : apiClient;
+
+                                // Skip local git operations for remote projects
+                                const isGitRepo = isRemote
+                                    ? false
+                                    : await checkIsGitRepository(normalizedProject).catch(() => false);
+                                const parentSessions = await fetchSessionsForDirectory(normalizedProject || null, projectClient);
                                 vscodeDebugLog("projectSessions", {
                                     projectId: project.id,
                                     projectPath: normalizedProject,
@@ -626,7 +638,7 @@ export const useSessionStore = create<SessionStore>()(
 
                                         if (candidates.size > 0) {
                                             const results = await Promise.allSettled(
-                                                Array.from(candidates).map((path) => fetchSessionsForDirectory(path))
+                                                Array.from(candidates).map((path) => fetchSessionsForDirectory(path, projectClient))
                                             );
                                             results.forEach((result) => {
                                                 if (result.status === "fulfilled" && Array.isArray(result.value)) {

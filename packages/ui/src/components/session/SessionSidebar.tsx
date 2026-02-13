@@ -784,6 +784,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   React.useEffect(() => {
     let cancelled = false;
     const normalizedProjects = projects
+      .filter((project) => (project.connectionId ?? 'local') === activeConnectionId)
       .map((project) => ({ id: project.id, path: normalizePath(project.path) }))
       .filter((project): project is { id: string; path: string } => Boolean(project.path));
 
@@ -820,7 +821,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [projects]);
+  }, [projects, activeConnectionId]);
 
   const childrenMap = React.useMemo(() => {
     const map = new Map<string, Session[]>();
@@ -1122,7 +1123,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       setArchivedSessionsByDirectory((prev) => {
         const next = new Map(prev);
-        const archivedSet = next.get(sessionDirectory) ?? new Set<string>();
+        const existingSet = next.get(sessionDirectory);
+        const archivedSet = existingSet ? new Set(existingSet) : new Set<string>();
         archivedSet.add(session.id);
         next.set(sessionDirectory, archivedSet);
         return next;
@@ -1182,6 +1184,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
+    // When remote connection is active, always use the web directory browser
+    if (activeConnectionId !== 'local') {
+      sessionEvents.requestDirectoryDialog();
+      return;
+    }
+
     if (!tauriIpcAvailable) {
       sessionEvents.requestDirectoryDialog();
       return;
@@ -1207,7 +1215,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         console.error('Desktop: Error selecting directory:', error);
         toast.error('Failed to select directory');
       });
-  }, [addProject, tauriIpcAvailable]);
+  }, [activeConnectionId, addProject, tauriIpcAvailable]);
 
   const toggleParent = React.useCallback((sessionId: string) => {
     setExpandedParents((prev) => {
@@ -1473,6 +1481,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const normalizedProjects = React.useMemo(() => {
     return projects
+      .filter((project) => (project.connectionId ?? 'local') === activeConnectionId)
       .map((project) => ({
         ...project,
         normalizedPath: normalizePath(project.path),
@@ -1483,7 +1492,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         label?: string;
         normalizedPath: string;
       }>;
-  }, [projects]);
+  }, [projects, activeConnectionId]);
 
   // Compute a dependency that changes when any project's git branch changes
   const projectGitBranchesKey = React.useMemo(() => {
