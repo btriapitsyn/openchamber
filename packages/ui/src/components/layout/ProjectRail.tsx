@@ -217,7 +217,7 @@ const ProjectIcon = React.memo<ProjectIconProps>(({ projectId, badge, label, pro
             />
           )}
           {/* Running spinner for active working projects */}
-          {!isIdle && !isActive && !hasNotification && !notificationCenterKind && (
+          {!isIdle && !hasNotification && !notificationCenterKind && (
             <div className="absolute -top-0.5 -right-0.5" aria-label="Running">
               <GridLoader size="xs" className="text-[var(--color-primary)]" />
             </div>
@@ -294,6 +294,7 @@ export const ProjectRail: React.FC = () => {
   const notificationCenterNotifications = useNotificationCenterStore((state) => state.notifications);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
   const sessionAttentionStates = useSessionStore((state) => state.sessionAttentionStates);
+  const sessionStatus = useSessionStore((state) => state.sessionStatus);
   
   // Context menu state - combined to prevent out-of-sync issues
   const [contextMenu, setContextMenu] = React.useState<{ projectId: string; x: number; y: number } | null>(null);
@@ -335,6 +336,13 @@ export const ProjectRail: React.FC = () => {
       const key = directory.replace(/\/+$/, '');
       if (sessions.length > 0) {
         result[key] = sessions.every((s) => {
+          // Check sessionStatus first - if busy or retry, not idle
+          const status = sessionStatus?.get(s.id);
+          if (status?.type === 'busy' || status?.type === 'retry') {
+            return false;
+          }
+          
+          // Also check sessionAttentionStates
           const state = sessionAttentionStates.get(s.id);
           // No attention state yet means the session hasn't reported activity — treat as idle
           return !state || state.status === 'idle';
@@ -342,7 +350,7 @@ export const ProjectRail: React.FC = () => {
       }
     }
     return result;
-  }, [sessionsByDirectory, sessionAttentionStates]);
+  }, [sessionsByDirectory, sessionAttentionStates, sessionStatus]);
 
   // Derive per-project notification center status from notifications
   // Use the 'worst' kind as the status: error > stuck > completed
