@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { checkIsGitRepository, getGitBranches } from '@/lib/gitApi';
+import { resolveRootTrackingRemote } from '@/lib/worktrees/worktreeCreate';
 
 export type WorktreeBaseOption = {
   value: string;
@@ -37,6 +38,18 @@ export interface BranchSelectorState {
   isLoading: boolean;
   isGitRepository: boolean | null;
 }
+
+const parseTrackingRemote = (tracking: string | null | undefined): string | null => {
+  const value = String(tracking || '').trim().replace(/^remotes\//, '');
+  if (!value) {
+    return null;
+  }
+  const slashIndex = value.indexOf('/');
+  if (slashIndex <= 0) {
+    return null;
+  }
+  return value.slice(0, slashIndex);
+};
 
 /**
  * Hook to load available git branches for a directory.
@@ -77,6 +90,9 @@ export function useBranchOptions(directory: string | null): BranchSelectorState 
         const branchData = await getGitBranches(directory).catch(() => null);
         if (cancelled) return;
 
+        const rootTrackingRemote = await resolveRootTrackingRemote(directory).catch(() => null);
+        if (cancelled) return;
+
         const worktreeBaseOptions: WorktreeBaseOption[] = [];
         const headLabel = branchData?.current ? `Current (HEAD: ${branchData.current})` : 'Current (HEAD)';
         worktreeBaseOptions.push({ value: 'HEAD', label: headLabel, group: 'special' });
@@ -84,6 +100,17 @@ export function useBranchOptions(directory: string | null): BranchSelectorState 
         if (branchData) {
           const localBranches = branchData.all
             .filter((branchName) => !branchName.startsWith('remotes/'))
+            .filter((branchName) => {
+              if (!rootTrackingRemote) {
+                return true;
+              }
+              const tracking = branchData.branches?.[branchName]?.tracking;
+              const trackingRemote = parseTrackingRemote(tracking);
+              if (!trackingRemote) {
+                return true;
+              }
+              return trackingRemote === rootTrackingRemote;
+            })
             .sort((a, b) => a.localeCompare(b));
           localBranches.forEach((branchName) => {
             worktreeBaseOptions.push({ value: branchName, label: branchName, group: 'local' });
@@ -92,6 +119,16 @@ export function useBranchOptions(directory: string | null): BranchSelectorState 
           const remoteBranches = branchData.all
             .filter((branchName) => branchName.startsWith('remotes/'))
             .map((branchName) => branchName.replace(/^remotes\//, ''))
+            .filter((branchName) => {
+              if (!rootTrackingRemote) {
+                return true;
+              }
+              const slashIndex = branchName.indexOf('/');
+              if (slashIndex <= 0) {
+                return false;
+              }
+              return branchName.slice(0, slashIndex) === rootTrackingRemote;
+            })
             .sort((a, b) => a.localeCompare(b));
           remoteBranches.forEach((branchName) => {
             worktreeBaseOptions.push({ value: branchName, label: branchName, group: 'remote' });

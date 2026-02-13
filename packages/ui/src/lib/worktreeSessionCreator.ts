@@ -10,15 +10,15 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { checkIsGitRepository, getGitBranches, getGitStatus } from '@/lib/gitApi';
+import { checkIsGitRepository } from '@/lib/gitApi';
 import { generateBranchName } from '@/lib/git/branchNameGenerator';
 import { getRootBranch, getWorktreeStatus } from '@/lib/worktrees/worktreeStatus';
 import { getWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import {
-  createSdkWorktree,
   removeProjectWorktree,
   type ProjectRef,
 } from '@/lib/worktrees/worktreeManager';
+import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { startConfigUpdate, finishConfigUpdate } from '@/lib/configUpdate';
 
 const normalizePath = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/, '') || value;
@@ -50,66 +50,6 @@ const resolveProjectRef = (directory: string): ProjectRef | null => {
 
 // Track if we're currently creating a worktree session
 let isCreatingWorktreeSession = false;
-
-const parseTrackingRef = (tracking: string | null | undefined): { remote: string; branch: string } | null => {
-  const value = String(tracking || '').trim().replace(/^remotes\//, '');
-  if (!value) {
-    return null;
-  }
-
-  const separatorIndex = value.indexOf('/');
-  if (separatorIndex <= 0 || separatorIndex >= value.length - 1) {
-    return null;
-  }
-
-  return {
-    remote: value.slice(0, separatorIndex),
-    branch: value.slice(separatorIndex + 1),
-  };
-};
-
-const resolveRootTrackingRemote = async (projectDirectory: string): Promise<string | null> => {
-  const rootBranch = await getRootBranch(projectDirectory);
-
-  try {
-    const branchState = await getGitBranches(projectDirectory);
-    const tracking = branchState.branches?.[rootBranch]?.tracking || null;
-    const parsed = parseTrackingRef(tracking);
-    if (parsed?.remote) {
-      return parsed.remote;
-    }
-  } catch {
-    // ignore and fallback to status tracking
-  }
-
-  try {
-    const status = await getGitStatus(projectDirectory);
-    const parsed = parseTrackingRef(status.tracking);
-    if (parsed?.remote) {
-      return parsed.remote;
-    }
-  } catch {
-    // ignore
-  }
-
-  return null;
-};
-
-const resolveWorktreeUpstreamDefaults = async (
-  projectDirectory: string,
-  localBranch: string
-): Promise<{ setUpstream: true; upstreamRemote: string; upstreamBranch: string } | null> => {
-  const remote = await resolveRootTrackingRemote(projectDirectory);
-  if (!remote || !localBranch) {
-    return null;
-  }
-
-  return {
-    setUpstream: true,
-    upstreamRemote: remote,
-    upstreamBranch: localBranch,
-  };
-};
 
 /**
  * Create a new session with an auto-generated worktree.
@@ -158,15 +98,11 @@ export async function createWorktreeSession(): Promise<{ id: string } | null> {
 
     const setupCommands = await getWorktreeSetupCommands(projectRef);
     const rootBranch = await getRootBranch(projectRef.path);
-    const upstreamDefaults = await resolveWorktreeUpstreamDefaults(projectRef.path, preferredName);
-    const metadata = await createSdkWorktree(projectRef, {
+    const metadata = await createWorktreeWithDefaults(projectRef, {
       preferredName,
       mode: 'new',
       branchName: preferredName,
       worktreeName: preferredName,
-      setUpstream: upstreamDefaults?.setUpstream,
-      upstreamRemote: upstreamDefaults?.upstreamRemote,
-      upstreamBranch: upstreamDefaults?.upstreamBranch,
       setupCommands,
     });
 
@@ -331,7 +267,7 @@ export async function createWorktreeOnly(): Promise<string | null> {
     const projectRef: ProjectRef = { id: activeProject.id, path: projectDirectory };
     const preferredName = generateBranchName();
     const setupCommands = await getWorktreeSetupCommands(projectRef);
-    const metadata = await createSdkWorktree(projectRef, {
+    const metadata = await createWorktreeWithDefaults(projectRef, {
       preferredName,
       mode: 'new',
       branchName: preferredName,
@@ -416,16 +352,15 @@ export async function createWorktreeSessionForBranch(
 
     const setupCommands = await getWorktreeSetupCommands(projectRef);
     const rootBranch = await getRootBranch(projectRef.path);
-    const upstreamDefaults = await resolveWorktreeUpstreamDefaults(projectRef.path, branchName);
-    const metadata = await createSdkWorktree(projectRef, {
+    const metadata = await createWorktreeWithDefaults(projectRef, {
       preferredName: branchName,
       mode: 'existing',
       existingBranch: options?.existingBranch || branchName,
       branchName,
       worktreeName: options?.worktreeName || branchName,
-      setUpstream: options?.setUpstream ?? upstreamDefaults?.setUpstream,
-      upstreamRemote: options?.upstreamRemote || upstreamDefaults?.upstreamRemote,
-      upstreamBranch: options?.upstreamBranch || upstreamDefaults?.upstreamBranch,
+      setUpstream: options?.setUpstream,
+      upstreamRemote: options?.upstreamRemote,
+      upstreamBranch: options?.upstreamBranch,
       ensureRemoteName: options?.ensureRemoteName,
       ensureRemoteUrl: options?.ensureRemoteUrl,
       setupCommands,
@@ -607,18 +542,16 @@ export async function createWorktreeSessionForNewBranch(
 
     const setupCommands = await getWorktreeSetupCommands(projectRef);
     const rootBranch = await getRootBranch(projectRef.path);
-    const upstreamDefaults = await resolveWorktreeUpstreamDefaults(projectRef.path, base);
-
     try {
-      const metadata = await createSdkWorktree(projectRef, {
+      const metadata = await createWorktreeWithDefaults(projectRef, {
         preferredName: base,
         mode: 'new',
         branchName: base,
         worktreeName: options?.worktreeName || base,
         startRef: start,
-        setUpstream: options?.setUpstream ?? upstreamDefaults?.setUpstream,
-        upstreamRemote: options?.upstreamRemote || upstreamDefaults?.upstreamRemote,
-        upstreamBranch: options?.upstreamBranch || upstreamDefaults?.upstreamBranch,
+        setUpstream: options?.setUpstream,
+        upstreamRemote: options?.upstreamRemote,
+        upstreamBranch: options?.upstreamBranch,
         ensureRemoteName: options?.ensureRemoteName,
         ensureRemoteUrl: options?.ensureRemoteUrl,
         setupCommands,

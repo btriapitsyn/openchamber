@@ -28,7 +28,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { createWorktreeSessionForNewBranchExact } from '@/lib/worktreeSessionCreator';
-import { validateSdkWorktree } from '@/lib/worktrees/worktreeManager';
+import { validateWorktreeCreate } from '@/lib/worktrees/worktreeManager';
 import { getRemotes } from '@/lib/gitApi';
 import type {
   GitHubPullRequestContextResult,
@@ -256,7 +256,7 @@ export function GitHubPullRequestPickerDialog({
 
     const results = await Promise.all(
       unknown.map(async (head) => {
-        const validation = await validateSdkWorktree(projectRef, {
+        const validation = await validateWorktreeCreate(projectRef, {
           mode: 'new',
           branchName: head,
           worktreeName: head,
@@ -396,7 +396,7 @@ export function GitHubPullRequestPickerDialog({
     }
 
     const startRef = `${remoteName}/${preferredBranch}`;
-    const validation = await validateSdkWorktree(projectRef, {
+    const validation = await validateWorktreeCreate(projectRef, {
       mode: 'new',
       branchName: preferredBranch,
       worktreeName: preferredBranch,

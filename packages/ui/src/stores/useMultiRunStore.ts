@@ -3,7 +3,8 @@ import { devtools } from 'zustand/middleware';
 import type { CreateMultiRunParams, CreateMultiRunResult } from '@/types/multirun';
 import { opencodeClient } from '@/lib/opencode/client';
 import { saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
-import { createSdkWorktree, type ProjectRef } from '@/lib/worktrees/worktreeManager';
+import type { ProjectRef } from '@/lib/worktrees/worktreeManager';
+import { createWorktreeWithDefaults } from '@/lib/worktrees/worktreeCreate';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { useSessionStore } from './sessionStore';
@@ -156,9 +157,8 @@ export const useMultiRunStore = create<MultiRunStore>()(
             const preferredName = count > 1
               ? generateWorktreeNameSeed(groupSlug, `${modelSlug}/${index}`)
               : generateWorktreeNameSeed(groupSlug, modelSlug);
-
             try {
-              const worktreeMetadata = await createSdkWorktree(project, {
+              const worktreeMetadata = await createWorktreeWithDefaults(project, {
                 preferredName,
                 mode: 'new',
                 branchName: preferredName,

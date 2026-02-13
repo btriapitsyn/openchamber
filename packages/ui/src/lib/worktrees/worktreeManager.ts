@@ -141,7 +141,7 @@ export async function listProjectWorktrees(project: ProjectRef): Promise<Worktre
   });
 }
 
-export type CreateSdkWorktreeArgs = {
+export type CreateWorktreeArgs = {
   preferredName?: string;
   setupCommands?: string[];
   mode?: 'new' | 'existing';
@@ -156,7 +156,7 @@ export type CreateSdkWorktreeArgs = {
   ensureRemoteUrl?: string;
 };
 
-export async function createSdkWorktree(project: ProjectRef, args: CreateSdkWorktreeArgs): Promise<WorktreeMetadata> {
+export async function createWorktree(project: ProjectRef, args: CreateWorktreeArgs): Promise<WorktreeMetadata> {
   const projectDirectory = project.path;
   const payload = toCreatePayload(args, projectDirectory);
 
@@ -181,7 +181,7 @@ export async function createSdkWorktree(project: ProjectRef, args: CreateSdkWork
   return metadata;
 }
 
-export async function validateSdkWorktree(project: ProjectRef, args: CreateSdkWorktreeArgs): Promise<GitWorktreeValidationResult> {
+export async function validateWorktreeCreate(project: ProjectRef, args: CreateWorktreeArgs): Promise<GitWorktreeValidationResult> {
   const projectDirectory = project.path;
   const payload = toCreatePayload(args, projectDirectory);
   return git.worktree.validate(projectDirectory, payload);
