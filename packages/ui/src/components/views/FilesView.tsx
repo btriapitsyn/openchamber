@@ -540,6 +540,30 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const effectiveSelectedPath = React.useMemo(() => selectedPath ?? openPaths[0] ?? null, [openPaths, selectedPath]);
   const selectedFile = React.useMemo(() => (effectiveSelectedPath ? toFileNode(effectiveSelectedPath) : null), [effectiveSelectedPath, toFileNode]);
 
+  // Editor tabs horizontal scroll fades
+  const editorTabsScrollRef = React.useRef<HTMLDivElement>(null);
+  const [editorTabsOverflow, setEditorTabsOverflow] = React.useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+  const updateEditorTabsOverflow = React.useCallback(() => {
+    const el = editorTabsScrollRef.current;
+    if (!el) return;
+    setEditorTabsOverflow({
+      left: el.scrollLeft > 2,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+    });
+  }, []);
+  React.useEffect(() => {
+    const el = editorTabsScrollRef.current;
+    if (!el) return;
+    updateEditorTabsOverflow();
+    el.addEventListener('scroll', updateEditorTabsOverflow, { passive: true });
+    const ro = new ResizeObserver(updateEditorTabsOverflow);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', updateEditorTabsOverflow);
+      ro.disconnect();
+    };
+  }, [updateEditorTabsOverflow, openFiles.length]);
+
   const [childrenByDir, setChildrenByDir] = React.useState<Record<string, FileNode[]>>({});
   const loadedDirsRef = React.useRef<Set<string>>(new Set());
   const inFlightDirsRef = React.useRef<Set<string>>(new Set());
@@ -1894,48 +1918,60 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             )
           ) : (
             openFiles.length > 0 ? (
-              <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
-                {openFiles.map((file) => {
-                  const isActive = selectedFile?.path === file.path;
-                  return (
-                    <div
-                      key={file.path}
-                      title={getDisplayPath(file.path)}
-                      className={cn(
-                        'group inline-flex items-center gap-1 rounded-md border px-2 py-1 typography-ui-label transition-colors whitespace-nowrap',
-                        isActive
-                          ? 'bg-[var(--interactive-selection)] border-[var(--primary-muted)] text-[var(--interactive-selection-foreground)]'
-                          : 'bg-transparent border-[var(--interactive-border)] text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]'
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!isActive) {
-                            void handleSelectFile(file);
-                          }
-                        }}
-                        className="max-w-[12rem] truncate text-left"
-                      >
-                        {file.name}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleCloseFile(file.path);
-                        }}
+              <div className="relative min-w-0 flex-1">
+                {editorTabsOverflow.left && (
+                  <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 z-10 bg-gradient-to-r from-background to-transparent" />
+                )}
+                {editorTabsOverflow.right && (
+                  <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 z-10 bg-gradient-to-l from-background to-transparent" />
+                )}
+                <div
+                  ref={editorTabsScrollRef}
+                  className="flex min-w-0 items-center gap-1 overflow-x-auto scrollbar-none"
+                  style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                >
+                  {openFiles.map((file) => {
+                    const isActive = selectedFile?.path === file.path;
+                    return (
+                      <div
+                        key={file.path}
+                        title={getDisplayPath(file.path)}
                         className={cn(
-                          'rounded-sm p-0.5 text-[var(--surface-muted-foreground)] hover:text-[var(--surface-foreground)]',
-                          !isActive && 'opacity-0 group-hover:opacity-100'
+                          'group inline-flex items-center gap-1 rounded-md border px-2 py-1 typography-ui-label transition-colors whitespace-nowrap',
+                          isActive
+                            ? 'bg-[var(--interactive-selection)] border-[var(--primary-muted)] text-[var(--interactive-selection-foreground)]'
+                            : 'bg-transparent border-[var(--interactive-border)] text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]'
                         )}
-                        aria-label={`Close ${file.name}`}
                       >
-                        <RiCloseLine size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isActive) {
+                              void handleSelectFile(file);
+                            }
+                          }}
+                          className="max-w-[12rem] truncate text-left"
+                        >
+                          {file.name}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleCloseFile(file.path);
+                          }}
+                          className={cn(
+                            'rounded-sm p-0.5 text-[var(--surface-muted-foreground)] hover:text-[var(--surface-foreground)]',
+                            !isActive && 'opacity-0 group-hover:opacity-100'
+                          )}
+                          aria-label={`Close ${file.name}`}
+                        >
+                          <RiCloseLine size={14} />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
               <div className="typography-ui-label font-medium truncate">Select a file</div>
