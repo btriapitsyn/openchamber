@@ -557,7 +557,7 @@ export const MainLayout: React.FC = () => {
                             <Header />
                             <div className="flex flex-1 overflow-hidden">
                                 <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
-                                    <SessionSidebar />
+                                    <SessionSidebar hideProjectSelector />
                                 </Sidebar>
                                 <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
                                     <div className="flex flex-1 min-h-0 overflow-hidden">

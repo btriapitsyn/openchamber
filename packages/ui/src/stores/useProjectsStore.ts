@@ -23,6 +23,7 @@ interface ProjectsStore {
   setActiveProject: (id: string) => void;
   setActiveProjectIdOnly: (id: string) => void;
   renameProject: (id: string, label: string) => void;
+  updateProjectMeta: (id: string, meta: { label?: string; icon?: string | null; color?: string | null }) => void;
   reorderProjects: (fromIndex: number, toIndex: number) => void;
   validateProjectPath: (path: string) => ProjectPathValidationResult;
   synchronizeFromSettings: (settings: DesktopSettings) => void;
@@ -72,7 +73,8 @@ const deriveProjectLabel = (path: string): string => {
     return 'Root';
   }
   const segments = normalized.split('/').filter(Boolean);
-  return segments[segments.length - 1] || normalized;
+  const raw = segments[segments.length - 1] || normalized;
+  return raw.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 };
 
 const createProjectId = (): string => {
@@ -373,6 +375,26 @@ export const useProjectsStore = create<ProjectsStore>()(
       const nextProjects = projects.map((project) =>
         project.id === id ? { ...project, label: trimmed } : project
       );
+      set({ projects: nextProjects });
+      persistProjects(nextProjects, activeProjectId);
+    },
+
+    updateProjectMeta: (id: string, meta: { label?: string; icon?: string | null; color?: string | null }) => {
+      if (vscodeWorkspace) {
+        return;
+      }
+      const { projects, activeProjectId } = get();
+      const nextProjects = projects.map((project) => {
+        if (project.id !== id) return project;
+        const updated = { ...project };
+        if (meta.label !== undefined) {
+          const trimmed = meta.label.trim();
+          if (trimmed) updated.label = trimmed;
+        }
+        if (meta.icon !== undefined) updated.icon = meta.icon;
+        if (meta.color !== undefined) updated.color = meta.color;
+        return updated;
+      });
       set({ projects: nextProjects });
       persistProjects(nextProjects, activeProjectId);
     },

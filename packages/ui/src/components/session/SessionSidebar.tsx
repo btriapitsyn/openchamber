@@ -525,6 +525,7 @@ interface SessionSidebarProps {
   onSessionSelected?: (sessionId: string) => void;
   allowReselect?: boolean;
   hideDirectoryControls?: boolean;
+  hideProjectSelector?: boolean;
   showOnlyMainWorkspace?: boolean;
 }
 
@@ -533,6 +534,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   onSessionSelected,
   allowReselect = false,
   hideDirectoryControls = false,
+  hideProjectSelector = false,
   showOnlyMainWorkspace = false,
 }) => {
   const [editingId, setEditingId] = React.useState<string | null>(null);
@@ -1390,16 +1392,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [availableWorktreesByProject, getSessionsByDirectory, sessionsByDirectory, isVSCode],
   );
 
+  // Keep last-known repo status to avoid UI jiggling during project switch
+  const lastRepoStatusRef = React.useRef(false);
+  if (activeProjectId && projectRepoStatus.has(activeProjectId)) {
+    lastRepoStatusRef.current = Boolean(projectRepoStatus.get(activeProjectId));
+  }
+
   const projectSections = React.useMemo(() => {
     return normalizedProjects.map((project) => {
       const projectSessions = getSessionsForProject(project);
       const worktreesForProject = availableWorktreesByProject.get(project.normalizedPath) ?? [];
+      const isRepo = projectRepoStatus.has(project.id)
+        ? Boolean(projectRepoStatus.get(project.id))
+        : lastRepoStatusRef.current;
       const groups = buildGroupedSessions(
         projectSessions,
         project.normalizedPath,
         worktreesForProject,
         projectRootBranches.get(project.id) ?? null,
-        Boolean(projectRepoStatus.get(project.id)),
+        isRepo,
       );
       return {
         project,
@@ -1434,6 +1445,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
     [activeProjectForHeader, projectRepoStatus],
   );
+  // Only flip to false once the new project's status is actually resolved (present in map)
+  const stableActiveProjectIsRepo = activeProjectForHeader && projectRepoStatus.has(activeProjectForHeader.id)
+    ? activeProjectIsRepo
+    : lastRepoStatusRef.current;
   const reserveHeaderActionsSpace = Boolean(activeProjectForHeader);
   const useMobileNotesPanel = mobileVariant || deviceInfo.isMobile;
 
@@ -2056,7 +2071,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       };
       const allGroupSessions = collectGroupSessions(group.sessions);
       const normalizedGroupDirectory = normalizePath(group.directory ?? null);
-      const isGitProject = Boolean(projectId && projectRepoStatus.get(projectId));
+      const isGitProject = projectId && projectRepoStatus.has(projectId)
+        ? Boolean(projectRepoStatus.get(projectId))
+        : lastRepoStatusRef.current;
       const showBranchSubtitle = !group.isMain && isBranchDifferentFromLabel(group.branch, group.label);
       const isActiveGroup = Boolean(
         normalizedGroupDirectory
@@ -2282,7 +2299,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       )}
     >
       {!hideDirectoryControls && (
-        <div className="select-none pl-3.5 pr-2 py-1.5 flex-shrink-0 border-b border-border/60">
+        <div className={cn('select-none pl-3.5 pr-2 flex-shrink-0 border-b border-border/60', hideProjectSelector ? 'py-1' : 'py-1.5')}>
+          {!hideProjectSelector && (
           <div className="flex h-8 items-center justify-between gap-2">
             <DropdownMenu
               onOpenChange={(open) => {
@@ -2403,11 +2421,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               <RiFolderAddLine className="h-4.5 w-4.5" />
             </button>
           </div>
+          )}
           {reserveHeaderActionsSpace ? (
             <div className="mt-1 h-8 pl-1">
               {activeProjectForHeader ? (
               <div className="inline-flex h-8 items-center gap-1.5 rounded-md pl-0 pr-1">
-              {activeProjectIsRepo ? (
+              {stableActiveProjectIsRepo ? (
                 <>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2512,7 +2531,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   <DropdownMenuContent align="start" className="w-[340px] p-0">
                     <ProjectNotesTodoPanel
                       projectRef={activeProjectRefForHeader}
-                      canCreateWorktree={activeProjectIsRepo}
+                      canCreateWorktree={stableActiveProjectIsRepo}
                       onActionComplete={() => setProjectNotesPanelOpen(false)}
                     />
                   </DropdownMenuContent>
@@ -2749,7 +2768,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         >
           <ProjectNotesTodoPanel
             projectRef={activeProjectRefForHeader}
-            canCreateWorktree={activeProjectIsRepo}
+            canCreateWorktree={stableActiveProjectIsRepo}
             onActionComplete={() => setProjectNotesPanelOpen(false)}
             className="p-0"
           />

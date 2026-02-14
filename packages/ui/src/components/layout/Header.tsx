@@ -4,6 +4,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { toast } from '@/components/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { AnimatedTabs } from '@/components/ui/animated-tabs';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiSettings3Line, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiFolderAddLine, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiMore2Fill, RiPencilLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiSettings3Line, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
@@ -22,11 +23,12 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { useDeviceInfo } from '@/lib/device';
-import { cn, hasModifier } from '@/lib/utils';
+import { cn, hasModifier, formatDirectoryName } from '@/lib/utils';
 import { useDiffFileCount } from '@/components/views/DiffView';
 import { McpDropdown, McpDropdownContent } from '@/components/mcp/McpDropdown';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
@@ -51,8 +53,11 @@ import type { UsageWindow } from '@/types';
 import type { GitHubAuthStatus } from '@/lib/api/types';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
-import { isDesktopShell } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, isVSCodeRuntime } from '@/lib/desktop';
+import { sessionEvents } from '@/lib/sessionEvents';
 import { desktopHostsGet } from '@/lib/desktopHosts';
+import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
+import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP } from '@/lib/projectMeta';
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -131,6 +136,12 @@ export const Header: React.FC = () => {
   const loadQuotaSettings = useQuotaStore((state) => state.loadSettings);
   const setQuotaDisplayMode = useQuotaStore((state) => state.setDisplayMode);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
+  const projects = useProjectsStore((state) => state.projects);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
+  const setActiveProject = useProjectsStore((state) => state.setActiveProject);
+  const addProject = useProjectsStore((state) => state.addProject);
+  const removeProject = useProjectsStore((state) => state.removeProject);
+
   const { isMobile } = useDeviceInfo();
   const diffFileCount = useDiffFileCount();
   const updateAvailable = useUpdateStore((state) => state.available);
@@ -210,6 +221,144 @@ export const Header: React.FC = () => {
       setDesktopServicesTab('usage');
     }
   }, [desktopServicesTab, isDesktopApp]);
+
+  // --- Project tabs state (desktop, non-vscode only) ---
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const showProjectTabs = !isMobile && !isVSCode && projects.length > 0;
+  const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
+
+  const [editingProject, setEditingProject] = React.useState<{ id: string; name: string; path: string; icon?: string | null; color?: string | null } | null>(null);
+  const [projectTabMenuOpen, setProjectTabMenuOpen] = React.useState<string | null>(null);
+  const projectTabsScrollRef = React.useRef<HTMLDivElement>(null);
+  const projectTabsContainerRef = React.useRef<HTMLDivElement>(null);
+  const projectTabIndicatorRef = React.useRef<HTMLDivElement>(null);
+  const projectTabRefs = React.useRef<Map<string, HTMLElement>>(new Map());
+  const [projectTabsReady, setProjectTabsReady] = React.useState(false);
+  const [projectTabsOverflow, setProjectTabsOverflow] = React.useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+
+  const formatProjectTabLabel = React.useCallback((project: { label?: string; path: string }): string => {
+    return project.label?.trim()
+      || formatDirectoryName(project.path, homeDirectory)
+      || project.path;
+  }, [homeDirectory]);
+
+  const updateProjectTabsOverflow = React.useCallback(() => {
+    const el = projectTabsScrollRef.current;
+    if (!el) return;
+    setProjectTabsOverflow({
+      left: el.scrollLeft > 2,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+    });
+  }, []);
+
+  const updateProjectTabIndicator = React.useCallback(() => {
+    const container = projectTabsContainerRef.current;
+    const indicator = projectTabIndicatorRef.current;
+    if (!container || !indicator || !activeProjectId) return;
+    const activeTab = projectTabRefs.current.get(activeProjectId);
+    if (!activeTab) {
+      indicator.style.opacity = '0';
+      return;
+    }
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = activeTab.getBoundingClientRect();
+    indicator.style.transform = `translateX(${tabRect.left - containerRect.left}px)`;
+    indicator.style.width = `${tabRect.width}px`;
+    indicator.style.opacity = '1';
+  }, [activeProjectId]);
+
+  // Track metadata that affects tab width (label, icon) to re-measure indicator
+  const projectTabMeta = React.useMemo(
+    () => projects.map((p) => `${p.id}:${p.label ?? ''}:${p.icon ?? ''}`).join('|'),
+    [projects]
+  );
+
+  React.useLayoutEffect(() => {
+    if (!showProjectTabs) return;
+    updateProjectTabIndicator();
+    if (!projectTabsReady) {
+      setProjectTabsReady(true);
+    }
+  }, [showProjectTabs, updateProjectTabIndicator, projectTabsReady, activeProjectId, projectTabMeta]);
+
+  React.useEffect(() => {
+    if (!showProjectTabs) return;
+    const ro = new ResizeObserver(() => updateProjectTabIndicator());
+    const container = projectTabsContainerRef.current;
+    if (container) ro.observe(container);
+    // Also observe the active tab element for size changes
+    if (activeProjectId) {
+      const activeTab = projectTabRefs.current.get(activeProjectId);
+      if (activeTab) ro.observe(activeTab);
+    }
+    return () => ro.disconnect();
+  }, [showProjectTabs, updateProjectTabIndicator, activeProjectId]);
+
+  React.useEffect(() => {
+    const el = projectTabsScrollRef.current;
+    if (!el || !showProjectTabs) return;
+    updateProjectTabsOverflow();
+    el.addEventListener('scroll', updateProjectTabsOverflow, { passive: true });
+    const ro = new ResizeObserver(updateProjectTabsOverflow);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener('scroll', updateProjectTabsOverflow);
+      ro.disconnect();
+    };
+  }, [showProjectTabs, updateProjectTabsOverflow, projects.length]);
+
+  const handleAddProject = React.useCallback(() => {
+    if (!tauriIpcAvailable || !isDesktopLocalOriginActive()) {
+      sessionEvents.requestDirectoryDialog();
+      return;
+    }
+    import('@/lib/desktop')
+      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+      .then((result) => {
+        if (result.success && result.path) {
+          const added = addProject(result.path, { id: result.projectId });
+          if (!added) {
+            toast.error('Failed to add project', {
+              description: 'Please select a valid directory.',
+            });
+          }
+        } else if (result.error && result.error !== 'Directory selection cancelled') {
+          toast.error('Failed to select directory', {
+            description: result.error,
+          });
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to select directory:', error);
+        toast.error('Failed to select directory');
+      });
+  }, [addProject, tauriIpcAvailable]);
+
+  const updateProjectMeta = useProjectsStore((state) => state.updateProjectMeta);
+
+  const handleOpenProjectEdit = React.useCallback((projectId: string) => {
+    const project = projects.find((p) => p.id === projectId);
+    if (!project) return;
+    setEditingProject({
+      id: project.id,
+      name: formatProjectTabLabel(project),
+      path: project.path,
+      icon: project.icon,
+      color: project.color,
+    });
+    setProjectTabMenuOpen(null);
+  }, [projects, formatProjectTabLabel]);
+
+  const handleSaveProjectEdit = React.useCallback((data: { label: string; icon: string | null; color: string | null }) => {
+    if (!editingProject) return;
+    updateProjectMeta(editingProject.id, data);
+    setEditingProject(null);
+  }, [editingProject, updateProjectMeta]);
+
+  const handleCloseProject = React.useCallback((projectId: string) => {
+    removeProject(projectId);
+    setProjectTabMenuOpen(null);
+  }, [removeProject]);
 
   const refreshCurrentInstanceLabel = React.useCallback(async () => {
     if (typeof window === 'undefined' || !isDesktopApp) {
@@ -750,19 +899,12 @@ export const Header: React.FC = () => {
     const isDiffTab = tab.icon === 'diff';
     const Icon = isDiffTab ? null : (tab.icon as RemixiconComponentType);
     const isChatTab = tab.id === 'chat';
-    const showContextTooltip = isChatTab && !isMobile && contextUsage && contextUsage.totalTokens > 0;
 
     const renderIcon = (iconSize: number) => {
       if (isDiffTab) {
         return <DiffIcon size={iconSize} />;
       }
       return Icon ? <Icon size={iconSize} /> : null;
-    };
-
-    const formatTokens = (tokens: number) => {
-      if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-      if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
-      return tokens.toFixed(1).replace(/\.0$/, '');
     };
 
     const tabButton = (
@@ -791,22 +933,6 @@ export const Header: React.FC = () => {
           </>
         )}
 
-        {showContextTooltip && (
-          <span className="header-tab-badge">
-            <div className={cn(
-              'app-region-no-drag flex items-center gap-1.5 text-muted-foreground/60 select-none typography-micro',
-            )}>
-              <span className={cn(
-                'font-medium',
-                contextUsage.percentage >= 90 ? 'text-status-error' :
-                  contextUsage.percentage >= 75 ? 'text-status-warning' : 'text-status-success'
-              )}>
-                {Math.min(contextUsage.percentage, 999).toFixed(1)}%
-              </span>
-            </div>
-          </span>
-        )}
-
         {tab.badge !== undefined && tab.badge > 0 && (
           <span className="header-tab-badge typography-micro text-status-info font-medium">
             {tab.badge}
@@ -814,24 +940,6 @@ export const Header: React.FC = () => {
         )}
       </button>
     );
-
-    if (showContextTooltip) {
-      const safeOutputLimit = typeof contextUsage.outputLimit === 'number' ? Math.max(contextUsage.outputLimit, 0) : 0;
-      return (
-        <Tooltip key={tab.id} delayDuration={1000}>
-          <TooltipTrigger asChild>
-            {tabButton}
-          </TooltipTrigger>
-          <TooltipContent>
-            <div className="space-y-0.5">
-              <p className="typography-micro leading-tight">Used tokens: {formatTokens(contextUsage.totalTokens)}</p>
-              <p className="typography-micro leading-tight">Context limit: {formatTokens(contextUsage.contextLimit)}</p>
-              <p className="typography-micro leading-tight">Output limit: {formatTokens(safeOutputLimit)}</p>
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      );
-    }
 
     return <React.Fragment key={tab.id}>{tabButton}</React.Fragment>;
   };
@@ -851,18 +959,158 @@ export const Header: React.FC = () => {
         type="button"
         onClick={handleOpenSessionSwitcher}
         aria-label="Open sessions"
-        className={`${headerIconButtonClass} mr-2`}
+        className={`${headerIconButtonClass} mr-2 shrink-0`}
       >
         <RiLayoutLeftLine className="h-5 w-5" />
       </button>
 
-      <div className="flex items-center gap-1 p-1 bg-background/50 rounded-lg">
-        {tabs.map((tab) => renderTab(tab))}
-      </div>
+      {/* Project tabs */}
+      {showProjectTabs && (
+        <div className="app-region-no-drag flex items-center min-w-0 flex-1 mr-3">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleAddProject}
+                className="app-region-no-drag mr-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Add project"
+              >
+                <RiFolderAddLine className="h-4.5 w-4.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Add project</TooltipContent>
+          </Tooltip>
+          <div className="relative min-w-0 flex-1">
+            {/* Left fade */}
+            {projectTabsOverflow.left && (
+              <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 z-20 bg-gradient-to-r from-[var(--surface-background)] to-transparent rounded-l-lg" />
+            )}
+            {/* Right fade */}
+            {projectTabsOverflow.right && (
+              <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-6 z-20 bg-gradient-to-l from-[var(--surface-background)] to-transparent rounded-r-lg" />
+            )}
+            <div
+              ref={projectTabsScrollRef}
+              className="overflow-x-auto scrollbar-none"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              <div
+                ref={projectTabsContainerRef}
+                className="relative flex items-center h-9 gap-0.5 rounded-lg p-0.5"
+              >
+              {/* Sliding indicator */}
+              <div
+                ref={projectTabIndicatorRef}
+                className={cn(
+                  'absolute top-0.5 bottom-0.5 rounded-md border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm',
+                  projectTabsReady ? 'transition-[transform,width] duration-200 ease-out' : null
+                )}
+                style={{ width: 0, transform: 'translateX(0)', opacity: 0 }}
+              />
 
-      <div className="flex-1" />
+              {projects.map((project) => {
+                const isActive = project.id === activeProjectId;
+                const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+                const projectColorVar = project.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
 
-      <div className="flex items-center gap-1 pr-3">
+                return (
+                  <div
+                    key={project.id}
+                    ref={(el) => {
+                      if (el) { projectTabRefs.current.set(project.id, el); }
+                      else { projectTabRefs.current.delete(project.id); }
+                    }}
+                    role="tab"
+                    tabIndex={0}
+                    aria-selected={isActive}
+                    onClick={() => {
+                      if (project.id !== activeProjectId) {
+                        setActiveProject(project.id);
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setProjectTabMenuOpen(project.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        if (project.id !== activeProjectId) {
+                          setActiveProject(project.id);
+                        }
+                      }
+                    }}
+                    className={cn(
+                      'relative z-10 flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1.5 text-[0.9375rem] font-medium transition-colors duration-150 whitespace-nowrap group',
+                      isActive
+                        ? 'text-foreground'
+                        : 'text-muted-foreground hover:text-foreground',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
+                    )}
+                    title={project.path}
+                  >
+                    {ProjectIcon && (
+                      <ProjectIcon
+                        className="h-4 w-4 shrink-0"
+                        style={projectColorVar ? { color: projectColorVar } : undefined}
+                      />
+                    )}
+                    <span>{formatProjectTabLabel(project)}</span>
+                    <DropdownMenu
+                      open={projectTabMenuOpen === project.id}
+                      onOpenChange={(open) => setProjectTabMenuOpen(open ? project.id : null)}
+                    >
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            'inline-flex h-4 w-4 items-center justify-center rounded-sm transition-opacity',
+                            'text-muted-foreground hover:text-foreground',
+                            isActive || projectTabMenuOpen === project.id
+                              ? 'opacity-60 hover:opacity-100'
+                              : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'
+                          )}
+                          aria-label="Project options"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <RiMore2Fill className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="min-w-[160px]">
+                        <DropdownMenuItem
+                          onClick={() => handleOpenProjectEdit(project.id)}
+                          className="gap-2"
+                        >
+                          <RiPencilLine className="h-4 w-4" />
+                          Edit project
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => handleCloseProject(project.id)}
+                          className="text-destructive focus:text-destructive gap-2"
+                        >
+                          <RiCloseLine className="h-4 w-4" />
+                          Close project
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                );
+              })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!showProjectTabs && (
+        <div className="flex items-center gap-1 p-1 bg-background/50 rounded-lg">
+          {tabs.map((tab) => renderTab(tab))}
+        </div>
+      )}
+
+      {!showProjectTabs && <div className="flex-1" />}
+
+      <div className="flex items-center gap-1 pr-3 shrink-0">
         <OpenInAppButton directory={openDirectory} className="mr-1" />
         <DropdownMenu
             open={isDesktopServicesOpen}
@@ -1595,12 +1843,25 @@ export const Header: React.FC = () => {
   );
 
   return (
-    <header
-      ref={headerRef}
-      className={headerClassName}
-      style={{ ['--padding-scale' as string]: '1' } as React.CSSProperties}
-    >
-      {isMobile ? renderMobile() : renderDesktop()}
-    </header>
+    <>
+      <header
+        ref={headerRef}
+        className={headerClassName}
+        style={{ ['--padding-scale' as string]: '1' } as React.CSSProperties}
+      >
+        {isMobile ? renderMobile() : renderDesktop()}
+      </header>
+      {editingProject && (
+        <ProjectEditDialog
+          open={Boolean(editingProject)}
+          onOpenChange={(open) => { if (!open) setEditingProject(null); }}
+          projectName={editingProject.name}
+          projectPath={editingProject.path}
+          initialIcon={editingProject.icon}
+          initialColor={editingProject.color}
+          onSave={handleSaveProjectEdit}
+        />
+      )}
+    </>
   );
 };

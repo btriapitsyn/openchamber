@@ -486,6 +486,8 @@ export interface ProjectEntry {
   id: string;
   path: string;
   label?: string;
+  icon?: string | null;
+  color?: string | null;
   addedAt?: number;
   lastOpenedAt?: number;
   sidebarCollapsed?: boolean;
