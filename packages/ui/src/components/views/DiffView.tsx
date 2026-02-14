@@ -44,7 +44,61 @@ type FileEntry = GitStatus['files'][number] & {
     isNew: boolean;
 };
 
-type DiffData = { original: string; modified: string };
+type DiffData = { original: string; modified: string; truncated?: boolean };
+
+// Threshold (in total bytes of original + modified) above which we show
+// a "click to load" gate instead of auto-rendering the diff.
+// This prevents the diff DOM from growing large enough to freeze the tab.
+const LARGE_DIFF_BYTE_THRESHOLD = 150_000; // ~150 KB of combined text
+
+const isLargeDiff = (diff: DiffData): boolean =>
+    diff.original.length + diff.modified.length > LARGE_DIFF_BYTE_THRESHOLD;
+
+const TruncatedBanner: React.FC = () => (
+    <div className="flex items-center gap-2 px-3 py-1.5 text-xs rounded-md bg-warning/10 text-warning border border-warning/20 mx-auto max-w-fit">
+        <span className="font-medium">Large file</span>
+        <span className="text-muted-foreground">— content was trimmed server-side to keep the page responsive</span>
+    </div>
+);
+
+interface LargeDiffGateProps {
+    diff: DiffData;
+    children: React.ReactNode;
+}
+
+const LargeDiffGate: React.FC<LargeDiffGateProps> = ({ diff, children }) => {
+    const [forceShow, setForceShow] = React.useState(false);
+    const large = isLargeDiff(diff);
+
+    if (!large || forceShow) {
+        return (
+            <>
+                {diff.truncated && <TruncatedBanner />}
+                {children}
+            </>
+        );
+    }
+
+    const totalKB = Math.round((diff.original.length + diff.modified.length) / 1024);
+
+    return (
+        <div className="flex flex-col items-center justify-center gap-3 py-12 px-4 text-center">
+            <div className="typography-ui-label font-semibold text-foreground">
+                Large diff ({totalKB} KB)
+            </div>
+            <div className="typography-meta text-muted-foreground max-w-sm">
+                Rendering this diff may slow down the page. {diff.truncated ? 'Content was also trimmed server-side.' : ''}
+            </div>
+            <button
+                type="button"
+                className="typography-ui-label text-primary hover:underline"
+                onClick={() => setForceShow(true)}
+            >
+                Show anyway
+            </button>
+        </div>
+    );
+};
 
 type DiffTabViewMode = 'single' | 'stacked';
 
@@ -449,15 +503,17 @@ const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({
 
     return (
         <div className="w-full" style={{ contain: 'layout' }}>
-            <PierreDiffViewer
-                original={diff.original}
-                modified={diff.modified}
-                language={language}
-                fileName={filePath}
-                renderSideBySide={renderSideBySide}
-                wrapLines={wrapLines}
-                layout="inline"
-            />
+            <LargeDiffGate diff={diff}>
+                <PierreDiffViewer
+                    original={diff.original}
+                    modified={diff.modified}
+                    language={language}
+                    fileName={filePath}
+                    renderSideBySide={renderSideBySide}
+                    wrapLines={wrapLines}
+                    layout="inline"
+                />
+            </LargeDiffGate>
         </div>
     );
 });
@@ -502,14 +558,16 @@ const SingleDiffViewer = React.memo<SingleDiffViewerProps>(({
 
     return (
         <div className="absolute inset-0" style={{ contain: 'size layout' }}>
-            <PierreDiffViewer
-                original={diff.original}
-                modified={diff.modified}
-                language={language}
-                fileName={filePath}
-                renderSideBySide={renderSideBySide}
-                wrapLines={wrapLines}
-            />
+            <LargeDiffGate diff={diff}>
+                <PierreDiffViewer
+                    original={diff.original}
+                    modified={diff.modified}
+                    language={language}
+                    fileName={filePath}
+                    renderSideBySide={renderSideBySide}
+                    wrapLines={wrapLines}
+                />
+            </LargeDiffGate>
         </div>
     );
 });
@@ -537,7 +595,7 @@ const DiffViewerEntry = React.memo<DiffViewerEntryProps>(({
 
     const diffData = React.useMemo(() => {
         if (!cachedDiff) return null;
-        return { original: cachedDiff.original, modified: cachedDiff.modified };
+        return { original: cachedDiff.original, modified: cachedDiff.modified, truncated: cachedDiff.truncated };
     }, [cachedDiff]);
 
     if (!diffData) return null;
@@ -588,6 +646,9 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 
     const [isExpanded, setIsExpanded] = React.useState(!defaultCollapsed);
     const [hasBeenVisible, setHasBeenVisible] = React.useState(false);
+    // Track whether the section is currently in/near the viewport.
+    // Expanded diffs that scroll far off-screen are unmounted to free DOM/memory.
+    const [isNearViewport, setIsNearViewport] = React.useState(true);
     const [diffRetryNonce, setDiffRetryNonce] = React.useState(0);
     const [diffLoadError, setDiffLoadError] = React.useState<string | null>(null);
     const [isLoading, setIsLoading] = React.useState(false);
@@ -599,7 +660,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 
     const diffData = React.useMemo(() => {
         if (!cachedDiff) return null;
-        return { original: cachedDiff.original, modified: cachedDiff.modified };
+        return { original: cachedDiff.original, modified: cachedDiff.modified, truncated: cachedDiff.truncated };
     }, [cachedDiff]);
 
     const setSectionRef = React.useCallback((node: HTMLDivElement | null) => {
@@ -619,28 +680,34 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     }, [file.path, onSelect]);
 
     React.useEffect(() => {
-        if (!isExpanded || hasBeenVisible) return;
+        if (!isExpanded) return;
         const target = sectionRef.current;
         if (!target) return;
 
         if (!scrollRootRef.current || typeof IntersectionObserver === 'undefined') {
             setHasBeenVisible(true);
+            setIsNearViewport(true);
             return;
         }
 
+        // Use a generous margin so diffs stay mounted a bit before/after scrolling past.
         const observer = new IntersectionObserver(
             (entries) => {
-                if (entries.some((entry) => entry.isIntersecting)) {
-                    setHasBeenVisible(true);
-                    observer.disconnect();
+                for (const entry of entries) {
+                    if (entry.isIntersecting) {
+                        setHasBeenVisible(true);
+                        setIsNearViewport(true);
+                    } else {
+                        setIsNearViewport(false);
+                    }
                 }
             },
-            { root: scrollRootRef.current, rootMargin: '200px 0px', threshold: 0.1 }
+            { root: scrollRootRef.current, rootMargin: '600px 0px', threshold: 0 }
         );
 
         observer.observe(target);
         return () => observer.disconnect();
-    }, [hasBeenVisible, isExpanded, scrollRootRef]);
+    }, [isExpanded, scrollRootRef]);
 
     React.useEffect(() => {
         if (!isExpanded || !hasBeenVisible) return;
@@ -673,6 +740,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                 setDiff(directory, file.path, {
                     original: response.original ?? '',
                     modified: response.modified ?? '',
+                    truncated: response.truncated,
                 });
                 setIsLoading(false);
             } catch (error) {
@@ -777,7 +845,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                                 Loading diff…
                             </div>
                         ) : null}
-                        {isExpanded && diffData ? (
+                        {isExpanded && hasBeenVisible && isNearViewport && diffData ? (
                             <InlineDiffViewer
                                 filePath={file.path}
                                 diff={diffData}
@@ -1024,6 +1092,7 @@ export const DiffView: React.FC = () => {
                 setDiff(effectiveDirectory, selectedFile, {
                     original: response.original ?? '',
                     modified: response.modified ?? '',
+                    truncated: response.truncated,
                 });
             } catch (error) {
                 if (cancelled) return;

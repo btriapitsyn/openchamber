@@ -10,11 +10,6 @@ on:
         description: 'Version to release (e.g., 0.1.0)'
         required: true
         type: string
-      dry_run:
-        description: 'Dry run (skip publishing)'
-        required: false
-        default: false
-        type: boolean
 
 env:
   CARGO_INCREMENTAL: 0
@@ -119,47 +114,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Install Apple Certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          # Create temporary keychain
-          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-
-          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-          # Import certificate
-          echo "$APPLE_CERTIFICATE" | base64 --decode > $RUNNER_TEMP/certificate.p12
-          security import $RUNNER_TEMP/certificate.p12 \
-            -P "$APPLE_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 \
-            -k "$KEYCHAIN_PATH"
-
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
-      - name: Set up notarization credentials
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-        run: |
-          # Validate secrets are set
-          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_TEAM_ID" ] || [ -z "$APPLE_PASSWORD" ]; then
-            echo "Error: Missing Apple notarization credentials"
-            exit 1
-          fi
-
-          xcrun notarytool store-credentials "openchamber-notarize" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_PASSWORD"
-
       - name: Build UI package
         run: bun run --cwd packages/ui build
 
@@ -167,54 +121,6 @@ jobs:
         # Note: We use inline commands instead of desktop:build to pass architecture-specific --target flag
         # This enables cross-compilation for both arm64 and x86_64 from the same runner
         run: bun run --cwd packages/desktop build && bun run --cwd packages/desktop tauri build --target ${{ matrix.target }}
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
-      - name: Verify macOS entitlements
-        run: |
-          set -euo pipefail
-
-          BUNDLE_DIR="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos"
-
-          if [ ! -d "$BUNDLE_DIR" ]; then
-            echo "Error: bundle directory not found: $BUNDLE_DIR"
-            exit 1
-          fi
-
-          APP_PATH=$(find "$BUNDLE_DIR" -maxdepth 2 -name "*.app" -print -quit)
-          if [ -z "$APP_PATH" ]; then
-            echo "Error: .app bundle not found under $BUNDLE_DIR"
-            echo "Contents:"; ls -la "$BUNDLE_DIR"
-            exit 1
-          fi
-
-          echo "Verifying app bundle: $APP_PATH"
-          codesign -vv "$APP_PATH"
-
-          ENTITLEMENTS=$(codesign -d --entitlements :- "$APP_PATH" 2>&1 || true)
-          echo "$ENTITLEMENTS"
-
-          if echo "$ENTITLEMENTS" | grep -q "com.apple.security.app-sandbox"; then
-            echo "Error: app sandbox entitlement is present"
-            exit 1
-          fi
-
-          for key in \
-            com.apple.security.cs.allow-jit \
-            com.apple.security.cs.allow-unsigned-executable-memory \
-            com.apple.security.cs.disable-executable-page-protection \
-            com.apple.security.cs.disable-library-validation
-          do
-            if ! echo "$ENTITLEMENTS" | grep -q "<key>$key</key>"; then
-              echo "Error: required entitlement missing: $key"
-              exit 1
-            fi
-          done
 
       - name: Prepare release artifacts
         run: |
@@ -232,9 +138,8 @@ jobs:
             exit 1
           fi
 
-          # Copy tar.gz and signature for updater
+          # Copy tar.gz for updater
           TAR_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz"
-          SIG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz.sig"
 
           if ls $TAR_PATH 1> /dev/null 2>&1; then
             TAR_FILE=$(ls $TAR_PATH | head -n 1)
@@ -246,30 +151,12 @@ jobs:
             exit 1
           fi
 
-          if ls $SIG_PATH 1> /dev/null 2>&1; then
-            SIG_FILE=$(ls $SIG_PATH | head -n 1)
-            SIG_BASE=$(basename "$SIG_FILE")
-            SIG_NAME="${SIG_BASE%.tar.gz.sig}-${{ matrix.platform }}.tar.gz.sig"
-            cp "$SIG_FILE" "artifacts/$SIG_NAME"
-          else
-            echo "Error: signature file not found at $SIG_PATH"
-            exit 1
-          fi
-
           echo "Successfully prepared artifacts:"
           ls -lh artifacts/
 
       - name: Generate update manifest
         run: |
           VERSION="${{ needs.create-release.outputs.version }}"
-
-          # Find the signature file for this platform
-          SIG_FILE=$(find artifacts -name "*-${{ matrix.platform }}.tar.gz.sig" | head -1)
-          if [ -f "$SIG_FILE" ]; then
-            SIGNATURE=$(cat "$SIG_FILE")
-          else
-            SIGNATURE=""
-          fi
 
           # Find the tar.gz file name for this platform
           TAR_FILE=$(find artifacts -name "*-${{ matrix.platform }}.tar.gz" ! -name "*.sig" | head -1)
@@ -282,7 +169,6 @@ jobs:
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "${{ matrix.platform }}": {
-                "signature": "${SIGNATURE}",
                 "url": "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${TAR_NAME}"
               }
             }
@@ -299,7 +185,6 @@ jobs:
           files: |
             artifacts/*.dmg
             artifacts/*.tar.gz
-            artifacts/*.tar.gz.sig
             artifacts/latest-${{ matrix.platform }}.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -310,46 +195,6 @@ jobs:
           name: manifest-${{ matrix.platform }}
           path: artifacts/latest-${{ matrix.platform }}.json
           retention-days: 1
-
-  publish-npm:
-    needs: create-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build packages
-        run: bun run build
-
-      - name: Create npm tarball
-        working-directory: packages/web
-        run: npm pack
-
-      - name: Upload npm tarball to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.create-release.outputs.version }}
-          files: packages/web/*.tgz
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish to npm
-        if: ${{ github.event.inputs.dry_run != 'true' }}
-        working-directory: packages/web
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   combine-manifests:
     needs: [create-release, build-desktop-macos]
@@ -435,7 +280,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   finalize-release:
-    needs: [create-release, build-desktop-macos, publish-npm, combine-manifests]
+    needs: [create-release, build-desktop-macos, combine-manifests]
     runs-on: ubuntu-latest
     steps:
       - name: Publish release

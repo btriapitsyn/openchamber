@@ -26,6 +26,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -33,6 +40,7 @@ import { GridLoader } from '@/components/ui/grid-loader';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import {
   RiAddLine,
+  RiArchiveLine,
   RiArrowDownSLine,
   RiArrowRightSLine,
   RiCheckLine,
@@ -44,12 +52,14 @@ import {
   RiGitBranchLine,
   RiGitPullRequestLine,
   RiStickyNoteLine,
+  RiInboxUnarchiveLine,
   RiLinkUnlinkM,
 
   RiGithubLine,
 
   RiMore2Line,
   RiPencilAiLine,
+  RiSearchLine,
   RiShare2Line,
   RiShieldLine,
 } from '@remixicon/react';
@@ -61,6 +71,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
@@ -74,6 +85,9 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
 import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
+import { TranscriptSearch } from './TranscriptSearch';
+import { SidebarTodos } from './SidebarTodos';
+import { SidebarScratchPad } from './SidebarScratchPad';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -86,6 +100,7 @@ const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
 const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
 const PROJECT_ACTIVE_SESSION_STORAGE_KEY = 'oc.sessions.activeSessionByProject';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
+const ARCHIVED_SESSIONS_STORAGE_KEY = 'oc.sessions.archived';
 
 const formatDateLabel = (value: string | number) => {
   const targetDate = new Date(value);
@@ -456,10 +471,11 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                     e.stopPropagation();
                     onNewSession();
                   }}
-                  className="inline-flex h-6 w-6 items-center justify-center text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="inline-flex h-6 items-center gap-1 px-1.5 text-primary border border-primary/40 hover:bg-primary/10 flex-shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 typography-meta font-medium"
                   aria-label="New session"
                 >
-                  <RiAddLine className="h-4 w-4" />
+                  <RiAddLine className="h-3.5 w-3.5" />
+                  <span>New</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>
@@ -557,6 +573,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
+  const [searchPanelOpen, setSearchPanelOpen] = React.useState(false);
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
     try {
       const raw = getSafeStorage().getItem(GROUP_COLLAPSE_STORAGE_KEY);
@@ -610,6 +627,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [isProjectRenameInline, setIsProjectRenameInline] = React.useState(false);
   const [projectRenameDraft, setProjectRenameDraft] = React.useState('');
   const [projectRootBranches, setProjectRootBranches] = React.useState<Map<string, string>>(new Map());
+  const [archivedSessionsByDirectory, setArchivedSessionsByDirectory] = React.useState<Map<string, Set<string>>>(() => {
+    try {
+      const raw = getSafeStorage().getItem(ARCHIVED_SESSIONS_STORAGE_KEY);
+      if (!raw) {
+        return new Map();
+      }
+      const parsed = JSON.parse(raw) as Record<string, string[]>;
+      const next = new Map<string, Set<string>>();
+      Object.entries(parsed).forEach(([directory, sessionIds]) => {
+        if (Array.isArray(sessionIds)) {
+          next.set(directory, new Set(sessionIds.filter((item) => typeof item === 'string')));
+        }
+      });
+      return next;
+    } catch {
+      return new Map();
+    }
+  });
+  const [showArchivedView, setShowArchivedView] = React.useState(false);
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
   const persistCollapsedProjectsTimer = React.useRef<number | null>(null);
@@ -634,6 +670,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const gitDirectories = useGitStore((state) => state.directories);
+
+  const connections = useConnectionsStore((state) => state.connections);
+  const activeConnectionId = useConnectionsStore((state) => state.activeConnectionId);
+  const setActiveConnection = useConnectionsStore((state) => state.setActiveConnection);
+  const connectionHealth = useConnectionsStore((state) => state.connectionHealth);
 
   const sessions = useSessionStore((state) => state.sessions);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
@@ -726,9 +767,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return [...sessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
   }, [sessions]);
 
+  // Cleanup stale archived session IDs
+  React.useEffect(() => {
+    setArchivedSessionsByDirectory((prev) => {
+      const validSessionIds = new Set(sessions.map((s) => s.id));
+      let hasChanges = false;
+      const next = new Map<string, Set<string>>();
+      
+      prev.forEach((sessionIds, directory) => {
+        const validIds = Array.from(sessionIds).filter((id) => validSessionIds.has(id));
+        if (validIds.length !== sessionIds.size) {
+          hasChanges = true;
+        }
+        if (validIds.length > 0) {
+          next.set(directory, new Set(validIds));
+        }
+      });
+
+      return hasChanges ? next : prev;
+    });
+  }, [sessions]);
+
   React.useEffect(() => {
     let cancelled = false;
     const normalizedProjects = projects
+      .filter((project) => (project.connectionId ?? 'local') === activeConnectionId)
       .map((project) => ({ id: project.id, path: normalizePath(project.path) }))
       .filter((project): project is { id: string; path: string } => Boolean(project.path));
 
@@ -765,7 +828,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [projects]);
+  }, [projects, activeConnectionId]);
 
   const childrenMap = React.useMemo(() => {
     const map = new Map<string, Session[]>();
@@ -1012,6 +1075,26 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     async (session: Session) => {
       const descendants = collectDescendants(session.id);
 
+      // Clean up archived state if the session was archived
+      const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+      if (sessionDirectory) {
+        setArchivedSessionsByDirectory((prev) => {
+          const archivedSet = prev.get(sessionDirectory);
+          if (archivedSet && archivedSet.has(session.id)) {
+            const next = new Map(prev);
+            const nextSet = new Set(archivedSet);
+            nextSet.delete(session.id);
+            if (nextSet.size === 0) {
+              next.delete(sessionDirectory);
+            } else {
+              next.set(sessionDirectory, nextSet);
+            }
+            return next;
+          }
+          return prev;
+        });
+      }
+
       if (descendants.length === 0) {
 
         const success = await deleteSession(session.id);
@@ -1045,8 +1128,84 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     [collectDescendants, deleteSession, deleteSessions],
   );
 
+  const handleArchiveSession = React.useCallback(
+    (session: Session) => {
+      const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+      if (!sessionDirectory) {
+        toast.error('Cannot archive session without directory');
+        return;
+      }
+
+      setArchivedSessionsByDirectory((prev) => {
+        const next = new Map(prev);
+        const existingSet = next.get(sessionDirectory);
+        const archivedSet = existingSet ? new Set(existingSet) : new Set<string>();
+        archivedSet.add(session.id);
+        next.set(sessionDirectory, archivedSet);
+        return next;
+      });
+
+      toast.success('Session archived', {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            setArchivedSessionsByDirectory((prev) => {
+              const next = new Map(prev);
+              const archivedSet = next.get(sessionDirectory);
+              if (archivedSet) {
+                const nextSet = new Set(archivedSet);
+                nextSet.delete(session.id);
+                if (nextSet.size === 0) {
+                  next.delete(sessionDirectory);
+                } else {
+                  next.set(sessionDirectory, nextSet);
+                }
+              }
+              return next;
+            });
+          },
+        },
+      });
+    },
+    [], // toast and setState are stable
+  );
+
+  const handleUnarchiveSession = React.useCallback(
+    (session: Session) => {
+      const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+      if (!sessionDirectory) {
+        toast.error('Cannot unarchive session without directory');
+        return;
+      }
+
+      setArchivedSessionsByDirectory((prev) => {
+        const next = new Map(prev);
+        const archivedSet = next.get(sessionDirectory);
+        if (archivedSet) {
+          const nextSet = new Set(archivedSet);
+          nextSet.delete(session.id);
+          if (nextSet.size === 0) {
+            next.delete(sessionDirectory);
+          } else {
+            next.set(sessionDirectory, nextSet);
+          }
+        }
+        return next;
+      });
+
+      toast.success('Session restored');
+    },
+    [], // toast and setState are stable
+  );
+
   const handleOpenDirectoryDialog = React.useCallback(() => {
-    if (!tauriIpcAvailable || !isDesktopLocalOriginActive()) {
+    // When remote connection is active, always use the web directory browser
+    if (activeConnectionId !== 'local') {
+      sessionEvents.requestDirectoryDialog();
+      return;
+    }
+
+    if (!tauriIpcAvailable) {
       sessionEvents.requestDirectoryDialog();
       return;
     }
@@ -1071,7 +1230,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         console.error('Desktop: Error selecting directory:', error);
         toast.error('Failed to select directory');
       });
-  }, [addProject, tauriIpcAvailable]);
+  }, [activeConnectionId, addProject, tauriIpcAvailable]);
 
   const toggleParent = React.useCallback((sessionId: string) => {
     setExpandedParents((prev) => {
@@ -1108,9 +1267,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       availableWorktrees: WorktreeMetadata[],
       projectRootBranch: string | null,
       projectIsRepo: boolean,
+      showArchivedViewFilter: boolean,
     ) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
-      const sortedProjectSessions = [...projectSessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
+      
+      // Filter sessions based on archived view mode
+      const filteredSessions = projectSessions.filter((session) => {
+        const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+        if (!sessionDirectory) {
+          return !showArchivedViewFilter; // Sessions without a directory can't be archived (no directory key for storage)
+        }
+        const archivedSet = archivedSessionsByDirectory.get(sessionDirectory);
+        const isArchived = archivedSet && archivedSet.has(session.id);
+        
+        // Show only archived sessions when in archived view, otherwise show only active sessions
+        return showArchivedViewFilter ? isArchived : !isArchived;
+      });
+      
+      const sortedProjectSessions = [...filteredSessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
 
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
       const childrenMap = new Map<string, Session[]>();
@@ -1245,7 +1419,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       return groups;
     },
-    [homeDirectory, worktreeMetadata]
+    [homeDirectory, worktreeMetadata, archivedSessionsByDirectory]
   );
 
   const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
@@ -1308,8 +1482,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
   }, [collapsedGroups, safeStorage]);
 
+  React.useEffect(() => {
+    try {
+      const serialized: Record<string, string[]> = {};
+      archivedSessionsByDirectory.forEach((sessionIds, directory) => {
+        serialized[directory] = Array.from(sessionIds);
+      });
+      safeStorage.setItem(ARCHIVED_SESSIONS_STORAGE_KEY, JSON.stringify(serialized));
+    } catch {
+      // ignored
+    }
+  }, [archivedSessionsByDirectory, safeStorage]);
+
   const normalizedProjects = React.useMemo(() => {
     return projects
+      .filter((project) => (project.connectionId ?? 'local') === activeConnectionId)
       .map((project) => ({
         ...project,
         normalizedPath: normalizePath(project.path),
@@ -1320,7 +1507,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         label?: string;
         normalizedPath: string;
       }>;
-  }, [projects]);
+  }, [projects, activeConnectionId]);
 
   // Compute a dependency that changes when any project's git branch changes
   const projectGitBranchesKey = React.useMemo(() => {
@@ -1400,13 +1587,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         worktreesForProject,
         projectRootBranches.get(project.id) ?? null,
         Boolean(projectRepoStatus.get(project.id)),
+        showArchivedView,
       );
       return {
         project,
         groups,
       };
     });
-  }, [normalizedProjects, getSessionsForProject, buildGroupedSessions, availableWorktreesByProject, projectRootBranches, projectRepoStatus]);
+  }, [normalizedProjects, getSessionsForProject, buildGroupedSessions, availableWorktreesByProject, projectRootBranches, projectRepoStatus, showArchivedView]);
 
   const visibleProjectSections = React.useMemo(() => {
     if (projectSections.length === 0) {
@@ -1889,7 +2077,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                           toggleParent(session.id);
                         }
                       }}
-                      className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 flex-shrink-0 rounded-sm"
+                      className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 flex-shrink-0 rounded-sm"
                       aria-label={isExpanded ? 'Collapse subsessions' : 'Expand subsessions'}
                     >
                       {isExpanded ? (
@@ -1988,6 +2176,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         </DropdownMenuItem>
                       </>
                     )}
+                    {showArchivedView ? (
+                      <DropdownMenuItem onClick={() => handleUnarchiveSession(session)} className="[&>svg]:mr-1">
+                        <RiInboxUnarchiveLine className="mr-1 h-4 w-4" />
+                        Unarchive
+                      </DropdownMenuItem>
+                    ) : (
+                      <DropdownMenuItem onClick={() => handleArchiveSession(session)} className="[&>svg]:mr-1">
+                        <RiArchiveLine className="mr-1 h-4 w-4" />
+                        Archive
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive [&>svg]:mr-1"
                       onClick={() => handleDeleteSession(session)}
@@ -2026,10 +2225,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       handleShareSession,
       handleCopyShareUrl,
       handleUnshareSession,
+      handleArchiveSession,
+      handleUnarchiveSession,
       handleDeleteSession,
       copiedSessionId,
       mobileVariant,
       openMenuSessionId,
+      showArchivedView,
     ],
   );
 
@@ -2281,6 +2483,64 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         mobileVariant ? '' : 'bg-sidebar',
       )}
     >
+      {!hideDirectoryControls && connections.length > 1 && (
+        <div className="select-none pl-3.5 pr-2 pt-2 pb-1.5 flex-shrink-0 border-b border-border/60">
+          <Select value={activeConnectionId} onValueChange={setActiveConnection}>
+            <SelectTrigger size="sm" className="w-full h-7 justify-between">
+              <SelectValue>
+                {(() => {
+                  const activeConn = connections.find(conn => conn.id === activeConnectionId);
+                  if (!activeConn) return 'Select Connection';
+                  const health = connectionHealth[activeConn.id];
+                  const statusColor = 
+                    health?.status === 'connected' ? 'var(--status-success)' :
+                    health?.status === 'disconnected' ? 'var(--status-error)' :
+                    health?.status === 'checking' ? 'var(--status-warning)' :
+                    'var(--surface-muted-foreground)';
+                  return (
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: statusColor }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{activeConn.label}</span>
+                      {health?.latencyMs !== undefined && health.status === 'connected' && (
+                        <span className="text-muted-foreground">({health.latencyMs}ms)</span>
+                      )}
+                    </span>
+                  );
+                })()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {connections.map((conn) => {
+                const health = connectionHealth[conn.id];
+                const statusColor = 
+                  health?.status === 'connected' ? 'var(--status-success)' :
+                  health?.status === 'disconnected' ? 'var(--status-error)' :
+                  health?.status === 'checking' ? 'var(--status-warning)' :
+                  'var(--surface-muted-foreground)';
+                return (
+                  <SelectItem key={conn.id} value={conn.id}>
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: statusColor }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{conn.label}</span>
+                      {health?.latencyMs !== undefined && health.status === 'connected' && (
+                        <span className="text-muted-foreground">({health.latencyMs}ms)</span>
+                      )}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       {!hideDirectoryControls && (
         <div className="select-none pl-3.5 pr-2 py-1.5 flex-shrink-0 border-b border-border/60">
           <div className="flex h-8 items-center justify-between gap-2">
@@ -2358,9 +2618,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                             setIsProjectRenameInline(false);
                             return;
                           }
-                          if (event.key === ' ' || event.key === 'Enter') {
-                            event.stopPropagation();
-                          }
+                          event.stopPropagation();
                         }}
                       />
                       <button type="submit" className="inline-flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground">
@@ -2390,18 +2648,39 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <button
-              type="button"
-              onClick={handleOpenDirectoryDialog}
-              className={cn(
-                'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                    !isDesktopShellRuntime && 'bg-sidebar/60 hover:bg-sidebar',
-              )}
-              aria-label="Add project"
-              title="Add project"
-            >
-              <RiFolderAddLine className="h-4.5 w-4.5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleOpenDirectoryDialog}
+                className={cn(
+                  'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      !isDesktopShellRuntime && 'bg-sidebar/60 hover:bg-sidebar',
+                )}
+                aria-label="Add project"
+                title="Add project"
+              >
+                <RiFolderAddLine className="h-4.5 w-4.5" />
+              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setSearchPanelOpen((prev) => !prev)}
+                    className={cn(
+                      'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
+                      searchPanelOpen && 'bg-interactive-hover text-foreground',
+                      !isDesktopShellRuntime && 'bg-sidebar/60 hover:bg-sidebar',
+                    )}
+                    aria-label="Search transcripts"
+                  >
+                    <RiSearchLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  <p>Search transcripts</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
           </div>
           {reserveHeaderActionsSpace ? (
             <div className="mt-1 h-8 pl-1">
@@ -2477,6 +2756,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setShowArchivedView((prev) => !prev)}
+                    className={cn(
+                      headerActionButtonClass,
+                      showArchivedView && 'text-primary bg-primary/10'
+                    )}
+                    aria-label="Archived sessions"
+                  >
+                    <RiArchiveLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}>
+                  <p>{showArchivedView ? 'Show active sessions' : 'Show archived sessions'}</p>
+                </TooltipContent>
+              </Tooltip>
                 </>
               ) : null}
               {useMobileNotesPanel ? (
@@ -2525,7 +2822,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         </div>
       )}
 
-      <ScrollableOverlay
+      {searchPanelOpen ? (
+        <TranscriptSearch
+          onClose={() => setSearchPanelOpen(false)}
+          onSessionSelected={onSessionSelected}
+        />
+      ) : (
+        <ScrollableOverlay
         outerClassName="flex-1 min-h-0"
         className={cn('space-y-1 pb-1 pl-2.5 pr-1', mobileVariant ? '' : '')}
       >
@@ -2646,68 +2949,81 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   >
                     {!isCollapsed ? (
                       <div className="space-y-[0.6rem] py-1">
+                        {showArchivedView && (
+                          <div className="pl-1 pb-1 pt-0">
+                            <p className="text-sm font-semibold text-muted-foreground">Archived</p>
+                          </div>
+                        )}
                         {section.groups.length > 0 ? (
-                          <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragStart={(event) => {
-                              setActiveDraggedGroupId(String(event.active.id));
-                              const width = (event.active.rect.current.initial?.width ?? null);
-                              setActiveDraggedGroupWidth(typeof width === 'number' ? width : null);
-                            }}
-                            onDragCancel={() => {
-                              setActiveDraggedGroupId(null);
-                              setActiveDraggedGroupWidth(null);
-                            }}
-                            onDragEnd={(event) => {
-                              const { active, over } = event;
-                              setActiveDraggedGroupId(null);
-                              setActiveDraggedGroupWidth(null);
-                              if (!over || active.id === over.id) {
-                                return;
-                              }
-                              const oldIndex = orderedGroups.findIndex((item) => item.id === active.id);
-                              const newIndex = orderedGroups.findIndex((item) => item.id === over.id);
-                              if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
-                                return;
-                              }
-                              const next = arrayMove(orderedGroups, oldIndex, newIndex).map((item) => item.id);
-                              setGroupOrderByProject((prev) => {
-                                const map = new Map(prev);
-                                map.set(projectKey, next);
-                                return map;
-                              });
-                            }}
-                          >
-                            <SortableContext
-                              items={orderedGroups.map((group) => group.id)}
-                              strategy={verticalListSortingStrategy}
-                            >
-                              {orderedGroups.map((group) => {
-                                const groupKey = `${projectKey}:${group.id}`;
-                                return (
-                                  <SortableGroupItem key={group.id} id={group.id}>
-                                    {renderGroupSessions(group, groupKey, projectKey)}
-                                  </SortableGroupItem>
-                                );
-                              })}
-                            </SortableContext>
-                            <DragOverlay modifiers={[centerDragOverlayUnderPointer]} dropAnimation={null}>
-                              {activeDraggedGroupId ? (
-                                (() => {
-                                  const dragGroup = orderedGroups.find((group) => group.id === activeDraggedGroupId);
-                                  if (!dragGroup) {
-                                    return null;
+                          <>
+                            {section.groups.every((group) => group.sessions.length === 0) && showArchivedView ? (
+                              <div className="py-1 text-left typography-micro text-muted-foreground pl-1">
+                                No archived sessions
+                              </div>
+                            ) : (
+                              <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragStart={(event) => {
+                                  setActiveDraggedGroupId(String(event.active.id));
+                                  const width = (event.active.rect.current.initial?.width ?? null);
+                                  setActiveDraggedGroupWidth(typeof width === 'number' ? width : null);
+                                }}
+                                onDragCancel={() => {
+                                  setActiveDraggedGroupId(null);
+                                  setActiveDraggedGroupWidth(null);
+                                }}
+                                onDragEnd={(event) => {
+                                  const { active, over } = event;
+                                  setActiveDraggedGroupId(null);
+                                  setActiveDraggedGroupWidth(null);
+                                  if (!over || active.id === over.id) {
+                                    return;
                                   }
-                                  const showBranchIcon = !dragGroup.isMain || Boolean(isRepo);
-                                  return <GroupDragOverlay label={dragGroup.label} showBranchIcon={showBranchIcon} width={activeDraggedGroupWidth ?? undefined} />;
-                                })()
-                              ) : null}
-                            </DragOverlay>
-                          </DndContext>
+                                  const oldIndex = orderedGroups.findIndex((item) => item.id === active.id);
+                                  const newIndex = orderedGroups.findIndex((item) => item.id === over.id);
+                                  if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) {
+                                    return;
+                                  }
+                                  const next = arrayMove(orderedGroups, oldIndex, newIndex).map((item) => item.id);
+                                  setGroupOrderByProject((prev) => {
+                                    const map = new Map(prev);
+                                    map.set(projectKey, next);
+                                    return map;
+                                  });
+                                }}
+                              >
+                                <SortableContext
+                                  items={orderedGroups.map((group) => group.id)}
+                                  strategy={verticalListSortingStrategy}
+                                >
+                                  {orderedGroups.map((group) => {
+                                    const groupKey = `${projectKey}:${group.id}`;
+                                    return (
+                                      <SortableGroupItem key={group.id} id={group.id}>
+                                        {renderGroupSessions(group, groupKey, projectKey)}
+                                      </SortableGroupItem>
+                                    );
+                                  })}
+                                </SortableContext>
+                                <DragOverlay modifiers={[centerDragOverlayUnderPointer]} dropAnimation={null}>
+                                  {activeDraggedGroupId ? (
+                                    (() => {
+                                      const dragGroup = orderedGroups.find((group) => group.id === activeDraggedGroupId);
+                                      if (!dragGroup) {
+                                        return null;
+                                      }
+                                      const showBranchIcon = !dragGroup.isMain || Boolean(isRepo);
+                                      return <GroupDragOverlay label={dragGroup.label} showBranchIcon={showBranchIcon} width={activeDraggedGroupWidth ?? undefined} />;
+                                    })()
+                                  ) : null}
+                                </DragOverlay>
+                              </DndContext>
+                            )}
+                          </>
                         ) : (
                           <div className="py-1 text-left typography-micro text-muted-foreground">
-                            No sessions yet.
+                            {showArchivedView ? 'No archived sessions' : 'No sessions yet.'}
                           </div>
                         )}
                       </div>
@@ -2718,6 +3034,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </>
         )}
       </ScrollableOverlay>
+      )}
+
+      <SidebarTodos />
+      <SidebarScratchPad />
 
       <GitHubIssuePickerDialog
         open={issuePickerOpen}

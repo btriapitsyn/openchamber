@@ -105,6 +105,7 @@ export const useSessionStore = create<SessionStore>()(
             pendingInputMode: 'replace',
             pendingSyntheticParts: null,
             newSessionDraft: { open: true, directoryOverride: null, parentID: null },
+            pausedSessions: new Map(),
 
             // Voice state (initialized to disconnected/idle)
             voiceStatus: 'disconnected',
@@ -617,6 +618,11 @@ export const useSessionStore = create<SessionStore>()(
                 },
                 updateSession: (session: Session) => useSessionManagementStore.getState().updateSession(session),
                 removeSessionFromStore: (sessionId: string) => useSessionManagementStore.getState().removeSessionFromStore(sessionId),
+                
+                pauseSession: (sessionId: string) => useSessionManagementStore.getState().pauseSession(sessionId),
+                resumeSession: (sessionId: string) => useSessionManagementStore.getState().resumeSession(sessionId),
+                unpauseSession: (sessionId: string) => useSessionManagementStore.getState().unpauseSession(sessionId),
+                isSessionPaused: (sessionId: string) => useSessionManagementStore.getState().isSessionPaused(sessionId),
 
                 revertToMessage: async (sessionId: string, messageId: string) => {
                     // Get the message text before reverting
@@ -842,7 +848,8 @@ useSessionManagementStore.subscribe((state, prevState) => {
         state.webUICreatedSessions === prevState.webUICreatedSessions &&
         state.worktreeMetadata === prevState.worktreeMetadata &&
         state.availableWorktrees === prevState.availableWorktrees &&
-        state.availableWorktreesByProject === prevState.availableWorktreesByProject
+        state.availableWorktreesByProject === prevState.availableWorktreesByProject &&
+        state.pausedSessions === prevState.pausedSessions
     ) {
         return;
     }
@@ -860,6 +867,7 @@ useSessionManagementStore.subscribe((state, prevState) => {
         worktreeMetadata: state.worktreeMetadata,
         availableWorktrees: state.availableWorktrees,
         availableWorktreesByProject: state.availableWorktreesByProject,
+        pausedSessions: state.pausedSessions,
     });
 });
 

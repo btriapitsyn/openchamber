@@ -77,9 +77,10 @@ export function useRouter(): void {
           setSettingsDialogOpen(false);
         }
 
-        // 3. Apply tab
-        if (route.tab) {
-          setActiveMainTab(route.tab);
+        // 3. Apply tab (default to 'chat' when absent — matches serializeRoute which omits tab for 'chat')
+        const targetTab = route.tab ?? 'chat';
+        if (targetTab !== useUIStore.getState().activeMainTab) {
+          setActiveMainTab(targetTab);
         }
 
         // 4. Apply diff file (only if going to diff tab)

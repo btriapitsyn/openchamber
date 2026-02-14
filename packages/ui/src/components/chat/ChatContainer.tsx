@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
 
 import { ChatInput } from './ChatInput';
+import { PausedSessionBanner } from './PausedSessionBanner';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -375,6 +376,7 @@ export const ChatContainer: React.FC = () => {
                     <ChatEmptyState />
                 </div>
                 <div className="relative bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
+                    {currentSessionId && <PausedSessionBanner sessionId={currentSessionId} />}
                     <ChatInput scrollToBottom={scrollToBottom} />
                 </div>
             </div>
@@ -406,6 +408,7 @@ export const ChatContainer: React.FC = () => {
                             ))}
                         </div>
                     </div>
+                    {currentSessionId && <PausedSessionBanner sessionId={currentSessionId} />}
                     <ChatInput scrollToBottom={scrollToBottom} />
                 </div>
             );
@@ -422,6 +425,7 @@ export const ChatContainer: React.FC = () => {
                     <ChatEmptyState />
                 </div>
                 <div className="relative bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 z-10">
+                    {currentSessionId && <PausedSessionBanner sessionId={currentSessionId} />}
                     <ChatInput scrollToBottom={scrollToBottom} />
                 </div>
             </div>
@@ -478,6 +482,7 @@ export const ChatContainer: React.FC = () => {
                         </Button>
                     </div>
                 )}
+                {currentSessionId && <PausedSessionBanner sessionId={currentSessionId} />}
                 <ChatInput scrollToBottom={scrollToBottom} />
             </div>
 

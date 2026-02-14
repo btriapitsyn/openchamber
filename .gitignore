@@ -50,3 +50,5 @@ packages/intellij/
 
 # OS
 Thumbs.db
+prd.json
+progress.txt

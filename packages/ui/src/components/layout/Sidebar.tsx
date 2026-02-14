@@ -1,17 +1,13 @@
 import React from 'react';
-import { RiDownloadLine, RiInformationLine, RiQuestionLine, RiSettings3Line } from '@remixicon/react';
-import { toast } from '@/components/ui';
+import { RiInformationLine, RiQuestionLine, RiSettings3Line } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { useUIStore } from '@/stores/useUIStore';
-import { useUpdateStore } from '@/stores/useUpdateStore';
-import { UpdateDialog } from '../ui/UpdateDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 export const SIDEBAR_CONTENT_WIDTH = 264;
 const SIDEBAR_MIN_WIDTH = 200;
 const SIDEBAR_MAX_WIDTH = 500;
-const CHECK_FOR_UPDATES_EVENT = 'openchamber:check-for-updates';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -24,13 +20,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     const [isResizing, setIsResizing] = React.useState(false);
     const startXRef = React.useRef(0);
     const startWidthRef = React.useRef(sidebarWidth || SIDEBAR_CONTENT_WIDTH);
-    const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
-
-    const updateStore = useUpdateStore();
-    const pendingMenuUpdateCheckRef = React.useRef(false);
-
-    const checkForUpdates = updateStore.checkForUpdates;
-    const { available, downloaded, checking } = updateStore;
 
     const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
         if (typeof window === 'undefined') {
@@ -39,51 +28,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
     });
 
-
-
     React.useEffect(() => {
         if (typeof window === 'undefined') {
             return;
         }
         setIsDesktopApp(Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__));
     }, []);
-
-    React.useEffect(() => {
-        if (typeof window === 'undefined') {
-            return;
-        }
-
-        const handleMenuUpdateCheck = () => {
-            if (!(window as unknown as { __TAURI__?: unknown }).__TAURI__) {
-                return;
-            }
-            pendingMenuUpdateCheckRef.current = true;
-            void checkForUpdates();
-        };
-
-        window.addEventListener(CHECK_FOR_UPDATES_EVENT, handleMenuUpdateCheck as EventListener);
-        return () => {
-            window.removeEventListener(CHECK_FOR_UPDATES_EVENT, handleMenuUpdateCheck as EventListener);
-        };
-    }, [checkForUpdates]);
-
-    React.useEffect(() => {
-        if (!pendingMenuUpdateCheckRef.current) {
-            return;
-        }
-        if (checking) {
-            return;
-        }
-
-        if (available || downloaded) {
-            setUpdateDialogOpen(true);
-        } else {
-            toast.success('No updates available', {
-                description: 'You are running the latest version.',
-            });
-        }
-        pendingMenuUpdateCheckRef.current = false;
-    }, [available, downloaded, checking]);
 
     React.useEffect(() => {
         if (isMobile || !isResizing) {
@@ -194,22 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                             <span>Settings</span>
                         </button>
                         <div className="flex items-center gap-1">
-                            {(available || downloaded) ? (
-                                    <button
-                                        onClick={() => setUpdateDialogOpen(true)}
-                                        className={cn(
-                                            'flex items-center gap-1.5 rounded-md px-2 py-1',
-                                            'text-xs font-semibold',
-                                            'bg-primary/10 text-primary',
-                                            'hover:bg-primary/20',
-                                            'transition-colors'
-                                        )}
-                                    >
-                                        <RiDownloadLine className="h-3.5 w-3.5" />
-                                        <span>Update</span>
-                                    </button>
-
-                            ) : !isDesktopApp && (
+                            {!isDesktopApp && (
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <button
@@ -247,18 +182,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                         </div>
                     </div>
                 </div>
-                <UpdateDialog
-                    open={updateDialogOpen}
-                    onOpenChange={setUpdateDialogOpen}
-                    info={updateStore.info}
-                    downloading={updateStore.downloading}
-                    downloaded={updateStore.downloaded}
-                    progress={updateStore.progress}
-                    error={updateStore.error}
-                    onDownload={updateStore.downloadUpdate}
-                    onRestart={updateStore.restartToUpdate}
-                    runtimeType={updateStore.runtimeType}
-                />
             </div>
         </aside>
     );

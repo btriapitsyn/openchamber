@@ -8,7 +8,7 @@ import { AboutSettings } from './AboutSettings';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import { cn } from '@/lib/utils';
 
-export type OpenChamberSection = 'visual' | 'chat' | 'sessions' | 'git' | 'github' | 'notifications' | 'voice';
+export type OpenChamberSection = 'visual' | 'chat' | 'sessions' | 'connections' | 'git' | 'github' | 'notifications' | 'voice' | 'todos';
 
 interface OpenChamberSidebarProps {
   selectedSection: OpenChamberSection;
@@ -39,6 +39,16 @@ const OPENCHAMBER_SECTION_GROUPS: SectionGroup[] = [
     id: 'sessions',
     label: 'Sessions',
     items: ['Defaults', 'Zen Model', 'Retention'],
+  },
+  {
+    id: 'connections',
+    label: 'Connections',
+    items: ['Local', 'Remote'],
+  },
+  {
+    id: 'todos',
+    label: 'Todos',
+    items: ['Tasks', 'Per-project'],
   },
   {
     id: 'git',

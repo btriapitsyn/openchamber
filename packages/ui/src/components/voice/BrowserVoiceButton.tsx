@@ -123,9 +123,7 @@ export function BrowserVoiceButton() {
             lastToastedErrorRef.current = error;
             const displayError = normalizeVoiceErrorMessage(error);
             
-            toast.error(displayError, {
-                duration: 5000,
-            });
+            toast.error(displayError);
         }
 
         if (!isError) {

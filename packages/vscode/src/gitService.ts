@@ -1799,6 +1799,18 @@ export async function getAvailableBranchesForWorktree(directory: string): Promis
   return availableBranches;
 }
 
+// ============== Diff Size Limits ==============
+
+// Text files larger than this are truncated to prevent the diff renderer
+// from creating too many DOM nodes and freezing the UI.
+const DIFF_MAX_TEXT_BYTES = 300 * 1024; // 300 KB
+
+function truncateText(text: string, maxBytes: number): string {
+  if (text.length <= maxBytes) return text;
+  const cutIdx = text.lastIndexOf('\n', maxBytes);
+  return text.slice(0, cutIdx > 0 ? cutIdx : maxBytes);
+}
+
 // ============== Diff Operations ==============
 
 /**
@@ -1890,7 +1902,7 @@ export async function getGitFileDiff(
   directory: string, 
   filePath: string, 
   staged = false
-): Promise<{ original: string; modified: string; path: string }> {
+): Promise<{ original: string; modified: string; path: string; truncated?: boolean }> {
   const repo = await getRepository(directory);
   
   if (repo) {
@@ -1913,9 +1925,17 @@ export async function getGitFileDiff(
       // Read the current file content
       const fileUri = vscode.Uri.file(path.join(directory, filePath));
       const modifiedBytes = await vscode.workspace.fs.readFile(fileUri);
-      const modified = Buffer.from(modifiedBytes).toString('utf8');
+      let modified = Buffer.from(modifiedBytes).toString('utf8');
       
-      return { original, modified, path: filePath };
+      // Truncate large text files to prevent diff renderer from freezing
+      let truncated = false;
+      if (original.length > DIFF_MAX_TEXT_BYTES || modified.length > DIFF_MAX_TEXT_BYTES) {
+        truncated = true;
+        original = truncateText(original, DIFF_MAX_TEXT_BYTES);
+        modified = truncateText(modified, DIFF_MAX_TEXT_BYTES);
+      }
+      
+      return { original, modified, path: filePath, truncated };
     } catch (error) {
       console.error('[GitService] Failed to get file diff:', error);
     }

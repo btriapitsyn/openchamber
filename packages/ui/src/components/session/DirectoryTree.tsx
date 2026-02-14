@@ -38,6 +38,8 @@ interface DirectoryTreeProps {
   isRootReady?: boolean;
   /** Always show action icons (add, pin) instead of only on hover */
   alwaysShowActions?: boolean;
+  /** Connection ID for remote filesystem access */
+  connectionId?: string;
 }
 
 export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
@@ -52,6 +54,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   rootDirectory = null,
   isRootReady,
   alwaysShowActions = false,
+  connectionId,
 }) => {
   const { isMobile } = useDeviceInfo();
   const [directories, setDirectories] = React.useState<DirectoryItem[]>([]);
@@ -66,6 +69,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
   const inputRef = React.useRef<HTMLInputElement>(null);
   const { requestAccess, startAccessing, isDesktop } = useFileSystemAccess();
   const previousShowHidden = React.useRef(showHidden);
+  const hasLoadedOnce = React.useRef(false);
 
   const stripTrailingSlashes = React.useCallback((value: string | null | undefined) => {
     if (!value) {
@@ -109,6 +113,20 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     }
     return Boolean(effectiveRoot);
   }, [isRootReady, effectiveRoot]);
+
+  // Reset tree state when connectionId changes so stale local data is never
+  // visible while the remote home directory is being resolved.
+  const prevConnectionId = React.useRef(connectionId);
+  React.useEffect(() => {
+    if (prevConnectionId.current !== connectionId) {
+      prevConnectionId.current = connectionId;
+      setHomeDirectory('');
+      setDirectories([]);
+      setExpandedPaths(new Set());
+      setIsLoading(true);
+      hasLoadedOnce.current = false;
+    }
+  }, [connectionId]);
 
   React.useEffect(() => {
     if (!rootReady) {
@@ -183,12 +201,18 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
 
     const resolveHomeDirectory = async () => {
       try {
-        const fsHome = await opencodeClient.getFilesystemHome();
+        const fsHome = await opencodeClient.getFilesystemHome(connectionId);
         if (!cancelled && applyRootDirectory(fsHome)) {
           return;
         }
       } catch (error) {
         console.warn('Failed to resolve filesystem home directory:', error);
+      }
+
+      // For remote connections, don't fall back to local system info —
+      // that would resolve the local home directory instead of the remote one.
+      if (connectionId && connectionId !== 'local') {
+        return;
       }
 
       try {
@@ -208,7 +232,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [rootDirectory, stripTrailingSlashes]);
+  }, [rootDirectory, stripTrailingSlashes, connectionId]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -372,7 +396,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
     }
 
     try {
-      const filesystemEntries = await opencodeClient.listLocalDirectory(path);
+      const filesystemEntries = await opencodeClient.listLocalDirectory(path, { connectionId });
       return filesystemEntries
         .filter((entry) => {
           if (!entry.isDirectory) {
@@ -393,6 +417,12 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
     } catch {
+      // For remote connections, don't fall back to the local API client —
+      // that would silently show local files instead of remote ones.
+      if (connectionId && connectionId !== 'local') {
+        return [];
+      }
+
       try {
 
         const tempClient = opencodeClient.getApiClient();
@@ -429,9 +459,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
         return [];
       }
     }
-  }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady]);
-
-  const hasLoadedOnce = React.useRef(false);
+  }, [showHidden, effectiveRoot, stripTrailingSlashes, rootReady, connectionId]);
 
   const loadInitialDirectories = React.useCallback(async () => {
     if (!rootReady || !effectiveRoot) {
@@ -668,20 +696,22 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
           </span>
         </button>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            startCreatingDirectory(item);
-          }}
-          className={cn(
-            "hover:bg-interactive-hover rounded transition-opacity",
-            isMobile ? "p-1.5" : "p-1",
-            alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
-          )}
-          title="Create new directory"
-        >
-          <RiAddLine className={cn("text-muted-foreground", isMobile ? "h-3.5 w-3.5" : "h-3 w-3")} />
-        </button>
+        {(!connectionId || connectionId === 'local') && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              startCreatingDirectory(item);
+            }}
+            className={cn(
+              "hover:bg-interactive-hover rounded transition-opacity",
+              isMobile ? "p-1.5" : "p-1",
+              alwaysShowActions ? "opacity-60" : "opacity-0 group-hover:opacity-100"
+            )}
+            title="Create new directory"
+          >
+            <RiAddLine className={cn("text-muted-foreground", isMobile ? "h-3.5 w-3.5" : "h-3 w-3")} />
+          </button>
+        )}
 
         <button
           onClick={(e) => {

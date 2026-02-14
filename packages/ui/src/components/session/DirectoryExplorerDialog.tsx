@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { DirectoryTree } from './DirectoryTree';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
+import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
 import { cn, formatPathForDisplay } from '@/lib/utils';
 import { toast } from '@/components/ui';
@@ -38,6 +39,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 }) => {
   const { currentDirectory, homeDirectory, isHomeReady } = useDirectoryStore();
   const { addProject, getActiveProject } = useProjectsStore();
+  const { activeConnectionId } = useConnectionsStore();
   const [pendingPath, setPendingPath] = React.useState<string | null>(null);
   const [pathInputValue, setPathInputValue] = React.useState('');
   const [hasUserSelection, setHasUserSelection] = React.useState(false);
@@ -93,8 +95,11 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     try {
       let resolvedPath = targetPath;
       let projectId: string | undefined;
+      const isRemote = activeConnectionId && activeConnectionId !== 'local';
 
-      if (isDesktop) {
+      // Skip native desktop file access for remote connections — the path
+      // lives on the remote server, not the local filesystem.
+      if (isDesktop && !isRemote) {
         const accessResult = await requestAccess(targetPath);
         if (!accessResult.success) {
           toast.error('Unable to access directory', {
@@ -114,7 +119,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         }
       }
 
-      const added = addProject(resolvedPath, { id: projectId });
+      const added = addProject(resolvedPath, { id: projectId, connectionId: activeConnectionId });
       if (!added) {
         toast.error('Failed to add project', {
           description: 'Please select a valid directory path.',
@@ -137,6 +142,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     requestAccess,
     startAccessing,
     isConfirming,
+    activeConnectionId,
   ]);
 
   const handleConfirm = React.useCallback(async () => {
@@ -252,9 +258,17 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         visible={autocompleteVisible}
         onClose={handleAutocompleteClose}
         showHidden={showHidden}
+        connectionId={activeConnectionId}
       />
     </div>
   );
+
+  // For remote connections, don't pass local homeDirectory as rootDirectory.
+  // Let DirectoryTree fetch the remote home directory itself — omit isRootReady
+  // so DirectoryTree derives readiness from its own resolved effectiveRoot.
+  const isRemoteConnection = activeConnectionId && activeConnectionId !== 'local';
+  const treeRootDirectory = isRemoteConnection ? undefined : (isHomeReady ? homeDirectory : null);
+  const treeIsRootReady = isRemoteConnection ? undefined : isHomeReady;
 
   const treeSection = (
     <div className="flex-1 min-h-0 rounded-xl border border-border/40 bg-sidebar/70 overflow-hidden flex flex-col">
@@ -266,8 +280,9 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         className="flex-1 min-h-0 sm:min-h-[280px] sm:max-h-[380px]"
         selectionBehavior="deferred"
         showHidden={showHidden}
-        rootDirectory={isHomeReady ? homeDirectory : null}
-        isRootReady={isHomeReady}
+        rootDirectory={treeRootDirectory}
+        isRootReady={treeIsRootReady}
+        connectionId={activeConnectionId}
       />
     </div>
   );
@@ -288,9 +303,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           className="flex-1 min-h-0"
           selectionBehavior="deferred"
           showHidden={showHidden}
-          rootDirectory={isHomeReady ? homeDirectory : null}
-          isRootReady={isHomeReady}
+          rootDirectory={treeRootDirectory}
+          isRootReady={treeIsRootReady}
           alwaysShowActions
+          connectionId={activeConnectionId}
         />
       </div>
     </div>

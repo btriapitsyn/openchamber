@@ -1,4 +1,5 @@
 import express from 'express';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
@@ -55,6 +56,9 @@ const FILE_SEARCH_EXCLUDED_DIRS = new Set([
 
 // Lock to prevent race conditions in persistSettings
 let persistSettingsLock = Promise.resolve();
+
+// Per-session locks for transcript writes to prevent race conditions
+const transcriptLocks = new Map();
 
 const normalizeDirectoryPath = (value) => {
   if (typeof value !== 'string') {
@@ -1050,6 +1054,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
+const TRANSCRIPTS_DIR = path.join(OPENCHAMBER_DATA_DIR, 'transcripts');
 
 const readSettingsFromDisk = async () => {
   try {
@@ -1348,8 +1353,66 @@ const sanitizeProjects = (input) => {
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       project.sidebarCollapsed = candidate.sidebarCollapsed;
     }
+    if (typeof candidate.badge === 'string' && candidate.badge.trim().length > 0) {
+      project.badge = candidate.badge.trim();
+    }
+    if (typeof candidate.group === 'string' && candidate.group.trim().length > 0) {
+      project.group = candidate.group.trim();
+    }
 
     result.push(project);
+  }
+
+  return result;
+};
+
+const sanitizeConnections = (input) => {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+
+  const result = [];
+  const seenIds = new Set();
+
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') continue;
+
+    const candidate = entry;
+    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+    const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+    const baseUrl = typeof candidate.baseUrl === 'string' ? candidate.baseUrl.trim() : '';
+    const type = candidate.type === 'local' || candidate.type === 'remote' ? candidate.type : null;
+
+    if (!id || !label || !baseUrl || !type) continue;
+    if (seenIds.has(id)) continue;
+
+    // Validate URL format for remote connections
+    // Local connections can use relative paths like '/api'
+    if (type === 'remote') {
+      try {
+        new URL(baseUrl);
+      } catch {
+        continue; // Skip invalid URLs
+      }
+    } else if (type === 'local') {
+      // For local connections, allow relative paths starting with '/'
+      if (!baseUrl.startsWith('/')) {
+        try {
+          new URL(baseUrl);
+        } catch {
+          continue; // Skip invalid URLs
+        }
+      }
+    }
+
+    seenIds.add(id);
+
+    result.push({
+      id,
+      label,
+      baseUrl,
+      type,
+    });
   }
 
   return result;
@@ -1400,6 +1463,27 @@ const sanitizeSettingsUpdate = (payload) => {
   }
   if (typeof candidate.activeProjectId === 'string' && candidate.activeProjectId.length > 0) {
     result.activeProjectId = candidate.activeProjectId;
+  }
+
+  if (Array.isArray(candidate.connections)) {
+    const connections = sanitizeConnections(candidate.connections);
+    if (connections) {
+      result.connections = connections;
+    }
+  }
+  if (typeof candidate.activeConnectionId === 'string' && candidate.activeConnectionId.length > 0) {
+    // If connections were updated in this payload, validate the activeConnectionId
+    // If connections weren't in this payload, we can't validate - accept as-is
+    if (result.connections) {
+      // Connections were just updated, validate against the new list
+      if (result.connections.some(c => c.id === candidate.activeConnectionId)) {
+        result.activeConnectionId = candidate.activeConnectionId;
+      }
+      // Otherwise, silently skip the invalid activeConnectionId
+    } else {
+      // Connections weren't updated, can't validate, accept the value
+      result.activeConnectionId = candidate.activeConnectionId;
+    }
   }
 
   if (Array.isArray(candidate.approvedDirectories)) {
@@ -1698,6 +1782,46 @@ const sanitizeSettingsUpdate = (payload) => {
     }
     if (Object.keys(sanitized).length > 0) {
       result.usageModelGroups = sanitized;
+    }
+  }
+
+  // Scratch pads - per-project scratch pad content
+  if (candidate.scratchPads && typeof candidate.scratchPads === 'object') {
+    const sanitized = {};
+    for (const [projectId, content] of Object.entries(candidate.scratchPads)) {
+      if (typeof projectId === 'string' && typeof content === 'string' && content.length > 0) {
+        sanitized[projectId] = content;
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.scratchPads = sanitized;
+    }
+  }
+
+  // Project todos - per-project todo items (separate from per-session AI todos)
+  if (candidate.projectTodos && typeof candidate.projectTodos === 'object') {
+    const sanitized = {};
+    for (const [projectId, todos] of Object.entries(candidate.projectTodos)) {
+      if (typeof projectId === 'string' && Array.isArray(todos)) {
+        const validTodos = todos
+          .filter((t) => t && typeof t === 'object')
+          .map((t) => ({
+            id: typeof t.id === 'string' ? t.id : '',
+            content: typeof t.content === 'string' ? t.content : '',
+            status: (t.status === 'pending' || t.status === 'in_progress' || t.status === 'done') ? t.status : 'pending',
+            priority: (t.priority === 'high' || t.priority === 'medium' || t.priority === 'low') ? t.priority : 'medium',
+            createdAt: typeof t.createdAt === 'number' && Number.isFinite(t.createdAt) ? t.createdAt : Date.now(),
+            updatedAt: typeof t.updatedAt === 'number' && Number.isFinite(t.updatedAt) ? t.updatedAt : Date.now(),
+          }))
+          .filter((t) => t.id && t.content);
+        
+        if (validTodos.length > 0) {
+          sanitized[projectId] = validTodos;
+        }
+      }
+    }
+    if (Object.keys(sanitized).length > 0) {
+      result.projectTodos = sanitized;
     }
   }
 
@@ -2438,7 +2562,9 @@ const sessionAttentionStates = new Map(); // sessionId -> {
 //   lastUserMessageAt: number | null,
 //   lastStatusChangeAt: number,
 //   viewedByClients: Set<clientId>,
-//   status: 'idle' | 'busy' | 'retry'
+//   status: 'idle' | 'busy' | 'retry',
+//   notificationKind: 'ready' | 'error' | 'question' | 'permission' | null,
+//   projectPath: string | null
 // }
 const SESSION_ATTENTION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -3730,6 +3856,148 @@ function broadcastUiNotification(payload) {
   }
 }
 
+/**
+ * Capture finalized message to transcript file.
+ * Only captures user messages and finalized assistant messages (finish === 'stop').
+ * Writes to ~/.config/openchamber/transcripts/<sessionId>.jsonl
+ */
+async function captureTranscript(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return;
+  }
+
+  // Only process message.created and message.updated events
+  if (payload.type !== 'message.created' && payload.type !== 'message.updated') {
+    return;
+  }
+
+  const info = payload.properties?.info;
+  if (!info || typeof info !== 'object') {
+    return;
+  }
+
+  const sessionId = info.sessionID ?? info.sessionId;
+  const role = info.role;
+  const messageId = info.id;
+
+  if (!sessionId || !role || !messageId) {
+    return;
+  }
+
+  // Add path traversal protection
+  const sanitizedSessionId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!sanitizedSessionId || sanitizedSessionId !== sessionId) {
+    console.warn('[Transcript] Invalid sessionId format, skipping:', sessionId);
+    return;
+  }
+
+  // Only capture user messages and finalized assistant messages
+  if (role === 'user') {
+    // User messages are finalized immediately
+  } else if (role === 'assistant' && info.finish === 'stop') {
+    // Assistant messages are only captured when complete
+  } else {
+    return; // Skip partial streaming updates
+  }
+
+  try {
+    // Extract text content from the message
+    let content = '';
+    let parts = info.parts || payload.properties?.parts || [];
+    
+    // Assistant message.updated events don't include parts inline
+    // Fetch from API to get the complete message
+    if (role === 'assistant' && Array.isArray(parts) && parts.length === 0) {
+      try {
+        const url = buildOpenCodeUrl(`/session/${encodeURIComponent(sessionId)}/message/${encodeURIComponent(messageId)}`, '');
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: { Accept: 'application/json', ...getOpenCodeAuthHeaders() },
+          signal: AbortSignal.timeout(3000),
+        });
+        
+        if (response.ok) {
+          const message = await response.json().catch(() => null);
+          if (message && Array.isArray(message.parts)) {
+            parts = message.parts;
+          }
+        }
+      } catch (err) {
+        console.warn('[Transcript] Failed to fetch assistant message parts:', err?.message);
+        return; // Skip this message if we can't get the content
+      }
+    }
+    
+    if (Array.isArray(parts)) {
+      const textParts = [];
+      for (const part of parts) {
+        if (!part || typeof part !== 'object') continue;
+        
+        const partType = part.type;
+        if (partType === 'text') {
+          const text = part.text || part.content;
+          if (typeof text === 'string' && text.length > 0) {
+            textParts.push(text);
+          }
+        } else if (partType === 'file') {
+          // Record filename only, not content
+          const filename = part.name || part.filename || part.path;
+          if (typeof filename === 'string' && filename.length > 0) {
+            textParts.push(`[file: ${filename}]`);
+          }
+        } else if (partType === 'tool') {
+          // Record tool call ID reference, not output
+          const toolName = part.name || part.tool;
+          const toolCallId = part.id || part.toolCallId;
+          if (toolName && toolCallId) {
+            textParts.push(`[tool: ${toolName} (${toolCallId})]`);
+          } else if (toolName) {
+            textParts.push(`[tool: ${toolName}]`);
+          }
+        }
+      }
+      content = textParts.join('\n').trim();
+    }
+
+    // Skip if no content to record
+    if (!content) {
+      return;
+    }
+
+    // Create transcript entry
+    const entry = {
+      timestamp: Date.now(),
+      role: role,
+      content: content,
+    };
+
+    // Ensure transcripts directory exists
+    await fsPromises.mkdir(TRANSCRIPTS_DIR, { recursive: true });
+
+    // Append to session transcript file with per-session write lock
+    const transcriptPath = path.join(TRANSCRIPTS_DIR, `${sanitizedSessionId}.jsonl`);
+    const line = JSON.stringify(entry) + '\n';
+    
+    // Get or create lock for this session
+    const getLock = (sessionId) => {
+      if (!transcriptLocks.has(sessionId)) {
+        transcriptLocks.set(sessionId, Promise.resolve());
+      }
+      return transcriptLocks.get(sessionId);
+    };
+
+    const lock = getLock(sanitizedSessionId);
+    const nextLock = lock.then(async () => {
+      await fsPromises.appendFile(transcriptPath, line, 'utf8');
+    });
+    transcriptLocks.set(sanitizedSessionId, nextLock);
+    await nextLock;
+  } catch (err) {
+    // Silent failure - transcript capture should not disrupt the SSE stream
+    console.warn('[Transcript] Failed to capture message:', err?.message || err);
+  }
+}
+
 function isStreamingAssistantPart(properties) {
   if (!properties || typeof properties !== 'object') {
     return false;
@@ -3891,6 +4159,14 @@ const maybeSendPushForTrigger = async (payload) => {
 
   const sessionId = extractSessionIdFromPayload(payload);
 
+  // Extract project directory from the payload so UI can badge the correct project rail icon.
+  const notificationProjectPath = (() => {
+    const infoPath = payload.properties?.info?.path;
+    if (typeof infoPath?.root === 'string' && infoPath.root.length > 0) return infoPath.root.replace(/\/+$/, '');
+    if (typeof infoPath?.cwd === 'string' && infoPath.cwd.length > 0) return infoPath.cwd.replace(/\/+$/, '');
+    return '';
+  })();
+
   const formatMode = (raw) => {
     const value = typeof raw === 'string' ? raw.trim() : '';
     const normalized = value.length > 0 ? value : 'agent';
@@ -3999,6 +4275,7 @@ const maybeSendPushForTrigger = async (payload) => {
           tag: `ready-${sessionId}`,
           kind: 'ready',
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         };
         emitDesktopNotification(notificationPayload);
@@ -4061,6 +4338,7 @@ const maybeSendPushForTrigger = async (payload) => {
           tag: `error-${sessionId}`,
           kind: 'error',
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         };
         emitDesktopNotification(notificationPayload);
@@ -4143,6 +4421,7 @@ const maybeSendPushForTrigger = async (payload) => {
           body,
           tag: `question-${sessionId}`,
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         });
 
@@ -4152,6 +4431,7 @@ const maybeSendPushForTrigger = async (payload) => {
           body,
           tag: `question-${sessionId}`,
           sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         });
       }
@@ -4235,6 +4515,17 @@ const maybeSendPushForTrigger = async (payload) => {
           body,
           tag: requestKey ? `permission-${requestKey}` : `permission-${sessionId}`,
           sessionId,
+          projectPath: notificationProjectPath,
+          requireHidden: settings.notificationMode !== 'always',
+        });
+
+        broadcastUiNotification({
+          kind: 'permission',
+          title,
+          body,
+          tag: requestKey ? `permission-${requestKey}` : `permission-${sessionId}`,
+          sessionId,
+          projectPath: notificationProjectPath,
           requireHidden: settings.notificationMode !== 'always',
         });
 
@@ -4742,7 +5033,8 @@ function setupProxy(app) {
       req.path.startsWith('/config/settings') ||
       req.path.startsWith('/config/skills') ||
       req.path === '/config/reload' ||
-      req.path === '/health'
+      req.path === '/health' ||
+      req.path === '/share'
     ) {
       return next();
     }
@@ -4935,162 +5227,67 @@ function setupProxy(app) {
   });
 
 
-  const hopByHopRequestHeaders = new Set([
-    'host',
-    'connection',
-    'content-length',
-    'transfer-encoding',
-    'keep-alive',
-    'te',
-    'trailer',
-    'upgrade',
-  ]);
+  const proxyMiddleware = createProxyMiddleware({
+    target: openCodePort ? `http://localhost:${openCodePort}` : 'http://127.0.0.1:0',
+    pathFilter: (path) => !path.startsWith('/share'),
+    router: () => {
+      if (!openCodePort) {
+        return 'http://127.0.0.1:0';
+      }
+      return `http://localhost:${openCodePort}`;
+    },
+    changeOrigin: true,
+    pathRewrite: (path) => {
+      if (!path.startsWith('/api')) {
+        return path;
+      }
 
-  const hopByHopResponseHeaders = new Set([
-    'connection',
-    'content-length',
-    'transfer-encoding',
-    'keep-alive',
-    'te',
-    'trailer',
-    'upgrade',
-    'www-authenticate',
-  ]);
+      const suffix = path.slice(4) || '/';
 
-  const collectForwardHeaders = (req) => {
-    const authHeaders = getOpenCodeAuthHeaders();
-    const headers = {};
-
-    for (const [key, value] of Object.entries(req.headers || {})) {
-      if (!value) continue;
-      const lowerKey = key.toLowerCase();
-      if (hopByHopRequestHeaders.has(lowerKey)) continue;
-      headers[lowerKey] = Array.isArray(value) ? value.join(', ') : String(value);
-    }
-
-    if (authHeaders.Authorization) {
-      headers.Authorization = authHeaders.Authorization;
-    }
-
-    return headers;
-  };
-
-  const collectRequestBodyBuffer = async (req) => {
-    if (Buffer.isBuffer(req.body)) {
-      return req.body;
-    }
-
-    if (typeof req.body === 'string') {
-      return Buffer.from(req.body);
-    }
-
-    if (req.body && typeof req.body === 'object') {
-      return Buffer.from(JSON.stringify(req.body));
-    }
-
-    if (req.readableEnded) {
-      return Buffer.alloc(0);
-    }
-
-    return await new Promise((resolve, reject) => {
-      const chunks = [];
-      req.on('data', (chunk) => {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      });
-      req.on('end', () => resolve(Buffer.concat(chunks)));
-      req.on('error', reject);
-    });
-  };
-
-  const forwardGenericApiRequest = async (req, res) => {
-    try {
-      const upstreamPath = req.originalUrl.replace(/^\/api/, '');
-      const targetUrl = buildOpenCodeUrl(upstreamPath, '');
-      const headers = collectForwardHeaders(req);
-      const method = String(req.method || 'GET').toUpperCase();
-      const hasBody = method !== 'GET' && method !== 'HEAD';
-      const bodyBuffer = hasBody ? await collectRequestBodyBuffer(req) : null;
-
-      const upstreamResponse = await fetch(targetUrl, {
-        method,
-        headers,
-        body: hasBody ? bodyBuffer : undefined,
-        signal: AbortSignal.timeout(LONG_REQUEST_TIMEOUT_MS),
-      });
-
-      for (const [key, value] of upstreamResponse.headers.entries()) {
-        const lowerKey = key.toLowerCase();
-        if (hopByHopResponseHeaders.has(lowerKey)) {
-          continue;
+      return suffix;
+    },
+    ws: false,
+    // v3.x API: callbacks go in 'on' object
+    on: {
+      error: (err, req, res) => {
+        console.error(`Proxy error: ${err.message}`);
+        if (!res.headersSent) {
+          res.status(503).json({ error: 'OpenCode service unavailable' });
         }
-        res.setHeader(key, value);
-      }
+      },
+      proxyReq: (proxyReq, req, res) => {
+        console.log(`Proxying ${req.method} ${req.path} to OpenCode`);
+        const authHeaders = getOpenCodeAuthHeaders();
+        if (authHeaders.Authorization) {
+          proxyReq.setHeader('Authorization', authHeaders.Authorization);
+        }
 
-      const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer());
-      res.status(upstreamResponse.status).send(upstreamBody);
-    } catch (error) {
-      if (!res.headersSent) {
-        const isTimeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
-        res.status(isTimeout ? 504 : 503).json({
-          error: isTimeout ? 'OpenCode request timed out' : 'OpenCode service unavailable',
-        });
-      }
-    }
-  };
+        if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
+          proxyReq.setHeader('Accept', 'text/event-stream');
+          proxyReq.setHeader('Cache-Control', 'no-cache');
+          proxyReq.setHeader('Connection', 'keep-alive');
+        }
+      },
+      proxyRes: (proxyRes, req, res) => {
+        // Strip WWW-Authenticate to prevent browser's native Basic Auth popup
+        if (proxyRes.headers['www-authenticate']) {
+          delete proxyRes.headers['www-authenticate'];
+        }
 
-  // Dedicated forwarder for large session message payloads.
-  // This avoids edge-cases in generic proxy streaming for multi-file attachments.
-  app.post('/api/session/:sessionId/message', express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
-    try {
-      const upstreamPath = req.originalUrl.replace(/^\/api/, '');
-      const targetUrl = buildOpenCodeUrl(upstreamPath, '');
-      const authHeaders = getOpenCodeAuthHeaders();
-
-      const headers = {
-        ...(typeof req.headers['content-type'] === 'string' ? { 'content-type': req.headers['content-type'] } : { 'content-type': 'application/json' }),
-        ...(typeof req.headers.accept === 'string' ? { accept: req.headers.accept } : {}),
-        ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
-      };
-
-      const bodyBuffer = Buffer.isBuffer(req.body)
-        ? req.body
-        : Buffer.from(typeof req.body === 'string' ? req.body : '');
-
-      const upstreamResponse = await fetch(targetUrl, {
-        method: 'POST',
-        headers,
-        body: bodyBuffer,
-        signal: AbortSignal.timeout(45000),
-      });
-
-      const upstreamBody = Buffer.from(await upstreamResponse.arrayBuffer());
-
-      if (upstreamResponse.headers.has('content-type')) {
-        res.setHeader('content-type', upstreamResponse.headers.get('content-type'));
-      }
-
-      res.status(upstreamResponse.status).send(upstreamBody);
-    } catch (error) {
-      if (!res.headersSent) {
-        const isTimeout = error?.name === 'TimeoutError' || error?.name === 'AbortError';
-        res.status(isTimeout ? 504 : 503).json({
-          error: isTimeout ? 'OpenCode message forward timed out' : 'OpenCode message forward failed',
-        });
+        if (req.url?.includes('/event')) {
+          proxyRes.headers['Access-Control-Allow-Origin'] = '*';
+          proxyRes.headers['Access-Control-Allow-Headers'] = 'Cache-Control, Accept';
+          proxyRes.headers['Content-Type'] = 'text/event-stream';
+          proxyRes.headers['Cache-Control'] = 'no-cache';
+          proxyRes.headers['Connection'] = 'keep-alive';
+          proxyRes.headers['X-Accel-Buffering'] = 'no';
+          proxyRes.headers['X-Content-Type-Options'] = 'nosniff';
+        }
       }
     }
   });
 
-  app.use('/api', (req, res, next) => {
-    if (isSseApiPath(req.path)) {
-      return next();
-    }
-
-    if (req.method === 'POST' && /\/session\/[^/]+\/message$/.test(req.path || '')) {
-      return next();
-    }
-
-    return forwardGenericApiRequest(req, res);
-  });
+  app.use('/api', proxyMiddleware);
 }
 
 function startHealthMonitoring() {
@@ -5303,7 +5500,8 @@ async function main(options = {}) {
       req.path.startsWith('/api/opencode') ||
       req.path.startsWith('/api/push') ||
       req.path.startsWith('/api/voice') ||
-      req.path.startsWith('/api/tts')
+      req.path.startsWith('/api/tts') ||
+      req.path.startsWith('/api/share')
     ) {
 
       express.json({ limit: '50mb' })(req, res, next);
@@ -5685,6 +5883,25 @@ async function main(options = {}) {
   // New authoritative session status endpoints
   // Server maintains the source of truth, clients only query
 
+  // POST /api/share - Proxy share requests to external share service
+  app.post('/api/share', async (req, res) => {
+    try {
+      const response = await fetch('http://3.83.43.50:4243/share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+      });
+      if (!response.ok) {
+        return res.status(response.status).json({ error: `Share service returned ${response.status}` });
+      }
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Share proxy error:', error);
+      res.status(502).json({ error: 'Failed to reach share service' });
+    }
+  });
+
   // GET /api/sessions/snapshot - Combined status + attention snapshot
   app.get('/api/sessions/snapshot', (_req, res) => {
     res.json({
@@ -5788,6 +6005,170 @@ async function main(options = {}) {
       sessionId,
       messageSent: true
     });
+  });
+
+  // GET /api/transcripts/search - Search across all transcript files
+  app.get('/api/transcripts/search', async (req, res) => {
+    try {
+      // Validate query parameter
+      const query = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+      if (!query) {
+        return res.status(400).json({ error: 'Query parameter "q" is required and cannot be empty' });
+      }
+
+      // Parse limit and offset with defaults
+      const rawLimit = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+      const rawOffset = Array.isArray(req.query.offset) ? req.query.offset[0] : req.query.offset;
+      
+      const limit = Math.min(
+        Math.max(1, parseInt(rawLimit, 10) || 50),
+        200
+      );
+      const offset = Math.max(0, parseInt(rawOffset, 10) || 0);
+
+      // Check if transcripts directory exists
+      let transcriptFiles = [];
+      try {
+        const entries = await fsPromises.readdir(TRANSCRIPTS_DIR, { withFileTypes: true });
+        transcriptFiles = entries
+          .filter((entry) => entry.isFile() && entry.name.endsWith('.jsonl'))
+          .map((entry) => entry.name);
+      } catch (error) {
+        // Directory doesn't exist or can't be read - return empty results
+        if (error && typeof error === 'object' && error.code === 'ENOENT') {
+          return res.json({ results: [], total: 0, hasMore: false });
+        }
+        throw error;
+      }
+
+      // Search across all transcript files
+      const allMatches = [];
+      // SECURITY: Using .includes() not regex — no ReDoS risk. If switching to regex, escape query first.
+      const queryLower = query.toLowerCase();
+      const MAX_TRANSCRIPT_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+      const MAX_TOTAL_MATCHES = 1000;
+
+      for (const filename of transcriptFiles) {
+        // Check if client disconnected
+        if (req.destroyed) {
+          console.log('[Transcript Search] Request aborted, stopping search');
+          return;
+        }
+
+        // Stop if we've accumulated enough matches
+        if (allMatches.length >= MAX_TOTAL_MATCHES) {
+          break;
+        }
+
+        const sessionId = filename.replace(/\.jsonl$/, '');
+        
+        // Validate sessionId from filename
+        if (!sessionId || sessionId.includes('..') || sessionId.includes('/')) {
+          console.warn(`[Transcript Search] Invalid session ID from filename: ${filename}`);
+          continue;
+        }
+
+        const transcriptPath = path.join(TRANSCRIPTS_DIR, filename);
+
+        try {
+          // Check file size before reading
+          const stat = await fsPromises.stat(transcriptPath);
+          if (stat.size > MAX_TRANSCRIPT_FILE_BYTES) {
+            console.warn(`[Transcript Search] Skipping large file ${filename}: ${stat.size} bytes`);
+            continue;
+          }
+
+          const content = await fsPromises.readFile(transcriptPath, 'utf8');
+          const lines = content.split('\n').filter((line) => line.trim().length > 0);
+
+          for (let lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+            try {
+              const entry = JSON.parse(lines[lineNumber]);
+              const entryContent = typeof entry.content === 'string' ? entry.content : '';
+              
+              // Case-insensitive substring matching
+              if (entryContent.toLowerCase().includes(queryLower)) {
+                // Find match position for snippet highlighting
+                const matchIndex = entryContent.toLowerCase().indexOf(queryLower);
+                
+                // Create snippet: 200 chars total, centered around the match
+                let snippet = entryContent;
+                const maxSnippetLength = 200;
+                
+                if (entryContent.length > maxSnippetLength) {
+                  // Calculate start position to center the match
+                  const halfSnippet = Math.floor(maxSnippetLength / 2);
+                  let snippetStart = Math.max(0, matchIndex - halfSnippet);
+                  let snippetEnd = snippetStart + maxSnippetLength;
+                  
+                  // Adjust if we'd go past the end
+                  if (snippetEnd > entryContent.length) {
+                    snippetEnd = entryContent.length;
+                    snippetStart = Math.max(0, snippetEnd - maxSnippetLength);
+                  }
+                  
+                  snippet = entryContent.slice(snippetStart, snippetEnd);
+                  
+                  // Add ellipsis if truncated
+                  if (snippetStart > 0) snippet = '...' + snippet;
+                  if (snippetEnd < entryContent.length) snippet = snippet + '...';
+                }
+                
+                // Highlight the matched text with ** markers using case-insensitive regex
+                // Query is escaped to prevent ReDoS
+                const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const highlightRegex = new RegExp(escapedQuery, 'i');
+                snippet = snippet.replace(highlightRegex, '**$&**');
+
+                allMatches.push({
+                  sessionId,
+                  timestamp: typeof entry.timestamp === 'number' ? entry.timestamp : 0,
+                  role: typeof entry.role === 'string' ? entry.role : 'unknown',
+                  snippet,
+                  lineNumber: lineNumber + 1 // 1-indexed for display
+                });
+
+                // Stop if we've hit the match limit
+                if (allMatches.length >= MAX_TOTAL_MATCHES) {
+                  break;
+                }
+              }
+            } catch (parseError) {
+              // Skip lines that fail to parse
+              continue;
+            }
+          }
+
+          // Check match limit again after processing file
+          if (allMatches.length >= MAX_TOTAL_MATCHES) {
+            break;
+          }
+        } catch (readError) {
+          // Skip files that fail to read
+          console.warn(`[Transcript Search] Failed to read ${filename}:`, readError?.message || readError);
+          continue;
+        }
+      }
+
+      // Sort by timestamp descending (newest first)
+      allMatches.sort((a, b) => b.timestamp - a.timestamp);
+
+      // Apply pagination
+      const total = allMatches.length;
+      const paginatedResults = allMatches.slice(offset, offset + limit);
+      const hasMore = offset + limit < total;
+
+      res.json({
+        results: paginatedResults,
+        total,
+        hasMore
+      });
+    } catch (error) {
+      console.error('Failed to search transcripts:', error);
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to search transcripts' 
+      });
+    }
   });
 
   app.get('/api/openchamber/update-check', async (_req, res) => {
@@ -6059,6 +6440,13 @@ async function main(options = {}) {
       const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (global stream)
       maybeCacheSessionInfoFromEvent(payload);
+      // Capture transcript entries for finalized messages
+      if (payload) {
+        // Fire-and-forget: intentionally not awaited to avoid blocking SSE stream
+        captureTranscript(payload).catch(() => {
+          // Silent failure - transcript capture should not disrupt the stream
+        });
+      }
       const transitions = deriveSessionActivityTransitions(payload);
       if (transitions && transitions.length > 0) {
         for (const activity of transitions) {
@@ -6187,6 +6575,13 @@ async function main(options = {}) {
       const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (per-session stream)
       maybeCacheSessionInfoFromEvent(payload);
+      // Capture transcript entries for finalized messages
+      if (payload) {
+        // Fire-and-forget: intentionally not awaited to avoid blocking SSE stream
+        captureTranscript(payload).catch(() => {
+          // Silent failure - transcript capture should not disrupt the stream
+        });
+      }
       const transitions = deriveSessionActivityTransitions(payload);
       if (transitions && transitions.length > 0) {
         for (const activity of transitions) {
@@ -8902,6 +9297,7 @@ async function main(options = {}) {
         original: result.original,
         modified: result.modified,
         path: result.path,
+        truncated: result.truncated || false,
       });
     } catch (error) {
       console.error('Failed to get git file diff:', error);

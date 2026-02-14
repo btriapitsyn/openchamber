@@ -1337,6 +1337,10 @@ function getImageMimeType(filePath) {
   return mimeMap[ext] || 'application/octet-stream';
 }
 
+// Text files larger than this are truncated to prevent the diff renderer
+// from creating hundreds of thousands of DOM nodes and crashing the page.
+const DIFF_MAX_TEXT_BYTES = 300 * 1024; // 300 KB
+
 export async function getFileDiff(directory, { path: filePath, staged = false } = {}) {
   if (!directory || !filePath) {
     throw new Error('directory and path are required for getFileDiff');
@@ -1348,6 +1352,8 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
   const mimeType = isImage ? getImageMimeType(filePath) : null;
 
   let original = '';
+  let truncated = false;
+
   try {
     if (isImage) {
       // For images, use git show with raw output and convert to base64
@@ -1392,10 +1398,28 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
     }
   }
 
+  // Truncate large text files to avoid crashing the client diff renderer.
+  // Images are excluded — they're displayed as <img> tags, not diff DOM nodes.
+  if (!isImage) {
+    if (original.length > DIFF_MAX_TEXT_BYTES || modified.length > DIFF_MAX_TEXT_BYTES) {
+      truncated = true;
+      if (original.length > DIFF_MAX_TEXT_BYTES) {
+        // Truncate at a newline boundary to avoid chopping mid-line
+        const cutIdx = original.lastIndexOf('\n', DIFF_MAX_TEXT_BYTES);
+        original = original.slice(0, cutIdx > 0 ? cutIdx : DIFF_MAX_TEXT_BYTES);
+      }
+      if (modified.length > DIFF_MAX_TEXT_BYTES) {
+        const cutIdx = modified.lastIndexOf('\n', DIFF_MAX_TEXT_BYTES);
+        modified = modified.slice(0, cutIdx > 0 ? cutIdx : DIFF_MAX_TEXT_BYTES);
+      }
+    }
+  }
+
   return {
     original,
     modified,
     path: filePath,
+    truncated,
   };
 }
 

@@ -11,7 +11,7 @@ const CollapsibleTrigger = ({
 }: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleTrigger>) => (
   <CollapsiblePrimitive.CollapsibleTrigger
     className={cn(
-      "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+      "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-foreground cursor-pointer hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
       className
     )}
     {...props}

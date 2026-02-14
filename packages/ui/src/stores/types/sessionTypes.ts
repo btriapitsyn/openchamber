@@ -130,6 +130,16 @@ export interface VoiceState {
     mode: VoiceMode;
 }
 
+export interface PausedSessionInfo {
+    pausedAt: number;
+    lastUserMessageId: string;
+    lastUserMessageText: string;
+    providerID: string;
+    modelID: string;
+    agentName: string | undefined;
+    contextSummary: string;
+}
+
 export interface SessionStore {
 
     sessions: Session[];
@@ -168,6 +178,8 @@ export interface SessionStore {
     sessionContextUsage: Map<string, SessionContextUsage>;
 
     sessionAgentEditModes: Map<string, Map<string, EditPermissionMode>>;
+    
+    pausedSessions: Map<string, PausedSessionInfo>;
 
     // Server-owned session status (mirrors OpenCode SessionStatus: busy|retry|idle).
     // Use as the single source of truth for "assistant working" UI.
@@ -302,4 +314,9 @@ export interface SessionStore {
       consumePendingInputText: () => { text: string; mode: 'replace' | 'append' } | null;
       setPendingSyntheticParts: (parts: SyntheticContextPart[] | null) => void;
      consumePendingSyntheticParts: () => SyntheticContextPart[] | null;
+     
+     pauseSession: (sessionId: string) => Promise<void>;
+     resumeSession: (sessionId: string) => Promise<void>;
+     unpauseSession: (sessionId: string) => void;
+     isSessionPaused: (sessionId: string) => boolean;
    }
