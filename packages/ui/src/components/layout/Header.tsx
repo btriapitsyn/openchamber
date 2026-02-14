@@ -681,34 +681,33 @@ export const Header: React.FC = () => {
       base.push({ id: 'plan', label: 'Plan', icon: RiFileTextLine });
     }
 
-    base.push(
-      {
-        id: 'diff',
-        label: 'Diff',
-        icon: 'diff',
-        badge: !isMobile && diffFileCount > 0 ? diffFileCount : undefined,
-      },
-      { id: 'files', label: 'Files', icon: RiFolder6Line },
-    );
-
     if (isMobile) {
-      base.push({
-        id: 'terminal',
-        label: 'Terminal',
-        icon: RiTerminalBoxLine,
-      }, {
-        id: 'git',
-        label: 'Git',
-        icon: RiGitBranchLine,
-        showDot: diffFileCount > 0,
-      });
+      base.push(
+        {
+          id: 'diff',
+          label: 'Diff',
+          icon: 'diff',
+        },
+        { id: 'files', label: 'Files', icon: RiFolder6Line },
+        {
+          id: 'terminal',
+          label: 'Terminal',
+          icon: RiTerminalBoxLine,
+        },
+        {
+          id: 'git',
+          label: 'Git',
+          icon: RiGitBranchLine,
+          showDot: diffFileCount > 0,
+        },
+      );
     }
 
     return base;
   }, [diffFileCount, isMobile, showPlanTab]);
 
   useEffect(() => {
-    if (!isMobile && (activeMainTab === 'git' || activeMainTab === 'terminal')) {
+    if (!isMobile && (activeMainTab === 'git' || activeMainTab === 'terminal' || activeMainTab === 'diff' || activeMainTab === 'files')) {
       setActiveMainTab('chat');
     }
   }, [activeMainTab, isMobile, setActiveMainTab]);
@@ -948,7 +947,7 @@ export const Header: React.FC = () => {
                           onValueChange={handleDisplayModeChange}
                           tabs={quotaDisplayTabs}
                           size="sm"
-                          className="w-[8.25rem]"
+                          className="w-[10.5rem]"
                         />
                         <button
                           type="button"

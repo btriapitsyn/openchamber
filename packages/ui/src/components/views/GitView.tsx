@@ -1662,10 +1662,11 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 flex flex-col">
           <div className={cn('min-w-0 min-h-0 h-full bg-muted/10 flex flex-col', isSidebarMode && 'border-t border-border/40')}>
-            <div className="px-3 py-3">
+            <div className="px-3 py-1.5">
               <AnimatedTabs<ActionTab>
                 value={actionTab}
                 onValueChange={setActionTab}
+                size="sm"
                 collapseLabelsOnSmall
                 collapseLabelsOnNarrow={isSidebarMode}
                 tabs={[

@@ -14,10 +14,11 @@ export const RightSidebarTabs: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar">
-      <div className="border-b border-border/40 px-3 py-2">
+      <div className="border-b border-border/40 bg-background px-3 py-1.5">
         <AnimatedTabs<RightTab>
           value={rightSidebarTab}
           onValueChange={setRightSidebarTab}
+          size="sm"
           collapseLabelsOnSmall
           collapseLabelsOnNarrow
           tabs={[

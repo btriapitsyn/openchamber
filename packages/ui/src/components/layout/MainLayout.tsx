@@ -125,7 +125,8 @@ export const MainLayout: React.FC = () => {
 
     React.useEffect(() => {
         if (isContextPanelOpen) {
-            if (isSidebarOpen) {
+            const currentlyOpen = useUIStore.getState().isSidebarOpen;
+            if (currentlyOpen) {
                 setSidebarOpen(false);
                 leftSidebarAutoClosedByContextRef.current = true;
             }
@@ -136,7 +137,7 @@ export const MainLayout: React.FC = () => {
             setSidebarOpen(true);
             leftSidebarAutoClosedByContextRef.current = false;
         }
-    }, [isContextPanelOpen, isSidebarOpen, setSidebarOpen]);
+    }, [isContextPanelOpen, setSidebarOpen]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {

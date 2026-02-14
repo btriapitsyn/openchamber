@@ -31,10 +31,10 @@ export const PreviewToggleButton: React.FC<PreviewToggleButtonProps> = ({
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
+          size="sm"
           onClick={onToggle}
           aria-label={ariaLabel}
-          className="size-8"
+          className="h-5 w-5 p-0"
         >
           {isPreview ? (
             <RiEyeLine className="size-4" aria-hidden="true" />

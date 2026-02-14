@@ -125,13 +125,33 @@ export const ChangeRow = React.memo<ChangeRowProps>(function ChangeRow({
         >
           {descriptor.code}
         </span>
-        <span
-          className="flex-1 min-w-0 truncate typography-ui-label text-foreground"
-          style={{ direction: 'rtl', textAlign: 'left' }}
-          title={file.path}
-        >
-          {file.path}
-        </span>
+        {(() => {
+          const lastSlash = file.path.lastIndexOf('/');
+          if (lastSlash === -1) {
+            return (
+              <span
+                className="flex-1 min-w-0 truncate typography-ui-label text-foreground"
+                style={{ direction: 'rtl', textAlign: 'left' }}
+                title={file.path}
+              >
+                {file.path}
+              </span>
+            );
+          }
+          const dir = file.path.slice(0, lastSlash);
+          const name = file.path.slice(lastSlash);
+          return (
+            <span className="flex-1 min-w-0 flex items-baseline overflow-hidden" title={file.path}>
+              <span
+                className="min-w-0 truncate typography-ui-label text-muted-foreground"
+                style={{ direction: 'rtl', textAlign: 'left' }}
+              >
+                {dir}
+              </span>
+              <span className="flex-shrink-0 typography-ui-label"><span className="text-muted-foreground">/</span><span className="text-foreground">{name.slice(1)}</span></span>
+            </span>
+          );
+        })()}
         <span className="shrink-0 typography-micro">
           <span style={{ color: 'var(--status-success)' }}>+{insertions}</span>
           <span className="text-muted-foreground mx-0.5">/</span>

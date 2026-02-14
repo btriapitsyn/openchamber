@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { DiffView, FilesView } from '@/components/views';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
+import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useUIStore } from '@/stores/useUIStore';
 
 const CONTEXT_PANEL_MIN_WIDTH = 360;
@@ -38,13 +39,16 @@ const clampWidth = (width: number): number => {
   return Math.min(CONTEXT_PANEL_MAX_WIDTH, Math.max(CONTEXT_PANEL_MIN_WIDTH, Math.round(width)));
 };
 
-const getPathLabel = (value: string | null): string => {
-  if (!value) {
+const getRelativePathLabel = (filePath: string | null, directory: string): string => {
+  if (!filePath) {
     return '';
   }
-  const normalized = value.replace(/\\/g, '/');
-  const parts = normalized.split('/').filter(Boolean);
-  return parts[parts.length - 1] ?? normalized;
+  const normalizedFile = filePath.replace(/\\/g, '/');
+  const normalizedDir = directory.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (normalizedDir && normalizedFile.startsWith(normalizedDir + '/')) {
+    return normalizedFile.slice(normalizedDir.length + 1);
+  }
+  return normalizedFile;
 };
 
 export const ContextPanel: React.FC = () => {
@@ -112,8 +116,11 @@ export const ContextPanel: React.FC = () => {
     toggleContextPanelExpanded(directoryKey);
   }, [directoryKey, toggleContextPanelExpanded]);
 
+  const activeFilePath = useFilesViewTabsStore((state) => (directoryKey ? (state.byRoot[directoryKey]?.selectedPath ?? null) : null));
+
   const panelTitle = panelState?.mode === 'diff' ? 'Diff' : panelState?.mode === 'file' ? 'File' : 'Panel';
-  const pathLabel = getPathLabel(panelState?.targetPath ?? null);
+  const effectivePath = panelState?.mode === 'file' ? (activeFilePath ?? panelState?.targetPath ?? null) : (panelState?.targetPath ?? null);
+  const pathLabel = getRelativePathLabel(effectivePath, effectiveDirectory);
 
   const content = panelState?.mode === 'diff'
     ? <DiffView hideStackedFileSidebar stackedDefaultCollapsedAll hideFileSelector pinSelectedFileHeaderToTopOnNavigate />

@@ -2136,12 +2136,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             aria-label={!hideGroupLabel ? (isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`) : undefined}
           >
             {!hideGroupLabel ? (
-              <div className="min-w-0 flex items-center gap-1.5 px-0">
-                {isCollapsed ? (
-                  <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                ) : (
-                  <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-                )}
+              <div className="min-w-0 flex items-center gap-1.5 pl-1.5">
                 {!group.isMain || isGitProject ? (
                   <RiGitBranchLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
                 ) : null}
@@ -2155,6 +2150,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     </span>
                   ) : null}
                 </div>
+                {isCollapsed ? (
+                  <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                ) : (
+                  <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+                )}
               </div>
             ) : <div />}
             {group.directory ? (

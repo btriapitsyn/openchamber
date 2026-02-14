@@ -31,86 +31,71 @@ export function AnimatedTabs<T extends string>({
   size = 'default',
 }: AnimatedTabsProps<T>) {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const activeTabRef = React.useRef<HTMLButtonElement>(null);
+  const indicatorRef = React.useRef<HTMLDivElement>(null);
+  const tabRefs = React.useRef<Map<string, HTMLButtonElement>>(new Map());
   const [isReadyToAnimate, setIsReadyToAnimate] = React.useState(false);
 
-  const updateClipPath = React.useCallback(() => {
+  const updateIndicator = React.useCallback(() => {
     const container = containerRef.current;
-    const activeTab = activeTabRef.current;
+    const indicator = indicatorRef.current;
+    const activeTab = tabRefs.current.get(value);
 
-    if (!container || !activeTab) return;
+    if (!container || !indicator || !activeTab) return;
 
-    const containerWidth = container.offsetWidth;
-    if (!containerWidth) return;
+    const containerRect = container.getBoundingClientRect();
+    const tabRect = activeTab.getBoundingClientRect();
 
-    const { offsetLeft, offsetWidth } = activeTab;
-    const leftPercent = Math.max(0, Math.min(100, (offsetLeft / containerWidth) * 100));
-    const rightPercent = Math.max(0, Math.min(100, ((offsetLeft + offsetWidth) / containerWidth) * 100));
+    const left = tabRect.left - containerRect.left;
+    const width = tabRect.width;
 
-    container.style.clipPath = `inset(0 ${Number(100 - rightPercent).toFixed(2)}% 0 ${Number(leftPercent).toFixed(2)}% round 8px)`;
-  }, []);
+    indicator.style.transform = `translateX(${left}px)`;
+    indicator.style.width = `${width}px`;
+  }, [value]);
 
   React.useLayoutEffect(() => {
-    updateClipPath();
+    updateIndicator();
     if (!isReadyToAnimate) {
       setIsReadyToAnimate(true);
     }
-  }, [isReadyToAnimate, updateClipPath, value, tabs.length]);
+  }, [isReadyToAnimate, updateIndicator, value, tabs.length]);
 
   React.useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const observer = new ResizeObserver(() => updateClipPath());
+    const observer = new ResizeObserver(() => updateIndicator());
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [updateClipPath]);
+  }, [updateIndicator]);
+
+  const setTabRef = React.useCallback((el: HTMLButtonElement | null, tabValue: string) => {
+    if (el) {
+      tabRefs.current.set(tabValue, el);
+    } else {
+      tabRefs.current.delete(tabValue);
+    }
+  }, []);
 
   return (
-    <div className={cn('relative isolate w-full', collapseLabelsOnNarrow && '@container/animated-tabs', className)}>
+    <div className={cn('relative w-full', collapseLabelsOnNarrow && '@container/animated-tabs', className)}>
       <div
         ref={containerRef}
-        aria-hidden
         className={cn(
-          'pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-lg [clip-path:inset(0_75%_0_0_round_8px)]',
-          animate && isReadyToAnimate ? '[transition:clip-path_200ms_ease]' : null
-        )}
-        >
-        <div
-          className={cn(
-            'flex items-center gap-1 bg-interactive-selection text-interactive-selection-foreground',
-            size === 'sm' ? 'h-7 rounded-md px-1' : 'h-9 rounded-lg px-1.5'
-          )}
-        >
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <div
-                key={tab.value}
-                className={cn(
-                  'flex flex-1 items-center justify-center font-semibold',
-                  size === 'sm' ? 'h-5 rounded-md px-2 text-xs' : 'h-7 rounded-lg px-2.5 text-sm',
-                  collapseLabelsOnSmall ? 'gap-0 sm:gap-1.25' : 'gap-1.25'
-                )}
-              >
-                {Icon ? <Icon className={cn(size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4')} /> : null}
-                <span className={cn('animated-tabs__label truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
-                  {tab.label}
-                </span>
-              </div>
-
-            );
-          })}
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          'relative z-20 flex items-center gap-1 bg-muted/20',
-          size === 'sm' ? 'h-7 rounded-md px-1' : 'h-9 rounded-lg px-1.5'
+          'relative flex items-center overflow-hidden',
+          size === 'sm' ? 'h-8 rounded-lg p-0.5 gap-0.5' : 'h-10 rounded-lg p-1 gap-0.5'
         )}
       >
+        {/* Sliding indicator */}
+        <div
+          ref={indicatorRef}
+          className={cn(
+            'absolute top-0.5 bottom-0.5 rounded-md border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm',
+            animate && isReadyToAnimate ? 'transition-[transform,width] duration-200 ease-out' : null
+          )}
+          style={{ width: 0, transform: 'translateX(0)' }}
+        />
+
         {tabs.map((tab) => {
           const isActive = value === tab.value;
           const Icon = tab.icon;
@@ -118,17 +103,17 @@ export function AnimatedTabs<T extends string>({
           return (
             <button
               key={tab.value}
-              ref={isActive ? activeTabRef : null}
+              ref={(el) => setTabRef(el, tab.value)}
               type="button"
               onClick={() => {
                 if (!isInteractive) return;
                 onValueChange(tab.value);
               }}
-                className={cn(
-                  'animated-tabs__button flex flex-1 items-center justify-center font-semibold transition-colors duration-150',
-                  size === 'sm' ? 'h-5 rounded-md px-2 text-xs' : 'h-7 rounded-lg px-2.5 text-sm',
-                collapseLabelsOnSmall ? 'gap-0 sm:gap-1.25' : 'gap-1.25',
-                isActive ? 'text-accent-foreground' : 'text-muted-foreground',
+              className={cn(
+                'animated-tabs__button relative z-10 flex flex-1 items-center justify-center font-medium transition-colors duration-150',
+                size === 'sm' ? 'h-6 rounded-md px-2.5 text-sm' : 'h-7 rounded-md px-3 text-sm',
+                collapseLabelsOnSmall ? 'gap-0 sm:gap-1.5' : 'gap-1.5',
+                isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
               )}
               aria-pressed={isActive}
@@ -136,18 +121,17 @@ export function AnimatedTabs<T extends string>({
               aria-disabled={!isInteractive}
               tabIndex={isInteractive ? 0 : -1}
             >
-                {Icon ? (
-                  <Icon
-                    className={cn(
-                      size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4',
-                      isActive ? 'text-accent-foreground' : 'text-muted-foreground'
-                    )}
-                  />
-                ) : null}
-                <span className={cn('animated-tabs__label truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
-                  {tab.label}
-                </span>
-
+              {Icon ? (
+                <Icon
+                  className={cn(
+                    size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4',
+                    isActive ? 'text-foreground' : 'text-muted-foreground'
+                  )}
+                />
+              ) : null}
+              <span className={cn('animated-tabs__label truncate', collapseLabelsOnSmall ? 'hidden sm:inline' : null)}>
+                {tab.label}
+              </span>
             </button>
           );
         })}
