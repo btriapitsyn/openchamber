@@ -37,6 +37,7 @@ import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Switch } from '@/components/ui/switch';
+import { TextLoop } from '@/components/ui/TextLoop';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsVSCodeRuntime } from '@/hooks/useRuntimeAPIs';
 import { isDesktopShell } from '@/lib/desktop';
@@ -205,6 +206,28 @@ const formatCost = (value?: number | null) => {
     }
 
     return CURRENCY_FORMATTER.format(value);
+};
+
+const formatCompactPrice = (metadata?: ModelMetadata): string | null => {
+    if (!metadata?.cost) {
+        return null;
+    }
+
+    const inputCost = metadata.cost.input;
+    const outputCost = metadata.cost.output;
+    const hasInput = typeof inputCost === 'number' && Number.isFinite(inputCost);
+    const hasOutput = typeof outputCost === 'number' && Number.isFinite(outputCost);
+
+    if (hasInput && hasOutput) {
+        return `In ${formatCost(inputCost)} · Out ${formatCost(outputCost)}`;
+    }
+    if (hasInput) {
+        return `In ${formatCost(inputCost)}`;
+    }
+    if (hasOutput) {
+        return `Out ${formatCost(outputCost)}`;
+    }
+    return null;
 };
 
 const getCapabilityIcons = (metadata?: ModelMetadata) => {
@@ -1936,6 +1959,42 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
         const showProviderLogo = keyPrefix === 'fav' || keyPrefix === 'recent';
 
+        // Build animated metadata slides for desktop
+        const priceText = formatCompactPrice(metadata);
+        const hasPrice = priceText !== null;
+        const hasCapabilities = indicatorIcons.length > 0;
+
+        // Build slides array: price first, then capabilities
+        const slides: React.ReactNode[] = [];
+        if (hasPrice) {
+            slides.push(
+                <span key="price" className="typography-micro text-muted-foreground whitespace-nowrap">
+                    {priceText}
+                </span>
+            );
+        }
+        if (hasCapabilities) {
+            slides.push(
+                <div key="capabilities" className="flex items-center gap-0.5">
+                    {indicatorIcons.map(({ id, icon: Icon, label }) => (
+                        <span
+                            key={id}
+                            className="flex h-3.5 w-3.5 items-center justify-center text-muted-foreground"
+                            aria-label={label}
+                            role="img"
+                            title={label}
+                        >
+                            <Icon className="h-2.5 w-2.5" />
+                        </span>
+                    ))}
+                </div>
+            );
+        }
+
+        // Rotate metadata in interactive desktop-style pickers (web/desktop), keep VS Code static.
+        const supportsRotatingMetadata = !isVSCodeRuntime;
+        const shouldAnimate = supportsRotatingMetadata && slides.length > 1 && (isHighlighted || isSelected);
+
         return (
             <div
                 key={`${keyPrefix}-${providerID}-${modelID}`}
@@ -1961,19 +2020,22 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     ) : null}
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
-                    {indicatorIcons.length > 0 && (
-                        <div className={cn("items-center gap-0.5", isHighlighted ? "flex" : "hidden group-hover:flex")}>
-                            {indicatorIcons.map(({ id, icon: Icon, label }) => (
-                                <span
-                                    key={id}
-                                    className="flex h-3.5 w-3.5 items-center justify-center text-muted-foreground"
-                                    aria-label={label}
-                                    role="img"
-                                    title={label}
-                                >
-                                    <Icon className="h-2.5 w-2.5" />
-                                </span>
-                            ))}
+                    {/* Metadata slot: animated TextLoop for desktop highlighted/selected rows, static otherwise */}
+                    {slides.length > 0 && (
+                        <div className={cn(
+                            "items-center",
+                            shouldAnimate ? "flex w-[140px] justify-end" : ((isHighlighted || isSelected) ? "flex" : "hidden group-hover:flex")
+                        )}>
+                            {shouldAnimate ? (
+                                <TextLoop interval={2.1} transition={{ duration: 0.25 }} trigger={shouldAnimate}>
+                                    {slides}
+                                </TextLoop>
+                            ) : (
+                                <>
+                                    {/* On non-desktop or when not highlighted/selected, show first slide (price if available, else capabilities) */}
+                                    {slides[0]}
+                                </>
+                            )}
                         </div>
                     )}
                     {isSelected && (
