@@ -9,7 +9,7 @@ import { UpdateDialog } from '../ui/UpdateDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 export const SIDEBAR_CONTENT_WIDTH = 264;
-const SIDEBAR_MIN_WIDTH = 200;
+const SIDEBAR_MIN_WIDTH = 300;
 const SIDEBAR_MAX_WIDTH = 500;
 const CHECK_FOR_UPDATES_EVENT = 'openchamber:check-for-updates';
 

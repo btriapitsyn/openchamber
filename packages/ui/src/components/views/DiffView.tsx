@@ -16,7 +16,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { getLanguageFromExtension, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -704,100 +704,98 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
         };
     }, [directory, diffData, diffRetryNonce, file.path, git, hasBeenVisible, isExpanded, setDiff]);
 
+    const handleToggle = React.useCallback(() => {
+        handleOpenChange(!isExpanded);
+        handleSelect();
+    }, [handleOpenChange, handleSelect, isExpanded]);
+
     return (
-        <div ref={setSectionRef} className="scroll-mt-4">
-            <Collapsible
-                open={isExpanded}
-                onOpenChange={handleOpenChange}
-                className="group/collapsible"
-            >
-                <div className="sticky top-0 z-10 bg-background">
-                    <CollapsibleTrigger
-                        onClick={handleSelect}
-                        className={cn(
-                            'relative flex w-full items-center gap-2 px-3 py-1.5 transition-colors rounded-t-xl border border-border/60 overflow-hidden',
-                            'bg-background hover:bg-background',
-                            isExpanded ? 'rounded-b-none' : 'rounded-b-xl',
-                            'text-muted-foreground hover:text-foreground'
-                        )}
-                    >
-                        <div className={cn(
-                            'absolute inset-0 pointer-events-none transition-colors group-hover:bg-interactive-hover'
-                        )} />
-                        <div className="relative flex min-w-0 flex-1 items-center gap-2">
-                            <span className="flex size-5 items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity">
-                                {isExpanded ? (
-                                    <RiArrowDownSLine className="size-4" />
-                                ) : (
-                                    <RiArrowRightSLine className="size-4" />
-                                )}
-                            </span>
-                            <span
-                                className="typography-micro font-semibold w-4 text-center uppercase"
-                                style={{ color: descriptor.color }}
-                                title={descriptor.description}
-                                aria-label={descriptor.description}
-                            >
-                                {descriptor.code}
-                            </span>
-                            <span
-                                className="min-w-0 flex-1 truncate typography-ui-label"
-                                style={{ direction: 'rtl', textAlign: 'left' }}
-                                title={file.path}
-                            >
-                                {file.path}
-                            </span>
-                        </div>
-                        <div className="relative flex items-center gap-2">
-                            {formatDiffTotals(file.insertions, file.deletions)}
-                            <DiffViewToggle
-                                mode={renderSideBySide ? 'side-by-side' : 'unified'}
-                                onModeChange={(mode: DiffViewMode) => {
-                                    const nextLayout: 'inline' | 'side-by-side' =
-                                        mode === 'side-by-side' ? 'side-by-side' : 'inline';
-                                    setDiffFileLayout(file.path, nextLayout);
-                                }}
-                                className="opacity-70"
-                            />
-                        </div>
-                    </CollapsibleTrigger>
-                </div>
-                <CollapsibleContent>
-                    <div className="relative border border-t-0 border-border/60 bg-background rounded-b-xl overflow-hidden">
-                        {diffLoadError ? (
-                            <div className="flex flex-col items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
-                                <div className="typography-ui-label font-semibold text-foreground">
-                                    Failed to load diff
-                                </div>
-                                <div className="typography-meta text-muted-foreground max-w-[32rem] text-center">
-                                    {diffLoadError}
-                                </div>
-                                <button
-                                    type="button"
-                                    className="typography-ui-label text-primary hover:underline"
-                                    onClick={() => setDiffRetryNonce((nonce) => nonce + 1)}
-                                >
-                                    Retry
-                                </button>
-                            </div>
-                        ) : null}
-                        {isLoading && !diffData && !diffLoadError ? (
-                            <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
-                                <RiLoader4Line size={16} className="animate-spin" />
-                                Loading diff…
-                            </div>
-                        ) : null}
-                        {isExpanded && diffData ? (
-                            <InlineDiffViewer
-                                filePath={file.path}
-                                diff={diffData}
-                                renderSideBySide={renderSideBySide}
-                                wrapLines={wrapLines}
-                            />
-                        ) : null}
+        <div ref={setSectionRef} className="scroll-mt-4 group/collapsible">
+            <div className="sticky top-0 z-10 bg-background">
+                <button
+                    type="button"
+                    onClick={handleToggle}
+                    className={cn(
+                        'relative flex w-full items-center gap-2 px-3 py-1.5 rounded-t-xl border border-border/60 overflow-hidden',
+                        'bg-background hover:bg-background',
+                        isExpanded ? 'rounded-b-none' : 'rounded-b-xl',
+                        'text-muted-foreground hover:text-foreground'
+                    )}
+                >
+                    <div className="absolute inset-0 pointer-events-none group-hover/collapsible:bg-interactive-hover" />
+                    <div className="relative flex min-w-0 flex-1 items-center gap-2">
+                        <span className="flex size-5 items-center justify-center opacity-70 group-hover/collapsible:opacity-100">
+                            {isExpanded ? (
+                                <RiArrowDownSLine className="size-4" />
+                            ) : (
+                                <RiArrowRightSLine className="size-4" />
+                            )}
+                        </span>
+                        <span
+                            className="typography-micro font-semibold w-4 text-center uppercase"
+                            style={{ color: descriptor.color }}
+                            title={descriptor.description}
+                            aria-label={descriptor.description}
+                        >
+                            {descriptor.code}
+                        </span>
+                        <span
+                            className="min-w-0 flex-1 truncate typography-ui-label"
+                            style={{ direction: 'rtl', textAlign: 'left' }}
+                            title={file.path}
+                        >
+                            {file.path}
+                        </span>
                     </div>
-                </CollapsibleContent>
-            </Collapsible>
+                    <div className="relative flex items-center gap-2">
+                        {formatDiffTotals(file.insertions, file.deletions)}
+                        <DiffViewToggle
+                            mode={renderSideBySide ? 'side-by-side' : 'unified'}
+                            onModeChange={(mode: DiffViewMode) => {
+                                const nextLayout: 'inline' | 'side-by-side' =
+                                    mode === 'side-by-side' ? 'side-by-side' : 'inline';
+                                setDiffFileLayout(file.path, nextLayout);
+                            }}
+                            className="opacity-70"
+                        />
+                    </div>
+                </button>
+            </div>
+            {isExpanded && (
+                <div className="relative border border-t-0 border-border/60 bg-background rounded-b-xl overflow-hidden">
+                    {diffLoadError ? (
+                        <div className="flex flex-col items-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                            <div className="typography-ui-label font-semibold text-foreground">
+                                Failed to load diff
+                            </div>
+                            <div className="typography-meta text-muted-foreground max-w-[32rem] text-center">
+                                {diffLoadError}
+                            </div>
+                            <button
+                                type="button"
+                                className="typography-ui-label text-primary hover:underline"
+                                onClick={() => setDiffRetryNonce((nonce) => nonce + 1)}
+                            >
+                                Retry
+                            </button>
+                        </div>
+                    ) : null}
+                    {isLoading && !diffData && !diffLoadError ? (
+                        <div className="flex items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                            <RiLoader4Line size={16} className="animate-spin" />
+                            Loading diff…
+                        </div>
+                    ) : null}
+                    {diffData ? (
+                        <InlineDiffViewer
+                            filePath={file.path}
+                            diff={diffData}
+                            renderSideBySide={renderSideBySide}
+                            wrapLines={wrapLines}
+                        />
+                    ) : null}
+                </div>
+            )}
         </div>
     );
 });
@@ -851,7 +849,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const fileSectionRefs = React.useRef(new Map<string, HTMLDivElement | null>());
     const pendingScrollTargetRef = React.useRef<string | null>(null);
     const pendingScrollFrameRef = React.useRef<number | null>(null);
-    const settleScrollTimeoutsRef = React.useRef<Array<number>>([]);
+
 
     React.useEffect(() => {
         if (!pinSelectedFileHeaderToTopOnNavigate || !isStackedView || !pinnedStackedTarget) {
@@ -1015,7 +1013,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         }
     }, []);
 
-    const scrollToFile = React.useCallback((path: string, behavior: ScrollBehavior = 'smooth') => {
+    const scrollToFile = React.useCallback((path: string) => {
         const node = fileSectionRefs.current.get(path);
         const scrollRoot = diffScrollRef.current;
         if (!node || !scrollRoot) return false;
@@ -1023,47 +1021,13 @@ export const DiffView: React.FC<DiffViewProps> = ({
         const rootRect = scrollRoot.getBoundingClientRect();
         const nodeRect = node.getBoundingClientRect();
         const nextTop = scrollRoot.scrollTop + (nodeRect.top - rootRect.top);
-
-        scrollRoot.scrollTo({
-            top: Math.max(0, nextTop),
-            behavior,
-        });
+        scrollRoot.scrollTop = Math.max(0, nextTop);
         return true;
     }, []);
-
-    const clearSettleScrollTimeouts = React.useCallback(() => {
-        if (settleScrollTimeoutsRef.current.length === 0) {
-            return;
-        }
-
-        for (const timeoutId of settleScrollTimeoutsRef.current) {
-            window.clearTimeout(timeoutId);
-        }
-        settleScrollTimeoutsRef.current = [];
-    }, []);
-
-    const scheduleSettleAlignment = React.useCallback((path: string) => {
-        clearSettleScrollTimeouts();
-
-        const delays = [60, 140, 260, 420, 700];
-        settleScrollTimeoutsRef.current = delays.map((delayMs) => {
-            return window.setTimeout(() => {
-                // Re-align after late layout shifts (eg async syntax/highlight paint)
-                scrollToFile(path, 'auto');
-            }, delayMs);
-        });
-    }, [clearSettleScrollTimeouts, scrollToFile]);
-
-    React.useEffect(() => {
-        return () => {
-            clearSettleScrollTimeouts();
-        };
-    }, [clearSettleScrollTimeouts]);
 
     React.useEffect(() => {
         if (!isStackedView) {
             pendingScrollTargetRef.current = null;
-            clearSettleScrollTimeouts();
             if (pendingScrollFrameRef.current !== null) {
                 window.cancelAnimationFrame(pendingScrollFrameRef.current);
                 pendingScrollFrameRef.current = null;
@@ -1075,7 +1039,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         if (!target) return;
 
         let attempts = 0;
-        const maxAttempts = 24;
+        const maxAttempts = 20;
 
         const tryAlign = () => {
             const currentTarget = pendingScrollTargetRef.current;
@@ -1084,7 +1048,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 return;
             }
 
-            const didScroll = scrollToFile(currentTarget, 'auto');
+            const didScroll = scrollToFile(currentTarget);
             if (!didScroll) {
                 attempts += 1;
                 if (attempts < maxAttempts) {
@@ -1096,35 +1060,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 return;
             }
 
-            const node = fileSectionRefs.current.get(currentTarget);
-            const scrollRoot = diffScrollRef.current;
-            if (!node || !scrollRoot) {
-                pendingScrollTargetRef.current = null;
-                pendingScrollFrameRef.current = null;
-                return;
+            if (pinSelectedFileHeaderToTopOnNavigate) {
+                setPinnedStackedTarget(currentTarget);
             }
-
-            const rootRect = scrollRoot.getBoundingClientRect();
-            const nodeRect = node.getBoundingClientRect();
-            const aligned = Math.abs(nodeRect.top - rootRect.top) <= 2;
-
-            if (aligned) {
-                scheduleSettleAlignment(currentTarget);
-                if (pinSelectedFileHeaderToTopOnNavigate) {
-                    setPinnedStackedTarget(currentTarget);
-                }
-                pendingScrollTargetRef.current = null;
-                pendingScrollFrameRef.current = null;
-                return;
-            }
-
-            attempts += 1;
-            if (attempts < maxAttempts) {
-                pendingScrollFrameRef.current = window.requestAnimationFrame(tryAlign);
-            } else {
-                pendingScrollTargetRef.current = null;
-                pendingScrollFrameRef.current = null;
-            }
+            pendingScrollTargetRef.current = null;
+            pendingScrollFrameRef.current = null;
         };
 
         pendingScrollFrameRef.current = window.requestAnimationFrame(tryAlign);
@@ -1135,7 +1075,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 pendingScrollFrameRef.current = null;
             }
         };
-    }, [changedFiles, clearSettleScrollTimeouts, isStackedView, scheduleSettleAlignment, scrollToFile, selectedFile, stackedExpandRequestNonce]);
+    }, [isStackedView, pinSelectedFileHeaderToTopOnNavigate, scrollToFile, stackedExpandRequestNonce]);
 
     const handleSelectFile = React.useCallback((value: string) => {
         setSelectedFile(value);
@@ -1144,14 +1084,14 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const handleSelectFileAndScroll = React.useCallback((value: string) => {
         setSelectedFile(value);
 
-        if (isStackedView && !scrollToFile(value, 'auto')) {
+        if (isStackedView && !scrollToFile(value)) {
             pendingScrollTargetRef.current = value;
         }
     }, [isStackedView, scrollToFile]);
 
     const handleDiffViewModeChange = React.useCallback((mode: DiffTabViewMode) => {
         setDiffViewMode(mode);
-        if (mode === 'stacked' && selectedFile && !scrollToFile(selectedFile, 'auto')) {
+        if (mode === 'stacked' && selectedFile && !scrollToFile(selectedFile)) {
             pendingScrollTargetRef.current = selectedFile;
         }
     }, [scrollToFile, selectedFile, setDiffViewMode]);

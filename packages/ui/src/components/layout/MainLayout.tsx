@@ -17,10 +17,30 @@ import { MultiRunLauncher } from '@/components/multirun';
 import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useEdgeSwipe } from '@/hooks/useEdgeSwipe';
 import { cn } from '@/lib/utils';
 
 import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
+
+const normalizeDirectoryKey = (value: string): string => {
+    if (!value) return '';
+
+    const raw = value.replace(/\\/g, '/');
+    const hadUncPrefix = raw.startsWith('//');
+    let normalized = raw.replace(/\/+$/g, '');
+    normalized = normalized.replace(/\/+/g, '/');
+
+    if (hadUncPrefix && !normalized.startsWith('//')) {
+        normalized = `/${normalized}`;
+    }
+
+    if (normalized === '') {
+        return raw.startsWith('/') ? '/' : '';
+    }
+
+    return normalized;
+};
 
 export const MainLayout: React.FC = () => {
     const RIGHT_SIDEBAR_AUTO_CLOSE_WIDTH = 1140;
@@ -44,8 +64,19 @@ export const MainLayout: React.FC = () => {
     } = useUIStore();
 
     const { isMobile } = useDeviceInfo();
+    const effectiveDirectory = useEffectiveDirectory() ?? '';
+    const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
+    const isContextPanelOpen = useUIStore((state) => {
+        if (!directoryKey) {
+            return false;
+        }
+        const panelState = state.contextPanelByDirectory[directoryKey];
+        return Boolean(panelState?.isOpen && panelState?.mode);
+    });
+    const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
     const rightSidebarAutoClosedRef = React.useRef(false);
     const bottomTerminalAutoClosedRef = React.useRef(false);
+    const leftSidebarAutoClosedByContextRef = React.useRef(false);
 
     useEdgeSwipe({ enabled: true });
 
@@ -91,6 +122,21 @@ export const MainLayout: React.FC = () => {
             }
         };
     }, []);
+
+    React.useEffect(() => {
+        if (isContextPanelOpen) {
+            if (isSidebarOpen) {
+                setSidebarOpen(false);
+                leftSidebarAutoClosedByContextRef.current = true;
+            }
+            return;
+        }
+
+        if (leftSidebarAutoClosedByContextRef.current) {
+            setSidebarOpen(true);
+            leftSidebarAutoClosedByContextRef.current = false;
+        }
+    }, [isContextPanelOpen, isSidebarOpen, setSidebarOpen]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {

@@ -62,9 +62,11 @@ const isLegacyDefaultTemplates = (value: unknown): boolean => {
   );
 };
 
-const CONTEXT_PANEL_DEFAULT_WIDTH = 520;
+const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
 const CONTEXT_PANEL_MIN_WIDTH = 360;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
+const LEFT_SIDEBAR_MIN_WIDTH = 300;
+const RIGHT_SIDEBAR_MIN_WIDTH = 400;
 
 const normalizeDirectoryPath = (value: string): string => {
   if (!value) return '';
@@ -305,10 +307,10 @@ export const useUIStore = create<UIStore>()(
         isMultiRunLauncherOpen: false,
         multiRunLauncherPrefillPrompt: '',
         isSidebarOpen: true,
-        sidebarWidth: 264,
+        sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
         hasManuallyResizedLeftSidebar: false,
         isRightSidebarOpen: false,
-        rightSidebarWidth: 420,
+        rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
         hasManuallyResizedRightSidebar: false,
         rightSidebarTab: 'git',
         contextPanelByDirectory: {},
@@ -390,12 +392,10 @@ export const useUIStore = create<UIStore>()(
           set((state) => {
             const newOpen = !state.isSidebarOpen;
 
-            if (newOpen && typeof window !== 'undefined') {
-              const proportionalWidth = Math.floor(window.innerWidth * 0.2);
+            if (newOpen && !state.hasManuallyResizedLeftSidebar) {
               return {
                 isSidebarOpen: newOpen,
-                sidebarWidth: proportionalWidth,
-                hasManuallyResizedLeftSidebar: false
+                sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
               };
             }
             return { isSidebarOpen: newOpen };
@@ -403,14 +403,11 @@ export const useUIStore = create<UIStore>()(
         },
 
         setSidebarOpen: (open) => {
-          set(() => {
-
-            if (open && typeof window !== 'undefined') {
-              const proportionalWidth = Math.floor(window.innerWidth * 0.2);
+          set((state) => {
+            if (open && !state.hasManuallyResizedLeftSidebar) {
               return {
                 isSidebarOpen: open,
-                sidebarWidth: proportionalWidth,
-                hasManuallyResizedLeftSidebar: false
+                sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
               };
             }
             return { isSidebarOpen: open };
@@ -425,12 +422,10 @@ export const useUIStore = create<UIStore>()(
           set((state) => {
             const newOpen = !state.isRightSidebarOpen;
 
-            if (newOpen && typeof window !== 'undefined') {
-              const proportionalWidth = Math.floor(window.innerWidth * 0.28);
+            if (newOpen && !state.hasManuallyResizedRightSidebar) {
               return {
                 isRightSidebarOpen: newOpen,
-                rightSidebarWidth: proportionalWidth,
-                hasManuallyResizedRightSidebar: false,
+                rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
               };
             }
             return { isRightSidebarOpen: newOpen };
@@ -438,13 +433,11 @@ export const useUIStore = create<UIStore>()(
         },
 
         setRightSidebarOpen: (open) => {
-          set(() => {
-            if (open && typeof window !== 'undefined') {
-              const proportionalWidth = Math.floor(window.innerWidth * 0.28);
+          set((state) => {
+            if (open && !state.hasManuallyResizedRightSidebar) {
               return {
                 isRightSidebarOpen: open,
-                rightSidebarWidth: proportionalWidth,
-                hasManuallyResizedRightSidebar: false,
+                rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
               };
             }
             return { isRightSidebarOpen: open };
@@ -630,36 +623,7 @@ export const useUIStore = create<UIStore>()(
           if (guard && !guard(tab)) {
             return;
           }
-          const state = get();
-          const currentTab = state.activeMainTab;
-          const fullscreenTabs: MainTab[] = ['files', 'diff'];
-          const isEnteringFullscreen = fullscreenTabs.includes(tab) && !fullscreenTabs.includes(currentTab);
-          const isLeavingFullscreen = !fullscreenTabs.includes(tab) && fullscreenTabs.includes(currentTab);
-
-          if (isEnteringFullscreen) {
-            // Save current sidebar state and close it
-            set({
-              activeMainTab: tab,
-              sidebarOpenBeforeFullscreenTab: state.isSidebarOpen,
-              isSidebarOpen: false,
-            });
-          } else if (isLeavingFullscreen) {
-            // Restore sidebar state if it was open before
-            const shouldRestore = state.sidebarOpenBeforeFullscreenTab === true;
-            set({
-              activeMainTab: tab,
-              sidebarOpenBeforeFullscreenTab: null,
-              ...(shouldRestore && typeof window !== 'undefined'
-                ? {
-                    isSidebarOpen: true,
-                    sidebarWidth: Math.floor(window.innerWidth * 0.2),
-                    hasManuallyResizedLeftSidebar: false,
-                  }
-                : {}),
-            });
-          } else {
-            set({ activeMainTab: tab });
-          }
+          set({ activeMainTab: tab });
         },
 
         setPendingDiffFile: (filePath) => {
@@ -671,21 +635,7 @@ export const useUIStore = create<UIStore>()(
           if (guard && !guard('diff')) {
             return;
           }
-          const state = get();
-          const currentTab = state.activeMainTab;
-          const fullscreenTabs: MainTab[] = ['files', 'diff'];
-          const isEnteringFullscreen = !fullscreenTabs.includes(currentTab);
-
-          if (isEnteringFullscreen) {
-            set({
-              pendingDiffFile: filePath,
-              activeMainTab: 'diff',
-              sidebarOpenBeforeFullscreenTab: state.isSidebarOpen,
-              isSidebarOpen: false,
-            });
-          } else {
-            set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
-          }
+          set({ pendingDiffFile: filePath, activeMainTab: 'diff' });
         },
 
         consumePendingDiffFile: () => {
@@ -979,14 +929,6 @@ export const useUIStore = create<UIStore>()(
 
           set((state) => {
             const updates: Partial<UIStore> = {};
-
-            if (state.isSidebarOpen && !state.hasManuallyResizedLeftSidebar) {
-              updates.sidebarWidth = Math.floor(window.innerWidth * 0.2);
-            }
-
-            if (state.isRightSidebarOpen && !state.hasManuallyResizedRightSidebar) {
-              updates.rightSidebarWidth = Math.floor(window.innerWidth * 0.28);
-            }
 
             if (state.isBottomTerminalOpen && !state.hasManuallyResizedBottomTerminal) {
               updates.bottomTerminalHeight = Math.floor(window.innerHeight * 0.32);

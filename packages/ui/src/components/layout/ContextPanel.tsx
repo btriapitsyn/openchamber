@@ -9,7 +9,7 @@ import { useUIStore } from '@/stores/useUIStore';
 
 const CONTEXT_PANEL_MIN_WIDTH = 360;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
-const CONTEXT_PANEL_DEFAULT_WIDTH = 520;
+const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
 
 const normalizeDirectoryKey = (value: string): string => {
   if (!value) return '';
@@ -156,37 +156,35 @@ export const ContextPanel: React.FC = () => {
     return null;
   }
 
-  if (isExpanded) {
-    return (
-      <div className="absolute inset-0 z-20 flex min-w-0 flex-col overflow-hidden border-l border-border bg-background">
-        {header}
-        <div className="min-h-0 flex-1 overflow-hidden">{content}</div>
-      </div>
-    );
-  }
-
   return (
     <aside
       className={cn(
-        'relative flex h-full min-h-0 flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background',
+        'flex min-h-0 flex-col overflow-hidden border-l border-border bg-background',
+        isExpanded
+          ? 'absolute inset-0 z-20 min-w-0'
+          : 'relative h-full flex-shrink-0',
         isResizing ? 'transition-none' : 'transition-[width] duration-200 ease-in-out'
       )}
-      style={{
-        width: `${width}px`,
-        minWidth: `${width}px`,
-        maxWidth: `${width}px`,
-      }}
+      style={isExpanded
+        ? undefined
+        : {
+            width: `${width}px`,
+            minWidth: `${width}px`,
+            maxWidth: `${width}px`,
+          }}
     >
-      <div
-        className={cn(
-          'absolute left-0 top-0 z-20 h-full w-[4px] cursor-col-resize transition-colors hover:bg-primary/50',
-          isResizing && 'bg-primary'
-        )}
-        onPointerDown={handleResizeStart}
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize context panel"
-      />
+      {!isExpanded && (
+        <div
+          className={cn(
+            'absolute left-0 top-0 z-20 h-full w-[4px] cursor-col-resize transition-colors hover:bg-primary/50',
+            isResizing && 'bg-primary'
+          )}
+          onPointerDown={handleResizeStart}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize context panel"
+        />
+      )}
       {header}
       <div className="min-h-0 flex-1 overflow-hidden">{content}</div>
     </aside>
