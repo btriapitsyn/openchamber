@@ -2381,8 +2381,42 @@ export async function renameBranch(directory, oldName, newName) {
   const git = await createGit(directory);
 
   try {
+    const normalizedOldName = cleanBranchName(String(oldName || '').trim());
+    const normalizedNewName = cleanBranchName(String(newName || '').trim());
+
+    const previousRemote = await git
+      .raw(['config', '--get', `branch.${normalizedOldName}.remote`])
+      .then((value) => String(value || '').trim())
+      .catch(() => '');
+    const previousMerge = await git
+      .raw(['config', '--get', `branch.${normalizedOldName}.merge`])
+      .then((value) => String(value || '').trim())
+      .catch(() => '');
+
     // Use git branch -m command to rename the branch
     await git.raw(['branch', '-m', oldName, newName]);
+
+    if (previousRemote && previousMerge && normalizedNewName) {
+      const previousMergeBranch = cleanBranchName(previousMerge);
+      const nextMergeBranch =
+        previousMergeBranch === normalizedOldName
+          ? normalizedNewName
+          : previousMergeBranch;
+      const upstream = normalizeUpstreamTarget(previousRemote, nextMergeBranch);
+
+      if (upstream) {
+        try {
+          await runGitCommandOrThrow(
+            directory,
+            ['branch', `--set-upstream-to=${upstream.full}`, normalizedNewName],
+            `Failed to set upstream to ${upstream.full}`
+          );
+        } catch {
+          await setBranchTrackingFallback(directory, normalizedNewName, upstream);
+        }
+      }
+    }
+
     return { success: true, branch: newName };
   } catch (error) {
     console.error('Failed to rename branch:', error);
