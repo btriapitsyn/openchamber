@@ -57,7 +57,14 @@ import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, isVSCodeRunti
 import { sessionEvents } from '@/lib/sessionEvents';
 import { desktopHostsGet } from '@/lib/desktopHosts';
 import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
+import { GridLoader } from '@/components/ui/grid-loader';
 import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP } from '@/lib/projectMeta';
+
+const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
+
+const getAttentionDiamondDelay = (index: number): string => {
+  return index === 4 ? '0ms' : '130ms';
+};
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -127,6 +134,11 @@ export const Header: React.FC = () => {
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const sessions = useSessionStore((state) => state.sessions);
+  const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
+  const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
+  const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
+  const sessionStatus = useSessionStore((state) => state.sessionStatus);
+  const sessionAttentionStates = useSessionStore((state) => state.sessionAttentionStates);
   const quotaResults = useQuotaStore((state) => state.results);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isQuotaLoading = useQuotaStore((state) => state.isLoading);
@@ -315,6 +327,67 @@ export const Header: React.FC = () => {
     () => projects.map((p) => `${p.id}:${p.label ?? ''}:${p.icon ?? ''}`).join('|'),
     [projects]
   );
+
+  const projectTabSessionIndicators = React.useMemo(() => {
+    const result = new Map<string, { hasStreaming: boolean; hasNeedsAttention: boolean }>();
+    if (!showProjectTabs || projects.length === 0) {
+      return result;
+    }
+
+    for (const project of projects) {
+      const projectRoot = normalize(project.path);
+      if (!projectRoot) {
+        result.set(project.id, { hasStreaming: false, hasNeedsAttention: false });
+        continue;
+      }
+
+      const dirs: string[] = [projectRoot];
+      const worktrees = availableWorktreesByProject.get(projectRoot) ?? [];
+      for (const meta of worktrees) {
+        const p = (meta && typeof meta === 'object' && 'path' in meta) ? (meta as { path?: unknown }).path : null;
+        if (typeof p === 'string' && p.trim()) {
+          const normalized = normalize(p);
+          if (normalized && normalized !== projectRoot) {
+            dirs.push(normalized);
+          }
+        }
+      }
+
+      const seen = new Set<string>();
+      let hasStreaming = false;
+      let hasNeedsAttention = false;
+
+      for (const dir of dirs) {
+        const list = sessionsByDirectory.get(dir) ?? getSessionsByDirectory(dir);
+        for (const session of list) {
+          if (!session?.id || seen.has(session.id)) {
+            continue;
+          }
+          seen.add(session.id);
+
+          const statusType = sessionStatus?.get(session.id)?.type ?? 'idle';
+          if (statusType === 'busy' || statusType === 'retry') {
+            hasStreaming = true;
+          }
+
+          if (session.id !== currentSessionId && sessionAttentionStates.get(session.id)?.needsAttention === true) {
+            hasNeedsAttention = true;
+          }
+
+          if (hasStreaming && hasNeedsAttention) {
+            break;
+          }
+        }
+        if (hasStreaming && hasNeedsAttention) {
+          break;
+        }
+      }
+
+      result.set(project.id, { hasStreaming, hasNeedsAttention });
+    }
+
+    return result;
+  }, [availableWorktreesByProject, currentSessionId, getSessionsByDirectory, projects, sessionAttentionStates, sessionStatus, sessionsByDirectory, showProjectTabs]);
 
   React.useLayoutEffect(() => {
     if (!showProjectTabs) return;
@@ -1216,7 +1289,7 @@ export const Header: React.FC = () => {
         setDragCurrentOrder([...newOrder]);
       }
     }
-  }, [cleanupDrag, computeVirtualRects]);
+  }, [activeProjectId, cleanupDrag, computeVirtualRects]);
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleProjectTabPointerUp = React.useCallback((_e: React.PointerEvent<HTMLDivElement>) => {
@@ -1319,8 +1392,39 @@ export const Header: React.FC = () => {
               {displayProjects.map((project) => {
                 const isActive = project.id === activeProjectId;
                 const isDragged = draggingProjectId === project.id;
+                const sessionIndicator = projectTabSessionIndicators.get(project.id);
+                const showProjectStreaming = sessionIndicator?.hasStreaming === true;
+                const showProjectUnread = !showProjectStreaming
+                  && project.id !== activeProjectId
+                  && sessionIndicator?.hasNeedsAttention === true;
                 const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
                 const projectColorVar = project.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
+
+                const statusMarker = showProjectStreaming
+                  ? (
+                    <GridLoader size="xs" className="text-primary" />
+                  )
+                  : showProjectUnread
+                    ? (
+                      <span
+                        className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]"
+                        aria-label="Unread updates"
+                        title="Unread updates"
+                      >
+                        {Array.from({ length: 9 }, (_, i) => (
+                          ATTENTION_DIAMOND_INDICES.has(i) ? (
+                            <span
+                              key={i}
+                              className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse"
+                              style={{ animationDelay: getAttentionDiamondDelay(i) }}
+                            />
+                          ) : (
+                            <span key={i} className="h-[3px] w-[3px]" />
+                          )
+                        ))}
+                      </span>
+                    )
+                    : null;
 
                 return (
                   <div
@@ -1363,6 +1467,11 @@ export const Header: React.FC = () => {
                     style={{ touchAction: 'none' }}
                     title={project.path}
                   >
+                    {statusMarker ? (
+                      <span className="inline-flex h-3.5 items-center justify-center">
+                        {statusMarker}
+                      </span>
+                    ) : null}
                     {ProjectIcon && (
                       <ProjectIcon
                         className="h-4 w-4 shrink-0"
