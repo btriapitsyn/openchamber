@@ -710,22 +710,22 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
     }, [handleOpenChange, handleSelect, isExpanded]);
 
     return (
-        <div ref={setSectionRef} className="scroll-mt-4 group/collapsible">
+        <div ref={setSectionRef} className="scroll-mt-4">
             <div className="sticky top-0 z-10 bg-background">
                 <button
                     type="button"
                     onClick={handleToggle}
                     className={cn(
-                        'relative flex w-full items-center gap-2 px-3 py-1.5 rounded-t-xl border border-border/60 overflow-hidden',
-                        'bg-background hover:bg-background',
+                        'group/header relative flex w-full items-center gap-2 px-3 py-1.5 rounded-t-xl border border-border/60 overflow-hidden',
+                        'bg-background',
                         isExpanded ? 'rounded-b-none' : 'rounded-b-xl',
                         'text-muted-foreground hover:text-foreground',
                         isSelected ? 'ring-1 ring-inset ring-[var(--interactive-selection)]' : null
                     )}
                 >
-                    <div className="absolute inset-0 pointer-events-none group-hover/collapsible:bg-interactive-hover" />
+                    <div className="absolute inset-0 pointer-events-none group-hover/header:bg-interactive-hover" />
                     <div className="relative flex min-w-0 flex-1 items-center gap-2">
-                        <span className="flex size-5 items-center justify-center opacity-70 group-hover/collapsible:opacity-100">
+                        <span className="flex size-5 items-center justify-center opacity-70 group-hover/header:opacity-100">
                             {isExpanded ? (
                                 <RiArrowDownSLine className="size-4" />
                             ) : (
