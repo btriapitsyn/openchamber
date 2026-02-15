@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
+import { useShallow } from 'zustand/react/shallow';
 
 import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
@@ -10,6 +11,7 @@ import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScro
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
 import { detectTurns, type Turn } from './hooks/useTurnGrouping';
 import { TurnGroupingProvider, useMessageNeighbors, useTurnGroupingContextForMessage, useTurnGroupingContextStatic, useLastTurnMessageIds } from './contexts/TurnGroupingContext';
+import { useSessionStore } from '@/stores/useSessionStore';
 
 interface ChatMessageEntry {
     info: Message;
@@ -211,7 +213,7 @@ const MessageList: React.FC<MessageListProps> = ({
         onMessageContentChange('permission');
     }, [permissions, questions, onMessageContentChange]);
 
-    const displayMessages = React.useMemo(() => {
+    const baseDisplayMessages = React.useMemo(() => {
         const seenIds = new Set<string>();
         return messages
             .filter((message) => {
@@ -237,6 +239,101 @@ const MessageList: React.FC<MessageListProps> = ({
                 };
             });
     }, [messages]);
+
+    const activeRetryStatus = useSessionStore(
+        useShallow((state) => {
+            const sessionId = state.currentSessionId;
+            if (!sessionId) return null;
+            const status = state.sessionStatus?.get(sessionId);
+            if (!status || status.type !== 'retry') return null;
+            const rawMessage = typeof status.message === 'string' ? status.message.trim() : '';
+            return {
+                sessionId,
+                message: rawMessage || 'Quota limit reached. Retrying automatically.',
+                confirmedAt: status.confirmedAt,
+            };
+        })
+    );
+
+    const displayMessages = React.useMemo(() => {
+        if (!activeRetryStatus) {
+            return baseDisplayMessages;
+        }
+
+        const retryError = {
+            name: 'SessionRetry',
+            message: activeRetryStatus.message,
+            data: { message: activeRetryStatus.message },
+        };
+
+        const resolveRole = (message: ChatMessageEntry): string | null => {
+            const info = message.info as unknown as { clientRole?: string | null | undefined; role?: string | null | undefined };
+            return (typeof info.clientRole === 'string' ? info.clientRole : null)
+                ?? (typeof info.role === 'string' ? info.role : null)
+                ?? null;
+        };
+
+        let lastUserIndex = -1;
+        for (let index = baseDisplayMessages.length - 1; index >= 0; index -= 1) {
+            if (resolveRole(baseDisplayMessages[index]) === 'user') {
+                lastUserIndex = index;
+                break;
+            }
+        }
+
+        if (lastUserIndex < 0) {
+            return baseDisplayMessages;
+        }
+
+        // Prefer attaching retry error to the assistant message in the current turn (if one exists)
+        // to avoid rendering a separate header-only placeholder + error block.
+        let targetAssistantIndex = -1;
+        for (let index = baseDisplayMessages.length - 1; index > lastUserIndex; index -= 1) {
+            if (resolveRole(baseDisplayMessages[index]) === 'assistant') {
+                targetAssistantIndex = index;
+                break;
+            }
+        }
+
+        if (targetAssistantIndex >= 0) {
+            const existing = baseDisplayMessages[targetAssistantIndex];
+            const existingInfo = existing.info as unknown as { error?: unknown };
+            if (existingInfo.error) {
+                return baseDisplayMessages;
+            }
+
+            return baseDisplayMessages.map((message, index) => {
+                if (index !== targetAssistantIndex) {
+                    return message;
+                }
+                return {
+                    ...message,
+                    info: {
+                        ...(message.info as unknown as Record<string, unknown>),
+                        error: retryError,
+                    } as unknown as Message,
+                };
+            });
+        }
+
+        const eventTime = typeof activeRetryStatus.confirmedAt === 'number' ? activeRetryStatus.confirmedAt : Date.now();
+        const syntheticId = `synthetic_retry_notice_${activeRetryStatus.sessionId}`;
+        const synthetic: ChatMessageEntry = {
+            info: {
+                id: syntheticId,
+                sessionID: activeRetryStatus.sessionId,
+                role: 'assistant',
+                time: { created: eventTime, completed: eventTime },
+                finish: 'stop',
+                error: retryError,
+            } as unknown as Message,
+            parts: [],
+        };
+
+        const next = baseDisplayMessages.slice();
+        next.splice(lastUserIndex + 1, 0, synthetic);
+        return next;
+    }, [activeRetryStatus, baseDisplayMessages]);
 
     const { turns, ungroupedMessages } = React.useMemo(() => {
         const groupedTurns = detectTurns(displayMessages);

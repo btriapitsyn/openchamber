@@ -3426,15 +3426,12 @@ const startGlobalEventWatcher = async () => {
 
             // Update authoritative session state from OpenCode events
             if (payload && payload.type === 'session.status') {
-              const status = payload.properties?.status;
-              const sessionId = payload.properties?.sessionID ?? payload.properties?.sessionId;
-              const eventId = payload.properties?.eventId || `sse-${Date.now()}`;
-
-              if (typeof sessionId === 'string' && status?.type) {
-                updateSessionState(sessionId, status.type, eventId, {
-                  attempt: status.attempt,
-                  message: status.message,
-                  next: status.next
+              const update = extractSessionStatusUpdate(payload);
+              if (update) {
+                updateSessionState(update.sessionId, update.type, update.eventId || `sse-${Date.now()}`, {
+                  attempt: update.attempt,
+                  message: update.message,
+                  next: update.next,
                 });
               }
             }
@@ -3686,6 +3683,84 @@ function parseSseDataPayload(block) {
   }
 }
 
+function extractSessionStatusUpdate(payload) {
+  if (!payload || typeof payload !== 'object' || payload.type !== 'session.status') {
+    return null;
+  }
+
+  const props = payload.properties ?? {};
+  const status =
+    props.status ??
+    props.session?.status ??
+    props.sessionInfo?.status;
+  const metadata =
+    props.metadata ??
+    (typeof status === 'object' && status !== null ? status.metadata : null);
+
+  const sessionId = props.sessionID ?? props.sessionId;
+  if (typeof sessionId !== 'string' || sessionId.length === 0) {
+    return null;
+  }
+
+  const statusType =
+    typeof status === 'string'
+      ? status
+      : typeof status?.type === 'string'
+        ? status.type
+        : typeof status?.status === 'string'
+          ? status.status
+          : typeof props.type === 'string'
+            ? props.type
+            : typeof props.phase === 'string'
+              ? props.phase
+              : typeof props.state === 'string'
+                ? props.state
+                : null;
+
+  const normalizedType =
+    statusType === 'idle' || statusType === 'busy' || statusType === 'retry'
+      ? statusType
+      : null;
+
+  if (!normalizedType) {
+    return null;
+  }
+
+  const attempt =
+    typeof status?.attempt === 'number'
+      ? status.attempt
+      : typeof props.attempt === 'number'
+        ? props.attempt
+        : typeof metadata?.attempt === 'number'
+          ? metadata.attempt
+          : undefined;
+  const message =
+    typeof status?.message === 'string'
+      ? status.message
+      : typeof props.message === 'string'
+        ? props.message
+        : typeof metadata?.message === 'string'
+          ? metadata.message
+          : undefined;
+  const next =
+    typeof status?.next === 'number'
+      ? status.next
+      : typeof props.next === 'number'
+        ? props.next
+        : typeof metadata?.next === 'number'
+          ? metadata.next
+          : undefined;
+
+  return {
+    sessionId,
+    type: normalizedType,
+    attempt,
+    message,
+    next,
+    eventId: typeof props.eventId === 'string' ? props.eventId : null,
+  };
+}
+
 function emitDesktopNotification(payload) {
   if (!ENV_DESKTOP_NOTIFY) {
     return;
@@ -3759,13 +3834,10 @@ function deriveSessionActivityTransitions(payload) {
   }
 
   if (payload.type === 'session.status') {
-    const status = payload.properties?.status;
-    const sessionId = payload.properties?.sessionID ?? payload.properties?.sessionId;
-    const statusType = status?.type;
-
-    if (typeof sessionId === 'string' && sessionId.length > 0 && typeof statusType === 'string') {
-      const phase = statusType === 'busy' || statusType === 'retry' ? 'busy' : 'idle';
-      return [{ sessionId, phase }];
+    const update = extractSessionStatusUpdate(payload);
+    if (update) {
+      const phase = update.type === 'busy' || update.type === 'retry' ? 'busy' : 'idle';
+      return [{ sessionId: update.sessionId, phase }];
     }
   }
 
@@ -6059,6 +6131,20 @@ async function main(options = {}) {
       const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (global stream)
       maybeCacheSessionInfoFromEvent(payload);
+
+      // Keep server-authoritative session state fresh even if the
+      // background watcher is disconnected.
+      if (payload && payload.type === 'session.status') {
+        const update = extractSessionStatusUpdate(payload);
+        if (update) {
+          updateSessionState(update.sessionId, update.type, update.eventId || `proxy-${Date.now()}`, {
+            attempt: update.attempt,
+            message: update.message,
+            next: update.next,
+          });
+        }
+      }
+
       const transitions = deriveSessionActivityTransitions(payload);
       if (transitions && transitions.length > 0) {
         for (const activity of transitions) {
@@ -6187,6 +6273,18 @@ async function main(options = {}) {
       const payload = parseSseDataPayload(block);
       // Cache session titles from session.updated/session.created events (per-session stream)
       maybeCacheSessionInfoFromEvent(payload);
+
+      if (payload && payload.type === 'session.status') {
+        const update = extractSessionStatusUpdate(payload);
+        if (update) {
+          updateSessionState(update.sessionId, update.type, update.eventId || `proxy-${Date.now()}`, {
+            attempt: update.attempt,
+            message: update.message,
+            next: update.next,
+          });
+        }
+      }
+
       const transitions = deriveSessionActivityTransitions(payload);
       if (transitions && transitions.length > 0) {
         for (const activity of transitions) {

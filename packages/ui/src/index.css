@@ -683,6 +683,17 @@ html:not(.dark) .chat-scroll {
   }
 }
 
+/* Utility: hide scrollbars without affecting layout */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 /* Git right-sidebar header/actions collapse to icon-only when narrow. */
 @container git-header (max-width: 26rem) {
   .git-header-label {
@@ -949,11 +960,9 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
 @keyframes grid-pulse {
   0%, 100% {
     opacity: 0.2;
-    transform: scale(0.8);
   }
   50% {
     opacity: 1;
-    transform: scale(1);
   }
 }
 

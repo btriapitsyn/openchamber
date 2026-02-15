@@ -317,8 +317,10 @@ export const Header: React.FC = () => {
     }
     const containerRect = container.getBoundingClientRect();
     const tabRect = activeTab.getBoundingClientRect();
-    indicator.style.transform = `translateX(${tabRect.left - containerRect.left}px)`;
-    indicator.style.width = `${tabRect.width}px`;
+    const indicatorX = Math.round(tabRect.left - containerRect.left);
+    const indicatorWidth = Math.round(tabRect.width);
+    indicator.style.transform = `translateX(${indicatorX}px)`;
+    indicator.style.width = `${indicatorWidth}px`;
     indicator.style.opacity = '1';
   }, [activeProjectId, draggingProjectId]);
 
@@ -1016,14 +1018,14 @@ export const Header: React.FC = () => {
       <button
         type="button"
         onClick={() => setActiveMainTab(tab.id)}
-        className={cn(
-          'relative flex h-8 items-center gap-2 px-3 rounded-lg typography-ui-label font-medium transition-colors',
-          isActive
-            ? 'app-region-no-drag bg-interactive-selection text-interactive-selection-foreground shadow-sm'
-            : 'app-region-no-drag text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-          isChatTab && !isMobile && 'min-w-[100px] justify-center'
-        )}
+          className={cn(
+            'relative flex h-8 items-center gap-2 px-3 rounded-lg typography-ui-label font-medium transition-colors',
+            isActive
+              ? 'app-region-no-drag bg-interactive-selection text-interactive-selection-foreground shadow-sm'
+              : 'app-region-no-drag text-muted-foreground hover:bg-interactive-hover/50 hover:text-foreground',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            isChatTab && !isMobile && 'min-w-[100px] justify-center'
+          )}
         aria-label={tab.label}
         aria-selected={isActive}
         role="tab"
@@ -1376,19 +1378,17 @@ export const Header: React.FC = () => {
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               <div
-                 ref={projectTabsContainerRef}
-                 className="relative inline-flex items-center h-9 gap-0.5 rounded-lg bg-[var(--surface-muted)]/50 py-0.5 px-px"
-               >
-              {/* Sliding indicator */}
-              <div
-                ref={projectTabIndicatorRef}
-                className={cn(
-                  'absolute top-0.5 bottom-0.5 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm',
-                  projectTabsReady && !draggingProjectId ? 'transition-[transform,width] duration-200 ease-out' : null
-                )}
-                style={{ width: 0, transform: 'translateX(0)', opacity: 0 }}
-              />
-
+                ref={projectTabsContainerRef}
+                className="relative inline-flex items-center h-9 gap-0.5 rounded-lg bg-[var(--surface-muted)]/50 py-0.5 px-px"
+              >
+                {/* Sliding indicator */}
+                <div
+                  ref={projectTabIndicatorRef}
+                  className={cn(
+                    'absolute top-0.5 bottom-0.5 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm'
+                  )}
+                  style={{ width: 0, transform: 'translateX(0)', opacity: 0 }}
+                />
               {displayProjects.map((project) => {
                 const isActive = project.id === activeProjectId;
                 const isDragged = draggingProjectId === project.id;
@@ -1400,14 +1400,15 @@ export const Header: React.FC = () => {
                 const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
                 const projectColorVar = project.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
 
-                const statusMarker = showProjectStreaming
-                  ? (
-                    <GridLoader size="xs" className="text-primary" />
-                  )
-                  : showProjectUnread
-                    ? (
+                 const statusMarker = showProjectStreaming
+                   ? (
+                     <GridLoader size="xs" className="text-primary" />
+                   )
+                   : showProjectUnread
+                     ? (
                       <span
-                        className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]"
+                        className="grid grid-cols-3 place-items-center gap-[1px] text-[var(--status-info)]"
+                        style={{ width: '11px', height: '11px' }}
                         aria-label="Unread updates"
                         title="Unread updates"
                       >
@@ -1415,11 +1416,11 @@ export const Header: React.FC = () => {
                           ATTENTION_DIAMOND_INDICES.has(i) ? (
                             <span
                               key={i}
-                              className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse"
+                              className="shrink-0 h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse"
                               style={{ animationDelay: getAttentionDiamondDelay(i) }}
                             />
                           ) : (
-                            <span key={i} className="h-[3px] w-[3px]" />
+                            <span key={i} className="shrink-0 h-[3px] w-[3px]" />
                           )
                         ))}
                       </span>
@@ -1453,12 +1454,11 @@ export const Header: React.FC = () => {
                       }
                     }}
                     className={cn(
-                      'relative z-10 flex h-8 shrink-0 items-center gap-1 rounded-lg pl-2.5 pr-1 text-[0.9375rem] font-medium whitespace-nowrap group',
-                      'transition-[color,opacity,transform] duration-150 ease-out',
+                      'relative z-10 flex h-8 shrink-0 items-center gap-1 rounded-lg pr-1 text-[0.9375rem] font-medium whitespace-nowrap group',
                       isDragged
                         ? 'opacity-30 scale-[0.97]'
                         : 'cursor-pointer',
-                      !isDragged && draggingProjectId && 'transition-[color,opacity,transform] duration-200 ease-out',
+                      statusMarker ? 'pl-[9px]' : 'pl-[7px]',
                       isActive
                         ? 'text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
@@ -1467,11 +1467,16 @@ export const Header: React.FC = () => {
                     style={{ touchAction: 'none' }}
                     title={project.path}
                   >
-                    {statusMarker ? (
-                      <span className="inline-flex h-3.5 items-center justify-center">
-                        {statusMarker}
-                      </span>
-                    ) : null}
+                     <span
+                       className="relative flex h-3.5 items-center justify-center overflow-visible"
+                        style={{ width: statusMarker ? '13px' : '0px' }}
+                     >
+                       {statusMarker && (
+                         <span className="absolute left-0 flex items-center justify-center">
+                           {statusMarker}
+                         </span>
+                       )}
+                     </span>
                     {ProjectIcon && (
                       <ProjectIcon
                         className="h-4 w-4 shrink-0"
@@ -1487,7 +1492,7 @@ export const Header: React.FC = () => {
                         <button
                           type="button"
                           className={cn(
-                            'inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm transition-opacity',
+                            '-ml-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm',
                             'text-muted-foreground hover:text-foreground',
                             isActive || projectTabMenuOpen === project.id
                               ? 'opacity-60 hover:opacity-100'
@@ -1672,7 +1677,7 @@ export const Header: React.FC = () => {
                                 : window.usedPercent;
                               const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
                               const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                ? (quotaDisplayMode === 'remaining' 
+                                ? (quotaDisplayMode === 'remaining'
                                     ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
                                     : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
                                 : null;

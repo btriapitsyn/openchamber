@@ -291,28 +291,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     return '';
   }, []);
 
-  // Robust target resolver that checks shadow root, light DOM, and container
-  const resolveAnnotationTarget = useCallback((id: string): HTMLElement | null => {
-    if (!id || !diffContainerRef.current) return null;
-    
-    const diffsContainer = diffContainerRef.current.querySelector('diffs-container');
-    if (!diffsContainer) return null;
-    
-    // Try shadow root first
-    const shadowTarget = diffsContainer.shadowRoot?.querySelector(`[data-annotation-id="${id}"]`);
-    if (shadowTarget) return shadowTarget as HTMLElement;
-    
-    // Try light DOM (slotted content)
-    const lightTarget = diffsContainer.querySelector(`[data-annotation-id="${id}"]`);
-    if (lightTarget) return lightTarget as HTMLElement;
-    
-    // Try container directly
-    const containerTarget = diffContainerRef.current.querySelector(`[data-annotation-id="${id}"]`);
-    if (containerTarget) return containerTarget as HTMLElement;
-    
-    return null;
-  }, []);
-
   const renderAnnotation = useCallback((annotation: DiffLineAnnotation<AnnotationData>) => {
     const div = document.createElement('div');
     // Invisible — comments are rendered as floating elements outside shadow DOM
@@ -412,6 +390,11 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
     setCommentPositions(next);
   }, [allDrafts, editingDraftId, fileName, findLineElement, getAnchorPositions, getSessionKey, selection]);
+
+  const updateCommentPositionsRef = useRef(updateCommentPositions);
+  useEffect(() => {
+    updateCommentPositionsRef.current = updateCommentPositions;
+  }, [updateCommentPositions]);
 
   const handleSaveComment = useCallback((textToSave: string, rangeOverride?: SelectedLineRange) => {
     // Use provided range override or fall back to current selection
@@ -698,7 +681,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     // Update floating comment positions after Pierre renders
     requestAnimationFrame(() => {
       forceUpdate();
-      updateCommentPositions();
+      updateCommentPositionsRef.current();
     });
 
     return () => {

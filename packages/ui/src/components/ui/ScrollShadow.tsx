@@ -26,7 +26,7 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
       (
       {
         orientation = "vertical",
-        offset = 72,
+        offset = 0,
         size = 48,
         isEnabled = true,
         hideBottomShadow = false,

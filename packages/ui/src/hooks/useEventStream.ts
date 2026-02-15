@@ -640,19 +640,56 @@ export const useEventStream = () => {
       case 'session.status':
         {
           const sessionId = readStringProp(props, ['sessionID', 'sessionId']);
-          const statusObj = (typeof props.status === 'object' && props.status !== null) ? props.status as Record<string, unknown> : null;
-          const statusType = typeof statusObj?.type === 'string' ? statusObj.type : null;
-          const statusInfo = statusObj ?? {};
+          const statusRaw = (props as { status?: unknown }).status;
+          const statusObj = (typeof statusRaw === 'object' && statusRaw !== null) ? statusRaw as Record<string, unknown> : null;
+          const statusType =
+            typeof statusRaw === 'string'
+              ? statusRaw
+              : typeof statusObj?.type === 'string'
+                ? statusObj.type
+                : typeof statusObj?.status === 'string'
+                  ? statusObj.status
+                  : typeof (props as { type?: unknown }).type === 'string'
+                    ? ((props as { type: string }).type)
+                    : typeof (props as { phase?: unknown }).phase === 'string'
+                      ? ((props as { phase: string }).phase)
+                      : typeof (props as { state?: unknown }).state === 'string'
+                        ? ((props as { state: string }).state)
+                        : null;
+          const statusInfo = statusObj ?? ({} as Record<string, unknown>);
+          const metadata = (props as { metadata?: unknown }).metadata;
+          const metadataObj = (typeof metadata === 'object' && metadata !== null) ? metadata as Record<string, unknown> : null;
 
           if (sessionId && statusType) {
             if (statusType === 'busy') {
-            updateSessionStatus(sessionId, { type: 'busy' }, 'sse:session.status');
+             updateSessionStatus(sessionId, { type: 'busy' }, 'sse:session.status');
             } else if (statusType === 'retry') {
               updateSessionStatus(sessionId, {
                 type: 'retry',
-                attempt: typeof statusInfo.attempt === 'number' ? statusInfo.attempt : undefined,
-                message: typeof statusInfo.message === 'string' ? statusInfo.message : undefined,
-                next: typeof statusInfo.next === 'number' ? statusInfo.next : undefined,
+                attempt:
+                  typeof statusInfo.attempt === 'number'
+                    ? statusInfo.attempt
+                    : typeof (props as { attempt?: unknown }).attempt === 'number'
+                      ? (props as { attempt: number }).attempt
+                      : typeof metadataObj?.attempt === 'number'
+                        ? metadataObj.attempt
+                      : undefined,
+                message:
+                  typeof statusInfo.message === 'string'
+                    ? statusInfo.message
+                    : typeof (props as { message?: unknown }).message === 'string'
+                      ? (props as { message: string }).message
+                      : typeof metadataObj?.message === 'string'
+                        ? metadataObj.message
+                      : undefined,
+                next:
+                  typeof statusInfo.next === 'number'
+                    ? statusInfo.next
+                    : typeof (props as { next?: unknown }).next === 'number'
+                      ? (props as { next: number }).next
+                      : typeof metadataObj?.next === 'number'
+                        ? metadataObj.next
+                      : undefined,
               }, 'sse:session.status');
             } else {
               updateSessionStatus(sessionId, { type: 'idle' }, 'sse:session.status');

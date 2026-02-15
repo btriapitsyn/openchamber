@@ -683,20 +683,42 @@ class OpencodeService {
       throw new Error('Message must have at least one part (text or file)');
     }
 
-    // Use SDK session.prompt() method
-    // DON'T send messageID - let server generate it (fixes Claude empty response issue)
-    await this.client.session.prompt({
-      sessionID: params.id,
-      ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
-      // messageID intentionally omitted - server will generate
-      model: {
-        providerID: params.providerID,
-        modelID: params.modelID
+    // Use async prompt endpoint so the client doesn't block waiting
+    // for model work (SSE will deliver output/status).
+    // This avoids 504s from proxy timeouts on long-running turns.
+    const base = this.baseUrl.replace(/\/+$/, '');
+    const url = new URL(`${base}/session/${encodeURIComponent(params.id)}/prompt_async`);
+    if (this.currentDirectory) {
+      url.searchParams.set('directory', this.currentDirectory);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
       },
-      agent: params.agent,
-      variant: params.variant,
-      parts
+      body: JSON.stringify({
+        model: {
+          providerID: params.providerID,
+          modelID: params.modelID,
+        },
+        agent: params.agent,
+        variant: params.variant,
+        parts,
+      }),
     });
+
+    if (!response.ok) {
+      let detail = '';
+      try {
+        detail = await response.text();
+      } catch {
+        // ignore
+      }
+      const suffix = detail && detail.trim().length > 0 ? `: ${detail.trim()}` : '';
+      throw new Error(`Failed to send message (${response.status})${suffix}`);
+    }
 
     // Return temporary ID for optimistic UI
     // Real messageID will come from server via SSE events

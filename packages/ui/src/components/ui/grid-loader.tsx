@@ -21,18 +21,19 @@ const GridLoader: React.FC<GridLoaderProps> = ({ className, size = 'md' }) => {
   const config = sizeConfig[size];
 
   return (
-    <div
-      className={cn('grid grid-cols-3', config.container, className)}
+    <span
+      className={cn('grid grid-cols-3 place-items-center', config.container, className)}
+      style={{ width: '11px', height: '11px' }}
       aria-label="Loading"
     >
       {Array.from({ length: 9 }, (_, i) => (
-        <div
+        <span
           key={i}
-          className={cn('rounded-full bg-current animate-grid-pulse', config.dot)}
+          className={cn('shrink-0 rounded-full bg-current animate-grid-pulse', config.dot)}
           style={{ animationDelay: `${getPulseDelayMs(i)}ms` }}
         />
       ))}
-    </div>
+    </span>
   );
 };
 

@@ -1,5 +1,6 @@
 import React from 'react';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { opencodeClient } from '@/lib/opencode/client';
 
 interface SessionState {
   status: 'idle' | 'busy' | 'retry';
@@ -70,20 +71,27 @@ export function useServerSessionStatus() {
     lastSyncAtRef.current = now;
 
     try {
-      const snapshotResponse = await fetch('/api/sessions/snapshot', {
-        method: 'GET',
-        cache: 'no-store',
-        headers: { Accept: 'application/json' },
-      });
+      const [snapshotResult, upstreamStatusResult] = await Promise.allSettled([
+        fetch('/api/sessions/snapshot', {
+          method: 'GET',
+          cache: 'no-store',
+          headers: { Accept: 'application/json' },
+        }).then(async (r) => {
+          if (!r.ok) {
+            throw new Error(String(r.status));
+          }
+          return (await r.json()) as ServerSnapshotResponse;
+        }),
+        opencodeClient.getGlobalSessionStatus(),
+      ]);
 
-      if (!snapshotResponse.ok) {
-        console.warn('[useServerSessionStatus] Failed to fetch session snapshot:', snapshotResponse.status);
-        return;
-      }
+      const snapshotData: ServerSnapshotResponse | null =
+        snapshotResult.status === 'fulfilled' ? snapshotResult.value : null;
+      const statusSessions = snapshotData?.statusSessions ?? {};
+      const attentionSessions = snapshotData?.attentionSessions ?? {};
 
-      const snapshotData: ServerSnapshotResponse = await snapshotResponse.json();
-      const statusSessions = snapshotData.statusSessions ?? {};
-      const attentionSessions = snapshotData.attentionSessions ?? {};
+      const upstreamStatuses =
+        upstreamStatusResult.status === 'fulfilled' ? (upstreamStatusResult.value ?? {}) : {};
 
       // Update the session store with server state
       const currentStatuses = useSessionStore.getState().sessionStatus || new Map();
@@ -117,10 +125,37 @@ export function useServerSessionStatus() {
         }
       }
 
+      // Overlay OpenCode's own session status endpoint.
+      // This is the source-of-truth for retry message payload and works even when
+      // OpenChamber server-side tracking misses transient updates.
+      for (const [sessionId, upstream] of Object.entries(upstreamStatuses)) {
+        const existing = (newStatuses ?? currentStatuses).get(sessionId);
+        const hasChanged =
+          !existing ||
+          existing.type !== upstream.type ||
+          existing.attempt !== upstream.attempt ||
+          existing.message !== upstream.message ||
+          existing.next !== upstream.next;
+
+        if (hasChanged) {
+          ensureStatusesMap().set(sessionId, {
+            type: upstream.type,
+            confirmedAt: Date.now(),
+            attempt: upstream.attempt,
+            message: upstream.message,
+            next: upstream.next,
+          });
+        }
+      }
+
       // Check for sessions that are no longer in server state (treat as idle)
+      const activeServerStatusIds = new Set(Object.keys(statusSessions));
+      const activeUpstreamIds = new Set(Object.keys(upstreamStatuses));
+
       for (const [sessionId, currentStatus] of (newStatuses ?? currentStatuses)) {
         if ((currentStatus.type === 'busy' || currentStatus.type === 'retry') &&
-            !statusSessions[sessionId]) {
+            !activeServerStatusIds.has(sessionId) &&
+            !activeUpstreamIds.has(sessionId)) {
           // Session was busy but not in server state anymore -> mark as idle
           ensureStatusesMap().set(sessionId, {
             type: 'idle',
@@ -179,8 +214,9 @@ export function useServerSessionStatus() {
       if (process.env.NODE_ENV === 'development') {
         console.debug('[useServerSessionStatus] Updated session statuses from server:', {
           statusCount: Object.keys(statusSessions).length,
+          upstreamCount: Object.keys(upstreamStatuses).length,
           attentionCount: Object.keys(attentionSessions).length,
-          serverTime: snapshotData.serverTime,
+          serverTime: snapshotData?.serverTime,
         });
       }
     } catch (error) {

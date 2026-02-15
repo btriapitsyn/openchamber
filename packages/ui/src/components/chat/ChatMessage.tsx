@@ -204,11 +204,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         const resolvedProvider = typeof providerID === 'string' && providerID.trim().length > 0 ? providerID : undefined;
         const resolvedModel = typeof modelID === 'string' && modelID.trim().length > 0 ? modelID : undefined;
         const resolvedVariant = typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined;
- 
+
         if (!resolvedAgent && !resolvedProvider && !resolvedModel && !resolvedVariant) {
             return null;
         }
- 
+
         return {
             agentName: resolvedAgent,
             providerId: resolvedProvider,
@@ -344,7 +344,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         const variants = model?.variants;
         return Boolean(variants && Object.keys(variants).length > 0);
     }, [isUser, modelID, providerID, providers]);
- 
+
     const displayAgentName = useStickyDisplayValue<string>(agentName);
     const displayProviderIDValue = useStickyDisplayValue<string>(providerID ?? undefined);
     const displayModelName = useStickyDisplayValue<string>(modelName);
@@ -532,36 +532,36 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const shouldShowHeader = React.useMemo(() => {
         if (isUser) return true;
-        
+
         // Use turn grouping context if available for more precise control
         const headerMessageId = turnGroupingContext?.headerMessageId;
         if (headerMessageId) {
             // For turn grouping: only show header for the first assistant message in the turn
             const isFirstAssistantInTurn = message.info.id === headerMessageId;
-            
+
             if (isFirstAssistantInTurn) {
                 // For completed messages, always show header (historical messages)
                 if (streamPhase === 'completed') {
                     return true;
                 }
-                
+
                 // For streaming messages: show header when streaming starts and keep it visible
                 const isCurrentlyStreaming = streamPhase === 'streaming' || streamPhase === 'cooldown';
                 const hasStartedStreaming = shouldShowHeaderRef.current;
-                
+
                 // Update the ref when streaming starts
                 if (isCurrentlyStreaming && !hasStartedStreaming) {
                     shouldShowHeaderRef.current = true;
                 }
-                
+
                 // Show header if streaming has started or is currently active
                 return hasStartedStreaming || isCurrentlyStreaming;
             }
-            
+
             // For non-first assistant messages, don't show header
             return false;
         }
-        
+
         // Fallback to original logic when turn grouping is not available
         if (!previousRole) return true;
         return previousRole.isUser;
@@ -600,7 +600,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const headerVariantRaw = !isUser ? (variantFromTurnStore ?? previousUserMetadata?.variant) : undefined;
 
     const headerVariant = !isUser && modelHasVariants ? (headerVariantRaw ?? 'Default') : undefined;
- 
+
     const assistantSummaryCandidate =
         typeof turnGroupingContext?.summaryBody === 'string' && turnGroupingContext.summaryBody.trim().length > 0
             ? turnGroupingContext.summaryBody
@@ -633,6 +633,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         const detail = dataMessage || errorMessage || errorName;
         if (!detail) {
             return undefined;
+        }
+        if (errorName === 'SessionRetry') {
+            return `Opencode failed to send a message. Retry attempt info: \n\`${detail}\``;
         }
         return `Opencode failed to send message with error:\n\`${detail}\``;
     }, [isUser, message.info]);

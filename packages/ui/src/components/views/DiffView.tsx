@@ -719,7 +719,8 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                         'relative flex w-full items-center gap-2 px-3 py-1.5 rounded-t-xl border border-border/60 overflow-hidden',
                         'bg-background hover:bg-background',
                         isExpanded ? 'rounded-b-none' : 'rounded-b-xl',
-                        'text-muted-foreground hover:text-foreground'
+                        'text-muted-foreground hover:text-foreground',
+                        isSelected ? 'ring-1 ring-inset ring-[var(--interactive-selection)]' : null
                     )}
                 >
                     <div className="absolute inset-0 pointer-events-none group-hover/collapsible:bg-interactive-hover" />
