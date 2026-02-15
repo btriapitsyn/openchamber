@@ -1041,7 +1041,7 @@ export const Header: React.FC = () => {
                       }
                     }}
                     className={cn(
-                      'relative z-10 flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md pl-2.5 pr-1.5 text-[0.9375rem] font-medium transition-colors duration-150 whitespace-nowrap group',
+                      'relative z-10 flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md pl-2.5 pr-1 text-[0.9375rem] font-medium transition-colors duration-150 whitespace-nowrap group',
                       isActive
                         ? 'text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
@@ -1064,7 +1064,7 @@ export const Header: React.FC = () => {
                         <button
                           type="button"
                           className={cn(
-                            'inline-flex h-4 w-4 items-center justify-center rounded-sm transition-opacity',
+                            'inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm transition-opacity',
                             'text-muted-foreground hover:text-foreground',
                             isActive || projectTabMenuOpen === project.id
                               ? 'opacity-60 hover:opacity-100'
@@ -1073,7 +1073,7 @@ export const Header: React.FC = () => {
                           aria-label="Project options"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <RiMore2Fill className="h-4 w-4" />
+                          <RiMore2Fill className="h-3.5 w-3.5" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="min-w-[160px]">
