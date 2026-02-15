@@ -256,12 +256,17 @@ jobs:
         run: bun run --cwd packages/desktop fastlane:android:build
 
       - name: Install iOS signing assets
-        if: ${{ inputs.build_ios && secrets.IOS_CERTIFICATE != '' && secrets.IOS_CERTIFICATE_PASSWORD != '' }}
+        if: ${{ inputs.build_ios }}
         env:
           IOS_CERTIFICATE: ${{ secrets.IOS_CERTIFICATE }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
           IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
         run: |
+          if [ -z "$IOS_CERTIFICATE" ] || [ -z "$IOS_CERTIFICATE_PASSWORD" ]; then
+            echo "iOS certificate secrets not provided; skipping manual signing asset import"
+            exit 0
+          fi
+
           KEYCHAIN_PATH="$RUNNER_TEMP/ios-signing.keychain-db"
           KEYCHAIN_PASSWORD="${RUNNER_TEMP##*/}-$(openssl rand -hex 12)"
 
@@ -291,8 +296,19 @@ jobs:
           IOS_EXPORT_METHOD: ${{ inputs.ios_export_method }}
         run: bun run --cwd packages/desktop fastlane:ios:build
 
+      - name: Validate Google Play credentials
+        if: ${{ inputs.upload_play_internal && inputs.build_android }}
+        env:
+          GOOGLE_PLAY_JSON_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          GOOGLE_PLAY_JSON_KEY_PATH: ${{ secrets.GOOGLE_PLAY_JSON_KEY_PATH }}
+        run: |
+          if [ -z "$GOOGLE_PLAY_JSON_KEY" ] && [ -z "$GOOGLE_PLAY_JSON_KEY_PATH" ]; then
+            echo "GOOGLE_PLAY_JSON_KEY or GOOGLE_PLAY_JSON_KEY_PATH must be set for Play upload"
+            exit 1
+          fi
+
       - name: Upload to Google Play internal
-        if: ${{ inputs.upload_play_internal && inputs.build_android && (secrets.GOOGLE_PLAY_JSON_KEY != '' || secrets.GOOGLE_PLAY_JSON_KEY_PATH != '') }}
+        if: ${{ inputs.upload_play_internal && inputs.build_android }}
         env:
           GOOGLE_PLAY_JSON_KEY: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
           GOOGLE_PLAY_JSON_KEY_PATH: ${{ secrets.GOOGLE_PLAY_JSON_KEY_PATH }}
@@ -302,8 +318,19 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: bun run --cwd packages/desktop fastlane:android:play-internal
 
+      - name: Validate TestFlight credentials
+        if: ${{ inputs.upload_testflight && inputs.build_ios }}
+        env:
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY }}
+        run: |
+          test -n "$APP_STORE_CONNECT_API_KEY_KEY_ID"
+          test -n "$APP_STORE_CONNECT_API_KEY_ISSUER_ID"
+          test -n "$APP_STORE_CONNECT_API_KEY_KEY"
+
       - name: Upload to TestFlight
-        if: ${{ inputs.upload_testflight && inputs.build_ios && secrets.APP_STORE_CONNECT_API_KEY_KEY_ID != '' && secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID != '' && secrets.APP_STORE_CONNECT_API_KEY_KEY != '' }}
+        if: ${{ inputs.upload_testflight && inputs.build_ios }}
         env:
           APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
           APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
@@ -384,11 +411,21 @@ jobs:
 
   publish-fdroid:
     needs: mobile-build
-    if: ${{ inputs.publish_fdroid_repo && inputs.build_android && secrets.FDROID_KEYSTORE_BASE64 != '' && secrets.FDROID_KEYSTORE_PASSWORD != '' && secrets.FDROID_KEY_PASSWORD != '' }}
+    if: ${{ inputs.publish_fdroid_repo && inputs.build_android }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Validate F-Droid publish credentials
+        env:
+          FDROID_KEYSTORE_BASE64: ${{ secrets.FDROID_KEYSTORE_BASE64 }}
+          FDROID_KEYSTORE_PASSWORD: ${{ secrets.FDROID_KEYSTORE_PASSWORD }}
+          FDROID_KEY_PASSWORD: ${{ secrets.FDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$FDROID_KEYSTORE_BASE64"
+          test -n "$FDROID_KEYSTORE_PASSWORD"
+          test -n "$FDROID_KEY_PASSWORD"
+
       - name: Download F-Droid artifact
         uses: actions/download-artifact@v4
         with:
