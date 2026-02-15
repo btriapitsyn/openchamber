@@ -295,6 +295,11 @@
   :root.tauri-mobile-runtime.device-tablet:not(.desktop-runtime) .ios-keyboard-safe-area {
     padding-bottom: calc(var(--oc-keyboard-home-indicator, 34px) + var(--oc-safe-area-bottom-visual, 0px)) !important;
   }
+
+  :root.tauri-mobile-runtime.runtime-android.device-mobile:not(.desktop-runtime) .ios-keyboard-safe-area,
+  :root.tauri-mobile-runtime.runtime-android.device-tablet:not(.desktop-runtime) .ios-keyboard-safe-area {
+    padding-bottom: calc(var(--oc-keyboard-inset, 0px) + var(--oc-safe-area-bottom-visual, 0px)) !important;
+  }
 }
 
 /* Phase 1: iOS PWA safe area handling - Enhanced positioning approach */
@@ -337,6 +342,10 @@
 
     :root.tauri-mobile-runtime .ios-keyboard-safe-area {
       padding-bottom: calc(var(--oc-keyboard-home-indicator, 34px) + var(--oc-safe-area-bottom-visual, 0px)) !important;
+    }
+
+    :root.tauri-mobile-runtime.runtime-android .ios-keyboard-safe-area {
+      padding-bottom: calc(var(--oc-keyboard-inset, 0px) + var(--oc-safe-area-bottom-visual, 0px)) !important;
     }
 
     /* Prevent keyboard-induced page scroll on iOS PWA */

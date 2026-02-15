@@ -189,10 +189,22 @@ export const MainLayout: React.FC = () => {
         const root = document.documentElement;
         const isTauriMobileRuntime = root.classList.contains('tauri-mobile-runtime');
         const isTauriIOSRuntime = isTauriMobileRuntime && root.classList.contains('runtime-ios');
+        const isTauriAndroidRuntime = isTauriMobileRuntime && root.classList.contains('runtime-android');
+
+        type VirtualKeyboardLike = {
+            overlaysContent?: boolean;
+            boundingRect?: { height?: number };
+            addEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+            removeEventListener?: (type: string, listener: EventListenerOrEventListenerObject) => void;
+        };
+        const vkNavigator = navigator as Navigator & { virtualKeyboard?: VirtualKeyboardLike };
+        const virtualKeyboard = vkNavigator.virtualKeyboard;
 
         let stickyKeyboardInset = 0;
         let ignoreOpenUntilZero = false;
         let previousHeight = 0;
+        let layoutViewportBaseline = 0;
+        let windowViewportBaseline = 0;
         let keyboardAvoidTarget: HTMLElement | null = null;
 
         const setKeyboardOpen = useUIStore.getState().setKeyboardOpen;
@@ -257,8 +269,32 @@ export const MainLayout: React.FC = () => {
             const isTextTarget = isInput || Boolean(active?.isContentEditable);
 
             const layoutHeight = Math.round(root.clientHeight || window.innerHeight);
+            const windowHeight = Math.round(window.innerHeight);
             const viewportSum = height + offsetTop;
-            const rawInset = Math.max(0, layoutHeight - viewportSum);
+            const baselineCandidate = Math.max(layoutHeight, viewportSum);
+            const windowBaselineCandidate = Math.max(windowHeight, viewportSum);
+            if (!isTextTarget && stickyKeyboardInset === 0) {
+                layoutViewportBaseline = baselineCandidate;
+                windowViewportBaseline = windowBaselineCandidate;
+            } else if (layoutViewportBaseline === 0) {
+                layoutViewportBaseline = baselineCandidate;
+                windowViewportBaseline = windowBaselineCandidate;
+            } else if (windowViewportBaseline === 0) {
+                windowViewportBaseline = windowBaselineCandidate;
+            }
+            const rootRawInset = Math.max(0, Math.max(layoutViewportBaseline, baselineCandidate) - viewportSum);
+            const windowRawInset = Math.max(0, Math.max(windowViewportBaseline, windowBaselineCandidate) - viewportSum);
+            const virtualKeyboardInset = (() => {
+                if (!isTauriAndroidRuntime || !isTextTarget) {
+                    return 0;
+                }
+                const value = virtualKeyboard?.boundingRect?.height;
+                if (typeof value !== 'number' || !Number.isFinite(value)) {
+                    return 0;
+                }
+                return Math.max(0, Math.round(value));
+            })();
+            const rawInset = Math.max(rootRawInset, windowRawInset, virtualKeyboardInset);
 
             // Keyboard heuristic:
             // - when an input is focused, smaller deltas can still be keyboard
@@ -351,6 +387,14 @@ export const MainLayout: React.FC = () => {
         const viewport = window.visualViewport;
         viewport?.addEventListener('resize', updateVisualViewport);
         viewport?.addEventListener('scroll', updateVisualViewport);
+        try {
+            if (virtualKeyboard) {
+                virtualKeyboard.overlaysContent = true;
+            }
+        } catch {
+            // ignored
+        }
+        virtualKeyboard?.addEventListener?.('geometrychange', updateVisualViewport);
         window.addEventListener('resize', updateVisualViewport);
         window.addEventListener('orientationchange', updateVisualViewport);
         const isTextInputTarget = (element: HTMLElement | null) => {
@@ -400,8 +444,14 @@ export const MainLayout: React.FC = () => {
                 const measuredOffsetTop = currentViewport ? Math.max(0, Math.round(currentViewport.offsetTop)) : 0;
                 const offsetTop = isTauriIOSRuntime ? 0 : measuredOffsetTop;
                 const layoutHeight = Math.round(root.clientHeight || window.innerHeight);
+                const windowHeight = Math.round(window.innerHeight);
                 const viewportSum = height + offsetTop;
-                const rawInset = Math.max(0, layoutHeight - viewportSum);
+                const baselineCandidate = Math.max(layoutHeight, viewportSum);
+                const windowBaselineCandidate = Math.max(windowHeight, viewportSum);
+                const rawInset = Math.max(
+                    0,
+                    Math.max(layoutViewportBaseline, baselineCandidate, windowViewportBaseline, windowBaselineCandidate) - viewportSum,
+                );
 
                 if (rawInset > 0) {
                     updateVisualViewport();
@@ -418,6 +468,7 @@ export const MainLayout: React.FC = () => {
         return () => {
             viewport?.removeEventListener('resize', updateVisualViewport);
             viewport?.removeEventListener('scroll', updateVisualViewport);
+            virtualKeyboard?.removeEventListener?.('geometrychange', updateVisualViewport);
             window.removeEventListener('resize', updateVisualViewport);
             window.removeEventListener('orientationchange', updateVisualViewport);
             document.removeEventListener('focusin', handleFocusIn, true);
