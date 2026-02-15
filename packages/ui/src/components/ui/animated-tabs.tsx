@@ -82,15 +82,17 @@ export function AnimatedTabs<T extends string>({
       <div
         ref={containerRef}
         className={cn(
-          'relative flex items-center overflow-hidden',
-          size === 'sm' ? 'h-8 rounded-lg p-0.5 gap-0.5' : 'h-10 rounded-lg p-1 gap-0.5'
+          'relative flex items-center overflow-hidden bg-[var(--surface-muted)]/50',
+          size === 'sm'
+            ? 'h-8 rounded-lg py-0.5 px-px gap-0.5'
+            : 'h-10 rounded-lg py-0.5 px-px gap-0.5'
         )}
       >
         {/* Sliding indicator */}
         <div
           ref={indicatorRef}
           className={cn(
-            'absolute top-0.5 bottom-0.5 rounded-md border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm',
+            'absolute top-0.5 bottom-0.5 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] shadow-sm',
             animate && isReadyToAnimate ? 'transition-[transform,width] duration-200 ease-out' : null
           )}
           style={{ width: 0, transform: 'translateX(0)' }}
@@ -111,7 +113,7 @@ export function AnimatedTabs<T extends string>({
               }}
               className={cn(
                 'animated-tabs__button relative z-10 flex flex-1 items-center justify-center font-medium transition-colors duration-150',
-                size === 'sm' ? 'h-6 rounded-md px-2.5 text-sm' : 'h-7 rounded-md px-3 text-sm',
+                size === 'sm' ? 'h-6 rounded-lg px-2.5 text-sm' : 'h-7 rounded-lg px-3 text-sm',
                 collapseLabelsOnSmall ? 'gap-0 sm:gap-1.5' : 'gap-1.5',
                 isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--interactive-focus-ring)] focus-visible:ring-offset-1 focus-visible:ring-offset-background'
