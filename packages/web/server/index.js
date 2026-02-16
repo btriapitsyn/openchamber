@@ -1050,7 +1050,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
-const OPENCODE_LOCAL_AUTH_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'opencode-local-auth.json');
+const OPENCODE_PASSWORD_SETTINGS_KEY = '_internalOpencodeServerPassword';
 
 const readSettingsFromDisk = async () => {
   try {
@@ -2887,197 +2887,69 @@ function generateSecureOpenCodePassword() {
 }
 
 function isValidOpenCodePassword(password) {
-  return typeof password === 'string' && password.length >= 24;
+  return typeof password === 'string' && password.trim().length > 0;
 }
 
-const OPENCODE_CREDENTIAL_SERVICE = 'com.openchamber.local-opencode';
-const OPENCODE_CREDENTIAL_ACCOUNT = 'http://127.0.0.1';
-
-function readPasswordFromSystemCredentialStore() {
+async function readPersistedOpenCodePasswordFromSettings() {
   try {
-    if (process.platform === 'darwin') {
-      const result = spawnSync(
-        'security',
-        [
-          'find-generic-password',
-          '-s',
-          OPENCODE_CREDENTIAL_SERVICE,
-          '-a',
-          OPENCODE_CREDENTIAL_ACCOUNT,
-          '-w',
-        ],
-        { encoding: 'utf8', timeout: 5000 }
-      );
-
-      if (result.status !== 0) {
-        return null;
-      }
-
-      const password = (result.stdout || '').trim();
-      return isValidOpenCodePassword(password) ? password : null;
-    }
-
-    if (process.platform === 'linux') {
-      const result = spawnSync(
-        'secret-tool',
-        [
-          'lookup',
-          'service',
-          OPENCODE_CREDENTIAL_SERVICE,
-          'account',
-          OPENCODE_CREDENTIAL_ACCOUNT,
-        ],
-        { encoding: 'utf8', timeout: 5000 }
-      );
-
-      if (result.status !== 0) {
-        return null;
-      }
-
-      const password = (result.stdout || '').trim();
-      return isValidOpenCodePassword(password) ? password : null;
-    }
-
-    return null;
+    const settings = await readSettingsFromDisk();
+    const persisted = typeof settings?.[OPENCODE_PASSWORD_SETTINGS_KEY] === 'string'
+      ? settings[OPENCODE_PASSWORD_SETTINGS_KEY].trim()
+      : '';
+    return isValidOpenCodePassword(persisted) ? persisted : null;
   } catch {
     return null;
   }
 }
 
-function persistPasswordToSystemCredentialStore(password) {
+async function persistOpenCodePasswordToSettings(password) {
   if (!isValidOpenCodePassword(password)) {
-    return false;
+    return;
   }
 
-  try {
-    if (process.platform === 'darwin') {
-      const result = spawnSync(
-        'security',
-        [
-          'add-generic-password',
-          '-U',
-          '-s',
-          OPENCODE_CREDENTIAL_SERVICE,
-          '-a',
-          OPENCODE_CREDENTIAL_ACCOUNT,
-          '-w',
-          password,
-        ],
-        { encoding: 'utf8', timeout: 5000 }
-      );
-      return result.status === 0;
+  persistSettingsLock = persistSettingsLock.then(async () => {
+    const current = await readSettingsFromDisk();
+    if (typeof current?.[OPENCODE_PASSWORD_SETTINGS_KEY] === 'string' &&
+      current[OPENCODE_PASSWORD_SETTINGS_KEY] === password) {
+      return;
     }
-
-    if (process.platform === 'linux') {
-      const result = spawnSync(
-        'secret-tool',
-        [
-          'store',
-          '--label',
-          'OpenChamber local OpenCode password',
-          'service',
-          OPENCODE_CREDENTIAL_SERVICE,
-          'account',
-          OPENCODE_CREDENTIAL_ACCOUNT,
-        ],
-        { encoding: 'utf8', timeout: 5000, input: `${password}\n` }
-      );
-      return result.status === 0;
-    }
-
-    return false;
-  } catch {
-    return false;
-  }
-}
-
-function removeLegacyLocalOpenCodePasswordFile() {
-  try {
-    if (fs.existsSync(OPENCODE_LOCAL_AUTH_FILE_PATH)) {
-      fs.unlinkSync(OPENCODE_LOCAL_AUTH_FILE_PATH);
-    }
-  } catch {
-    // best-effort
-  }
-}
-
-function readStoredLocalOpenCodePassword() {
-  try {
-    if (!fs.existsSync(OPENCODE_LOCAL_AUTH_FILE_PATH)) {
-      return null;
-    }
-
-    const raw = fs.readFileSync(OPENCODE_LOCAL_AUTH_FILE_PATH, 'utf8');
-    const parsed = JSON.parse(raw);
-    const password = typeof parsed?.password === 'string' ? parsed.password.trim() : '';
-    return isValidOpenCodePassword(password) ? password : null;
-  } catch (error) {
-    console.warn('Failed to read local OpenCode auth file:', error?.message || error);
-    return null;
-  }
-}
-
-function persistLocalOpenCodePassword(password) {
-  try {
-    fs.mkdirSync(path.dirname(OPENCODE_LOCAL_AUTH_FILE_PATH), { recursive: true });
-
-    const payload = {
-      version: 1,
-      username: 'opencode',
-      password,
-      createdAt: Date.now(),
-      managedBy: 'openchamber',
+    const next = {
+      ...(current && typeof current === 'object' ? current : {}),
+      [OPENCODE_PASSWORD_SETTINGS_KEY]: password,
     };
+    await writeSettingsToDisk(next);
+  });
 
-    const tmpPath = `${OPENCODE_LOCAL_AUTH_FILE_PATH}.${process.pid}.${Date.now()}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), 'utf8');
-    try {
-      fs.chmodSync(tmpPath, 0o600);
-    } catch {
-      // best-effort
-    }
-    fs.renameSync(tmpPath, OPENCODE_LOCAL_AUTH_FILE_PATH);
-    try {
-      fs.chmodSync(OPENCODE_LOCAL_AUTH_FILE_PATH, 0o600);
-    } catch {
-      // best-effort
-    }
-  } catch (error) {
-    console.warn('Failed to persist local OpenCode auth file:', error?.message || error);
-  }
+  return persistSettingsLock;
 }
 
-function ensureLocalOpenCodeServerPassword() {
+async function ensureLocalOpenCodeServerPassword({ rotateManaged = false } = {}) {
   const fromEnv = typeof process.env.OPENCODE_SERVER_PASSWORD === 'string'
     ? process.env.OPENCODE_SERVER_PASSWORD.trim()
     : '';
   if (isValidOpenCodePassword(fromEnv)) {
     process.env.OPENCODE_SERVER_PASSWORD = fromEnv;
+    await persistOpenCodePasswordToSettings(fromEnv);
     return fromEnv;
   }
 
-  const storedSystemPassword = readPasswordFromSystemCredentialStore();
-  if (storedSystemPassword) {
-    process.env.OPENCODE_SERVER_PASSWORD = storedSystemPassword;
-    return storedSystemPassword;
+  if (rotateManaged) {
+    const rotatedPassword = generateSecureOpenCodePassword();
+    process.env.OPENCODE_SERVER_PASSWORD = rotatedPassword;
+    await persistOpenCodePasswordToSettings(rotatedPassword);
+    console.log('Rotated secure password for managed local OpenCode instance');
+    return rotatedPassword;
   }
 
-  const storedPassword = readStoredLocalOpenCodePassword();
+  const storedPassword = await readPersistedOpenCodePasswordFromSettings();
   if (storedPassword) {
-    const persistedToSystem = persistPasswordToSystemCredentialStore(storedPassword);
-    if (persistedToSystem) {
-      removeLegacyLocalOpenCodePasswordFile();
-    }
     process.env.OPENCODE_SERVER_PASSWORD = storedPassword;
     return storedPassword;
   }
 
   const generatedPassword = generateSecureOpenCodePassword();
   process.env.OPENCODE_SERVER_PASSWORD = generatedPassword;
-  const persistedToSystem = persistPasswordToSystemCredentialStore(generatedPassword);
-  if (!persistedToSystem) {
-    persistLocalOpenCodePassword(generatedPassword);
-  }
+  await persistOpenCodePasswordToSettings(generatedPassword);
   console.log('Generated secure password for managed local OpenCode instance');
   return generatedPassword;
 }
@@ -4656,7 +4528,9 @@ async function startOpenCode() {
 
   await applyOpencodeBinaryFromSettings();
   ensureOpencodeCliEnv();
-  const openCodePassword = ensureLocalOpenCodeServerPassword();
+  const openCodePassword = await ensureLocalOpenCodeServerPassword({
+    rotateManaged: isRestartingOpenCode,
+  });
 
   try {
     const serverInstance = await createOpencodeServer({
