@@ -1643,6 +1643,13 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
             }
         }
 
+        if let Ok(password) = env::var("OPENCODE_SERVER_PASSWORD") {
+            let trimmed = password.trim();
+            if !trimmed.is_empty() {
+                cmd = cmd.env("OPENCODE_SERVER_PASSWORD", trimmed);
+            }
+        }
+
         let (rx, child) = match cmd.spawn() {
             Ok(v) => v,
             Err(err) => {
