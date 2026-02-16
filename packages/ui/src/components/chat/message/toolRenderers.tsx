@@ -44,6 +44,81 @@ export const formatEditOutput = (output: string, toolName: string, metadata?: Re
     return cleaned;
 };
 
+export interface ParsedReadOutputLine {
+    text: string;
+    lineNumber: number | null;
+    isInfo: boolean;
+}
+
+export interface ParsedReadToolOutput {
+    type: 'file' | 'directory' | 'unknown';
+    lines: ParsedReadOutputLine[];
+}
+
+export const parseReadToolOutput = (output: string): ParsedReadToolOutput => {
+    const typeMatch = output.match(/<type>(file|directory)<\/type>/i);
+    const detectedType = (typeMatch?.[1]?.toLowerCase() ?? 'unknown') as ParsedReadToolOutput['type'];
+
+    const contentMatch = output.match(/<content>([\s\S]*?)<\/content>/i);
+    const rawContent = contentMatch?.[1] ?? output;
+    const normalizedContent = rawContent.replace(/\r\n/g, '\n');
+    const rawLines = normalizedContent.split('\n');
+
+    const isTruncationInfoLine = (text: string): boolean => {
+        return /\(\s*File has more lines\..*offset.*\)/i.test(text.trim());
+    };
+
+    const parsedLines = rawLines.map((line): ParsedReadOutputLine => {
+        const trimmed = line.trim();
+        const isInfo = (trimmed.startsWith('(') && trimmed.endsWith(')')) || isTruncationInfoLine(trimmed);
+
+        if (detectedType !== 'directory') {
+            const numberedMatch = line.match(/^(\d+):\s?(.*)$/);
+            if (numberedMatch) {
+                const numberedText = numberedMatch[2];
+                const numberedTrimmed = numberedText.trim();
+                const numberedIsInfo =
+                    (numberedTrimmed.startsWith('(') && numberedTrimmed.endsWith(')'))
+                    || isTruncationInfoLine(numberedTrimmed);
+                return {
+                    lineNumber: numberedIsInfo ? null : Number(numberedMatch[1]),
+                    text: numberedText,
+                    isInfo: numberedIsInfo,
+                };
+            }
+        }
+
+        return {
+            lineNumber: null,
+            text: line,
+            isInfo,
+        };
+    });
+
+    const lines = parsedLines.filter((line, index, arr) => {
+        if (line.text.trim().length > 0) {
+            return true;
+        }
+
+        const prev = arr[index - 1];
+        const next = arr[index + 1];
+        const adjacentToInfo = Boolean(prev?.isInfo || next?.isInfo);
+        const hasNumber = line.lineNumber !== null;
+
+        // Drop numbered blank lines wrapped around helper/info rows.
+        if (adjacentToInfo && hasNumber) {
+            return false;
+        }
+
+        return true;
+    });
+
+    return {
+        type: detectedType,
+        lines,
+    };
+};
+
 export const renderListOutput = (output: string, options?: { unstyled?: boolean }) => {
     try {
         const lines = output.trim().split('\n').filter(Boolean);

@@ -16,6 +16,7 @@ import {
     renderWebSearchOutput,
     formatInputForDisplay,
     parseDiffToUnified,
+    parseReadToolOutput,
     type UnifiedDiffHunk,
     type SideBySideDiffHunk,
     type SideBySideDiffLine,
@@ -740,33 +741,41 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                 }
 
                                 if (tool === 'read') {
-                                    const lines = popup.content.split('\n');
+                                    const parsedReadOutput = parseReadToolOutput(popup.content);
 
                                     const inputMeta = popup.metadata?.input;
                                     const inputObj = typeof inputMeta === 'object' && inputMeta !== null ? (inputMeta as Record<string, unknown>) : {};
                                     const offset = typeof inputObj.offset === 'number' ? inputObj.offset : 0;
-                                    const limit = typeof inputObj.limit === 'number' ? inputObj.limit : undefined;
-
-                                    const isInfoMessage = (line: string) => line.trim().startsWith('(');
+                                    let fallbackLineCursor = offset;
+                                    const hasExplicitLineNumbers = parsedReadOutput.lines.some((line) => line.lineNumber !== null);
 
                                     return (
                                         <div>
-                                            {lines.map((line: string, idx: number) => {
+                                            {parsedReadOutput.lines.map((line, idx: number) => {
+                                                if (line.lineNumber !== null) {
+                                                    fallbackLineCursor = line.lineNumber;
+                                                }
 
-                                                const isInfo = isInfoMessage(line);
+                                                const shouldAssignFallbackLineNumber =
+                                                    parsedReadOutput.type === 'file'
+                                                    && !hasExplicitLineNumbers
+                                                    && line.lineNumber === null
+                                                    && !line.isInfo;
 
-                                                const lineNumber = offset + idx + 1;
+                                                const effectiveLineNumber = line.lineNumber ?? (shouldAssignFallbackLineNumber
+                                                    ? (fallbackLineCursor += 1)
+                                                    : null);
 
-                                                const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
+                                                const shouldShowLineNumber = !line.isInfo && effectiveLineNumber !== null;
 
                                                     return (
-                                                        <div key={idx} className={`typography-code font-mono flex ${isInfo ? 'text-muted-foreground/70 italic' : ''}`}>
+                                                        <div key={idx} className={`typography-code font-mono flex ${line.isInfo ? 'text-muted-foreground/70 italic' : ''}`}>
                                                             <span className="w-12 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
-                                                                {shouldShowLineNumber ? lineNumber : ''}
+                                                                {shouldShowLineNumber ? effectiveLineNumber : ''}
                                                             </span>
                                                             <div className="flex-1 min-w-0">
-                                                            {isInfo ? (
-                                                                <div className="whitespace-pre-wrap break-words">{line}</div>
+                                                            {line.isInfo ? (
+                                                                <div className="whitespace-pre-wrap break-words">{line.text}</div>
                                                             ) : (
                                                                 <SyntaxHighlighter
                                                                     style={syntaxTheme}
@@ -794,7 +803,7 @@ const ToolOutputDialog: React.FC<ToolOutputDialogProps> = ({ popup, onOpenChange
                                                                         },
                                                                     }}
                                                                 >
-                                                                    {line}
+                                                                    {line.text}
                                                                 </SyntaxHighlighter>
                                                             )}
                                                         </div>

@@ -24,6 +24,7 @@ import {
     formatEditOutput,
     detectLanguageFromOutput,
     formatInputForDisplay,
+    parseReadToolOutput,
 } from '../toolRenderers';
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
@@ -808,31 +809,40 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
         if (hasStringOutput && outputString.trim()) {
             if (part.tool === 'read') {
-                const formattedOutput = formatEditOutput(outputString, part.tool, metadata);
-                const lines = formattedOutput.split('\n');
+                const parsedReadOutput = parseReadToolOutput(outputString);
                 const offset = typeof input?.offset === 'number' ? input.offset : 0;
-                const limit = typeof input?.limit === 'number' ? input.limit : undefined;
-                const isInfoMessage = (line: string) => line.trim().startsWith('(');
+                const contentForLanguage = parsedReadOutput.lines.map((line) => line.text).join('\n');
+                let fallbackLineCursor = offset;
+                const hasExplicitLineNumbers = parsedReadOutput.lines.some((line) => line.lineNumber !== null);
 
                 return renderScrollableBlock(
                     <div className="typography-code w-full min-w-0 space-y-1">
-                        {lines.map((line: string, idx: number) => {
-                            const isInfo = isInfoMessage(line);
-                            const lineNumber = offset + idx + 1;
-                            const shouldShowLineNumber = !isInfo && (limit === undefined || idx < limit);
+                        {parsedReadOutput.lines.map((line, idx) => {
+                            if (line.lineNumber !== null) {
+                                fallbackLineCursor = line.lineNumber;
+                            }
+                            const shouldAssignFallbackLineNumber =
+                                parsedReadOutput.type === 'file'
+                                && !hasExplicitLineNumbers
+                                && line.lineNumber === null
+                                && !line.isInfo;
+                            const effectiveLineNumber = line.lineNumber ?? (shouldAssignFallbackLineNumber
+                                ? (fallbackLineCursor += 1)
+                                : null);
+                            const shouldShowLineNumber = !line.isInfo && effectiveLineNumber !== null;
 
                             return (
-                                <div key={idx} className={cn('typography-code font-mono flex w-full min-w-0', isInfo && 'text-muted-foreground/70 italic')}>
+                                <div key={idx} className={cn('typography-code font-mono flex w-full min-w-0', line.isInfo && 'text-muted-foreground/70 italic')}>
                                     <span className="w-10 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
-                                        {shouldShowLineNumber ? lineNumber : ''}
+                                        {shouldShowLineNumber ? effectiveLineNumber : ''}
                                     </span>
                                     <div className="flex-1 min-w-0">
-                                        {isInfo ? (
-                                            <div className="whitespace-pre-wrap break-words">{line}</div>
+                                        {line.isInfo ? (
+                                            <div className="whitespace-pre-wrap break-words">{line.text}</div>
                                         ) : (
                                             <SyntaxHighlighter
                                                 style={syntaxTheme}
-                                                language={detectLanguageFromOutput(formattedOutput, part.tool, input as Record<string, unknown>)}
+                                                language={detectLanguageFromOutput(contentForLanguage, part.tool, input as Record<string, unknown>)}
                                                 PreTag="div"
                                                 wrapLines
                                                 wrapLongLines
@@ -855,7 +865,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                                                     },
                                                 }}
                                             >
-                                                {line}
+                                                {line.text}
                                             </SyntaxHighlighter>
                                         )}
                                     </div>
@@ -1073,6 +1083,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
     const justificationText = React.useMemo(() => {
         if (!showTextJustificationActivity) return null;
+        if (part.tool === 'apply_patch') return null;
         // Get title or description from state - this is the "yapping" text like "Shows system information"
         const title = (stateWithData as { title?: string }).title;
         if (typeof title === 'string' && title.trim().length > 0) {
@@ -1083,7 +1094,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
             return inputDesc;
         }
         return null;
-    }, [showTextJustificationActivity, stateWithData, input]);
+    }, [showTextJustificationActivity, part.tool, stateWithData, input]);
 
     const runtime = React.useContext(RuntimeAPIContext);
 
