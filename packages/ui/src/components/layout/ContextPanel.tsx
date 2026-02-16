@@ -67,6 +67,22 @@ export const ContextPanel: React.FC = () => {
   const [isResizing, setIsResizing] = React.useState(false);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(width);
+  const panelRef = React.useRef<HTMLElement | null>(null);
+  const wasOpenRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!isOpen || wasOpenRef.current) {
+      wasOpenRef.current = isOpen;
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      panelRef.current?.focus({ preventScroll: true });
+    });
+
+    wasOpenRef.current = true;
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   React.useEffect(() => {
     if (!isResizing || !directoryKey) {
@@ -115,6 +131,16 @@ export const ContextPanel: React.FC = () => {
     }
     toggleContextPanelExpanded(directoryKey);
   }, [directoryKey, toggleContextPanelExpanded]);
+
+  const handlePanelKeyDownCapture = React.useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    handleClose();
+  }, [handleClose]);
 
   const activeFilePath = useFilesViewTabsStore((state) => (directoryKey ? (state.byRoot[directoryKey]?.selectedPath ?? null) : null));
 
@@ -165,6 +191,9 @@ export const ContextPanel: React.FC = () => {
 
   return (
     <aside
+      ref={panelRef}
+      data-context-panel="true"
+      tabIndex={-1}
       className={cn(
         'flex min-h-0 flex-col overflow-hidden border-l border-border bg-background',
         isExpanded
@@ -172,6 +201,7 @@ export const ContextPanel: React.FC = () => {
           : 'relative h-full flex-shrink-0',
         isResizing ? 'transition-none' : 'transition-[width] duration-200 ease-in-out'
       )}
+      onKeyDownCapture={handlePanelKeyDownCapture}
       style={isExpanded
         ? undefined
         : {
