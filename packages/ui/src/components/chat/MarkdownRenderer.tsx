@@ -1,10 +1,12 @@
 import React from 'react';
 import { Streamdown } from 'streamdown';
+import { mermaid } from '@streamdown/mermaid';
 import 'streamdown/styles.css';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import { RiFileCopyLine, RiCheckLine, RiDownloadLine } from '@remixicon/react';
+import { toast } from '@/components/ui';
 
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
@@ -115,6 +117,45 @@ const useMarkdownShikiThemes = (): readonly [string | object, string | object] =
   }, [getThemes, isVSCode]);
 
   return isVSCode ? themes : fallbackThemes;
+};
+
+const useStreamdownMermaidOptions = () => {
+  const themeSystem = useOptionalThemeSystem();
+  const fallbackLight = getDefaultTheme(false);
+  const fallbackDark = getDefaultTheme(true);
+
+  const currentTheme = themeSystem?.currentTheme
+    ?? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+      ? fallbackDark
+      : fallbackLight);
+
+  const mermaidRenderKey = `${currentTheme.metadata.id}:${currentTheme.metadata.variant}:${themeSystem?.themeMode ?? 'fallback'}`;
+
+  const options = React.useMemo(() => {
+    const isDark = currentTheme.metadata.variant === 'dark';
+    return {
+      config: {
+        theme: isDark ? 'dark' : 'base',
+        themeVariables: {
+          primaryColor: currentTheme.colors.surface.elevated,
+          primaryTextColor: currentTheme.colors.surface.foreground,
+          primaryBorderColor: currentTheme.colors.interactive.border,
+          lineColor: currentTheme.colors.interactive.border,
+          secondaryColor: currentTheme.colors.surface.muted,
+          tertiaryColor: currentTheme.colors.surface.subtle,
+          background: currentTheme.colors.surface.background,
+          mainBkg: currentTheme.colors.surface.elevated,
+          nodeTextColor: currentTheme.colors.surface.foreground,
+          edgeLabelBackground: currentTheme.colors.surface.background,
+        },
+      },
+    };
+  }, [currentTheme]);
+
+  return React.useMemo(
+    () => ({ options, mermaidRenderKey }),
+    [mermaidRenderKey, options],
+  );
 };
 
 // Table utility functions
@@ -349,9 +390,27 @@ type CodeBlockWrapperProps = React.HTMLAttributes<HTMLPreElement> & {
   children?: React.ReactNode;
 };
 
+const getMermaidInfo = (children: React.ReactNode): { isMermaid: boolean; source: string } => {
+  if (!React.isValidElement(children)) return { isMermaid: false, source: '' };
+  const props = children.props as Record<string, unknown> | undefined;
+  const className = typeof props?.className === 'string' ? props.className : '';
+  if (!className.includes('language-mermaid')) return { isMermaid: false, source: '' };
+  // Extract raw mermaid source from the code element's children
+  const codeChildren = props?.children;
+  let source = '';
+  if (typeof codeChildren === 'string') {
+    source = codeChildren;
+  } else if (React.isValidElement(codeChildren)) {
+    const innerProps = codeChildren.props as Record<string, unknown> | undefined;
+    if (typeof innerProps?.children === 'string') source = innerProps.children;
+  }
+  return { isMermaid: true, source };
+};
+
 const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className, style, ...props }) => {
   const [copied, setCopied] = React.useState(false);
   const codeRef = React.useRef<HTMLDivElement>(null);
+  const mermaidInfo = getMermaidInfo(children);
 
   const normalizedStyle = React.useMemo<React.CSSProperties | undefined>(() => {
     if (!style) return style;
@@ -396,6 +455,15 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
 
     return next;
   }, [style]);
+
+  // Mermaid blocks get their own controls via MermaidWrapper — skip the code copy button.
+  // We must still add data-block so streamdown's code component renders as block (not inline).
+  if (mermaidInfo.isMermaid) {
+    const codeChild = React.isValidElement(children)
+      ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, { 'data-block': true })
+      : children;
+    return <MermaidWrapper source={mermaidInfo.source}>{codeChild}</MermaidWrapper>;
+  }
 
   const getCodeContent = (): string => {
     if (!codeRef.current) return '';
@@ -443,6 +511,87 @@ const streamdownComponents = {
   table: TableWrapper,
 };
 
+const streamdownPlugins = {
+  mermaid,
+};
+
+const streamdownControls = {
+  code: false,
+  table: false,
+  mermaid: {
+    download: false,
+    copy: false,
+    fullscreen: false,
+    panZoom: false,
+  },
+};
+
+// Mermaid copy button — copies raw mermaid source
+const MermaidCopyButton: React.FC<{ source: string }> = ({ source }) => {
+  const [copied, setCopied] = React.useState(false);
+
+  const handleCopy = async () => {
+    if (!source) return;
+    try {
+      await navigator.clipboard.writeText(source);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy diagram:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
+      title="Copy diagram source"
+    >
+      {copied ? <RiCheckLine className="size-3.5" /> : <RiFileCopyLine className="size-3.5" />}
+    </button>
+  );
+};
+
+// Mermaid download button — downloads rendered SVG
+const MermaidDownloadButton: React.FC<{ containerRef: React.RefObject<HTMLDivElement | null> }> = ({ containerRef }) => {
+  const handleDownload = () => {
+    const svgEl = containerRef.current?.querySelector('svg');
+    if (!(svgEl instanceof SVGElement)) return;
+    const serializer = new XMLSerializer();
+    let markup = serializer.serializeToString(svgEl);
+    if (!markup.includes('xmlns=')) {
+      markup = markup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+    downloadFile('diagram.svg', markup, 'image/svg+xml');
+    toast.success('Diagram downloaded');
+  };
+
+  return (
+    <button
+      onClick={handleDownload}
+      className="p-1 rounded hover:bg-interactive-hover/60 text-muted-foreground hover:text-foreground transition-colors"
+      title="Download diagram"
+    >
+      <RiDownloadLine className="size-3.5" />
+    </button>
+  );
+};
+
+// Mermaid wrapper with custom controls (same pattern as TableWrapper)
+const MermaidWrapper: React.FC<{ children: React.ReactNode; source: string }> = ({ children, source }) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="group relative" ref={containerRef}>
+      {children}
+      <div className="absolute top-1 right-2 z-20 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <MermaidDownloadButton containerRef={containerRef} />
+        <MermaidCopyButton source={source} />
+      </div>
+    </div>
+  );
+};
+
 export type MarkdownVariant = 'assistant' | 'tool';
 
 interface MarkdownRendererProps {
@@ -465,6 +614,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   variant = 'assistant',
 }) => {
   const shikiThemes = useMarkdownShikiThemes();
+  const { options: mermaidOptions, mermaidRenderKey } = useStreamdownMermaidOptions();
   const componentKey = React.useMemo(() => {
     const signature = part?.id ? `part-${part.id}` : `message-${messageId}`;
     return `markdown-${signature}`;
@@ -477,6 +627,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const markdownContent = (
     <div className={cn('break-words', className)}>
       <Streamdown
+        key={`streamdown-${componentKey}-${mermaidRenderKey}`}
         mode={isStreaming ? 'streaming' : 'static'}
         isAnimating={isStreaming}
         animated={{
@@ -487,7 +638,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
         }}
         shikiTheme={shikiThemes}
         className={streamdownClassName}
-        controls={{ code: false, table: false }}
+        controls={streamdownControls}
+        plugins={streamdownPlugins}
+        mermaid={mermaidOptions}
         components={streamdownComponents}
       >
         {content}
@@ -512,6 +665,7 @@ export const SimpleMarkdownRenderer: React.FC<{
   variant?: MarkdownVariant;
 }> = ({ content, className, variant = 'assistant' }) => {
   const shikiThemes = useMarkdownShikiThemes();
+  const { options: mermaidOptions, mermaidRenderKey } = useStreamdownMermaidOptions();
 
   const streamdownClassName = variant === 'tool'
     ? 'streamdown-content streamdown-tool'
@@ -520,10 +674,13 @@ export const SimpleMarkdownRenderer: React.FC<{
   return (
     <div className={cn('break-words', className)}>
       <Streamdown
+        key={`streamdown-simple-${mermaidRenderKey}`}
         mode="static"
         shikiTheme={shikiThemes}
         className={streamdownClassName}
-        controls={{ code: false, table: false }}
+        controls={streamdownControls}
+        plugins={streamdownPlugins}
+        mermaid={mermaidOptions}
         components={streamdownComponents}
       >
         {content}

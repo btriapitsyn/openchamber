@@ -18,8 +18,15 @@ declare module 'streamdown' {
     controls?: boolean | {
       code?: boolean;
       table?: boolean;
-      mermaid?: boolean;
+      mermaid?: boolean | {
+        download?: boolean;
+        copy?: boolean;
+        fullscreen?: boolean;
+        panZoom?: boolean;
+      };
     };
+    plugins?: Record<string, unknown>;
+    mermaid?: Record<string, unknown>;
     components?: {
       [key: string]: ComponentType<{ children?: ReactNode; className?: string; [key: string]: unknown }>;
     };

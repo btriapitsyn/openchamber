@@ -325,13 +325,10 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         return visibleParts.filter((part) => part.type === 'text');
     }, [visibleParts]);
 
-    const liveAssistantText = React.useMemo(() => {
-        return flattenAssistantTextParts(assistantTextParts);
-    }, [assistantTextParts]);
-
     const createSessionFromAssistantMessage = useSessionStore((state) => state.createSessionFromAssistantMessage);
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
+    const hasStopFinish = messageFinish === 'stop';
 
     // TTS for message playback
     const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
@@ -864,7 +861,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     const summaryCandidate =
         typeof turnGroupingContext?.summaryBody === 'string' && turnGroupingContext.summaryBody.trim().length > 0
             ? turnGroupingContext.summaryBody
-            : (rawSummaryBodyFromStore ?? liveAssistantText);
+            : rawSummaryBodyFromStore;
 
     const summaryBodyRef = React.useRef<string | undefined>(undefined);
     if (summaryCandidate && summaryCandidate.trim().length > 0) {
@@ -885,15 +882,15 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
     const showErrorMessage = Boolean(errorMessage);
 
-    const shouldShowFooter = isLastAssistantInTurn && hasTextContent && (isMessageCompleted || Boolean(errorMessage));
+    const shouldShowFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage));
 
     const turnDurationText = React.useMemo(() => {
-        if (!isLastAssistantInTurn || !isMessageCompleted) return undefined;
+        if (!isLastAssistantInTurn || !hasStopFinish) return undefined;
         const userCreatedAt = turnGroupingContext?.userMessageCreatedAt;
         if (typeof userCreatedAt !== 'number' || typeof messageCompletedAt !== 'number') return undefined;
         if (messageCompletedAt <= userCreatedAt) return undefined;
         return formatTurnDuration(messageCompletedAt - userCreatedAt);
-    }, [isLastAssistantInTurn, isMessageCompleted, turnGroupingContext?.userMessageCreatedAt, messageCompletedAt]);
+    }, [isLastAssistantInTurn, hasStopFinish, turnGroupingContext?.userMessageCreatedAt, messageCompletedAt]);
 
     const footerButtons = (
          <>

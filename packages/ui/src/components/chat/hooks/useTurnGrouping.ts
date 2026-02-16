@@ -106,6 +106,9 @@ const extractFinalAssistantText = (turn: Turn): string | undefined => {
         const assistantMsg = turn.assistantMessages[messageIndex];
         if (!assistantMsg) continue;
 
+        const infoFinish = (assistantMsg.info as { finish?: string | null | undefined }).finish;
+        if (infoFinish !== 'stop') continue;
+
         for (let partIndex = assistantMsg.parts.length - 1; partIndex >= 0; partIndex -= 1) {
             const part = assistantMsg.parts[partIndex];
             if (!part || part.type !== 'text') continue;

@@ -864,6 +864,11 @@ html:not(.dark) .chat-scroll {
   contain-intrinsic-size: none !important;
 }
 
+/* Mermaid block: position context for controls wrapper. */
+[data-streamdown="mermaid-block"] {
+  position: relative;
+}
+
 /* Hide system caret in terminal - targets both Ghostty internal input and our custom touch input */
 .terminal-viewport-container textarea,
 .terminal-viewport-container input {
