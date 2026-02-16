@@ -1017,6 +1017,10 @@ struct DesktopWindowState {
     width: u32,
     height: u32,
     #[serde(default)]
+    outer_width: Option<u32>,
+    #[serde(default)]
+    outer_height: Option<u32>,
+    #[serde(default)]
     maximized: bool,
     #[serde(default)]
     fullscreen: bool,
@@ -1059,6 +1063,34 @@ fn settings_file_path() -> PathBuf {
         .join("settings.json")
 }
 
+fn write_json_value_atomic(path: &Path, value: &serde_json::Value) -> Result<()> {
+    let serialized = serde_json::to_string_pretty(value)?;
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+
+        let file_stem = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("settings.json");
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let temp_path = parent.join(format!(".{file_stem}.{unique}.tmp"));
+
+        fs::write(&temp_path, serialized)?;
+        if let Err(err) = fs::rename(&temp_path, path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(err.into());
+        }
+        return Ok(());
+    }
+
+    fs::write(path, serialized)?;
+    Ok(())
+}
+
 fn read_desktop_local_port_from_disk() -> Option<u16> {
     let path = settings_file_path();
     let raw = fs::read_to_string(path).ok();
@@ -1074,9 +1106,6 @@ fn read_desktop_local_port_from_disk() -> Option<u16> {
 
 fn write_desktop_local_port_to_disk(port: u16) -> Result<()> {
     let path = settings_file_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
 
     let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
         serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
@@ -1089,7 +1118,7 @@ fn write_desktop_local_port_to_disk(port: u16) -> Result<()> {
     }
 
     root["desktopLocalPort"] = serde_json::Value::Number(serde_json::Number::from(port));
-    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    write_json_value_atomic(&path, &root)?;
     Ok(())
 }
 
@@ -1156,9 +1185,6 @@ fn read_desktop_window_state_from_disk() -> Option<DesktopWindowState> {
 
 fn write_desktop_window_state_to_disk(state: &DesktopWindowState) -> Result<()> {
     let path = settings_file_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
 
     let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
         serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
@@ -1171,15 +1197,12 @@ fn write_desktop_window_state_to_disk(state: &DesktopWindowState) -> Result<()> 
     }
 
     root["desktopWindowState"] = serde_json::to_value(state).unwrap_or(serde_json::Value::Null);
-    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    write_json_value_atomic(&path, &root)?;
     Ok(())
 }
 
 fn write_desktop_hosts_config_to_disk(config: &DesktopHostsConfig) -> Result<()> {
     let path = settings_file_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
 
     let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
         serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
@@ -1218,7 +1241,7 @@ fn write_desktop_hosts_config_to_disk(config: &DesktopHostsConfig) -> Result<()>
         _ => serde_json::Value::Null,
     };
 
-    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    write_json_value_atomic(&path, &root)?;
     Ok(())
 }
 
@@ -2030,6 +2053,9 @@ fn is_window_state_visible(app: &tauri::AppHandle, state: &DesktopWindowState) -
         return false;
     }
 
+    let frame_width = state.outer_width.unwrap_or(state.width) as f64;
+    let frame_height = state.outer_height.unwrap_or(state.height) as f64;
+
     let Ok(monitors) = app.available_monitors() else {
         return true;
     };
@@ -2039,8 +2065,8 @@ fn is_window_state_visible(app: &tauri::AppHandle, state: &DesktopWindowState) -
 
     let left = state.x as f64;
     let top = state.y as f64;
-    let right = left + state.width as f64;
-    let bottom = top + state.height as f64;
+    let right = left + frame_width;
+    let bottom = top + frame_height;
 
     for monitor in monitors {
         let scale = monitor.scale_factor();
@@ -2069,6 +2095,7 @@ fn is_window_state_visible(app: &tauri::AppHandle, state: &DesktopWindowState) -
 fn capture_window_state(window: &tauri::Window) -> Option<DesktopWindowState> {
     let position = window.outer_position().ok()?;
     let size = window.inner_size().ok()?;
+    let outer_size = window.outer_size().ok();
     let scale = window
         .scale_factor()
         .ok()
@@ -2080,9 +2107,25 @@ fn capture_window_state(window: &tauri::Window) -> Option<DesktopWindowState> {
         y: (position.y as f64 / scale).round() as i32,
         width: (size.width as f64 / scale).round().max(MIN_WINDOW_WIDTH as f64) as u32,
         height: (size.height as f64 / scale).round().max(MIN_WINDOW_HEIGHT as f64) as u32,
+        outer_width: outer_size
+            .as_ref()
+            .map(|outer| (outer.width as f64 / scale).round().max(MIN_WINDOW_WIDTH as f64) as u32),
+        outer_height: outer_size
+            .as_ref()
+            .map(|outer| (outer.height as f64 / scale).round().max(MIN_WINDOW_HEIGHT as f64) as u32),
         maximized: window.is_maximized().unwrap_or(false),
         fullscreen: window.is_fullscreen().unwrap_or(false),
     })
+}
+
+fn persist_window_state_snapshot(window: &tauri::Window) {
+    let Some(snapshot) = capture_window_state(window) else {
+        return;
+    };
+
+    if let Err(err) = write_desktop_window_state_to_disk(&snapshot) {
+        log::warn!("[desktop] failed to persist window geometry: {err}");
+    }
 }
 
 fn schedule_window_state_persist(window: tauri::Window, immediate: bool) {
@@ -2102,10 +2145,13 @@ fn schedule_window_state_persist(window: tauri::Window, immediate: bool) {
         next
     };
 
+    if immediate {
+        persist_window_state_snapshot(&window);
+        return;
+    }
+
     tauri::async_runtime::spawn(async move {
-        if !immediate {
-            tokio::time::sleep(Duration::from_millis(WINDOW_STATE_DEBOUNCE_MS)).await;
-        }
+        tokio::time::sleep(Duration::from_millis(WINDOW_STATE_DEBOUNCE_MS)).await;
 
         let is_latest = app
             .try_state::<WindowGeometryDebounceState>()
@@ -2121,13 +2167,7 @@ fn schedule_window_state_persist(window: tauri::Window, immediate: bool) {
             return;
         }
 
-        let Some(snapshot) = capture_window_state(&window) else {
-            return;
-        };
-
-        if let Err(err) = write_desktop_window_state_to_disk(&snapshot) {
-            log::warn!("[desktop] failed to persist window geometry: {err}");
-        }
+        persist_window_state_snapshot(&window);
     });
 }
 
@@ -2447,6 +2487,11 @@ fn main() {
                 // Clean up focus tracking for the destroyed window.
                 if let Some(state) = app.try_state::<WindowFocusState>() {
                     state.remove_window(&label);
+                }
+
+                if let Some(state) = app.try_state::<WindowGeometryDebounceState>() {
+                    let mut guard = state.revisions.lock().expect("window geometry debounce mutex");
+                    guard.remove(&label);
                 }
 
                 // If this was the last window, kill the sidecar and exit.
