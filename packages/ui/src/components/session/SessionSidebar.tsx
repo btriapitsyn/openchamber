@@ -1290,11 +1290,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       sortedWorktrees.forEach((meta) => {
         const directory = normalizePath(meta.path) ?? meta.path;
-        const label = meta.label || meta.name || formatDirectoryName(directory, homeDirectory) || directory;
+        const currentBranch = gitDirectories.get(directory)?.status?.current?.trim() || null;
+        const metadataBranch = meta.branch?.trim() || null;
+        const shouldSyncLabelWithBranch = Boolean(
+          currentBranch
+          && metadataBranch
+          && meta.label
+          && normalizeForBranchComparison(meta.label) === normalizeForBranchComparison(metadataBranch),
+        );
+        const label = shouldSyncLabelWithBranch
+          ? currentBranch!
+          : (meta.label || meta.name || formatDirectoryName(directory, homeDirectory) || directory);
         groups.push({
           id: `worktree:${directory}`,
           label,
-          branch: meta.branch || null,
+          branch: currentBranch || metadataBranch,
           description: formatPathForDisplay(directory, homeDirectory),
           isMain: false,
           worktree: meta,
@@ -1309,10 +1319,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         .sort((a, b) => (groupOrder.get(a) ?? 0) - (groupOrder.get(b) ?? 0));
 
       orphanKeys.forEach((directory) => {
+        const currentBranch = gitDirectories.get(directory)?.status?.current?.trim() || null;
         groups.push({
           id: `worktree:orphan:${directory}`,
           label: formatDirectoryName(directory, homeDirectory) || directory,
-          branch: null,
+          branch: currentBranch,
           description: formatPathForDisplay(directory, homeDirectory),
           isMain: false,
           worktree: null,
@@ -1323,7 +1334,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       return groups;
     },
-    [homeDirectory, worktreeMetadata, pinnedSessionIds]
+    [homeDirectory, worktreeMetadata, pinnedSessionIds, gitDirectories]
   );
 
   const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
