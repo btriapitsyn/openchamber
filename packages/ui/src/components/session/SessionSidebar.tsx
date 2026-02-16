@@ -43,6 +43,7 @@ import {
   RiFolderAddLine,
   RiGitBranchLine,
   RiGitPullRequestLine,
+  RiGitRepositoryLine,
   RiStickyNoteLine,
   RiLinkUnlinkM,
 
@@ -74,6 +75,7 @@ import { updateDesktopSettings } from '@/lib/persistence';
 import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
 import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
+import { BranchPickerDialog } from './BranchPickerDialog';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -556,6 +558,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [issuePickerOpen, setIssuePickerOpen] = React.useState(false);
   const [pullRequestPickerOpen, setPullRequestPickerOpen] = React.useState(false);
+  const [isBranchPickerOpen, setIsBranchPickerOpen] = React.useState(false);
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
@@ -1440,6 +1443,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       : null),
     [activeProjectForHeader],
   );
+  const branchPickerProject = React.useMemo(() => {
+    if (!activeProjectForHeader) {
+      return null;
+    }
+    return {
+      id: activeProjectForHeader.id,
+      path: activeProjectForHeader.path,
+      normalizedPath: activeProjectForHeader.normalizedPath,
+      label: activeProjectForHeader.label,
+    };
+  }, [activeProjectForHeader]);
 
   const activeProjectIsRepo = React.useMemo(
     () => (activeProjectForHeader ? Boolean(projectRepoStatus.get(activeProjectForHeader.id)) : false),
@@ -2423,9 +2437,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </div>
           )}
           {reserveHeaderActionsSpace ? (
-            <div className="mt-1 h-8 pl-1">
+            <div className="mt-1 -ml-1 flex h-8 items-center">
               {activeProjectForHeader ? (
-              <div className="inline-flex h-8 items-center gap-1.5 rounded-md pl-0 pr-1">
+              <div className="flex h-full items-center gap-1.5 rounded-md pl-0 pr-1">
               {stableActiveProjectIsRepo ? (
                 <>
               <Tooltip>
@@ -2497,6 +2511,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
               </Tooltip>
                 </>
+              ) : null}
+              {stableActiveProjectIsRepo && branchPickerProject ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setIsBranchPickerOpen(true)}
+                      className={headerActionButtonClass}
+                      aria-label="Manage branches"
+                    >
+                      <RiGitRepositoryLine className="h-4.5 w-4.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={4}><p>Manage branches</p></TooltipContent>
+                </Tooltip>
               ) : null}
               {useMobileNotesPanel ? (
                 <Tooltip>
@@ -2758,6 +2787,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             setSessionSwitcherOpen(false);
           }
         }}
+      />
+
+      <BranchPickerDialog
+        open={isBranchPickerOpen}
+        onOpenChange={setIsBranchPickerOpen}
+        project={branchPickerProject}
       />
 
       {useMobileNotesPanel ? (

@@ -1640,7 +1640,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
         isWorktreeMode={!!worktreeMetadata}
         isSidebarMode={isSidebarMode}
         onOpenHistory={() => setIsHistoryDialogOpen(true)}
-        onOpenBranchPicker={branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
+        onOpenBranchPicker={!isSidebarMode && branchPickerProject ? () => setIsBranchPickerOpen(true) : undefined}
       />
 
       {/* In-progress operation banner */}

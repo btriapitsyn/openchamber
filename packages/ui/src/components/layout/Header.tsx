@@ -991,6 +991,17 @@ export const Header: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (hasModifier(e) && !e.shiftKey && !e.altKey) {
         const num = parseInt(e.key, 10);
+        if (showProjectTabs) {
+          if (num >= 1 && num <= projects.length) {
+            e.preventDefault();
+            const targetProject = projects[num - 1];
+            if (targetProject && targetProject.id !== activeProjectId) {
+              setActiveProject(targetProject.id);
+            }
+          }
+          return;
+        }
+
         if (num >= 1 && num <= tabs.length) {
           e.preventDefault();
           setActiveMainTab(tabs[num - 1].id);
@@ -999,7 +1010,7 @@ export const Header: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tabs, setActiveMainTab]);
+  }, [tabs, setActiveMainTab, showProjectTabs, projects, activeProjectId, setActiveProject]);
 
   const renderTab = (tab: TabConfig) => {
     const isActive = activeMainTab === tab.id;

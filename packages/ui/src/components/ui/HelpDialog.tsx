@@ -15,7 +15,6 @@ import {
   RiArrowUpSLine,
   RiBrainAi3Line,
   RiCloseCircleLine,
-  RiCodeLine,
   RiCommandLine,
   RiGitBranchLine,
   RiLayoutLeftLine,
@@ -160,9 +159,9 @@ export const HelpDialog: React.FC = () => {
           icon: RiPaletteLine,
         },
         {
-          keys: [`${mod} + 2`],
-          description: "Open Diff Panel",
-          icon: RiCodeLine,
+          keys: [`${mod} + 1...9`],
+          description: "Switch Project or Main Tab",
+          icon: RiLayoutLeftLine,
         },
         {
           keys: [`${mod} + T`],
