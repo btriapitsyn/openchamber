@@ -51,8 +51,10 @@ import {
 
   RiMore2Line,
   RiPencilAiLine,
+  RiPushpinLine,
   RiShare2Line,
   RiShieldLine,
+  RiUnpinLine,
 } from '@remixicon/react';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
@@ -88,6 +90,7 @@ const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
 const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
 const PROJECT_ACTIVE_SESSION_STORAGE_KEY = 'oc.sessions.activeSessionByProject';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
+const SESSION_PINNED_STORAGE_KEY = 'oc.sessions.pinned';
 
 const formatDateLabel = (value: string | number) => {
   const targetDate = new Date(value);
@@ -146,6 +149,28 @@ const toFiniteNumber = (value: unknown): number | undefined => {
     }
   }
   return undefined;
+};
+
+const getSessionCreatedAt = (session: Session): number => {
+  return toFiniteNumber(session.time?.created) ?? 0;
+};
+
+const getSessionUpdatedAt = (session: Session): number => {
+  return toFiniteNumber(session.time?.updated) ?? 0;
+};
+
+const compareSessionsByPinnedAndTime = (a: Session, b: Session, pinnedSessionIds: Set<string>): number => {
+  const aPinned = pinnedSessionIds.has(a.id);
+  const bPinned = pinnedSessionIds.has(b.id);
+  if (aPinned !== bPinned) {
+    return aPinned ? -1 : 1;
+  }
+
+  if (aPinned && bPinned) {
+    return getSessionCreatedAt(b) - getSessionCreatedAt(a);
+  }
+
+  return getSessionUpdatedAt(b) - getSessionUpdatedAt(a);
 };
 
 const centerDragOverlayUnderPointer: Modifier = ({ transform, activeNodeRect, activatorEvent }) => {
@@ -562,6 +587,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
+  const [pinnedSessionIds, setPinnedSessionIds] = React.useState<Set<string>>(() => {
+    try {
+      const raw = getSafeStorage().getItem(SESSION_PINNED_STORAGE_KEY);
+      if (!raw) {
+        return new Set();
+      }
+      const parsed = JSON.parse(raw) as string[];
+      return new Set(Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : []);
+    } catch {
+      return new Set();
+    }
+  });
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(() => {
     try {
       const raw = getSafeStorage().getItem(GROUP_COLLAPSE_STORAGE_KEY);
@@ -727,9 +764,45 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     } catch { /* ignored */ }
   }, [safeStorage]);
 
-  const sortedSessions = React.useMemo(() => {
-    return [...sessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
+  React.useEffect(() => {
+    const existingSessionIds = new Set(sessions.map((session) => session.id));
+    setPinnedSessionIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (existingSessionIds.has(id)) {
+          next.add(id);
+        } else {
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
   }, [sessions]);
+
+  React.useEffect(() => {
+    try {
+      safeStorage.setItem(SESSION_PINNED_STORAGE_KEY, JSON.stringify(Array.from(pinnedSessionIds)));
+    } catch {
+      // ignored
+    }
+  }, [pinnedSessionIds, safeStorage]);
+
+  const togglePinnedSession = React.useCallback((sessionId: string) => {
+    setPinnedSessionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  }, []);
+
+  const sortedSessions = React.useMemo(() => {
+    return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
+  }, [sessions, pinnedSessionIds]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -783,9 +856,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       collection.push(session);
       map.set(parentID, collection);
     });
-    map.forEach((list) => list.sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0)));
+    map.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
     return map;
-  }, [sortedSessions]);
+  }, [sortedSessions, pinnedSessionIds]);
 
   React.useEffect(() => {
     const directories = new Set<string>();
@@ -1115,7 +1188,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       projectIsRepo: boolean,
     ) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
-      const sortedProjectSessions = [...projectSessions].sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0));
+      const sortedProjectSessions = [...projectSessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
 
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
       const childrenMap = new Map<string, Session[]>();
@@ -1128,7 +1201,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         collection.push(session);
         childrenMap.set(parentID, collection);
       });
-      childrenMap.forEach((list) => list.sort((a, b) => (b.time?.updated || 0) - (a.time?.updated || 0)));
+      childrenMap.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
 
       // Build worktree lookup map
       const worktreeByPath = new Map<string, WorktreeMetadata>();
@@ -1250,7 +1323,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       return groups;
     },
-    [homeDirectory, worktreeMetadata]
+    [homeDirectory, worktreeMetadata, pinnedSessionIds]
   );
 
   const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
@@ -1719,6 +1792,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const isActive = currentSessionId === session.id;
       const sessionTitle = session.title || 'Untitled Session';
       const hasChildren = node.children.length > 0;
+      const isPinnedSession = pinnedSessionIds.has(session.id);
       const isExpanded = expandedParents.has(session.id);
       const needsAttention = sessionAttentionStates.get(session.id)?.needsAttention === true;
       const sessionSummary = session.summary as
@@ -1863,8 +1937,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 )}
               >
                 {}
-                <div className="flex w-full items-center gap-2 min-w-0 flex-1 overflow-hidden">
-                  {showStatusMarker ? (
+                  <div className="flex w-full items-center gap-2 min-w-0 flex-1 overflow-hidden">
+                    {showStatusMarker ? (
                     <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
                       {isStreaming ? (
                         <GridLoader size="xs" className="text-primary" />
@@ -1884,6 +1958,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         </span>
                       )}
                     </span>
+                  ) : null}
+                  {isPinnedSession ? (
+                    <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" />
                   ) : null}
                   <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">
                     {sessionTitle}
@@ -1984,6 +2061,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       <RiPencilAiLine className="mr-1 h-4 w-4" />
                       Rename
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => togglePinnedSession(session.id)} className="[&>svg]:mr-1">
+                      {isPinnedSession ? (
+                        <RiUnpinLine className="mr-1 h-4 w-4" />
+                      ) : (
+                        <RiPushpinLine className="mr-1 h-4 w-4" />
+                      )}
+                      {isPinnedSession ? 'Unpin session' : 'Pin session'}
+                    </DropdownMenuItem>
                     {!session.share ? (
                       <DropdownMenuItem onClick={() => handleShareSession(session)} className="[&>svg]:mr-1">
                         <RiShare2Line className="mr-1 h-4 w-4" />
@@ -2052,6 +2137,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       toggleParent,
       handleSessionSelect,
       handleSessionDoubleClick,
+      pinnedSessionIds,
+      togglePinnedSession,
       handleShareSession,
       handleCopyShareUrl,
       handleUnshareSession,
