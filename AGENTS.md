@@ -41,6 +41,10 @@ Quota provider registry, dispatch, and provider integrations for usage endpoints
 Git repository operations for the web server runtime.
 - Module docs: `packages/web/server/lib/git/DOCUMENTATION.md`
 
+##### github
+GitHub authentication, OAuth device flow, Octokit client factory, and repository URL parsing.
+- Module docs: `packages/web/server/lib/github/DOCUMENTATION.md`
+
 ## Build / dev commands (verified)
 All scripts are in `package.json`.
 - Validate: `bun run type-check`, `bun run lint`
