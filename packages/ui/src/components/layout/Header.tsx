@@ -1349,7 +1349,7 @@ export const Header: React.FC = () => {
 
       {/* Project tabs */}
       {showProjectTabs && (
-        <div className="app-region-no-drag ml-6 mr-3 flex min-w-0 flex-1 items-center">
+        <div className="ml-6 mr-3 flex min-w-0 flex-1 items-center">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -1363,7 +1363,7 @@ export const Header: React.FC = () => {
             </TooltipTrigger>
             <TooltipContent>Add project</TooltipContent>
           </Tooltip>
-          <div className="relative min-w-0 flex-1">
+          <div className="app-region-no-drag relative min-w-0 w-fit max-w-full">
             {/* Left fade */}
             {projectTabsOverflow.left && (
               <div className="pointer-events-none absolute left-0 top-0 bottom-0 w-6 z-20 bg-gradient-to-r from-[var(--surface-background)] to-transparent rounded-l-lg" />
@@ -1374,7 +1374,7 @@ export const Header: React.FC = () => {
             )}
             <div
               ref={projectTabsScrollRef}
-              className="overflow-x-auto scrollbar-none"
+              className="max-w-full overflow-x-auto scrollbar-none"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               <div
