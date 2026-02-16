@@ -7216,17 +7216,12 @@ async function main(options = {}) {
 
   // ================= GitHub OAuth (Device Flow) =================
 
-  // Note: scopes may be overridden via OPENCHAMBER_GITHUB_SCOPES or settings.json (see github-auth.js).
+  // Note: scopes may be overridden via OPENCHAMBER_GITHUB_SCOPES or settings.json (see lib/github/auth.js).
 
   let githubLibraries = null;
   const getGitHubLibraries = async () => {
     if (!githubLibraries) {
-      const [auth, device, octokit] = await Promise.all([
-        import('./lib/github-auth.js'),
-        import('./lib/github-device-flow.js'),
-        import('./lib/github-octokit.js'),
-      ]);
-      githubLibraries = { ...auth, ...device, ...octokit };
+      githubLibraries = await import('./lib/github/index.js');
     }
     return githubLibraries;
   };
@@ -7480,7 +7475,7 @@ async function main(options = {}) {
         return res.json({ connected: false });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory, remote);
       if (!repo) {
         return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
@@ -7706,7 +7701,7 @@ async function main(options = {}) {
         return res.status(401).json({ error: 'GitHub not connected' });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory, remote);
       if (!repo) {
         return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
@@ -7883,7 +7878,7 @@ async function main(options = {}) {
         return res.status(401).json({ error: 'GitHub not connected' });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
@@ -7958,7 +7953,7 @@ async function main(options = {}) {
         return res.status(401).json({ error: 'GitHub not connected' });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
@@ -8001,7 +7996,7 @@ async function main(options = {}) {
         return res.status(401).json({ error: 'GitHub not connected' });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.status(400).json({ error: 'Unable to resolve GitHub repo from git remote' });
@@ -8052,7 +8047,7 @@ async function main(options = {}) {
         return res.json({ connected: false });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.json({ connected: true, repo: null, issues: [] });
@@ -8108,7 +8103,7 @@ async function main(options = {}) {
         return res.json({ connected: false });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.json({ connected: true, repo: null, issue: null });
@@ -8169,7 +8164,7 @@ async function main(options = {}) {
         return res.json({ connected: false });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.json({ connected: true, repo: null, comments: [] });
@@ -8214,7 +8209,7 @@ async function main(options = {}) {
         return res.json({ connected: false });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.json({ connected: true, repo: null, prs: [] });
@@ -8289,7 +8284,7 @@ async function main(options = {}) {
         return res.json({ connected: false });
       }
 
-      const { resolveGitHubRepoFromDirectory } = await import('./lib/github-repo.js');
+      const { resolveGitHubRepoFromDirectory } = await import('./lib/github/index.js');
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.json({ connected: true, repo: null, pr: null });
