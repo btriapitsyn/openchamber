@@ -930,6 +930,11 @@ const HEALTH_TIMEOUT: Duration = Duration::from_secs(20);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 const DEFAULT_DESKTOP_PORT: u16 = 57123;
+const WINDOW_STATE_DEBOUNCE_MS: u64 = 300;
+const MIN_WINDOW_WIDTH: u32 = 800;
+const MIN_WINDOW_HEIGHT: u32 = 520;
+const MIN_RESTORE_WINDOW_WIDTH: u32 = 900;
+const MIN_RESTORE_WINDOW_HEIGHT: u32 = 560;
 
 const LOCAL_HOST_ID: &str = "local";
 
@@ -1002,6 +1007,24 @@ struct DesktopHost {
 struct DesktopHostsConfig {
     hosts: Vec<DesktopHost>,
     default_host_id: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DesktopWindowState {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    #[serde(default)]
+    maximized: bool,
+    #[serde(default)]
+    fullscreen: bool,
+}
+
+#[derive(Default)]
+struct WindowGeometryDebounceState {
+    revisions: Mutex<HashMap<String, u64>>,
 }
 
 fn normalize_host_url(raw: &str) -> Option<String> {
@@ -1115,6 +1138,41 @@ fn read_desktop_hosts_config_from_disk() -> DesktopHostsConfig {
         hosts,
         default_host_id: default_value,
     }
+}
+
+fn read_desktop_window_state_from_disk() -> Option<DesktopWindowState> {
+    let path = settings_file_path();
+    let raw = fs::read_to_string(path).ok();
+    let parsed = raw
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
+
+    parsed
+        .as_ref()
+        .and_then(|v| v.get("desktopWindowState"))
+        .cloned()
+        .and_then(|v| serde_json::from_value::<DesktopWindowState>(v).ok())
+}
+
+fn write_desktop_window_state_to_disk(state: &DesktopWindowState) -> Result<()> {
+    let path = settings_file_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
+        serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+
+    root["desktopWindowState"] = serde_json::to_value(state).unwrap_or(serde_json::Value::Null);
+    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
+    Ok(())
 }
 
 fn write_desktop_hosts_config_to_disk(config: &DesktopHostsConfig) -> Result<()> {
@@ -1840,7 +1898,7 @@ fn desktop_new_window_at_url(app: tauri::AppHandle, url: String) -> Result<(), S
         .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone())
         .ok_or_else(|| "Local origin not yet known (sidecar may still be starting)".to_string())?;
 
-    create_window(&app, &url, &local_origin).map_err(|e| e.to_string())
+    create_window(&app, &url, &local_origin, false).map_err(|e| e.to_string())
 }
 
 /// Read a file and return its content as base64 with mime type detection.
@@ -1967,8 +2025,114 @@ fn build_init_script(local_origin: &str) -> String {
     init_script
 }
 
+fn is_window_state_visible(app: &tauri::AppHandle, state: &DesktopWindowState) -> bool {
+    if state.width == 0 || state.height == 0 {
+        return false;
+    }
+
+    let Ok(monitors) = app.available_monitors() else {
+        return true;
+    };
+    if monitors.is_empty() {
+        return true;
+    }
+
+    let left = state.x as f64;
+    let top = state.y as f64;
+    let right = left + state.width as f64;
+    let bottom = top + state.height as f64;
+
+    for monitor in monitors {
+        let scale = monitor.scale_factor();
+        if !scale.is_finite() || scale <= 0.0 {
+            continue;
+        }
+
+        let position = monitor.position();
+        let size = monitor.size();
+
+        let monitor_left = position.x as f64 / scale;
+        let monitor_top = position.y as f64 / scale;
+        let monitor_right = monitor_left + size.width as f64 / scale;
+        let monitor_bottom = monitor_top + size.height as f64 / scale;
+
+        let overlap_width = right.min(monitor_right) - left.max(monitor_left);
+        let overlap_height = bottom.min(monitor_bottom) - top.max(monitor_top);
+        if overlap_width > 0.0 && overlap_height > 0.0 {
+            return true;
+        }
+    }
+
+    false
+}
+
+fn capture_window_state(window: &tauri::Window) -> Option<DesktopWindowState> {
+    let position = window.outer_position().ok()?;
+    let size = window.inner_size().ok()?;
+    let scale = window
+        .scale_factor()
+        .ok()
+        .filter(|value| value.is_finite() && *value > 0.0)
+        .unwrap_or(1.0);
+
+    Some(DesktopWindowState {
+        x: (position.x as f64 / scale).round() as i32,
+        y: (position.y as f64 / scale).round() as i32,
+        width: (size.width as f64 / scale).round().max(MIN_WINDOW_WIDTH as f64) as u32,
+        height: (size.height as f64 / scale).round().max(MIN_WINDOW_HEIGHT as f64) as u32,
+        maximized: window.is_maximized().unwrap_or(false),
+        fullscreen: window.is_fullscreen().unwrap_or(false),
+    })
+}
+
+fn schedule_window_state_persist(window: tauri::Window, immediate: bool) {
+    if window.label() != "main" {
+        return;
+    }
+
+    let app = window.app_handle().clone();
+    let label = window.label().to_string();
+    let revision = {
+        let Some(state) = app.try_state::<WindowGeometryDebounceState>() else {
+            return;
+        };
+        let mut guard = state.revisions.lock().expect("window geometry debounce mutex");
+        let next = guard.get(&label).copied().unwrap_or(0).saturating_add(1);
+        guard.insert(label.clone(), next);
+        next
+    };
+
+    tauri::async_runtime::spawn(async move {
+        if !immediate {
+            tokio::time::sleep(Duration::from_millis(WINDOW_STATE_DEBOUNCE_MS)).await;
+        }
+
+        let is_latest = app
+            .try_state::<WindowGeometryDebounceState>()
+            .map(|state| {
+                state
+                    .revisions
+                    .lock()
+                    .map(|guard| guard.get(&label).copied() == Some(revision))
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false);
+        if !is_latest {
+            return;
+        }
+
+        let Some(snapshot) = capture_window_state(&window) else {
+            return;
+        };
+
+        if let Err(err) = write_desktop_window_state_to_disk(&snapshot) {
+            log::warn!("[desktop] failed to persist window geometry: {err}");
+        }
+    });
+}
+
 /// Create a new window with a unique label, pointing at the given URL.
-fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Result<()> {
+fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_geometry: bool) -> Result<()> {
     let parsed = url::Url::parse(url).map_err(|err| anyhow!("Invalid URL: {err}"))?;
     let label = next_window_label();
 
@@ -1980,14 +2144,34 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Resul
         *state.local_origin.lock().expect("desktop local origin mutex") = Some(local_origin.to_string());
     }
 
+    let restored_state = if restore_geometry {
+        read_desktop_window_state_from_disk()
+    } else {
+        None
+    };
+
     let mut builder = WebviewWindowBuilder::new(app, &label, WebviewUrl::External(parsed))
         .title("OpenChamber")
         .inner_size(1280.0, 800.0)
+        .min_inner_size(MIN_WINDOW_WIDTH as f64, MIN_WINDOW_HEIGHT as f64)
         .decorations(true)
         .visible(false)
         .initialization_script(&init_script)
         .background_throttling(BackgroundThrottlingPolicy::Disabled)
         ;
+
+    let apply_restored_state = restored_state
+        .as_ref()
+        .map(|state| is_window_state_visible(app, state))
+        .unwrap_or(false);
+
+    if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
+        let restored_width = state.width.max(MIN_RESTORE_WINDOW_WIDTH);
+        let restored_height = state.height.max(MIN_RESTORE_WINDOW_HEIGHT);
+        builder = builder
+            .inner_size(restored_width as f64, restored_height as f64)
+            .position(state.x as f64, state.y as f64);
+    }
 
     #[cfg(target_os = "macos")]
     {
@@ -1998,6 +2182,12 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str) -> Resul
     }
 
     let window = builder.build()?;
+
+    if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
+        if state.maximized || state.fullscreen {
+            let _ = window.maximize();
+        }
+    }
 
     let _ = window.show();
     let _ = window.set_focus();
@@ -2072,7 +2262,7 @@ fn open_new_window(app: &tauri::AppHandle) {
         }
     }
 
-    if let Err(err) = create_window(app, &target_url, &local_origin) {
+    if let Err(err) = create_window(app, &target_url, &local_origin, false) {
         log::error!("[desktop] failed to create new window: {err}");
     }
 }
@@ -2090,6 +2280,7 @@ fn main() {
         .manage(SidecarState::default())
         .manage(DesktopUiInjectionState::default())
         .manage(WindowFocusState::default())
+        .manage(WindowGeometryDebounceState::default())
         .manage(MenuRuntimeState::default())
         .manage(PendingUpdate(Mutex::new(None)))
         .plugin(tauri_plugin_shell::init())
@@ -2265,6 +2456,14 @@ fn main() {
                     app.exit(0);
                 }
             }
+
+            if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_)) {
+                schedule_window_state_persist(window.clone(), false);
+            }
+
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                schedule_window_state_persist(window.clone(), true);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             desktop_notify,
@@ -2381,7 +2580,7 @@ fn main() {
                     }
                 }
 
-                if let Err(err) = create_window(&handle, &initial_url, &local_origin) {
+                if let Err(err) = create_window(&handle, &initial_url, &local_origin, true) {
                     log::error!("[desktop] failed to create window: {err}");
                 }
             });
