@@ -2735,14 +2735,29 @@ const getHmrState = () => {
     globalThis[HMR_STATE_KEY] = {
       openCodeProcess: null,
       openCodePort: null,
-      openCodeWorkingDirectory: os.homedir(),
-      isShuttingDown: false,
-      signalsAttached: false,
-    };
+        openCodeWorkingDirectory: os.homedir(),
+        isShuttingDown: false,
+        signalsAttached: false,
+        userProvidedOpenCodePassword: undefined,
+        openCodeAuthPassword: null,
+        openCodeAuthSource: null,
+      };
   }
   return globalThis[HMR_STATE_KEY];
 };
 const hmrState = getHmrState();
+
+const normalizeOpenCodePassword = (value) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+};
+
+if (typeof hmrState.userProvidedOpenCodePassword === 'undefined') {
+  const initialPassword = normalizeOpenCodePassword(process.env.OPENCODE_SERVER_PASSWORD);
+  hmrState.userProvidedOpenCodePassword = initialPassword || null;
+}
 
 // Non-HMR state (safe to reset on reload)
 let healthCheckInterval = null;
@@ -2763,6 +2778,15 @@ let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
 let terminalInputWsServer = null;
+let openCodeAuthPassword =
+  typeof hmrState.openCodeAuthPassword === 'string' && hmrState.openCodeAuthPassword.length > 0
+    ? hmrState.openCodeAuthPassword
+    : null;
+let openCodeAuthSource = typeof hmrState.openCodeAuthSource === 'string' ? hmrState.openCodeAuthSource : null;
+const userProvidedOpenCodePassword =
+  typeof hmrState.userProvidedOpenCodePassword === 'string' && hmrState.userProvidedOpenCodePassword.length > 0
+    ? hmrState.userProvidedOpenCodePassword
+    : null;
 
 // Sync helper - call after modifying any HMR state variable
 const syncToHmrState = () => {
@@ -2771,6 +2795,8 @@ const syncToHmrState = () => {
   hmrState.isShuttingDown = isShuttingDown;
   hmrState.signalsAttached = signalsAttached;
   hmrState.openCodeWorkingDirectory = openCodeWorkingDirectory;
+  hmrState.openCodeAuthPassword = openCodeAuthPassword;
+  hmrState.openCodeAuthSource = openCodeAuthSource;
 };
 
 // Sync helper - call to restore state from HMR (e.g., on module reload)
@@ -2780,6 +2806,11 @@ const syncFromHmrState = () => {
   isShuttingDown = hmrState.isShuttingDown;
   signalsAttached = hmrState.signalsAttached;
   openCodeWorkingDirectory = hmrState.openCodeWorkingDirectory;
+  openCodeAuthPassword =
+    typeof hmrState.openCodeAuthPassword === 'string' && hmrState.openCodeAuthPassword.length > 0
+      ? hmrState.openCodeAuthPassword
+      : null;
+  openCodeAuthSource = typeof hmrState.openCodeAuthSource === 'string' ? hmrState.openCodeAuthSource : null;
 };
 
 // Module-level variables that shadow HMR state
@@ -2865,9 +2896,7 @@ const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
  * Uses Basic Auth with username "opencode" and the password from the env variable.
  */
 function getOpenCodeAuthHeaders() {
-  const password = typeof process.env.OPENCODE_SERVER_PASSWORD === 'string'
-    ? process.env.OPENCODE_SERVER_PASSWORD.trim()
-    : '';
+  const password = normalizeOpenCodePassword(openCodeAuthPassword);
   
   if (!password) {
     return {};
@@ -2888,6 +2917,23 @@ function generateSecureOpenCodePassword() {
 
 function isValidOpenCodePassword(password) {
   return typeof password === 'string' && password.trim().length > 0;
+}
+
+function setOpenCodeAuthState(password, source) {
+  const normalized = normalizeOpenCodePassword(password);
+  if (!isValidOpenCodePassword(normalized)) {
+    openCodeAuthPassword = null;
+    openCodeAuthSource = null;
+    delete process.env.OPENCODE_SERVER_PASSWORD;
+    syncToHmrState();
+    return null;
+  }
+
+  openCodeAuthPassword = normalized;
+  openCodeAuthSource = source;
+  process.env.OPENCODE_SERVER_PASSWORD = normalized;
+  syncToHmrState();
+  return normalized;
 }
 
 async function readPersistedOpenCodePasswordFromSettings() {
@@ -2924,31 +2970,29 @@ async function persistOpenCodePasswordToSettings(password) {
 }
 
 async function ensureLocalOpenCodeServerPassword({ rotateManaged = false } = {}) {
-  const fromEnv = typeof process.env.OPENCODE_SERVER_PASSWORD === 'string'
-    ? process.env.OPENCODE_SERVER_PASSWORD.trim()
-    : '';
-  if (isValidOpenCodePassword(fromEnv)) {
-    process.env.OPENCODE_SERVER_PASSWORD = fromEnv;
-    await persistOpenCodePasswordToSettings(fromEnv);
-    return fromEnv;
+  if (isValidOpenCodePassword(userProvidedOpenCodePassword)) {
+    const resolved = setOpenCodeAuthState(userProvidedOpenCodePassword, 'user-env');
+    await persistOpenCodePasswordToSettings(resolved);
+    return resolved;
   }
 
   if (rotateManaged) {
-    const rotatedPassword = generateSecureOpenCodePassword();
-    process.env.OPENCODE_SERVER_PASSWORD = rotatedPassword;
+    const rotatedPassword = setOpenCodeAuthState(generateSecureOpenCodePassword(), 'rotated');
     await persistOpenCodePasswordToSettings(rotatedPassword);
     console.log('Rotated secure password for managed local OpenCode instance');
     return rotatedPassword;
   }
 
-  const storedPassword = await readPersistedOpenCodePasswordFromSettings();
-  if (storedPassword) {
-    process.env.OPENCODE_SERVER_PASSWORD = storedPassword;
-    return storedPassword;
+  if (isValidOpenCodePassword(openCodeAuthPassword)) {
+    return setOpenCodeAuthState(openCodeAuthPassword, openCodeAuthSource || 'generated');
   }
 
-  const generatedPassword = generateSecureOpenCodePassword();
-  process.env.OPENCODE_SERVER_PASSWORD = generatedPassword;
+  const storedPassword = await readPersistedOpenCodePasswordFromSettings();
+  if (storedPassword) {
+    return setOpenCodeAuthState(storedPassword, 'persisted');
+  }
+
+  const generatedPassword = setOpenCodeAuthState(generateSecureOpenCodePassword(), 'generated');
   await persistOpenCodePasswordToSettings(generatedPassword);
   console.log('Generated secure password for managed local OpenCode instance');
   return generatedPassword;

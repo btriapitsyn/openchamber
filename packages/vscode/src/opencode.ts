@@ -388,7 +388,12 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   void _context;
   let server: { url: string; close: () => void } | null = null;
   let managedApiUrlOverride: string | null = null;
-  let managedServerPassword: string | null = null;
+  let managedPassword: string | null = null;
+  let managedPasswordSource: 'user-env' | 'persisted' | 'generated' | 'rotated' | null = null;
+  const userProvidedEnvPassword = (() => {
+    const normalized = (process.env.OPENCODE_SERVER_PASSWORD || '').trim();
+    return isValidOpenCodePassword(normalized) ? normalized : null;
+  })();
   let status: ConnectionStatus = 'disconnected';
   let lastError: string | undefined;
   const listeners = new Set<(status: ConnectionStatus, error?: string) => void>();
@@ -458,44 +463,50 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     if (useConfiguredUrl && configuredApiUrl) {
       return {};
     }
-    const password = managedServerPassword || process.env.OPENCODE_SERVER_PASSWORD || '';
+    const password = managedPassword || '';
     if (!password) {
       return {};
     }
     return { Authorization: buildOpenCodeAuthHeader(password) };
   };
 
+  const setManagedPasswordState = (
+    password: string,
+    source: 'user-env' | 'persisted' | 'generated' | 'rotated'
+  ): string => {
+    const normalized = password.trim();
+    managedPassword = normalized;
+    managedPasswordSource = source;
+    process.env.OPENCODE_SERVER_PASSWORD = normalized;
+    return normalized;
+  };
+
   const ensureManagedOpenCodeServerPassword = async ({ rotateManaged = false }: { rotateManaged?: boolean } = {}): Promise<string> => {
-    const fromEnv = (process.env.OPENCODE_SERVER_PASSWORD || '').trim();
-    if (isValidOpenCodePassword(fromEnv)) {
-      managedServerPassword = fromEnv;
-      process.env.OPENCODE_SERVER_PASSWORD = fromEnv;
+    if (userProvidedEnvPassword) {
+      const fromEnv = setManagedPasswordState(userProvidedEnvPassword, 'user-env');
       persistOpenCodePasswordToSettings(fromEnv);
       return fromEnv;
     }
 
     if (rotateManaged) {
-      const rotated = generateSecureOpenCodePassword();
-      managedServerPassword = rotated;
-      process.env.OPENCODE_SERVER_PASSWORD = rotated;
+      const rotated = setManagedPasswordState(generateSecureOpenCodePassword(), 'rotated');
       persistOpenCodePasswordToSettings(rotated);
       return rotated;
     }
 
-    if (managedServerPassword) {
-      return managedServerPassword;
+    if (managedPassword && isValidOpenCodePassword(managedPassword)) {
+      return setManagedPasswordState(
+        managedPassword,
+        managedPasswordSource || 'generated'
+      );
     }
 
     const persisted = readPersistedOpenCodePasswordFromSettings();
     if (persisted) {
-      managedServerPassword = persisted;
-      process.env.OPENCODE_SERVER_PASSWORD = managedServerPassword;
-      return managedServerPassword;
+      return setManagedPasswordState(persisted, 'persisted');
     }
 
-    const generated = generateSecureOpenCodePassword();
-    managedServerPassword = generated;
-    process.env.OPENCODE_SERVER_PASSWORD = generated;
+    const generated = setManagedPasswordState(generateSecureOpenCodePassword(), 'generated');
     persistOpenCodePasswordToSettings(generated);
 
     return generated;
