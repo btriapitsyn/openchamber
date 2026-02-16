@@ -3851,7 +3851,7 @@ function deriveSessionActivityTransitions(payload) {
     }
   }
 
-  if (payload.type === 'message.part.updated') {
+  if (payload.type === 'message.part.updated' || payload.type === 'message.part.delta') {
     const info = payload.properties?.info;
     const sessionId = info?.sessionID ?? info?.sessionId ?? payload.properties?.sessionID ?? payload.properties?.sessionId;
     const role = info?.role;

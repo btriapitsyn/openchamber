@@ -818,7 +818,6 @@ export const useEventStream = () => {
           type: part.type || 'text',
         } as Part;
 
-        // Fallback: if we see assistant parts but session.status hasn't arrived yet, mark busy.
         if (roleInfo === 'assistant') {
           const partType = (messagePart as { type?: unknown }).type;
           const partTime = (messagePart as { time?: { end?: unknown } }).time;
@@ -860,6 +859,81 @@ export const useEventStream = () => {
 
         trackMessage(messageId, 'addStreamingPart_called');
         addStreamingPart(sessionId, messageId, messagePart, roleInfo);
+        break;
+      }
+
+      case 'message.part.delta': {
+        const sessionId = readStringProp(props, ['sessionID', 'sessionId']);
+        const messageId = readStringProp(props, ['messageID', 'messageId']);
+        const partId = readStringProp(props, ['partID', 'partId']);
+        const field = readStringProp(props, ['field']);
+        const delta = typeof props.delta === 'string' ? props.delta : null;
+
+        if (!sessionId || !messageId || !partId || !field || delta === null) {
+          if (streamDebugEnabled()) {
+            console.debug('[useEventStream] Skipping message.part.delta with missing payload', {
+              sessionID: props.sessionID,
+              messageID: props.messageID,
+              partID: props.partID,
+              field: props.field,
+            });
+          }
+          break;
+        }
+
+        lastMessageEventBySessionRef.current.set(sessionId, Date.now());
+        const pendingTimer = pendingMessageStallTimersRef.current.get(sessionId);
+        if (pendingTimer) {
+          clearTimeout(pendingTimer);
+          pendingMessageStallTimersRef.current.delete(sessionId);
+        }
+
+        const trimmedHeadMaxId = useSessionStore.getState().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
+        if (trimmedHeadMaxId && !isIdNewer(messageId, trimmedHeadMaxId)) {
+          if (streamDebugEnabled()) {
+            console.debug('[useEventStream] Skipping message.part.delta for trimmed message', {
+              sessionId,
+              messageId,
+              trimmedHeadMaxId,
+            });
+          }
+          break;
+        }
+
+        const existingMessage = getMessageFromStore(sessionId, messageId);
+        const existingPart = existingMessage?.parts?.find((item) => item?.id === partId);
+        if (!existingPart) {
+          break;
+        }
+
+        const existingPartRecord = existingPart as Record<string, unknown>;
+        const existingFieldValue = existingPartRecord[field];
+        const updatedPart: Part = {
+          ...existingPart,
+          [field]: `${typeof existingFieldValue === 'string' ? existingFieldValue : ''}${delta}`,
+        } as Part;
+
+        let roleInfo = 'assistant';
+        const existingRole = (existingMessage?.info as Record<string, unknown> | undefined)?.role;
+        if (typeof existingRole === 'string') {
+          roleInfo = existingRole;
+        }
+
+        if (roleInfo === 'assistant' && delta.length > 0) {
+          const currentStatus = useSessionStore.getState().sessionStatus?.get(sessionId);
+          const recentlyConfirmedIdle =
+            currentStatus?.type === 'idle' &&
+            typeof currentStatus.confirmedAt === 'number' &&
+            Date.now() - currentStatus.confirmedAt < 1200;
+          if (!currentStatus || currentStatus.type === 'idle') {
+            if (!recentlyConfirmedIdle) {
+              updateSessionStatus(sessionId, { type: 'busy' }, 'sse:message.part.delta');
+            }
+          }
+        }
+
+        trackMessage(messageId, 'part_delta_received', { role: roleInfo, field });
+        addStreamingPart(sessionId, messageId, updatedPart, roleInfo);
         break;
       }
 

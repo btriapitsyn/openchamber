@@ -82,7 +82,7 @@ const deriveSessionActivity = (payload: Record<string, unknown>): SessionActivit
     }
   }
 
-  if (type === 'message.updated' || type === 'message.part.updated') {
+  if (type === 'message.updated' || type === 'message.part.updated' || type === 'message.part.delta') {
     const info = properties?.info as Record<string, unknown> | undefined;
     const sessionId = (info?.sessionID ?? info?.sessionId ?? properties?.sessionID ?? properties?.sessionId) as string;
     const role = info?.role as string;
