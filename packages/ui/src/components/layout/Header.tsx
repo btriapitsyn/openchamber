@@ -1207,16 +1207,18 @@ export const Header: React.FC = () => {
       overlay.style.fontWeight = computed.fontWeight;
       overlay.style.fontFamily = computed.fontFamily;
       overlay.style.color = computed.color;
+      overlay.style.backgroundColor = 'var(--surface-elevated)';
+      overlay.style.border = '1px solid var(--interactive-border)';
+      overlay.style.boxSizing = 'border-box';
       overlay.style.whiteSpace = 'nowrap';
+      overlay.style.opacity = '1';
       const isDraggedActive = ds.projectId === activeProjectId;
       if (isDraggedActive) {
-        overlay.style.backgroundColor = 'var(--surface-elevated)';
         overlay.style.outline = '1px solid var(--interactive-border)';
         overlay.style.outlineOffset = '-1px';
-        overlay.style.opacity = '0.95';
       } else {
-        overlay.style.backgroundColor = 'transparent';
-        overlay.style.opacity = '0.9';
+        overlay.style.outline = 'none';
+        overlay.style.outlineOffset = '0';
       }
 
       document.body.appendChild(overlay);
