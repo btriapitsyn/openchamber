@@ -29,6 +29,25 @@ const isLikelyLocalHostname = (hostname: string): boolean => {
   return false;
 };
 
+const isLoopbackHostname = (hostname: string): boolean => {
+  const host = hostname.trim().toLowerCase();
+  if (!host) {
+    return false;
+  }
+  if (host === 'localhost' || host === '::1' || host === '[::1]') {
+    return true;
+  }
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) {
+    return false;
+  }
+  const octets = ipv4.slice(1).map((part) => Number(part));
+  if (octets.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return false;
+  }
+  return octets[0] === 127;
+};
+
 const normalizeLocalOriginForCurrentRuntime = (parsed: URL): URL => {
   if (typeof window === 'undefined') {
     return parsed;
@@ -52,7 +71,7 @@ const normalizeLocalOriginForCurrentRuntime = (parsed: URL): URL => {
   if (parsedPort !== runtimePort) {
     return parsed;
   }
-  if (!isLikelyLocalHostname(parsed.hostname)) {
+  if (!isLoopbackHostname(parsed.hostname)) {
     return parsed;
   }
 

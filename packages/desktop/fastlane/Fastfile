@@ -92,6 +92,59 @@ def latest_artifact!(glob_pattern)
   files.max_by { |path| File.mtime(path) }
 end
 
+def android_sdk_root
+  ENV["ANDROID_HOME"] || ENV["ANDROID_SDK_ROOT"] || File.join(Dir.home, "Library", "Android", "sdk")
+end
+
+def latest_android_build_tools_bin
+  build_tools_dir = File.join(android_sdk_root, "build-tools")
+  UI.user_error!("Android build-tools directory not found at #{build_tools_dir}") unless Dir.exist?(build_tools_dir)
+
+  versions = Dir.children(build_tools_dir)
+                .select { |name| File.directory?(File.join(build_tools_dir, name)) }
+                .sort_by { |name| name.split(".").map { |part| part.to_i } }
+  UI.user_error!("No Android build-tools versions found in #{build_tools_dir}") if versions.empty?
+
+  File.join(build_tools_dir, versions.last)
+end
+
+def sign_android_apks_if_configured!(artifacts)
+  key_alias = ENV["ANDROID_KEY_ALIAS"]
+  store_password = ENV["ANDROID_KEYSTORE_PASSWORD"]
+  key_password = ENV["ANDROID_KEY_PASSWORD"]
+  return if [key_alias, store_password, key_password].any? { |value| value.nil? || value.empty? }
+
+  explicit_keystore = ENV["ANDROID_KEYSTORE_PATH"]
+  generated_keystore = File.join(desktop_root, "src-tauri", "gen", "android", "keystore.jks")
+  keystore = if explicit_keystore && !explicit_keystore.empty?
+               explicit_keystore
+             elsif File.exist?(generated_keystore)
+               generated_keystore
+             end
+  return if keystore.nil? || keystore.empty? || !File.exist?(keystore)
+
+  build_tools_bin = latest_android_build_tools_bin
+  zipalign = File.join(build_tools_bin, "zipalign")
+  apksigner = File.join(build_tools_bin, "apksigner")
+
+  artifacts.select { |path| path.end_with?(".apk") }.each do |apk|
+    next unless apk.end_with?("-unsigned.apk")
+
+    aligned = apk.sub(/-unsigned\.apk\z/, "-aligned.apk")
+    signed = apk.sub(/-unsigned\.apk\z/, "-signed.apk")
+
+    sh("#{zipalign.shellescape} -f -p 4 #{apk.shellescape} #{aligned.shellescape}")
+    sh(
+      "#{apksigner.shellescape} sign " \
+      "--ks #{keystore.shellescape} " \
+      "--ks-key-alias #{key_alias.shellescape} " \
+      "--ks-pass #{"pass:#{store_password}".shellescape} " \
+      "--key-pass #{"pass:#{key_password}".shellescape} " \
+      "--out #{signed.shellescape} #{aligned.shellescape}"
+    )
+  end
+end
+
 def has_platform_artifacts?(platform, extension)
   pattern = File.join(desktop_root, "build", "mobile-artifacts", platform, "*.#{extension}")
   Dir.glob(pattern).any? { |path| File.file?(path) }
@@ -100,6 +153,7 @@ end
 platform :android do
   lane :build do
     ensure_mobile_initialized!(:android)
+    run_in_desktop(["node", "./scripts/apply-mobile-branding.mjs"])
     run_in_desktop(["node", "./scripts/apply-mobile-signing.mjs"])
 
     targets = list_env("ANDROID_TARGETS", ["aarch64", "armv7", "x86_64"])
@@ -119,7 +173,8 @@ platform :android do
     patterns = []
     patterns << "src-tauri/gen/android/app/build/outputs/apk/**/*.apk" if build_apk
     patterns << "src-tauri/gen/android/app/build/outputs/bundle/**/*.aab" if build_aab
-    copy_artifacts!("android", patterns)
+    artifacts = copy_artifacts!("android", patterns)
+    sign_android_apks_if_configured!(artifacts)
   end
 
   lane :play_internal do
@@ -150,6 +205,7 @@ end
 platform :ios do
   lane :build do
     ensure_mobile_initialized!(:ios)
+    run_in_desktop(["node", "./scripts/apply-mobile-branding.mjs"])
 
     targets = list_env("IOS_TARGETS", ["aarch64"])
     config = ENV["IOS_TAURI_CONFIG"] || "src-tauri/tauri.ios.conf.json"

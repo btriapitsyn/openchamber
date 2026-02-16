@@ -29,6 +29,15 @@ const androidLaunchScreen = `<?xml version="1.0" encoding="utf-8"?>
   </item>
 </layer-list>`;
 
+const androidNetworkSecurityConfig = `<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>`;
+
 const iosLaunchScreen = `<?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="23506" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="Y6W-OH-hqX">
     <device id="retina6_12" orientation="portrait" appearance="light"/>
@@ -77,8 +86,40 @@ const targets = [
   ['src-tauri/gen/android/app/src/main/res/values/themes.xml', androidThemes],
   ['src-tauri/gen/android/app/src/main/res/values-night/themes.xml', androidThemes],
   ['src-tauri/gen/android/app/src/main/res/drawable/launch_screen.xml', androidLaunchScreen],
+  ['src-tauri/gen/android/app/src/main/res/xml/network_security_config.xml', androidNetworkSecurityConfig],
   ['src-tauri/gen/apple/LaunchScreen.storyboard', iosLaunchScreen],
 ];
+
+async function patchAndroidManifest(rootDir) {
+  const manifestPath = path.join(rootDir, 'src-tauri/gen/android/app/src/main/AndroidManifest.xml');
+  if (!(await exists(manifestPath))) {
+    return 0;
+  }
+
+  const original = await fs.readFile(manifestPath, 'utf8');
+  let updated = original;
+
+  if (updated.includes('android:usesCleartextTraffic="${usesCleartextTraffic}"')) {
+    updated = updated.replace(
+      'android:usesCleartextTraffic="${usesCleartextTraffic}"',
+      'android:usesCleartextTraffic="true"\n        android:networkSecurityConfig="@xml/network_security_config"',
+    );
+  } else {
+    if (/android:usesCleartextTraffic="[^"]*"/.test(updated)) {
+      updated = updated.replace(/android:usesCleartextTraffic="[^"]*"/g, 'android:usesCleartextTraffic="true"');
+    }
+    if (!updated.includes('android:networkSecurityConfig=')) {
+      updated = updated.replace('<application\n', '<application\n        android:networkSecurityConfig="@xml/network_security_config"\n');
+    }
+  }
+
+  if (updated === original) {
+    return 0;
+  }
+
+  await fs.writeFile(manifestPath, updated, 'utf8');
+  return 1;
+}
 
 async function exists(filePath) {
   try {
@@ -101,5 +142,7 @@ for (const [relativePath, content] of targets) {
   await fs.writeFile(absolutePath, `${content}\n`, 'utf8');
   updated += 1;
 }
+
+updated += await patchAndroidManifest(root);
 
 console.log(`[mobile-branding] updated ${updated} files`);

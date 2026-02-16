@@ -4,6 +4,7 @@ import { isDesktopShell, isTauriShell, writeTextToClipboard } from '@/lib/deskto
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { buildRuntimeApiHeaders, resolveRuntimeApiEndpoint } from '@/lib/instances/runtimeApiBaseUrl';
 
 const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install | bash';
 const POLL_INTERVAL_MS = 3000;
@@ -55,7 +56,10 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await fetch('/api/config/settings', { method: 'GET', headers: { Accept: 'application/json' } });
+        const response = await fetch(resolveRuntimeApiEndpoint('/config/settings'), {
+          method: 'GET',
+          headers: buildRuntimeApiHeaders(),
+        });
         if (!response.ok) return;
         const data = (await response.json().catch(() => null)) as null | { opencodeBinary?: unknown };
         if (!data || cancelled) return;

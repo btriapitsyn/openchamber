@@ -62,4 +62,20 @@ describe('resolveInstanceApiBaseUrlAfterLogin', () => {
     assert.equal(resolved.apiBaseUrl, 'http://192.168.1.20:5173/api');
     assert.equal(resolved.origin, 'http://192.168.1.20:5173');
   });
+
+  it('preserves explicit private LAN host input', () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      writable: true,
+      value: {
+        location: {
+          origin: 'http://localhost:4040',
+        },
+      },
+    });
+
+    const resolved = resolveInstanceApiBaseUrlAfterLogin({ enteredUrl: 'http://192.168.1.23:4040' });
+    assert.equal(resolved.apiBaseUrl, 'http://192.168.1.23:4040/api');
+    assert.equal(resolved.origin, 'http://192.168.1.23:4040');
+  });
 });

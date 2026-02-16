@@ -5,6 +5,7 @@ import { setDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { setFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { loadAppearancePreferences, applyAppearancePreferences } from '@/lib/appearancePersistence';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
+import { buildRuntimeApiHeaders, resolveRuntimeApiEndpoint } from '@/lib/instances/runtimeApiBaseUrl';
 
 const persistToLocalStorage = (settings: DesktopSettings) => {
   if (typeof window === 'undefined') {
@@ -679,9 +680,9 @@ const fetchWebSettings = async (): Promise<DesktopSettings | null> => {
   }
 
   try {
-    const response = await fetch('/api/config/settings', {
+    const response = await fetch(resolveRuntimeApiEndpoint('/config/settings'), {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers: buildRuntimeApiHeaders(),
     });
     if (!response.ok) {
       return null;
@@ -754,12 +755,11 @@ export const updateDesktopSettings = async (changes: Partial<DesktopSettings>): 
   }
 
   try {
-    const response = await fetch('/api/config/settings', {
+    const response = await fetch(resolveRuntimeApiEndpoint('/config/settings'), {
       method: 'PUT',
-      headers: {
+      headers: buildRuntimeApiHeaders({
         'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
+      }),
       body: JSON.stringify(changes),
     });
 

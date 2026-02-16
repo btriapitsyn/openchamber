@@ -10,6 +10,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel } from '@/lib/utils';
+import { buildRuntimeApiHeaders, resolveRuntimeApiEndpoint } from '@/lib/instances/runtimeApiBaseUrl';
 
 interface ZenModel {
   id: string;
@@ -131,9 +132,9 @@ export const DefaultsSettings: React.FC = () => {
 
         // 2. Fetch API (Web/server)
         if (!data) {
-          const response = await fetch('/api/config/settings', {
+          const response = await fetch(resolveRuntimeApiEndpoint('/config/settings'), {
             method: 'GET',
-            headers: { Accept: 'application/json' },
+            headers: buildRuntimeApiHeaders(),
           });
           if (response.ok) {
             data = await response.json();
@@ -196,19 +197,9 @@ export const DefaultsSettings: React.FC = () => {
          defaultVariant: '',
        });
 
-        {
-          const response = await fetch('/api/config/settings', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ defaultModel: newValue }),
-          });
-         if (!response.ok) {
-           console.warn('Failed to save default model to server:', response.status, response.statusText);
-         }
-       }
-     } catch (error) {
-       console.warn('Failed to save default model:', error);
-     }
+      } catch (error) {
+        console.warn('Failed to save default model:', error);
+      }
   }, [providers, setCurrentVariant, setProvider, setModel, setSettingsDefaultModel, setSettingsDefaultVariant]);
 
   const DEFAULT_VARIANT_VALUE = '__default__';
