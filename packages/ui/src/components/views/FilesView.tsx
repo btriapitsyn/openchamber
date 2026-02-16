@@ -56,6 +56,7 @@ import {
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useDeviceInfo } from '@/lib/device';
+import { writeTextToClipboard } from '@/lib/desktop';
 import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -498,8 +499,13 @@ const FileRow: React.FC<FileRowProps> = ({
               )}
               <DropdownMenuItem onClick={(e) => {
                 e.stopPropagation();
-                void navigator.clipboard.writeText(node.path);
-                toast.success('Path copied');
+                void writeTextToClipboard(node.path).then((copied) => {
+                  if (copied) {
+                    toast.success('Path copied');
+                  } else {
+                    toast.error('Copy failed');
+                  }
+                });
               }}>
                 <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
               </DropdownMenuItem>
@@ -2120,7 +2126,9 @@ export const FilesView: React.FC = () => {
               size="sm"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(fileContent);
+                  if (!(await writeTextToClipboard(fileContent))) {
+                    throw new Error('copy failed');
+                  }
                   setCopiedContent(true);
                   if (copiedContentTimeoutRef.current !== null) {
                     window.clearTimeout(copiedContentTimeoutRef.current);
@@ -2150,7 +2158,9 @@ export const FilesView: React.FC = () => {
               size="sm"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(displaySelectedPath);
+                  if (!(await writeTextToClipboard(displaySelectedPath))) {
+                    throw new Error('copy failed');
+                  }
                   setCopiedPath(true);
                   if (copiedPathTimeoutRef.current !== null) {
                     window.clearTimeout(copiedPathTimeoutRef.current);
@@ -2506,7 +2516,9 @@ export const FilesView: React.FC = () => {
               size="sm"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(fileContent);
+                  if (!(await writeTextToClipboard(fileContent))) {
+                    throw new Error('copy failed');
+                  }
                   setCopiedContent(true);
                   if (copiedContentTimeoutRef.current !== null) {
                     window.clearTimeout(copiedContentTimeoutRef.current);
@@ -2536,7 +2548,9 @@ export const FilesView: React.FC = () => {
               size="sm"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(displaySelectedPath);
+                  if (!(await writeTextToClipboard(displaySelectedPath))) {
+                    throw new Error('copy failed');
+                  }
                   setCopiedPath(true);
                   if (copiedPathTimeoutRef.current !== null) {
                     window.clearTimeout(copiedPathTimeoutRef.current);

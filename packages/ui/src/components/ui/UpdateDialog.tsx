@@ -9,6 +9,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { RiCheckLine, RiClipboardLine, RiDownloadCloudLine, RiDownloadLine, RiExternalLinkLine, RiLoaderLine, RiRestartLine, RiTerminalLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
+import { writeTextToClipboard } from '@/lib/desktop';
 import type { UpdateInfo, UpdateProgress } from '@/lib/desktop';
 
 type WebUpdateState = 'idle' | 'updating' | 'restarting' | 'reconnecting' | 'error';
@@ -173,7 +174,9 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
 
   const handleCopyCommand = async () => {
     try {
-      await navigator.clipboard.writeText(updateCommand);
+      if (!(await writeTextToClipboard(updateCommand))) {
+        throw new Error('copy failed');
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

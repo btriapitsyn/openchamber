@@ -145,7 +145,14 @@ export function useRouter(): void {
 
       // After applying, update URL to normalized form (use replaceState)
       if (!isVSCode) {
-        syncURLFromState({ replace: true });
+        const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+        const hasOpenChamberDeepLinkParams =
+          route.settingsSection === 'settings' &&
+          Boolean(params && (params.has('section') || params.has('devices') || params.has('user_code')));
+
+        if (!hasOpenChamberDeepLinkParams) {
+          syncURLFromState({ replace: true });
+        }
       }
     };
 

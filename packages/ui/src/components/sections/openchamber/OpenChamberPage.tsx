@@ -10,6 +10,7 @@ import { NotificationSettings } from './NotificationSettings';
 import { GitHubSettings } from './GitHubSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { OpenCodeCliSettings } from './OpenCodeCliSettings';
+import { DevicesSettings } from './DevicesSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
@@ -18,9 +19,10 @@ import type { OpenChamberSection } from './OpenChamberSidebar';
 interface OpenChamberPageProps {
     /** Which section to display. If undefined, shows all sections (mobile/legacy behavior) */
     section?: OpenChamberSection;
+    userCode?: string | null;
 }
 
-export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => {
+export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section, userCode }) => {
     const { isMobile } = useDeviceInfo();
     const showAbout = isMobile && isWebRuntime();
     const isVSCode = isVSCodeRuntime();
@@ -45,6 +47,9 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                     )}
                     <div className="border-t border-border/40 pt-6">
                         <SessionRetentionSettings />
+                    </div>
+                    <div className="border-t border-border/40 pt-6">
+                        <DevicesSettings prefillUserCode={userCode} />
                     </div>
                     {showAbout && (
                         <div className="border-t border-border/40 pt-6">
@@ -73,6 +78,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <NotificationSectionContent />;
             case 'voice':
                 return <VoiceSectionContent />;
+            case 'devices':
+                return <DevicesSectionContent userCode={userCode} />;
             default:
                 return null;
         }
@@ -93,7 +100,7 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
 
 // Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile)
 const VisualSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'terminalFontSize', 'spacing', 'cornerRadius', 'inputBarOffset', 'terminalQuickKeys']} />;
+    return <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'terminalFontSize', 'spacing', 'cornerRadius', 'inputBarOffset', 'terminalQuickKeys', 'mobileHaptics']} />;
 };
 
 // Chat section: Default Tool Output, Diff layout, Show reasoning traces, Queue mode, Persist draft
@@ -159,4 +166,8 @@ const VoiceSectionContent: React.FC = () => {
         return null;
     }
     return <VoiceSettings />;
+};
+
+const DevicesSectionContent: React.FC<{ userCode?: string | null }> = ({ userCode }) => {
+    return <DevicesSettings prefillUserCode={userCode} />;
 };

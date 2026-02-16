@@ -80,6 +80,7 @@ interface UIStore {
   isSessionCreateDialogOpen: boolean;
   isSettingsDialogOpen: boolean;
   isModelSelectorOpen: boolean;
+  isDeviceLoginOpen: boolean;
   sidebarSection: SidebarSection;
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
@@ -110,6 +111,8 @@ interface UIStore {
   isImagePreviewOpen: boolean;
   nativeNotificationsEnabled: boolean;
   notificationMode: 'always' | 'hidden-only';
+  mobileHapticsEnabled: boolean;
+  biometricLockEnabled: boolean;
   notifyOnSubtasks: boolean;
 
   // Event toggles (which events trigger notifications)
@@ -162,6 +165,7 @@ interface UIStore {
   setSessionCreateDialogOpen: (open: boolean) => void;
   setSettingsDialogOpen: (open: boolean) => void;
   setModelSelectorOpen: (open: boolean) => void;
+  setDeviceLoginOpen: (open: boolean) => void;
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
@@ -195,6 +199,8 @@ interface UIStore {
   setImagePreviewOpen: (open: boolean) => void;
   setNativeNotificationsEnabled: (value: boolean) => void;
   setNotificationMode: (mode: 'always' | 'hidden-only') => void;
+  setMobileHapticsEnabled: (value: boolean) => void;
+  setBiometricLockEnabled: (value: boolean) => void;
   setShowTerminalQuickKeysOnDesktop: (value: boolean) => void;
   setNotifyOnSubtasks: (value: boolean) => void;
   setNotifyOnCompletion: (value: boolean) => void;
@@ -244,6 +250,7 @@ export const useUIStore = create<UIStore>()(
         isSessionCreateDialogOpen: false,
         isSettingsDialogOpen: false,
         isModelSelectorOpen: false,
+        isDeviceLoginOpen: false,
         sidebarSection: 'sessions',
         eventStreamStatus: 'idle',
         eventStreamHint: null,
@@ -271,6 +278,8 @@ export const useUIStore = create<UIStore>()(
         isImagePreviewOpen: false,
         nativeNotificationsEnabled: false,
         notificationMode: 'hidden-only',
+        mobileHapticsEnabled: true,
+        biometricLockEnabled: false,
         notifyOnSubtasks: true,
 
         // Event toggles (which events trigger notifications)
@@ -528,6 +537,10 @@ export const useUIStore = create<UIStore>()(
 
         setModelSelectorOpen: (open) => {
           set({ isModelSelectorOpen: open });
+        },
+
+        setDeviceLoginOpen: (open) => {
+          set({ isDeviceLoginOpen: open });
         },
 
         setSidebarSection: (section) => {
@@ -839,6 +852,14 @@ export const useUIStore = create<UIStore>()(
           set({ notificationMode: mode });
         },
 
+        setMobileHapticsEnabled: (value) => {
+          set({ mobileHapticsEnabled: value });
+        },
+
+        setBiometricLockEnabled: (value) => {
+          set({ biometricLockEnabled: value });
+        },
+
         setShowTerminalQuickKeysOnDesktop: (value) => {
           set({ showTerminalQuickKeysOnDesktop: value });
         },
@@ -940,6 +961,8 @@ export const useUIStore = create<UIStore>()(
           diffViewMode: state.diffViewMode,
           nativeNotificationsEnabled: state.nativeNotificationsEnabled,
           notificationMode: state.notificationMode,
+          mobileHapticsEnabled: state.mobileHapticsEnabled,
+          biometricLockEnabled: state.biometricLockEnabled,
           showTerminalQuickKeysOnDesktop: state.showTerminalQuickKeysOnDesktop,
           notifyOnSubtasks: state.notifyOnSubtasks,
           notifyOnCompletion: state.notifyOnCompletion,

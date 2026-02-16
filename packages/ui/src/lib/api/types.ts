@@ -1,6 +1,6 @@
 import type { WorktreeMetadata } from '@/types/worktree';
 
-export type RuntimePlatform = 'web' | 'desktop' | 'vscode';
+export type RuntimePlatform = 'web' | 'desktop' | 'mobile' | 'vscode';
 
 export interface RuntimeDescriptor {
   platform: RuntimePlatform;
@@ -509,6 +509,8 @@ export interface SettingsPayload {
   showTextJustificationActivity?: boolean;
   nativeNotificationsEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
+  mobileHapticsEnabled?: boolean;
+  biometricLockEnabled?: boolean;
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
   queueModeEnabled?: boolean;

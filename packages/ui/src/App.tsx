@@ -4,6 +4,15 @@ import { VSCodeLayout } from '@/components/layout/VSCodeLayout';
 import { AgentManagerView } from '@/components/views/agent-manager';
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useEventStream } from '@/hooks/useEventStream';
@@ -17,10 +26,11 @@ import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { GitPollingProvider } from '@/hooks/useGitPolling';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { authenticateWithBiometrics, getBiometricStatus, isDesktopLocalOriginActive, isDesktopShell, isMobileRuntime, isNativeMobileApp, isTauriShell } from '@/lib/desktop';
 import { OnboardingScreen } from '@/components/onboarding/OnboardingScreen';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useInstancesStore } from '@/stores/useInstancesStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
@@ -53,15 +63,31 @@ function App({ apis }: AppProps) {
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
+  const [connectionCheckCompleted, setConnectionCheckCompleted] = React.useState<boolean>(() => apis.runtime.isVSCode);
+  const [isRetryingConnection, setIsRetryingConnection] = React.useState(false);
   const { uiFont, monoFont } = useFontPreferences();
   const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
   const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   const [showCliOnboarding, setShowCliOnboarding] = React.useState(false);
+  const instances = useInstancesStore((state) => state.instances);
+  const currentInstanceId = useInstancesStore((state) => state.currentInstanceId);
+  const setCurrentInstance = useInstancesStore((state) => state.setCurrentInstance);
+  const touchInstance = useInstancesStore((state) => state.touchInstance);
+  const isDeviceLoginOpen = useUIStore((state) => state.isDeviceLoginOpen);
+  const setDeviceLoginOpen = useUIStore((state) => state.setDeviceLoginOpen);
+  const biometricLockEnabled = useUIStore((state) => state.biometricLockEnabled);
+  const setBiometricLockEnabled = useUIStore((state) => state.setBiometricLockEnabled);
   const appReadyDispatchedRef = React.useRef(false);
+  const [biometricRequired, setBiometricRequired] = React.useState(false);
+  const [biometricBusy, setBiometricBusy] = React.useState(false);
 
   React.useEffect(() => {
     setIsVSCodeRuntime(apis.runtime.isVSCode);
   }, [apis.runtime.isVSCode]);
+
+  React.useEffect(() => {
+    setConnectionCheckCompleted(isVSCodeRuntime);
+  }, [isVSCodeRuntime]);
 
   React.useEffect(() => {
     registerRuntimeAPIs(apis);
@@ -125,16 +151,32 @@ function App({ apis }: AppProps) {
   }, [isInitialized]);
 
   React.useEffect(() => {
+    let cancelled = false;
+
     const init = async () => {
-      // VS Code runtime bootstraps config + sessions after the managed OpenCode instance reports "connected".
-      // Doing the default initialization here can race with startup and lead to one-shot failures.
       if (isVSCodeRuntime) {
+        if (!cancelled) {
+          setConnectionCheckCompleted(true);
+        }
         return;
       }
+
+      if (!cancelled) {
+        setConnectionCheckCompleted(false);
+      }
+
       await initializeApp();
+
+      if (!cancelled) {
+        setConnectionCheckCompleted(true);
+      }
     };
 
-    init();
+    void init();
+
+    return () => {
+      cancelled = true;
+    };
   }, [initializeApp, isVSCodeRuntime]);
 
   React.useEffect(() => {
@@ -188,7 +230,7 @@ function App({ apis }: AppProps) {
 
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
   React.useEffect(() => {
-    if (!isTauriShell()) {
+    if (!isDesktopShell() || !isTauriShell()) {
       return;
     }
     const tauri = (window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
@@ -257,6 +299,147 @@ function App({ apis }: AppProps) {
     window.location.reload();
   }, []);
 
+  const handleRetryConnection = React.useCallback(async () => {
+    setIsRetryingConnection(true);
+    try {
+      await initializeApp();
+      setConnectionCheckCompleted(true);
+    } finally {
+      setIsRetryingConnection(false);
+    }
+  }, [initializeApp]);
+
+  const sortedInstances = React.useMemo(() => {
+    return [...instances].sort((a, b) => (b.lastUsedAt ?? 0) - (a.lastUsedAt ?? 0));
+  }, [instances]);
+
+  const alternativeInstances = React.useMemo(() => {
+    return sortedInstances.filter((instance) => instance.id !== currentInstanceId);
+  }, [currentInstanceId, sortedInstances]);
+
+  const handleSwitchInstance = React.useCallback((instanceId: string) => {
+    if (!instanceId || instanceId === currentInstanceId) {
+      return;
+    }
+    setCurrentInstance(instanceId);
+    touchInstance(instanceId);
+    window.location.reload();
+  }, [currentInstanceId, setCurrentInstance, touchInstance]);
+
+  const showConnectionRecoveryDialog = connectionCheckCompleted
+    && !isVSCodeRuntime
+    && !isConnected
+    && !isDeviceLoginOpen;
+
+  const isMobileShellRuntime = React.useMemo(() => isMobileRuntime(), []);
+
+  const requestBiometricUnlock = React.useCallback(async () => {
+    if (!isNativeMobileApp() || !biometricLockEnabled) {
+      setBiometricRequired(false);
+      return true;
+    }
+
+    setBiometricBusy(true);
+    try {
+      const status = await getBiometricStatus();
+      if (!status.isAvailable) {
+        setBiometricRequired(true);
+        return false;
+      }
+
+      const authenticated = await authenticateWithBiometrics('Unlock OpenChamber', {
+        allowDeviceCredential: true,
+        title: 'Unlock OpenChamber',
+        subtitle: 'Authenticate to continue',
+        confirmationRequired: false,
+      });
+      setBiometricRequired(!authenticated);
+      return authenticated;
+    } finally {
+      setBiometricBusy(false);
+    }
+  }, [biometricLockEnabled]);
+
+  React.useEffect(() => {
+    if (!isNativeMobileApp() || !biometricLockEnabled) {
+      setBiometricRequired(false);
+      return;
+    }
+    void requestBiometricUnlock();
+  }, [biometricLockEnabled, requestBiometricUnlock]);
+
+  const connectionRecoveryDialog = showConnectionRecoveryDialog ? (
+    <Dialog open={showConnectionRecoveryDialog} onOpenChange={() => {}}>
+      <DialogContent className="max-w-md" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Connection required</DialogTitle>
+          <DialogDescription>
+            Unable to reach `{opencodeClient.getBaseUrl()}`. Retry, switch to another saved instance, or connect a new one.
+          </DialogDescription>
+        </DialogHeader>
+
+        {alternativeInstances.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {alternativeInstances.slice(0, 4).map((instance) => (
+              <Button
+                key={instance.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleSwitchInstance(instance.id)}
+              >
+                {instance.label || instance.origin}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setDeviceLoginOpen(true);
+            }}
+          >
+            {isMobileShellRuntime ? 'Connect Another Instance' : 'Add Instance'}
+          </Button>
+          <Button type="button" onClick={() => void handleRetryConnection()} disabled={isRetryingConnection}>
+            {isRetryingConnection ? 'Retrying...' : 'Retry'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  ) : null;
+
+  const biometricLockDialog = biometricRequired ? (
+    <Dialog open={biometricRequired} onOpenChange={() => {}}>
+      <DialogContent className="max-w-md" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>Unlock OpenChamber</DialogTitle>
+          <DialogDescription>
+            Biometric verification is required to access this app.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setBiometricLockEnabled(false);
+              setBiometricRequired(false);
+            }}
+          >
+            Disable lock
+          </Button>
+          <Button type="button" onClick={() => void requestBiometricUnlock()} disabled={biometricBusy}>
+            {biometricBusy ? 'Checking...' : 'Unlock'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  ) : null;
+
   if (showCliOnboarding) {
     return (
       <ErrorBoundary>
@@ -281,6 +464,7 @@ function App({ apis }: AppProps) {
             <div className="h-full text-foreground bg-background">
               <AgentManagerView />
               <Toaster />
+              {connectionRecoveryDialog}
             </div>
           </RuntimeAPIProvider>
         </ErrorBoundary>
@@ -294,6 +478,7 @@ function App({ apis }: AppProps) {
             <div className="h-full text-foreground bg-background">
               <VSCodeLayout />
               <Toaster />
+              {connectionRecoveryDialog}
             </div>
           </FireworksProvider>
         </RuntimeAPIProvider>
@@ -308,15 +493,17 @@ function App({ apis }: AppProps) {
           <FireworksProvider>
             <VoiceProvider>
               <div className="h-full text-foreground bg-background">
-                <MainLayout />
-                <Toaster />
-                <ConfigUpdateOverlay />
-                <AboutDialogWrapper />
+              <MainLayout />
+              <Toaster />
+              <ConfigUpdateOverlay />
+              <AboutDialogWrapper />
                 {showMemoryDebug && (
                   <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
                 )}
-              </div>
-            </VoiceProvider>
+              {connectionRecoveryDialog}
+              {biometricLockDialog}
+            </div>
+          </VoiceProvider>
           </FireworksProvider>
         </GitPollingProvider>
       </RuntimeAPIProvider>

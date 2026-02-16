@@ -9,7 +9,7 @@ import {
 import { toast } from '@/components/ui';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { cn } from '@/lib/utils';
-import { fetchDesktopInstalledApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings, type InstalledDesktopAppInfo } from '@/lib/desktop';
+import { fetchDesktopInstalledApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, writeTextToClipboard, type DesktopSettings, type InstalledDesktopAppInfo } from '@/lib/desktop';
 import { RiArrowDownSLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from '@remixicon/react';
 
 const FINDER_DEFAULT_ICON_DATA_URL = 'data:image/png;base64,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';
@@ -302,28 +302,7 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
   };
 
   const handleCopyPath = async () => {
-    if (typeof navigator === 'undefined') return;
-    const text = directory;
-    let copied = false;
-    if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(text);
-        copied = true;
-      } catch {
-        // fall through
-      }
-    }
-    if (!copied) {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'absolute';
-      textarea.style.left = '-9999px';
-      document.body.appendChild(textarea);
-      textarea.select();
-      copied = document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
+    const copied = await writeTextToClipboard(directory);
     if (!copied) {
       return;
     }

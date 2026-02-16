@@ -5,6 +5,7 @@ import { Ghostty, Terminal as GhosttyTerminal, FitAddon } from 'ghostty-web';
 import { isMobileDeviceViaCSS } from '@/lib/device';
 import type { TerminalTheme } from '@/lib/terminalTheme';
 import { getGhosttyTerminalOptions } from '@/lib/terminalTheme';
+import { writeTextToClipboard } from '@/lib/desktop';
 import type { TerminalChunk } from '@/stores/useTerminalStore';
 import { cn } from '@/lib/utils';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
@@ -365,14 +366,8 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         return;
       }
 
-      if (navigator.clipboard?.writeText) {
-        const copied = await navigator.clipboard
-          .writeText(text)
-          .then(() => true)
-          .catch(() => false);
-        if (copied) {
-          return;
-        }
+      if (await writeTextToClipboard(text)) {
+        return;
       }
 
       try {

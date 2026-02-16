@@ -13,6 +13,7 @@ import {
 import { toast } from '@/components/ui';
 import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine } from '@remixicon/react';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
+import { openExternalUrl, writeTextToClipboard } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import type { ModelMetadata } from '@/types';
 
@@ -397,7 +398,7 @@ export const ProvidersPage: React.FC = () => {
       }));
 
       if (urlCandidate) {
-        window.open(urlCandidate, '_blank', 'noopener,noreferrer');
+        await openExternalUrl(urlCandidate);
       }
       setPendingOAuth({ providerId, methodIndex });
       toast.message('Complete the OAuth flow in your browser');
@@ -449,7 +450,7 @@ export const ProvidersPage: React.FC = () => {
 
   const handleCopyOAuthLink = async (url: string) => {
     try {
-      await navigator.clipboard.writeText(url);
+      await writeTextToClipboard(url);
       toast.success('OAuth link copied');
     } catch (error) {
       console.error('Failed to copy OAuth link:', error);
@@ -459,7 +460,7 @@ export const ProvidersPage: React.FC = () => {
 
   const handleCopyOAuthCode = async (code: string) => {
     try {
-      await navigator.clipboard.writeText(code);
+      await writeTextToClipboard(code);
       toast.success('Device code copied');
     } catch (error) {
       console.error('Failed to copy device code:', error);

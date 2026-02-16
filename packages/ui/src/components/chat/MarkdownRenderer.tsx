@@ -5,7 +5,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import { RiFileCopyLine, RiCheckLine, RiDownloadLine } from '@remixicon/react';
 
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { isVSCodeRuntime, writeTextToClipboard } from '@/lib/desktop';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getStreamdownThemePair } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -407,7 +407,9 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
     const code = getCodeContent();
     if (!code) return;
     try {
-      await navigator.clipboard.writeText(code);
+      if (!(await writeTextToClipboard(code))) {
+        throw new Error('copy failed');
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {

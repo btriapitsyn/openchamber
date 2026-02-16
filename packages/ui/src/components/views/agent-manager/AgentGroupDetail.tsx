@@ -10,6 +10,7 @@ import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
+import { writeTextToClipboard } from '@/lib/desktop';
 import { useAgentGroupsStore, type AgentGroup, type AgentGroupSession } from '@/stores/useAgentGroupsStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { ChatContainer } from '@/components/chat/ChatContainer';
@@ -88,8 +89,7 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
       toast.error('No worktree path available');
       return;
     }
-    navigator.clipboard
-      .writeText(selectedSession.path)
+    writeTextToClipboard(selectedSession.path)
       .then(() => {
         toast.success('Worktree path copied');
       })

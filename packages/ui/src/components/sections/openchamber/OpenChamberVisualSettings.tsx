@@ -17,7 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { isVSCodeRuntime } from '@/lib/desktop';
+import { isNativeMobileApp, isVSCodeRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import {
     setDirectoryShowHidden,
@@ -82,7 +82,7 @@ const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft';
+export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft' | 'mobileHaptics';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -118,6 +118,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
     const persistChatDraft = useUIStore(state => state.persistChatDraft);
     const setPersistChatDraft = useUIStore(state => state.setPersistChatDraft);
+    const mobileHapticsEnabled = useUIStore(state => state.mobileHapticsEnabled);
+    const setMobileHapticsEnabled = useUIStore(state => state.setMobileHapticsEnabled);
+    const isNativeMobile = React.useMemo(() => isNativeMobileApp(), []);
     const {
         themeMode,
         setThemeMode,
@@ -772,6 +775,23 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     </label>
                     <p className="typography-meta text-muted-foreground pl-5">
                         Save your typed message across page reloads and session switches.
+                    </p>
+                </div>
+            )}
+
+            {shouldShow('mobileHaptics') && isNativeMobile && (
+                <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <Checkbox
+                            checked={mobileHapticsEnabled}
+                            onChange={setMobileHapticsEnabled}
+                        />
+                        <span className="typography-ui-header font-semibold text-foreground">
+                            Haptic feedback
+                        </span>
+                    </label>
+                    <p className="typography-meta text-muted-foreground pl-5">
+                        Trigger haptics on long-press and key voice interactions.
                     </p>
                 </div>
             )}

@@ -1,9 +1,10 @@
 import React from 'react';
 import { RiFileCopyLine, RiCheckLine, RiExternalLinkLine } from '@remixicon/react';
-import { isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopShell, isTauriShell, writeTextToClipboard } from '@/lib/desktop';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { buildRuntimeApiHeaders, resolveRuntimeApiEndpoint } from '@/lib/instances/runtimeApiBaseUrl';
 
 const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install | bash';
 const POLL_INTERVAL_MS = 3000;
@@ -55,7 +56,10 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await fetch('/api/config/settings', { method: 'GET', headers: { Accept: 'application/json' } });
+        const response = await fetch(resolveRuntimeApiEndpoint('/config/settings'), {
+          method: 'GET',
+          headers: buildRuntimeApiHeaders(),
+        });
         if (!response.ok) return;
         const data = (await response.json().catch(() => null)) as null | { opencodeBinary?: unknown };
         if (!data || cancelled) return;
@@ -147,7 +151,9 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
 
   const handleCopy = React.useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(INSTALL_COMMAND);
+      if (!(await writeTextToClipboard(INSTALL_COMMAND))) {
+        throw new Error('copy failed');
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {

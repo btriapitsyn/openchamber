@@ -1,4 +1,4 @@
-import type { ProjectEntry } from '@/lib/api/types';
+import type { ProjectEntry, RuntimeDescriptor } from '@/lib/api/types';
 
 export type AssistantNotificationPayload = {
   title?: string;
@@ -48,6 +48,8 @@ export type DesktopSettings = {
   showTextJustificationActivity?: boolean;
   nativeNotificationsEnabled?: boolean;
   notificationMode?: 'always' | 'hidden-only';
+  mobileHapticsEnabled?: boolean;
+  biometricLockEnabled?: boolean;
   notifyOnSubtasks?: boolean;
 
   // Event toggles (which events trigger notifications)
@@ -120,18 +122,92 @@ type TauriGlobal = {
   dialog?: {
     open?: (options: Record<string, unknown>) => Promise<unknown>;
   };
+  notification?: {
+    isPermissionGranted?: () => Promise<boolean>;
+    requestPermission?: () => Promise<'granted' | 'denied' | 'default' | string>;
+    sendNotification?: (payload: { title?: string; body?: string; tag?: string }) => Promise<void> | void;
+  };
+  opener?: {
+    openUrl?: (url: string) => Promise<void>;
+  };
+  clipboardManager?: {
+    writeText?: (text: string) => Promise<void>;
+    readText?: () => Promise<string>;
+  };
+  haptics?: {
+    vibrate?: (duration: number) => Promise<void>;
+    impactFeedback?: (style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft') => Promise<void>;
+    notificationFeedback?: (kind: 'success' | 'warning' | 'error') => Promise<void>;
+    selectionFeedback?: () => Promise<void>;
+  };
+  biometric?: {
+    checkStatus?: () => Promise<{ isAvailable?: boolean; error?: string }>;
+    authenticate?: (
+      reason: string,
+      options?: {
+        allowDeviceCredential?: boolean;
+        cancelTitle?: string;
+        fallbackTitle?: string;
+        title?: string;
+        subtitle?: string;
+        confirmationRequired?: boolean;
+      }
+    ) => Promise<void>;
+  };
   event?: {
     listen?: (
       event: string,
       handler: (evt: { payload?: unknown }) => void,
     ) => Promise<() => void>;
   };
+  shell?: {
+    open?: (url: string) => Promise<unknown>;
+  };
+};
+
+type TauriNotificationPermission = 'granted' | 'denied' | 'default';
+type HapticFeedbackType = 'selection' | 'success' | 'warning' | 'error' | 'impact-light' | 'impact-medium' | 'impact-heavy';
+
+const getTauriGlobal = (): TauriGlobal | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  return (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__ ?? null;
+};
+
+const getRuntimeDescriptor = (): RuntimeDescriptor | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: RuntimeDescriptor } }).__OPENCHAMBER_RUNTIME_APIS__;
+  return apis?.runtime ?? null;
 };
 
 export const isTauriShell = (): boolean => {
   if (typeof window === 'undefined') return false;
-  const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+  const tauri = getTauriGlobal();
   return typeof tauri?.core?.invoke === 'function';
+};
+
+export const isNativeMobileApp = (): boolean => isTauriMobileShell();
+
+const isLikelyMobileUserAgent = (): boolean => {
+  if (typeof navigator === 'undefined') {
+    return false;
+  }
+  const ua = navigator.userAgent.toLowerCase();
+  return /iphone|ipad|ipod|android|mobile/.test(ua);
+};
+
+export const isTauriMobileShell = (): boolean => {
+  const runtime = getRuntimeDescriptor();
+  if (runtime?.platform === 'mobile') {
+    return true;
+  }
+  if (runtime?.platform === 'desktop' || runtime?.platform === 'vscode') {
+    return false;
+  }
+  return isTauriShell() && isLikelyMobileUserAgent();
 };
 
 const normalizeOrigin = (raw: string): string | null => {
@@ -160,6 +236,21 @@ export const isDesktopLocalOriginActive = (): boolean => {
 // (Remote pages can temporarily lose window.__TAURI__ if URL doesn't match remote allowlist.)
 export const isDesktopShell = (): boolean => {
   if (typeof window === 'undefined') return false;
+  if (isTauriMobileShell()) {
+    return false;
+  }
+  const runtime = getRuntimeDescriptor();
+  if (runtime) {
+    if (runtime.platform === 'mobile') {
+      return false;
+    }
+    if (runtime.platform === 'desktop' || runtime.isDesktop) {
+      return true;
+    }
+    if (runtime.platform === 'web' || runtime.platform === 'vscode') {
+      return false;
+    }
+  }
   if (typeof window.__OPENCHAMBER_LOCAL_ORIGIN__ === 'string' && window.__OPENCHAMBER_LOCAL_ORIGIN__.length > 0) {
     return true;
   }
@@ -167,22 +258,27 @@ export const isDesktopShell = (): boolean => {
 };
 
 export const isVSCodeRuntime = (): boolean => {
-  if (typeof window === "undefined") return false;
-  const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { isVSCode?: boolean } } }).__OPENCHAMBER_RUNTIME_APIS__;
-  return apis?.runtime?.isVSCode === true;
+  const runtime = getRuntimeDescriptor();
+  return runtime?.isVSCode === true || runtime?.platform === 'vscode';
+};
+
+export const isMobileRuntime = (): boolean => {
+  const runtime = getRuntimeDescriptor();
+  return runtime?.platform === 'mobile' || isTauriMobileShell();
 };
 
 export const isWebRuntime = (): boolean => {
   if (typeof window === "undefined") return false;
-  const apis = (window as { __OPENCHAMBER_RUNTIME_APIS__?: { runtime?: { platform?: string } } }).__OPENCHAMBER_RUNTIME_APIS__;
-  const platform = apis?.runtime?.platform;
+  if (isTauriMobileShell()) {
+    return false;
+  }
+  const platform = getRuntimeDescriptor()?.platform;
   if (platform === 'web') {
     return true;
   }
-  if (platform === 'desktop' || platform === 'vscode') {
+  if (platform === 'desktop' || platform === 'vscode' || platform === 'mobile') {
     return false;
   }
-  // Default: anything that's not VSCode behaves like web (HTTP UI).
   return !isVSCodeRuntime();
 };
 
@@ -203,7 +299,7 @@ export const requestDirectoryAccess = async (
   // Desktop shell on local instance: use native folder picker.
   if (isTauriShell() && isDesktopLocalOriginActive()) {
     try {
-      const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+      const tauri = getTauriGlobal();
       const selected = await tauri?.dialog?.open?.({
         directory: true,
         multiple: false,
@@ -241,7 +337,20 @@ export const sendAssistantCompletionNotification = async (
 ): Promise<boolean> => {
   if (isTauriShell()) {
     try {
-      const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+      const tauri = getTauriGlobal();
+      if (tauri?.notification?.sendNotification) {
+        const permission = await requestNativeNotificationPermission();
+        if (permission !== 'granted') {
+          return false;
+        }
+        await tauri.notification.sendNotification({
+          title: payload?.title ?? 'OpenChamber',
+          body: payload?.body,
+          tag: 'openchamber-agent-complete',
+        });
+        return true;
+      }
+
       await tauri?.core?.invoke?.('desktop_notify', {
         payload: {
           title: payload?.title,
@@ -265,7 +374,7 @@ export const checkForDesktopUpdates = async (): Promise<UpdateInfo | null> => {
   }
 
   try {
-    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const tauri = getTauriGlobal();
     const info = await tauri?.core?.invoke?.('desktop_check_for_updates');
     return info as UpdateInfo;
   } catch (error) {
@@ -281,7 +390,7 @@ export const downloadDesktopUpdate = async (
     return false;
   }
 
-  const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+  const tauri = getTauriGlobal();
   let unlisten: null | (() => void | Promise<void>) = null;
   let downloaded = 0;
   let total: number | undefined;
@@ -342,7 +451,7 @@ export const restartToApplyUpdate = async (): Promise<boolean> => {
   }
 
   try {
-    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const tauri = getTauriGlobal();
     await tauri?.core?.invoke?.('desktop_restart');
     return true;
   } catch (error) {
@@ -362,7 +471,7 @@ export const openDesktopPath = async (path: string, app?: string | null): Promis
   }
 
   try {
-    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const tauri = getTauriGlobal();
     await tauri?.core?.invoke?.('desktop_open_path', {
       path: trimmed,
       app: typeof app === 'string' && app.trim().length > 0 ? app.trim() : undefined,
@@ -385,7 +494,7 @@ export const filterInstalledDesktopApps = async (apps: string[]): Promise<string
   }
 
   try {
-    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const tauri = getTauriGlobal();
     const result = await tauri?.core?.invoke?.('desktop_filter_installed_apps', {
       apps: candidate,
     });
@@ -407,7 +516,7 @@ export const fetchDesktopAppIcons = async (apps: string[]): Promise<Record<strin
   }
 
   try {
-    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const tauri = getTauriGlobal();
     const result = await tauri?.core?.invoke?.('desktop_fetch_app_icons', {
       apps: candidate,
     });
@@ -454,7 +563,7 @@ export const fetchDesktopInstalledApps = async (
   }
 
   try {
-    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const tauri = getTauriGlobal();
     const result = await tauri?.core?.invoke?.('desktop_get_installed_apps', {
       apps: candidate,
       force: force === true ? true : undefined,
@@ -485,5 +594,268 @@ export const fetchDesktopInstalledApps = async (
   } catch (error) {
     console.warn('Failed to fetch installed apps (tauri)', error);
     return { apps: [], success: false, hasCache: false, isCacheStale: false };
+  }
+};
+
+export const requestNativeNotificationPermission = async (): Promise<TauriNotificationPermission> => {
+  if (!isTauriShell()) {
+    if (typeof Notification === 'undefined') {
+      return 'denied';
+    }
+    if (Notification.permission === 'default') {
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted' || permission === 'denied' || permission === 'default') {
+          return permission;
+        }
+      } catch {
+        return 'denied';
+      }
+    }
+    return Notification.permission;
+  }
+
+  const tauri = getTauriGlobal();
+  const isGranted = await tauri?.notification?.isPermissionGranted?.();
+  if (isGranted === true) {
+    return 'granted';
+  }
+  const requested = await tauri?.notification?.requestPermission?.();
+  if (requested === 'granted' || requested === 'denied' || requested === 'default') {
+    return requested;
+  }
+  return 'denied';
+};
+
+export const writeTextToClipboard = async (text: string): Promise<boolean> => {
+  const value = typeof text === 'string' ? text : String(text);
+  if (!value) {
+    return false;
+  }
+
+  const tauri = getTauriGlobal();
+  if (tauri?.clipboardManager?.writeText) {
+    try {
+      await tauri.clipboardManager.writeText(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+};
+
+const fileNameFromUri = (uri: string): string => {
+  try {
+    const parsed = new URL(uri);
+    const raw = parsed.pathname.split('/').pop() ?? '';
+    const decoded = decodeURIComponent(raw);
+    return decoded || 'attachment';
+  } catch {
+    const raw = uri.split('/').pop() ?? '';
+    return raw || 'attachment';
+  }
+};
+
+export const pickFilesFromNativeDialog = async (): Promise<File[]> => {
+  if (!isNativeMobileApp()) {
+    return [];
+  }
+
+  const tauri = getTauriGlobal();
+  if (!tauri?.dialog?.open) {
+    return [];
+  }
+
+  try {
+    const selected = await tauri.dialog.open({
+      multiple: true,
+      directory: false,
+      title: 'Attach files',
+    });
+
+    const values: string[] = Array.isArray(selected)
+      ? selected.filter((value): value is string => typeof value === 'string')
+      : typeof selected === 'string'
+        ? [selected]
+        : [];
+
+    if (values.length === 0) {
+      return [];
+    }
+
+    const files: File[] = [];
+    for (const uri of values) {
+      try {
+        const response = await fetch(uri);
+        if (!response.ok) {
+          continue;
+        }
+        const blob = await response.blob();
+        const name = fileNameFromUri(uri);
+        files.push(new File([blob], name, { type: blob.type || 'application/octet-stream' }));
+      } catch {
+        continue;
+      }
+    }
+
+    return files;
+  } catch {
+    return [];
+  }
+};
+
+export const openExternalUrl = async (url: string): Promise<boolean> => {
+  const value = typeof url === 'string' ? url.trim() : '';
+  if (!value) {
+    return false;
+  }
+
+  const tauri = getTauriGlobal();
+  if (tauri?.opener?.openUrl) {
+    try {
+      await tauri.opener.openUrl(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (tauri?.shell?.open) {
+    try {
+      await tauri.shell.open(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.open(value, '_blank', 'noopener,noreferrer');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+};
+
+export const runHapticFeedback = async (type: HapticFeedbackType, enabled = true): Promise<void> => {
+  if (!enabled) {
+    return;
+  }
+
+  const tauri = getTauriGlobal();
+  if (tauri?.haptics) {
+    try {
+      if (type === 'selection') {
+        await tauri.haptics.selectionFeedback?.();
+        return;
+      }
+      if (type === 'success' || type === 'warning' || type === 'error') {
+        await tauri.haptics.notificationFeedback?.(type);
+        return;
+      }
+      if (type === 'impact-light') {
+        await tauri.haptics.impactFeedback?.('light');
+        return;
+      }
+      if (type === 'impact-medium') {
+        await tauri.haptics.impactFeedback?.('medium');
+        return;
+      }
+      if (type === 'impact-heavy') {
+        await tauri.haptics.impactFeedback?.('heavy');
+        return;
+      }
+    } catch {
+      return;
+    }
+  }
+
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    try {
+      if (type === 'selection') {
+        navigator.vibrate(10);
+      } else if (type === 'success') {
+        navigator.vibrate([20, 20, 20]);
+      } else if (type === 'warning') {
+        navigator.vibrate([30, 20, 30]);
+      } else if (type === 'error') {
+        navigator.vibrate([40, 30, 40]);
+      } else if (type === 'impact-light') {
+        navigator.vibrate(12);
+      } else if (type === 'impact-medium') {
+        navigator.vibrate(18);
+      } else if (type === 'impact-heavy') {
+        navigator.vibrate(24);
+      }
+    } catch {
+      return;
+    }
+  }
+};
+
+export const getBiometricStatus = async (): Promise<{ isAvailable: boolean; error?: string }> => {
+  if (!isNativeMobileApp()) {
+    return { isAvailable: false, error: 'not_mobile' };
+  }
+
+  const tauri = getTauriGlobal();
+  if (!tauri?.biometric?.checkStatus) {
+    return { isAvailable: false, error: 'plugin_unavailable' };
+  }
+
+  try {
+    const status = await tauri.biometric.checkStatus();
+    return {
+      isAvailable: status?.isAvailable === true,
+      error: typeof status?.error === 'string' ? status.error : undefined,
+    };
+  } catch (error) {
+    return {
+      isAvailable: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
+export const authenticateWithBiometrics = async (
+  reason: string,
+  options?: {
+    allowDeviceCredential?: boolean;
+    cancelTitle?: string;
+    fallbackTitle?: string;
+    title?: string;
+    subtitle?: string;
+    confirmationRequired?: boolean;
+  }
+): Promise<boolean> => {
+  if (!isNativeMobileApp()) {
+    return false;
+  }
+
+  const tauri = getTauriGlobal();
+  if (!tauri?.biometric?.authenticate) {
+    return false;
+  }
+
+  try {
+    await tauri.biometric.authenticate(reason, options);
+    return true;
+  } catch {
+    return false;
   }
 };

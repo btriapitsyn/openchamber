@@ -2,6 +2,7 @@ import React from 'react';
 import { RiDownloadLine, RiInformationLine, RiQuestionLine, RiSettings3Line } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import type { RuntimeAPIs } from '@/lib/api/types';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
@@ -32,21 +33,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
     const checkForUpdates = updateStore.checkForUpdates;
     const { available, downloaded, checking } = updateStore;
 
-    const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
+    const getIsDesktopApp = React.useCallback(() => {
         if (typeof window === 'undefined') {
             return false;
         }
-        return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+        const runtime = (window as typeof window & { __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs }).__OPENCHAMBER_RUNTIME_APIS__?.runtime;
+        return runtime?.platform === 'desktop' || runtime?.isDesktop === true;
+    }, []);
+
+    const [isDesktopApp, setIsDesktopApp] = React.useState<boolean>(() => {
+        return getIsDesktopApp();
     });
 
 
 
     React.useEffect(() => {
-        if (typeof window === 'undefined') {
-            return;
-        }
-        setIsDesktopApp(Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__));
-    }, []);
+        setIsDesktopApp(getIsDesktopApp());
+    }, [getIsDesktopApp]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {
@@ -54,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         }
 
         const handleMenuUpdateCheck = () => {
-            if (!(window as unknown as { __TAURI__?: unknown }).__TAURI__) {
+            if (!getIsDesktopApp()) {
                 return;
             }
             pendingMenuUpdateCheckRef.current = true;
@@ -65,7 +68,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
         return () => {
             window.removeEventListener(CHECK_FOR_UPDATES_EVENT, handleMenuUpdateCheck as EventListener);
         };
-    }, [checkForUpdates]);
+    }, [checkForUpdates, getIsDesktopApp]);
 
     React.useEffect(() => {
         if (!pendingMenuUpdateCheckRef.current) {

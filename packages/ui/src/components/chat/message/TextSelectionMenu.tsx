@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { writeTextToClipboard } from '@/lib/desktop';
 import { RiChatNewLine, RiAddLine, RiFileCopyLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 
@@ -224,7 +225,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
     if (!selectedText) return;
 
     try {
-      await navigator.clipboard.writeText(selectedText);
+      await writeTextToClipboard(selectedText);
     } catch (err) {
       console.error('Failed to copy:', err);
     }

@@ -6,6 +6,7 @@ import { useFireworksCelebration } from '@/contexts/FireworksContext';
 import type { GitIdentityProfile, CommitFileEntry } from '@/lib/api/types';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { writeTextToClipboard } from '@/lib/desktop';
 import {
   useGitStore,
   useGitStatus,
@@ -473,8 +474,7 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
   const [stashDialogBranch, setStashDialogBranch] = React.useState('');
 
   const handleCopyCommitHash = React.useCallback((hash: string) => {
-    navigator.clipboard
-      .writeText(hash)
+    writeTextToClipboard(hash)
       .then(() => {
         toast.success('Commit hash copied');
       })

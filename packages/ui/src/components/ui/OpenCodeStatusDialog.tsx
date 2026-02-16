@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui';
 import { useUIStore } from '@/stores/useUIStore';
+import { writeTextToClipboard } from '@/lib/desktop';
 
 export const OpenCodeStatusDialog: React.FC = () => {
   const {
@@ -21,8 +22,7 @@ export const OpenCodeStatusDialog: React.FC = () => {
       return;
     }
 
-    void navigator.clipboard
-      .writeText(openCodeStatusText)
+    void writeTextToClipboard(openCodeStatusText)
       .then(() => {
         toast.success('Copied', { description: 'OpenCode status copied to clipboard.' });
       })

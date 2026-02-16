@@ -4,6 +4,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
+import { writeTextToClipboard } from '@/lib/desktop';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
 
 export interface DebugMessageInfo {
@@ -357,8 +358,7 @@ export const debugUtils = {
 
   async copyDiagnosticsReport() {
     const report = await this.buildDiagnosticsReport();
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(report);
+    if (await writeTextToClipboard(report)) {
       return { ok: true, report } as const;
     }
     return { ok: false, report } as const;

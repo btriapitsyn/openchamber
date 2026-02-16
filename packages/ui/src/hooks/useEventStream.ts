@@ -16,7 +16,7 @@ import { handleTodoUpdatedEvent } from '@/stores/useTodoStore';
 import { useMcpStore } from '@/stores/useMcpStore';
 import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { isDesktopLocalOriginActive } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, runHapticFeedback } from '@/lib/desktop';
 import { triggerSessionStatusPoll } from '@/hooks/useServerSessionStatus';
 
 interface EventData {
@@ -121,6 +121,7 @@ export const useEventStream = () => {
 
   const { checkConnection } = useConfigStore();
   const nativeNotificationsEnabled = useUIStore((state) => state.nativeNotificationsEnabled);
+  const mobileHapticsEnabled = useUIStore((state) => state.mobileHapticsEnabled);
   const fallbackDirectory = useDirectoryStore((state) => state.currentDirectory);
 
   const activeSessionDirectory = React.useMemo(() => {
@@ -1480,6 +1481,7 @@ export const useEventStream = () => {
         const runtimeAPIs = getRegisteredRuntimeAPIs();
         if (runtimeAPIs?.notifications && title) {
           void runtimeAPIs.notifications.notifyAgentCompletion({ title, body, tag });
+          void runHapticFeedback('success', mobileHapticsEnabled);
         }
 
         break;
@@ -1500,6 +1502,7 @@ export const useEventStream = () => {
   }, [
     currentSessionId,
     nativeNotificationsEnabled,
+    mobileHapticsEnabled,
     addStreamingPart,
     completeStreamingMessage,
     updateMessageInfo,

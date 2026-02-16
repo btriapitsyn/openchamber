@@ -10,6 +10,7 @@ import { useUIStore } from '@/stores/useUIStore';
 
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
+import { writeTextToClipboard } from '@/lib/desktop';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
@@ -482,7 +483,9 @@ export const PlanView: React.FC = () => {
               size="sm"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(content);
+                  if (!(await writeTextToClipboard(content))) {
+                    throw new Error('copy failed');
+                  }
                   setCopiedContent(true);
                   if (copiedContentTimeoutRef.current !== null) {
                     window.clearTimeout(copiedContentTimeoutRef.current);
@@ -509,7 +512,9 @@ export const PlanView: React.FC = () => {
               size="sm"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(displayPath ?? resolvedPath);
+                  if (!(await writeTextToClipboard(displayPath ?? resolvedPath))) {
+                    throw new Error('copy failed');
+                  }
                   setCopiedPath(true);
                   if (copiedTimeoutRef.current !== null) {
                     window.clearTimeout(copiedTimeoutRef.current);

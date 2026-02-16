@@ -10,6 +10,7 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useContextStore } from '@/stores/contextStore';
 import { useDeviceInfo } from '@/lib/device';
+import { writeTextToClipboard } from '@/lib/desktop';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { cn } from '@/lib/utils';
@@ -568,9 +569,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [isUser, previousRole, turnGroupingContext, streamPhase, message.info]);
 
     const handleCopyCode = React.useCallback((code: string) => {
-        navigator.clipboard.writeText(code);
-        setCopiedCode(code);
-        setTimeout(() => setCopiedCode(null), 2000);
+        void writeTextToClipboard(code).then((copied) => {
+            if (!copied) {
+                return;
+            }
+            setCopiedCode(code);
+            setTimeout(() => setCopiedCode(null), 2000);
+        });
     }, []);
 
     const userMessageIdForTurn = turnGroupingContext?.turnId;
@@ -669,31 +674,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             return false;
         }
 
-        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window !== 'undefined' && window.isSecureContext) {
-            try {
-                await navigator.clipboard.writeText(text);
-                return true;
-            } catch (error) {
-                void error;
-            }
-        }
-
-        if (typeof document === 'undefined') {
-            return false;
-        }
-
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.top = '-1000px';
-        textarea.style.left = '-1000px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        textarea.setSelectionRange(0, textarea.value.length);
-        const succeeded = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return succeeded;
+        return writeTextToClipboard(text);
     }, []);
 
     const handleCopyMessage = React.useCallback(async () => {
