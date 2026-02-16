@@ -1,4 +1,4 @@
-import { getRemoteUrl } from './git-service.js';
+import { getRemoteUrl } from './git/index.js';
 
 export const parseGitHubRemoteUrl = (raw) => {
   if (typeof raw !== 'string') {
