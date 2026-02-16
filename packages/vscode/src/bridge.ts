@@ -806,7 +806,10 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
         const base = `${apiUrl.replace(/\/+$/, '')}/`;
         const targetUrl = new URL(normalizedPath.replace(/^\/+/, ''), base).toString();
-        const requestHeaders: Record<string, string> = sanitizeForwardHeaders(headers);
+        const requestHeaders: Record<string, string> = {
+          ...sanitizeForwardHeaders(headers),
+          ...ctx?.manager?.getOpenCodeAuthHeaders(),
+        };
 
         // Ensure SSE requests are negotiated correctly.
         if (normalizedPath === '/event' || normalizedPath === '/global/event') {
@@ -875,7 +878,10 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
         const base = `${apiUrl.replace(/\/+$/, '')}/`;
         const targetUrl = new URL(normalizedPath.replace(/^\/+/, ''), base).toString();
-        const requestHeaders: Record<string, string> = sanitizeForwardHeaders(headers);
+        const requestHeaders: Record<string, string> = {
+          ...sanitizeForwardHeaders(headers),
+          ...ctx?.manager?.getOpenCodeAuthHeaders(),
+        };
 
         try {
           const response = await fetch(targetUrl, {

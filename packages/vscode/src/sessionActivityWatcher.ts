@@ -191,11 +191,13 @@ export const startGlobalEventWatcher = async (
         }
 
         const url = buildOpenCodeUrl('/global/event', baseUrl);
+        const authHeaders = manager.getOpenCodeAuthHeaders();
         upstream = await fetch(url, {
           headers: {
             Accept: 'text/event-stream',
             'Cache-Control': 'no-cache',
             Connection: 'keep-alive',
+            ...authHeaders,
           },
           signal,
         });

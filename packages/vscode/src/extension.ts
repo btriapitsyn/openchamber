@@ -362,10 +362,11 @@ export async function activate(context: vscode.ExtensionContext) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), timeoutMs);
         const startedAt = Date.now();
+        const openCodeAuthHeaders = openCodeManager?.getOpenCodeAuthHeaders() || {};
         try {
           const resp = await fetch(input, {
             method: 'GET',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', ...openCodeAuthHeaders },
             signal: controller.signal,
           });
           const elapsedMs = Date.now() - startedAt;

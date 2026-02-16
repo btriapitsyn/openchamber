@@ -1050,6 +1050,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
+const OPENCODE_LOCAL_AUTH_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'opencode-local-auth.json');
 
 const readSettingsFromDisk = async () => {
   try {
@@ -2879,6 +2880,87 @@ function getOpenCodeAuthHeaders() {
   return { Authorization: `Basic ${credentials}` };
 }
 
+function generateSecureOpenCodePassword() {
+  return crypto
+    .randomBytes(32)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function isValidOpenCodePassword(password) {
+  return typeof password === 'string' && password.length >= 24;
+}
+
+function readStoredLocalOpenCodePassword() {
+  try {
+    if (!fs.existsSync(OPENCODE_LOCAL_AUTH_FILE_PATH)) {
+      return null;
+    }
+
+    const raw = fs.readFileSync(OPENCODE_LOCAL_AUTH_FILE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    const password = typeof parsed?.password === 'string' ? parsed.password.trim() : '';
+    return isValidOpenCodePassword(password) ? password : null;
+  } catch (error) {
+    console.warn('Failed to read local OpenCode auth file:', error?.message || error);
+    return null;
+  }
+}
+
+function persistLocalOpenCodePassword(password) {
+  try {
+    fs.mkdirSync(path.dirname(OPENCODE_LOCAL_AUTH_FILE_PATH), { recursive: true });
+
+    const payload = {
+      version: 1,
+      username: 'opencode',
+      password,
+      createdAt: Date.now(),
+      managedBy: 'openchamber',
+    };
+
+    const tmpPath = `${OPENCODE_LOCAL_AUTH_FILE_PATH}.${process.pid}.${Date.now()}.tmp`;
+    fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2), 'utf8');
+    try {
+      fs.chmodSync(tmpPath, 0o600);
+    } catch {
+      // best-effort
+    }
+    fs.renameSync(tmpPath, OPENCODE_LOCAL_AUTH_FILE_PATH);
+    try {
+      fs.chmodSync(OPENCODE_LOCAL_AUTH_FILE_PATH, 0o600);
+    } catch {
+      // best-effort
+    }
+  } catch (error) {
+    console.warn('Failed to persist local OpenCode auth file:', error?.message || error);
+  }
+}
+
+function ensureLocalOpenCodeServerPassword() {
+  const fromEnv = typeof process.env.OPENCODE_SERVER_PASSWORD === 'string'
+    ? process.env.OPENCODE_SERVER_PASSWORD.trim()
+    : '';
+  if (isValidOpenCodePassword(fromEnv)) {
+    process.env.OPENCODE_SERVER_PASSWORD = fromEnv;
+    return fromEnv;
+  }
+
+  const storedPassword = readStoredLocalOpenCodePassword();
+  if (storedPassword) {
+    process.env.OPENCODE_SERVER_PASSWORD = storedPassword;
+    return storedPassword;
+  }
+
+  const generatedPassword = generateSecureOpenCodePassword();
+  process.env.OPENCODE_SERVER_PASSWORD = generatedPassword;
+  persistLocalOpenCodePassword(generatedPassword);
+  console.log('Generated secure password for managed local OpenCode instance');
+  return generatedPassword;
+}
+
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
@@ -4453,6 +4535,7 @@ async function startOpenCode() {
 
   await applyOpencodeBinaryFromSettings();
   ensureOpencodeCliEnv();
+  const openCodePassword = ensureLocalOpenCodeServerPassword();
 
   try {
     const serverInstance = await createOpencodeServer({
@@ -4461,6 +4544,7 @@ async function startOpenCode() {
       timeout: 30000,
       env: {
         ...process.env,
+        OPENCODE_SERVER_PASSWORD: openCodePassword,
         // Pass minimal config to avoid pollution, but inherit PATH etc
       }
     });

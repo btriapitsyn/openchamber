@@ -4,9 +4,11 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { spawnSync } from 'child_process';
+import { randomBytes } from 'crypto';
 import { createOpencodeServer } from '@opencode-ai/sdk/v2/server';
 
 const READY_CHECK_TIMEOUT_MS = 30000;
+const OPENCODE_SERVER_PASSWORD_SECRET_KEY = 'openchamber.opencodeServerPassword.v1';
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
@@ -41,10 +43,27 @@ export interface OpenCodeManager {
   setWorkingDirectory(path: string): Promise<{ success: boolean; restarted: boolean; path: string }>;
   getStatus(): ConnectionStatus;
   getApiUrl(): string | null;
+  getOpenCodeAuthHeaders(): Record<string, string>;
   getWorkingDirectory(): string;
   isCliAvailable(): boolean;
   getDebugInfo(): OpenCodeDebugInfo;
   onStatusChange(callback: (status: ConnectionStatus, error?: string) => void): vscode.Disposable;
+}
+
+function generateSecureOpenCodePassword(): string {
+  return randomBytes(32)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function buildOpenCodeAuthHeader(password: string): string {
+  return `Basic ${Buffer.from(`opencode:${password}`, 'utf8').toString('base64')}`;
+}
+
+function isValidOpenCodePassword(password: string): boolean {
+  return typeof password === 'string' && password.length >= 24;
 }
 
 function resolvePortFromUrl(url: string): number | null {
@@ -258,7 +277,11 @@ function getCandidateBaseUrls(serverUrl: string): string[] {
   }
 }
 
-async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<ReadyResult> {
+async function waitForReady(
+  serverUrl: string,
+  timeoutMs = 15000,
+  authHeaders: Record<string, string> = {}
+): Promise<ReadyResult> {
   const outputChannel = vscode.window.createOutputChannel('OpenChamberManager');
   const start = Date.now();
   const candidates = getCandidateBaseUrls(serverUrl);
@@ -275,7 +298,7 @@ async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<Ready
         const url = new URL(`${baseUrl}/global/health`);
         const res = await fetch(url.toString(), {
           method: 'GET',
-          headers: { Accept: 'application/json' },
+          headers: { Accept: 'application/json', ...authHeaders },
           signal: controller.signal,
         });
 
@@ -306,10 +329,9 @@ async function waitForReady(serverUrl: string, timeoutMs = 15000): Promise<Ready
 }
 
 export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCodeManager {
-  // Discard unused parameter - reserved for future use (state persistence, subscriptions)
-  void _context;
   let server: { url: string; close: () => void } | null = null;
   let managedApiUrlOverride: string | null = null;
+  let managedServerPassword: string | null = null;
   let status: ConnectionStatus = 'disconnected';
   let lastError: string | undefined;
   const listeners = new Set<(status: ConnectionStatus, error?: string) => void>();
@@ -375,6 +397,54 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     return null;
   };
 
+  const getOpenCodeAuthHeaders = (): Record<string, string> => {
+    if (useConfiguredUrl && configuredApiUrl) {
+      return {};
+    }
+    const password = managedServerPassword || process.env.OPENCODE_SERVER_PASSWORD || '';
+    if (!password) {
+      return {};
+    }
+    return { Authorization: buildOpenCodeAuthHeader(password) };
+  };
+
+  const ensureManagedOpenCodeServerPassword = async (): Promise<string> => {
+    const fromEnv = (process.env.OPENCODE_SERVER_PASSWORD || '').trim();
+    if (isValidOpenCodePassword(fromEnv)) {
+      managedServerPassword = fromEnv;
+      process.env.OPENCODE_SERVER_PASSWORD = fromEnv;
+      return fromEnv;
+    }
+
+    if (managedServerPassword) {
+      return managedServerPassword;
+    }
+
+    try {
+      const stored = (await _context.secrets.get(OPENCODE_SERVER_PASSWORD_SECRET_KEY)) || '';
+      const normalizedStored = stored.trim();
+      if (isValidOpenCodePassword(normalizedStored)) {
+        managedServerPassword = normalizedStored;
+        process.env.OPENCODE_SERVER_PASSWORD = managedServerPassword;
+        return managedServerPassword;
+      }
+    } catch (error) {
+      console.warn('[VSCode] Failed to read managed OpenCode password from secure storage:', error);
+    }
+
+    const generated = generateSecureOpenCodePassword();
+    managedServerPassword = generated;
+    process.env.OPENCODE_SERVER_PASSWORD = generated;
+
+    try {
+      await _context.secrets.store(OPENCODE_SERVER_PASSWORD_SECRET_KEY, generated);
+    } catch (error) {
+      console.warn('[VSCode] Failed to persist managed OpenCode password to secure storage:', error);
+    }
+
+    return generated;
+  };
+
   async function startInternal(workdir?: string): Promise<void> {
     startCount += 1;
     setStatus('connecting');
@@ -418,6 +488,9 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
         process.env.OPENCODE_BINARY = resolvedCli;
       }
 
+      const password = await ensureManagedOpenCodeServerPassword();
+      process.env.OPENCODE_SERVER_PASSWORD = password;
+
       // SDK spawns `opencode serve` in current process cwd.
       // Some OpenCode endpoints behave differently based on server process cwd,
       // so ensure we start it from the workspace directory.
@@ -440,7 +513,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
       if (server && server.url) {
         // Validate readiness for the current workspace context.
-        const ready = await waitForReady(server.url, READY_CHECK_TIMEOUT_MS);
+        const ready = await waitForReady(server.url, READY_CHECK_TIMEOUT_MS, getOpenCodeAuthHeaders());
         lastReadyElapsedMs = ready.elapsedMs;
         lastReadyAttempts = ready.attempts;
         if (ready.ok) {
@@ -603,6 +676,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     setWorkingDirectory,
     getStatus: () => status,
     getApiUrl,
+    getOpenCodeAuthHeaders,
     getWorkingDirectory: () => workingDirectory,
     isCliAvailable: () => !cliMissing,
     getDebugInfo: () => ({
