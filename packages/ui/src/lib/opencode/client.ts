@@ -464,6 +464,7 @@ class OpencodeService {
       'application/toml',
       'application/x-sh',
       'application/x-shellscript',
+      'application/octet-stream',
     ];
     
     return textBasedTypes.includes(lowerMime);
