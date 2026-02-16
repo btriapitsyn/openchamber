@@ -9,6 +9,7 @@ type ScrollableOverlayProps = React.HTMLAttributes<HTMLElement> & {
   outerClassName?: string;
   scrollbarClassName?: string;
   disableHorizontal?: boolean;
+  observeMutations?: boolean;
   fillContainer?: boolean;
   keyboardAvoid?: boolean;
   /** Prevent scroll from propagating to parent when at boundaries */
@@ -26,6 +27,7 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
     as: Component = "div",
     scrollbarClassName,
     disableHorizontal = false,
+    observeMutations = true,
     fillContainer = true,
     keyboardAvoid = false,
     preventOverscroll = false,
@@ -64,6 +66,7 @@ export const ScrollableOverlay = React.forwardRef<HTMLElement, ScrollableOverlay
           hideDelayMs={hideDelayMs}
           className={scrollbarClassName}
           disableHorizontal={disableHorizontal}
+          observeMutations={observeMutations}
         />
       </div>
     );

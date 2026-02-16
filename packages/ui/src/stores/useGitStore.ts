@@ -441,6 +441,7 @@ export const useGitStore = create<GitStore>()(
 
         // Pre-fetch all diffs so they're ready when user opens Diff tab
         void get().fetchAllDiffs(directory, git);
+
       },
 
       getDiff: (directory, filePath) => {

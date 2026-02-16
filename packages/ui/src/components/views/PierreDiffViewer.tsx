@@ -45,20 +45,9 @@ const WEBKIT_SCROLL_FIX_CSS = `
     font-size: var(--text-code);
   }
 
-  :host, pre, [data-diffs], [data-code] {
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    -webkit-backface-visibility: hidden;
-    backface-visibility: hidden;
-  }
-
   pre, [data-code] {
     font-family: var(--font-mono);
     font-size: var(--text-code);
-  }
-
-  [data-code] {
-    -webkit-overflow-scrolling: touch;
   }
 
   /* Mobile touch selection support */
@@ -79,7 +68,7 @@ const WEBKIT_SCROLL_FIX_CSS = `
       height: 24px !important;
     }
   }
-`;
+  `;
 
 // Fast cache key - use length + samples instead of full hash
 function fnv1a32(input: string): string {
@@ -478,7 +467,7 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
   const diffInstanceRef = useRef<PierreFileDiff<unknown> | null>(null);
   const sharedVirtualizerRef = useRef<SharedVirtualizer | null>(null);
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
-  const workerPool = useWorkerPool();
+  const workerPool = useWorkerPool(renderSideBySide ? 'split' : 'unified');
 
   const lightResolvedTheme = useMemo(() => getResolvedShikiTheme(lightTheme), [lightTheme]);
   const darkResolvedTheme = useMemo(() => getResolvedShikiTheme(darkTheme), [darkTheme]);

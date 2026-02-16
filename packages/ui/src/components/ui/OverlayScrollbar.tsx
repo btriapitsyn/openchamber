@@ -7,6 +7,7 @@ type OverlayScrollbarProps = {
   hideDelayMs?: number;
   className?: string;
   disableHorizontal?: boolean;
+  observeMutations?: boolean;
 };
 
 type ThumbMetrics = {
@@ -20,6 +21,7 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
   hideDelayMs = 1000,
   className,
   disableHorizontal = false,
+  observeMutations = true,
 }) => {
   const [visible, setVisible] = React.useState(false);
   const [vertical, setVertical] = React.useState<ThumbMetrics>({ length: 0, offset: 0 });
@@ -102,7 +104,7 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
     resizeObserver?.observe(container);
 
     const mutationObserver =
-      typeof MutationObserver !== "undefined"
+      observeMutations && typeof MutationObserver !== "undefined"
         ? new MutationObserver(() => updateMetrics())
         : null;
     mutationObserver?.observe(container, { childList: true, subtree: true, characterData: true });
@@ -114,7 +116,7 @@ export const OverlayScrollbar: React.FC<OverlayScrollbarProps> = ({
       if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
       if (frameRef.current) cancelAnimationFrame(frameRef.current);
     };
-  }, [containerRef, handleScroll, scheduleHide, updateMetrics]);
+  }, [containerRef, handleScroll, observeMutations, scheduleHide, updateMetrics]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>, axis: "vertical" | "horizontal") => {
     const container = containerRef.current;

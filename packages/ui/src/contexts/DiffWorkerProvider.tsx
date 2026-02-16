@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect } from 'react';
-import { WorkerPoolContextProvider, useWorkerPool } from '@pierre/diffs/react';
 import type { SupportedLanguages } from '@pierre/diffs';
+import { WorkerPoolManager } from '@pierre/diffs/worker';
 
 import { useOptionalThemeSystem } from './useThemeSystem';
 import { workerFactory } from '@/lib/diff/workerFactory';
@@ -23,30 +23,87 @@ interface DiffWorkerProviderProps {
   children: React.ReactNode;
 }
 
-// Component that warms up the worker pool and precomputes diff ASTs
+type WorkerPoolStyle = 'unified' | 'split';
+
+const WORKER_POOL_CONFIG: Record<WorkerPoolStyle, { poolSize: number; totalASTLRUCacheSize: number; lineDiffType: 'none' | 'word-alt' }> = {
+  unified: {
+    poolSize: 1,
+    totalASTLRUCacheSize: 24,
+    lineDiffType: 'none',
+  },
+  split: {
+    poolSize: 2,
+    totalASTLRUCacheSize: 56,
+    lineDiffType: 'word-alt',
+  },
+};
+
+let unifiedWorkerPool: WorkerPoolManager | undefined;
+let splitWorkerPool: WorkerPoolManager | undefined;
+
+const createWorkerPool = (style: WorkerPoolStyle) => {
+  const config = WORKER_POOL_CONFIG[style];
+  const pool = new WorkerPoolManager(
+    {
+      workerFactory,
+      poolSize: config.poolSize,
+      totalASTLRUCacheSize: config.totalASTLRUCacheSize,
+    },
+    {
+      theme: {
+        light: 'pierre-light',
+        dark: 'pierre-dark',
+      },
+      langs: PRELOAD_LANGS,
+      lineDiffType: config.lineDiffType,
+      preferredHighlighter: 'shiki-wasm',
+    }
+  );
+  void pool.initialize();
+  return pool;
+};
+
+const getWorkerPool = (style: WorkerPoolStyle): WorkerPoolManager | undefined => {
+  if (typeof window === 'undefined') {
+    return undefined;
+  }
+
+  if (style === 'split') {
+    splitWorkerPool ??= createWorkerPool('split');
+    return splitWorkerPool;
+  }
+
+  unifiedWorkerPool ??= createWorkerPool('unified');
+  return unifiedWorkerPool;
+};
+
 const WorkerPoolWarmup: React.FC<{
   children: React.ReactNode;
   renderTheme: { light: string; dark: string };
 }> = ({ children, renderTheme }) => {
-  const workerPool = useWorkerPool();
+  const unifiedPool = useWorkerPool('unified');
+  const splitPool = useWorkerPool('split');
 
   useEffect(() => {
-    if (!workerPool) {
-      return;
+    if (unifiedPool) {
+      void unifiedPool.setRenderOptions({
+        theme: renderTheme,
+        lineDiffType: WORKER_POOL_CONFIG.unified.lineDiffType,
+      });
     }
-
-    // Important: WorkerPoolContextProvider uses a singleton and does not react to
-    // prop changes. Update the worker pool render options explicitly.
-    // Force-disable intra-line diff globally (word-level/char-level).
-    void workerPool.setRenderOptions({ theme: renderTheme, lineDiffType: 'none' });
-  }, [renderTheme, workerPool]);
+    if (splitPool) {
+      void splitPool.setRenderOptions({
+        theme: renderTheme,
+        lineDiffType: WORKER_POOL_CONFIG.split.lineDiffType,
+      });
+    }
+  }, [renderTheme, splitPool, unifiedPool]);
 
   return <>{children}</>;
 };
 
 export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children }) => {
   const themeSystem = useOptionalThemeSystem();
-  const isDark = themeSystem?.currentTheme?.metadata?.variant === 'dark';
 
   const fallbackLight = getDefaultTheme(false);
   const fallbackDark = getDefaultTheme(true);
@@ -64,15 +121,6 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   ensurePierreThemeRegistered(lightTheme);
   ensurePierreThemeRegistered(darkTheme);
 
-  const highlighterOptions = useMemo(() => ({
-    theme: {
-      dark: darkTheme.metadata.id,
-      light: lightTheme.metadata.id,
-    },
-    themeType: isDark ? ('dark' as const) : ('light' as const),
-    langs: PRELOAD_LANGS,
-  }), [darkTheme.metadata.id, isDark, lightTheme.metadata.id]);
-
   const renderTheme = useMemo(
     () => ({
       light: lightTheme.metadata.id,
@@ -82,22 +130,13 @@ export const DiffWorkerProvider: React.FC<DiffWorkerProviderProps> = ({ children
   );
 
   return (
-    <WorkerPoolContextProvider
-      poolOptions={{
-        workerFactory,
-        poolSize: 2,
-        totalASTLRUCacheSize: 50,
-      }}
-      highlighterOptions={highlighterOptions}
-    >
-      <WorkerPoolWarmup
-        renderTheme={renderTheme}
-      >
-        {children}
-      </WorkerPoolWarmup>
-    </WorkerPoolContextProvider>
+    <WorkerPoolWarmup renderTheme={renderTheme}>
+      {children}
+    </WorkerPoolWarmup>
   );
 };
 
 // eslint-disable-next-line react-refresh/only-export-components
-export { useWorkerPool };
+export const useWorkerPool = (style: WorkerPoolStyle = 'unified'): WorkerPoolManager | undefined => {
+  return useMemo(() => getWorkerPool(style), [style]);
+};
