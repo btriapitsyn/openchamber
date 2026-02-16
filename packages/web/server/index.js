@@ -2859,18 +2859,15 @@ const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
 const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
 
 // OpenCode server authentication (Basic Auth with username "opencode")
-const ENV_OPENCODE_SERVER_PASSWORD = (() => {
-  const pwd = process.env.OPENCODE_SERVER_PASSWORD;
-  return typeof pwd === 'string' && pwd.length > 0 ? pwd : null;
-})();
 
 /**
  * Returns auth headers for OpenCode server requests if OPENCODE_SERVER_PASSWORD is set.
  * Uses Basic Auth with username "opencode" and the password from the env variable.
  */
 function getOpenCodeAuthHeaders() {
-  // Re-read from env each time in case it wasn't set at module load (HMR issue)
-  const password = ENV_OPENCODE_SERVER_PASSWORD || process.env.OPENCODE_SERVER_PASSWORD;
+  const password = typeof process.env.OPENCODE_SERVER_PASSWORD === 'string'
+    ? process.env.OPENCODE_SERVER_PASSWORD.trim()
+    : '';
   
   if (!password) {
     return {};
@@ -2891,6 +2888,117 @@ function generateSecureOpenCodePassword() {
 
 function isValidOpenCodePassword(password) {
   return typeof password === 'string' && password.length >= 24;
+}
+
+const OPENCODE_CREDENTIAL_SERVICE = 'com.openchamber.local-opencode';
+const OPENCODE_CREDENTIAL_ACCOUNT = 'http://127.0.0.1';
+
+function readPasswordFromSystemCredentialStore() {
+  try {
+    if (process.platform === 'darwin') {
+      const result = spawnSync(
+        'security',
+        [
+          'find-generic-password',
+          '-s',
+          OPENCODE_CREDENTIAL_SERVICE,
+          '-a',
+          OPENCODE_CREDENTIAL_ACCOUNT,
+          '-w',
+        ],
+        { encoding: 'utf8', timeout: 5000 }
+      );
+
+      if (result.status !== 0) {
+        return null;
+      }
+
+      const password = (result.stdout || '').trim();
+      return isValidOpenCodePassword(password) ? password : null;
+    }
+
+    if (process.platform === 'linux') {
+      const result = spawnSync(
+        'secret-tool',
+        [
+          'lookup',
+          'service',
+          OPENCODE_CREDENTIAL_SERVICE,
+          'account',
+          OPENCODE_CREDENTIAL_ACCOUNT,
+        ],
+        { encoding: 'utf8', timeout: 5000 }
+      );
+
+      if (result.status !== 0) {
+        return null;
+      }
+
+      const password = (result.stdout || '').trim();
+      return isValidOpenCodePassword(password) ? password : null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function persistPasswordToSystemCredentialStore(password) {
+  if (!isValidOpenCodePassword(password)) {
+    return false;
+  }
+
+  try {
+    if (process.platform === 'darwin') {
+      const result = spawnSync(
+        'security',
+        [
+          'add-generic-password',
+          '-U',
+          '-s',
+          OPENCODE_CREDENTIAL_SERVICE,
+          '-a',
+          OPENCODE_CREDENTIAL_ACCOUNT,
+          '-w',
+          password,
+        ],
+        { encoding: 'utf8', timeout: 5000 }
+      );
+      return result.status === 0;
+    }
+
+    if (process.platform === 'linux') {
+      const result = spawnSync(
+        'secret-tool',
+        [
+          'store',
+          '--label',
+          'OpenChamber local OpenCode password',
+          'service',
+          OPENCODE_CREDENTIAL_SERVICE,
+          'account',
+          OPENCODE_CREDENTIAL_ACCOUNT,
+        ],
+        { encoding: 'utf8', timeout: 5000, input: `${password}\n` }
+      );
+      return result.status === 0;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function removeLegacyLocalOpenCodePasswordFile() {
+  try {
+    if (fs.existsSync(OPENCODE_LOCAL_AUTH_FILE_PATH)) {
+      fs.unlinkSync(OPENCODE_LOCAL_AUTH_FILE_PATH);
+    }
+  } catch {
+    // best-effort
+  }
 }
 
 function readStoredLocalOpenCodePassword() {
@@ -2948,15 +3056,28 @@ function ensureLocalOpenCodeServerPassword() {
     return fromEnv;
   }
 
+  const storedSystemPassword = readPasswordFromSystemCredentialStore();
+  if (storedSystemPassword) {
+    process.env.OPENCODE_SERVER_PASSWORD = storedSystemPassword;
+    return storedSystemPassword;
+  }
+
   const storedPassword = readStoredLocalOpenCodePassword();
   if (storedPassword) {
+    const persistedToSystem = persistPasswordToSystemCredentialStore(storedPassword);
+    if (persistedToSystem) {
+      removeLegacyLocalOpenCodePasswordFile();
+    }
     process.env.OPENCODE_SERVER_PASSWORD = storedPassword;
     return storedPassword;
   }
 
   const generatedPassword = generateSecureOpenCodePassword();
   process.env.OPENCODE_SERVER_PASSWORD = generatedPassword;
-  persistLocalOpenCodePassword(generatedPassword);
+  const persistedToSystem = persistPasswordToSystemCredentialStore(generatedPassword);
+  if (!persistedToSystem) {
+    persistLocalOpenCodePassword(generatedPassword);
+  }
   console.log('Generated secure password for managed local OpenCode instance');
   return generatedPassword;
 }
