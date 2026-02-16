@@ -37,6 +37,10 @@ Server-side integration modules used by API routes and runtime services.
 Quota provider registry, dispatch, and provider integrations for usage endpoints.
 - Module docs: `packages/web/server/lib/quota/DOCUMENTATION.md`
 
+##### git
+Git repository operations for the web server runtime.
+- Module docs: `packages/web/server/lib/git/DOCUMENTATION.md`
+
 ## Build / dev commands (verified)
 All scripts are in `package.json`.
 - Validate: `bun run type-check`, `bun run lint`
