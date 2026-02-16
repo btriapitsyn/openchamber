@@ -44,7 +44,15 @@ type FileEntry = GitStatus['files'][number] & {
     isNew: boolean;
 };
 
-type DiffData = { original: string; modified: string };
+type DiffData = { original: string; modified: string; isBinary?: boolean };
+
+const BinaryDiffPlaceholder = React.memo(() => {
+    return (
+        <div className="rounded-lg border border-border/60 bg-background px-3 py-2">
+            <div className="typography-meta text-muted-foreground">Content of this file cannot be viewed.</div>
+        </div>
+    );
+});
 
 type DiffTabViewMode = 'single' | 'stacked';
 
@@ -437,6 +445,10 @@ const InlineDiffViewer = React.memo<InlineDiffViewerProps>(({
         [filePath]
     );
 
+    if (diff.isBinary) {
+        return <BinaryDiffPlaceholder />;
+    }
+
     if (isImageFile(filePath)) {
         return (
             <InlineImageDiffViewer
@@ -482,6 +494,10 @@ const SingleDiffViewer = React.memo<SingleDiffViewerProps>(({
         () => getLanguageFromExtension(filePath) || 'text',
         [filePath]
     );
+
+    if (diff.isBinary) {
+        return <BinaryDiffPlaceholder />;
+    }
 
     // Don't render if not visible (memory optimization)
     if (!isVisible) {
@@ -564,7 +580,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
 
     const diffData = React.useMemo<DiffData | null>(() => {
         if (!cachedDiff) return null;
-        return { original: cachedDiff.original, modified: cachedDiff.modified };
+        return { original: cachedDiff.original, modified: cachedDiff.modified, isBinary: cachedDiff.isBinary };
     }, [cachedDiff]);
 
     const setSectionRef = React.useCallback((node: HTMLDivElement | null) => {
@@ -647,6 +663,7 @@ const MultiFileDiffEntry = React.memo<MultiFileDiffEntryProps>(({
                 setDiff(directory, file.path, {
                     original: response.original ?? '',
                     modified: response.modified ?? '',
+                    isBinary: response.isBinary,
                 });
                 setIsLoading(false);
             } catch (error) {
@@ -1228,7 +1245,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
     const selectedDiffData = React.useMemo<DiffData | null>(() => {
         if (!selectedCachedDiff) return null;
-        return { original: selectedCachedDiff.original, modified: selectedCachedDiff.modified };
+        return { original: selectedCachedDiff.original, modified: selectedCachedDiff.modified, isBinary: selectedCachedDiff.isBinary };
     }, [selectedCachedDiff]);
 
     const hasCurrentDiff = !!selectedCachedDiff;
@@ -1272,6 +1289,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 setDiff(effectiveDirectory, selectedFile, {
                     original: response.original ?? '',
                     modified: response.modified ?? '',
+                    isBinary: response.isBinary,
                 });
             } catch (error) {
                 if (cancelled) return;

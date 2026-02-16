@@ -9000,6 +9000,7 @@ async function main(options = {}) {
         original: result.original,
         modified: result.modified,
         path: result.path,
+        isBinary: Boolean(result.isBinary),
       });
     } catch (error) {
       console.error('Failed to get git file diff:', error);

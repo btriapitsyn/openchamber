@@ -143,6 +143,7 @@ export interface GitFileDiffResponse {
   original: string;
   modified: string;
   path: string;
+  isBinary?: boolean;
 }
 
 export interface GetGitFileDiffOptions {

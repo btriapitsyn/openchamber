@@ -1316,6 +1316,8 @@ export async function getRangeFiles(directory, { base, head } = {}) {
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp', 'avif'];
 
+const BINARY_SNIFF_BYTES = 8192;
+
 function isImageFile(filePath) {
   const ext = filePath.split('.').pop()?.toLowerCase();
   return IMAGE_EXTENSIONS.includes(ext || '');
@@ -1337,6 +1339,67 @@ function getImageMimeType(filePath) {
   return mimeMap[ext] || 'application/octet-stream';
 }
 
+const parseIsBinaryFromNumstat = (raw) => {
+  const text = String(raw || '').trim();
+  if (!text) {
+    return false;
+  }
+
+  // Expected format: <added>\t<deleted>\t<path>
+  const firstLine = text.split('\n').map((line) => line.trim()).find(Boolean) || '';
+  const [added, deleted] = firstLine.split('\t');
+  return added === '-' || deleted === '-';
+};
+
+const looksBinaryBySniff = async (absolutePath) => {
+  try {
+    const handle = await fsp.open(absolutePath, 'r');
+    try {
+      const buffer = Buffer.alloc(BINARY_SNIFF_BYTES);
+      const { bytesRead } = await handle.read(buffer, 0, BINARY_SNIFF_BYTES, 0);
+      if (bytesRead <= 0) {
+        return false;
+      }
+      return buffer.subarray(0, bytesRead).includes(0);
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return false;
+  }
+};
+
+const isBinaryDiff = async (directoryPath, filePath, staged) => {
+  // Fast path: ask git for numstat. For binary, it returns "-\t-\t<path>".
+  const args = ['diff', '--numstat'];
+  if (staged) {
+    args.push('--cached');
+  }
+  args.push('--', filePath);
+
+  const result = await runGitCommand(directoryPath, args);
+  if (parseIsBinaryFromNumstat(result.stdout)) {
+    return true;
+  }
+
+  // Fallback for untracked files (diff output is empty): use --no-index against /dev/null
+  if (!staged) {
+    const tracked = await runGitCommand(directoryPath, ['ls-files', '--error-unmatch', '--', filePath]).then((r) => r.success);
+    if (!tracked) {
+      const noIndex = await runGitCommand(directoryPath, ['diff', '--no-index', '--numstat', '--', '/dev/null', filePath]);
+      if (parseIsBinaryFromNumstat(noIndex.stdout) || parseIsBinaryFromNumstat(noIndex.stderr) || parseIsBinaryFromNumstat(noIndex.message)) {
+        return true;
+      }
+      const text = `${noIndex.stdout || ''}\n${noIndex.stderr || ''}\n${noIndex.message || ''}`.toLowerCase();
+      if (text.includes('binary files') || text.includes('git binary patch')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 export async function getFileDiff(directory, { path: filePath, staged = false } = {}) {
   if (!directory || !filePath) {
     throw new Error('directory and path are required for getFileDiff');
@@ -1346,6 +1409,20 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
   const git = await createGit(directoryPath);
   const isImage = isImageFile(filePath);
   const mimeType = isImage ? getImageMimeType(filePath) : null;
+
+  if (!isImage) {
+    const absolutePath = path.join(directoryPath, filePath);
+    const isBinaryBySniff = await looksBinaryBySniff(absolutePath);
+    const isBinary = isBinaryBySniff || (await isBinaryDiff(directoryPath, filePath, staged));
+    if (isBinary) {
+      return {
+        original: '',
+        modified: '',
+        path: filePath,
+        isBinary: true,
+      };
+    }
+  }
 
   let original = '';
   try {
@@ -1396,6 +1473,7 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
     original,
     modified,
     path: filePath,
+    isBinary: false,
   };
 }
 
