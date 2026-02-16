@@ -51,6 +51,7 @@ import {
 import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
 import type { UsageWindow } from '@/types';
 import type { GitHubAuthStatus } from '@/lib/api/types';
+import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, isVSCodeRuntime } from '@/lib/desktop';
@@ -64,6 +65,22 @@ const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
 const getAttentionDiamondDelay = (index: number): string => {
   return index === 4 ? '0ms' : '130ms';
+};
+
+const isSameContextUsage = (
+  a: SessionContextUsage | null,
+  b: SessionContextUsage | null,
+): boolean => {
+  if (a === b) return true;
+  if (!a || !b) return false;
+
+  return a.totalTokens === b.totalTokens
+    && a.percentage === b.percentage
+    && a.contextLimit === b.contextLimit
+    && (a.outputLimit ?? 0) === (b.outputLimit ?? 0)
+    && (a.normalizedOutput ?? 0) === (b.normalizedOutput ?? 0)
+    && a.thresholdLimit === b.thresholdLimit
+    && (a.lastMessageId ?? '') === (b.lastMessageId ?? '');
 };
 
 const formatTime = (timestamp: number | null) => {
@@ -133,6 +150,12 @@ export const Header: React.FC = () => {
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
+  const currentSessionMessages = useSessionStore((state) => {
+    if (!currentSessionId) {
+      return undefined;
+    }
+    return state.messages.get(currentSessionId);
+  });
   const sessions = useSessionStore((state) => state.sessions);
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
@@ -217,6 +240,25 @@ export const Header: React.FC = () => {
   const contextLimit = (limit && typeof limit.context === 'number' ? limit.context : 0);
   const outputLimit = (limit && typeof limit.output === 'number' ? limit.output : 0);
   const contextUsage = getContextUsage(contextLimit, outputLimit);
+  const [stableDesktopContextUsage, setStableDesktopContextUsage] = React.useState<SessionContextUsage | null>(null);
+  const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessages !== undefined;
+
+  useEffect(() => {
+    if (!currentSessionId) {
+      setStableDesktopContextUsage((prev) => (prev === null ? prev : null));
+      return;
+    }
+
+    if (contextUsage && contextUsage.totalTokens > 0) {
+      setStableDesktopContextUsage((prev) => (isSameContextUsage(prev, contextUsage) ? prev : contextUsage));
+      return;
+    }
+
+    if (isContextUsageResolvedForSession) {
+      setStableDesktopContextUsage((prev) => (prev === null ? prev : null));
+    }
+  }, [contextUsage, currentSessionId, isContextUsageResolvedForSession]);
+
   const isSessionSwitcherOpen = useUIStore((state) => state.isSessionSwitcherOpen);
   const githubAvatarUrl = githubAuthStatus?.connected ? githubAuthStatus.user?.avatarUrl : null;
   const githubLogin = githubAuthStatus?.connected ? githubAuthStatus.user?.login : null;
@@ -238,6 +280,7 @@ export const Header: React.FC = () => {
   // --- Project tabs state (desktop, non-vscode only) ---
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const showProjectTabs = !isMobile && !isVSCode && projects.length > 0;
+  const showDesktopHeaderContextUsage = !isVSCode && activeMainTab === 'chat' && !!stableDesktopContextUsage && stableDesktopContextUsage.totalTokens > 0;
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
 
   const [editingProject, setEditingProject] = React.useState<{ id: string; name: string; path: string; icon?: string | null; color?: string | null } | null>(null);
@@ -1552,6 +1595,20 @@ export const Header: React.FC = () => {
       {!showProjectTabs && <div className="flex-1" />}
 
       <div className="flex items-center gap-1 pr-3 shrink-0">
+        {showDesktopHeaderContextUsage && stableDesktopContextUsage && (
+          <ContextUsageDisplay
+            totalTokens={stableDesktopContextUsage.totalTokens}
+            percentage={stableDesktopContextUsage.percentage}
+            contextLimit={stableDesktopContextUsage.contextLimit}
+            outputLimit={stableDesktopContextUsage.outputLimit ?? 0}
+            size="compact"
+            hideIcon
+            showPercentIcon
+            className="mr-3.5"
+            valueClassName="typography-ui-label font-medium leading-none text-foreground"
+            percentIconClassName="h-5 w-5 text-muted-foreground"
+          />
+        )}
         <OpenInAppButton directory={openDirectory} className="mr-1" />
         <DropdownMenu
             open={isDesktopServicesOpen}
@@ -1581,7 +1638,7 @@ export const Header: React.FC = () => {
                     )}
                   >
                     <RiStackLine className="h-5 w-5" />
-                    {isDesktopApp && <span className="truncate text-base font-normal">{currentInstanceLabel}</span>}
+                    {isDesktopApp && <span className="truncate typography-ui-label font-medium text-foreground">{currentInstanceLabel}</span>}
                   </button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>

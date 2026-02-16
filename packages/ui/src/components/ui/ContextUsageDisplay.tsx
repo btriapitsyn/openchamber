@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiDonutChartLine } from '@remixicon/react';
+import { RiDonutChartFill, RiDonutChartLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -12,6 +12,10 @@ interface ContextUsageDisplayProps {
   size?: 'default' | 'compact';
   isMobile?: boolean;
   hideIcon?: boolean;
+  showPercentIcon?: boolean;
+  className?: string;
+  valueClassName?: string;
+  percentIconClassName?: string;
 }
 
 export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
@@ -22,6 +26,10 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   size = 'default',
   isMobile = false,
   hideIcon = false,
+  showPercentIcon = false,
+  className,
+  valueClassName,
+  percentIconClassName,
 }) => {
   const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState(false);
 
@@ -53,13 +61,26 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
       className={cn(
         'app-region-no-drag flex items-center gap-1.5 text-muted-foreground/60 select-none',
         size === 'compact' ? 'typography-micro' : 'typography-meta',
+        className,
       )}
       aria-label="Context usage"
       onClick={isMobile ? () => setMobileTooltipOpen(true) : undefined}
     >
       {!isMobile && !hideIcon && <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />}
-      <span className={cn(getPercentageColor(percentage), 'font-medium')}>
-        {Math.min(percentage, 999).toFixed(1)}%
+      <span className={cn('font-medium inline-flex items-center gap-1.5', valueClassName)}>
+        {showPercentIcon ? (
+          <>
+            <RiDonutChartFill
+              className={cn('h-3.5 w-3.5', percentIconClassName, getPercentageColor(percentage))}
+              aria-hidden="true"
+            />
+            <span className="text-foreground">{Math.min(percentage, 999).toFixed(1)}%</span>
+          </>
+        ) : (
+          <>
+            <span className={getPercentageColor(percentage)}>{Math.min(percentage, 999).toFixed(1)}</span>%
+          </>
+        )}
       </span>
     </div>
   );

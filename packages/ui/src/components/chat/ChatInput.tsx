@@ -47,7 +47,6 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -118,9 +117,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const consumePendingInputText = useSessionStore((state) => state.consumePendingInputText);
     const pendingInputText = useSessionStore((state) => state.pendingInputText);
     const consumePendingSyntheticParts = useSessionStore((state) => state.consumePendingSyntheticParts);
-    const getContextUsage = useSessionStore((state) => state.getContextUsage);
 
-    const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents, getCurrentModel } = useConfigStore();
+    const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
     const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
     const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius, persistChatDraft } = useUIStore();
@@ -1648,14 +1646,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const footerGapClass = 'gap-x-1.5 gap-y-0';
     const isVSCode = isVSCodeRuntime();
-    const currentModel = getCurrentModel();
-    const modelLimit = currentModel && typeof currentModel.limit === 'object' && currentModel.limit !== null
-        ? (currentModel.limit as Record<string, unknown>)
-        : null;
-    const contextLimit = (modelLimit && typeof modelLimit.context === 'number' ? modelLimit.context : 0);
-    const outputLimit = (modelLimit && typeof modelLimit.output === 'number' ? modelLimit.output : 0);
-    const contextUsage = getContextUsage(contextLimit, outputLimit);
-    const showInputContextUsage = !isMobile && !isVSCode && contextUsage && contextUsage.totalTokens > 0;
     const footerPaddingClass = isMobile ? 'px-1.5 py-1.5' : (isVSCode ? 'px-1.5 py-1' : 'px-2.5 py-1.5');
     const buttonSizeClass = isMobile ? 'h-8 w-8' : (isVSCode ? 'h-5 w-5' : 'h-6 w-6');
     const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
@@ -2118,16 +2108,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             <>
                                 <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
                                     {attachmentsControls}
-                                    {showInputContextUsage && (
-                                        <ContextUsageDisplay
-                                            totalTokens={contextUsage.totalTokens}
-                                            percentage={contextUsage.percentage}
-                                            contextLimit={contextUsage.contextLimit}
-                                            outputLimit={contextUsage.outputLimit}
-                                            size="compact"
-                                            hideIcon
-                                        />
-                                    )}
                                 </div>
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
                                     <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
