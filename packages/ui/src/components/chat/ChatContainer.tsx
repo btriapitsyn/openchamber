@@ -341,10 +341,10 @@ export const ChatContainer: React.FC = () => {
 
                 if (!shouldSkipScroll) {
                     if (typeof window === 'undefined') {
-                        scrollToBottom();
+                        scrollToBottom({ instant: true });
                     } else {
                         window.requestAnimationFrame(() => {
-                            scrollToBottom();
+                            scrollToBottom({ instant: true });
                         });
                     }
                 }

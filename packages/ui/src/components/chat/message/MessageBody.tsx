@@ -18,7 +18,7 @@ import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBra
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
-import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
+import { MarkdownRenderer, SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { useMessageStore } from '@/stores/messageStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -325,11 +325,14 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         return visibleParts.filter((part) => part.type === 'text');
     }, [visibleParts]);
 
+    const liveAssistantText = React.useMemo(() => {
+        return flattenAssistantTextParts(assistantTextParts);
+    }, [assistantTextParts]);
+
     const createSessionFromAssistantMessage = useSessionStore((state) => state.createSessionFromAssistantMessage);
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
-    const hasStopFinish = messageFinish === 'stop';
-    
+
     // TTS for message playback
     const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
     const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
@@ -861,7 +864,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     const summaryCandidate =
         typeof turnGroupingContext?.summaryBody === 'string' && turnGroupingContext.summaryBody.trim().length > 0
             ? turnGroupingContext.summaryBody
-            : rawSummaryBodyFromStore;
+            : (rawSummaryBodyFromStore ?? liveAssistantText);
 
     const summaryBodyRef = React.useRef<string | undefined>(undefined);
     if (summaryCandidate && summaryCandidate.trim().length > 0) {
@@ -878,18 +881,19 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         turnGroupingContext?.isLastAssistantInTurn &&
         summaryBody &&
         summaryBody.trim().length > 0;
+    const shouldStreamSummary = !isMessageCompleted;
 
     const showErrorMessage = Boolean(errorMessage);
 
-    const shouldShowFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage));
+    const shouldShowFooter = isLastAssistantInTurn && hasTextContent && (isMessageCompleted || Boolean(errorMessage));
 
     const turnDurationText = React.useMemo(() => {
-        if (!isLastAssistantInTurn || !hasStopFinish) return undefined;
+        if (!isLastAssistantInTurn || !isMessageCompleted) return undefined;
         const userCreatedAt = turnGroupingContext?.userMessageCreatedAt;
         if (typeof userCreatedAt !== 'number' || typeof messageCompletedAt !== 'number') return undefined;
         if (messageCompletedAt <= userCreatedAt) return undefined;
         return formatTurnDuration(messageCompletedAt - userCreatedAt);
-    }, [isLastAssistantInTurn, hasStopFinish, turnGroupingContext?.userMessageCreatedAt, messageCompletedAt]);
+    }, [isLastAssistantInTurn, isMessageCompleted, turnGroupingContext?.userMessageCreatedAt, messageCompletedAt]);
 
     const footerButtons = (
          <>
@@ -1021,7 +1025,12 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             <div
                                 className="group/assistant-text relative break-words"
                             >
-                                <SimpleMarkdownRenderer content={summaryBody} />
+                                <MarkdownRenderer
+                                    content={summaryBody}
+                                    messageId={messageId}
+                                    isAnimated={false}
+                                    isStreaming={shouldStreamSummary}
+                                />
                                 {shouldShowFooter && (
                                     <div className="mt-2 mb-1 flex items-center justify-start gap-1.5">
                                         <div className="flex items-center gap-1.5">

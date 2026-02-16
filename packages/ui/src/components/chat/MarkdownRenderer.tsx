@@ -1,5 +1,6 @@
 import React from 'react';
 import { Streamdown } from 'streamdown';
+import 'streamdown/styles.css';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
@@ -477,6 +478,13 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     <div className={cn('break-words', className)}>
       <Streamdown
         mode={isStreaming ? 'streaming' : 'static'}
+        isAnimating={isStreaming}
+        animated={{
+          animation: 'fadeIn',
+          duration: 250,
+          easing: 'ease-out',
+          sep: 'word',
+        }}
         shikiTheme={shikiThemes}
         className={streamdownClassName}
         controls={{ code: false, table: false }}

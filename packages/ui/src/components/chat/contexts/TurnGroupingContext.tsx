@@ -243,19 +243,22 @@ const isActivityStandaloneTool = (toolName: unknown): boolean => {
 };
 
 const extractFinalAssistantText = (turn: Turn): string | undefined => {
-    for (const assistantMsg of turn.assistantMessages) {
-        const infoFinish = (assistantMsg.info as { finish?: string | null | undefined }).finish;
-        if (infoFinish === 'stop') {
-            const textPart = assistantMsg.parts.find(p => p.type === 'text');
-            if (textPart) {
-                const textContent = (textPart as { text?: string | null | undefined }).text ??
-                                  (textPart as { content?: string | null | undefined }).content;
-                if (typeof textContent === 'string' && textContent.trim().length > 0) {
-                    return textContent;
-                }
+    for (let messageIndex = turn.assistantMessages.length - 1; messageIndex >= 0; messageIndex -= 1) {
+        const assistantMsg = turn.assistantMessages[messageIndex];
+        if (!assistantMsg) continue;
+
+        for (let partIndex = assistantMsg.parts.length - 1; partIndex >= 0; partIndex -= 1) {
+            const part = assistantMsg.parts[partIndex];
+            if (!part || part.type !== 'text') continue;
+
+            const textContent = (part as { text?: string | null | undefined }).text ??
+                (part as { content?: string | null | undefined }).content;
+            if (typeof textContent === 'string' && textContent.trim().length > 0) {
+                return textContent;
             }
         }
     }
+
     return undefined;
 };
 

@@ -4,6 +4,13 @@ declare module 'streamdown' {
   export interface StreamdownProps {
     children: string;
     mode?: 'streaming' | 'static';
+    isAnimating?: boolean;
+    animated?: {
+      animation?: string;
+      duration?: number;
+      easing?: string;
+      sep?: 'word' | 'char';
+    };
     className?: string;
 
     shikiTheme?: readonly [string | object, string | object];
