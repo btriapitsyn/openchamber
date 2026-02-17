@@ -18,7 +18,16 @@ function spawnProcess(command, args, opts = {}) {
 }
 
 async function main() {
-  const tauriProcess = spawnProcess('bun', ['--cwd', desktopDir, 'tauri', 'dev', '--features', 'devtools']);
+  const tauriProcess = spawnProcess('bun', [
+    '--cwd',
+    desktopDir,
+    'tauri',
+    'dev',
+    '--features',
+    'devtools',
+    '--config',
+    './src-tauri/tauri.dev.conf.json',
+  ]);
 
   let cleaning = false;
 
