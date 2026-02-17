@@ -176,7 +176,10 @@ export class AgentManagerPanelProvider {
     let response: Response;
     let wrapAsGlobal = false;
 
-    const requestHeaders = this._buildSseHeaders(headers || {});
+    const requestHeaders = this._buildSseHeaders({
+      ...(headers || {}),
+      ...(this._openCodeManager?.getOpenCodeAuthHeaders() || {}),
+    });
 
     try {
       response = await fetch(targetUrl, {

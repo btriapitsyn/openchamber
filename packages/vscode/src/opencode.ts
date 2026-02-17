@@ -686,7 +686,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       }
     }
     lastStartAttempts = 1;
-    pendingOperation = startInternal(workdir, { rotateManaged: false });
+    pendingOperation = startInternal(workdir, { rotateManaged: true });
     try {
       await pendingOperation;
     } finally {

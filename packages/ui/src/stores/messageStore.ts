@@ -1707,12 +1707,14 @@ export const useMessageStore = create<MessageStore>()(
                         };
 
                         if (messageIndex === -1) {
-                            console.info("[MESSAGE-DEBUG] updateMessageInfo: messageIndex === -1", {
-                                sessionId,
-                                messageId,
-                                messageInfo,
-                                existingCount: normalizedSessionMessages.length,
-                            });
+                            if (process.env.NODE_ENV === 'development') {
+                                console.info("[MESSAGE-DEBUG] updateMessageInfo: messageIndex === -1", {
+                                    sessionId,
+                                    messageId,
+                                    messageInfo,
+                                    existingCount: normalizedSessionMessages.length,
+                                });
+                            }
 
                             if (normalizedSessionMessages.length > 0) {
                                 const firstMessage = normalizedSessionMessages[0];

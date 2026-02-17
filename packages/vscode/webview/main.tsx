@@ -303,6 +303,19 @@ const decodeBase64 = (value: string): Uint8Array => {
   return bytes;
 };
 
+const isNullBodyStatus = (status: number): boolean => status === 204 || status === 205 || status === 304;
+
+const buildProxiedResponse = (
+  proxied: { status: number; headers: Record<string, string>; bodyBase64?: string }
+): Response => {
+  if (isNullBodyStatus(proxied.status)) {
+    return new Response(null, { status: proxied.status, headers: proxied.headers });
+  }
+
+  const body = proxied.bodyBase64 ? decodeBase64(proxied.bodyBase64) : new Uint8Array();
+  return new Response(body, { status: proxied.status, headers: proxied.headers });
+};
+
 const encodeBase64 = (bytes: Uint8Array): string => {
   const CHUNK = 0x8000;
   let binary = '';
@@ -375,6 +388,47 @@ const isSessionMessageApiPath = (pathname: string) => /^\/api\/session\/[^/]+\/m
 
 const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
   const pathname = url.pathname;
+  const normalizedPathname = pathname !== '/' ? pathname.replace(/\/+$/, '') : pathname;
+  const method = ((init?.method || 'GET') as string).toUpperCase();
+
+  if (normalizedPathname === '/api/sessions/snapshot' && method === 'GET') {
+    return new Response(JSON.stringify({
+      statusSessions: {},
+      attentionSessions: {},
+      serverTime: Date.now(),
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (/^\/api\/sessions\/[^/]+\/(view|unview)$/.test(normalizedPathname) && method === 'POST') {
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (normalizedPathname === '/api/tts/status' && method === 'GET') {
+    return new Response(JSON.stringify({ available: false }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (normalizedPathname === '/api/tts/say/status' && method === 'GET') {
+    return new Response(JSON.stringify({ available: false, voices: [] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if ((pathname === '/api/tts/speak' || pathname === '/api/tts/say/speak' || pathname === '/api/tts/summarize') && method === 'POST') {
+    return new Response(JSON.stringify({ error: 'TTS endpoints are not available in VS Code runtime' }), {
+      status: 501,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 
   // Health endpoints: reflect actual connection status
   if (pathname === '/health' || pathname === '/api/health') {
@@ -792,8 +846,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     if (method === 'POST' && isSessionMessageApiPath(targetUrl.pathname)) {
       const bodyText = await extractBodyText(input, init, method);
       const proxied = await proxySessionMessageRequest({ path: suffixPath, headers, bodyText });
-      const body = proxied.bodyBase64 ? decodeBase64(proxied.bodyBase64) : new Uint8Array();
-      const response = new Response(body, { status: proxied.status, headers: proxied.headers });
+      const response = buildProxiedResponse(proxied);
       recordBootstrapFetch(targetUrl.pathname, response.ok);
       maybeHideLoadingOverlay();
       return response;
@@ -801,8 +854,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
     const bodyBase64 = await extractBodyBase64(input, init, method);
     const proxied = await proxyApiRequest({ method, path: suffixPath, headers, bodyBase64 });
-    const body = proxied.bodyBase64 ? decodeBase64(proxied.bodyBase64) : new Uint8Array();
-    const response = new Response(body, { status: proxied.status, headers: proxied.headers });
+    const response = buildProxiedResponse(proxied);
     recordBootstrapFetch(targetUrl.pathname, response.ok);
     maybeHideLoadingOverlay();
     return response;

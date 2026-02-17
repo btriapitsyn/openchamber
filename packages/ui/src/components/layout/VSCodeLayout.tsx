@@ -91,6 +91,19 @@ export const VSCodeLayout: React.FC = () => {
     return sessions.find((session) => session.id === currentSessionId)?.title || 'Session';
   }, [currentSessionId, sessions]);
   const newSessionDraftOpen = useSessionStore((state) => Boolean(state.newSessionDraft?.open));
+  const isSyncingMessages = useSessionStore((state) => state.isSyncing);
+  const hasActiveSessionWork = useSessionStore((state) => {
+    const statuses = state.sessionStatus;
+    if (!statuses || statuses.size === 0) {
+      return false;
+    }
+    for (const status of statuses.values()) {
+      if (status?.type === 'busy' || status?.type === 'retry') {
+        return true;
+      }
+    }
+    return false;
+  });
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
   const [connectionStatus, setConnectionStatus] = React.useState<'connecting' | 'connected' | 'error' | 'disconnected'>(
     () => (typeof window !== 'undefined'
@@ -129,10 +142,37 @@ export const VSCodeLayout: React.FC = () => {
       return;
     }
 
-    if (!currentSessionId && !newSessionDraftOpen && currentView === 'chat') {
-      setCurrentView('sessions');
+    if (currentView !== 'chat') {
+      return;
     }
-  }, [currentSessionId, newSessionDraftOpen, currentView, viewMode]);
+
+    if (currentSessionId || newSessionDraftOpen || isSyncingMessages || hasActiveSessionWork) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const state = useSessionStore.getState();
+      const stillNoSession = !state.currentSessionId;
+      const draftStillClosed = !state.newSessionDraft?.open;
+      const stillSyncing = state.isSyncing;
+      const stillActiveWork = (() => {
+        const statuses = state.sessionStatus;
+        if (!statuses || statuses.size === 0) return false;
+        for (const status of statuses.values()) {
+          if (status?.type === 'busy' || status?.type === 'retry') return true;
+        }
+        return false;
+      })();
+
+      if (stillNoSession && draftStillClosed && !stillSyncing && !stillActiveWork) {
+        setCurrentView('sessions');
+      }
+    }, 900);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [currentSessionId, newSessionDraftOpen, currentView, viewMode, isSyncingMessages, hasActiveSessionWork]);
 
   const handleBackToSessions = React.useCallback(() => {
     setCurrentView('sessions');

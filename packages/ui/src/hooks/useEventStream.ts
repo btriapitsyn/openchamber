@@ -486,7 +486,7 @@ export const useEventStream = () => {
     // Note: needs_attention logic is now handled by the server
     // Server maintains authoritative state based on view tracking and message events
 
-    if (prevType !== nextType) {
+    if (process.env.NODE_ENV === 'development' && prevType !== nextType) {
       try {
         console.info('[SESSION-STATUS]', {
           sessionId,
