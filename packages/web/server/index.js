@@ -20,7 +20,6 @@ import {
   pruneRebindTimestamps,
   readTerminalInputWsControlFrame,
 } from './lib/terminal-input-ws-protocol.js';
-import { createOpencodeServer } from '@opencode-ai/sdk/server';
 import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1050,7 +1049,6 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
-const OPENCODE_PASSWORD_SETTINGS_KEY = '_internalOpencodeServerPassword';
 
 const readSettingsFromDisk = async () => {
   try {
@@ -2778,15 +2776,18 @@ let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
 let terminalInputWsServer = null;
-let openCodeAuthPassword =
-  typeof hmrState.openCodeAuthPassword === 'string' && hmrState.openCodeAuthPassword.length > 0
-    ? hmrState.openCodeAuthPassword
-    : null;
-let openCodeAuthSource = typeof hmrState.openCodeAuthSource === 'string' ? hmrState.openCodeAuthSource : null;
 const userProvidedOpenCodePassword =
   typeof hmrState.userProvidedOpenCodePassword === 'string' && hmrState.userProvidedOpenCodePassword.length > 0
     ? hmrState.userProvidedOpenCodePassword
     : null;
+let openCodeAuthPassword =
+  typeof hmrState.openCodeAuthPassword === 'string' && hmrState.openCodeAuthPassword.length > 0
+    ? hmrState.openCodeAuthPassword
+    : userProvidedOpenCodePassword;
+let openCodeAuthSource =
+  typeof hmrState.openCodeAuthSource === 'string' && hmrState.openCodeAuthSource.length > 0
+    ? hmrState.openCodeAuthSource
+    : (userProvidedOpenCodePassword ? 'user-env' : null);
 
 // Sync helper - call after modifying any HMR state variable
 const syncToHmrState = () => {
@@ -2809,8 +2810,11 @@ const syncFromHmrState = () => {
   openCodeAuthPassword =
     typeof hmrState.openCodeAuthPassword === 'string' && hmrState.openCodeAuthPassword.length > 0
       ? hmrState.openCodeAuthPassword
-      : null;
-  openCodeAuthSource = typeof hmrState.openCodeAuthSource === 'string' ? hmrState.openCodeAuthSource : null;
+      : userProvidedOpenCodePassword;
+  openCodeAuthSource =
+    typeof hmrState.openCodeAuthSource === 'string' && hmrState.openCodeAuthSource.length > 0
+      ? hmrState.openCodeAuthSource
+      : (userProvidedOpenCodePassword ? 'user-env' : null);
 };
 
 // Module-level variables that shadow HMR state
@@ -2896,7 +2900,7 @@ const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
  * Uses Basic Auth with username "opencode" and the password from the env variable.
  */
 function getOpenCodeAuthHeaders() {
-  const password = normalizeOpenCodePassword(openCodeAuthPassword);
+  const password = normalizeOpenCodePassword(openCodeAuthPassword || process.env.OPENCODE_SERVER_PASSWORD || '');
   
   if (!password) {
     return {};
@@ -2936,49 +2940,13 @@ function setOpenCodeAuthState(password, source) {
   return normalized;
 }
 
-async function readPersistedOpenCodePasswordFromSettings() {
-  try {
-    const settings = await readSettingsFromDisk();
-    const persisted = typeof settings?.[OPENCODE_PASSWORD_SETTINGS_KEY] === 'string'
-      ? settings[OPENCODE_PASSWORD_SETTINGS_KEY].trim()
-      : '';
-    return isValidOpenCodePassword(persisted) ? persisted : null;
-  } catch {
-    return null;
-  }
-}
-
-async function persistOpenCodePasswordToSettings(password) {
-  if (!isValidOpenCodePassword(password)) {
-    return;
-  }
-
-  persistSettingsLock = persistSettingsLock.then(async () => {
-    const current = await readSettingsFromDisk();
-    if (typeof current?.[OPENCODE_PASSWORD_SETTINGS_KEY] === 'string' &&
-      current[OPENCODE_PASSWORD_SETTINGS_KEY] === password) {
-      return;
-    }
-    const next = {
-      ...(current && typeof current === 'object' ? current : {}),
-      [OPENCODE_PASSWORD_SETTINGS_KEY]: password,
-    };
-    await writeSettingsToDisk(next);
-  });
-
-  return persistSettingsLock;
-}
-
 async function ensureLocalOpenCodeServerPassword({ rotateManaged = false } = {}) {
   if (isValidOpenCodePassword(userProvidedOpenCodePassword)) {
-    const resolved = setOpenCodeAuthState(userProvidedOpenCodePassword, 'user-env');
-    await persistOpenCodePasswordToSettings(resolved);
-    return resolved;
+    return setOpenCodeAuthState(userProvidedOpenCodePassword, 'user-env');
   }
 
   if (rotateManaged) {
     const rotatedPassword = setOpenCodeAuthState(generateSecureOpenCodePassword(), 'rotated');
-    await persistOpenCodePasswordToSettings(rotatedPassword);
     console.log('Rotated secure password for managed local OpenCode instance');
     return rotatedPassword;
   }
@@ -2987,13 +2955,7 @@ async function ensureLocalOpenCodeServerPassword({ rotateManaged = false } = {})
     return setOpenCodeAuthState(openCodeAuthPassword, openCodeAuthSource || 'generated');
   }
 
-  const storedPassword = await readPersistedOpenCodePasswordFromSettings();
-  if (storedPassword) {
-    return setOpenCodeAuthState(storedPassword, 'persisted');
-  }
-
   const generatedPassword = setOpenCodeAuthState(generateSecureOpenCodePassword(), 'generated');
-  await persistOpenCodePasswordToSettings(generatedPassword);
   console.log('Generated secure password for managed local OpenCode instance');
   return generatedPassword;
 }
@@ -4541,7 +4503,6 @@ function parseArgs(argv = process.argv.slice(2)) {
 function killProcessOnPort(port) {
   if (!port) return;
   try {
-    // SDK's proc.kill() only kills the Node wrapper, not the actual opencode binary.
     // Kill any process listening on our port to clean up orphaned children.
     const result = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8', timeout: 5000 });
     const output = result.stdout || '';
@@ -4561,6 +4522,84 @@ function killProcessOnPort(port) {
   }
 }
 
+async function createManagedOpenCodeServerProcess({
+  hostname,
+  port,
+  timeout,
+  cwd,
+  env,
+}) {
+  const binary = (process.env.OPENCODE_BINARY || 'opencode').trim() || 'opencode';
+  const args = ['serve', '--hostname', hostname, '--port', String(port)];
+  const child = spawn(binary, args, {
+    cwd,
+    env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const url = await new Promise((resolve, reject) => {
+    let output = '';
+    let done = false;
+    const finish = (handler, value) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      child.stdout?.off('data', onStdout);
+      child.stderr?.off('data', onStderr);
+      child.off('exit', onExit);
+      child.off('error', onError);
+      handler(value);
+    };
+
+    const onStdout = (chunk) => {
+      output += chunk.toString();
+      const lines = output.split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('opencode server listening')) continue;
+        const match = line.match(/on\s+(https?:\/\/[^\s]+)/);
+        if (!match) {
+          finish(reject, new Error(`Failed to parse server url from output: ${line}`));
+          return;
+        }
+        finish(resolve, match[1]);
+        return;
+      }
+    };
+
+    const onStderr = (chunk) => {
+      output += chunk.toString();
+    };
+
+    const onExit = (code) => {
+      finish(reject, new Error(`OpenCode exited with code ${code}. Output: ${output}`));
+    };
+
+    const onError = (error) => {
+      finish(reject, error);
+    };
+
+    const timer = setTimeout(() => {
+      finish(reject, new Error(`Timeout waiting for OpenCode to start after ${timeout}ms`));
+    }, timeout);
+
+    child.stdout?.on('data', onStdout);
+    child.stderr?.on('data', onStderr);
+    child.on('exit', onExit);
+    child.on('error', onError);
+  });
+
+  return {
+    url,
+    close() {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
 async function startOpenCode() {
   const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? 0;
   console.log(
@@ -4568,24 +4607,23 @@ async function startOpenCode() {
       ? `Starting OpenCode on requested port ${desiredPort}...`
       : 'Starting OpenCode with dynamic port assignment...'
   );
-  // Note: SDK starts in current process CWD. openCodeWorkingDirectory is tracked but not used for spawn in SDK.
 
   await applyOpencodeBinaryFromSettings();
   ensureOpencodeCliEnv();
   const openCodePassword = await ensureLocalOpenCodeServerPassword({
-    rotateManaged: isRestartingOpenCode,
+    rotateManaged: true,
   });
 
   try {
-    const serverInstance = await createOpencodeServer({
+    const serverInstance = await createManagedOpenCodeServerProcess({
       hostname: '127.0.0.1',
       port: desiredPort,
       timeout: 30000,
+      cwd: openCodeWorkingDirectory,
       env: {
         ...process.env,
         OPENCODE_SERVER_PASSWORD: openCodePassword,
-        // Pass minimal config to avoid pollution, but inherit PATH etc
-      }
+      },
     });
 
     if (!serverInstance || !serverInstance.url) {

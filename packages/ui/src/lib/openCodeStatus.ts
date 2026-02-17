@@ -100,6 +100,19 @@ const formatIso = (timestamp: number | null | undefined): string => {
   }
 };
 
+const normalizePort = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return null;
+};
+
 export const buildOpenCodeStatusReport = async (): Promise<string> => {
   const now = new Date();
   const appVersion = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '(unknown)';
@@ -214,6 +227,12 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
   lines.push(`Event stream: ${eventStreamStatus}`);
   lines.push(`Directory: ${directory || '(none)'}`);
   lines.push(`Platform: ${platform}`);
+
+  const runtimeOpenCodePort = normalizePort(openChamberHealth?.openCodePort);
+  lines.push(`OpenCode runtime port: ${runtimeOpenCodePort ?? '(unknown)'}`);
+  if (typeof openChamberHealth?.openCodeRunning === 'boolean') {
+    lines.push(`OpenCode runtime running: ${openChamberHealth.openCodeRunning ? 'yes' : 'no'}`);
+  }
 
   if (typeof window !== 'undefined') {
     const injected = (window as unknown as { __OPENCHAMBER_MACOS_MAJOR__?: unknown }).__OPENCHAMBER_MACOS_MAJOR__;

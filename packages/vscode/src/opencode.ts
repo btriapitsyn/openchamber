@@ -4,13 +4,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import { randomBytes } from 'crypto';
-import { createOpencodeServer } from '@opencode-ai/sdk/v2/server';
 
 const READY_CHECK_TIMEOUT_MS = 30000;
-const OPENCHAMBER_SETTINGS_PATH = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
-const OPENCODE_PASSWORD_SETTINGS_KEY = '_internalOpencodeServerPassword';
-
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export type OpenCodeDebugInfo = {
@@ -68,8 +65,9 @@ function isValidOpenCodePassword(password: string): boolean {
 }
 
 function readOpenChamberSettings(): Record<string, unknown> {
+  const settingsPath = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
   try {
-    const raw = fs.readFileSync(OPENCHAMBER_SETTINGS_PATH, 'utf8');
+    const raw = fs.readFileSync(settingsPath, 'utf8');
     const parsed = JSON.parse(raw) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return parsed as Record<string, unknown>;
@@ -78,53 +76,6 @@ function readOpenChamberSettings(): Record<string, unknown> {
   } catch {
     return {};
   }
-}
-
-function writeOpenChamberSettings(settings: Record<string, unknown>) {
-  const dir = path.dirname(OPENCHAMBER_SETTINGS_PATH);
-  fs.mkdirSync(dir, { recursive: true });
-  const tmpPath = `${OPENCHAMBER_SETTINGS_PATH}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmpPath, JSON.stringify(settings, null, 2), 'utf8');
-  if (process.platform !== 'win32') {
-    try {
-      fs.chmodSync(tmpPath, 0o600);
-    } catch {
-      // best-effort
-    }
-  }
-  fs.renameSync(tmpPath, OPENCHAMBER_SETTINGS_PATH);
-  if (process.platform !== 'win32') {
-    try {
-      fs.chmodSync(OPENCHAMBER_SETTINGS_PATH, 0o600);
-    } catch {
-      // best-effort
-    }
-  }
-}
-
-function readPersistedOpenCodePasswordFromSettings(): string | null {
-  const settings = readOpenChamberSettings();
-  const persisted = typeof settings[OPENCODE_PASSWORD_SETTINGS_KEY] === 'string'
-    ? settings[OPENCODE_PASSWORD_SETTINGS_KEY].trim()
-    : '';
-  return isValidOpenCodePassword(persisted) ? persisted : null;
-}
-
-function persistOpenCodePasswordToSettings(password: string): void {
-  if (!isValidOpenCodePassword(password)) {
-    return;
-  }
-
-  const settings = readOpenChamberSettings();
-  if (typeof settings[OPENCODE_PASSWORD_SETTINGS_KEY] === 'string' &&
-    settings[OPENCODE_PASSWORD_SETTINGS_KEY] === password) {
-    return;
-  }
-
-  writeOpenChamberSettings({
-    ...settings,
-    [OPENCODE_PASSWORD_SETTINGS_KEY]: password,
-  });
 }
 
 function resolvePortFromUrl(url: string): number | null {
@@ -384,12 +335,92 @@ async function waitForReady(
   return { ok: false, elapsedMs: Date.now() - start, attempts, version: null };
 }
 
+async function spawnManagedOpenCodeServer(
+  workingDirectory: string,
+  timeoutMs: number
+): Promise<{ url: string; close: () => void }> {
+  const binary = (process.env.OPENCODE_BINARY || 'opencode').trim() || 'opencode';
+  const args = ['serve', '--hostname', '127.0.0.1', '--port', '0'];
+  const child = spawn(binary, args, {
+    cwd: workingDirectory,
+    env: { ...process.env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  const url = await new Promise<string>((resolve, reject) => {
+    let output = '';
+    let settled = false;
+
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.stdout?.off('data', onStdout);
+      child.stderr?.off('data', onStderr);
+      child.off('exit', onExit);
+      child.off('error', onError);
+    };
+
+    const onStdout = (chunk: Buffer) => {
+      output += chunk.toString();
+      const lines = output.split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('opencode server listening')) continue;
+        const match = line.match(/on\s+(https?:\/\/[^\s]+)/);
+        if (!match) {
+          cleanup();
+          reject(new Error(`Failed to parse server url from output: ${line}`));
+          return;
+        }
+        cleanup();
+        resolve(match[1]);
+        return;
+      }
+    };
+
+    const onStderr = (chunk: Buffer) => {
+      output += chunk.toString();
+    };
+
+    const onExit = (code: number | null) => {
+      cleanup();
+      reject(new Error(`OpenCode exited with code ${code}. Output: ${output}`));
+    };
+
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Timeout waiting for server to start after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    child.stdout?.on('data', onStdout);
+    child.stderr?.on('data', onStderr);
+    child.on('exit', onExit);
+    child.on('error', onError);
+  });
+
+  return {
+    url,
+    close: () => {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
 export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCodeManager {
   void _context;
   let server: { url: string; close: () => void } | null = null;
   let managedApiUrlOverride: string | null = null;
   let managedPassword: string | null = null;
-  let managedPasswordSource: 'user-env' | 'persisted' | 'generated' | 'rotated' | null = null;
+  let managedPasswordSource: 'user-env' | 'generated' | 'rotated' | null = null;
   const userProvidedEnvPassword = (() => {
     const normalized = (process.env.OPENCODE_SERVER_PASSWORD || '').trim();
     return isValidOpenCodePassword(normalized) ? normalized : null;
@@ -460,10 +491,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
   };
 
   const getOpenCodeAuthHeaders = (): Record<string, string> => {
-    if (useConfiguredUrl && configuredApiUrl) {
-      return {};
-    }
-    const password = managedPassword || '';
+    const password = (managedPassword || userProvidedEnvPassword || process.env.OPENCODE_SERVER_PASSWORD || '').trim();
     if (!password) {
       return {};
     }
@@ -472,7 +500,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
   const setManagedPasswordState = (
     password: string,
-    source: 'user-env' | 'persisted' | 'generated' | 'rotated'
+    source: 'user-env' | 'generated' | 'rotated'
   ): string => {
     const normalized = password.trim();
     managedPassword = normalized;
@@ -483,15 +511,11 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
 
   const ensureManagedOpenCodeServerPassword = async ({ rotateManaged = false }: { rotateManaged?: boolean } = {}): Promise<string> => {
     if (userProvidedEnvPassword) {
-      const fromEnv = setManagedPasswordState(userProvidedEnvPassword, 'user-env');
-      persistOpenCodePasswordToSettings(fromEnv);
-      return fromEnv;
+      return setManagedPasswordState(userProvidedEnvPassword, 'user-env');
     }
 
     if (rotateManaged) {
-      const rotated = setManagedPasswordState(generateSecureOpenCodePassword(), 'rotated');
-      persistOpenCodePasswordToSettings(rotated);
-      return rotated;
+      return setManagedPasswordState(generateSecureOpenCodePassword(), 'rotated');
     }
 
     if (managedPassword && isValidOpenCodePassword(managedPassword)) {
@@ -501,15 +525,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       );
     }
 
-    const persisted = readPersistedOpenCodePasswordFromSettings();
-    if (persisted) {
-      return setManagedPasswordState(persisted, 'persisted');
-    }
-
-    const generated = setManagedPasswordState(generateSecureOpenCodePassword(), 'generated');
-    persistOpenCodePasswordToSettings(generated);
-
-    return generated;
+    return setManagedPasswordState(generateSecureOpenCodePassword(), 'generated');
   };
 
   async function startInternal(
@@ -569,12 +585,7 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       const originalCwd = process.cwd();
       try {
         process.chdir(workingDirectory);
-        server = await createOpencodeServer({
-          hostname: '127.0.0.1',
-          port: 0,
-          timeout: READY_CHECK_TIMEOUT_MS,
-          signal: undefined,
-        });
+        server = await spawnManagedOpenCodeServer(workingDirectory, READY_CHECK_TIMEOUT_MS);
       } finally {
         try {
           process.chdir(originalCwd);
@@ -641,7 +652,6 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       server = null;
     }
 
-    // SDK's proc.kill() only kills the Node wrapper, not the actual opencode binary.
     // Kill any process listening on our port to clean up orphaned children.
     if (portToKill) {
       try {

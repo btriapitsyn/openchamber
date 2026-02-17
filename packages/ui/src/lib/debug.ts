@@ -264,11 +264,27 @@ export const debugUtils = {
       const resp = await fetch('/api/health');
       const contentType = resp.headers.get('content-type') || '';
       const body = await safeText(resp);
+      const isJson = contentType.toLowerCase().includes('application/json');
+      let parsed: Record<string, unknown> | null = null;
+      if (isJson && body) {
+        try {
+          const candidate = JSON.parse(body) as unknown;
+          if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+            parsed = candidate as Record<string, unknown>;
+          }
+        } catch {
+          parsed = null;
+        }
+      }
       opencodeHealth = {
         status: resp.status,
         ok: resp.ok,
         contentType,
-        type: contentType.includes('application/json') ? 'json' : 'html',
+        type: isJson ? 'json' : 'html',
+        openCodePort: parsed?.openCodePort ?? null,
+        openCodeRunning: parsed?.openCodeRunning ?? null,
+        isOpenCodeReady: parsed?.isOpenCodeReady ?? null,
+        lastOpenCodeError: parsed?.lastOpenCodeError ?? null,
         preview: body ? body.slice(0, 120) : null,
       };
     } catch (error) {

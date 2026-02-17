@@ -1627,6 +1627,7 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
             .args(["--port", &port.to_string()])
             .env("OPENCHAMBER_HOST", "127.0.0.1")
             .env("OPENCHAMBER_DIST_DIR", dist_dir.clone())
+            .env("OPENCHAMBER_RUNTIME", "desktop")
             .env("OPENCHAMBER_DESKTOP_NOTIFY", "true")
             .env("PATH", augmented_path.clone())
             .env("NO_PROXY", no_proxy)
