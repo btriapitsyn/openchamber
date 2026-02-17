@@ -3,6 +3,7 @@ import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
 import http from 'http';
+import net from 'net';
 import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import os from 'os';
@@ -2910,6 +2911,10 @@ function getOpenCodeAuthHeaders() {
   return { Authorization: `Basic ${credentials}` };
 }
 
+function isOpenCodeConnectionSecure() {
+  return Object.prototype.hasOwnProperty.call(getOpenCodeAuthHeaders(), 'Authorization');
+}
+
 function generateSecureOpenCodePassword() {
   return crypto
     .randomBytes(32)
@@ -4600,12 +4605,47 @@ async function createManagedOpenCodeServerProcess({
   };
 }
 
+async function resolveManagedOpenCodePort(requestedPort) {
+  if (typeof requestedPort === 'number' && Number.isFinite(requestedPort) && requestedPort > 0) {
+    return requestedPort;
+  }
+
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    const cleanup = () => {
+      server.removeAllListeners('error');
+      server.removeAllListeners('listening');
+    };
+
+    server.once('error', (error) => {
+      cleanup();
+      reject(error);
+    });
+
+    server.once('listening', () => {
+      const address = server.address();
+      const port = address && typeof address === 'object' ? address.port : 0;
+      server.close(() => {
+        cleanup();
+        if (port > 0) {
+          resolve(port);
+          return;
+        }
+        reject(new Error('Failed to allocate OpenCode port'));
+      });
+    });
+
+    server.listen(0, '127.0.0.1');
+  });
+}
+
 async function startOpenCode() {
   const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? 0;
+  const spawnPort = await resolveManagedOpenCodePort(desiredPort);
   console.log(
     desiredPort > 0
       ? `Starting OpenCode on requested port ${desiredPort}...`
-      : 'Starting OpenCode with dynamic port assignment...'
+      : `Starting OpenCode on allocated port ${spawnPort}...`
   );
 
   await applyOpencodeBinaryFromSettings();
@@ -4617,7 +4657,7 @@ async function startOpenCode() {
   try {
     const serverInstance = await createManagedOpenCodeServerProcess({
       hostname: '127.0.0.1',
-      port: desiredPort,
+      port: spawnPort,
       timeout: 30000,
       cwd: openCodeWorkingDirectory,
       env: {
@@ -5511,6 +5551,8 @@ async function main(options = {}) {
       timestamp: new Date().toISOString(),
       openCodePort: openCodePort,
       openCodeRunning: Boolean(openCodePort && isOpenCodeReady && !isRestartingOpenCode),
+      openCodeSecureConnection: isOpenCodeConnectionSecure(),
+      openCodeAuthSource: openCodeAuthSource || null,
       openCodeApiPrefix: '',
       openCodeApiPrefixDetected: true,
       isOpenCodeReady,
@@ -5520,6 +5562,13 @@ async function main(options = {}) {
       opencodeShimInterpreter: resolvedOpencodeBinary ? opencodeShimInterpreter(resolvedOpencodeBinary) : null,
       nodeBinaryResolved: resolvedNodeBinary || null,
       bunBinaryResolved: resolvedBunBinary || null,
+    });
+  });
+
+  app.post('/api/system/shutdown', (req, res) => {
+    res.json({ ok: true });
+    gracefulShutdown({ exitProcess: false }).catch((error) => {
+      console.error('Shutdown request failed:', error?.message || error);
     });
   });
 

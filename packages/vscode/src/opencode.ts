@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as net from 'net';
 import { execSync } from 'child_process';
 import { spawnSync } from 'child_process';
 import { spawn } from 'child_process';
@@ -32,6 +33,8 @@ export type OpenCodeDebugInfo = {
   lastReadyAttempts: number | null;
   lastStartAttempts: number | null;
   version: string | null;
+  secureConnection: boolean;
+  authSource: 'user-env' | 'generated' | 'rotated' | null;
 };
 
 export interface OpenCodeManager {
@@ -337,10 +340,11 @@ async function waitForReady(
 
 async function spawnManagedOpenCodeServer(
   workingDirectory: string,
+  port: number,
   timeoutMs: number
 ): Promise<{ url: string; close: () => void }> {
   const binary = (process.env.OPENCODE_BINARY || 'opencode').trim() || 'opencode';
-  const args = ['serve', '--hostname', '127.0.0.1', '--port', '0'];
+  const args = ['serve', '--hostname', '127.0.0.1', '--port', String(port)];
   const child = spawn(binary, args, {
     cwd: workingDirectory,
     env: { ...process.env },
@@ -413,6 +417,30 @@ async function spawnManagedOpenCodeServer(
       }
     },
   };
+}
+
+async function allocateManagedOpenCodePort(): Promise<number> {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+
+    server.once('error', (error) => {
+      reject(error);
+    });
+
+    server.once('listening', () => {
+      const address = server.address();
+      const port = address && typeof address === 'object' ? address.port : 0;
+      server.close(() => {
+        if (port > 0) {
+          resolve(port);
+          return;
+        }
+        reject(new Error('Failed to allocate OpenCode port'));
+      });
+    });
+
+    server.listen(0, '127.0.0.1');
+  });
 }
 
 export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCodeManager {
@@ -585,7 +613,8 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
       const originalCwd = process.cwd();
       try {
         process.chdir(workingDirectory);
-        server = await spawnManagedOpenCodeServer(workingDirectory, READY_CHECK_TIMEOUT_MS);
+        const port = await allocateManagedOpenCodePort();
+        server = await spawnManagedOpenCodeServer(workingDirectory, port, READY_CHECK_TIMEOUT_MS);
       } finally {
         try {
           process.chdir(originalCwd);
@@ -761,29 +790,34 @@ export function createOpenCodeManager(_context: vscode.ExtensionContext): OpenCo
     getOpenCodeAuthHeaders,
     getWorkingDirectory: () => workingDirectory,
     isCliAvailable: () => !cliMissing,
-    getDebugInfo: () => ({
-      mode: useConfiguredUrl && configuredApiUrl ? 'external' : 'managed',
-      status,
-      lastError,
-      workingDirectory,
-      cliAvailable: !cliMissing,
-      cliPath,
-      configuredApiUrl: useConfiguredUrl && configuredApiUrl ? configuredApiUrl.replace(/\/+$/, '') : null,
-      configuredPort,
-      detectedPort,
-      apiPrefix: '',
-      apiPrefixDetected: true,
-      startCount,
-      restartCount,
-      lastStartAt,
-      lastConnectedAt,
-      lastExitCode,
-      serverUrl: getApiUrl(),
-      lastReadyElapsedMs,
-      lastReadyAttempts,
-      lastStartAttempts,
-      version,
-    }),
+    getDebugInfo: () => {
+      const secureConnection = Boolean(getOpenCodeAuthHeaders().Authorization);
+      return {
+        mode: useConfiguredUrl && configuredApiUrl ? 'external' : 'managed',
+        status,
+        lastError,
+        workingDirectory,
+        cliAvailable: !cliMissing,
+        cliPath,
+        configuredApiUrl: useConfiguredUrl && configuredApiUrl ? configuredApiUrl.replace(/\/+$/, '') : null,
+        configuredPort,
+        detectedPort,
+        apiPrefix: '',
+        apiPrefixDetected: true,
+        startCount,
+        restartCount,
+        lastStartAt,
+        lastConnectedAt,
+        lastExitCode,
+        serverUrl: getApiUrl(),
+        lastReadyElapsedMs,
+        lastReadyAttempts,
+        lastStartAttempts,
+        version,
+        secureConnection,
+        authSource: managedPasswordSource || (userProvidedEnvPassword ? 'user-env' : null),
+      };
+    },
     onStatusChange(callback) {
       listeners.add(callback);
       callback(status, lastError);

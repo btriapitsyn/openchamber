@@ -466,7 +466,13 @@ export async function activate(context: vscode.ExtensionContext) {
           ? `OpenCode mode: ${debug.mode} (starts=${debug.startCount}, restarts=${debug.restartCount})`
           : `OpenCode mode: (unknown)`,
         debug
-          ? `OpenCode CLI path: ${debug.cliPath || '(not found - SDK manages process)'}`
+          ? `Secure OpenCode connection: ${debug.secureConnection ? 'true' : 'false'}`
+          : `Secure OpenCode connection: (unknown)`,
+        debug
+          ? `OpenCode auth source: ${debug.authSource ?? '(none)'}`
+          : `OpenCode auth source: (unknown)`,
+        debug
+          ? `OpenCode CLI path: ${debug.cliPath || '(not found)'}`
           : `OpenCode CLI path: (unknown)`,
         debug
           ? `OpenCode detected port: ${debug.detectedPort ?? '(none)'}`

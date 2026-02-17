@@ -283,6 +283,8 @@ export const debugUtils = {
         type: isJson ? 'json' : 'html',
         openCodePort: parsed?.openCodePort ?? null,
         openCodeRunning: parsed?.openCodeRunning ?? null,
+        openCodeSecureConnection: parsed?.openCodeSecureConnection ?? null,
+        openCodeAuthSource: parsed?.openCodeAuthSource ?? null,
         isOpenCodeReady: parsed?.isOpenCodeReady ?? null,
         lastOpenCodeError: parsed?.lastOpenCodeError ?? null,
         preview: body ? body.slice(0, 120) : null,

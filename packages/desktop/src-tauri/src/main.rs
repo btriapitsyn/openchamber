@@ -1476,10 +1476,27 @@ fn kill_sidecar(app: tauri::AppHandle) {
         return;
     };
 
+    let sidecar_url = state.url.lock().expect("sidecar url mutex").clone();
+    if let Some(url) = sidecar_url {
+        let shutdown_url = format!("{}/api/system/shutdown", url.trim_end_matches('/'));
+        if let Ok(client) = reqwest::blocking::Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_millis(1500))
+            .build()
+        {
+            if let Ok(resp) = client.post(shutdown_url).send() {
+                if resp.status().is_success() {
+                    std::thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
+    }
+
     let mut guard = state.child.lock().expect("sidecar mutex");
     if let Some(child) = guard.take() {
         let _ = child.kill();
     }
+    *state.url.lock().expect("sidecar url mutex") = None;
 }
 
 fn build_local_url(port: u16) -> String {

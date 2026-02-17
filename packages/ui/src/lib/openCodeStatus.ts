@@ -13,6 +13,8 @@ type ProbeResult = {
 type OpenChamberHealthSnapshot = {
   openCodePort?: unknown;
   openCodeRunning?: unknown;
+  openCodeSecureConnection?: unknown;
+  openCodeAuthSource?: unknown;
   isOpenCodeReady?: unknown;
   lastOpenCodeError?: unknown;
   opencodeBinaryResolved?: unknown;
@@ -232,6 +234,12 @@ export const buildOpenCodeStatusReport = async (): Promise<string> => {
   lines.push(`OpenCode runtime port: ${runtimeOpenCodePort ?? '(unknown)'}`);
   if (typeof openChamberHealth?.openCodeRunning === 'boolean') {
     lines.push(`OpenCode runtime running: ${openChamberHealth.openCodeRunning ? 'yes' : 'no'}`);
+  }
+  if (typeof openChamberHealth?.openCodeSecureConnection === 'boolean') {
+    lines.push(`Secure OpenCode connection: ${openChamberHealth.openCodeSecureConnection ? 'true' : 'false'}`);
+  }
+  if (typeof openChamberHealth?.openCodeAuthSource === 'string' && openChamberHealth.openCodeAuthSource.trim()) {
+    lines.push(`OpenCode auth source: ${openChamberHealth.openCodeAuthSource}`);
   }
 
   if (typeof window !== 'undefined') {
