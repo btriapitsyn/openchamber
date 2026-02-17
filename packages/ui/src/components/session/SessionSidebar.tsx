@@ -44,6 +44,7 @@ import {
   RiGitBranchLine,
   RiGitPullRequestLine,
   RiGitRepositoryLine,
+  RiNodeTree,
   RiStickyNoteLine,
   RiLinkUnlinkM,
 
@@ -1758,7 +1759,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [activeProjectForHeader, projectRenameDraft, renameProject]);
 
   const headerActionButtonClass =
-    'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50';
+    'inline-flex h-6 w-6 items-center justify-center rounded-md leading-none text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50';
 
   // Track when project sticky headers become "stuck"
   React.useEffect(() => {
@@ -2535,9 +2536,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </div>
           )}
           {reserveHeaderActionsSpace ? (
-            <div className="mt-1 -ml-1 flex h-8 items-center">
+            <div className="-ml-1 flex h-8 items-center">
               {activeProjectForHeader ? (
-              <div className="flex h-full items-center gap-1.5 rounded-md pl-0 pr-1">
+              <div className="flex h-8 -translate-y-px items-center gap-1.5 rounded-md pl-0 pr-1">
               {stableActiveProjectIsRepo ? (
                 <>
               <Tooltip>
@@ -2564,7 +2565,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     className={headerActionButtonClass}
                     aria-label="New worktree"
                   >
-                    <RiGitBranchLine className="h-4.5 w-4.5" />
+                    <RiNodeTree className="h-4.5 w-4.5" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={4}><p>New worktree</p></TooltipContent>

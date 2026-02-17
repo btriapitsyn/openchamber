@@ -1325,6 +1325,8 @@ const sanitizeProjects = (input) => {
     const rawPath = typeof candidate.path === 'string' ? candidate.path.trim() : '';
     const normalizedPath = rawPath ? path.resolve(normalizeDirectoryPath(rawPath)) : '';
     const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+    const icon = typeof candidate.icon === 'string' ? candidate.icon.trim() : '';
+    const color = typeof candidate.color === 'string' ? candidate.color.trim() : '';
     const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null;
     const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt)
       ? Number(candidate.lastOpenedAt)
@@ -1341,6 +1343,8 @@ const sanitizeProjects = (input) => {
       id,
       path: normalizedPath,
       ...(label ? { label } : {}),
+      ...(icon ? { icon } : {}),
+      ...(color ? { color } : {}),
       ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
       ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
     };

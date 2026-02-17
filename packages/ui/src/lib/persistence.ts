@@ -147,6 +147,12 @@ const sanitizeProjects = (value: unknown): DesktopSettings['projects'] | undefin
     if (typeof candidate.label === 'string' && candidate.label.trim().length > 0) {
       project.label = candidate.label.trim();
     }
+    if (typeof candidate.icon === 'string' && candidate.icon.trim().length > 0) {
+      project.icon = candidate.icon.trim();
+    }
+    if (typeof candidate.color === 'string' && candidate.color.trim().length > 0) {
+      project.color = candidate.color.trim();
+    }
     if (typeof candidate.addedAt === 'number' && Number.isFinite(candidate.addedAt) && candidate.addedAt >= 0) {
       project.addedAt = candidate.addedAt;
     }
