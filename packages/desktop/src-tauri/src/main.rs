@@ -117,6 +117,8 @@ const MENU_ITEM_REPORT_BUG_ID: &str = "menu_report_bug";
 const MENU_ITEM_REQUEST_FEATURE_ID: &str = "menu_request_feature";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_JOIN_DISCORD_ID: &str = "menu_join_discord";
+#[cfg(target_os = "macos")]
+const MENU_ITEM_CLEAR_CACHE_ID: &str = "menu_clear_cache";
 
 #[cfg(target_os = "macos")]
 const GITHUB_BUG_REPORT_URL: &str =
@@ -268,6 +270,9 @@ fn build_macos_menu<R: tauri::Runtime>(
     let join_discord =
         MenuItem::with_id(app, MENU_ITEM_JOIN_DISCORD_ID, "Join Discord", true, None::<&str>)?;
 
+    let clear_cache =
+        MenuItem::with_id(app, MENU_ITEM_CLEAR_CACHE_ID, "Clear Cache", true, None::<&str>)?;
+
     let theme_submenu =
         Submenu::with_items(app, "Theme", true, &[&theme_light, &theme_dark, &theme_system])?;
 
@@ -292,6 +297,8 @@ fn build_macos_menu<R: tauri::Runtime>(
         &[
             &help_dialog,
             &download_logs,
+            &PredefinedMenuItem::separator(app)?,
+            &clear_cache,
             &PredefinedMenuItem::separator(app)?,
             &report_bug,
             &request_feature,
@@ -410,6 +417,35 @@ fn desktop_set_auto_worktree_menu(app: tauri::AppHandle, enabled: bool) -> Resul
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn desktop_clear_cache(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut failures: Vec<String> = Vec::new();
+
+        for (label, window) in app.webview_windows() {
+            if let Err(err) = window.clear_all_browsing_data() {
+                failures.push(format!("{label}: {err}"));
+            }
+        }
+
+        if !failures.is_empty() {
+            return Err(format!("Failed to clear browsing data for some windows: {}", failures.join("; ")));
+        }
+
+        // Reload all windows after clearing persisted browsing data so in-memory state is reset too.
+        eval_in_all_windows(&app, "window.location.reload();");
+
+        log::info!("[desktop] Cleared all webview browsing data and reloaded windows");
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("desktop_clear_cache is only supported on macOS".to_string())
+    }
 }
 
 #[tauri::command]
@@ -2430,6 +2466,14 @@ fn main() {
                 }
                 if id == MENU_ITEM_DOWNLOAD_LOGS_ID {
                     dispatch_menu_action(app, "download-logs");
+                    return;
+                }
+                if id == MENU_ITEM_CLEAR_CACHE_ID {
+                    let app = app.clone();
+                    tauri::async_runtime::spawn_blocking(move || {
+                        let _ = crate::desktop_clear_cache(app);
+                    });
+                    return;
                 }
             }
         })
@@ -2473,6 +2517,7 @@ fn main() {
             desktop_new_window,
             desktop_new_window_at_url,
             desktop_set_auto_worktree_menu,
+            desktop_clear_cache,
             desktop_open_path,
             desktop_filter_installed_apps,
             desktop_get_installed_apps,

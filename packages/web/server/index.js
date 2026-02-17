@@ -10976,7 +10976,6 @@ Context:
     res.json({ success: true, killedCount });
   });
 
-
   try {
     syncFromHmrState();
     if (await isOpenCodeProcessHealthy()) {

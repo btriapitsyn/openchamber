@@ -145,6 +145,7 @@
         "@radix-ui/react-toggle": "^1.1.10",
         "@radix-ui/react-tooltip": "^1.2.8",
         "@remixicon/react": "^4.7.0",
+        "@streamdown/code": "^1.0.2",
         "@streamdown/mermaid": "^1.0.2",
         "@types/react-syntax-highlighter": "^15.5.13",
         "class-variance-authority": "^0.7.1",
@@ -1057,6 +1058,8 @@
     "@sindresorhus/is": ["@sindresorhus/is@4.6.0", "", {}, "sha512-t09vSN3MdfsyCHoFcTRCH/iUtG7OJ0CsjzB8cjAmKc/va/kIgeDI/TxsigdncE/4be734m0cvIYwNaV4i2XqAw=="],
 
     "@sindresorhus/merge-streams": ["@sindresorhus/merge-streams@2.3.0", "", {}, "sha512-LtoMMhxAlorcGhmFYI+LhPgbPZCkgP6ra1YL604EeF6U98pLlQ3iWIGMdWSC+vWmPBWBNgmDBAhnAobLROJmwg=="],
+
+    "@streamdown/code": ["@streamdown/code@1.0.2", "", { "dependencies": { "shiki": "^3.19.0" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-QKLS3sC8no5y0YvhGLA+ZjtNhznWU09IvFcjRKgSA35ulckMLw3b5T1ha+o1DaW8BS8l0zceLPFZa3/X9+agWQ=="],
 
     "@streamdown/mermaid": ["@streamdown/mermaid@1.0.2", "", { "dependencies": { "mermaid": "^11.12.2" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-Fr/4sBWnAeSnxM3PcrV/+DiZe5oPMq9gOkUIAH7ZauJeuwrZ/DVzD4g0zlav6AH0axh2m/sOfrfLtY5aLT7niw=="],
 

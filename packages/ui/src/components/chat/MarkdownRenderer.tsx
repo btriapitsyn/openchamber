@@ -1,5 +1,6 @@
 import React from 'react';
 import { Streamdown } from 'streamdown';
+import { code } from '@streamdown/code';
 import { mermaid } from '@streamdown/mermaid';
 import 'streamdown/styles.css';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
@@ -412,6 +413,14 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
   const [copied, setCopied] = React.useState(false);
   const codeRef = React.useRef<HTMLDivElement>(null);
   const mermaidInfo = getMermaidInfo(children);
+  const codeChild = React.useMemo(
+    () => (
+      React.isValidElement(children)
+        ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, { 'data-block': true })
+        : children
+    ),
+    [children],
+  );
 
   const normalizedStyle = React.useMemo<React.CSSProperties | undefined>(() => {
     if (!style) return style;
@@ -458,11 +467,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
   }, [style]);
 
   // Mermaid blocks get their own controls via MermaidWrapper — skip the code copy button.
-  // We must still add data-block so streamdown's code component renders as block (not inline).
   if (mermaidInfo.isMermaid) {
-    const codeChild = React.isValidElement(children)
-      ? React.cloneElement(children as React.ReactElement<Record<string, unknown>>, { 'data-block': true })
-      : children;
     return <MermaidWrapper source={mermaidInfo.source}>{codeChild}</MermaidWrapper>;
   }
 
@@ -492,7 +497,7 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
         className={cn(className)}
         style={normalizedStyle}
       >
-        {children}
+        {codeChild}
       </pre>
       <div className="absolute top-1 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <button
@@ -513,6 +518,7 @@ const streamdownComponents = {
 };
 
 const streamdownPlugins = {
+  code,
   mermaid,
 };
 

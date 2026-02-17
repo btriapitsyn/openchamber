@@ -487,3 +487,18 @@ export const fetchDesktopInstalledApps = async (
     return { apps: [], success: false, hasCache: false, isCacheStale: false };
   }
 };
+
+export const clearDesktopCache = async (): Promise<boolean> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return false;
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    await tauri?.core?.invoke?.('desktop_clear_cache');
+    return true;
+  } catch (error) {
+    console.warn('Failed to clear cache', error);
+    return false;
+  }
+};
