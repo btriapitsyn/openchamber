@@ -16,6 +16,8 @@ interface ContextUsageDisplayProps {
   className?: string;
   valueClassName?: string;
   percentIconClassName?: string;
+  onClick?: () => void;
+  pressed?: boolean;
 }
 
 export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
@@ -30,6 +32,8 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   className,
   valueClassName,
   percentIconClassName,
+  onClick,
+  pressed = false,
 }) => {
   const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState(false);
 
@@ -56,16 +60,10 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
     `Output limit: ${formatTokens(safeOutputLimit)}`,
   ];
 
-  const contextElement = (
-    <div
-      className={cn(
-        'app-region-no-drag flex items-center gap-1.5 text-muted-foreground/60 select-none',
-        size === 'compact' ? 'typography-micro' : 'typography-meta',
-        className,
-      )}
-      aria-label="Context usage"
-      onClick={isMobile ? () => setMobileTooltipOpen(true) : undefined}
-    >
+  const isInteractive = !isMobile && typeof onClick === 'function';
+
+  const contextContent = (
+    <>
       {!isMobile && !hideIcon && <RiDonutChartLine className="h-4 w-4 flex-shrink-0" />}
       <span className={cn('font-medium inline-flex items-center gap-1.5', valueClassName)}>
         {showPercentIcon ? (
@@ -82,6 +80,39 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
           </>
         )}
       </span>
+    </>
+  );
+
+  const sharedClassName = cn(
+    'app-region-no-drag flex items-center gap-1.5 select-none',
+    size === 'compact' ? 'typography-micro' : 'typography-meta',
+    isInteractive
+      ? cn(
+        'rounded-md px-2 py-1.5 text-foreground transition-colors',
+        'hover:bg-interactive-hover',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+      )
+      : 'text-muted-foreground/60',
+    className,
+  );
+
+  const contextElement = isInteractive ? (
+    <button
+      type="button"
+      className={sharedClassName}
+      aria-label="Context usage"
+      aria-pressed={pressed}
+      onClick={onClick}
+    >
+      {contextContent}
+    </button>
+  ) : (
+    <div
+      className={sharedClassName}
+      aria-label="Context usage"
+      onClick={isMobile ? () => setMobileTooltipOpen(true) : undefined}
+    >
+      {contextContent}
     </div>
   );
 

@@ -6,7 +6,7 @@ import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey 
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files';
 export type RightSidebarTab = 'git' | 'files';
-export type ContextPanelMode = 'diff' | 'file';
+export type ContextPanelMode = 'diff' | 'file' | 'context';
 
 type ContextPanelDirectoryState = {
   isOpen: boolean;
@@ -224,6 +224,7 @@ interface UIStore {
   setRightSidebarTab: (tab: RightSidebarTab) => void;
   openContextDiff: (directory: string, filePath: string) => void;
   openContextFile: (directory: string, filePath: string) => void;
+  openContextOverview: (directory: string) => void;
   closeContextPanel: (directory: string) => void;
   toggleContextPanelExpanded: (directory: string) => void;
   setContextPanelWidth: (directory: string, width: number) => void;
@@ -404,6 +405,18 @@ export const useUIStore = create<UIStore>()(
 
         setSidebarOpen: (open) => {
           set((state) => {
+            if (state.isSidebarOpen === open) {
+              if (!open) {
+                return state;
+              }
+              if (!state.hasManuallyResizedLeftSidebar && state.sidebarWidth !== LEFT_SIDEBAR_MIN_WIDTH) {
+                return {
+                  isSidebarOpen: open,
+                  sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
+                };
+              }
+              return state;
+            }
             if (open && !state.hasManuallyResizedLeftSidebar) {
               return {
                 isSidebarOpen: open,
@@ -434,6 +447,18 @@ export const useUIStore = create<UIStore>()(
 
         setRightSidebarOpen: (open) => {
           set((state) => {
+            if (state.isRightSidebarOpen === open) {
+              if (!open) {
+                return state;
+              }
+              if (!state.hasManuallyResizedRightSidebar && state.rightSidebarWidth !== RIGHT_SIDEBAR_MIN_WIDTH) {
+                return {
+                  isRightSidebarOpen: open,
+                  rightSidebarWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+                };
+              }
+              return state;
+            }
             if (open && !state.hasManuallyResizedRightSidebar) {
               return {
                 isRightSidebarOpen: open,
@@ -494,6 +519,29 @@ export const useUIStore = create<UIStore>()(
                 isOpen: true,
                 mode: 'file' as const,
                 targetPath: normalizedFilePath,
+              },
+            };
+
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+          });
+        },
+
+        openContextOverview: (directory) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          if (!normalizedDirectory) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            const current = touchContextPanelState(prev);
+            const byDirectory = {
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: {
+                ...current,
+                isOpen: true,
+                mode: 'context' as const,
+                targetPath: null,
               },
             };
 
@@ -585,7 +633,25 @@ export const useUIStore = create<UIStore>()(
         },
 
         setBottomTerminalOpen: (open) => {
-          set(() => {
+          set((state) => {
+            if (state.isBottomTerminalOpen === open) {
+              if (!open) {
+                return state;
+              }
+              if (!state.hasManuallyResizedBottomTerminal && typeof window !== 'undefined') {
+                const proportionalHeight = Math.floor(window.innerHeight * 0.32);
+                if (state.bottomTerminalHeight === proportionalHeight && state.hasManuallyResizedBottomTerminal === false) {
+                  return state;
+                }
+                return {
+                  isBottomTerminalOpen: open,
+                  bottomTerminalHeight: proportionalHeight,
+                  hasManuallyResizedBottomTerminal: false,
+                };
+              }
+              return state;
+            }
+
             if (open && typeof window !== 'undefined') {
               const proportionalHeight = Math.floor(window.innerHeight * 0.32);
               return {

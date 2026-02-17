@@ -141,6 +141,9 @@ export const Header: React.FC = () => {
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
+  const openContextOverview = useUIStore((state) => state.openContextOverview);
+  const closeContextPanel = useUIStore((state) => state.closeContextPanel);
+  const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
   const activeMainTab = useUIStore((state) => state.activeMainTab);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
@@ -338,9 +341,15 @@ export const Header: React.FC = () => {
   const updateProjectTabsOverflow = React.useCallback(() => {
     const el = projectTabsScrollRef.current;
     if (!el) return;
-    setProjectTabsOverflow({
+    const next = {
       left: el.scrollLeft > 2,
       right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2,
+    };
+    setProjectTabsOverflow((prev) => {
+      if (prev.left === next.left && prev.right === next.right) {
+        return prev;
+      }
+      return next;
     });
   }, []);
 
@@ -883,6 +892,30 @@ export const Header: React.FC = () => {
     setSessionSwitcherOpen(false);
     setSettingsDialogOpen(true);
   }, [blurActiveElement, isMobile, setSessionSwitcherOpen, setSettingsDialogOpen]);
+
+  const handleOpenContextPanel = React.useCallback(() => {
+    const directory = normalize(openDirectory || '');
+    if (!directory) {
+      return;
+    }
+
+    const panelState = contextPanelByDirectory[directory];
+    if (panelState?.isOpen && panelState.mode === 'context') {
+      closeContextPanel(directory);
+      return;
+    }
+
+    openContextOverview(directory);
+  }, [closeContextPanel, contextPanelByDirectory, openContextOverview, openDirectory]);
+
+  const isContextPanelActive = React.useMemo(() => {
+    const directory = normalize(openDirectory || '');
+    if (!directory) {
+      return false;
+    }
+    const panelState = contextPanelByDirectory[directory];
+    return Boolean(panelState?.isOpen && panelState.mode === 'context');
+  }, [contextPanelByDirectory, openDirectory]);
 
   const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
 
@@ -1604,9 +1637,11 @@ export const Header: React.FC = () => {
             size="compact"
             hideIcon
             showPercentIcon
+            onClick={handleOpenContextPanel}
+            pressed={isContextPanelActive}
             className="mr-3.5"
             valueClassName="typography-ui-label font-medium leading-none text-foreground"
-            percentIconClassName="h-5 w-5 text-muted-foreground"
+            percentIconClassName="h-5 w-5"
           />
         )}
         <OpenInAppButton directory={openDirectory} className="mr-1" />

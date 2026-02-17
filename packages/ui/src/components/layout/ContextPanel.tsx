@@ -7,6 +7,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { ContextPanelContent } from './ContextSidebarTab';
 
 const CONTEXT_PANEL_MIN_WIDTH = 360;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
@@ -144,14 +145,16 @@ export const ContextPanel: React.FC = () => {
 
   const activeFilePath = useFilesViewTabsStore((state) => (directoryKey ? (state.byRoot[directoryKey]?.selectedPath ?? null) : null));
 
-  const panelTitle = panelState?.mode === 'diff' ? 'Diff' : panelState?.mode === 'file' ? 'File' : 'Panel';
-  const effectivePath = panelState?.mode === 'file' ? (activeFilePath ?? panelState?.targetPath ?? null) : (panelState?.targetPath ?? null);
+  const panelTitle = panelState?.mode === 'diff' ? 'Diff' : panelState?.mode === 'file' ? 'File' : panelState?.mode === 'context' ? 'Context' : 'Panel';
+  const effectivePath = panelState?.mode === 'file' ? (activeFilePath ?? panelState?.targetPath ?? null) : panelState?.mode === 'context' ? null : (panelState?.targetPath ?? null);
   const pathLabel = getRelativePathLabel(effectivePath, effectiveDirectory);
 
   const content = panelState?.mode === 'diff'
     ? <DiffView hideStackedFileSidebar stackedDefaultCollapsedAll hideFileSelector pinSelectedFileHeaderToTopOnNavigate />
     : panelState?.mode === 'file'
       ? <FilesView mode="editor-only" />
+      : panelState?.mode === 'context'
+        ? <ContextPanelContent />
       : null;
 
   const header = (

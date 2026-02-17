@@ -7,6 +7,7 @@ interface ErrorBoundaryState {
   hasError: boolean;
   error?: Error;
   errorInfo?: React.ErrorInfo;
+  copied?: boolean;
 }
 
 interface ErrorBoundaryProps {
@@ -25,15 +26,30 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    this.setState({ error, errorInfo });
+    this.setState({ error, errorInfo, copied: false });
 
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error caught by boundary:', error, errorInfo);
-    }
+    console.error('Error caught by boundary:', error, errorInfo);
   }
 
   handleReset = () => {
     this.setState({ hasError: false, error: undefined, errorInfo: undefined });
+  };
+
+  handleCopy = async () => {
+    const errorText = this.state.error ? String(this.state.error) : 'Unknown error';
+    const stack = this.state.error?.stack ? `\n\nStack:\n${this.state.error.stack}` : '';
+    const componentStack = this.state.errorInfo?.componentStack ? `\n\nComponent stack:${this.state.errorInfo.componentStack}` : '';
+    const payload = `${errorText}${stack}${componentStack}`;
+
+    try {
+      await navigator.clipboard.writeText(payload);
+      this.setState({ copied: true });
+      window.setTimeout(() => {
+        this.setState((prev) => (prev.copied ? { copied: false } : null));
+      }, 1500);
+    } catch {
+      // ignore
+    }
   };
 
   render() {
@@ -61,6 +77,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                   <summary className="cursor-pointer hover:bg-interactive-hover/80">Error details</summary>
                   <pre className="mt-2 overflow-x-auto">
                     {this.state.error.toString()}
+                    {this.state.errorInfo?.componentStack ? `\n\nComponent stack:${this.state.errorInfo.componentStack}` : ''}
                   </pre>
                 </details>
               )}
@@ -69,6 +86,9 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
                 <Button onClick={this.handleReset} variant="outline" className="flex-1">
                   <RiRestartLine className="h-4 w-4 mr-2" />
                   Try again
+                </Button>
+                <Button onClick={this.handleCopy} variant="outline" className="flex-1">
+                  {this.state.copied ? 'Copied' : 'Copy'}
                 </Button>
               </div>
             </CardContent>
