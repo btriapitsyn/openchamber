@@ -628,22 +628,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   const markdownContent = (
     <div className={cn('break-words', className)}>
       <Streamdown
-        key={`streamdown-${componentKey}-${mermaidRenderKey}`}
-        mode={isStreaming ? 'streaming' : 'static'}
-        isAnimating={isStreaming}
-        animated={{
-          animation: 'fadeIn',
-          duration: 250,
-          easing: 'ease-out',
-          sep: 'word',
-        }}
-        shikiTheme={shikiThemes}
-        className={streamdownClassName}
-        controls={streamdownControls}
-        plugins={streamdownPlugins}
-        mermaid={mermaidOptions}
-        components={streamdownComponents}
-      >
+         key={`streamdown-${componentKey}-${mermaidRenderKey}`}
+         mode={isStreaming ? 'streaming' : 'static'}
+         shikiTheme={shikiThemes}
+         className={streamdownClassName}
+         controls={streamdownControls}
+         plugins={streamdownPlugins}
+         mermaid={mermaidOptions}
+         components={streamdownComponents}
+       >
         {content}
       </Streamdown>
     </div>
