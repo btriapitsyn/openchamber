@@ -322,21 +322,22 @@ const TableDownloadButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement |
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleDownload = (format: 'csv' | 'markdown') => {
-    const tableEl = tableRef.current?.querySelector('table');
-    if (!tableEl) return;
-    
-    try {
-      const data = extractTableData(tableEl);
-      const content = format === 'csv' ? tableToCSV(data) : tableToMarkdown(data);
-      const filename = format === 'csv' ? 'table.csv' : 'table.md';
-      const mimeType = format === 'csv' ? 'text/csv' : 'text/markdown';
-      downloadFile(filename, content, mimeType);
-      setShowMenu(false);
-    } catch (err) {
-      console.error('Failed to download table:', err);
-    }
-  };
+   const handleDownload = (format: 'csv' | 'markdown') => {
+     const tableEl = tableRef.current?.querySelector('table');
+     if (!tableEl) return;
+     
+     try {
+       const data = extractTableData(tableEl);
+       const content = format === 'csv' ? tableToCSV(data) : tableToMarkdown(data);
+       const filename = format === 'csv' ? 'table.csv' : 'table.md';
+       const mimeType = format === 'csv' ? 'text/csv' : 'text/markdown';
+       downloadFile(filename, content, mimeType);
+       setShowMenu(false);
+       toast.success(`Table downloaded as ${format.toUpperCase()}`);
+     } catch (err) {
+       console.error('Failed to download table:', err);
+     }
+   };
 
   return (
     <div className="relative" ref={menuRef}>

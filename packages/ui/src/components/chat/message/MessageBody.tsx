@@ -18,7 +18,7 @@ import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBra
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
-import { MarkdownRenderer, SimpleMarkdownRenderer } from '../MarkdownRenderer';
+import { SimpleMarkdownRenderer } from '../MarkdownRenderer';
 import { useMessageStore } from '@/stores/messageStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -878,7 +878,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         turnGroupingContext?.isLastAssistantInTurn &&
         summaryBody &&
         summaryBody.trim().length > 0;
-    const shouldStreamSummary = !isMessageCompleted;
 
     const showErrorMessage = Boolean(errorMessage);
 
@@ -1022,12 +1021,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             <div
                                 className="group/assistant-text relative break-words"
                             >
-                                <MarkdownRenderer
-                                    content={summaryBody}
-                                    messageId={messageId}
-                                    isAnimated={false}
-                                    isStreaming={shouldStreamSummary}
-                                />
+                                <SimpleMarkdownRenderer content={summaryBody} />
                                 {shouldShowFooter && (
                                     <div className="mt-2 mb-1 flex items-center justify-start gap-1.5">
                                         <div className="flex items-center gap-1.5">
