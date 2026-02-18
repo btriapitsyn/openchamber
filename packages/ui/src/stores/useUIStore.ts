@@ -88,6 +88,7 @@ interface UIStore {
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
   autoDeleteLastRunAt: number | null;
+  autoArchiveLastRunAt: number | null;
   messageLimit: number;
 
   toolCallExpansion: 'collapsed' | 'activity' | 'detailed';
@@ -171,6 +172,7 @@ interface UIStore {
   setAutoDeleteEnabled: (value: boolean) => void;
   setAutoDeleteAfterDays: (days: number) => void;
   setAutoDeleteLastRunAt: (timestamp: number | null) => void;
+  setAutoArchiveLastRunAt: (timestamp: number | null) => void;
   setMessageLimit: (value: number) => void;
   setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed') => void;
   setFontSize: (size: number) => void;
@@ -253,6 +255,7 @@ export const useUIStore = create<UIStore>()(
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
         autoDeleteLastRunAt: null,
+        autoArchiveLastRunAt: null,
         messageLimit: 200,
         toolCallExpansion: 'collapsed',
         fontSize: 100,
@@ -583,6 +586,10 @@ export const useUIStore = create<UIStore>()(
 
         setAutoDeleteLastRunAt: (timestamp) => {
           set({ autoDeleteLastRunAt: timestamp });
+        },
+
+        setAutoArchiveLastRunAt: (timestamp) => {
+          set({ autoArchiveLastRunAt: timestamp });
         },
 
         setMessageLimit: (value) => {
@@ -948,6 +955,7 @@ export const useUIStore = create<UIStore>()(
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoDeleteAfterDays: state.autoDeleteAfterDays,
           autoDeleteLastRunAt: state.autoDeleteLastRunAt,
+          autoArchiveLastRunAt: state.autoArchiveLastRunAt,
           messageLimit: state.messageLimit,
           toolCallExpansion: state.toolCallExpansion,
           fontSize: state.fontSize,

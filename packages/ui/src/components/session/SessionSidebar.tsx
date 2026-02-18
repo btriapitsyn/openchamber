@@ -64,6 +64,13 @@ import {
   RiShieldLine,
 } from '@remixicon/react';
 import { sessionEvents } from '@/lib/sessionEvents';
+import {
+  getArchivedSessions,
+  setArchivedSessions,
+  archiveSession,
+  unarchiveSession,
+  subscribe as subscribeToArchivedSessions,
+} from '@/lib/archivedSessions';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { formatDirectoryName, formatPathForDisplay, cn } from '@/lib/utils';
 import { useSessionStore } from '@/stores/useSessionStore';
@@ -89,6 +96,7 @@ import { TranscriptSearch } from './TranscriptSearch';
 import { SidebarTodos } from './SidebarTodos';
 import { SidebarScratchPad } from './SidebarScratchPad';
 
+
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
 const getAttentionDiamondDelay = (index: number): string => {
@@ -100,7 +108,6 @@ const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
 const GROUP_COLLAPSE_STORAGE_KEY = 'oc.sessions.groupCollapse';
 const PROJECT_ACTIVE_SESSION_STORAGE_KEY = 'oc.sessions.activeSessionByProject';
 const SESSION_EXPANDED_STORAGE_KEY = 'oc.sessions.expandedParents';
-const ARCHIVED_SESSIONS_STORAGE_KEY = 'oc.sessions.archived';
 
 const formatDateLabel = (value: string | number) => {
   const targetDate = new Date(value);
@@ -627,25 +634,34 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [isProjectRenameInline, setIsProjectRenameInline] = React.useState(false);
   const [projectRenameDraft, setProjectRenameDraft] = React.useState('');
   const [projectRootBranches, setProjectRootBranches] = React.useState<Map<string, string>>(new Map());
-  const [archivedSessionsByDirectory, setArchivedSessionsByDirectory] = React.useState<Map<string, Set<string>>>(() => {
-    try {
-      const raw = getSafeStorage().getItem(ARCHIVED_SESSIONS_STORAGE_KEY);
-      if (!raw) {
-        return new Map();
+
+  // Convert shared module data format to component's internal format
+  const convertArchivedSessionsToMap = React.useCallback((): Map<string, Set<string>> => {
+    const data = getArchivedSessions();
+    const map = new Map<string, Set<string>>();
+    Object.entries(data).forEach(([directory, sessionIds]) => {
+      if (sessionIds.length > 0) {
+        map.set(directory, new Set(sessionIds));
       }
-      const parsed = JSON.parse(raw) as Record<string, string[]>;
-      const next = new Map<string, Set<string>>();
-      Object.entries(parsed).forEach(([directory, sessionIds]) => {
-        if (Array.isArray(sessionIds)) {
-          next.set(directory, new Set(sessionIds.filter((item) => typeof item === 'string')));
-        }
-      });
-      return next;
-    } catch {
-      return new Map();
-    }
-  });
+    });
+    return map;
+  }, []);
+
+  // State that syncs with the shared archive module
+  const [archivedSessionsByDirectory, setArchivedSessionsByDirectory] = React.useState<Map<string, Set<string>>>(
+    convertArchivedSessionsToMap
+  );
+
+  // Subscribe to archive changes from the shared module
+  React.useEffect(() => {
+    const unsubscribe = subscribeToArchivedSessions(() => {
+      setArchivedSessionsByDirectory(convertArchivedSessionsToMap());
+    });
+    return unsubscribe;
+  }, [convertArchivedSessionsToMap]);
+
   const [showArchivedView, setShowArchivedView] = React.useState(false);
+
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
   const persistCollapsedProjectsTimer = React.useRef<number | null>(null);
@@ -769,23 +785,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   // Cleanup stale archived session IDs
   React.useEffect(() => {
-    setArchivedSessionsByDirectory((prev) => {
-      const validSessionIds = new Set(sessions.map((s) => s.id));
-      let hasChanges = false;
-      const next = new Map<string, Set<string>>();
-      
-      prev.forEach((sessionIds, directory) => {
-        const validIds = Array.from(sessionIds).filter((id) => validSessionIds.has(id));
-        if (validIds.length !== sessionIds.size) {
-          hasChanges = true;
-        }
-        if (validIds.length > 0) {
-          next.set(directory, new Set(validIds));
-        }
-      });
+    const validSessionIds = new Set(sessions.map((s) => s.id));
+    const currentData = getArchivedSessions();
+    let hasChanges = false;
+    const cleanedData: Record<string, string[]> = {};
 
-      return hasChanges ? next : prev;
+    Object.entries(currentData).forEach(([directory, sessionIds]) => {
+      const validIds = sessionIds.filter((id) => validSessionIds.has(id));
+      if (validIds.length !== sessionIds.length) {
+        hasChanges = true;
+      }
+      if (validIds.length > 0) {
+        cleanedData[directory] = validIds;
+      }
     });
+
+    if (hasChanges) {
+      setArchivedSessions(cleanedData);
+    }
   }, [sessions]);
 
   React.useEffect(() => {
@@ -1078,21 +1095,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       // Clean up archived state if the session was archived
       const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
       if (sessionDirectory) {
-        setArchivedSessionsByDirectory((prev) => {
-          const archivedSet = prev.get(sessionDirectory);
-          if (archivedSet && archivedSet.has(session.id)) {
-            const next = new Map(prev);
-            const nextSet = new Set(archivedSet);
-            nextSet.delete(session.id);
-            if (nextSet.size === 0) {
-              next.delete(sessionDirectory);
-            } else {
-              next.set(sessionDirectory, nextSet);
-            }
-            return next;
-          }
-          return prev;
-        });
+        // Use the shared module to unarchive (if archived)
+        unarchiveSession(session.id, sessionDirectory);
       }
 
       if (descendants.length === 0) {
@@ -1136,38 +1140,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         return;
       }
 
-      setArchivedSessionsByDirectory((prev) => {
-        const next = new Map(prev);
-        const existingSet = next.get(sessionDirectory);
-        const archivedSet = existingSet ? new Set(existingSet) : new Set<string>();
-        archivedSet.add(session.id);
-        next.set(sessionDirectory, archivedSet);
-        return next;
-      });
+      archiveSession(session.id, sessionDirectory);
 
       toast.success('Session archived', {
         action: {
           label: 'Undo',
           onClick: () => {
-            setArchivedSessionsByDirectory((prev) => {
-              const next = new Map(prev);
-              const archivedSet = next.get(sessionDirectory);
-              if (archivedSet) {
-                const nextSet = new Set(archivedSet);
-                nextSet.delete(session.id);
-                if (nextSet.size === 0) {
-                  next.delete(sessionDirectory);
-                } else {
-                  next.set(sessionDirectory, nextSet);
-                }
-              }
-              return next;
-            });
+            unarchiveSession(session.id, sessionDirectory);
           },
         },
       });
     },
-    [], // toast and setState are stable
+    [],
   );
 
   const handleUnarchiveSession = React.useCallback(
@@ -1178,20 +1162,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         return;
       }
 
-      setArchivedSessionsByDirectory((prev) => {
-        const next = new Map(prev);
-        const archivedSet = next.get(sessionDirectory);
-        if (archivedSet) {
-          const nextSet = new Set(archivedSet);
-          nextSet.delete(session.id);
-          if (nextSet.size === 0) {
-            next.delete(sessionDirectory);
-          } else {
-            next.set(sessionDirectory, nextSet);
-          }
-        }
-        return next;
-      });
+      unarchiveSession(session.id, sessionDirectory);
 
       toast.success('Session restored');
     },
@@ -1481,18 +1452,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       // ignored
     }
   }, [collapsedGroups, safeStorage]);
-
-  React.useEffect(() => {
-    try {
-      const serialized: Record<string, string[]> = {};
-      archivedSessionsByDirectory.forEach((sessionIds, directory) => {
-        serialized[directory] = Array.from(sessionIds);
-      });
-      safeStorage.setItem(ARCHIVED_SESSIONS_STORAGE_KEY, JSON.stringify(serialized));
-    } catch {
-      // ignored
-    }
-  }, [archivedSessionsByDirectory, safeStorage]);
 
   const normalizedProjects = React.useMemo(() => {
     return projects
