@@ -596,54 +596,46 @@ export const useMessageStore = create<MessageStore>()(
 
                     await executeWithSessionDirectory(sessionId, async () => {
                         try {
-                            let effectiveContent = content;
-                            const isCommand = content.startsWith("/");
-
-                            if (isCommand) {
-                                const spaceIndex = content.indexOf(" ");
-                                const command = spaceIndex === -1 ? content.substring(1) : content.substring(1, spaceIndex);
-                                const commandArgs = spaceIndex === -1 ? "" : content.substring(spaceIndex + 1).trim();
-
-                                const apiClient = opencodeClient.getApiClient();
-                                const directory = opencodeClient.getDirectory();
-
-                                if (command === "init") {
-                                    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-
-                                    await apiClient.session.init({
-                                        sessionID: sessionId,
-                                        ...(directory ? { directory } : {}),
-                                        messageID: messageId,
-                                        providerID,
-                                        modelID,
-                                    });
-
-                                    return;
-                                }
-
-                                if (command === "summarize") {
-                                    await apiClient.session.summarize({
-                                        sessionID: sessionId,
-                                        ...(directory ? { directory } : {}),
-                                        providerID,
-                                        modelID,
-                                    });
-
-                                    return;
-                                }
-
-                                try {
-                                    const commandDetails = await opencodeClient.getCommandDetails(command);
-                                    if (commandDetails?.template) {
-                                        effectiveContent = commandDetails.template.replace(/\$ARGUMENTS/g, commandArgs);
-                                    } else {
-                                        effectiveContent = content;
-                                    }
-                                } catch (error) {
-                                    console.error("Command template resolution failed:", error);
-                                    effectiveContent = content;
-                                }
-                            }
+                            const trimmedContent = content.trimStart();
+                            const commandPayload = (() => {
+                                if (!trimmedContent.startsWith("/")) return null;
+                                const firstLineEnd = trimmedContent.indexOf("\n");
+                                const firstLine = firstLineEnd === -1 ? trimmedContent : trimmedContent.slice(0, firstLineEnd);
+                                const [commandToken, ...firstLineArgs] = firstLine.split(" ");
+                                const command = commandToken.slice(1).trim();
+                                if (command.toLowerCase() === "shell") return null;
+                                if (!command) return null;
+                                const restOfInput = firstLineEnd === -1 ? "" : trimmedContent.slice(firstLineEnd + 1);
+                                const argsFromFirstLine = firstLineArgs.join(" ").trim();
+                                const args = restOfInput
+                                    ? (argsFromFirstLine ? `${argsFromFirstLine}\n${restOfInput}` : restOfInput)
+                                    : argsFromFirstLine;
+                                return {
+                                    command,
+                                    arguments: args,
+                                };
+                            })();
+                            const shellPayload = (() => {
+                                if (!trimmedContent.startsWith("!")) return null;
+                                const command = trimmedContent.slice(1);
+                                if (!command.trim()) return null;
+                                return { command };
+                            })();
+                            const slashShellPayload = (() => {
+                                if (!trimmedContent.startsWith("/")) return null;
+                                const firstLineEnd = trimmedContent.indexOf("\n");
+                                const firstLine = firstLineEnd === -1 ? trimmedContent : trimmedContent.slice(0, firstLineEnd);
+                                const [commandToken, ...firstLineArgs] = firstLine.split(" ");
+                                const commandName = commandToken.slice(1).trim().toLowerCase();
+                                if (commandName !== "shell") return null;
+                                const restOfInput = firstLineEnd === -1 ? "" : trimmedContent.slice(firstLineEnd + 1);
+                                const argsFromFirstLine = firstLineArgs.join(" ").trim();
+                                const command = restOfInput
+                                    ? (argsFromFirstLine ? `${argsFromFirstLine}\n${restOfInput}` : restOfInput)
+                                    : argsFromFirstLine;
+                                if (!command.trim()) return null;
+                                return { command };
+                            })();
 
                             set({
                                 lastUsedProvider: { providerID, modelID },
@@ -723,17 +715,51 @@ export const useMessageStore = create<MessageStore>()(
                                     })),
                                 }));
 
-                                await opencodeClient.sendMessage({
-                                    id: sessionId,
-                                    providerID,
-                                    modelID,
-                                    text: effectiveContent,
-                                    agent,
-                                    variant,
-                                    files: filePayloads.length > 0 ? filePayloads : undefined,
-                                    additionalParts: additionalPartsPayload && additionalPartsPayload.length > 0 ? additionalPartsPayload : undefined,
-                                    agentMentions: agentMentionName ? [{ name: agentMentionName }] : undefined,
-                                });
+                                const apiClient = opencodeClient.getApiClient();
+                                const directory = opencodeClient.getDirectory();
+
+                                if (shellPayload || slashShellPayload) {
+                                    await apiClient.session.shell({
+                                        sessionID: sessionId,
+                                        ...(directory ? { directory } : {}),
+                                        ...(agent ? { agent } : {}),
+                                        model: {
+                                            providerID,
+                                            modelID,
+                                        },
+                                        command: (shellPayload ?? slashShellPayload)!.command,
+                                    });
+                                } else if (commandPayload && commandPayload.command.toLowerCase() === 'compact') {
+                                    await apiClient.session.summarize({
+                                        sessionID: sessionId,
+                                        ...(directory ? { directory } : {}),
+                                        providerID,
+                                        modelID,
+                                    });
+                                } else if (commandPayload) {
+                                    await opencodeClient.sendCommand({
+                                        id: sessionId,
+                                        providerID,
+                                        modelID,
+                                        command: commandPayload.command,
+                                        arguments: commandPayload.arguments,
+                                        agent,
+                                        variant,
+                                        files: filePayloads.length > 0 ? filePayloads : undefined,
+                                    });
+                                } else {
+                                    await opencodeClient.sendMessage({
+                                        id: sessionId,
+                                        providerID,
+                                        modelID,
+                                        text: content,
+                                        agent,
+                                        variant,
+                                        files: filePayloads.length > 0 ? filePayloads : undefined,
+                                        additionalParts: additionalPartsPayload && additionalPartsPayload.length > 0 ? additionalPartsPayload : undefined,
+                                        agentMentions: agentMentionName ? [{ name: agentMentionName }] : undefined,
+                                    });
+                                }
 
                                 if (filePayloads.length > 0) {
                                     try {
@@ -1145,7 +1171,8 @@ export const useMessageStore = create<MessageStore>()(
                                 const incomingText = extractTextFromPart(part).trim();
                                 const shouldKeep =
                                     incomingText.startsWith('User has requested to enter plan mode') ||
-                                    incomingText.startsWith('The plan at ');
+                                    incomingText.startsWith('The plan at ') ||
+                                    incomingText.startsWith('The following tool was executed by the user');
                                 if (!shouldKeep) {
                                     (window as any).__messageTracker?.(messageId, 'skipped_synthetic_user_part');
                                     return state;
@@ -1226,7 +1253,8 @@ export const useMessageStore = create<MessageStore>()(
                                     const incomingText = extractTextFromPart(part).trim();
                                     const shouldKeep =
                                         incomingText.startsWith('User has requested to enter plan mode') ||
-                                        incomingText.startsWith('The plan at ');
+                                        incomingText.startsWith('The plan at ') ||
+                                        incomingText.startsWith('The following tool was executed by the user');
                                     if (!shouldKeep) {
                                         (window as any).__messageTracker?.(messageId, 'skipped_synthetic_new_user_part');
                                         return state;

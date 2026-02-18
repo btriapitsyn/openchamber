@@ -1,9 +1,10 @@
 import React from 'react';
-import { RiCodeLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiRefreshLine } from '@remixicon/react';
+import { RiAiAgentLine, RiCodeLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiRefreshLine } from '@remixicon/react';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import type { ProjectFileSearchHit } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -11,6 +12,11 @@ import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 
 type FileInfo = ProjectFileSearchHit;
+type AgentInfo = {
+  name: string;
+  description?: string;
+  mode?: string | null;
+};
 
 export interface FileMentionHandle {
   handleKeyDown: (key: string) => void;
@@ -21,6 +27,7 @@ type AutocompleteTab = 'commands' | 'agents' | 'files';
 interface FileMentionAutocompleteProps {
   searchQuery: string;
   onFileSelect: (file: FileInfo) => void;
+  onAgentSelect?: (agentName: string) => void;
   onClose: () => void;
   showTabs?: boolean;
   activeTab?: AutocompleteTab;
@@ -30,6 +37,7 @@ interface FileMentionAutocompleteProps {
 export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileMentionAutocompleteProps>(({
   searchQuery,
   onFileSelect,
+  onAgentSelect,
   onClose,
   showTabs,
   activeTab = 'files',
@@ -37,11 +45,13 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 }, ref) => {
   const { currentDirectory } = useDirectoryStore();
   const { addServerFile } = useSessionStore();
+  const { getVisibleAgents } = useConfigStore();
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
   const showHidden = useDirectoryShowHidden();
   const showGitignored = useFilesViewShowGitignored();
   const [files, setFiles] = React.useState<FileInfo[]>([]);
+  const [agents, setAgents] = React.useState<AgentInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [marqueeWidth, setMarqueeWidth] = React.useState(360);
@@ -52,6 +62,8 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const measureRefs = React.useRef<(HTMLSpanElement | null)[]>([]);
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const ignoreTabClickRef = React.useRef(false);
+  const normalizedSearchQuery = (searchQuery ?? '').trim();
+  const visibleAgents = normalizedSearchQuery.length > 0 ? agents : agents.slice(0, 2);
 
   const fuzzyScore = React.useCallback((query: string, candidate: string): number | null => {
     const q = query.trim().toLowerCase();
@@ -180,10 +192,29 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   }, [currentDirectory, debouncedQuery, fuzzyScore, searchFiles, showHidden, showGitignored]);
 
   React.useEffect(() => {
+    const visibleAgents = getVisibleAgents();
+    const normalizedQuery = (searchQuery ?? '').trim().toLowerCase();
+    const filtered = visibleAgents
+      .filter((agent) => agent.mode && agent.mode !== 'primary')
+      .filter((agent) => {
+        if (!normalizedQuery) return true;
+        const haystack = `${agent.name} ${agent.description ?? ''}`.toLowerCase();
+        return haystack.includes(normalizedQuery);
+      })
+      .map((agent) => ({
+        name: agent.name,
+        description: agent.description,
+        mode: agent.mode,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    setAgents(filtered);
+  }, [getVisibleAgents, searchQuery]);
+
+  React.useEffect(() => {
     setSelectedIndex(0);
     setOverflowMap({});
     setMarqueeDurations({});
-  }, [files]);
+  }, [files, visibleAgents.length]);
 
   React.useEffect(() => {
     itemRefs.current[selectedIndex]?.scrollIntoView({
@@ -265,6 +296,10 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     onFileSelect(file);
   }, [addServerFile, onFileSelect]);
 
+  const handleAgentPick = React.useCallback((agentName: string) => {
+    onAgentSelect?.(agentName);
+  }, [onAgentSelect]);
+
   React.useImperativeHandle(ref, () => ({
     handleKeyDown: (key: string) => {
       if (key === 'Escape') {
@@ -272,7 +307,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         return;
       }
 
-      const total = files.length;
+      const total = visibleAgents.length + files.length;
       if (total === 0) {
         return;
       }
@@ -289,13 +324,20 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 
       if (key === 'Enter' || key === 'Tab') {
         const safeIndex = ((selectedIndex % total) + total) % total;
-        const selectedFile = files[safeIndex];
+        if (safeIndex < visibleAgents.length) {
+          const agent = visibleAgents[safeIndex];
+          if (agent) {
+            handleAgentPick(agent.name);
+          }
+          return;
+        }
+        const selectedFile = files[safeIndex - visibleAgents.length];
         if (selectedFile) {
           handleFileSelect(selectedFile);
         }
       }
     }
-  }), [files, selectedIndex, onClose, handleFileSelect]);
+  }), [files, visibleAgents, selectedIndex, onClose, handleFileSelect, handleAgentPick]);
 
   const getFileIcon = (file: FileInfo) => {
     const ext = file.extension?.toLowerCase();
@@ -373,26 +415,53 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           </div>
         ) : (
           <div className="pb-2">
+            {visibleAgents.map((agent, index) => {
+              const isSelected = selectedIndex === index;
+              return (
+                <div
+                  key={`agent-${agent.name}`}
+                  ref={(el) => { itemRefs.current[index] = el; }}
+                  className={cn(
+                    'flex items-start gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg',
+                    isSelected && 'bg-interactive-selection',
+                  )}
+                  onClick={() => handleAgentPick(agent.name)}
+                  onMouseEnter={() => setSelectedIndex(index)}
+                >
+                  <RiAiAgentLine className="h-3.5 w-3.5 text-[var(--status-info)] mt-0.5" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold truncate">@{agent.name}</div>
+                    {agent.description ? (
+                      <div className="typography-meta text-muted-foreground truncate">{agent.description}</div>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+            {visibleAgents.length > 0 && files.length > 0 && (
+              <div className="my-1 border-t border-border/60" />
+            )}
             {files.map((file, index) => {
+              const rowIndex = visibleAgents.length + index;
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 45 });
-              const isSelected = selectedIndex === index;
-              const isOverflowing = overflowMap[index] ?? false;
-              const marqueeDuration = marqueeDurations[index] ?? 2.6;
+              const isSelected = selectedIndex === rowIndex;
+              const isOverflowing = overflowMap[rowIndex] ?? false;
+              const marqueeDuration = marqueeDurations[rowIndex] ?? 2.6;
 
               const item = (
                 <div
-                  ref={(el) => { itemRefs.current[index] = el; }}
+                  ref={(el) => { itemRefs.current[rowIndex] = el; }}
                     className={cn(
                       "flex items-center gap-2 px-3 py-1.5 cursor-pointer typography-ui-label rounded-lg",
                       isSelected && "bg-interactive-selection"
                     )}
                   onClick={() => handleFileSelect(file)}
-                  onMouseEnter={() => setSelectedIndex(index)}
+                  onMouseEnter={() => setSelectedIndex(rowIndex)}
                 >
                   {getFileIcon(file)}
                   <span
-                    ref={(el) => { labelRefs.current[index] = el; }}
+                    ref={(el) => { labelRefs.current[rowIndex] = el; }}
                     className="relative flex-1 min-w-0 overflow-hidden file-mention-marquee-container"
                     style={isSelected ? {
                       ['--file-mention-marquee-width' as string]: `${marqueeWidth}px`,
@@ -401,7 +470,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                     aria-label={relativePath}
                   >
                     <span
-                      ref={(el) => { measureRefs.current[index] = el; }}
+                      ref={(el) => { measureRefs.current[rowIndex] = el; }}
                       className="absolute invisible whitespace-nowrap pointer-events-none"
                       aria-hidden
                     >
@@ -426,11 +495,14 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 </React.Fragment>
               );
             })}
-            {}
-            {files.length > 0 && <div className="h-2" />}
-            {files.length === 0 && (
+            {visibleAgents.length === 2 && normalizedSearchQuery.length === 0 && agents.length > 2 && (
+              <div className="px-3 py-1 typography-meta text-muted-foreground">
+                Type to search more agents
+              </div>
+            )}
+            {files.length === 0 && visibleAgents.length === 0 && (
               <div className="px-3 py-2 typography-ui-label text-muted-foreground">
-                No files found
+                No matches found
               </div>
             )}
           </div>

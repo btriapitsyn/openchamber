@@ -15,6 +15,14 @@ const SUMMARY_TAB = 'summary';
 
 export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
   const { respondToQuestion, rejectQuestion } = useSessionStore();
+  const isFromSubagent = useSessionStore(
+    React.useCallback((state) => {
+      const currentSessionId = state.currentSessionId;
+      if (!currentSessionId || question.sessionID === currentSessionId) return false;
+      const sourceSession = state.sessions.find((session) => session.id === question.sessionID);
+      return Boolean(sourceSession?.parentID && sourceSession.parentID === currentSessionId);
+    }, [question.sessionID])
+  );
   const [activeTab, setActiveTab] = React.useState<TabKey>('0');
   const [isResponding, setIsResponding] = React.useState(false);
   const [hasResponded, setHasResponded] = React.useState(false);
@@ -169,6 +177,11 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({ question }) => {
             <div className="flex items-center gap-2">
               <RiQuestionLine className="h-3.5 w-3.5 text-primary" />
               <span className="typography-meta font-medium text-muted-foreground">Input needed</span>
+              {isFromSubagent ? (
+                <span className="typography-micro text-muted-foreground px-1.5 py-0.5 rounded bg-foreground/5">
+                  From subagent
+                </span>
+              ) : null}
               {activeHeader ? (
                 <span className="ml-auto typography-micro font-medium text-foreground/70 px-1.5 py-0.5 rounded bg-muted/30 border border-border/20">
                   {activeHeader}

@@ -29,14 +29,15 @@ export const parseAgentMentions = (rawText: string, agents: Agent[]): ParsedAgen
   }
 
   const nonPrimaryAgents = agents.filter((agent) => agent.mode && agent.mode !== "primary");
-  if (nonPrimaryAgents.length === 0 || !rawText.includes("#")) {
+  if (nonPrimaryAgents.length === 0 || !rawText.includes("@")) {
     return { sanitizedText: rawText, mention: null };
   }
 
   let firstMention: ParsedAgentMention | null = null;
 
   for (const agent of nonPrimaryAgents) {
-    const pattern = new RegExp(`#${agent.name}\\b`, "gi");
+    const escapedAgentName = agent.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(`@${escapedAgentName}\\b`, "gi");
     let match: RegExpExecArray | null;
 
     while ((match = pattern.exec(rawText)) !== null) {

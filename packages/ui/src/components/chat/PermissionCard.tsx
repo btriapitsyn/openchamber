@@ -63,6 +63,14 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
   const [isResponding, setIsResponding] = React.useState(false);
   const [hasResponded, setHasResponded] = React.useState(false);
   const { respondToPermission } = useSessionStore();
+  const isFromSubagent = useSessionStore(
+    React.useCallback((state) => {
+      const currentSessionId = state.currentSessionId;
+      if (!currentSessionId || permission.sessionID === currentSessionId) return false;
+      const sourceSession = state.sessions.find((session) => session.id === permission.sessionID);
+      return Boolean(sourceSession?.parentID && sourceSession.parentID === currentSessionId);
+    }, [permission.sessionID])
+  );
   const { currentTheme } = useThemeSystem();
   const syntaxTheme = React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
 
@@ -317,6 +325,11 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
                 <span className="typography-meta font-medium text-muted-foreground">
                   Permission Required
                 </span>
+                {isFromSubagent ? (
+                  <span className="typography-micro text-muted-foreground px-1.5 py-0.5 rounded bg-foreground/5">
+                    From subagent
+                  </span>
+                ) : null}
               </div>
               <div className="flex items-center gap-1.5">
                 {getToolIcon(toolName)}

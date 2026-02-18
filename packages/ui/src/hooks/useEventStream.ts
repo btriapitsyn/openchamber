@@ -793,6 +793,28 @@ export const useEventStream = () => {
           break;
         }
 
+        const shouldKeepSyntheticUserText = (value: unknown): boolean => {
+          const text = typeof value === 'string' ? value.trim() : '';
+          if (!text) return false;
+          return (
+            text.startsWith('User has requested to enter plan mode') ||
+            text.startsWith('The plan at ') ||
+            text.startsWith('The following tool was executed by the user')
+          );
+        };
+
+        const inferUserRoleFromPart = (): boolean => {
+          const partType = typeof partExt.type === 'string' ? partExt.type : '';
+          if (partType === 'subtask' || partType === 'agent' || partType === 'file') {
+            return true;
+          }
+          if (partType === 'text' && partExt.synthetic === true) {
+            const text = (partExt as { text?: unknown }).text;
+            return shouldKeepSyntheticUserText(text);
+          }
+          return false;
+        };
+
         let roleInfo = 'assistant';
         if (messageInfo && typeof (messageInfo as { role?: unknown }).role === 'string') {
           roleInfo = (messageInfo as { role?: string }).role as string;
@@ -806,11 +828,18 @@ export const useEventStream = () => {
           }
         }
 
+        if (roleInfo !== 'user' && inferUserRoleFromPart()) {
+          roleInfo = 'user';
+        }
+
         trackMessage(messageId, 'part_received', { role: roleInfo });
 
         if (roleInfo === 'user' && partExt.synthetic === true) {
-          trackMessage(messageId, 'skipped_synthetic_user_part');
-          break;
+          const text = (partExt as { text?: unknown }).text;
+          if (!shouldKeepSyntheticUserText(text)) {
+            trackMessage(messageId, 'skipped_synthetic_user_part');
+            break;
+          }
         }
 
         const messagePart: Part = {
@@ -1162,7 +1191,8 @@ export const useEventStream = () => {
                 const textStr = typeof text === 'string' ? text.trim() : '';
                 const shouldKeep =
                   textStr.startsWith('User has requested to enter plan mode') ||
-                  textStr.startsWith('The plan at ');
+                  textStr.startsWith('The plan at ') ||
+                  textStr.startsWith('The following tool was executed by the user');
                 if (!shouldKeep) continue;
               }
 
@@ -1457,6 +1487,11 @@ export const useEventStream = () => {
               return;
             }
 
+            const requestSession = useSessionStore.getState().sessions.find((session) => session.id === request.sessionID);
+            if (requestSession?.parentID && requestSession.parentID === current) {
+              return;
+            }
+
             const pending = useSessionStore
               .getState()
               .permissions
@@ -1511,6 +1546,11 @@ export const useEventStream = () => {
           setTimeout(() => {
             const current = currentSessionIdRef.current;
             if (current === request.sessionID) {
+              return;
+            }
+
+            const requestSession = useSessionStore.getState().sessions.find((session) => session.id === request.sessionID);
+            if (requestSession?.parentID && requestSession.parentID === current) {
               return;
             }
 

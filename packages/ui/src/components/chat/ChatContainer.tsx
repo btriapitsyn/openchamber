@@ -24,6 +24,49 @@ const EMPTY_PERMISSIONS: PermissionRequest[] = [];
 const EMPTY_QUESTIONS: QuestionRequest[] = [];
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
 
+const collectVisibleSessionIdsForBlockingRequests = (
+    sessions: Array<{ id: string; parentID?: string }> | undefined,
+    currentSessionId: string | null
+): string[] => {
+    if (!currentSessionId) return [];
+    if (!Array.isArray(sessions) || sessions.length === 0) return [currentSessionId];
+
+    const current = sessions.find((session) => session.id === currentSessionId);
+    if (!current) return [currentSessionId];
+
+    // Opencode parity: when viewing a child session, permission/question prompts are handled in parent thread.
+    if (current.parentID) {
+        return [];
+    }
+
+    const childIds = sessions
+        .filter((session) => session.parentID === currentSessionId)
+        .map((session) => session.id);
+
+    return [currentSessionId, ...childIds];
+};
+
+const flattenBlockingRequests = <T extends { id: string }>(
+    source: Map<string, T[]>,
+    sessionIds: string[]
+): T[] => {
+    if (sessionIds.length === 0) return [];
+    const seen = new Set<string>();
+    const result: T[] = [];
+
+    for (const sessionId of sessionIds) {
+        const entries = source.get(sessionId);
+        if (!entries || entries.length === 0) continue;
+        for (const entry of entries) {
+            if (seen.has(entry.id)) continue;
+            seen.add(entry.id);
+            result.push(entry);
+        }
+    }
+
+    return result;
+};
+
 export const ChatContainer: React.FC = () => {
     const {
         currentSessionId,
@@ -67,19 +110,31 @@ export const ChatContainer: React.FC = () => {
         )
     );
 
-    const sessionPermissions = useSessionStore(
-        React.useCallback(
-            (state) => (currentSessionId ? state.permissions.get(currentSessionId) ?? EMPTY_PERMISSIONS : EMPTY_PERMISSIONS),
-            [currentSessionId]
-        )
+    const blockingRequestState = useSessionStore(
+        useShallow((state) => ({
+            sessions: state.sessions,
+            permissions: state.permissions,
+            questions: state.questions,
+        }))
     );
 
-    const sessionQuestions = useSessionStore(
-        React.useCallback(
-            (state) => (currentSessionId ? state.questions.get(currentSessionId) ?? EMPTY_QUESTIONS : EMPTY_QUESTIONS),
-            [currentSessionId]
-        )
+    const scopedSessionIds = React.useMemo(
+        () => collectVisibleSessionIdsForBlockingRequests(
+            blockingRequestState.sessions.map((session) => ({ id: session.id, parentID: session.parentID })),
+            currentSessionId,
+        ),
+        [blockingRequestState.sessions, currentSessionId]
     );
+
+    const sessionPermissions = React.useMemo(() => {
+        if (scopedSessionIds.length === 0) return EMPTY_PERMISSIONS;
+        return flattenBlockingRequests(blockingRequestState.permissions, scopedSessionIds);
+    }, [blockingRequestState.permissions, scopedSessionIds]);
+
+    const sessionQuestions = React.useMemo(() => {
+        if (scopedSessionIds.length === 0) return EMPTY_QUESTIONS;
+        return flattenBlockingRequests(blockingRequestState.questions, scopedSessionIds);
+    }, [blockingRequestState.questions, scopedSessionIds]);
 
     const memoryState = useSessionStore(
         React.useCallback(
