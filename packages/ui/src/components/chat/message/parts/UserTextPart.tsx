@@ -21,12 +21,12 @@ const buildMentionUrl = (name: string): string => {
 };
 
 const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMention }) => {
-    const CLAMP_LINES = 2;
+    const CLAMP_LINES = 5;
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
     const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
 
-    const [isExpanded, setIsExpanded] = React.useState(true);
+    const [isExpanded, setIsExpanded] = React.useState(false);
     const [isTruncated, setIsTruncated] = React.useState(false);
     const [collapseZoneHeight, setCollapseZoneHeight] = React.useState<number>(0);
     const textRef = React.useRef<HTMLDivElement>(null);
@@ -164,7 +164,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
             <div
                 className={cn(
                     "break-words whitespace-pre-wrap font-sans typography-markdown",
-                    !isExpanded && "line-clamp-2",
+                    !isExpanded && "line-clamp-5",
                     isTruncated && !isExpanded && "cursor-pointer"
                 )}
                 ref={textRef}
