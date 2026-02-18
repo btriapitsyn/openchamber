@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiAiAgentLine, RiCodeLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiRefreshLine } from '@remixicon/react';
+import { RiCodeLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiRefreshLine } from '@remixicon/react';
 import { cn, truncatePathMiddle } from '@/lib/utils';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionStore } from '@/stores/useSessionStore';
