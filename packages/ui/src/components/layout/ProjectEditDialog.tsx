@@ -54,13 +54,13 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
+        <DialogHeader className="min-w-0">
           <DialogTitle>Edit project</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-5 py-1">
+        <div className="min-w-0 space-y-5 py-1">
           {/* Name */}
-          <div className="space-y-1.5">
+          <div className="min-w-0 space-y-1.5">
             <label className="typography-ui-label font-medium text-foreground">
               Name
             </label>
@@ -76,13 +76,13 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
               }}
               autoFocus
             />
-            <p className="typography-meta text-muted-foreground truncate">
+            <p className="typography-meta text-muted-foreground truncate" title={projectPath}>
               {projectPath}
             </p>
           </div>
 
           {/* Color */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
               Color
             </label>
@@ -120,7 +120,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
           </div>
 
           {/* Icon */}
-          <div className="space-y-2">
+          <div className="min-w-0 space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
               Icon
             </label>
