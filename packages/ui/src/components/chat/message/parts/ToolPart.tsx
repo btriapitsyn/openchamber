@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
-import { RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileList2Line, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTaskLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { RiAiAgentLine, RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileList2Line, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTaskLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
@@ -11,6 +11,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { opencodeClient } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -86,6 +87,9 @@ export const getToolIcon = (toolName: string) => {
     }
     if (tool === 'skill') {
         return <RiBookLine className={iconClass} />;
+    }
+    if (tool === 'task') {
+        return <RiAiAgentLine className={iconClass} />;
     }
     if (tool === 'question') {
         return <RiSurveyLine className={iconClass} />;
@@ -277,6 +281,66 @@ type TaskToolSummaryEntry = {
     };
 };
 
+type SessionMessageWithParts = {
+    info?: {
+        role?: string;
+    };
+    parts?: Array<{
+        id?: string;
+        type?: string;
+        tool?: string;
+        state?: {
+            status?: string;
+            title?: string;
+        };
+    }>;
+};
+
+const EMPTY_SESSION_MESSAGES: SessionMessageWithParts[] = [];
+
+const readTaskSessionIdFromOutput = (output: string | undefined): string | undefined => {
+    if (typeof output !== 'string' || output.trim().length === 0) {
+        return undefined;
+    }
+    const parsedMetadata = parseTaskMetadataBlock(output);
+    if (parsedMetadata.sessionId) {
+        return parsedMetadata.sessionId;
+    }
+    const match = output.match(/task_id:\s*([a-zA-Z0-9_]+)/);
+    const candidate = match?.[1];
+    return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : undefined;
+};
+
+const buildTaskSummaryEntriesFromSession = (messages: SessionMessageWithParts[]): TaskToolSummaryEntry[] => {
+    const entries: TaskToolSummaryEntry[] = [];
+
+    for (const message of messages) {
+        if (message?.info?.role !== 'assistant') {
+            continue;
+        }
+        const parts = Array.isArray(message.parts) ? message.parts : [];
+        for (const part of parts) {
+            if (part?.type !== 'tool') {
+                continue;
+            }
+            const toolName = typeof part.tool === 'string' ? part.tool.toLowerCase() : '';
+            if (!toolName || toolName === 'task' || toolName === 'todowrite' || toolName === 'todoread') {
+                continue;
+            }
+            entries.push({
+                id: part.id,
+                tool: part.tool,
+                state: {
+                    status: part.state?.status,
+                    title: part.state?.title,
+                },
+            });
+        }
+    }
+
+    return entries;
+};
+
 const getTaskSummaryLabel = (entry: TaskToolSummaryEntry): string => {
     const title = entry.state?.title;
     if (typeof title === 'string' && title.trim().length > 0) {
@@ -293,6 +357,97 @@ const stripTaskMetadataFromOutput = (output: string): string => {
     return output.replace(/\n*<task_metadata>[\s\S]*?<\/task_metadata>\s*$/i, '').trimEnd();
 };
 
+const normalizeTaskSummaryEntries = (value: unknown): TaskToolSummaryEntry[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    const normalized: TaskToolSummaryEntry[] = [];
+    for (const entry of value) {
+        if (typeof entry === 'string') {
+            normalized.push({
+                tool: 'tool',
+                state: { status: 'completed', title: entry },
+            });
+            continue;
+        }
+
+        if (!entry || typeof entry !== 'object') {
+            continue;
+        }
+
+        const record = entry as {
+            id?: unknown;
+            tool?: unknown;
+            title?: unknown;
+            status?: unknown;
+            state?: { status?: unknown; title?: unknown };
+        };
+
+        const stateStatus = typeof record.state?.status === 'string' ? record.state.status : undefined;
+        const stateTitle = typeof record.state?.title === 'string' ? record.state.title : undefined;
+        const status = stateStatus ?? (typeof record.status === 'string' ? record.status : undefined);
+        const title = stateTitle ?? (typeof record.title === 'string' ? record.title : undefined);
+
+        normalized.push({
+            id: typeof record.id === 'string' ? record.id : undefined,
+            tool: typeof record.tool === 'string' ? record.tool : 'tool',
+            state: {
+                status,
+                title,
+            },
+        });
+    }
+
+    return normalized;
+};
+
+const parseTaskMetadataBlock = (output: string | undefined): {
+    sessionId?: string;
+    summaryEntries: TaskToolSummaryEntry[];
+} => {
+    if (typeof output !== 'string' || output.trim().length === 0) {
+        return { summaryEntries: [] };
+    }
+
+    const blockMatch = output.match(/<task_metadata>\s*([\s\S]*?)\s*<\/task_metadata>/i);
+    if (!blockMatch?.[1]) {
+        return { summaryEntries: [] };
+    }
+
+    const raw = blockMatch[1].trim();
+    if (!raw) {
+        return { summaryEntries: [] };
+    }
+
+    try {
+        const parsed = JSON.parse(raw) as {
+            sessionId?: unknown;
+            sessionID?: unknown;
+            summary?: unknown;
+            entries?: unknown;
+            tools?: unknown;
+            calls?: unknown;
+        };
+
+        const summaryEntries = normalizeTaskSummaryEntries(
+            parsed.summary ?? parsed.entries ?? parsed.tools ?? parsed.calls
+        );
+
+        const sessionId =
+            (typeof parsed.sessionId === 'string' && parsed.sessionId.trim().length > 0
+                ? parsed.sessionId.trim()
+                : undefined) ??
+            (typeof parsed.sessionID === 'string' && parsed.sessionID.trim().length > 0
+                ? parsed.sessionID.trim()
+                : undefined);
+
+        return { sessionId, summaryEntries };
+    } catch {
+        return { summaryEntries: [] };
+    }
+};
+
 const TaskToolSummary: React.FC<{
     entries: TaskToolSummaryEntry[];
     isExpanded: boolean;
@@ -302,8 +457,9 @@ const TaskToolSummary: React.FC<{
     sessionId?: string;
 }> = ({ entries, isExpanded, hasPrevTool, hasNextTool, output, sessionId }) => {
     const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
-    const completedEntries = React.useMemo(() => {
-        return entries.filter((entry) => entry.state?.status === 'completed');
+    const displayEntries = React.useMemo(() => {
+        const nonPending = entries.filter((entry) => entry.state?.status !== 'pending');
+        return nonPending.length > 0 ? nonPending : entries;
     }, [entries]);
 
     const trimmedOutput = typeof output === 'string'
@@ -319,12 +475,12 @@ const TaskToolSummary: React.FC<{
         }
     };
 
-    if (completedEntries.length === 0 && !hasOutput && !sessionId) {
+    if (displayEntries.length === 0 && !hasOutput && !sessionId) {
         return null;
     }
 
-    const visibleEntries = isExpanded ? completedEntries : completedEntries.slice(-6);
-    const hiddenCount = Math.max(0, completedEntries.length - visibleEntries.length);
+    const visibleEntries = isExpanded ? displayEntries : displayEntries.slice(-6);
+    const hiddenCount = Math.max(0, displayEntries.length - visibleEntries.length);
 
     return (
         <div
@@ -335,7 +491,7 @@ const TaskToolSummary: React.FC<{
                 hasNextTool ? 'before:bottom-[-0.6rem]' : 'before:bottom-0'
             )}
         >
-            {completedEntries.length > 0 ? (
+            {displayEntries.length > 0 ? (
                 <ToolScrollableSection maxHeightClass={isExpanded ? 'max-h-[40vh]' : 'max-h-56'} disableHorizontal>
                     <div className="w-full min-w-0 space-y-1">
                         {hiddenCount > 0 ? (
@@ -345,6 +501,7 @@ const TaskToolSummary: React.FC<{
                         {visibleEntries.map((entry, idx) => {
                             const toolName = typeof entry.tool === 'string' && entry.tool.trim().length > 0 ? entry.tool : 'tool';
                             const label = getTaskSummaryLabel(entry);
+                            const status = entry.state?.status;
 
                             const displayName = getToolMetadata(toolName).displayName;
 
@@ -352,7 +509,10 @@ const TaskToolSummary: React.FC<{
                                 <div key={entry.id ?? `${toolName}-${idx}`} className="flex items-center gap-2 min-w-0">
                                     <span className="flex-shrink-0 text-foreground/80">{getToolIcon(toolName)}</span>
                                     <span className="typography-meta text-foreground/80 flex-shrink-0">{displayName}</span>
-                                    <span className="typography-meta text-muted-foreground/70 truncate">{label}</span>
+                                    <span className={cn(
+                                        'typography-meta truncate',
+                                        status === 'error' ? 'text-[var(--status-error)]' : 'text-muted-foreground/70'
+                                    )}>{label}</span>
                                 </div>
                             );
                         })}
@@ -373,7 +533,7 @@ const TaskToolSummary: React.FC<{
             )}
 
             {hasOutput ? (
-                <div className={cn('space-y-1', (completedEntries.length > 0 || sessionId) && 'pt-1')}
+                <div className={cn('space-y-1', (displayEntries.length > 0 || sessionId) && 'pt-1')}
                 >
                     <button
                         type="button"
@@ -1043,24 +1203,105 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
     const effectiveTimeStart = isTaskTool ? (pinnedTaskTimeRef.current.start ?? time?.start) : time?.start;
     const effectiveTimeEnd = isTaskTool ? (pinnedTaskTimeRef.current.end ?? time?.end) : time?.end;
 
+    const taskOutputString = React.useMemo(() => {
+        return typeof stateWithData.output === 'string' ? stateWithData.output : undefined;
+    }, [stateWithData.output]);
+
+    const parsedTaskMetadata = React.useMemo(() => {
+        return parseTaskMetadataBlock(taskOutputString);
+    }, [taskOutputString]);
+
     const taskSessionId = React.useMemo<string | undefined>(() => {
         if (!isTaskTool) {
             return undefined;
         }
         const candidate = metadata as { sessionId?: string } | undefined;
-        return typeof candidate?.sessionId === 'string' ? candidate.sessionId : undefined;
-    }, [isTaskTool, metadata]);
+        if (typeof candidate?.sessionId === 'string' && candidate.sessionId.trim().length > 0) {
+            return candidate.sessionId;
+        }
+        if (parsedTaskMetadata.sessionId) {
+            return parsedTaskMetadata.sessionId;
+        }
+        return readTaskSessionIdFromOutput(taskOutputString);
+    }, [isTaskTool, metadata, parsedTaskMetadata.sessionId, taskOutputString]);
 
-    const taskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
+    const childSessionMessages = useSessionStore(
+        React.useCallback((store) => {
+            if (!taskSessionId) {
+                return EMPTY_SESSION_MESSAGES;
+            }
+            return (store.messages.get(taskSessionId) as SessionMessageWithParts[] | undefined) ?? EMPTY_SESSION_MESSAGES;
+        }, [taskSessionId])
+    );
+
+    const metadataTaskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
         if (!isTaskTool) {
             return [];
         }
-        const candidate = (metadata as { summary?: unknown } | undefined)?.summary;
-        if (!Array.isArray(candidate)) {
+        const candidateSummary = (metadata as { summary?: unknown; entries?: unknown; tools?: unknown; calls?: unknown } | undefined);
+        const normalized = normalizeTaskSummaryEntries(
+            candidateSummary?.summary ?? candidateSummary?.entries ?? candidateSummary?.tools ?? candidateSummary?.calls
+        );
+
+        if (normalized.length > 0) {
+            return normalized;
+        }
+
+        return parsedTaskMetadata.summaryEntries;
+    }, [isTaskTool, metadata, parsedTaskMetadata.summaryEntries]);
+
+    const childSessionTaskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
+        if (!isTaskTool || !taskSessionId) {
             return [];
         }
-        return candidate.filter((entry): entry is TaskToolSummaryEntry => typeof entry === 'object' && entry !== null) as TaskToolSummaryEntry[];
-    }, [isTaskTool, metadata]);
+        if (!Array.isArray(childSessionMessages) || childSessionMessages.length === 0) {
+            return [];
+        }
+        return buildTaskSummaryEntriesFromSession(childSessionMessages);
+    }, [childSessionMessages, isTaskTool, taskSessionId]);
+
+    const taskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
+        if (childSessionTaskSummaryEntries.length > 0) {
+            return childSessionTaskSummaryEntries;
+        }
+        return metadataTaskSummaryEntries;
+    }, [childSessionTaskSummaryEntries, metadataTaskSummaryEntries]);
+
+    const fetchedTaskSessionsRef = React.useRef<Set<string>>(new Set());
+    React.useEffect(() => {
+        if (!isTaskTool || !taskSessionId) {
+            return;
+        }
+        if (childSessionTaskSummaryEntries.length > 0) {
+            return;
+        }
+        if (fetchedTaskSessionsRef.current.has(taskSessionId)) {
+            return;
+        }
+
+        fetchedTaskSessionsRef.current.add(taskSessionId);
+        let cancelled = false;
+
+        void opencodeClient
+            .getSessionMessages(taskSessionId, 500)
+            .then((messages) => {
+                if (cancelled || !Array.isArray(messages)) {
+                    return;
+                }
+                if (messages.length === 0) {
+                    fetchedTaskSessionsRef.current.delete(taskSessionId);
+                    return;
+                }
+                useSessionStore.getState().syncMessages(taskSessionId, messages);
+            })
+            .catch(() => {
+                fetchedTaskSessionsRef.current.delete(taskSessionId);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [childSessionTaskSummaryEntries.length, isTaskTool, taskSessionId]);
 
 
     const taskSummaryLenRef = React.useRef<number>(taskSummaryEntries.length);
@@ -1211,7 +1452,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                     isExpanded={isExpanded}
                     hasPrevTool={hasPrevTool}
                     hasNextTool={hasNextTool}
-                    output={typeof stateWithData.output === 'string' ? stateWithData.output : undefined}
+                    output={taskOutputString}
                     sessionId={taskSessionId}
                 />
             ) : null}

@@ -64,13 +64,6 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
     const taskSessionID = typeof part.taskSessionID === 'string' ? part.taskSessionID.trim() : '';
     const model = normalizeSubtaskModel(part.model);
 
-    const compactPromptPreview = React.useMemo(() => {
-        if (!prompt) return '';
-        const flattened = prompt.replace(/\s+/g, ' ').trim();
-        if (flattened.length <= 240) return flattened;
-        return `${flattened.slice(0, 240)}...`;
-    }, [prompt]);
-
     return (
         <div className="mt-2">
             <div className="flex items-center gap-2 flex-wrap">
@@ -111,11 +104,7 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
                         <pre className="typography-meta mt-1.5 overflow-x-auto whitespace-pre-wrap break-words text-foreground/85">
                             {prompt}
                         </pre>
-                    ) : (
-                        <div className="typography-meta mt-1.5 text-muted-foreground">
-                            {compactPromptPreview}
-                        </div>
-                    )}
+                    ) : null}
                 </div>
             ) : null}
 
