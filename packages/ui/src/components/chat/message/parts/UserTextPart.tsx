@@ -1,10 +1,73 @@
 import React from 'react';
 
 import { cn } from '@/lib/utils';
+import { typography } from '@/lib/typography';
 import type { Part } from '@opencode-ai/sdk/v2';
 import type { AgentMentionInfo } from '../types';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string };
+
+type TextSegment = { type: 'text'; content: string } | { type: 'code'; content: string };
+
+/**
+ * Parse text to extract inline code segments (single backticks).
+ * - Triple backticks are NOT parsed (left as literal text)
+ * - Empty backticks (``) render as empty code element
+ * - Unmatched backticks render as literal backtick
+ */
+function parseInlineCode(text: string): TextSegment[] {
+    const segments: TextSegment[] = [];
+    let i = 0;
+
+    while (i < text.length) {
+        // Check for triple backticks - skip them (leave as literal text)
+        if (text.slice(i, i + 3) === '```') {
+            // Find the end of the triple backtick block or just consume the opening
+            const endTriple = text.indexOf('```', i + 3);
+            if (endTriple !== -1) {
+                // Found closing triple backticks - add entire block as text
+                segments.push({ type: 'text', content: text.slice(i, endTriple + 3) });
+                i = endTriple + 3;
+            } else {
+                // No closing triple backticks - add as text
+                segments.push({ type: 'text', content: text.slice(i, i + 3) });
+                i += 3;
+            }
+            continue;
+        }
+
+        // Check for single backtick
+        if (text[i] === '`') {
+            // Find the closing backtick (but not a triple backtick situation)
+            let j = i + 1;
+            while (j < text.length && text[j] !== '`') {
+                j++;
+            }
+
+            if (j < text.length) {
+                // Found closing backtick
+                const codeContent = text.slice(i + 1, j);
+                segments.push({ type: 'code', content: codeContent });
+                i = j + 1;
+            } else {
+                // No closing backtick - render as literal backtick
+                segments.push({ type: 'text', content: '`' });
+                i++;
+            }
+            continue;
+        }
+
+        // Regular text - collect until we hit a backtick
+        let j = i;
+        while (j < text.length && text[j] !== '`') {
+            j++;
+        }
+        segments.push({ type: 'text', content: text.slice(i, j) });
+        i = j;
+    }
+
+    return segments;
+}
 
 type UserTextPartProps = {
     part: Part;
@@ -24,7 +87,7 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     const rawText = partWithText.text;
     const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
 
-    const [isExpanded, setIsExpanded] = React.useState(false);
+    const [isExpanded, setIsExpanded] = React.useState(true);
     const [isTruncated, setIsTruncated] = React.useState(false);
     const [collapseZoneHeight, setCollapseZoneHeight] = React.useState<number>(0);
     const textRef = React.useRef<HTMLDivElement>(null);
@@ -95,29 +158,66 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
         return null;
     }
 
-    // Render content with optional agent mention link
-    const renderContent = () => {
-        if (!agentMention?.token || !textContent.includes(agentMention.token)) {
-            return textContent;
+    // Inline code styling to match assistant messages
+    const inlineCodeStyle: React.CSSProperties = {
+        ...typography.code.inline,
+        fontFamily: 'var(--font-mono)',
+        backgroundColor: 'var(--markdown-inline-code-bg, var(--surface-muted))',
+        color: 'var(--markdown-inline-code, var(--foreground))',
+        padding: '0.125rem 0.25rem',
+        borderRadius: '0.25rem',
+    };
+
+    // Render a text string, handling all agent mentions if present
+    const renderTextWithMention = (text: string, key: string): React.ReactNode => {
+        if (!agentMention?.token || !text.includes(agentMention.token)) {
+            return text;
         }
-        const idx = textContent.indexOf(agentMention.token);
-        const before = textContent.slice(0, idx);
-        const after = textContent.slice(idx + agentMention.token.length);
-        return (
-            <>
-                {before}
-                <a
-                    href={buildMentionUrl(agentMention.name)}
-                    className="text-primary hover:underline"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    {agentMention.token}
-                </a>
-                {after}
-            </>
-        );
+
+        // Split by the mention token to handle all occurrences
+        const parts = text.split(agentMention.token);
+        const result: React.ReactNode[] = [];
+
+        parts.forEach((part, index) => {
+            if (index > 0) {
+                // Add the mention link before this part (except for the first part)
+                result.push(
+                    <a
+                        key={`${key}-mention-${index}`}
+                        href={buildMentionUrl(agentMention.name)}
+                        className="text-primary hover:underline"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {agentMention.token}
+                    </a>
+                );
+            }
+            if (part) {
+                result.push(part);
+            }
+        });
+
+        return <React.Fragment key={key}>{result}</React.Fragment>;
+    };
+
+    // Render content with inline code parsing and optional agent mention link
+    const renderContent = () => {
+        const segments = parseInlineCode(textContent);
+
+        return segments.map((segment, index) => {
+            const key = `segment-${index}`;
+            if (segment.type === 'code') {
+                return (
+                    <code key={key} style={inlineCodeStyle}>
+                        {segment.content}
+                    </code>
+                );
+            }
+            // For text segments, check for agent mention
+            return renderTextWithMention(segment.content, key);
+        });
     };
 
     return (
