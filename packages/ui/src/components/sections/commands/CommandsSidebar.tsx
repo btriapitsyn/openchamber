@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RiAddLine, RiTerminalBoxLine, RiMore2Line, RiDeleteBinLine, RiFileCopyLine, RiRestartLine, RiEditLine } from '@remixicon/react';
 import { useCommandsStore, isCommandBuiltIn, type Command } from '@/stores/useCommandsStore';
+import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -45,6 +46,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     deleteCommand,
     loadCommands,
   } = useCommandsStore();
+  const { skills, loadSkills } = useSkillsStore();
 
   const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
@@ -53,7 +55,24 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
 
   React.useEffect(() => {
     loadCommands();
-  }, [loadCommands]);
+    loadSkills();
+  }, [loadCommands, loadSkills]);
+
+  const skillNames = React.useMemo(() => new Set(skills.map((skill) => skill.name)), [skills]);
+  const commandOnlyItems = React.useMemo(
+    () => commands.filter((command) => !skillNames.has(command.name)),
+    [commands, skillNames],
+  );
+
+  React.useEffect(() => {
+    if (!selectedCommandName) {
+      return;
+    }
+
+    if (skillNames.has(selectedCommandName)) {
+      setSelectedCommand(null);
+    }
+  }, [selectedCommandName, setSelectedCommand, skillNames]);
 
   const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
 
@@ -203,14 +222,14 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     setRenameDialogCommand(null);
   };
 
-  const builtInCommands = commands.filter(isCommandBuiltIn);
-  const customCommands = commands.filter((cmd) => !isCommandBuiltIn(cmd));
+  const builtInCommands = commandOnlyItems.filter(isCommandBuiltIn);
+  const customCommands = commandOnlyItems.filter((cmd) => !isCommandBuiltIn(cmd));
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
       <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">Total {commands.length}</span>
+          <span className="typography-meta text-muted-foreground">Total {commandOnlyItems.length}</span>
           <Button
             type="button"
             variant="ghost"
@@ -224,7 +243,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
       </div>
 
       <ScrollableOverlay outerClassName="flex-1 min-h-0" className="space-y-1 px-3 py-2">
-        {commands.length === 0 ? (
+        {commandOnlyItems.length === 0 ? (
           <div className="py-12 px-4 text-center text-muted-foreground">
             <RiTerminalBoxLine className="mx-auto mb-3 h-10 w-10 opacity-50" />
             <p className="typography-ui-label font-medium">No commands configured</p>

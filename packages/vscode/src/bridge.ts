@@ -2004,45 +2004,48 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           const scope: SkillScope | undefined = scopeValue === 'project' ? SKILL_SCOPE.PROJECT : scopeValue === 'user' ? SKILL_SCOPE.USER : undefined;
           const normalizedSource = sourceValue === 'agents' ? 'agents' : 'opencode';
           createSkill(skillName, { ...(body || {}), source: normalizedSource } as Record<string, unknown>, workingDirectory, scope);
-          // Skills are just files - OpenCode loads them on-demand, no restart needed
+          await ctx?.manager?.restart();
           return {
             id,
             type,
             success: true,
             data: {
               success: true,
-              requiresReload: false,
-              message: `Skill ${skillName} created successfully`,
+              requiresReload: true,
+              message: `Skill ${skillName} created successfully. Reloading interface…`,
+              reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
             },
           };
         }
 
         if (normalizedMethod === 'PATCH') {
           updateSkill(skillName, (body || {}) as Record<string, unknown>, workingDirectory);
-          // Skills are just files - OpenCode loads them on-demand, no restart needed
+          await ctx?.manager?.restart();
           return {
             id,
             type,
             success: true,
             data: {
               success: true,
-              requiresReload: false,
-              message: `Skill ${skillName} updated successfully`,
+              requiresReload: true,
+              message: `Skill ${skillName} updated successfully. Reloading interface…`,
+              reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
             },
           };
         }
 
         if (normalizedMethod === 'DELETE') {
           deleteSkill(skillName, workingDirectory);
-          // Skills are just files - OpenCode loads them on-demand, no restart needed
+          await ctx?.manager?.restart();
           return {
             id,
             type,
             success: true,
             data: {
               success: true,
-              requiresReload: false,
-              message: `Skill ${skillName} deleted successfully`,
+              requiresReload: true,
+              message: `Skill ${skillName} deleted successfully. Reloading interface…`,
+              reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
             },
           };
         }
@@ -2116,6 +2119,30 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           conflictPolicy: body.conflictPolicy,
           conflictDecisions: body.conflictDecisions,
         });
+
+        if (data.ok) {
+          const installed = data.installed || [];
+          const skipped = data.skipped || [];
+          const requiresReload = installed.length > 0;
+
+          if (requiresReload) {
+            await ctx?.manager?.restart();
+          }
+
+          return {
+            id,
+            type,
+            success: true,
+            data: {
+              ok: true,
+              installed,
+              skipped,
+              requiresReload,
+              message: requiresReload ? 'Skills installed successfully. Reloading interface…' : 'No skills were installed',
+              reloadDelayMs: requiresReload ? CLIENT_RELOAD_DELAY_MS : undefined,
+            },
+          };
+        }
 
         return { id, type, success: true, data };
       }
