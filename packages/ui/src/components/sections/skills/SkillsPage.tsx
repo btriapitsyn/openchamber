@@ -1,10 +1,12 @@
 import React from 'react';
+import type { Extension } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui';
 import { useSkillsStore, type SkillConfig, type SkillScope, type SupportingFile, type PendingFile } from '@/stores/useSkillsStore';
-import { RiAddLine, RiBookOpenLine, RiDeleteBinLine, RiFileLine, RiFolderLine, RiSaveLine, RiUser3Line } from '@remixicon/react';
+import { RiAddLine, RiBookOpenLine, RiDeleteBinLine, RiFileLine, RiFolderLine, RiRobot2Line, RiSaveLine, RiUser3Line } from '@remixicon/react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
   Select,
@@ -23,8 +25,23 @@ import {
 import { ButtonLarge } from '@/components/ui/button-large';
 import { AnimatedTabs } from '@/components/ui/animated-tabs';
 import { SkillsCatalogPage } from './catalog/SkillsCatalogPage';
+import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
+import { useThemeSystem } from '@/contexts/useThemeSystem';
+import {
+  SKILL_LOCATION_OPTIONS,
+  locationLabel,
+  locationPartsFrom,
+  locationValueFrom,
+  type SkillLocationValue,
+} from './skillLocations';
+
+const LazyCodeMirrorEditor = React.lazy(async () => {
+  const module = await import('@/components/ui/CodeMirrorEditor');
+  return { default: module.CodeMirrorEditor };
+});
 
 export const SkillsPage: React.FC = () => {
+  const { currentTheme } = useThemeSystem();
   const { 
     selectedSkillName, 
     getSkillByName, 
@@ -73,6 +90,7 @@ export const SkillsPage: React.FC = () => {
 
   const [draftName, setDraftName] = React.useState('');
   const [draftScope, setDraftScope] = React.useState<SkillScope>('user');
+  const [draftSource, setDraftSource] = React.useState<'opencode' | 'agents'>('opencode');
   const [description, setDescription] = React.useState('');
   const [instructions, setInstructions] = React.useState('');
   const [supportingFiles, setSupportingFiles] = React.useState<SupportingFile[]>([]);
@@ -93,6 +111,82 @@ export const SkillsPage: React.FC = () => {
   const [originalFileContent, setOriginalFileContent] = React.useState(''); // Track original for change detection
   const [deleteFilePath, setDeleteFilePath] = React.useState<string | null>(null);
   const [isDeletingFile, setIsDeletingFile] = React.useState(false);
+  const [instructionsEditorHeight, setInstructionsEditorHeight] = React.useState(320);
+  const [instructionsLanguage, setInstructionsLanguage] = React.useState<Extension | null>(null);
+  const [supportingFileLanguage, setSupportingFileLanguage] = React.useState<Extension | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadInstructionsLanguage = async () => {
+      const { languageByExtension } = await import('@/lib/codemirror/languageByExtension');
+      if (cancelled) return;
+      setInstructionsLanguage(languageByExtension('SKILL.md'));
+    };
+
+    void loadInstructionsLanguage();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const loadSupportingFileLanguage = async () => {
+      const targetPath = newFileName.trim();
+      if (!targetPath) {
+        setSupportingFileLanguage(null);
+        return;
+      }
+
+      const { languageByExtension } = await import('@/lib/codemirror/languageByExtension');
+      if (cancelled) return;
+      setSupportingFileLanguage(languageByExtension(targetPath));
+    };
+
+    void loadSupportingFileLanguage();
+    return () => {
+      cancelled = true;
+    };
+  }, [newFileName]);
+
+  const instructionsEditorExtensions = React.useMemo(() => {
+    const extensions: Extension[] = [createFlexokiCodeMirrorTheme(currentTheme), EditorView.lineWrapping];
+    if (instructionsLanguage) {
+      extensions.push(instructionsLanguage);
+    }
+    return extensions;
+  }, [currentTheme, instructionsLanguage]);
+
+  const supportingFileEditorExtensions = React.useMemo(() => {
+    const extensions: Extension[] = [createFlexokiCodeMirrorTheme(currentTheme), EditorView.lineWrapping];
+    if (supportingFileLanguage) {
+      extensions.push(supportingFileLanguage);
+    }
+    return extensions;
+  }, [currentTheme, supportingFileLanguage]);
+
+  const handleStartInstructionsResize = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = instructionsEditorHeight;
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const deltaY = moveEvent.clientY - startY;
+      const viewportMax = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.75) : 800;
+      const nextHeight = Math.max(220, Math.min(viewportMax, startHeight + deltaY));
+      setInstructionsEditorHeight(nextHeight);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [instructionsEditorHeight]);
   
   // Detect if skill-level fields have changed
   const hasSkillChanges = isNewSkill 
@@ -115,6 +209,7 @@ export const SkillsPage: React.FC = () => {
         // Prefill from draft (for new or duplicated skills)
         setDraftName(skillDraft.name || '');
         setDraftScope(skillDraft.scope || 'user');
+        setDraftSource(skillDraft.source === 'agents' ? 'agents' : 'opencode');
         setDescription(skillDraft.description || '');
         setInstructions(skillDraft.instructions || '');
         setOriginalDescription('');
@@ -178,6 +273,7 @@ export const SkillsPage: React.FC = () => {
         description: description.trim(),
         instructions: instructions.trim() || undefined,
         scope: isNewSkill ? draftScope : undefined,
+        source: isNewSkill ? draftSource : undefined,
         // Include pending files when creating new skill
         supportingFiles: isNewSkill && pendingFiles.length > 0 ? pendingFiles : undefined,
       };
@@ -387,7 +483,7 @@ export const SkillsPage: React.FC = () => {
         </h1>
         {selectedSkill && (
           <p className="typography-meta text-muted-foreground">
-            {selectedSkill.scope === 'project' ? 'Project' : 'User'} skill
+            {locationLabel(selectedSkill.scope, selectedSkill.source)} skill
             {selectedSkill.source === 'claude' && ' (Claude-compatible)'}
           </p>
         )}
@@ -405,7 +501,7 @@ export const SkillsPage: React.FC = () => {
         {isNewSkill && (
           <div className="space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
-              Skill Name & Scope
+              Skill Name & Location
             </label>
             <div className="flex items-center gap-2">
               <Input
@@ -414,34 +510,36 @@ export const SkillsPage: React.FC = () => {
                 placeholder="skill-name"
                 className="flex-1 text-foreground placeholder:text-muted-foreground"
               />
-              <Select value={draftScope} onValueChange={(v) => setDraftScope(v as SkillScope)}>
+              <Select
+                value={locationValueFrom(draftScope, draftSource)}
+                onValueChange={(v) => {
+                  const next = locationPartsFrom(v as SkillLocationValue);
+                  setDraftScope(next.scope);
+                  setDraftSource(next.source === 'agents' ? 'agents' : 'opencode');
+                }}
+              >
                 <SelectTrigger className="!h-9 w-auto gap-1.5">
                   {draftScope === 'user' ? (
                     <RiUser3Line className="h-4 w-4" />
                   ) : (
                     <RiFolderLine className="h-4 w-4" />
                   )}
-                  <span className="capitalize">{draftScope}</span>
+                  {draftSource === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                  <span>{locationLabel(draftScope, draftSource)}</span>
                 </SelectTrigger>
                 <SelectContent align="end">
-                  <SelectItem value="user" className="pr-2 [&>span:first-child]:hidden">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <RiUser3Line className="h-4 w-4" />
-                        <span>User</span>
+                  {SKILL_LOCATION_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value} className="pr-2 [&>span:first-child]:hidden">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          {option.scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
+                          {option.source === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                          <span>{option.label}</span>
+                        </div>
+                        <span className="typography-micro text-muted-foreground ml-6">{option.description}</span>
                       </div>
-                      <span className="typography-micro text-muted-foreground ml-6">Available in all projects</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="project" className="pr-2 [&>span:first-child]:hidden">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-2">
-                        <RiFolderLine className="h-4 w-4" />
-                        <span>Project</span>
-                      </div>
-                      <span className="typography-micro text-muted-foreground ml-6">Only in current project</span>
-                    </div>
-                  </SelectItem>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -476,13 +574,43 @@ export const SkillsPage: React.FC = () => {
             Detailed instructions for the agent when this skill is loaded
           </p>
         </div>
-        <Textarea
-          value={instructions}
-          onChange={(e) => setInstructions(e.target.value)}
-          placeholder="Step-by-step instructions, guidelines, or reference content..."
-          rows={12}
-          className="font-mono typography-meta max-h-80 resize-y"
-        />
+        <div
+          className="relative min-h-[220px] max-h-[75vh] rounded-md border border-[var(--interactive-border)] bg-[var(--surface-elevated)] overflow-hidden flex flex-col"
+          style={{ height: `${instructionsEditorHeight}px` }}
+        >
+          <div className="flex-1 min-h-0">
+            <React.Suspense
+              fallback={(
+                <Textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="Step-by-step instructions, guidelines, or reference content..."
+                  rows={12}
+                  className="h-full border-0 rounded-none font-mono typography-meta resize-none"
+                />
+              )}
+            >
+              <LazyCodeMirrorEditor
+                value={instructions}
+                onChange={setInstructions}
+                extensions={instructionsEditorExtensions}
+                className="h-full"
+              />
+            </React.Suspense>
+          </div>
+          <div
+            role="separator"
+            aria-label="Resize instructions editor"
+            onMouseDown={handleStartInstructionsResize}
+            className="absolute right-1.5 bottom-1.5 z-10 h-4 w-4 cursor-nwse-resize opacity-80 hover:opacity-100"
+          >
+            <svg viewBox="0 0 16 16" className="h-4 w-4 text-[var(--surface-muted-foreground)]" aria-hidden="true">
+              <path d="M6 14L14 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M10 14L14 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <path d="M2 14L14 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </div>
+        </div>
       </div>
 
       {/* Supporting Files */}
@@ -636,12 +764,25 @@ export const SkillsPage: React.FC = () => {
                 <label className="typography-ui-label font-medium text-foreground flex-shrink-0">
                   Content
                 </label>
-                <Textarea
-                  value={newFileContent}
-                  onChange={(e) => setNewFileContent(e.target.value)}
-                  placeholder="File content..."
-                  className="font-mono typography-meta flex-1 min-h-[200px] max-h-full resize-none"
-                />
+                <div className="h-[45vh] min-h-[220px] max-h-[55vh] rounded-md border border-[var(--interactive-border)] bg-[var(--surface-elevated)] overflow-hidden">
+                  <React.Suspense
+                    fallback={(
+                      <Textarea
+                        value={newFileContent}
+                        onChange={(e) => setNewFileContent(e.target.value)}
+                        placeholder="File content..."
+                        className="h-full border-0 rounded-none font-mono typography-meta resize-none"
+                      />
+                    )}
+                  >
+                    <LazyCodeMirrorEditor
+                      value={newFileContent}
+                      onChange={setNewFileContent}
+                      extensions={supportingFileEditorExtensions}
+                      className="h-full"
+                    />
+                  </React.Suspense>
+                </div>
               </div>
             </div>
           )}

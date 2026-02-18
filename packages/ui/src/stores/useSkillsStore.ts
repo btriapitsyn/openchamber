@@ -30,7 +30,7 @@ const getCurrentDirectory = (): string | null => {
 };
 
 export type SkillScope = 'user' | 'project';
-export type SkillSource = 'opencode' | 'claude';
+export type SkillSource = 'opencode' | 'claude' | 'agents';
 
 export interface SupportingFile {
   name: string;
@@ -83,6 +83,7 @@ export interface SkillConfig {
   description: string;
   instructions?: string;
   scope?: SkillScope;
+  source?: SkillSource;
   supportingFiles?: Array<{ path: string; content: string }>;
 }
 
@@ -94,6 +95,7 @@ export interface PendingFile {
 export interface SkillDraft {
   name: string;
   scope: SkillScope;
+  source?: SkillSource;
   description: string;
   instructions?: string;
   pendingFiles?: PendingFile[];
@@ -217,6 +219,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
             if (config.instructions) skillConfig.instructions = config.instructions;
             if (config.scope) skillConfig.scope = config.scope;
+            if (config.source) skillConfig.source = config.source;
             if (config.supportingFiles) skillConfig.supportingFiles = config.supportingFiles;
 
             const currentDirectory = getCurrentDirectory();

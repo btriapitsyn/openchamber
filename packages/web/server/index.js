@@ -6893,6 +6893,133 @@ async function main(options = {}) {
     SKILL_DIR,
   } = await import('./lib/opencode-config.js');
 
+  const findWorktreeRootForSkills = (workingDirectory) => {
+    if (!workingDirectory) return null;
+    let current = path.resolve(workingDirectory);
+    while (true) {
+      if (fs.existsSync(path.join(current, '.git'))) {
+        return current;
+      }
+      const parent = path.dirname(current);
+      if (parent === current) {
+        return null;
+      }
+      current = parent;
+    }
+  };
+
+  const getSkillProjectAncestors = (workingDirectory) => {
+    if (!workingDirectory) return [];
+    const result = [];
+    let current = path.resolve(workingDirectory);
+    const stop = findWorktreeRootForSkills(workingDirectory) || current;
+    while (true) {
+      result.push(current);
+      if (current === stop) break;
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+    return result;
+  };
+
+  const isPathInside = (candidatePath, parentPath) => {
+    if (!candidatePath || !parentPath) return false;
+    const normalizedCandidate = path.resolve(candidatePath);
+    const normalizedParent = path.resolve(parentPath);
+    return normalizedCandidate === normalizedParent || normalizedCandidate.startsWith(`${normalizedParent}${path.sep}`);
+  };
+
+  const inferSkillScopeAndSourceFromPath = (skillPath, workingDirectory) => {
+    const resolvedPath = typeof skillPath === 'string' ? path.resolve(skillPath) : '';
+    const home = os.homedir();
+    const source = resolvedPath.includes(`${path.sep}.agents${path.sep}skills${path.sep}`)
+      ? 'agents'
+      : resolvedPath.includes(`${path.sep}.claude${path.sep}skills${path.sep}`)
+        ? 'claude'
+        : 'opencode';
+
+    const projectAncestors = getSkillProjectAncestors(workingDirectory);
+    const isProjectScoped = projectAncestors.some((ancestor) => {
+      const candidates = [
+        path.join(ancestor, '.opencode'),
+        path.join(ancestor, '.claude', 'skills'),
+        path.join(ancestor, '.agents', 'skills'),
+      ];
+      return candidates.some((candidate) => isPathInside(resolvedPath, candidate));
+    });
+
+    if (isProjectScoped) {
+      return { scope: SKILL_SCOPE.PROJECT, source };
+    }
+
+    const userRoots = [
+      path.join(home, '.config', 'opencode'),
+      path.join(home, '.opencode'),
+      path.join(home, '.claude', 'skills'),
+      path.join(home, '.agents', 'skills'),
+      process.env.OPENCODE_CONFIG_DIR ? path.resolve(process.env.OPENCODE_CONFIG_DIR) : null,
+    ].filter(Boolean);
+
+    if (userRoots.some((root) => isPathInside(resolvedPath, root))) {
+      return { scope: SKILL_SCOPE.USER, source };
+    }
+
+    return { scope: SKILL_SCOPE.USER, source };
+  };
+
+  const fetchOpenCodeDiscoveredSkills = async (workingDirectory) => {
+    if (!openCodePort) {
+      return null;
+    }
+
+    try {
+      const url = new URL(buildOpenCodeUrl('/skill', ''));
+      if (workingDirectory) {
+        url.searchParams.set('directory', workingDirectory);
+      }
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          ...getOpenCodeAuthHeaders(),
+        },
+        signal: AbortSignal.timeout(8_000),
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = await response.json();
+      if (!Array.isArray(payload)) {
+        return null;
+      }
+
+      return payload
+        .map((item) => {
+          const name = typeof item?.name === 'string' ? item.name.trim() : '';
+          const location = typeof item?.location === 'string' ? item.location : '';
+          const description = typeof item?.description === 'string' ? item.description : '';
+          if (!name || !location) {
+            return null;
+          }
+          const inferred = inferSkillScopeAndSourceFromPath(location, workingDirectory);
+          return {
+            name,
+            path: location,
+            scope: inferred.scope,
+            source: inferred.source,
+            description,
+          };
+        })
+        .filter(Boolean);
+    } catch {
+      return null;
+    }
+  };
+
   // List all discovered skills
   app.get('/api/config/skills', async (req, res) => {
     try {
@@ -6900,11 +7027,11 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      const skills = discoverSkills(directory);
+      const skills = (await fetchOpenCodeDiscoveredSkills(directory)) || discoverSkills(directory);
 
       // Enrich with full sources info
       const enrichedSkills = skills.map(skill => {
-        const sources = getSkillSources(skill.name, directory);
+        const sources = getSkillSources(skill.name, directory, skill);
         return {
           ...skill,
           sources
@@ -7018,7 +7145,9 @@ async function main(options = {}) {
         return res.status(404).json({ ok: false, error: { kind: 'invalidSource', message: 'Unknown source' } });
       }
 
-      const discovered = directory ? discoverSkills(directory) : [];
+      const discovered = directory
+        ? ((await fetchOpenCodeDiscoveredSkills(directory)) || discoverSkills(directory))
+        : [];
       const installedByName = new Map(discovered.map((s) => [s.name, s]));
 
       if (src.sourceType === 'clawdhub' || isClawdHubSource(src.source)) {
@@ -7033,7 +7162,7 @@ async function main(options = {}) {
             ...item,
             sourceId: src.id,
             installed: installed
-              ? { isInstalled: true, scope: installed.scope }
+              ? { isInstalled: true, scope: installed.scope, source: installed.source }
               : { isInstalled: false },
           };
         });
@@ -7077,7 +7206,7 @@ async function main(options = {}) {
           ...item,
           gitIdentityId: src.gitIdentityId,
           installed: installed
-            ? { isInstalled: true, scope: installed.scope }
+            ? { isInstalled: true, scope: installed.scope, source: installed.source }
             : { isInstalled: false },
         };
       });
@@ -7131,6 +7260,7 @@ async function main(options = {}) {
         subpath,
         gitIdentityId,
         scope,
+        targetSource,
         selections,
         conflictPolicy,
         conflictDecisions,
@@ -7152,6 +7282,7 @@ async function main(options = {}) {
       if (isClawdHubSource(source)) {
         const result = await installSkillsFromClawdHub({
           scope,
+          targetSource,
           workingDirectory,
           userSkillDir: SKILL_DIR,
           selections,
@@ -7177,6 +7308,7 @@ async function main(options = {}) {
         subpath,
         identity,
         scope,
+        targetSource,
         workingDirectory,
         userSkillDir: SKILL_DIR,
         selections,
@@ -7217,7 +7349,9 @@ async function main(options = {}) {
       if (!directory) {
         return res.status(400).json({ error });
       }
-      const sources = getSkillSources(skillName, directory);
+      const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) || [])
+        .find((skill) => skill.name === skillName) || null;
+      const sources = getSkillSources(skillName, directory, discoveredSkill);
 
       res.json({
         name: skillName,
@@ -7242,7 +7376,9 @@ async function main(options = {}) {
         return res.status(400).json({ error });
       }
 
-      const sources = getSkillSources(skillName, directory);
+        const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) || [])
+          .find((skill) => skill.name === skillName) || null;
+        const sources = getSkillSources(skillName, directory, discoveredSkill);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
@@ -7263,7 +7399,7 @@ async function main(options = {}) {
   app.post('/api/config/skills/:name', async (req, res) => {
     try {
       const skillName = req.params.name;
-      const { scope, ...config } = req.body;
+      const { scope, source: skillSource, ...config } = req.body;
       const { directory, error } = await resolveProjectDirectory(req);
       if (!directory) {
         return res.status(400).json({ error });
@@ -7272,7 +7408,7 @@ async function main(options = {}) {
       console.log('[Server] Creating skill:', skillName);
       console.log('[Server] Scope:', scope, 'Working directory:', directory);
 
-      createSkill(skillName, config, directory, scope);
+      createSkill(skillName, { ...config, source: skillSource }, directory, scope);
       // Skills are just files - OpenCode loads them on-demand, no restart needed
 
       res.json({
@@ -7324,7 +7460,9 @@ async function main(options = {}) {
         return res.status(400).json({ error });
       }
 
-      const sources = getSkillSources(skillName, directory);
+      const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) || [])
+        .find((skill) => skill.name === skillName) || null;
+      const sources = getSkillSources(skillName, directory, discoveredSkill);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }
@@ -7351,7 +7489,9 @@ async function main(options = {}) {
         return res.status(400).json({ error });
       }
 
-      const sources = getSkillSources(skillName, directory);
+      const discoveredSkill = ((await fetchOpenCodeDiscoveredSkills(directory)) || [])
+        .find((skill) => skill.name === skillName) || null;
+      const sources = getSkillSources(skillName, directory, discoveredSkill);
       if (!sources.md.exists || !sources.md.dir) {
         return res.status(404).json({ error: 'Skill not found' });
       }

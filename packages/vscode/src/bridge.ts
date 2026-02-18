@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import { type OpenCodeManager } from './opencode';
-import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, SKILL_SCOPE, getProviderSources, removeProviderConfig } from './opencodeConfig';
+import { createAgent, createCommand, deleteAgent, deleteCommand, getAgentSources, getCommandSources, updateAgent, updateCommand, type AgentScope, type CommandScope, AGENT_SCOPE, COMMAND_SCOPE, discoverSkills, getSkillSources, createSkill, updateSkill, deleteSkill, readSkillSupportingFile, writeSkillSupportingFile, deleteSkillSupportingFile, type SkillScope, type SkillSource, type DiscoveredSkill, SKILL_SCOPE, getProviderSources, removeProviderConfig } from './opencodeConfig';
 import { getProviderAuth, removeProviderAuth } from './opencodeAuth';
 import { fetchQuotaForProvider, listConfiguredQuotaProviders } from './quotaProviders';
 import * as gitService from './gitService';
@@ -101,6 +101,132 @@ const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
 const OPENCHAMBER_SHARED_SETTINGS_PATH = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+
+const isPathInside = (candidatePath: string, parentPath: string): boolean => {
+  const normalizedCandidate = path.resolve(candidatePath);
+  const normalizedParent = path.resolve(parentPath);
+  return normalizedCandidate === normalizedParent || normalizedCandidate.startsWith(`${normalizedParent}${path.sep}`);
+};
+
+const findWorktreeRootForSkills = (workingDirectory?: string): string | null => {
+  if (!workingDirectory) return null;
+  let current = path.resolve(workingDirectory);
+  while (true) {
+    if (fs.existsSync(path.join(current, '.git'))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+};
+
+const getProjectAncestors = (workingDirectory?: string): string[] => {
+  if (!workingDirectory) return [];
+  const result: string[] = [];
+  let current = path.resolve(workingDirectory);
+  const stop = findWorktreeRootForSkills(workingDirectory) || current;
+  while (true) {
+    result.push(current);
+    if (current === stop) break;
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return result;
+};
+
+const inferSkillScopeAndSourceFromLocation = (location: string, workingDirectory?: string): { scope: SkillScope; source: SkillSource } => {
+  const resolvedPath = path.resolve(location);
+  const source: SkillSource = resolvedPath.includes(`${path.sep}.agents${path.sep}skills${path.sep}`)
+    ? 'agents'
+    : resolvedPath.includes(`${path.sep}.claude${path.sep}skills${path.sep}`)
+      ? 'claude'
+      : 'opencode';
+
+  const projectAncestors = getProjectAncestors(workingDirectory);
+  const isProjectScoped = projectAncestors.some((ancestor) => {
+    const candidates = [
+      path.join(ancestor, '.opencode'),
+      path.join(ancestor, '.claude', 'skills'),
+      path.join(ancestor, '.agents', 'skills'),
+    ];
+    return candidates.some((candidate) => isPathInside(resolvedPath, candidate));
+  });
+
+  if (isProjectScoped) {
+    return { scope: 'project', source };
+  }
+
+  const home = os.homedir();
+  const userRoots = [
+    path.join(home, '.config', 'opencode'),
+    path.join(home, '.opencode'),
+    path.join(home, '.claude', 'skills'),
+    path.join(home, '.agents', 'skills'),
+    process.env.OPENCODE_CONFIG_DIR ? path.resolve(process.env.OPENCODE_CONFIG_DIR) : null,
+  ].filter((value): value is string => Boolean(value));
+
+  if (userRoots.some((root) => isPathInside(resolvedPath, root))) {
+    return { scope: 'user', source };
+  }
+
+  return { scope: 'user', source };
+};
+
+const fetchOpenCodeSkillsFromApi = async (ctx: BridgeContext | undefined, workingDirectory?: string): Promise<DiscoveredSkill[] | null> => {
+  const apiUrl = ctx?.manager?.getApiUrl();
+  if (!apiUrl) {
+    return null;
+  }
+
+  try {
+    const base = apiUrl.endsWith('/') ? apiUrl : `${apiUrl}/`;
+    const url = new URL('skill', base);
+    if (workingDirectory) {
+      url.searchParams.set('directory', workingDirectory);
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        ...(ctx?.manager?.getOpenCodeAuthHeaders() || {}),
+      },
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = await response.json();
+    if (!Array.isArray(payload)) {
+      return null;
+    }
+
+    return payload
+      .map((item) => {
+        const name = typeof item?.name === 'string' ? item.name.trim() : '';
+        const location = typeof item?.location === 'string' ? item.location : '';
+        const description = typeof item?.description === 'string' ? item.description : '';
+        if (!name || !location) {
+          return null;
+        }
+        const inferred = inferSkillScopeAndSourceFromLocation(location, workingDirectory);
+        return {
+          name,
+          path: location,
+          scope: inferred.scope,
+          source: inferred.source,
+          description,
+        } as DiscoveredSkill;
+      })
+      .filter((item): item is DiscoveredSkill => item !== null);
+  } catch {
+    return null;
+  }
+};
 
 const readSharedSettingsFromDisk = (): Record<string, unknown> => {
   try {
@@ -1851,7 +1977,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
         // LIST all skills (no name provided)
         if (!name && normalizedMethod === 'GET') {
-          const skills = discoverSkills(workingDirectory);
+          const skills = (await fetchOpenCodeSkillsFromApi(ctx, workingDirectory)) || discoverSkills(workingDirectory);
           return { id, type, success: true, data: { skills } };
         }
 
@@ -1861,7 +1987,9 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
 
         if (normalizedMethod === 'GET') {
-          const sources = getSkillSources(skillName, workingDirectory);
+          const discoveredSkill = ((await fetchOpenCodeSkillsFromApi(ctx, workingDirectory)) || [])
+            .find((skill) => skill.name === skillName);
+          const sources = getSkillSources(skillName, workingDirectory, discoveredSkill || null);
           return {
             id,
             type,
@@ -1872,8 +2000,10 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
         if (normalizedMethod === 'POST') {
           const scopeValue = body?.scope as string | undefined;
+          const sourceValue = body?.source as string | undefined;
           const scope: SkillScope | undefined = scopeValue === 'project' ? SKILL_SCOPE.PROJECT : scopeValue === 'user' ? SKILL_SCOPE.USER : undefined;
-          createSkill(skillName, (body || {}) as Record<string, unknown>, workingDirectory, scope);
+          const normalizedSource = sourceValue === 'agents' ? 'agents' : 'opencode';
+          createSkill(skillName, { ...(body || {}), source: normalizedSource } as Record<string, unknown>, workingDirectory, scope);
           // Skills are just files - OpenCode loads them on-demand, no restart needed
           return {
             id,
@@ -1949,7 +2079,8 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
               .filter((v) => v !== null) as SkillsCatalogSourceConfig[])
           : [];
 
-        const data = await getSkillsCatalog(workingDirectory, refresh, additionalSources);
+        const installedSkills = (await fetchOpenCodeSkillsFromApi(ctx, workingDirectory)) || undefined;
+        const data = await getSkillsCatalog(workingDirectory, refresh, additionalSources, installedSkills);
         return { id, type, success: true, data };
       }
 
@@ -1967,6 +2098,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           source?: string;
           subpath?: string;
           scope?: 'user' | 'project';
+          targetSource?: 'opencode' | 'agents';
           selections?: Array<{ skillDir: string }>;
           conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
           conflictDecisions?: Record<string, 'skip' | 'overwrite'>;
@@ -1978,6 +2110,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           source: String(body.source || ''),
           subpath: body.subpath,
           scope: body.scope === 'project' ? 'project' : 'user',
+          targetSource: body.targetSource === 'agents' ? 'agents' : 'opencode',
           workingDirectory: body.scope === 'project' ? workingDirectory : undefined,
           selections: Array.isArray(body.selections) ? body.selections : [],
           conflictPolicy: body.conflictPolicy,
@@ -2006,7 +2139,9 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           return { id, type, success: false, error: 'File path is required' };
         }
 
-        const sources = getSkillSources(skillName, workingDirectory);
+        const discoveredSkill = ((await fetchOpenCodeSkillsFromApi(ctx, workingDirectory)) || [])
+          .find((skill) => skill.name === skillName);
+        const sources = getSkillSources(skillName, workingDirectory, discoveredSkill || null);
         if (!sources.md.dir) {
           return { id, type, success: false, error: `Skill "${skillName}" not found` };
         }

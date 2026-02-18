@@ -16,6 +16,7 @@ const DEFAULT_MAX_BUFFER = 4 * 1024 * 1024;
 const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
 
 type SkillScope = 'user' | 'project';
+type SkillInstallSource = 'opencode' | 'agents';
 
 export type SkillsCatalogSourceConfig = {
   id: string;
@@ -56,7 +57,7 @@ export type SkillsCatalogItem = {
 
 type SkillsCatalogItemWithBadge = SkillsCatalogItem & {
   sourceId: string;
-  installed: { isInstalled: boolean; scope?: SkillScope };
+  installed: { isInstalled: boolean; scope?: SkillScope; source?: SkillInstallSource };
 };
 
 type SkillsRepoError =
@@ -65,14 +66,14 @@ type SkillsRepoError =
   | { kind: 'gitUnavailable'; message: string }
   | { kind: 'networkError'; message: string }
   | { kind: 'unknown'; message: string }
-  | { kind: 'conflicts'; message: string; conflicts: Array<{ skillName: string; scope: SkillScope }> };
+  | { kind: 'conflicts'; message: string; conflicts: Array<{ skillName: string; scope: SkillScope; source?: SkillInstallSource }> };
 
 type SkillsRepoScanResult =
   | { ok: true; items: SkillsCatalogItem[] }
   | { ok: false; error: SkillsRepoError };
 
 type SkillsInstallResult =
-  | { ok: true; installed: Array<{ skillName: string; scope: SkillScope }>; skipped: Array<{ skillName: string; reason: string }> }
+  | { ok: true; installed: Array<{ skillName: string; scope: SkillScope; source?: SkillInstallSource }>; skipped: Array<{ skillName: string; reason: string }> }
   | { ok: false; error: SkillsRepoError };
 
 export const CURATED_SOURCES: CuratedSource[] = [
@@ -251,6 +252,7 @@ async function fetchClawdHubSkillInfo(slug: string): Promise<ClawdHubSkillInfoRe
 
 export async function installSkillsFromClawdHub(options: {
   scope: SkillScope;
+  targetSource?: SkillInstallSource;
   workingDirectory?: string;
   selections: Array<{ skillDir: string; clawdhub?: { slug: string; version: string } }>;
   conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
@@ -261,6 +263,7 @@ export async function installSkillsFromClawdHub(options: {
   }
 
   const userSkillDir = getUserSkillBaseDir();
+  const targetSource: SkillInstallSource = options.targetSource === 'agents' ? 'agents' : 'opencode';
   const requestedSkills = options.selections || [];
 
   if (requestedSkills.length === 0) {
@@ -268,20 +271,24 @@ export async function installSkillsFromClawdHub(options: {
   }
 
   // Check for conflicts
-  const conflicts: Array<{ skillName: string; scope: SkillScope }> = [];
+  const conflicts: Array<{ skillName: string; scope: SkillScope; source?: SkillInstallSource }> = [];
   for (const sel of requestedSkills) {
     const slug = sel.clawdhub?.slug || sel.skillDir;
     if (!validateSkillName(slug)) continue;
 
     const targetDir = options.scope === 'user'
-      ? path.join(userSkillDir, slug)
-      : path.join(options.workingDirectory as string, '.opencode', 'skills', slug);
+      ? (targetSource === 'agents'
+        ? path.join(os.homedir(), '.agents', 'skills', slug)
+        : path.join(userSkillDir, slug))
+      : (targetSource === 'agents'
+        ? path.join(options.workingDirectory as string, '.agents', 'skills', slug)
+        : path.join(options.workingDirectory as string, '.opencode', 'skills', slug));
 
     if (fs.existsSync(targetDir)) {
       const decision = options.conflictDecisions?.[slug];
       const hasAutoPolicy = options.conflictPolicy === 'skipAll' || options.conflictPolicy === 'overwriteAll';
       if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: slug, scope: options.scope });
+        conflicts.push({ skillName: slug, scope: options.scope, source: targetSource });
       }
     }
   }
@@ -290,7 +297,7 @@ export async function installSkillsFromClawdHub(options: {
     return { ok: false, error: { kind: 'conflicts', message: 'Some skills already exist in the selected scope', conflicts } };
   }
 
-  const installed: Array<{ skillName: string; scope: SkillScope }> = [];
+  const installed: Array<{ skillName: string; scope: SkillScope; source?: SkillInstallSource }> = [];
   const skipped: Array<{ skillName: string; reason: string }> = [];
 
   for (const sel of requestedSkills) {
@@ -322,8 +329,12 @@ export async function installSkillsFromClawdHub(options: {
     }
 
       const targetDir = options.scope === 'user'
-        ? path.join(userSkillDir, slug)
-        : path.join(options.workingDirectory as string, '.opencode', 'skills', slug);
+        ? (targetSource === 'agents'
+          ? path.join(os.homedir(), '.agents', 'skills', slug)
+          : path.join(userSkillDir, slug))
+        : (targetSource === 'agents'
+          ? path.join(options.workingDirectory as string, '.agents', 'skills', slug)
+          : path.join(options.workingDirectory as string, '.opencode', 'skills', slug));
 
       const exists = fs.existsSync(targetDir);
       let decision = options.conflictDecisions?.[slug] || null;
@@ -361,7 +372,7 @@ export async function installSkillsFromClawdHub(options: {
         await fs.promises.mkdir(path.dirname(targetDir), { recursive: true });
         await fs.promises.rename(tempDir, targetDir);
 
-        installed.push({ skillName: slug, scope: options.scope });
+        installed.push({ skillName: slug, scope: options.scope, source: targetSource });
       } catch (extractError) {
         await safeRm(tempDir);
         throw extractError;
@@ -705,6 +716,7 @@ export async function installSkillsFromRepository(options: {
   source: string;
   subpath?: string;
   scope: SkillScope;
+  targetSource?: SkillInstallSource;
   workingDirectory?: string;
   selections: Array<{ skillDir: string }>;
   conflictPolicy?: 'prompt' | 'skipAll' | 'overwriteAll';
@@ -730,24 +742,29 @@ export async function installSkillsFromRepository(options: {
   }
 
   const userSkillDir = getUserSkillBaseDir();
+  const targetSource: SkillInstallSource = options.targetSource === 'agents' ? 'agents' : 'opencode';
 
   const skillPlans = requestedDirs.map((dir) => {
     const skillName = path.posix.basename(dir);
     return { skillDirPosix: dir, skillName, installable: validateSkillName(skillName) };
   });
 
-  const conflicts: Array<{ skillName: string; scope: SkillScope }> = [];
+  const conflicts: Array<{ skillName: string; scope: SkillScope; source?: SkillInstallSource }> = [];
   for (const plan of skillPlans) {
     if (!plan.installable) continue;
     const targetDir = options.scope === 'user'
-      ? path.join(userSkillDir, plan.skillName)
-      : path.join(options.workingDirectory as string, '.opencode', 'skills', plan.skillName);
+      ? (targetSource === 'agents'
+        ? path.join(os.homedir(), '.agents', 'skills', plan.skillName)
+        : path.join(userSkillDir, plan.skillName))
+      : (targetSource === 'agents'
+        ? path.join(options.workingDirectory as string, '.agents', 'skills', plan.skillName)
+        : path.join(options.workingDirectory as string, '.opencode', 'skills', plan.skillName));
 
     if (fs.existsSync(targetDir)) {
       const decision = options.conflictDecisions?.[plan.skillName];
       const hasAutoPolicy = options.conflictPolicy === 'skipAll' || options.conflictPolicy === 'overwriteAll';
       if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: plan.skillName, scope: options.scope });
+        conflicts.push({ skillName: plan.skillName, scope: options.scope, source: targetSource });
       }
     }
   }
@@ -778,7 +795,7 @@ export async function installSkillsFromRepository(options: {
       return { ok: false as const, error: { kind: 'unknown' as const, message: checkoutResult.stderr || checkoutResult.message || 'Failed to checkout repository' } };
     }
 
-    const installed: Array<{ skillName: string; scope: SkillScope }> = [];
+    const installed: Array<{ skillName: string; scope: SkillScope; source?: SkillInstallSource }> = [];
     const skipped: Array<{ skillName: string; reason: string }> = [];
 
     for (const plan of skillPlans) {
@@ -795,8 +812,12 @@ export async function installSkillsFromRepository(options: {
       }
 
       const targetDir = options.scope === 'user'
-        ? path.join(userSkillDir, plan.skillName)
-        : path.join(options.workingDirectory as string, '.opencode', 'skills', plan.skillName);
+        ? (targetSource === 'agents'
+          ? path.join(os.homedir(), '.agents', 'skills', plan.skillName)
+          : path.join(userSkillDir, plan.skillName))
+        : (targetSource === 'agents'
+          ? path.join(options.workingDirectory as string, '.agents', 'skills', plan.skillName)
+          : path.join(options.workingDirectory as string, '.opencode', 'skills', plan.skillName));
 
       const exists = fs.existsSync(targetDir);
       let decision = options.conflictDecisions?.[plan.skillName] || null;
@@ -819,7 +840,7 @@ export async function installSkillsFromRepository(options: {
 
       try {
         await copyDirectoryNoSymlinks(srcDir, targetDir);
-        installed.push({ skillName: plan.skillName, scope: options.scope });
+        installed.push({ skillName: plan.skillName, scope: options.scope, source: targetSource });
       } catch (error) {
         await safeRm(targetDir);
         skipped.push({
@@ -841,10 +862,11 @@ const CATALOG_TTL_MS = 30 * 60 * 1000;
 export async function getSkillsCatalog(
   workingDirectory?: string,
   refresh?: boolean,
-  additionalSources?: SkillsCatalogSourceConfig[]
+  additionalSources?: SkillsCatalogSourceConfig[],
+  installedSkills?: Array<{ name: string; scope: SkillScope; source?: 'opencode' | 'agents' | 'claude' }>
 ) {
   const sources = [...CURATED_SOURCES, ...(Array.isArray(additionalSources) ? additionalSources : [])];
-  const discovered = discoverSkills(workingDirectory);
+  const discovered = Array.isArray(installedSkills) ? installedSkills : discoverSkills(workingDirectory);
   const installedByName = new Map(discovered.map((s) => [s.name, s]));
 
   const itemsBySource: Record<string, SkillsCatalogItemWithBadge[]> = {};
@@ -877,7 +899,7 @@ export async function getSkillsCatalog(
         return {
           sourceId: src.id,
           ...item,
-          installed: installed ? { isInstalled: true, scope: installed.scope } : { isInstalled: false },
+          installed: installed ? { isInstalled: true, scope: installed.scope, source: installed.source === 'agents' ? 'agents' : 'opencode' } : { isInstalled: false },
         };
       });
       continue;
@@ -917,7 +939,7 @@ export async function getSkillsCatalog(
       return {
         sourceId: src.id,
         ...item,
-        installed: installed ? { isInstalled: true, scope: installed.scope } : { isInstalled: false },
+        installed: installed ? { isInstalled: true, scope: installed.scope, source: installed.source === 'agents' ? 'agents' : 'opencode' } : { isInstalled: false },
       };
     });
   }

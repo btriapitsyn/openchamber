@@ -20,6 +20,7 @@ import {
 export type SkillConflict = {
   skillName: string;
   scope: 'user' | 'project';
+  source?: 'opencode' | 'agents';
 };
 
 export type ConflictDecision = 'skip' | 'overwrite';
@@ -85,7 +86,9 @@ export const InstallConflictsDialog: React.FC<InstallConflictsDialogProps> = ({
               >
                 <div className="min-w-0">
                   <div className="typography-ui-label truncate">{conflict.skillName}</div>
-                  <div className="typography-micro text-muted-foreground">Installed in {conflict.scope} scope</div>
+                  <div className="typography-micro text-muted-foreground">
+                    Installed in {conflict.scope} / {conflict.source || 'opencode'}
+                  </div>
                 </div>
 
                 <Select

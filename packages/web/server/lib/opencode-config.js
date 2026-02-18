@@ -330,11 +330,32 @@ function getClaudeSkillPath(workingDirectory, skillName) {
   return path.join(getClaudeSkillDir(workingDirectory, skillName), 'SKILL.md');
 }
 
+function getUserAgentsSkillDir(skillName) {
+  return path.join(os.homedir(), '.agents', 'skills', skillName);
+}
+
+function getUserAgentsSkillPath(skillName) {
+  return path.join(getUserAgentsSkillDir(skillName), 'SKILL.md');
+}
+
+function getProjectAgentsSkillDir(workingDirectory, skillName) {
+  return path.join(workingDirectory, '.agents', 'skills', skillName);
+}
+
+function getProjectAgentsSkillPath(workingDirectory, skillName) {
+  return path.join(getProjectAgentsSkillDir(workingDirectory, skillName), 'SKILL.md');
+}
+
 /**
  * Determine skill scope based on where the SKILL.md file exists
  * Priority: project level (.opencode) > user level > claude-compat (.claude/skills)
  */
 function getSkillScope(skillName, workingDirectory) {
+  const discovered = discoverSkills(workingDirectory).find((skill) => skill.name === skillName);
+  if (discovered?.path) {
+    return { scope: discovered.scope || null, path: discovered.path, source: discovered.source || null };
+  }
+
   if (workingDirectory) {
     // Check .opencode/skill first
     const projectPath = getProjectSkillPath(workingDirectory, skillName);
@@ -687,6 +708,129 @@ function readConfigLayers(workingDirectory) {
 
 function readConfig(workingDirectory) {
   return readConfigLayers(workingDirectory).mergedConfig;
+}
+
+function getAncestors(startDir, stopDir) {
+  if (!startDir) return [];
+  const result = [];
+  let current = path.resolve(startDir);
+  const resolvedStop = stopDir ? path.resolve(stopDir) : null;
+
+  while (true) {
+    result.push(current);
+    if (resolvedStop && current === resolvedStop) {
+      break;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return result;
+}
+
+function findWorktreeRoot(startDir) {
+  if (!startDir) return null;
+  let current = path.resolve(startDir);
+
+  while (true) {
+    if (fs.existsSync(path.join(current, '.git'))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
+function walkSkillMdFiles(rootDir) {
+  if (!rootDir || !fs.existsSync(rootDir)) return [];
+
+  const results = [];
+  const walk = (dir) => {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        continue;
+      }
+      if (entry.isFile() && entry.name === 'SKILL.md') {
+        results.push(fullPath);
+      }
+    }
+  };
+
+  walk(rootDir);
+  return results;
+}
+
+function addSkillFromMdFile(skillsMap, skillMdPath, scope, source) {
+  let parsed;
+  try {
+    parsed = parseMdFile(skillMdPath);
+  } catch {
+    return;
+  }
+
+  const name = typeof parsed.frontmatter?.name === 'string'
+    ? parsed.frontmatter.name.trim()
+    : '';
+  const description = typeof parsed.frontmatter?.description === 'string'
+    ? parsed.frontmatter.description
+    : '';
+
+  if (!name) {
+    return;
+  }
+
+  skillsMap.set(name, {
+    name,
+    path: skillMdPath,
+    scope,
+    source,
+    description,
+  });
+}
+
+function resolveSkillSearchDirectories(workingDirectory) {
+  const directories = [];
+  const pushDir = (dir) => {
+    if (!dir) return;
+    const resolved = path.resolve(dir);
+    if (!directories.includes(resolved)) {
+      directories.push(resolved);
+    }
+  };
+
+  // Equivalent to Opencode Config.directories order.
+  pushDir(OPENCODE_CONFIG_DIR);
+
+  if (workingDirectory) {
+    const worktreeRoot = findWorktreeRoot(workingDirectory) || path.resolve(workingDirectory);
+    const projectDirs = getAncestors(workingDirectory, worktreeRoot)
+      .map((dir) => path.join(dir, '.opencode'));
+    projectDirs.forEach(pushDir);
+  }
+
+  pushDir(path.join(os.homedir(), '.opencode'));
+
+  const customConfigDir = process.env.OPENCODE_CONFIG_DIR
+    ? path.resolve(process.env.OPENCODE_CONFIG_DIR)
+    : null;
+  pushDir(customConfigDir);
+
+  return directories;
 }
 
 function getConfigForPath(layers, targetPath) {
@@ -1491,87 +1635,95 @@ function deleteCommand(commandName, workingDirectory) {
  */
 function discoverSkills(workingDirectory) {
   const skills = new Map();
-  
-  // Helper to add skill if not already found (first found wins by priority)
-  const addSkill = (name, skillPath, scope, source) => {
-    if (!skills.has(name)) {
-      skills.set(name, { name, path: skillPath, scope, source });
+
+  // 1) External global (.claude, .agents)
+  for (const externalRootName of ['.claude', '.agents']) {
+    const homeRoot = path.join(os.homedir(), externalRootName, 'skills');
+    const source = externalRootName === '.agents' ? 'agents' : 'claude';
+    for (const skillMdPath of walkSkillMdFiles(homeRoot)) {
+      addSkillFromMdFile(skills, skillMdPath, SKILL_SCOPE.USER, source);
     }
-  };
-  
-  // 1. Project level .opencode/skills/ (highest priority)
+  }
+
+  // 2) External project ancestors (.claude, .agents)
   if (workingDirectory) {
-    const projectSkillDir = path.join(workingDirectory, '.opencode', 'skills');
-    if (fs.existsSync(projectSkillDir)) {
-      const entries = fs.readdirSync(projectSkillDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const skillMdPath = path.join(projectSkillDir, entry.name, 'SKILL.md');
-          if (fs.existsSync(skillMdPath)) {
-            addSkill(entry.name, skillMdPath, SKILL_SCOPE.PROJECT, 'opencode');
-          }
-        }
-      }
-    }
-
-    const legacyProjectSkillDir = path.join(workingDirectory, '.opencode', 'skill');
-    if (fs.existsSync(legacyProjectSkillDir)) {
-      const entries = fs.readdirSync(legacyProjectSkillDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const skillMdPath = path.join(legacyProjectSkillDir, entry.name, 'SKILL.md');
-          if (fs.existsSync(skillMdPath)) {
-            addSkill(entry.name, skillMdPath, SKILL_SCOPE.PROJECT, 'opencode');
-          }
-        }
-      }
-    }
-    
-    // 2. Claude-compatible .claude/skills/
-    const claudeSkillDir = path.join(workingDirectory, '.claude', 'skills');
-    if (fs.existsSync(claudeSkillDir)) {
-      const entries = fs.readdirSync(claudeSkillDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const skillMdPath = path.join(claudeSkillDir, entry.name, 'SKILL.md');
-          if (fs.existsSync(skillMdPath)) {
-            addSkill(entry.name, skillMdPath, SKILL_SCOPE.PROJECT, 'claude');
-          }
-        }
-      }
-    }
-  }
-  
-  // 3. User level ~/.config/opencode/skills/
-  if (fs.existsSync(SKILL_DIR)) {
-    const entries = fs.readdirSync(SKILL_DIR, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const skillMdPath = path.join(SKILL_DIR, entry.name, 'SKILL.md');
-        if (fs.existsSync(skillMdPath)) {
-          addSkill(entry.name, skillMdPath, SKILL_SCOPE.USER, 'opencode');
+    const worktreeRoot = findWorktreeRoot(workingDirectory) || path.resolve(workingDirectory);
+    const ancestors = getAncestors(workingDirectory, worktreeRoot);
+    for (const ancestor of ancestors) {
+      for (const externalRootName of ['.claude', '.agents']) {
+        const source = externalRootName === '.agents' ? 'agents' : 'claude';
+        const externalSkillsRoot = path.join(ancestor, externalRootName, 'skills');
+        for (const skillMdPath of walkSkillMdFiles(externalSkillsRoot)) {
+          addSkillFromMdFile(skills, skillMdPath, SKILL_SCOPE.PROJECT, source);
         }
       }
     }
   }
 
-  const legacyUserSkillDir = path.join(OPENCODE_CONFIG_DIR, 'skill');
-  if (fs.existsSync(legacyUserSkillDir)) {
-    const entries = fs.readdirSync(legacyUserSkillDir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const skillMdPath = path.join(legacyUserSkillDir, entry.name, 'SKILL.md');
-        if (fs.existsSync(skillMdPath)) {
-          addSkill(entry.name, skillMdPath, SKILL_SCOPE.USER, 'opencode');
-        }
+  // 3) Config directories: {skill,skills}/**/SKILL.md
+  const configDirectories = resolveSkillSearchDirectories(workingDirectory);
+  const homeOpencodeDir = path.resolve(path.join(os.homedir(), '.opencode'));
+  const customConfigDir = process.env.OPENCODE_CONFIG_DIR
+    ? path.resolve(process.env.OPENCODE_CONFIG_DIR)
+    : null;
+  for (const dir of configDirectories) {
+    for (const subDir of ['skill', 'skills']) {
+      const root = path.join(dir, subDir);
+      for (const skillMdPath of walkSkillMdFiles(root)) {
+        const isUserConfigDir = dir === OPENCODE_CONFIG_DIR
+          || dir === homeOpencodeDir
+          || (customConfigDir && dir === customConfigDir);
+        const scope = isUserConfigDir ? SKILL_SCOPE.USER : SKILL_SCOPE.PROJECT;
+        addSkillFromMdFile(skills, skillMdPath, scope, 'opencode');
       }
     }
   }
-  
+
+  // 4) Additional config.skills.paths
+  let configuredPaths = [];
+  try {
+    const config = readConfig(workingDirectory);
+    configuredPaths = Array.isArray(config?.skills?.paths) ? config.skills.paths : [];
+  } catch {
+    configuredPaths = [];
+  }
+  for (const skillPath of configuredPaths) {
+    if (typeof skillPath !== 'string' || !skillPath.trim()) continue;
+    const expanded = skillPath.startsWith('~/')
+      ? path.join(os.homedir(), skillPath.slice(2))
+      : skillPath;
+    const resolved = path.isAbsolute(expanded)
+      ? path.resolve(expanded)
+      : path.resolve(workingDirectory || process.cwd(), expanded);
+    for (const skillMdPath of walkSkillMdFiles(resolved)) {
+      addSkillFromMdFile(skills, skillMdPath, SKILL_SCOPE.PROJECT, 'opencode');
+    }
+  }
+
+  // 5) Cached skills from config.skills.urls pulls (best-effort, no network)
+  const cacheCandidates = [];
+  if (process.env.XDG_CACHE_HOME) {
+    cacheCandidates.push(path.join(process.env.XDG_CACHE_HOME, 'opencode', 'skills'));
+  }
+  cacheCandidates.push(path.join(os.homedir(), '.cache', 'opencode', 'skills'));
+  cacheCandidates.push(path.join(os.homedir(), 'Library', 'Caches', 'opencode', 'skills'));
+
+  for (const cacheRoot of cacheCandidates) {
+    if (!fs.existsSync(cacheRoot)) continue;
+    const entries = fs.readdirSync(cacheRoot, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const skillRoot = path.join(cacheRoot, entry.name);
+      for (const skillMdPath of walkSkillMdFiles(skillRoot)) {
+        addSkillFromMdFile(skills, skillMdPath, SKILL_SCOPE.USER, 'opencode');
+      }
+    }
+  }
+
   return Array.from(skills.values());
 }
 
-function getSkillSources(skillName, workingDirectory) {
+function getSkillSources(skillName, workingDirectory, discoveredSkill = null) {
   // Check all possible locations
   const projectPath = workingDirectory ? getProjectSkillPath(workingDirectory, skillName) : null;
   const projectExists = projectPath && fs.existsSync(projectPath);
@@ -1584,6 +1736,10 @@ function getSkillSources(skillName, workingDirectory) {
   const userPath = getUserSkillPath(skillName);
   const userExists = fs.existsSync(userPath);
   const userDir = userExists ? path.dirname(userPath) : null;
+
+  const matchedDiscovered = discoveredSkill && discoveredSkill.name === skillName
+    ? discoveredSkill
+    : discoverSkills(workingDirectory).find((skill) => skill.name === skillName);
   
   // Determine which md file to use (priority: project > claude > user)
   let mdPath = null;
@@ -1606,6 +1762,11 @@ function getSkillSources(skillName, workingDirectory) {
     mdScope = SKILL_SCOPE.USER;
     mdSource = 'opencode';
     mdDir = userDir;
+  } else if (matchedDiscovered?.path) {
+    mdPath = matchedDiscovered.path;
+    mdScope = matchedDiscovered.scope || null;
+    mdSource = matchedDiscovered.source || null;
+    mdDir = path.dirname(matchedDiscovered.path);
   }
   
   const mdExists = !!mdPath;
@@ -1675,14 +1836,27 @@ function createSkill(skillName, config, workingDirectory, scope) {
   let targetPath;
   let targetScope;
   
-  if (scope === SKILL_SCOPE.PROJECT && workingDirectory) {
+  const requestedScope = scope === SKILL_SCOPE.PROJECT ? SKILL_SCOPE.PROJECT : SKILL_SCOPE.USER;
+  const requestedSource = config?.source === 'agents' ? 'agents' : 'opencode';
+
+  if (requestedScope === SKILL_SCOPE.PROJECT && workingDirectory) {
     ensureProjectSkillDir(workingDirectory);
-    targetDir = getProjectSkillDir(workingDirectory, skillName);
-    targetPath = getProjectSkillPath(workingDirectory, skillName);
+    if (requestedSource === 'agents') {
+      targetDir = getProjectAgentsSkillDir(workingDirectory, skillName);
+      targetPath = getProjectAgentsSkillPath(workingDirectory, skillName);
+    } else {
+      targetDir = getProjectSkillDir(workingDirectory, skillName);
+      targetPath = getProjectSkillPath(workingDirectory, skillName);
+    }
     targetScope = SKILL_SCOPE.PROJECT;
   } else {
-    targetDir = getUserSkillDir(skillName);
-    targetPath = getUserSkillPath(skillName);
+    if (requestedSource === 'agents') {
+      targetDir = getUserAgentsSkillDir(skillName);
+      targetPath = getUserAgentsSkillPath(skillName);
+    } else {
+      targetDir = getUserSkillDir(skillName);
+      targetPath = getUserSkillPath(skillName);
+    }
     targetScope = SKILL_SCOPE.USER;
   }
 
@@ -1690,7 +1864,9 @@ function createSkill(skillName, config, workingDirectory, scope) {
   fs.mkdirSync(targetDir, { recursive: true });
 
   // Extract fields - scope is only for path determination
-  const { instructions, scope: _scopeFromConfig, supportingFiles, ...frontmatter } = config;
+  const { instructions, scope: _scopeFromConfig, source: _sourceFromConfig, supportingFiles, ...frontmatter } = config;
+  void _scopeFromConfig;
+  void _sourceFromConfig;
 
   // Ensure required fields
   if (!frontmatter.name) {
@@ -1789,6 +1965,13 @@ function deleteSkill(skillName, workingDirectory) {
       console.log(`Deleted claude-compat skill directory: ${claudeDir}`);
       deleted = true;
     }
+
+    const projectAgentsDir = getProjectAgentsSkillDir(workingDirectory, skillName);
+    if (fs.existsSync(projectAgentsDir)) {
+      fs.rmSync(projectAgentsDir, { recursive: true, force: true });
+      console.log(`Deleted project-level agents skill directory: ${projectAgentsDir}`);
+      deleted = true;
+    }
   }
 
   // User level
@@ -1796,6 +1979,13 @@ function deleteSkill(skillName, workingDirectory) {
   if (fs.existsSync(userDir)) {
     fs.rmSync(userDir, { recursive: true, force: true });
     console.log(`Deleted user-level skill directory: ${userDir}`);
+    deleted = true;
+  }
+
+  const userAgentsDir = getUserAgentsSkillDir(skillName);
+  if (fs.existsSync(userAgentsDir)) {
+    fs.rmSync(userAgentsDir, { recursive: true, force: true });
+    console.log(`Deleted user-level agents skill directory: ${userAgentsDir}`);
     deleted = true;
   }
 

@@ -68,7 +68,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     }
 
     // Set draft and open the page for editing
-    setSkillDraft({ name: newName, scope: 'user', description: '' });
+    setSkillDraft({ name: newName, scope: 'user', source: 'opencode', description: '' });
     setSelectedSkill(newName);
     onItemSelect?.();
 
@@ -115,12 +115,13 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     }
 
     // Set draft with prefilled values from source skill
-    setSkillDraft({
-      name: newName,
-      scope: skill.scope || 'user',
-      description: detail.sources.md.fields.includes('description') ? '' : '', // Will be populated from page
-      instructions: '',
-    });
+      setSkillDraft({
+        name: newName,
+        scope: skill.scope || 'user',
+        source: skill.source || 'opencode',
+        description: detail.sources.md.fields.includes('description') ? '' : '', // Will be populated from page
+        instructions: '',
+      });
     setSelectedSkill(newName);
 
     if (isMobile) {
@@ -166,6 +167,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
       name: sanitizedName,
       description: 'Renamed skill', // Will need proper description
       scope: renameDialogSkill.scope,
+      source: renameDialogSkill.source,
     });
 
     if (success) {
@@ -376,6 +378,11 @@ const SkillListItem: React.FC<SkillListItemProps> = ({
             {skill.source === 'claude' && (
               <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
                 claude
+              </span>
+            )}
+            {skill.source === 'agents' && (
+              <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
+                agents
               </span>
             )}
           </div>

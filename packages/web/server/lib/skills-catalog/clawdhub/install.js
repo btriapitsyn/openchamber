@@ -43,13 +43,22 @@ async function ensureDir(dirPath) {
   await fs.promises.mkdir(dirPath, { recursive: true });
 }
 
-function getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName }) {
+function getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName }) {
+  const source = targetSource === 'agents' ? 'agents' : 'opencode';
+
   if (scope === 'user') {
+    if (source === 'agents') {
+      return path.join(os.homedir(), '.agents', 'skills', skillName);
+    }
     return path.join(userSkillDir, skillName);
   }
 
   if (!workingDirectory) {
     throw new Error('workingDirectory is required for project installs');
+  }
+
+  if (source === 'agents') {
+    return path.join(workingDirectory, '.agents', 'skills', skillName);
   }
 
   return path.join(workingDirectory, '.opencode', 'skills', skillName);
@@ -59,6 +68,7 @@ function getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName })
  * Install skills from ClawdHub registry
  * @param {Object} options
  * @param {string} options.scope - 'user' or 'project'
+ * @param {string} [options.targetSource] - 'opencode' or 'agents'
  * @param {string} [options.workingDirectory] - Required for project scope
  * @param {string} options.userSkillDir - User skills directory
  * @param {Array} options.selections - Array of { skillDir, clawdhub: { slug, version } }
@@ -68,6 +78,7 @@ function getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName })
  */
 export async function installSkillsFromClawdHub({
   scope,
+  targetSource,
   workingDirectory,
   userSkillDir,
   selections,
@@ -76,6 +87,10 @@ export async function installSkillsFromClawdHub({
 } = {}) {
   if (scope !== 'user' && scope !== 'project') {
     return { ok: false, error: { kind: 'invalidSource', message: 'Invalid scope' } };
+  }
+
+  if (targetSource !== undefined && targetSource !== 'opencode' && targetSource !== 'agents') {
+    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid target source' } };
   }
 
   if (!userSkillDir) {
@@ -114,12 +129,12 @@ export async function installSkillsFromClawdHub({
       continue;
     }
 
-    const targetDir = getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName: plan.slug });
+    const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.slug });
     if (fs.existsSync(targetDir)) {
       const decision = conflictDecisions?.[plan.slug];
       const hasAutoPolicy = conflictPolicy === 'skipAll' || conflictPolicy === 'overwriteAll';
       if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: plan.slug, scope });
+        conflicts.push({ skillName: plan.slug, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
       }
     }
   }
@@ -164,7 +179,7 @@ export async function installSkillsFromClawdHub({
         }
       }
 
-      const targetDir = getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName: plan.slug });
+      const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.slug });
       const exists = fs.existsSync(targetDir);
 
       // Determine conflict resolution
@@ -205,7 +220,7 @@ export async function installSkillsFromClawdHub({
         await ensureDir(path.dirname(targetDir));
         await fs.promises.rename(tempDir, targetDir);
 
-        installed.push({ skillName: plan.slug, scope });
+        installed.push({ skillName: plan.slug, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
       } catch (extractError) {
         await safeRm(tempDir);
         throw extractError;

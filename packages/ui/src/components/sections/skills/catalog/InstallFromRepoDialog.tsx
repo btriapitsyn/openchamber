@@ -20,7 +20,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select';
-import { RiFolderLine, RiGitRepositoryLine, RiUser3Line } from '@remixicon/react';
+import { RiFolderLine, RiGitRepositoryLine, RiRobot2Line, RiUser3Line } from '@remixicon/react';
 
 import { isVSCodeRuntime } from '@/lib/desktop';
 import type { SkillsCatalogItem } from '@/lib/api/types';
@@ -28,6 +28,13 @@ import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { InstallConflictsDialog, type ConflictDecision, type SkillConflict } from './InstallConflictsDialog';
+import {
+  SKILL_LOCATION_OPTIONS,
+  locationLabel,
+  locationPartsFrom,
+  locationValueFrom,
+  type SkillLocationValue,
+} from '../skillLocations';
 
 interface InstallFromRepoDialogProps {
   open: boolean;
@@ -45,6 +52,7 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
   const [source, setSource] = React.useState('');
   const [subpath, setSubpath] = React.useState('');
   const [scope, setScope] = React.useState<'user' | 'project'>('user');
+  const [targetSource, setTargetSource] = React.useState<'opencode' | 'agents'>('opencode');
 
   const [items, setItems] = React.useState<SkillsCatalogItem[]>([]);
   const [selected, setSelected] = React.useState<Record<string, boolean>>({});
@@ -59,6 +67,7 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
     source: string;
     subpath?: string;
     scope: 'user' | 'project';
+    targetSource: 'opencode' | 'agents';
     selections: Array<{ skillDir: string }>;
     gitIdentityId?: string;
   } | null>(null);
@@ -68,6 +77,7 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
     setSource('');
     setSubpath('');
     setScope('user');
+    setTargetSource('opencode');
     setItems([]);
     setSelected({});
     setSearch('');
@@ -82,9 +92,9 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
   }, [open, loadDefaultGitIdentityId]);
 
   const installedByName = React.useMemo(() => {
-    const map = new Map<string, { scope: 'user' | 'project' }>();
+    const map = new Map<string, { scope: 'user' | 'project'; source: 'opencode' | 'claude' | 'agents' }>();
     for (const s of installedSkills) {
-      map.set(s.name, { scope: s.scope });
+      map.set(s.name, { scope: s.scope, source: s.source });
     }
     return map;
   }, [installedSkills]);
@@ -176,6 +186,7 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
       source: source.trim(),
       subpath: subpath.trim() || undefined,
       scope,
+      targetSource,
       selections: selectedDirs.map((dir) => ({ skillDir: dir })),
       gitIdentityId: gitIdentityId || undefined,
     };
@@ -272,31 +283,33 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
               </div>
 
               <div className="space-y-2">
-                <label className="typography-ui-label font-medium text-foreground">Target scope</label>
-                <Select value={scope} onValueChange={(v) => setScope(v as 'user' | 'project')}>
+                <label className="typography-ui-label font-medium text-foreground">Target location</label>
+                <Select
+                  value={locationValueFrom(scope, targetSource)}
+                  onValueChange={(v) => {
+                    const next = locationPartsFrom(v as SkillLocationValue);
+                    setScope(next.scope);
+                    setTargetSource(next.source === 'agents' ? 'agents' : 'opencode');
+                  }}
+                >
                   <SelectTrigger className="!h-9 w-full gap-1.5">
                     {scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
-                    <span className="capitalize">{scope}</span>
+                    {targetSource === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                    <span>{locationLabel(scope, targetSource)}</span>
                   </SelectTrigger>
                   <SelectContent align="start">
-                    <SelectItem value="user" className="pr-2 [&>span:first-child]:hidden">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <RiUser3Line className="h-4 w-4" />
-                          <span>User</span>
+                    {SKILL_LOCATION_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="pr-2 [&>span:first-child]:hidden">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            {option.scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
+                            {option.source === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                            <span>{option.label}</span>
+                          </div>
+                          <span className="typography-micro text-muted-foreground ml-6">{option.description}</span>
                         </div>
-                        <span className="typography-micro text-muted-foreground ml-6">Available in all projects</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="project" className="pr-2 [&>span:first-child]:hidden">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <RiFolderLine className="h-4 w-4" />
-                          <span>Project</span>
-                        </div>
-                        <span className="typography-micro text-muted-foreground ml-6">Only in current project</span>
-                      </div>
-                    </SelectItem>
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -378,7 +391,7 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
                             <div className="typography-ui-label truncate">{item.skillName}</div>
                             {installed ? (
                               <span className="typography-micro text-muted-foreground bg-muted px-1 rounded flex-shrink-0 leading-none pb-px border border-border/50">
-                                installed ({installed.scope})
+                                installed ({installed.scope}/{installed.source})
                               </span>
                             ) : null}
                           </div>

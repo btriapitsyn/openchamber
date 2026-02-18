@@ -105,13 +105,22 @@ async function cloneRepo({ cloneUrl, identity, tempDir }) {
   };
 }
 
-function getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName }) {
+function getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName }) {
+  const source = targetSource === 'agents' ? 'agents' : 'opencode';
+
   if (scope === 'user') {
+    if (source === 'agents') {
+      return path.join(os.homedir(), '.agents', 'skills', skillName);
+    }
     return path.join(userSkillDir, skillName);
   }
 
   if (!workingDirectory) {
     throw new Error('workingDirectory is required for project installs');
+  }
+
+  if (source === 'agents') {
+    return path.join(workingDirectory, '.agents', 'skills', skillName);
   }
 
   return path.join(workingDirectory, '.opencode', 'skills', skillName);
@@ -123,6 +132,7 @@ export async function installSkillsFromRepository({
   defaultSubpath,
   identity,
   scope,
+  targetSource,
   workingDirectory,
   userSkillDir,
   selections,
@@ -145,6 +155,10 @@ export async function installSkillsFromRepository({
 
   if (scope !== 'user' && scope !== 'project') {
     return { ok: false, error: { kind: 'invalidSource', message: 'Invalid scope' } };
+  }
+
+  if (targetSource !== undefined && targetSource !== 'opencode' && targetSource !== 'agents') {
+    return { ok: false, error: { kind: 'invalidSource', message: 'Invalid target source' } };
   }
 
   if (scope === 'project' && !workingDirectory) {
@@ -178,12 +192,12 @@ export async function installSkillsFromRepository({
       continue;
     }
 
-    const targetDir = getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName: plan.skillName });
+    const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
     if (fs.existsSync(targetDir)) {
       const decision = conflictDecisions?.[plan.skillName];
       const hasAutoPolicy = conflictPolicy === 'skipAll' || conflictPolicy === 'overwriteAll';
       if (!decision && !hasAutoPolicy) {
-        conflicts.push({ skillName: plan.skillName, scope });
+        conflicts.push({ skillName: plan.skillName, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
       }
     }
   }
@@ -239,7 +253,7 @@ export async function installSkillsFromRepository({
         continue;
       }
 
-      const targetDir = getTargetSkillDir({ scope, workingDirectory, userSkillDir, skillName: plan.skillName });
+      const targetDir = getTargetSkillDir({ scope, targetSource, workingDirectory, userSkillDir, skillName: plan.skillName });
       const exists = fs.existsSync(targetDir);
 
       let decision = conflictDecisions?.[plan.skillName] || null;
@@ -263,7 +277,7 @@ export async function installSkillsFromRepository({
 
       try {
         await copyDirectoryNoSymlinks(srcDir, targetDir);
-        installed.push({ skillName: plan.skillName, scope });
+        installed.push({ skillName: plan.skillName, scope, source: targetSource === 'agents' ? 'agents' : 'opencode' });
       } catch (error) {
         await safeRm(targetDir);
         skipped.push({

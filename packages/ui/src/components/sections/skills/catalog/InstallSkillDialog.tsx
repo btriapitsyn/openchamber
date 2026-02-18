@@ -16,11 +16,18 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select';
-import { RiFolderLine, RiUser3Line } from '@remixicon/react';
+import { RiFolderLine, RiRobot2Line, RiUser3Line } from '@remixicon/react';
 
 import type { SkillsCatalogItem } from '@/lib/api/types';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { InstallConflictsDialog, type ConflictDecision, type SkillConflict } from './InstallConflictsDialog';
+import {
+  SKILL_LOCATION_OPTIONS,
+  locationLabel,
+  locationPartsFrom,
+  locationValueFrom,
+  type SkillLocationValue,
+} from '../skillLocations';
 
 interface InstallSkillDialogProps {
   open: boolean;
@@ -31,18 +38,21 @@ interface InstallSkillDialogProps {
 export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, onOpenChange, item }) => {
   const { installSkills, isInstalling } = useSkillsCatalogStore();
   const [scope, setScope] = React.useState<'user' | 'project'>('user');
+  const [targetSource, setTargetSource] = React.useState<'opencode' | 'agents'>('opencode');
   const [conflictsOpen, setConflictsOpen] = React.useState(false);
   const [conflicts, setConflicts] = React.useState<SkillConflict[]>([]);
   const [baseRequest, setBaseRequest] = React.useState<{
     source: string;
     subpath?: string;
     scope: 'user' | 'project';
+    targetSource: 'opencode' | 'agents';
     skillDir: string;
   } | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
     setScope('user');
+    setTargetSource('opencode');
     setConflictsOpen(false);
     setConflicts([]);
     setBaseRequest(null);
@@ -52,6 +62,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     source: string;
     subpath?: string;
     scope: 'user' | 'project';
+    targetSource: 'opencode' | 'agents';
     skillDir: string;
     conflictDecisions?: Record<string, ConflictDecision>;
   }) => {
@@ -71,6 +82,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
       subpath: request.subpath,
       gitIdentityId: item?.gitIdentityId,
       scope: request.scope,
+      targetSource: request.targetSource,
       selections: [selection],
       conflictPolicy: 'prompt',
       conflictDecisions: request.conflictDecisions,
@@ -83,7 +95,13 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     }
 
     if (result.error?.kind === 'conflicts') {
-      setBaseRequest({ source: request.source, subpath: request.subpath, scope: request.scope, skillDir: request.skillDir });
+      setBaseRequest({
+        source: request.source,
+        subpath: request.subpath,
+        scope: request.scope,
+        targetSource: request.targetSource,
+        skillDir: request.skillDir,
+      });
       setConflicts(result.error.conflicts);
       setConflictsOpen(true);
       return;
@@ -108,7 +126,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
           <DialogHeader>
             <DialogTitle>Install skill</DialogTitle>
             <DialogDescription>
-              Install <span className="font-semibold text-foreground">{item.skillName}</span> into user or project scope.
+              Install <span className="font-semibold text-foreground">{item.skillName}</span> into one of four target locations.
             </DialogDescription>
           </DialogHeader>
 
@@ -127,26 +145,34 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
 
           <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
             <div className="flex items-center gap-2">
-              <Select value={scope} onValueChange={(v) => setScope(v as 'user' | 'project')}>
-                <SelectTrigger className="!h-9 w-full sm:w-36 justify-between">
-                  <span className="flex flex-1 items-center gap-2 justify-start">
+              <Select
+                value={locationValueFrom(scope, targetSource)}
+                onValueChange={(v) => {
+                  const next = locationPartsFrom(v as SkillLocationValue);
+                  setScope(next.scope);
+                  setTargetSource(next.source === 'agents' ? 'agents' : 'opencode');
+                }}
+              >
+                <SelectTrigger className="!h-9 w-full sm:w-auto">
+                  <span className="flex items-center gap-2 whitespace-nowrap">
                     {scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
-                    <span className="capitalize">{scope}</span>
+                    {targetSource === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                    <span>{locationLabel(scope, targetSource)}</span>
                   </span>
                 </SelectTrigger>
                 <SelectContent align="start">
-                  <SelectItem value="user" className="pr-2 [&>span:first-child]:hidden">
-                    <div className="flex items-center gap-2">
-                      <RiUser3Line className="h-4 w-4" />
-                      <span>User</span>
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="project" className="pr-2 [&>span:first-child]:hidden">
-                    <div className="flex items-center gap-2">
-                      <RiFolderLine className="h-4 w-4" />
-                      <span>Project</span>
-                    </div>
-                  </SelectItem>
+                  {SKILL_LOCATION_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value} className="pr-2 [&>span:first-child]:hidden">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                          {option.scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
+                          {option.source === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                          <span>{option.label}</span>
+                        </div>
+                        <span className="typography-micro text-muted-foreground ml-6">{option.description}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -164,6 +190,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
                     source: item.repoSource,
                     subpath: item.repoSubpath,
                     scope,
+                    targetSource,
                     skillDir: item.skillDir,
                   })
                 }
@@ -185,6 +212,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
             source: baseRequest.source,
             subpath: baseRequest.subpath,
             scope: baseRequest.scope,
+            targetSource: baseRequest.targetSource,
             skillDir: baseRequest.skillDir,
             conflictDecisions: decisions,
           });
