@@ -651,6 +651,30 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const messageTextContent = React.useMemo(() => {
         if (isUser) {
+            const shellOutputs = displayParts
+                .filter((part): part is Part & { type: 'text'; shellAction?: { output?: unknown } } => part.type === 'text')
+                .map((part) => {
+                    const output = part.shellAction?.output;
+                    return typeof output === 'string' ? output.trim() : '';
+                })
+                .filter((output) => output.length > 0);
+
+            if (shellOutputs.length > 0) {
+                return shellOutputs.join('\n\n');
+            }
+
+            const shellCommands = displayParts
+                .filter((part): part is Part & { type: 'text'; shellAction?: { command?: unknown } } => part.type === 'text')
+                .map((part) => {
+                    const command = part.shellAction?.command;
+                    return typeof command === 'string' ? command.trim() : '';
+                })
+                .filter((command) => command.length > 0);
+
+            if (shellCommands.length > 0) {
+                return shellCommands.join('\n');
+            }
+
             const textParts = displayParts
                 .filter((part): part is Part & { type: 'text'; text?: string; content?: string } => part.type === 'text')
                 .map((part) => {

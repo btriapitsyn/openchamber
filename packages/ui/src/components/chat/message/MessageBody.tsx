@@ -41,8 +41,22 @@ type SubtaskPartLike = Part & {
     };
 };
 
+type ShellActionPartLike = Part & {
+    type: 'text';
+    shellAction?: {
+        command?: unknown;
+        output?: unknown;
+        status?: unknown;
+    };
+};
+
 const isSubtaskPart = (part: Part): part is SubtaskPartLike => {
     return part.type === 'subtask';
+};
+
+const isShellActionPart = (part: Part): part is ShellActionPartLike => {
+    const textPart = part as unknown as { type?: unknown; shellAction?: unknown };
+    return textPart.type === 'text' && typeof textPart.shellAction === 'object' && textPart.shellAction !== null;
 };
 
 const normalizeSubtaskModel = (model: SubtaskPartLike['model']): string | null => {
@@ -125,6 +139,124 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
     );
 };
 
+const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) => {
+    const [expanded, setExpanded] = React.useState(false);
+    const [copiedOutput, setCopiedOutput] = React.useState(false);
+    const copiedResetTimeoutRef = React.useRef<number | null>(null);
+
+    const command = typeof part.shellAction?.command === 'string' ? part.shellAction.command.trim() : '';
+    const output = typeof part.shellAction?.output === 'string' ? part.shellAction.output : '';
+    const status = typeof part.shellAction?.status === 'string' ? part.shellAction.status.trim().toLowerCase() : '';
+    const hasOutput = output.trim().length > 0;
+
+    const clearCopiedResetTimeout = React.useCallback(() => {
+        if (copiedResetTimeoutRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(copiedResetTimeoutRef.current);
+            copiedResetTimeoutRef.current = null;
+        }
+    }, []);
+
+    React.useEffect(() => {
+        return () => {
+            clearCopiedResetTimeout();
+        };
+    }, [clearCopiedResetTimeout]);
+
+    const copyOutputToClipboard = React.useCallback(async () => {
+        if (!hasOutput) return;
+
+        let succeeded = false;
+
+        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window !== 'undefined' && window.isSecureContext) {
+            try {
+                await navigator.clipboard.writeText(output);
+                succeeded = true;
+            } catch {
+                succeeded = false;
+            }
+        }
+
+        if (!succeeded && typeof document !== 'undefined') {
+            const textarea = document.createElement('textarea');
+            textarea.value = output;
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.top = '-1000px';
+            textarea.style.left = '-1000px';
+            document.body.appendChild(textarea);
+            textarea.select();
+            textarea.setSelectionRange(0, textarea.value.length);
+            succeeded = document.execCommand('copy');
+            document.body.removeChild(textarea);
+        }
+
+        if (!succeeded) return;
+
+        clearCopiedResetTimeout();
+        setCopiedOutput(true);
+        if (typeof window !== 'undefined') {
+            copiedResetTimeoutRef.current = window.setTimeout(() => {
+                setCopiedOutput(false);
+                copiedResetTimeoutRef.current = null;
+            }, 2000);
+        }
+    }, [clearCopiedResetTimeout, hasOutput, output]);
+
+    return (
+        <div className="mt-2">
+            <div className="flex items-center gap-2 flex-wrap">
+                <span className="typography-meta font-semibold text-foreground">Shell command</span>
+                {status ? (
+                    <span className={cn(
+                        'inline-flex h-5 items-center rounded px-1.5 text-[11px] leading-none',
+                        status === 'error'
+                            ? 'bg-[var(--status-error-background)] text-[var(--status-error)]'
+                            : 'bg-foreground/5 text-muted-foreground'
+                    )}>
+                        {status}
+                    </span>
+                ) : null}
+            </div>
+
+            {command ? (
+                <pre className="typography-meta mt-1.5 overflow-x-auto whitespace-pre-wrap break-words text-foreground/90 font-mono">
+                    {command}
+                </pre>
+            ) : null}
+
+            {hasOutput ? (
+                <div className="mt-2 border-t border-border/60 pt-1.5">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <button
+                            type="button"
+                            className="typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+                            onClick={() => setExpanded((value) => !value)}
+                        >
+                            {expanded ? 'Hide output' : 'Show output'}
+                        </button>
+                        <button
+                            type="button"
+                            className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => {
+                                void copyOutputToClipboard();
+                            }}
+                            aria-label={copiedOutput ? 'Copied' : 'Copy output'}
+                            title={copiedOutput ? 'Copied' : 'Copy output'}
+                        >
+                            {copiedOutput ? <RiCheckLine className="h-3.5 w-3.5" /> : <RiFileCopyLine className="h-3.5 w-3.5" />}
+                        </button>
+                    </div>
+                    {expanded ? (
+                        <pre className="typography-meta mt-1.5 max-h-56 overflow-auto whitespace-pre-wrap break-words text-foreground/85 font-mono">
+                            {output}
+                        </pre>
+                    ) : null}
+                </div>
+            ) : null}
+        </div>
+    );
+};
+
 const formatTurnDuration = (durationMs: number): string => {
     const totalSeconds = durationMs / 1000;
     if (totalSeconds < 60) {
@@ -199,6 +331,9 @@ const UserMessageBody: React.FC<{
             if (isSubtaskPart(part)) {
                 return true;
             }
+            if (isShellActionPart(part)) {
+                return true;
+            }
             return false;
         });
     }, [parts]);
@@ -267,6 +402,14 @@ const UserMessageBody: React.FC<{
                         return (
                             <FadeInOnReveal key={part.id ?? `user-subtask-${index}`}>
                                 <UserSubtaskPart part={part} />
+                            </FadeInOnReveal>
+                        );
+                    }
+
+                    if (isShellActionPart(part)) {
+                        return (
+                            <FadeInOnReveal key={part.id ?? `user-shell-${index}`}>
+                                <UserShellActionPart part={part} />
                             </FadeInOnReveal>
                         );
                     }

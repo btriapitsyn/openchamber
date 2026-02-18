@@ -335,7 +335,7 @@ export const useSessionStore = create<SessionStore>()(
                     get().evictLeastRecentlyUsed();
                 },
                 loadMessages: (sessionId: string, limit?: number) => useMessageStore.getState().loadMessages(sessionId, limit),
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, attachments?: AttachedFile[], agentMentionName?: string, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string, inputMode: 'normal' | 'shell' = 'normal') => {
                     const draft = get().newSessionDraft;
                     const trimmedAgent = typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined;
 
@@ -420,7 +420,7 @@ export const useSessionStore = create<SessionStore>()(
                         try {
                             return await useMessageStore
                                 .getState()
-                                .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, mergedAdditionalParts, variant);
+                                .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, mergedAdditionalParts, variant, inputMode);
                         } catch (error) {
                             setStatus(created.id, 'idle');
                             throw error;
@@ -477,7 +477,7 @@ export const useSessionStore = create<SessionStore>()(
                     }
 
                     try {
-                        return await useMessageStore.getState().sendMessage(content, providerID, modelID, effectiveAgent, currentSessionId || undefined, attachments, agentMentionName, additionalParts, variant);
+                        return await useMessageStore.getState().sendMessage(content, providerID, modelID, effectiveAgent, currentSessionId || undefined, attachments, agentMentionName, additionalParts, variant, inputMode);
                     } catch (error) {
                         if (currentSessionId) {
                             setStatus(currentSessionId, 'idle');

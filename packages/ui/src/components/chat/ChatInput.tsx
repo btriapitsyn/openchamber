@@ -76,6 +76,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
         return draft;
     });
+    const [inputMode, setInputMode] = React.useState<'normal' | 'shell'>('normal');
     const [isDragging, setIsDragging] = React.useState(false);
     const [showFileMention, setShowFileMention] = React.useState(false);
     const [mentionQuery, setMentionQuery] = React.useState('');
@@ -206,6 +207,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     React.useEffect(() => {
         if (prevSessionIdRef.current !== currentSessionId) {
             prevSessionIdRef.current = currentSessionId;
+            setInputMode('normal');
             
             if (!persistChatDraft) {
                 // Clear draft when switching sessions if persist is disabled
@@ -538,9 +540,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             textareaRef.current?.blur();
         }
 
-        // Handle slash commands locally before sending
+        // Handle local slash commands only in normal mode
         const normalizedCommand = primaryText.trimStart();
-        if (normalizedCommand.startsWith('/')) {
+        if (inputMode === 'normal' && normalizedCommand.startsWith('/')) {
             const commandName = normalizedCommand
                 .slice(1)
                 .trim()
@@ -583,7 +585,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             primaryAttachments,
             agentMentionName,
             additionalParts.length > 0 ? additionalParts : undefined,
-            currentVariant
+            currentVariant,
+            inputMode
         ).catch((error: unknown) => {
             const rawMessage =
                 error instanceof Error
@@ -637,13 +640,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     // Primary action for send button - respects queue mode setting
     const handlePrimaryAction = React.useCallback(() => {
-        const canQueue = hasContent && currentSessionId && sessionPhase !== 'idle';
+        const canQueue = inputMode === 'normal' && hasContent && currentSessionId && sessionPhase !== 'idle';
         if (queueModeEnabled && canQueue) {
             handleQueueMessage();
         } else {
             void handleSubmitRef.current();
         }
-    }, [hasContent, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage]);
+    }, [inputMode, hasContent, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage]);
 
     // Auto-send queued messages when session becomes idle (but not after abort)
     React.useEffect(() => {
@@ -679,6 +682,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         // Early return during IME composition to prevent interference with autocomplete.
         // Uses keyCode === 229 fallback for WebKit where compositionend fires before keydown.
         if (isIMECompositionEvent(e)) return;
+
+        if (inputMode === 'shell' && e.key === 'Escape') {
+            e.preventDefault();
+            setInputMode('normal');
+            return;
+        }
+
+        if (inputMode === 'shell' && e.key === 'Backspace' && message.length === 0) {
+            e.preventDefault();
+            setInputMode('normal');
+            return;
+        }
 
         if (showCommandAutocomplete && commandRef.current) {
             if (e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Escape' || e.key === 'Tab') {
@@ -766,7 +781,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             // Normal mode: Enter sends, Ctrl+Enter queues
             // Note: Queueing only works when there's an existing session (currentSessionId)
             // For new sessions (draft), always send immediately
-            const canQueue = hasContent && currentSessionId && sessionPhase !== 'idle';
+            const canQueue = inputMode === 'normal' && hasContent && currentSessionId && sessionPhase !== 'idle';
 
             if (queueModeEnabled) {
                 if (isCtrlEnter || !canQueue) {
@@ -862,6 +877,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [adjustTextareaHeight, message, isMobile]);
 
     const updateAutocompleteState = React.useCallback((value: string, cursorPosition: number) => {
+        if (inputMode === 'shell') {
+            setShowCommandAutocomplete(false);
+            setShowFileMention(false);
+            setShowSkillAutocomplete(false);
+            return;
+        }
+
         if (value.startsWith('/')) {
             const firstSpace = value.indexOf(' ');
             const firstNewline = value.indexOf('\n');
@@ -918,7 +940,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         } else {
             setShowFileMention(false);
         }
-    }, [setAutocompleteTab, setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention, setShowSkillAutocomplete, setSkillQuery]);
+    }, [inputMode, setAutocompleteTab, setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention, setShowSkillAutocomplete, setSkillQuery]);
 
     const applyAutocompletePrefix = React.useCallback((prefix: '/' | '@') => {
         const nextMessage = message.length === 0
@@ -1031,6 +1053,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const value = e.target.value;
         const cursorPosition = e.target.selectionStart ?? value.length;
+
+        if (inputMode === 'normal' && value.startsWith('!')) {
+            const shellCommand = value.slice(1);
+            const nextCursor = Math.max(0, cursorPosition - 1);
+            setInputMode('shell');
+            setMessage(shellCommand);
+            adjustTextareaHeight();
+            setShowCommandAutocomplete(false);
+            setShowSkillAutocomplete(false);
+            setShowFileMention(false);
+            requestAnimationFrame(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.selectionStart = nextCursor;
+                    textareaRef.current.selectionEnd = nextCursor;
+                }
+            });
+            return;
+        }
+
         setMessage(value);
         adjustTextareaHeight();
         updateAutocompleteState(value, cursorPosition);
@@ -1858,7 +1899,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     className={cn(
                         "flex flex-col relative overflow-visible",
                         "border border-border/80",
-                        "focus-within:ring-1 focus-within:ring-primary/50",
+                        "focus-within:ring-1",
+                        inputMode === 'shell'
+                            ? 'focus-within:ring-[var(--status-info)]'
+                            : 'focus-within:ring-primary/50',
                         isDragging && "ring-2 ring-primary ring-offset-2"
                     )}
                     style={{
@@ -1936,7 +1980,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         onDrop={handleDrop}
                         onPointerDownCapture={handleTextareaPointerDownCapture}
                         placeholder={currentSessionId || newSessionDraftOpen
-                            ? "@ for files/agents; / for commands; ! for shell"
+                            ? inputMode === 'shell'
+                                ? "Enter shell command..."
+                                : "@ for files/agents; / for commands; ! for shell"
                             : "Select or create a session to start chatting"}
                         disabled={!currentSessionId && !newSessionDraftOpen}
                         autoCorrect={isMobile ? "on" : "off"}
@@ -1945,6 +1991,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         outerClassName="focus-within:ring-0"
                         className={cn(
                             'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent',
+                            inputMode === 'shell' && 'font-mono',
                             isMobile ? "py-2.5" : "pt-4 pb-2"
                         )}
                         style={{

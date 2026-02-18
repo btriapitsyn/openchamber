@@ -18,6 +18,8 @@ interface ChatMessageEntry {
     parts: Part[];
 }
 
+const USER_SHELL_MARKER = 'The following tool was executed by the user';
+
 const resolveMessageRole = (message: ChatMessageEntry): string | null => {
     const info = message.info as unknown as { clientRole?: string | null | undefined; role?: string | null | undefined };
     return (typeof info.clientRole === 'string' ? info.clientRole : null)
@@ -29,6 +31,84 @@ const isUserSubtaskMessage = (message: ChatMessageEntry | undefined): boolean =>
     if (!message) return false;
     if (resolveMessageRole(message) !== 'user') return false;
     return message.parts.some((part) => part?.type === 'subtask');
+};
+
+const getMessageId = (message: ChatMessageEntry | undefined): string | null => {
+    if (!message) return null;
+    const id = (message.info as unknown as { id?: unknown }).id;
+    return typeof id === 'string' && id.trim().length > 0 ? id : null;
+};
+
+const getMessageParentId = (message: ChatMessageEntry): string | null => {
+    const parentID = (message.info as unknown as { parentID?: unknown }).parentID;
+    return typeof parentID === 'string' && parentID.trim().length > 0 ? parentID : null;
+};
+
+const isUserShellMarkerMessage = (message: ChatMessageEntry | undefined): boolean => {
+    if (!message) return false;
+    if (resolveMessageRole(message) !== 'user') return false;
+
+    return message.parts.some((part) => {
+        if (part?.type !== 'text') return false;
+        const text = (part as unknown as { text?: unknown }).text;
+        const synthetic = (part as unknown as { synthetic?: unknown }).synthetic;
+        return synthetic === true && typeof text === 'string' && text.trim().startsWith(USER_SHELL_MARKER);
+    });
+};
+
+type ShellBridgeDetails = {
+    command?: string;
+    output?: string;
+    status?: string;
+};
+
+const getShellBridgeAssistantDetails = (message: ChatMessageEntry, expectedParentId: string | null): { hide: boolean; details: ShellBridgeDetails | null } => {
+    if (resolveMessageRole(message) !== 'assistant') {
+        return { hide: false, details: null };
+    }
+
+    if (expectedParentId && getMessageParentId(message) !== expectedParentId) {
+        return { hide: false, details: null };
+    }
+
+    if (message.parts.length !== 1) {
+        return { hide: false, details: null };
+    }
+
+    const part = message.parts[0] as unknown as {
+        type?: unknown;
+        tool?: unknown;
+        state?: {
+            status?: unknown;
+            input?: { command?: unknown };
+            output?: unknown;
+            metadata?: { output?: unknown };
+        };
+    };
+
+    if (part.type !== 'tool') {
+        return { hide: false, details: null };
+    }
+
+    const toolName = typeof part.tool === 'string' ? part.tool.toLowerCase() : '';
+    if (toolName !== 'bash') {
+        return { hide: false, details: null };
+    }
+
+    const command = typeof part.state?.input?.command === 'string' ? part.state.input.command : undefined;
+    const output =
+        (typeof part.state?.output === 'string' ? part.state.output : undefined)
+        ?? (typeof part.state?.metadata?.output === 'string' ? part.state.metadata.output : undefined);
+    const status = typeof part.state?.status === 'string' ? part.state.status : undefined;
+
+    return {
+        hide: true,
+        details: {
+            command,
+            output,
+            status,
+        },
+    };
 };
 
 const readTaskSessionId = (toolPart: Part): string | null => {
@@ -99,6 +179,53 @@ const withSubtaskSessionId = (message: ChatMessageEntry, taskSessionId: string |
             taskSessionID: taskSessionId,
         } as Part;
     });
+
+    return {
+        ...message,
+        parts: nextParts,
+    };
+};
+
+const withShellBridgeDetails = (message: ChatMessageEntry, details: ShellBridgeDetails | null): ChatMessageEntry => {
+    const command = typeof details?.command === 'string' ? details.command.trim() : '';
+    const output = typeof details?.output === 'string' ? details.output : '';
+    const status = typeof details?.status === 'string' ? details.status.trim() : '';
+
+    const nextParts: Part[] = [];
+    let injected = false;
+
+    for (const part of message.parts) {
+        if (!injected && part?.type === 'text') {
+            const text = (part as unknown as { text?: unknown }).text;
+            const synthetic = (part as unknown as { synthetic?: unknown }).synthetic;
+            if (synthetic === true && typeof text === 'string' && text.trim().startsWith(USER_SHELL_MARKER)) {
+                nextParts.push({
+                    type: 'text',
+                    text: '/shell',
+                    shellAction: {
+                        ...(command ? { command } : {}),
+                        ...(output ? { output } : {}),
+                        ...(status ? { status } : {}),
+                    },
+                } as unknown as Part);
+                injected = true;
+                continue;
+            }
+        }
+        nextParts.push(part);
+    }
+
+    if (!injected) {
+        nextParts.push({
+            type: 'text',
+            text: '/shell',
+            shellAction: {
+                ...(command ? { command } : {}),
+                ...(output ? { output } : {}),
+                ...(status ? { status } : {}),
+            },
+        } as unknown as Part);
+    }
 
     return {
         ...message,
@@ -337,6 +464,14 @@ const MessageList: React.FC<MessageListProps> = ({
                 const bridge = isSyntheticSubtaskBridgeAssistant(current);
                 if (bridge.hide) {
                     output[output.length - 1] = withSubtaskSessionId(previous as ChatMessageEntry, bridge.taskSessionId);
+                    continue;
+                }
+            }
+
+            if (isUserShellMarkerMessage(previous)) {
+                const bridge = getShellBridgeAssistantDetails(current, getMessageId(previous));
+                if (bridge.hide) {
+                    output[output.length - 1] = withShellBridgeDetails(previous as ChatMessageEntry, bridge.details);
                     continue;
                 }
             }

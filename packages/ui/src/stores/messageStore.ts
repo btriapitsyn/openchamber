@@ -354,7 +354,7 @@ interface MessageState {
 
 interface MessageActions {
     loadMessages: (sessionId: string, limit?: number) => Promise<void>;
-    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string) => Promise<void>;
+    sendMessage: (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string, inputMode?: 'normal' | 'shell') => Promise<void>;
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
@@ -579,7 +579,7 @@ export const useMessageStore = create<MessageStore>()(
                         });
                 },
 
-                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string) => {
+                sendMessage: async (content: string, providerID: string, modelID: string, agent?: string, currentSessionId?: string, attachments?: AttachedFile[], agentMentionName?: string | null, additionalParts?: Array<{ text: string; attachments?: AttachedFile[]; synthetic?: boolean }>, variant?: string, inputMode: 'normal' | 'shell' = 'normal') => {
                     if (!currentSessionId) {
                         throw new Error("No session selected");
                     }
@@ -598,6 +598,7 @@ export const useMessageStore = create<MessageStore>()(
                         try {
                             const trimmedContent = content.trimStart();
                             const commandPayload = (() => {
+                                if (inputMode === 'shell') return null;
                                 if (!trimmedContent.startsWith("/")) return null;
                                 const firstLineEnd = trimmedContent.indexOf("\n");
                                 const firstLine = firstLineEnd === -1 ? trimmedContent : trimmedContent.slice(0, firstLineEnd);
@@ -616,8 +617,8 @@ export const useMessageStore = create<MessageStore>()(
                                 };
                             })();
                             const shellPayload = (() => {
-                                if (!trimmedContent.startsWith("!")) return null;
-                                const command = trimmedContent.slice(1);
+                                if (inputMode !== 'shell') return null;
+                                const command = content.trim();
                                 if (!command.trim()) return null;
                                 return { command };
                             })();
