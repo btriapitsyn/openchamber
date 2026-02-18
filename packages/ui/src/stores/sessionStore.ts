@@ -1563,7 +1563,7 @@ export const useSessionStore = create<SessionStore>()(
 
                         // Extract partial text output
                         const textParts = parts.filter(p => p.type === 'text');
-                        let textSummary = textParts
+                        const textSummary = textParts
                             .map(p => {
                                 const part = p as { text?: string; content?: string };
                                 return part.text || part.content || '';

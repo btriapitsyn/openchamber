@@ -281,8 +281,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       return;
     }
 
-    const prevSelection = selectionRef.current;
-
     // Mobile tap-to-extend: if selection exists and new tap is on same side, extend range
     if (isMobile && selectionRef.current && range && range.side === selectionRef.current.side) {
       const start = Math.min(selectionRef.current.start, range.start);
@@ -658,7 +656,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       }
       container.innerHTML = '';
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- lineAnnotations excluded: updated incrementally below
   }, [diffThemeKey, fileName, language, modified, options, original, workerPool]);
 
   // Incrementally update annotations without full re-render.

@@ -23,7 +23,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useConnectionsStore } from '@/stores/useConnectionsStore';
 import { useFileSystemAccess } from '@/hooks/useFileSystemAccess';
-import { isDesktopLocalOriginActive, isTauriShell } from '@/lib/desktop';
+import { isTauriShell } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { sessionEvents } from '@/lib/sessionEvents';
 
