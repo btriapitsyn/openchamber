@@ -428,7 +428,6 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                   onClick={() => handleAgentPick(agent.name)}
                   onMouseEnter={() => setSelectedIndex(index)}
                 >
-                  <RiAiAgentLine className="h-3.5 w-3.5 text-[var(--status-info)] mt-0.5" />
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold truncate">@{agent.name}</div>
                     {agent.description ? (
