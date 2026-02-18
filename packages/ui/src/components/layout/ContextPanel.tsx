@@ -2,7 +2,7 @@ import React from 'react';
 import { RiCloseLine, RiFullscreenExitLine, RiFullscreenLine } from '@remixicon/react';
 
 import { Button } from '@/components/ui/button';
-import { DiffView, FilesView } from '@/components/views';
+import { DiffView, FilesView, PlanView } from '@/components/views';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
@@ -145,7 +145,7 @@ export const ContextPanel: React.FC = () => {
 
   const activeFilePath = useFilesViewTabsStore((state) => (directoryKey ? (state.byRoot[directoryKey]?.selectedPath ?? null) : null));
 
-  const panelTitle = panelState?.mode === 'diff' ? 'Diff' : panelState?.mode === 'file' ? 'File' : panelState?.mode === 'context' ? 'Context' : 'Panel';
+  const panelTitle = panelState?.mode === 'diff' ? 'Diff' : panelState?.mode === 'file' ? 'File' : panelState?.mode === 'context' ? 'Context' : panelState?.mode === 'plan' ? 'Plan' : 'Panel';
   const effectivePath = panelState?.mode === 'file' ? (activeFilePath ?? panelState?.targetPath ?? null) : panelState?.mode === 'context' ? null : (panelState?.targetPath ?? null);
   const pathLabel = getRelativePathLabel(effectivePath, effectiveDirectory);
 
@@ -155,7 +155,9 @@ export const ContextPanel: React.FC = () => {
       ? <FilesView mode="editor-only" />
       : panelState?.mode === 'context'
         ? <ContextPanelContent />
-      : null;
+        : panelState?.mode === 'plan'
+          ? <PlanView />
+          : null;
 
   const header = (
     <header className="flex h-10 items-center gap-2 border-b border-border/40 px-2.5">

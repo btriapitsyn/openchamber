@@ -142,6 +142,7 @@ export const Header: React.FC = () => {
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
+  const openContextPlan = useUIStore((state) => state.openContextPlan);
   const closeContextPanel = useUIStore((state) => state.closeContextPanel);
   const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
@@ -917,6 +918,30 @@ export const Header: React.FC = () => {
     return Boolean(panelState?.isOpen && panelState.mode === 'context');
   }, [contextPanelByDirectory, openDirectory]);
 
+  const handleOpenContextPlan = React.useCallback(() => {
+    const directory = normalize(openDirectory || '');
+    if (!directory) {
+      return;
+    }
+
+    const panelState = contextPanelByDirectory[directory];
+    if (panelState?.isOpen && panelState.mode === 'plan') {
+      closeContextPanel(directory);
+      return;
+    }
+
+    openContextPlan(directory);
+  }, [closeContextPanel, contextPanelByDirectory, openContextPlan, openDirectory]);
+
+  const isContextPlanActive = React.useMemo(() => {
+    const directory = normalize(openDirectory || '');
+    if (!directory) {
+      return false;
+    }
+    const panelState = contextPanelByDirectory[directory];
+    return Boolean(panelState?.isOpen && panelState.mode === 'plan');
+  }, [contextPanelByDirectory, openDirectory]);
+
   const headerIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
 
   const desktopPaddingClass = React.useMemo(() => {
@@ -1643,6 +1668,23 @@ export const Header: React.FC = () => {
             valueClassName="typography-ui-label font-medium leading-none text-foreground"
             percentIconClassName="h-5 w-5"
           />
+        )}
+        {showPlanTab && (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="Open plan"
+                onClick={handleOpenContextPlan}
+                className={cn(headerIconButtonClass, isContextPlanActive && 'bg-[var(--interactive-hover)] text-foreground')}
+              >
+                <RiFileTextLine className="h-5 w-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Plan</p>
+            </TooltipContent>
+          </Tooltip>
         )}
         <OpenInAppButton directory={openDirectory} className="mr-1" />
         <DropdownMenu

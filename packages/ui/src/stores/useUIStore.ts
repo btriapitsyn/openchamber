@@ -6,7 +6,7 @@ import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey 
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files';
 export type RightSidebarTab = 'git' | 'files';
-export type ContextPanelMode = 'diff' | 'file' | 'context';
+export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan';
 
 type ContextPanelDirectoryState = {
   isOpen: boolean;
@@ -225,6 +225,7 @@ interface UIStore {
   openContextDiff: (directory: string, filePath: string) => void;
   openContextFile: (directory: string, filePath: string) => void;
   openContextOverview: (directory: string) => void;
+  openContextPlan: (directory: string) => void;
   closeContextPanel: (directory: string) => void;
   toggleContextPanelExpanded: (directory: string) => void;
   setContextPanelWidth: (directory: string, width: number) => void;
@@ -541,6 +542,29 @@ export const useUIStore = create<UIStore>()(
                 ...current,
                 isOpen: true,
                 mode: 'context' as const,
+                targetPath: null,
+              },
+            };
+
+            return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+          });
+        },
+
+        openContextPlan: (directory) => {
+          const normalizedDirectory = normalizeDirectoryPath((directory || '').trim());
+          if (!normalizedDirectory) {
+            return;
+          }
+
+          set((state) => {
+            const prev = state.contextPanelByDirectory[normalizedDirectory];
+            const current = touchContextPanelState(prev);
+            const byDirectory = {
+              ...state.contextPanelByDirectory,
+              [normalizedDirectory]: {
+                ...current,
+                isOpen: true,
+                mode: 'plan' as const,
                 targetPath: null,
               },
             };
