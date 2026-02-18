@@ -1,67 +1,41 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  getArchivedSessions,
+  archiveSession,
+  unarchiveSession,
+  isSessionArchived,
+  subscribe,
+} from '@/lib/archivedSessions';
 
-// We need to test the archivedSessions module, but it uses getSafeStorage which
-// is a singleton. We'll mock the storage module.
-
-// Reset the module state before each test by dynamically importing
-let archivedSessions: typeof import('@/lib/archivedSessions');
-
-// Create a fresh mock storage for each test
-const createMockStorage = () => {
-  const store = new Map<string, string>();
-  return {
-    getItem: vi.fn((key: string) => store.get(key) ?? null),
-    setItem: vi.fn((key: string, value: string) => {
-      store.set(key, value);
-    }),
-    removeItem: vi.fn((key: string) => {
-      store.delete(key);
-    }),
-    clear: vi.fn(() => {
-      store.clear();
-    }),
-    key: vi.fn((index: number) => Array.from(store.keys())[index] ?? null),
-    get length() {
-      return store.size;
-    },
-    _store: store,
-  };
-};
-
-let mockStorage: ReturnType<typeof createMockStorage>;
-
-vi.mock('@/stores/utils/safeStorage', () => ({
-  getSafeStorage: () => mockStorage,
-}));
+const STORAGE_KEY = 'oc.sessions.archived';
 
 describe('archivedSessions', () => {
-  beforeEach(async () => {
-    mockStorage = createMockStorage();
-    vi.resetModules();
-    archivedSessions = await import('@/lib/archivedSessions');
+  beforeEach(() => {
+    // Clear localStorage before each test
+    localStorage.clear();
   });
 
   describe('getArchivedSessions', () => {
     it('returns empty object when storage is empty', () => {
-      const result = archivedSessions.getArchivedSessions();
+      const result = getArchivedSessions();
       expect(result).toEqual({});
     });
 
     it('returns empty object when storage contains null', () => {
-      mockStorage._store.set('oc.sessions.archived', 'null');
-      const result = archivedSessions.getArchivedSessions();
+      localStorage.setItem(STORAGE_KEY, 'null');
+      const result = getArchivedSessions();
       expect(result).toEqual({});
     });
 
     it('returns empty object when storage contains invalid JSON', () => {
-      mockStorage._store.set('oc.sessions.archived', 'not json');
-      const result = archivedSessions.getArchivedSessions();
+      localStorage.setItem(STORAGE_KEY, 'not json');
+      const result = getArchivedSessions();
       expect(result).toEqual({});
     });
 
     it('returns empty object when storage contains array', () => {
-      mockStorage._store.set('oc.sessions.archived', '["array"]');
-      const result = archivedSessions.getArchivedSessions();
+      localStorage.setItem(STORAGE_KEY, '["array"]');
+      const result = getArchivedSessions();
       expect(result).toEqual({});
     });
 
@@ -70,8 +44,8 @@ describe('archivedSessions', () => {
         '/path/to/project': ['session-1', 'session-2'],
         '/another/path': ['session-3'],
       };
-      mockStorage._store.set('oc.sessions.archived', JSON.stringify(data));
-      const result = archivedSessions.getArchivedSessions();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const result = getArchivedSessions();
       expect(result).toEqual(data);
     });
 
@@ -79,8 +53,8 @@ describe('archivedSessions', () => {
       const data = {
         '/path': ['valid', 123, null, 'also-valid'],
       };
-      mockStorage._store.set('oc.sessions.archived', JSON.stringify(data));
-      const result = archivedSessions.getArchivedSessions();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const result = getArchivedSessions();
       expect(result).toEqual({
         '/path': ['valid', 'also-valid'],
       });
@@ -91,8 +65,8 @@ describe('archivedSessions', () => {
         '/path': [123, null],
         '/other': ['valid'],
       };
-      mockStorage._store.set('oc.sessions.archived', JSON.stringify(data));
-      const result = archivedSessions.getArchivedSessions();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const result = getArchivedSessions();
       expect(result).toEqual({
         '/other': ['valid'],
       });
@@ -103,8 +77,8 @@ describe('archivedSessions', () => {
         '/path': 'not-an-array',
         '/other': ['valid'],
       };
-      mockStorage._store.set('oc.sessions.archived', JSON.stringify(data));
-      const result = archivedSessions.getArchivedSessions();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      const result = getArchivedSessions();
       expect(result).toEqual({
         '/other': ['valid'],
       });
@@ -113,32 +87,26 @@ describe('archivedSessions', () => {
 
   describe('archiveSession', () => {
     it('adds session to empty storage', () => {
-      archivedSessions.archiveSession('session-1', '/project');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      archiveSession('session-1', '/project');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({
         '/project': ['session-1'],
       });
     });
 
     it('adds session to existing directory', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      archivedSessions.archiveSession('session-2', '/project');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      archiveSession('session-2', '/project');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({
         '/project': ['session-1', 'session-2'],
       });
     });
 
     it('adds session to new directory', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project1': ['session-1'] })
-      );
-      archivedSessions.archiveSession('session-2', '/project2');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project1': ['session-1'] }));
+      archiveSession('session-2', '/project2');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({
         '/project1': ['session-1'],
         '/project2': ['session-2'],
@@ -146,12 +114,9 @@ describe('archivedSessions', () => {
     });
 
     it('does not duplicate session ID', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      archivedSessions.archiveSession('session-1', '/project');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      archiveSession('session-1', '/project');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({
         '/project': ['session-1'],
       });
@@ -160,46 +125,37 @@ describe('archivedSessions', () => {
 
   describe('unarchiveSession', () => {
     it('removes session from storage', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
+      localStorage.setItem(
+        STORAGE_KEY,
         JSON.stringify({ '/project': ['session-1', 'session-2'] })
       );
-      archivedSessions.unarchiveSession('session-1', '/project');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      unarchiveSession('session-1', '/project');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({
         '/project': ['session-2'],
       });
     });
 
     it('removes directory when last session is unarchived', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      archivedSessions.unarchiveSession('session-1', '/project');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      unarchiveSession('session-1', '/project');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({});
     });
 
     it('does nothing when session is not in storage', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      archivedSessions.unarchiveSession('session-999', '/project');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      unarchiveSession('session-999', '/project');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({
         '/project': ['session-1'],
       });
     });
 
     it('does nothing when directory is not in storage', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      archivedSessions.unarchiveSession('session-1', '/other');
-      const stored = JSON.parse(mockStorage._store.get('oc.sessions.archived') ?? '{}');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      unarchiveSession('session-1', '/other');
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
       expect(stored).toEqual({
         '/project': ['session-1'],
       });
@@ -208,34 +164,25 @@ describe('archivedSessions', () => {
 
   describe('isSessionArchived', () => {
     it('returns true when session is archived', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      const result = archivedSessions.isSessionArchived('session-1', '/project');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      const result = isSessionArchived('session-1', '/project');
       expect(result).toBe(true);
     });
 
     it('returns false when session is not archived', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      const result = archivedSessions.isSessionArchived('session-2', '/project');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      const result = isSessionArchived('session-2', '/project');
       expect(result).toBe(false);
     });
 
     it('returns false when directory is not in storage', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
-      const result = archivedSessions.isSessionArchived('session-1', '/other');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
+      const result = isSessionArchived('session-1', '/other');
       expect(result).toBe(false);
     });
 
     it('returns false when storage is empty', () => {
-      const result = archivedSessions.isSessionArchived('session-1', '/project');
+      const result = isSessionArchived('session-1', '/project');
       expect(result).toBe(false);
     });
   });
@@ -243,41 +190,42 @@ describe('archivedSessions', () => {
   describe('subscribe', () => {
     it('calls listener when archive changes', () => {
       const listener = vi.fn();
-      archivedSessions.subscribe(listener);
-      archivedSessions.archiveSession('session-1', '/project');
+      const unsubscribe = subscribe(listener);
+      archiveSession('session-1', '/project');
       expect(listener).toHaveBeenCalledTimes(1);
+      unsubscribe();
     });
 
     it('calls listener when unarchive changes', () => {
-      mockStorage._store.set(
-        'oc.sessions.archived',
-        JSON.stringify({ '/project': ['session-1'] })
-      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ '/project': ['session-1'] }));
       const listener = vi.fn();
-      archivedSessions.subscribe(listener);
-      archivedSessions.unarchiveSession('session-1', '/project');
+      const unsubscribe = subscribe(listener);
+      unarchiveSession('session-1', '/project');
       expect(listener).toHaveBeenCalledTimes(1);
+      unsubscribe();
     });
 
     it('stops calling listener after unsubscribe', () => {
       const listener = vi.fn();
-      const unsubscribe = archivedSessions.subscribe(listener);
-      archivedSessions.archiveSession('session-1', '/project');
+      const unsubscribe = subscribe(listener);
+      archiveSession('session-1', '/project');
       expect(listener).toHaveBeenCalledTimes(1);
 
       unsubscribe();
-      archivedSessions.archiveSession('session-2', '/project');
+      archiveSession('session-2', '/project');
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
     it('supports multiple listeners', () => {
       const listener1 = vi.fn();
       const listener2 = vi.fn();
-      archivedSessions.subscribe(listener1);
-      archivedSessions.subscribe(listener2);
-      archivedSessions.archiveSession('session-1', '/project');
+      const unsub1 = subscribe(listener1);
+      const unsub2 = subscribe(listener2);
+      archiveSession('session-1', '/project');
       expect(listener1).toHaveBeenCalledTimes(1);
       expect(listener2).toHaveBeenCalledTimes(1);
+      unsub1();
+      unsub2();
     });
 
     it('continues notifying other listeners if one throws', () => {
@@ -285,11 +233,13 @@ describe('archivedSessions', () => {
         throw new Error('test error');
       });
       const listener2 = vi.fn();
-      archivedSessions.subscribe(listener1);
-      archivedSessions.subscribe(listener2);
-      archivedSessions.archiveSession('session-1', '/project');
+      const unsub1 = subscribe(listener1);
+      const unsub2 = subscribe(listener2);
+      archiveSession('session-1', '/project');
       expect(listener1).toHaveBeenCalledTimes(1);
       expect(listener2).toHaveBeenCalledTimes(1);
+      unsub1();
+      unsub2();
     });
   });
 });

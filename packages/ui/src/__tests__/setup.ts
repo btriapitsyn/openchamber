@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { beforeEach } from 'vitest';
 
 // Mock localStorage for tests
 const createMockStorage = (): Storage => {
@@ -21,12 +22,21 @@ const createMockStorage = (): Storage => {
   } as Storage;
 };
 
+const mockLocalStorage = createMockStorage();
+const mockSessionStorage = createMockStorage();
+
 Object.defineProperty(globalThis, 'localStorage', {
-  value: createMockStorage(),
+  value: mockLocalStorage,
   writable: true,
 });
 
 Object.defineProperty(globalThis, 'sessionStorage', {
-  value: createMockStorage(),
+  value: mockSessionStorage,
   writable: true,
+});
+
+// Clear storage before each test to prevent state leakage
+beforeEach(() => {
+  mockLocalStorage.clear();
+  mockSessionStorage.clear();
 });
