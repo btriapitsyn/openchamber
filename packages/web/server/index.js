@@ -7297,7 +7297,22 @@ async function main(options = {}) {
           return res.status(400).json({ ok: false, error: result.error });
         }
 
-        return res.json({ ok: true, installed: result.installed || [], skipped: result.skipped || [] });
+        const installed = result.installed || [];
+        const skipped = result.skipped || [];
+        const requiresReload = installed.length > 0;
+
+        if (requiresReload) {
+          await refreshOpenCodeAfterConfigChange('skills install');
+        }
+
+        return res.json({
+          ok: true,
+          installed,
+          skipped,
+          requiresReload,
+          message: requiresReload ? 'Skills installed successfully. Reloading interface…' : 'No skills were installed',
+          reloadDelayMs: requiresReload ? CLIENT_RELOAD_DELAY_MS : undefined,
+        });
       }
 
       // Handle GitHub sources (git clone based)
@@ -7334,7 +7349,22 @@ async function main(options = {}) {
         return res.status(400).json({ ok: false, error: result.error });
       }
 
-      res.json({ ok: true, installed: result.installed || [], skipped: result.skipped || [] });
+      const installed = result.installed || [];
+      const skipped = result.skipped || [];
+      const requiresReload = installed.length > 0;
+
+      if (requiresReload) {
+        await refreshOpenCodeAfterConfigChange('skills install');
+      }
+
+      res.json({
+        ok: true,
+        installed,
+        skipped,
+        requiresReload,
+        message: requiresReload ? 'Skills installed successfully. Reloading interface…' : 'No skills were installed',
+        reloadDelayMs: requiresReload ? CLIENT_RELOAD_DELAY_MS : undefined,
+      });
     } catch (error) {
       console.error('Failed to install skills:', error);
       res.status(500).json({ ok: false, error: { kind: 'unknown', message: error.message || 'Failed to install skills' } });
@@ -7409,12 +7439,13 @@ async function main(options = {}) {
       console.log('[Server] Scope:', scope, 'Working directory:', directory);
 
       createSkill(skillName, { ...config, source: skillSource }, directory, scope);
-      // Skills are just files - OpenCode loads them on-demand, no restart needed
+      await refreshOpenCodeAfterConfigChange('skill creation');
 
       res.json({
         success: true,
-        requiresReload: false,
-        message: `Skill ${skillName} created successfully`,
+        requiresReload: true,
+        message: `Skill ${skillName} created successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
       });
     } catch (error) {
       console.error('Failed to create skill:', error);
@@ -7436,12 +7467,13 @@ async function main(options = {}) {
       console.log('[Server] Working directory:', directory);
 
       updateSkill(skillName, updates, directory);
-      // Skills are just files - OpenCode loads them on-demand, no restart needed
+      await refreshOpenCodeAfterConfigChange('skill update');
 
       res.json({
         success: true,
-        requiresReload: false,
-        message: `Skill ${skillName} updated successfully`,
+        requiresReload: true,
+        message: `Skill ${skillName} updated successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
       });
     } catch (error) {
       console.error('[Server] Failed to update skill:', error);
@@ -7518,12 +7550,13 @@ async function main(options = {}) {
       }
 
       deleteSkill(skillName, directory);
-      // Skills are just files - OpenCode loads them on-demand, no restart needed
+      await refreshOpenCodeAfterConfigChange('skill deletion');
 
       res.json({
         success: true,
-        requiresReload: false,
-        message: `Skill ${skillName} deleted successfully`,
+        requiresReload: true,
+        message: `Skill ${skillName} deleted successfully. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
       });
     } catch (error) {
       console.error('Failed to delete skill:', error);

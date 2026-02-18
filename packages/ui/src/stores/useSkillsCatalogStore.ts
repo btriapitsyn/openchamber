@@ -13,7 +13,7 @@ import type {
   SkillsCatalogSourceResponse,
 } from '@/lib/api/types';
 
-import { useSkillsStore } from '@/stores/useSkillsStore';
+import { refreshSkillsAfterOpenCodeRestart, useSkillsStore } from '@/stores/useSkillsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 
 const FALLBACK_SOURCES: SkillsCatalogSource[] = [
@@ -373,8 +373,14 @@ export const useSkillsCatalogStore = create<SkillsCatalogState>()(
             return { ok: false, error };
           }
 
-          // Refresh installed skills list.
-          void useSkillsStore.getState().loadSkills();
+          if (payload.requiresReload) {
+            await refreshSkillsAfterOpenCodeRestart({
+              message: payload.message,
+              delayMs: payload.reloadDelayMs,
+            });
+          } else {
+            void useSkillsStore.getState().loadSkills();
+          }
 
           return payload;
         } catch (error) {

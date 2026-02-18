@@ -139,6 +139,7 @@ class OpencodeService {
   private scopedClients: Map<string, OpencodeClient> = new Map();
   private sseAbortControllers: Map<string, AbortController> = new Map();
   private currentDirectory: string | undefined = undefined;
+  private directoryContextQueue: Promise<void> = Promise.resolve();
 
   private globalSseAbortController: AbortController | null = null;
   private globalSseTask: Promise<void> | null = null;
@@ -250,17 +251,27 @@ class OpencodeService {
   }
 
   async withDirectory<T>(directory: string | undefined | null, fn: () => Promise<T>): Promise<T> {
-    if (directory === undefined || directory === null) {
-      return fn();
-    }
+    const runWithContext = async (): Promise<T> => {
+      if (directory === undefined || directory === null) {
+        return fn();
+      }
 
-    const previousDirectory = this.currentDirectory;
-    this.currentDirectory = directory;
-    try {
-      return await fn();
-    } finally {
-      this.currentDirectory = previousDirectory;
-    }
+      const previousDirectory = this.currentDirectory;
+      this.currentDirectory = directory;
+      try {
+        return await fn();
+      } finally {
+        this.currentDirectory = previousDirectory;
+      }
+    };
+
+    const queuedRun = this.directoryContextQueue.then(runWithContext, runWithContext);
+    this.directoryContextQueue = queuedRun.then(
+      () => undefined,
+      () => undefined,
+    );
+
+    return queuedRun;
   }
 
   // Get the raw API client for direct access

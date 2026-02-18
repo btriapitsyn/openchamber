@@ -1036,4 +1036,7 @@ export interface SkillsInstallResponse {
   installed?: Array<{ skillName: string; scope: 'user' | 'project'; source?: 'opencode' | 'agents' }>;
   skipped?: Array<{ skillName: string; reason: string }>;
   error?: SkillsInstallError;
+  requiresReload?: boolean;
+  message?: string;
+  reloadDelayMs?: number;
 }

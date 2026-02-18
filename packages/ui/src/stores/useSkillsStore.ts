@@ -5,6 +5,7 @@ import { emitConfigChange, scopeMatches, subscribeToConfigChanges } from "@/lib/
 import {
   startConfigUpdate,
   finishConfigUpdate,
+  updateConfigUpdateMessage,
 } from "@/lib/configUpdate";
 import { getSafeStorage } from "./utils/safeStorage";
 
@@ -136,6 +137,13 @@ declare global {
 }
 
 const CONFIG_EVENT_SOURCE = "useSkillsStore";
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const MAX_HEALTH_WAIT_MS = 20000;
+const FAST_HEALTH_POLL_INTERVAL_MS = 300;
+const FAST_HEALTH_POLL_ATTEMPTS = 4;
+const SLOW_HEALTH_POLL_BASE_MS = 800;
+const SLOW_HEALTH_POLL_INCREMENT_MS = 200;
+const SLOW_HEALTH_POLL_MAX_MS = 2000;
 
 export const useSkillsStore = create<SkillsStore>()(
   devtools(
@@ -211,6 +219,7 @@ export const useSkillsStore = create<SkillsStore>()(
 
         createSkill: async (config: SkillConfig) => {
           startConfigUpdate("Creating skill...");
+          let requiresReload = false;
           try {
             const skillConfig: Record<string, unknown> = {
               name: config.name,
@@ -237,8 +246,16 @@ export const useSkillsStore = create<SkillsStore>()(
               throw new Error(message);
             }
 
-            // Skills are just files - no need to reload OpenCode
-            // Just refresh our local list
+            const needsReload = payload?.requiresReload ?? false;
+            if (needsReload) {
+              requiresReload = true;
+              await refreshSkillsAfterOpenCodeRestart({
+                message: payload?.message,
+                delayMs: payload?.reloadDelayMs,
+              });
+              return true;
+            }
+
             const loaded = await get().loadSkills();
             if (loaded) {
               emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
@@ -247,12 +264,15 @@ export const useSkillsStore = create<SkillsStore>()(
           } catch {
             return false;
           } finally {
-            finishConfigUpdate();
+            if (!requiresReload) {
+              finishConfigUpdate();
+            }
           }
         },
 
         updateSkill: async (name: string, config: Partial<SkillConfig>) => {
           startConfigUpdate("Updating skill...");
+          let requiresReload = false;
           try {
             const skillConfig: Record<string, unknown> = {};
 
@@ -275,8 +295,16 @@ export const useSkillsStore = create<SkillsStore>()(
               throw new Error(message);
             }
 
-            // Skills are just files - no need to reload OpenCode
-            // Just refresh our local list
+            const needsReload = payload?.requiresReload ?? false;
+            if (needsReload) {
+              requiresReload = true;
+              await refreshSkillsAfterOpenCodeRestart({
+                message: payload?.message,
+                delayMs: payload?.reloadDelayMs,
+              });
+              return true;
+            }
+
             const loaded = await get().loadSkills();
             if (loaded) {
               emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
@@ -285,12 +313,15 @@ export const useSkillsStore = create<SkillsStore>()(
           } catch {
             return false;
           } finally {
-            finishConfigUpdate();
+            if (!requiresReload) {
+              finishConfigUpdate();
+            }
           }
         },
 
         deleteSkill: async (name: string) => {
           startConfigUpdate("Deleting skill...");
+          let requiresReload = false;
           try {
             const currentDirectory = getCurrentDirectory();
             const queryParams = currentDirectory ? `?directory=${encodeURIComponent(currentDirectory)}` : '';
@@ -305,8 +336,16 @@ export const useSkillsStore = create<SkillsStore>()(
               throw new Error(message);
             }
 
-            // Skills are just files - no need to reload OpenCode
-            // Just refresh our local list
+            const needsReload = payload?.requiresReload ?? false;
+            if (needsReload) {
+              requiresReload = true;
+              await refreshSkillsAfterOpenCodeRestart({
+                message: payload?.message,
+                delayMs: payload?.reloadDelayMs,
+              });
+              return true;
+            }
+
             const loaded = await get().loadSkills();
             if (loaded) {
               emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
@@ -320,7 +359,9 @@ export const useSkillsStore = create<SkillsStore>()(
           } catch {
             return false;
           } finally {
-            finishConfigUpdate();
+            if (!requiresReload) {
+              finishConfigUpdate();
+            }
           }
         },
 
@@ -400,6 +441,73 @@ export const useSkillsStore = create<SkillsStore>()(
 
 if (typeof window !== "undefined") {
   window.__zustand_skills_store__ = useSkillsStore;
+}
+
+async function waitForOpenCodeConnection(delayMs?: number) {
+  const initialPause = typeof delayMs === "number" && delayMs > 0
+    ? Math.min(delayMs, FAST_HEALTH_POLL_INTERVAL_MS)
+    : 0;
+
+  if (initialPause > 0) {
+    await sleep(initialPause);
+  }
+
+  const start = Date.now();
+  let attempt = 0;
+  let lastError: unknown = null;
+
+  while (Date.now() - start < MAX_HEALTH_WAIT_MS) {
+    attempt += 1;
+    updateConfigUpdateMessage(`Waiting for OpenCode… (attempt ${attempt})`);
+
+    try {
+      const isHealthy = await opencodeClient.checkHealth();
+      if (isHealthy) {
+        return;
+      }
+      lastError = new Error("OpenCode health check reported not ready");
+    } catch (error) {
+      lastError = error;
+    }
+
+    const elapsed = Date.now() - start;
+
+    const waitMs =
+      attempt <= FAST_HEALTH_POLL_ATTEMPTS && elapsed < 1200
+        ? FAST_HEALTH_POLL_INTERVAL_MS
+        : Math.min(
+            SLOW_HEALTH_POLL_BASE_MS +
+              Math.max(0, attempt - FAST_HEALTH_POLL_ATTEMPTS) * SLOW_HEALTH_POLL_INCREMENT_MS,
+            SLOW_HEALTH_POLL_MAX_MS,
+          );
+
+    await sleep(waitMs);
+  }
+
+  throw lastError || new Error("OpenCode did not become ready in time");
+}
+
+export async function refreshSkillsAfterOpenCodeRestart(options?: { message?: string; delayMs?: number }) {
+  try {
+    updateConfigUpdateMessage(options?.message || "Refreshing skills…");
+  } catch {
+    // ignore
+  }
+
+  try {
+    await waitForOpenCodeConnection(options?.delayMs);
+    updateConfigUpdateMessage("Refreshing skills…");
+    const skillsStore = useSkillsStore.getState();
+    const loaded = await skillsStore.loadSkills();
+    if (loaded) {
+      emitConfigChange("skills", { source: CONFIG_EVENT_SOURCE });
+    }
+  } catch {
+    updateConfigUpdateMessage("OpenCode refresh failed. Please retry.");
+    await sleep(1500);
+  } finally {
+    finishConfigUpdate();
+  }
 }
 
 // Subscribe to config changes from other stores
