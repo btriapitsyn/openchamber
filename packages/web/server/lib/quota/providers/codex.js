@@ -52,7 +52,9 @@ export const fetchQuota = async () => {
         providerName,
         ok: false,
         configured: true,
-        error: `API error: ${response.status}`
+        error: response.status === 401
+          ? 'Session expired \u2014 please re-authenticate with OpenAI'
+          : `API error: ${response.status}`
       });
     }
 

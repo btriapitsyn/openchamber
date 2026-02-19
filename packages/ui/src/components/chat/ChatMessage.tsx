@@ -22,6 +22,7 @@ import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
 import { filterVisibleParts } from './message/partUtils';
 import { flattenAssistantTextParts } from '@/lib/messages/messageText';
+import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from '@/lib/messages/providerAuthError';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import type { TurnGroupingContext } from './hooks/useTurnGrouping';
 
@@ -645,6 +646,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         }
         if (errorName === 'SessionRetry') {
             return `Opencode failed to send a message. Retry attempt info: \n\`${detail}\``;
+        }
+        if (isLikelyProviderAuthFailure(detail)) {
+            return PROVIDER_AUTH_FAILURE_MESSAGE;
         }
         return `Opencode failed to send message with error:\n\`${detail}\``;
     }, [isUser, message.info]);

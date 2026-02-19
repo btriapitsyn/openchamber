@@ -4,6 +4,7 @@ import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import type { Message, Part } from "@opencode-ai/sdk/v2";
 import { opencodeClient } from "@/lib/opencode/client";
 import { isExecutionForkMetaText } from "@/lib/messages/executionMeta";
+import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from "@/lib/messages/providerAuthError";
 import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from "./types/sessionTypes";
 import { MEMORY_LIMITS, getMemoryLimits, getBackgroundTrimLimit } from "./types/sessionTypes";
 import {
@@ -787,6 +788,8 @@ export const useMessageStore = create<MessageStore>()(
                                         return { abortControllers: nextControllers };
                                     });
                                     return;
+                                } else if (isLikelyProviderAuthFailure(error.message)) {
+                                    errorMessage = PROVIDER_AUTH_FAILURE_MESSAGE;
                                 } else if (error.message) {
                                     errorMessage = error.message;
                                 }
@@ -814,6 +817,8 @@ export const useMessageStore = create<MessageStore>()(
                                 errorMessage = "OpenCode is restarting. Please wait a moment and try again.";
                             } else if (error.message?.includes("504") || error.message?.includes("Gateway")) {
                                 errorMessage = "Gateway timeout - your message is being processed. Please wait for response.";
+                            } else if (isLikelyProviderAuthFailure(error.message)) {
+                                errorMessage = PROVIDER_AUTH_FAILURE_MESSAGE;
                             } else if (error.message) {
                                 errorMessage = error.message;
                             }
