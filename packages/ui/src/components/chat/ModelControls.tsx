@@ -541,11 +541,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const inputModalityIcons = getModalityIcons(currentMetadata, 'input');
     const outputModalityIcons = getModalityIcons(currentMetadata, 'output');
 
-    // Providers/models can reload (directory switch/config sync) without changing
-    // currentProviderId/currentModelId; include providers to avoid stale variants.
-    const availableVariants = React.useMemo(() => {
-        return getCurrentModelVariants();
-    }, [getCurrentModelVariants]);
+    // Compute from current model each render to avoid stale variants
+    // in draft/session transitions.
+    const availableVariants = getCurrentModelVariants();
     const hasVariants = availableVariants.length > 0;
 
     const costRows = [
