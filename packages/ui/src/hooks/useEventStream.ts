@@ -1382,7 +1382,6 @@ export const useEventStream = () => {
           }
 
 	          completeStreamingMessage(sessionId, messageId);
-	          updateSessionStatus(sessionId, { type: 'idle' }, 'sse:message.updated.completed');
 	          // Removed: void refreshSessionStatus();
 
 	          const rawMessageSessionId = (message as { sessionID?: string }).sessionID;

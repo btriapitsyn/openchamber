@@ -666,9 +666,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             // Prevent double-triggering
             autoSendTriggeredRef.current = true;
 
+            const targetSessionId = currentSessionId;
+
             // Use setTimeout to avoid calling during render
             setTimeout(() => {
-                if (currentSessionId && currentProviderId && currentModelId) {
+                const activeSessionId = useSessionStore.getState().currentSessionId;
+                const currentStatus = targetSessionId
+                    ? useSessionStore.getState().sessionStatus?.get(targetSessionId)
+                    : null;
+                const stillIdle = currentStatus?.type === 'idle';
+                const sessionUnchanged = Boolean(targetSessionId) && activeSessionId === targetSessionId;
+
+                if (sessionUnchanged && stillIdle && targetSessionId && currentProviderId && currentModelId) {
                     void handleSubmitRef.current({ queuedOnly: true });
                 }
                 autoSendTriggeredRef.current = false;
