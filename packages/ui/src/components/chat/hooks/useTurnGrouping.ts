@@ -201,7 +201,6 @@ const getTurnActivityInfo = (turn: Turn, showTextJustificationActivity: boolean)
     }
 
     const activityParts: TurnActivityPart[] = [];
-    let syntheticIdCounter = 0;
 
     turn.assistantMessages.forEach((msg) => {
         const messageId = msg.info.id;
@@ -210,11 +209,8 @@ const getTurnActivityInfo = (turn: Turn, showTextJustificationActivity: boolean)
         // All earlier text messages are justification
         const isFinalSummaryMessage = messageId === lastTextMessageId;
 
-        msg.parts.forEach((part) => {
-            const baseId =
-                (typeof part.id === 'string' && part.id.trim().length > 0)
-                    ? part.id
-                    : `${messageId}-activity-${syntheticIdCounter++}`;
+        msg.parts.forEach((part, partIndex) => {
+            const baseId = `${messageId}-part-${partIndex}-${part.type}`;
 
             if (part.type === 'tool') {
                 const state = (part as { state?: { time?: { end?: number | null | undefined } | null | undefined } | null | undefined }).state;
@@ -295,13 +291,11 @@ const getTurnActivityInfo = (turn: Turn, showTextJustificationActivity: boolean)
     turn.assistantMessages.forEach((msg) => {
         const messageId = msg.info.id;
 
-        msg.parts.forEach((part) => {
+        msg.parts.forEach((part, partIndex) => {
             if (part.type === 'tool') {
                 const toolName = (part as { tool?: unknown }).tool;
                 if (isActivityStandaloneTool(toolName)) {
-                    const toolPartId = typeof part.id === 'string' && part.id.trim().length > 0
-                        ? part.id
-                        : `${messageId}-task-${taskOrder.length + 1}`;
+                    const toolPartId = `${messageId}-part-${partIndex}-${part.type}`;
 
                     if (!taskMessageById.has(toolPartId)) {
                         taskMessageById.set(toolPartId, messageId);

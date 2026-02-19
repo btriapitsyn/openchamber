@@ -51,13 +51,11 @@ const getToolConnections = (
     const toolParts = parts.filter((p) => p.kind === 'tool');
 
     toolParts.forEach((activity, index) => {
-        const partId = activity.part.id;
-        if (partId) {
-            connections[partId] = {
-                hasPrev: index > 0,
-                hasNext: index < toolParts.length - 1,
-            };
-        }
+        const partId = activity.id;
+        connections[partId] = {
+            hasPrev: index > 0,
+            hasNext: index < toolParts.length - 1,
+        };
     });
 
     return connections;
@@ -117,7 +115,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     const visibleInCollapsedIds = React.useMemo(() => {
         const ids = new Set<string>();
         visibleCollapsedParts.forEach((p) => {
-            if (p.part.id) ids.add(p.part.id);
+            ids.add(p.id);
         });
         return ids;
     }, [visibleCollapsedParts]);
@@ -218,8 +216,8 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         </div>
                     )}
 
-                    {partsToRender.map((activity, index) => {
-                        const partId = activity.part.id || `group-part-${index}`;
+                    {partsToRender.map((activity) => {
+                        const partId = activity.id;
                         const connection = connectionsToUse[partId];
 
                         const animationKey = `${partId}-exp${expansionKey}`;
@@ -227,19 +225,19 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         // Determine if animation should be skipped:
                         // 1. When expanding from collapsed: skip for items that were already visible
                         // 2. When collapsed: skip for items already shown before (track in ref)
-                        const wasVisibleInCollapsed = activity.part.id ? visibleInCollapsedIds.has(activity.part.id) : false;
+                        const wasVisibleInCollapsed = visibleInCollapsedIds.has(activity.id);
                         
                         let skipAnimation = false;
                         if (justExpandedFromCollapsed && wasVisibleInCollapsed) {
                             // Expanding: don't animate items that were already visible in collapsed state
                             skipAnimation = true;
-                        } else if (!isExpanded && activity.part.id) {
+                        } else if (!isExpanded) {
                             // Collapsed: animate only items that haven't been shown yet
-                            if (shownInCollapsedRef.current.has(activity.part.id)) {
+                            if (shownInCollapsedRef.current.has(activity.id)) {
                                 skipAnimation = true;
                             } else {
                                 // Mark as shown for future renders
-                                shownInCollapsedRef.current.add(activity.part.id);
+                                shownInCollapsedRef.current.add(activity.id);
                             }
                         }
 
