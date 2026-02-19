@@ -425,7 +425,8 @@ export const Header: React.FC = () => {
             hasStreaming = true;
           }
 
-          if (session.id !== currentSessionId && sessionAttentionStates.get(session.id)?.needsAttention === true) {
+          const isCurrentVisibleSession = session.id === currentSessionId && project.id === activeProjectId;
+          if (!isCurrentVisibleSession && sessionAttentionStates.get(session.id)?.needsAttention === true) {
             hasNeedsAttention = true;
           }
 
@@ -442,7 +443,7 @@ export const Header: React.FC = () => {
     }
 
     return result;
-  }, [availableWorktreesByProject, currentSessionId, getSessionsByDirectory, projects, sessionAttentionStates, sessionStatus, sessionsByDirectory, showProjectTabs]);
+  }, [activeProjectId, availableWorktreesByProject, currentSessionId, getSessionsByDirectory, projects, sessionAttentionStates, sessionStatus, sessionsByDirectory, showProjectTabs]);
 
   React.useLayoutEffect(() => {
     if (!showProjectTabs) return;
