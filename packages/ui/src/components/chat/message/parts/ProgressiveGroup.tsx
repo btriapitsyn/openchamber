@@ -248,7 +248,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                                         <ToolPart
                                             part={activity.part as ToolPartType}
                                             isExpanded={expandedTools.has(partId)}
-                                            onToggle={onToggleTool}
+                                            onToggle={() => onToggleTool(partId)}
                                             syntaxTheme={syntaxTheme}
                                             isMobile={isMobile}
                                             onContentChange={onContentChange}

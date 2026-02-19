@@ -45,6 +45,7 @@ declare global {
 const ENABLE_EMPTY_RESPONSE_DETECTION = false;
 const TEXT_SHRINK_TOLERANCE = 50;
 const RESYNC_DEBOUNCE_MS = 750;
+const QUESTION_RECONCILE_COOLDOWN_MS = 1500;
 
 const textLengthCache = new WeakMap<Part[], number>();
 const computeTextLength = (parts: Part[] | undefined | null): number => {
@@ -153,6 +154,38 @@ export const useEventStream = () => {
     return undefined;
   }, [activeSessionDirectory, fallbackDirectory]);
 
+  const bootstrapPendingQuestions = React.useCallback(async () => {
+    try {
+      const projects = useProjectsStore.getState().projects;
+      const projectDirs = projects.map((project) => project.path);
+      // Use getState() to avoid sessions dependency which causes cascading updates
+      const currentSessions = useSessionStore.getState().sessions;
+      const sessionDirs = currentSessions.map((session) => (session as { directory?: string | null }).directory);
+
+      const directories = [effectiveDirectory, ...projectDirs, ...sessionDirs];
+      const pending = await opencodeClient.listPendingQuestions({ directories });
+      if (pending.length === 0) {
+        return;
+      }
+
+      for (const request of pending) {
+        addQuestion(request as unknown as QuestionRequest);
+      }
+    } catch {
+      // ignored
+    }
+  }, [addQuestion, effectiveDirectory]);
+
+  const lastQuestionRefreshAtRef = React.useRef(0);
+  const requestPendingQuestionsRefresh = React.useCallback((force = false) => {
+    const now = Date.now();
+    if (!force && now - lastQuestionRefreshAtRef.current < QUESTION_RECONCILE_COOLDOWN_MS) {
+      return;
+    }
+    lastQuestionRefreshAtRef.current = now;
+    void bootstrapPendingQuestions();
+  }, [bootstrapPendingQuestions]);
+
   React.useEffect(() => {
     let cancelled = false;
 
@@ -171,36 +204,13 @@ export const useEventStream = () => {
       }
     };
 
-    const bootstrapPendingQuestions = async () => {
-      try {
-        const projects = useProjectsStore.getState().projects;
-        const projectDirs = projects.map((project) => project.path);
-        // Use getState() to avoid sessions dependency which causes cascading updates
-        const currentSessions = useSessionStore.getState().sessions;
-        const sessionDirs = currentSessions.map((session) => (session as { directory?: string | null }).directory);
-
-        const directories = [effectiveDirectory, ...projectDirs, ...sessionDirs];
-
-        const pending = await opencodeClient.listPendingQuestions({ directories });
-        if (cancelled || pending.length === 0) {
-          return;
-        }
-
-        for (const request of pending) {
-          addQuestion(request as unknown as QuestionRequest);
-        }
-      } catch {
-        // ignored
-      }
-    };
-
     void bootstrapPendingPermissions();
-    void bootstrapPendingQuestions();
+    requestPendingQuestionsRefresh(true);
 
     return () => {
       cancelled = true;
     };
-  }, [addPermission, addQuestion, effectiveDirectory]);
+  }, [addPermission, requestPendingQuestionsRefresh]);
 
   const normalizeDirectory = React.useCallback((value: string | null | undefined): string | null => {
     if (typeof value !== 'string') return null;
@@ -852,7 +862,14 @@ export const useEventStream = () => {
           const partTime = (messagePart as { time?: { end?: unknown } }).time;
           const partHasEnded = typeof partTime?.end === 'number';
           const toolState = (messagePart as { state?: { status?: unknown } }).state?.status;
+          const toolName = typeof (messagePart as { tool?: unknown }).tool === 'string'
+            ? (messagePart as { tool: string }).tool.toLowerCase()
+            : null;
           const textContent = (messagePart as { text?: unknown }).text;
+
+          if (partType === 'tool' && toolName === 'question') {
+            requestPendingQuestionsRefresh();
+          }
 
           const isStreamingPart = (() => {
             if (partType === 'tool') {
@@ -1229,6 +1246,15 @@ export const useEventStream = () => {
         if (!hasParts && !completedFromServer && !hasCompletedStatus && !eventHasStopFinish) break;
 
         if ((messageExt as { role?: unknown }).role === 'assistant' && hasParts) {
+          const hasQuestionTool = partsArray.some((part) => (
+            part?.type === 'tool'
+            && typeof (part as { tool?: unknown }).tool === 'string'
+            && (part as { tool: string }).tool.toLowerCase() === 'question'
+          ));
+          if (hasQuestionTool) {
+            requestPendingQuestionsRefresh();
+          }
+
           const incomingLen = computeTextLength(partsArray);
           const wouldShrink = existingLen > 0 && incomingLen + TEXT_SHRINK_TOLERANCE < existingLen;
 
@@ -1662,6 +1688,7 @@ export const useEventStream = () => {
     applySessionMetadata,
     trackMessage,
     reportMessage,
+    requestPendingQuestionsRefresh,
     
     updateSession,
     removeSessionFromStore,
