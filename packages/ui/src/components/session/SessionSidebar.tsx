@@ -2795,24 +2795,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   <TooltipContent side="bottom" sideOffset={4}><p>Manage branches</p></TooltipContent>
                 </Tooltip>
               ) : null}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!activeProjectId) return;
-                      const newFolder = createFolder(activeProjectId, 'New folder');
-                      setRenamingFolderId(newFolder.id);
-                      setRenameFolderDraft('New folder');
-                    }}
-                    className={headerActionButtonClass}
-                    aria-label="New folder"
-                  >
-                    <RiFolderLine className="h-4.5 w-4.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>New folder</p></TooltipContent>
-              </Tooltip>
               {useMobileNotesPanel ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
