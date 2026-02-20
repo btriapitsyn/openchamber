@@ -275,7 +275,10 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     if (meta.type === 'saved' || meta.type === 'edit') {
       return `draft-${meta.draft.id}`;
     } else if (meta.type === 'new') {
-      return 'new-comment-input';
+      const start = Math.min(meta.selection.start, meta.selection.end);
+      const end = Math.max(meta.selection.start, meta.selection.end);
+      const side = meta.selection.side ?? 'additions';
+      return `new-comment-${side}-${start}-${end}`;
     }
     return '';
   }, []);
@@ -779,7 +782,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
               onSave={handleSaveComment}
               onCancel={handleCancelComment}
             />,
-            target
+            target,
+            `draft-edit-${d.id}`
           );
         }
 
@@ -794,12 +798,14 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             }}
             onDelete={() => removeDraft(d.sessionKey, d.id)}
           />,
-          target
+          target,
+          `draft-card-${d.id}`
         );
       })}
 
       {selection && !editingDraftId && (() => {
-        const target = resolveAnnotationTarget('new-comment-input');
+        const newCommentAnnotationId = getAnnotationId({ type: 'new', selection });
+        const target = resolveAnnotationTarget(newCommentAnnotationId);
         if (!target) return null;
 
         return createPortal(
@@ -811,7 +817,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
             onSave={handleSaveComment}
             onCancel={handleCancelComment}
           />,
-          target
+          target,
+          newCommentAnnotationId
         );
       })()}
     </>
