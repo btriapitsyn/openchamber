@@ -22,12 +22,18 @@ interface PierreDiffCommentOverlaysProps {
 function parseCssWidth(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
+
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    const parsed = Number.parseFloat(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
   if (trimmed.endsWith('px')) {
     const parsed = Number.parseFloat(trimmed.slice(0, -2));
     return Number.isFinite(parsed) ? parsed : null;
   }
-  const parsed = Number.parseFloat(trimmed);
-  return Number.isFinite(parsed) ? parsed : null;
+
+  return null;
 }
 
 function clampMaxWidth(value: number | null | undefined): number | undefined {
