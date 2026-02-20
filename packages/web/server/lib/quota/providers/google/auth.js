@@ -14,7 +14,7 @@ import {
   asNonEmptyString,
   toTimestamp
 } from '../../utils/index.js';
-import { readAuthFile } from '../../../opencode-auth.js';
+import { readAuthFile } from '../../../opencode/auth.js';
 import { parseGoogleRefreshToken } from './transforms.js';
 
 const ANTIGRAVITY_GOOGLE_CLIENT_ID =
