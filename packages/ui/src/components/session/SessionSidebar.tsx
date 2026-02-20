@@ -689,7 +689,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   // Session Folders store
   const foldersMap = useSessionFoldersStore((state) => state.foldersMap);
   const collapsedFolderIds = useSessionFoldersStore((state) => state.collapsedFolderIds);
-  const getFoldersForProject = useSessionFoldersStore((state) => state.getFoldersForProject);
+  const getFoldersForScope = useSessionFoldersStore((state) => state.getFoldersForScope);
   const createFolder = useSessionFoldersStore((state) => state.createFolder);
   const renameFolder = useSessionFoldersStore((state) => state.renameFolder);
   const deleteFolder = useSessionFoldersStore((state) => state.deleteFolder);
@@ -1478,10 +1478,23 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   // Session Folders: cleanup stale session IDs when sessions are removed
   React.useEffect(() => {
-    if (!activeProjectId) return;
-    const existingIds = new Set(sessions.map((s) => s.id));
-    cleanupSessions(activeProjectId, existingIds);
-  }, [sessions, activeProjectId, cleanupSessions]);
+    const idsByScope = new Map<string, Set<string>>();
+    sessions.forEach((session) => {
+      const directory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+      if (!directory) return;
+      const existing = idsByScope.get(directory);
+      if (existing) {
+        existing.add(session.id);
+        return;
+      }
+      idsByScope.set(directory, new Set([session.id]));
+    });
+
+    const allScopeKeys = new Set([...Object.keys(foldersMap), ...idsByScope.keys()]);
+    allScopeKeys.forEach((scopeKey) => {
+      cleanupSessions(scopeKey, idsByScope.get(scopeKey) ?? new Set<string>());
+    });
+  }, [sessions, foldersMap, cleanupSessions]);
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
@@ -2095,7 +2108,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       <RiMore2Line className={mobileVariant ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[180px]">
+                  <DropdownMenuContent
+                    align="end"
+                    className="min-w-[180px]"
+                    onCloseAutoFocus={(event) => {
+                      if (renamingFolderId) {
+                        event.preventDefault();
+                      }
+                    }}
+                  >
                     <DropdownMenuItem
                       onClick={() => {
                         setEditingId(session.id);
@@ -2148,31 +2169,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       </>
                     )}
                     {/* Move to folder submenu */}
-                    {activeProjectId ? (() => {
-                      const projectFolders = getFoldersForProject(activeProjectId);
-                      const currentFolderId = getSessionFolderId(activeProjectId, session.id);
+                    {sessionDirectory ? (() => {
+                      const scopeFolders = getFoldersForScope(sessionDirectory);
+                      const currentFolderId = getSessionFolderId(sessionDirectory, session.id);
                       return (
                         <>
                           <DropdownMenuSeparator />
                           <DropdownMenuSub>
                             <DropdownMenuSubTrigger className="[&>svg]:mr-1">
-                              <RiFolderLine className="mr-1 h-4 w-4" />
+                              <RiFolderLine className="h-4 w-4" />
                               Move to folder
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent className="min-w-[180px]">
-                              {projectFolders.length === 0 ? (
+                              {scopeFolders.length === 0 ? (
                                 <DropdownMenuItem disabled className="text-muted-foreground">
                                   No folders yet
                                 </DropdownMenuItem>
                               ) : (
-                                projectFolders.map((folder) => (
+                                scopeFolders.map((folder) => (
                                   <DropdownMenuItem
                                     key={folder.id}
                                     onClick={() => {
                                       if (currentFolderId === folder.id) {
-                                        removeSessionFromFolder(activeProjectId, session.id);
+                                        removeSessionFromFolder(sessionDirectory, session.id);
                                       } else {
-                                        addSessionToFolder(activeProjectId, folder.id, session.id);
+                                        addSessionToFolder(sessionDirectory, folder.id, session.id);
                                       }
                                     }}
                                   >
@@ -2186,8 +2207,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 onClick={() => {
-                                  const newFolder = createFolder(activeProjectId, 'New folder');
-                                  addSessionToFolder(activeProjectId, newFolder.id, session.id);
+                                  const newFolder = createFolder(sessionDirectory, 'New folder');
+                                  addSessionToFolder(sessionDirectory, newFolder.id, session.id);
                                   setRenamingFolderId(newFolder.id);
                                   setRenameFolderDraft('New folder');
                                 }}
@@ -2198,7 +2219,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                               {currentFolderId ? (
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    removeSessionFromFolder(activeProjectId, session.id);
+                                    removeSessionFromFolder(sessionDirectory, session.id);
                                   }}
                                   className="text-destructive focus:text-destructive"
                                 >
@@ -2256,13 +2277,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       copiedSessionId,
       mobileVariant,
       openMenuSessionId,
-      activeProjectId,
-      getFoldersForProject,
+      renamingFolderId,
+      getFoldersForScope,
       getSessionFolderId,
       addSessionToFolder,
       removeSessionFromFolder,
       createFolder,
-      foldersMap,
     ],
   );
 
@@ -2273,13 +2293,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const maxVisible = hideDirectoryControls ? 10 : 5;
 
       // --- Session Folders: split into foldered vs ungrouped ---
-      const effectiveProjectId = projectId ?? activeProjectId;
-      const projectFolders = effectiveProjectId ? getFoldersForProject(effectiveProjectId) : [];
-      const sessionIdsInFolders = new Set(projectFolders.flatMap((f) => f.sessionIds));
+      const folderScopeKey = normalizePath(group.directory ?? null);
+      const scopeFolders = folderScopeKey ? getFoldersForScope(folderScopeKey) : [];
+      const sessionIdsInFolders = new Set(scopeFolders.flatMap((f) => f.sessionIds));
       const ungroupedSessions = group.sessions.filter((node) => !sessionIdsInFolders.has(node.session.id));
 
       // Folders that have sessions in THIS group
-      const foldersWithSessions = projectFolders
+      const foldersWithSessions = scopeFolders
         .map((folder) => {
           const nodes = folder.sessionIds
             .map((sid) => group.sessions.find((node) => node.session.id === sid))
@@ -2328,10 +2348,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             isCollapsed={collapsedFolderIds.has(folder.id)}
             onToggle={() => toggleFolderCollapse(folder.id)}
             onRename={(name) => {
-              if (effectiveProjectId) renameFolder(effectiveProjectId, folder.id, name);
+              if (folderScopeKey) renameFolder(folderScopeKey, folder.id, name);
             }}
             onDelete={() => {
-              if (effectiveProjectId) deleteFolder(effectiveProjectId, folder.id);
+              if (folderScopeKey) deleteFolder(folderScopeKey, folder.id);
             }}
             renderSessionNode={renderSessionNode}
             groupDirectory={group.directory}
@@ -2342,8 +2362,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
             onRenameDraftChange={(value) => setRenameFolderDraft(value)}
             onRenameSave={() => {
               const trimmed = renameFolderDraft.trim();
-              if (trimmed && effectiveProjectId) {
-                renameFolder(effectiveProjectId, folder.id, trimmed);
+              if (trimmed && folderScopeKey) {
+                renameFolder(folderScopeKey, folder.id, trimmed);
               }
               setRenamingFolderId(null);
               setRenameFolderDraft('');
@@ -2550,8 +2570,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       mobileVariant,
       setSessionSwitcherOpen,
       openNewSessionDraft,
-      getFoldersForProject,
-      foldersMap,
+      getFoldersForScope,
       collapsedFolderIds,
       toggleFolderCollapse,
       renameFolder,

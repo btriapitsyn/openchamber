@@ -12,18 +12,15 @@ import {
 import { cn } from '@/lib/utils';
 import type { SessionFolder } from '@/stores/useSessionFoldersStore';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- SessionNode is a local type in SessionSidebar; using `any` here avoids tight coupling
-type AnySessionNode = any;
-
-interface SessionFolderItemProps {
+interface SessionFolderItemProps<TSessionNode> {
   folder: SessionFolder;
-  sessions: AnySessionNode[];
+  sessions: TSessionNode[];
   isCollapsed: boolean;
   onToggle: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
   renderSessionNode: (
-    node: AnySessionNode,
+    node: TSessionNode,
     depth?: number,
     groupDir?: string | null,
     projectId?: string | null,
@@ -38,7 +35,7 @@ interface SessionFolderItemProps {
   onRenameCancel?: () => void;
 }
 
-const SessionFolderItemBase: React.FC<SessionFolderItemProps> = ({
+const SessionFolderItemBase = <TSessionNode,>({
   folder,
   sessions,
   isCollapsed,
@@ -54,9 +51,10 @@ const SessionFolderItemBase: React.FC<SessionFolderItemProps> = ({
   onRenameDraftChange,
   onRenameSave,
   onRenameCancel,
-}) => {
+}: SessionFolderItemProps<TSessionNode>) => {
   const [localRenaming, setLocalRenaming] = React.useState(false);
   const [localDraft, setLocalDraft] = React.useState('');
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
 
   const renaming = isRenaming || localRenaming;
   const draft = isRenaming ? renameDraft : localDraft;
@@ -97,12 +95,22 @@ const SessionFolderItemBase: React.FC<SessionFolderItemProps> = ({
     [isRenaming, onRenameDraftChange],
   );
 
-  // Auto-focus rename when externally triggered (e.g. "New folder")
+  // Auto-focus rename when externally triggered (e.g. from session menu)
   React.useEffect(() => {
-    if (isRenaming && !localRenaming) {
-      // External rename mode active — handled via props
-    }
-  }, [isRenaming, localRenaming]);
+    if (!isRenaming) return;
+    const focusInput = () => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.select();
+    };
+    const frameId = requestAnimationFrame(focusInput);
+    const timeoutId = window.setTimeout(focusInput, 0);
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [isRenaming]);
 
   const FolderIcon = isCollapsed ? RiFolderLine : RiFolderOpenLine;
 
@@ -142,6 +150,7 @@ const SessionFolderItemBase: React.FC<SessionFolderItemProps> = ({
               }}
             >
               <input
+                ref={inputRef}
                 value={draft}
                 onChange={(event) => handleDraftChange(event.target.value)}
                 className="flex-1 min-w-0 bg-transparent typography-ui-label outline-none placeholder:text-muted-foreground"
@@ -233,7 +242,7 @@ const SessionFolderItemBase: React.FC<SessionFolderItemProps> = ({
 
       {/* Folder body */}
       {!isCollapsed ? (
-        <div className="pb-1 pl-1">
+        <div className="pb-1 pl-2">
           {sessions.length > 0 ? (
             sessions.map((node) =>
               renderSessionNode(node, 0, groupDirectory ?? null, projectId ?? null),
@@ -249,4 +258,6 @@ const SessionFolderItemBase: React.FC<SessionFolderItemProps> = ({
   );
 };
 
-export const SessionFolderItem = React.memo(SessionFolderItemBase);
+export const SessionFolderItem = React.memo(SessionFolderItemBase) as <TSessionNode>(
+  props: SessionFolderItemProps<TSessionNode>,
+) => React.ReactElement;
