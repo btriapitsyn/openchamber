@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
-// createPortal no longer needed — comments float absolutely outside shadow DOM
+import { createPortal } from 'react-dom';
 import {
   FileDiff as PierreFileDiff,
   VirtualizedFileDiff,
@@ -282,108 +282,38 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
 
   const renderAnnotation = useCallback((annotation: DiffLineAnnotation<AnnotationData>) => {
     const div = document.createElement('div');
-    // Invisible — comments are rendered as floating elements outside shadow DOM
-    div.style.display = 'none';
+    div.style.position = 'relative';
 
     const meta = (annotation as DiffLineAnnotation<AnnotationData>).metadata;
     const id = getAnnotationId(meta);
-    
+
     div.dataset.annotationId = id;
+    div.dataset.annotationSide = annotation.side;
+    div.dataset.annotationLine = String(annotation.lineNumber);
     return div;
   }, [getAnnotationId]);
 
-  // Compute floating comment positions by finding target lines in Pierre's shadow DOM
-  const findLineElement = useCallback((root: ShadowRoot, line: number, side?: string) => {
-    const nodes = Array.from(
-      root.querySelectorAll(`[data-line="${line}"], [data-alt-line="${line}"]`)
-    ).filter((n): n is HTMLElement => n instanceof HTMLElement);
-    if (nodes.length === 0) return undefined;
-    if (!side) return nodes[0];
-    const match = nodes.find((n) => {
-      const lineType = n.closest('[data-line-type]')?.getAttribute('data-line-type') ?? n.getAttribute('data-line-type');
-      if (side === 'deletions') return lineType === 'change-deletion';
-      return lineType !== 'change-deletion';
-    });
-    return match ?? nodes[0];
-  }, []);
+  const annotationTargetsRef = useRef<Record<string, HTMLElement | null>>({});
 
-  const getAnchorPositions = useCallback((wrapper: HTMLElement, root: ShadowRoot, range: { start: number; end: number; side?: string }) => {
-    const wrapperRect = wrapper.getBoundingClientRect();
-    const first = findLineElement(root, range.start, range.side);
-    const last = findLineElement(root, range.end, range.side);
-
-    // Bottom of last line (for below placement)
-    const lastEl = last ?? first;
-    const bottomTop = lastEl
-      ? lastEl.getBoundingClientRect().top - wrapperRect.top + lastEl.getBoundingClientRect().height
-      : undefined;
-
-    // Top of first line (for above placement)
-    const firstEl = first ?? last;
-    const aboveTop = firstEl
-      ? firstEl.getBoundingClientRect().top - wrapperRect.top
-      : undefined;
-
-    return { bottomTop, aboveTop };
-  }, [findLineElement]);
-
-  const [commentPositions, setCommentPositions] = useState<Record<string, { top: number; flipUp: boolean } | undefined>>({});
-  type CommentPos = { top: number; flipUp: boolean };
-
-  const COMMENT_POPOVER_HEIGHT = 200; // approximate height of comment popover
-
-  const updateCommentPositions = useCallback(() => {
+  const resolveAnnotationTarget = useCallback((id: string): HTMLElement | null => {
     const wrapper = diffRootRef.current;
-    if (!wrapper) return;
+    if (!wrapper) return null;
 
-    const host = wrapper.querySelector('diffs-container') ?? diffContainerRef.current?.querySelector('diffs-container');
-    const shadow = (host as HTMLElement | null)?.shadowRoot;
-    if (!shadow) return;
-
-    const scrollContainer = wrapper.closest('.overlay-scrollbar-container') as HTMLElement | null;
-    const viewportBottom = scrollContainer
-      ? scrollContainer.getBoundingClientRect().bottom
-      : window.innerHeight;
-
-    const computePos = (range: { start: number; end: number; side?: string }): CommentPos | undefined => {
-      const anchors = getAnchorPositions(wrapper, shadow, range);
-      if (anchors.bottomTop === undefined) return undefined;
-
-      // Check if placing below last line would overflow viewport
-      const lastEl = findLineElement(shadow, range.end, range.side) ?? findLineElement(shadow, range.start, range.side);
-      const flipUp = lastEl
-        ? (lastEl.getBoundingClientRect().bottom + COMMENT_POPOVER_HEIGHT + 30) > viewportBottom
-        : false;
-
-      return {
-        top: flipUp ? (anchors.aboveTop ?? anchors.bottomTop) : anchors.bottomTop,
-        flipUp,
-      };
-    };
-
-    const next: Record<string, CommentPos | undefined> = {};
-    const sessionKey = getSessionKey();
-    const sessionDrafts = sessionKey ? (allDrafts[sessionKey] ?? []) : [];
-    const fileLabel = fileName || 'unknown';
-    const fileDrafts = sessionDrafts.filter((d) => d.source === 'diff' && d.fileLabel === fileLabel);
-
-    for (const d of fileDrafts) {
-      const side = d.side === 'original' ? 'deletions' : 'additions';
-      next[d.id] = computePos({ start: d.startLine, end: d.endLine, side });
+    const cached = annotationTargetsRef.current[id];
+    if (cached && wrapper.contains(cached)) {
+      return cached;
     }
 
-    if (selection && !editingDraftId) {
-      const side = selection.side ?? 'additions';
-      next['__new__'] = computePos({ start: selection.start, end: selection.end, side });
-    }
+    const host = wrapper.querySelector('diffs-container');
+    if (!host) return null;
 
-    setCommentPositions(next);
-  }, [allDrafts, editingDraftId, fileName, findLineElement, getAnchorPositions, getSessionKey, selection]);
+    const shadowRoot = host.shadowRoot;
+    if (!shadowRoot) return null;
 
-  const updateCommentPositionsRef = useRef(updateCommentPositions);
-  useEffect(() => {
-    updateCommentPositionsRef.current = updateCommentPositions;
-  }, [updateCommentPositions]);
+    const target = shadowRoot.querySelector(`[data-annotation-id="${id}"]`) as HTMLElement | null;
+    annotationTargetsRef.current[id] = target;
+    return target;
+  }, []);
 
   const handleSaveComment = useCallback((textToSave: string, rangeOverride?: SelectedLineRange) => {
     // Use provided range override or fall back to current selection
@@ -667,10 +597,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       containerWrapper: container,
     });
 
-    // Update floating comment positions after Pierre renders
     requestAnimationFrame(() => {
       forceUpdate();
-      updateCommentPositionsRef.current();
     });
 
     return () => {
@@ -699,9 +627,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
         void err;
       }
       forceUpdate();
-      updateCommentPositions();
     });
-  }, [lineAnnotations, updateCommentPositions]);
+  }, [lineAnnotations]);
 
   useEffect(() => {
     const instance = diffInstanceRef.current;
@@ -788,10 +715,6 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     };
   }, [diffThemeKey, fileName, handleSelectionChange]);
 
-  useEffect(() => {
-    requestAnimationFrame(updateCommentPositions);
-  }, [selection, editingDraftId, allDrafts, updateCommentPositions]);
-
   // MutationObserver to trigger re-renders when annotation DOM nodes are added/removed
   useEffect(() => {
     const container = diffContainerRef.current;
@@ -804,35 +727,20 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       const diffsContainer = container.querySelector('diffs-container');
       if (!diffsContainer) return;
 
-      // Watch for annotation nodes being added/removed
-      observer = new MutationObserver((mutations) => {
-        const hasAnnotationChanges = mutations.some(m => 
-          Array.from(m.addedNodes).some(n => 
-            n instanceof HTMLElement && n.hasAttribute('data-annotation-id')
-          ) ||
-          Array.from(m.removedNodes).some(n => 
-            n instanceof HTMLElement && n.hasAttribute('data-annotation-id')
-          )
-        );
+      const shadowRoot = diffsContainer.shadowRoot;
+      if (!shadowRoot) return;
 
-        if (hasAnnotationChanges) {
-           // Debounce with RAF to batch multiple mutations
-           if (rafId) cancelAnimationFrame(rafId);
-           rafId = requestAnimationFrame(() => {
-             forceUpdate();
-             rafId = null;
-           });
-         }
+      observer = new MutationObserver(() => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          forceUpdate();
+          rafId = null;
+        });
       });
 
-      // Observe both shadow root and light DOM
-      if (diffsContainer.shadowRoot) {
-        observer.observe(diffsContainer.shadowRoot, { childList: true, subtree: true });
-      }
-      observer.observe(diffsContainer, { childList: true, subtree: true });
+      observer.observe(shadowRoot, { childList: true, subtree: true });
     };
 
-    // Delay setup to allow Pierre to initialize
     const timeoutId = setTimeout(setupObserver, 100);
 
     return () => {
@@ -840,91 +748,72 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
       if (rafId) cancelAnimationFrame(rafId);
       observer?.disconnect();
     };
-  }, [diffThemeKey, fileName]); // Re-setup when diff changes
+  }, [diffThemeKey, fileName]);
 
   if (typeof window === 'undefined') {
     return null;
   }
 
-  // Floating comment elements positioned absolutely over the diff
   const sessionKey = getSessionKey();
   const sessionDrafts = sessionKey ? (allDrafts[sessionKey] ?? []) : [];
   const fileLabel = fileName || 'unknown';
   const fileDrafts = sessionDrafts.filter((d) => d.source === 'diff' && d.fileLabel === fileLabel);
 
-  const floatingComments = (
+  const commentPortals = (
     <>
       {fileDrafts.map((d) => {
-        const pos = commentPositions[d.id];
-        if (!pos) return null;
-
-        const popoverStyle: React.CSSProperties = pos.flipUp
-          ? { position: 'absolute', bottom: 'calc(100% + 4px)', right: -8, zIndex: 40, width: 380, maxWidth: 'min(380px, calc(100vw - 48px))', borderRadius: 14 }
-          : { position: 'absolute', top: 'calc(100% + 4px)', right: -8, zIndex: 40, width: 380, maxWidth: 'min(380px, calc(100vw - 48px))', borderRadius: 14 };
+        const target = resolveAnnotationTarget(`draft-${d.id}`);
+        if (!target) return null;
 
         if (d.id === editingDraftId) {
-          return (
-            <div
-              key={`edit-${d.id}`}
-              style={{ position: 'absolute', right: 24, top: pos.top, zIndex: 100, pointerEvents: 'auto' }}
-            >
-              <div style={popoverStyle}>
-                <InlineCommentInput
-                  initialText={commentText}
-                  fileLabel={(fileName?.split('/').pop()) ?? ''}
-                  lineRange={{
-                    start: d.startLine,
-                    end: d.endLine,
-                    side: d.side === 'original' ? 'deletions' : 'additions'
-                  }}
-                  isEditing={true}
-                  onSave={handleSaveComment}
-                  onCancel={handleCancelComment}
-                />
-              </div>
-            </div>
-          );
-        }
-
-        return (
-          <div
-            key={`saved-${d.id}`}
-            style={{ position: 'absolute', right: 24, top: pos.top, zIndex: 30, pointerEvents: 'auto' }}
-          >
-            <InlineCommentCard
-              draft={d}
-              onEdit={() => {
-                const side = d.side === 'original' ? 'deletions' : 'additions';
-                applySelection({ start: d.startLine, end: d.endLine, side });
-                setCommentText(d.text);
-                setEditingDraftId(d.id);
-              }}
-              onDelete={() => removeDraft(d.sessionKey, d.id)}
-            />
-          </div>
-        );
-      })}
-
-      {selection && !editingDraftId && commentPositions['__new__'] && (
-        <div
-          key="new-comment"
-          style={{ position: 'absolute', right: 24, top: commentPositions['__new__'].top, zIndex: 100, pointerEvents: 'auto' }}
-        >
-          <div style={commentPositions['__new__'].flipUp
-            ? { position: 'absolute', bottom: 'calc(100% + 4px)', right: -8, zIndex: 40, width: 380, maxWidth: 'min(380px, calc(100vw - 48px))', borderRadius: 14 }
-            : { position: 'absolute', top: 'calc(100% + 4px)', right: -8, zIndex: 40, width: 380, maxWidth: 'min(380px, calc(100vw - 48px))', borderRadius: 14 }
-          }>
+          return createPortal(
             <InlineCommentInput
               initialText={commentText}
               fileLabel={(fileName?.split('/').pop()) ?? ''}
-              lineRange={selection || undefined}
-              isEditing={false}
+              lineRange={{
+                start: d.startLine,
+                end: d.endLine,
+                side: d.side === 'original' ? 'deletions' : 'additions'
+              }}
+              isEditing={true}
               onSave={handleSaveComment}
               onCancel={handleCancelComment}
-            />
-          </div>
-        </div>
-      )}
+            />,
+            target
+          );
+        }
+
+        return createPortal(
+          <InlineCommentCard
+            draft={d}
+            onEdit={() => {
+              const side = d.side === 'original' ? 'deletions' : 'additions';
+              applySelection({ start: d.startLine, end: d.endLine, side });
+              setCommentText(d.text);
+              setEditingDraftId(d.id);
+            }}
+            onDelete={() => removeDraft(d.sessionKey, d.id)}
+          />,
+          target
+        );
+      })}
+
+      {selection && !editingDraftId && (() => {
+        const target = resolveAnnotationTarget('new-comment-input');
+        if (!target) return null;
+
+        return createPortal(
+          <InlineCommentInput
+            initialText={commentText}
+            fileLabel={(fileName?.split('/').pop()) ?? ''}
+            lineRange={selection || undefined}
+            isEditing={false}
+            onSave={handleSaveComment}
+            onCancel={handleCancelComment}
+          />,
+          target
+        );
+      })()}
     </>
   );
 
@@ -940,9 +829,9 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
           >
             <div ref={diffRootRef} className="size-full relative">
               <div ref={diffContainerRef} className="size-full" />
-              {floatingComments}
             </div>
           </ScrollableOverlay>
+          {commentPortals}
         </div>
       </div>
     );
@@ -953,8 +842,8 @@ export const PierreDiffViewer: React.FC<PierreDiffViewerProps> = ({
     <div className={cn("relative", "w-full")}>
       <div ref={diffRootRef} className="pierre-diff-wrapper w-full overflow-x-auto overflow-y-visible relative">
         <div ref={diffContainerRef} className="w-full" />
-        {floatingComments}
       </div>
+      {commentPortals}
     </div>
   );
 };
