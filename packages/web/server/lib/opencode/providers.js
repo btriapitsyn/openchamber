@@ -1,102 +1,93 @@
-import fs from 'fs';
-import path from 'path';
 import {
   CONFIG_FILE,
   readConfigLayers,
-  readConfigFile,
+  isPlainObject,
+  getConfigForPath,
   writeConfig,
 } from './shared.js';
 
 function getProviderSources(providerId, workingDirectory) {
   const layers = readConfigLayers(workingDirectory);
-  
-  const providers = {
-    user: {
-      exists: false,
-      disabled: false,
-      config: null,
-      path: layers.paths.userPath
-    },
-    project: {
-      exists: false,
-      disabled: false,
-      config: null,
-      path: layers.paths.projectPath
-    },
-    custom: {
-      exists: false,
-      disabled: false,
-      config: null,
-      path: layers.paths.customPath
-    }
-  };
+  const { userConfig, projectConfig, customConfig, paths } = layers;
 
-  const checkConfig = (config, path, scopeKey) => {
-    if (!config) return;
-    
-    if (config.disabled_providers && Array.isArray(config.disabled_providers)) {
-      if (config.disabled_providers.includes(providerId)) {
-        providers[scopeKey].exists = true;
-        providers[scopeKey].disabled = true;
-      }
-    }
-  };
+  const customProviders = isPlainObject(customConfig?.provider) ? customConfig.provider : {};
+  const customProvidersAlias = isPlainObject(customConfig?.providers) ? customConfig.providers : {};
+  const projectProviders = isPlainObject(projectConfig?.provider) ? projectConfig.provider : {};
+  const projectProvidersAlias = isPlainObject(projectConfig?.providers) ? projectConfig.providers : {};
+  const userProviders = isPlainObject(userConfig?.provider) ? userConfig.provider : {};
+  const userProvidersAlias = isPlainObject(userConfig?.providers) ? userConfig.providers : {};
 
-  checkConfig(layers.customConfig, layers.paths.customPath, 'custom');
-  checkConfig(layers.projectConfig, layers.paths.projectPath, 'project');
-  checkConfig(layers.userConfig, layers.paths.userPath, 'user');
+  const customExists =
+    Object.prototype.hasOwnProperty.call(customProviders, providerId) ||
+    Object.prototype.hasOwnProperty.call(customProvidersAlias, providerId);
+  const projectExists =
+    Object.prototype.hasOwnProperty.call(projectProviders, providerId) ||
+    Object.prototype.hasOwnProperty.call(projectProvidersAlias, providerId);
+  const userExists =
+    Object.prototype.hasOwnProperty.call(userProviders, providerId) ||
+    Object.prototype.hasOwnProperty.call(userProvidersAlias, providerId);
 
   return {
-    sources: providers,
-    providerId
+    sources: {
+      auth: { exists: false },
+      user: { exists: userExists, path: paths.userPath },
+      project: { exists: projectExists, path: paths.projectPath || null },
+      custom: { exists: customExists, path: paths.customPath }
+    }
   };
 }
 
-function removeProviderConfig(providerId, workingDirectory, scope) {
+function removeProviderConfig(providerId, workingDirectory, scope = 'user') {
+  if (!providerId || typeof providerId !== 'string') {
+    throw new Error('Provider ID is required');
+  }
+
   const layers = readConfigLayers(workingDirectory);
-  
-  let targetConfig = null;
-  let targetPath = null;
+  let targetPath = layers.paths.userPath;
 
-  if (scope === 'custom' && layers.paths.customPath) {
-    targetConfig = layers.customConfig;
+  if (scope === 'project') {
+    if (!workingDirectory) {
+      throw new Error('Working directory is required for project scope');
+    }
+    targetPath = layers.paths.projectPath || targetPath;
+  } else if (scope === 'custom') {
+    if (!layers.paths.customPath) {
+      return false;
+    }
     targetPath = layers.paths.customPath;
-  } else if (scope === 'project' && layers.paths.projectPath) {
-    targetConfig = layers.projectConfig;
-    targetPath = layers.paths.projectPath;
-  } else if (scope === 'user') {
-    targetConfig = layers.userConfig;
-    targetPath = layers.paths.userPath;
-  } else {
+  }
+
+  const targetConfig = getConfigForPath(layers, targetPath);
+  const providerConfig = isPlainObject(targetConfig.provider) ? targetConfig.provider : {};
+  const providersConfig = isPlainObject(targetConfig.providers) ? targetConfig.providers : {};
+  const removedProvider = Object.prototype.hasOwnProperty.call(providerConfig, providerId);
+  const removedProviders = Object.prototype.hasOwnProperty.call(providersConfig, providerId);
+
+  if (!removedProvider && !removedProviders) {
     return false;
   }
 
-  if (!targetConfig || !targetPath) {
-    return false;
-  }
-
-  if (!fs.existsSync(targetPath)) {
-    return false;
-  }
-
-  const modified = readConfigFile(targetPath);
-  let changed = false;
-
-  if (modified.disabled_providers && Array.isArray(modified.disabled_providers)) {
-    const index = modified.disabled_providers.indexOf(providerId);
-    if (index !== -1) {
-      modified.disabled_providers.splice(index, 1);
-      changed = true;
+  if (removedProvider) {
+    delete providerConfig[providerId];
+    if (Object.keys(providerConfig).length === 0) {
+      delete targetConfig.provider;
+    } else {
+      targetConfig.provider = providerConfig;
     }
   }
 
-  if (changed) {
-    writeConfig(modified, targetPath);
-    console.log(`Removed provider ${providerId} from config: ${targetPath}`);
-    return true;
+  if (removedProviders) {
+    delete providersConfig[providerId];
+    if (Object.keys(providersConfig).length === 0) {
+      delete targetConfig.providers;
+    } else {
+      targetConfig.providers = providersConfig;
+    }
   }
 
-  return false;
+  writeConfig(targetConfig, targetPath || CONFIG_FILE);
+  console.log(`Removed provider ${providerId} from config: ${targetPath}`);
+  return true;
 }
 
 export {
