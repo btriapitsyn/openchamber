@@ -165,6 +165,18 @@ export function CodeMirrorEditor({
   // Scoped map for widget containers to avoid global collisions and memory leaks
   const widgetContainersRef = React.useRef(new Map<string, HTMLElement>());
 
+  const syncEditorCssVars = React.useCallback((view?: EditorView | null) => {
+    const host = hostRef.current;
+    const resolvedView = view ?? viewRef.current;
+    if (!host || !resolvedView) {
+      return;
+    }
+
+    const gutters = resolvedView.dom.querySelector('.cm-gutters');
+    const gutterWidth = gutters instanceof HTMLElement ? gutters.getBoundingClientRect().width : 0;
+    host.style.setProperty('--oc-editor-gutter-width', `${gutterWidth}px`);
+  }, []);
+
   React.useEffect(() => {
     valueRef.current = value;
   }, [value]);
@@ -201,6 +213,7 @@ export function CodeMirrorEditor({
         indentUnit.of('  '),
         keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap]),
         EditorView.updateListener.of((update) => {
+          syncEditorCssVars(update.view);
           if (update.docChanged || update.viewportChanged || update.geometryChanged) {
             forceUpdate();
           }
@@ -226,6 +239,7 @@ export function CodeMirrorEditor({
 
     forceParsingCompat(viewRef.current, viewRef.current.state.doc.length, 200);
     viewRef.current.requestMeasure();
+    requestAnimationFrame(() => syncEditorCssVars(viewRef.current));
 
     if (viewRef.current) {
       onViewReadyRef.current?.(viewRef.current);
@@ -258,11 +272,12 @@ export function CodeMirrorEditor({
 
     forceParsingCompat(view, view.state.doc.length, 200);
     view.requestMeasure();
+    requestAnimationFrame(() => syncEditorCssVars(view));
 
     // Force a re-render to ensure Portals can find the new widget containers in the DOM
     // The containers are created synchronously by CodeMirror during dispatch -> toDOM
     forceUpdate();
-  }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets, enableSearch]);
+  }, [extensions, highlightLines, lineNumbersConfig, readOnly, blockWidgets, enableSearch, syncEditorCssVars]);
 
   React.useEffect(() => {
     const view = viewRef.current;
