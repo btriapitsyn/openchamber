@@ -234,6 +234,7 @@ export interface SessionStore {
     updateSessionCompaction: (sessionId: string, compactingTimestamp?: number | null) => void;
     addPermission: (permission: PermissionRequest) => void;
     respondToPermission: (sessionId: string, requestId: string, response: PermissionResponse) => Promise<void>;
+    dismissPermission: (sessionId: string, requestId: string) => void;
 
     addQuestion: (question: QuestionRequest) => void;
     dismissQuestion: (sessionId: string, requestId: string) => void;

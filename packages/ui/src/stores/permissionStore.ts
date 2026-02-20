@@ -14,6 +14,7 @@ interface PermissionState {
 interface PermissionActions {
     addPermission: (permission: PermissionRequest, contextData?: { currentAgentContext?: Map<string, string>, sessionAgentSelections?: Map<string, string>, getSessionAgentEditMode?: (sessionId: string, agentName: string | undefined) => string }) => void;
     respondToPermission: (sessionId: string, requestId: string, response: PermissionResponse) => Promise<void>;
+    dismissPermission: (sessionId: string, requestId: string) => void;
 }
 
 type PermissionStore = PermissionState & PermissionActions;
@@ -115,6 +116,16 @@ export const usePermissionStore = create<PermissionStore>()(
                         await messageStore.abortCurrentOperation(sessionId);
                     }
 
+                    set((state) => {
+                        const sessionPermissions = state.permissions.get(sessionId) || [];
+                        const updatedPermissions = sessionPermissions.filter((p) => p.id !== requestId);
+                        const newPermissions = new Map(state.permissions);
+                        newPermissions.set(sessionId, updatedPermissions);
+                        return { permissions: newPermissions };
+                    });
+                },
+
+                dismissPermission: (sessionId: string, requestId: string) => {
                     set((state) => {
                         const sessionPermissions = state.permissions.get(sessionId) || [];
                         const updatedPermissions = sessionPermissions.filter((p) => p.id !== requestId);

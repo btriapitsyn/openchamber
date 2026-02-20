@@ -1875,6 +1875,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     isWaitingForPermission={working.isWaitingForPermission}
                     wasAborted={working.wasAborted}
                     abortActive={working.abortActive}
+                    retryInfo={working.retryInfo}
                     showAbortStatus={showAbortStatus}
                 />
             </div>

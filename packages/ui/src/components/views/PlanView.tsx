@@ -6,8 +6,7 @@ import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/useUIStore';
-import { InlineCommentCard } from '@/components/comments/InlineCommentCard';
-import { InlineCommentInput } from '@/components/comments/InlineCommentInput';
+import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
@@ -20,8 +19,6 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
-import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
-import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
 const normalize = (value: string): string => {
@@ -87,22 +84,10 @@ export const PlanView: React.FC = () => {
   const sessions = useSessionStore((state) => state.sessions);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const runtimeApis = useRuntimeAPIs();
-  const newSessionDraftOpen = useSessionStore((state) => state.newSessionDraft?.open);
   useUIStore();
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
-
-  // Inline comment drafts
-  const addDraft = useInlineCommentDraftStore((state) => state.addDraft);
-  const updateDraft = useInlineCommentDraftStore((state) => state.updateDraft);
-  const removeDraft = useInlineCommentDraftStore((state) => state.removeDraft);
-  const allDrafts = useInlineCommentDraftStore((state) => state.drafts);
-
-  // Get session key for drafts
-  const getSessionKey = React.useCallback(() => {
-    return currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
-  }, [currentSessionId, newSessionDraftOpen]);
 
   const session = React.useMemo(() => {
     if (!currentSessionId) return null;
@@ -122,6 +107,9 @@ export const PlanView: React.FC = () => {
     return toDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory });
   }, [resolvedPath, sessionDirectory, homeDirectory]);
   const [content, setContent] = React.useState<string>('');
+  const planFileLabel = React.useMemo(() => {
+    return displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
+  }, [displayPath]);
   const [loading, setLoading] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
   const [copiedContent, setCopiedContent] = React.useState(false);
@@ -130,8 +118,6 @@ export const PlanView: React.FC = () => {
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
 
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
-  const [commentText, setCommentText] = React.useState('');
-  const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
   const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -172,23 +158,66 @@ export const PlanView: React.FC = () => {
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, []);
 
+  const extractSelectedCode = React.useCallback((text: string, range: SelectedLineRange): string => {
+    const lines = text.split('\n');
+    const startLine = Math.max(1, range.start);
+    const endLine = Math.min(lines.length, range.end);
+    if (startLine > endLine) return '';
+    return lines.slice(startLine - 1, endLine).join('\n');
+  }, []);
+
+  const commentController = useInlineCommentController<SelectedLineRange>({
+    source: 'plan',
+    fileLabel: planFileLabel,
+    language: resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown',
+    getCodeForRange: (range) => extractSelectedCode(content, normalizeLineRange(range)),
+    toStoreRange: (range) => ({ startLine: range.start, endLine: range.end }),
+    fromDraftRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
+  });
+
+  const {
+    drafts: planFileDrafts,
+    commentText,
+    editingDraftId,
+    setSelection: setCommentSelection,
+    saveComment,
+    cancel,
+    reset,
+    startEdit,
+    deleteDraft,
+  } = commentController;
+
   React.useEffect(() => {
     setLineSelection(null);
-    setCommentText('');
-    setEditingDraftId(null);
-  }, [content]);
+    reset();
+  }, [content, reset]);
+
+  React.useEffect(() => {
+    setCommentSelection(lineSelection);
+  }, [lineSelection, setCommentSelection]);
+
+  const handleCancelComment = React.useCallback(() => {
+    setLineSelection(null);
+    cancel();
+  }, [cancel]);
+
+  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
+    if (rangeOverride) {
+      setLineSelection(rangeOverride);
+    }
+    saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined);
+    setLineSelection(null);
+  }, [lineSelection, saveComment]);
 
   React.useEffect(() => {
     if (!lineSelection) return;
-    
-    // Auto-scroll input into view on mobile
+
     if (isMobile && !editingDraftId) {
-       // We rely on InlineCommentInput doing this now via useEffect
+      // Input handles mobile scroll/focus behavior.
     }
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Check if click is inside any comment component
       if (
         target.closest('[data-comment-card="true"]') ||
         target.closest('[data-comment-input="true"]') ||
@@ -196,15 +225,12 @@ export const PlanView: React.FC = () => {
       ) {
         return;
       }
-      
+
       if (target.closest('.cm-gutterElement')) return;
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
-      
-      // If clicking outside while editing, maybe we should save or ask confirmation?
-      // For now, cancel edit
+
       setLineSelection(null);
-      setCommentText('');
-      setEditingDraftId(null);
+      cancel();
     };
 
     const timeoutId = window.setTimeout(() => {
@@ -215,63 +241,7 @@ export const PlanView: React.FC = () => {
       window.clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [lineSelection, editingDraftId, isMobile]);
-
-  const extractSelectedCode = React.useCallback((text: string, range: SelectedLineRange): string => {
-    const lines = text.split('\n');
-    const startLine = Math.max(1, range.start);
-    const endLine = Math.min(lines.length, range.end);
-    if (startLine > endLine) return '';
-    return lines.slice(startLine - 1, endLine).join('\n');
-  }, []);
-
-  const handleCancelComment = React.useCallback(() => {
-    setCommentText('');
-    setLineSelection(null);
-    setEditingDraftId(null);
-  }, []);
-
-  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
-    // Use provided range override or fall back to current selection
-    const targetRange = rangeOverride ?? lineSelection;
-    if (!targetRange || !textToSave.trim()) return;
-
-    const sessionKey = getSessionKey();
-    if (!sessionKey) {
-      toast.error('Select a session to save comment');
-      return;
-    }
-
-    const code = extractSelectedCode(content, targetRange);
-    const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
-    const language = resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown';
-
-    if (editingDraftId) {
-      updateDraft(sessionKey, editingDraftId, {
-        fileLabel,
-        startLine: targetRange.start,
-        endLine: targetRange.end,
-        code,
-        language,
-        text: textToSave.trim(),
-      });
-    } else {
-      addDraft({
-        sessionKey,
-        source: 'plan',
-        fileLabel,
-        startLine: targetRange.start,
-        endLine: targetRange.end,
-        code,
-        language,
-        text: textToSave.trim(),
-      });
-    }
-
-    setCommentText('');
-    setLineSelection(null);
-    setEditingDraftId(null);
-  }, [lineSelection, content, displayPath, resolvedPath, addDraft, updateDraft, getSessionKey, extractSelectedCode, editingDraftId]);
+  }, [cancel, editingDraftId, isMobile, lineSelection]);
 
 
   const editorExtensions = React.useMemo(() => {
@@ -381,64 +351,25 @@ export const PlanView: React.FC = () => {
     };
   }, []);
 
-  const planFileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
-
-  const planFileDrafts = React.useMemo(() => {
-    const sessionKey = getSessionKey();
-    if (!sessionKey) return [];
-    const sessionDrafts = allDrafts[sessionKey] ?? [];
-    return sessionDrafts.filter((d) => d.source === 'plan' && d.fileLabel === planFileLabel);
-  }, [getSessionKey, allDrafts, planFileLabel]);
-
   const blockWidgets = React.useMemo(() => {
-    const widgets: Array<{ afterLine: number; id: string; content: React.ReactNode }> = [];
-
-    for (const draft of planFileDrafts) {
-      const content = draft.id === editingDraftId ? (
-        <InlineCommentInput
-          key={`edit-${draft.id}`}
-          initialText={commentText}
-          fileLabel={draft.fileLabel}
-          lineRange={{ start: draft.startLine, end: draft.endLine }}
-          isEditing={true}
-          onSave={handleSaveComment}
-          onCancel={handleCancelComment}
-        />
-      ) : (
-        <InlineCommentCard
-          key={`saved-${draft.id}`}
-          draft={draft}
-          onEdit={() => {
-            setLineSelection({ start: draft.startLine, end: draft.endLine });
-            setCommentText(draft.text);
-            setEditingDraftId(draft.id);
-          }}
-          onDelete={() => removeDraft(draft.sessionKey, draft.id)}
-        />
-      );
-      widgets.push({ afterLine: draft.endLine, id: draft.id, content });
-    }
-
-    if (lineSelection && !editingDraftId && !isDragging) {
-      widgets.push({
-        afterLine: Math.max(lineSelection.start, lineSelection.end),
-        id: 'plan-new-comment-input',
-        content: (
-          <InlineCommentInput
-            key="new-comment"
-            initialText={commentText}
-            fileLabel={planFileLabel}
-            lineRange={lineSelection}
-            isEditing={false}
-            onSave={handleSaveComment}
-            onCancel={handleCancelComment}
-          />
-        ),
-      });
-    }
-
-    return widgets;
-  }, [planFileDrafts, editingDraftId, commentText, lineSelection, isDragging, planFileLabel, handleSaveComment, handleCancelComment, removeDraft]);
+    return buildCodeMirrorCommentWidgets({
+      drafts: planFileDrafts,
+      editingDraftId,
+      commentText,
+      selection: lineSelection,
+      isDragging,
+      fileLabel: planFileLabel,
+      newWidgetId: 'plan-new-comment-input',
+      mapDraftToRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
+      onSave: handleSaveComment,
+      onCancel: handleCancelComment,
+      onEdit: (draft) => {
+        startEdit(draft);
+        setLineSelection({ start: draft.startLine, end: draft.endLine });
+      },
+      onDelete: deleteDraft,
+    });
+  }, [commentText, deleteDraft, editingDraftId, handleCancelComment, handleSaveComment, isDragging, lineSelection, planFileDrafts, planFileLabel, startEdit]);
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background">

@@ -13,6 +13,7 @@ export interface InlineCommentInputProps {
   lineRange?: { start: number; end: number; side?: 'additions' | 'deletions' };
   isEditing?: boolean;
   className?: string;
+  maxWidth?: number;
 }
 
 export function InlineCommentInput({
@@ -23,6 +24,7 @@ export function InlineCommentInput({
   lineRange,
   isEditing = false,
   className,
+  maxWidth,
 }: InlineCommentInputProps) {
   const themeContext = useOptionalThemeSystem();
   const currentTheme = themeContext?.currentTheme;
@@ -118,6 +120,7 @@ export function InlineCommentInput({
       style={{
         backgroundColor: currentTheme?.colors?.surface?.elevated,
         borderColor: currentTheme?.colors?.interactive?.border,
+        maxWidth: maxWidth ? `${Math.max(200, Math.floor(maxWidth))}px` : undefined,
       }}
       data-comment-input="true"
       onPointerDown={(e) => e.stopPropagation()}
