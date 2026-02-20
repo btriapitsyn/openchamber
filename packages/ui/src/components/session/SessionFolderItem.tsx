@@ -191,51 +191,51 @@ const SessionFolderItemBase = <TSessionNode,>({
               <span className="typography-ui-label font-semibold text-muted-foreground truncate">
                 {folder.name}
               </span>
-              <span className="typography-micro text-muted-foreground/60 flex-shrink-0">
-                ({sessions.length})
+              <span className="typography-micro text-muted-foreground/70 flex-shrink-0">
+                • {sessions.length}
               </span>
+              {isCollapsed ? (
+                <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+              ) : (
+                <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+              )}
             </div>
           )}
 
-          {!renaming ? (
-            isCollapsed ? (
-              <RiArrowRightSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-            ) : (
-              <RiArrowDownSLine className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-            )
-          ) : null}
         </div>
 
         {/* Action buttons */}
         {!renaming ? (
-          <div
-            className={cn(
-              'flex items-center gap-0.5 px-0.5 transition-opacity',
-              mobileVariant ? 'opacity-100' : 'opacity-0 group-hover/folder:opacity-100 group-focus-within/folder:opacity-100',
-            )}
-          >
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                handleStartRename();
-              }}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              aria-label={`Rename folder ${folder.name}`}
+          <div className="flex items-center gap-0.5 px-0.5">
+            <div
+              className={cn(
+                'flex items-center gap-0.5 transition-opacity',
+                mobileVariant ? 'opacity-100' : 'opacity-0 group-hover/folder:opacity-100 group-focus-within/folder:opacity-100',
+              )}
             >
-              <RiPencilAiLine className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onDelete();
-              }}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              aria-label={`Delete folder ${folder.name}`}
-            >
-              <RiDeleteBinLine className="h-3.5 w-3.5" />
-            </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleStartRename();
+                }}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                aria-label={`Rename folder ${folder.name}`}
+              >
+                <RiPencilAiLine className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDelete();
+                }}
+                className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                aria-label={`Delete folder ${folder.name}`}
+              >
+                <RiDeleteBinLine className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         ) : null}
       </div>
