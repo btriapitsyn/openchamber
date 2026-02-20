@@ -45,6 +45,10 @@ Git repository operations for the web server runtime.
 GitHub authentication, OAuth device flow, Octokit client factory, and repository URL parsing.
 - Module docs: `packages/web/server/lib/github/DOCUMENTATION.md`
 
+##### opencode
+OpenCode server integration utilities including config management, provider authentication, and UI authentication.
+- Module docs: `packages/web/server/lib/opencode/DOCUMENTATION.md`
+
 ## Build / dev commands (verified)
 All scripts are in `package.json`.
 - Validate: `bun run type-check`, `bun run lint`
