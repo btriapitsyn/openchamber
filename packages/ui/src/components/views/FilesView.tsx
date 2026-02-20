@@ -65,7 +65,8 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStatus } from '@/stores/useGitStore';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
-import { useFloatingComments } from '@/components/comments/useFloatingComments';
+import { InlineCommentCard } from '@/components/comments/InlineCommentCard';
+import { InlineCommentInput } from '@/components/comments/InlineCommentInput';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
@@ -1792,23 +1793,65 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return sessionDrafts.filter((d) => d.source === 'file' && d.fileLabel === selectedFile.path);
   }, [selectedFile, currentSessionId, allDrafts]);
 
-  const floatingComments = useFloatingComments({
-    editorView: editorViewRef.current,
-    wrapperRef: editorWrapperRef,
-    fileDrafts: filesFileDrafts,
-    editingDraftId,
-    commentText: '',
-    lineSelection,
-    isDragging,
-    fileLabel: selectedFile?.path ?? '',
-    onSaveComment: handleSaveComment,
-    onCancelComment: () => setLineSelection(null),
-    onEditDraft: (draft) => {
-      setEditingDraftId(draft.id);
-      setLineSelection(null);
-    },
-    onDeleteDraft: (draft) => removeDraft(draft.sessionKey, draft.id),
-  });
+  const blockWidgets = React.useMemo(() => {
+    const widgets: import('@/components/ui/CodeMirrorEditor').BlockWidgetDef[] = [];
+
+    for (const draft of filesFileDrafts) {
+      if (draft.id === editingDraftId) {
+        widgets.push({
+          afterLine: draft.endLine,
+          id: `edit-${draft.id}`,
+          content: (
+            <InlineCommentInput
+              key={draft.id}
+              initialText={draft.text}
+              fileLabel={selectedFile?.path}
+              lineRange={{ start: draft.startLine, end: draft.endLine }}
+              isEditing={true}
+              onSave={handleSaveComment}
+              onCancel={() => setEditingDraftId(null)}
+            />
+          ),
+        });
+      } else {
+        widgets.push({
+          afterLine: draft.endLine,
+          id: `card-${draft.id}`,
+          content: (
+            <InlineCommentCard
+              key={draft.id}
+              draft={draft}
+              onEdit={() => {
+                setEditingDraftId(draft.id);
+                setLineSelection(null);
+              }}
+              onDelete={() => removeDraft(draft.sessionKey, draft.id)}
+            />
+          ),
+        });
+      }
+    }
+
+    if (lineSelection && !editingDraftId && !isDragging) {
+      widgets.push({
+        afterLine: lineSelection.end,
+        id: 'files-new-comment-input',
+        content: (
+          <InlineCommentInput
+            key="new-comment"
+            initialText=""
+            fileLabel={selectedFile?.path}
+            lineRange={lineSelection}
+            isEditing={false}
+            onSave={handleSaveComment}
+            onCancel={() => setLineSelection(null)}
+          />
+        ),
+      });
+    }
+
+    return widgets;
+  }, [filesFileDrafts, editingDraftId, lineSelection, isDragging, selectedFile?.path, handleSaveComment, removeDraft]);
 
   const fileViewer = (
     <div
@@ -2178,6 +2221,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 onChange={setDraftContent}
                 extensions={editorExtensions}
                 className="h-full"
+                blockWidgets={blockWidgets}
                 onViewReady={(view) => {
                   editorViewRef.current = view;
                   window.requestAnimationFrame(() => {
@@ -2263,7 +2307,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                     },
                 }}
               />
-              {floatingComments}
             </div>
           )}
         </ScrollableOverlay>
