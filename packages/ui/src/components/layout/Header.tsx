@@ -230,12 +230,109 @@ export const Header: React.FC = () => {
     return first === 10 ? second : first;
   }, []);
 
+  const [macosTabStripVisible, setMacosTabStripVisible] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    return (window as unknown as { __OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__?: unknown }).__OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__ === true;
+  });
+
   useEffect(() => {
     if (typeof window === 'undefined') {
       return;
     }
     setIsDesktopApp(isDesktopShell());
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isDesktopApp || !isMacPlatform || isMobile) {
+      return;
+    }
+
+    let disposed = false;
+
+    const applyVisibility = (visible: boolean) => {
+      setMacosTabStripVisible((prev) => (prev === visible ? prev : visible));
+    };
+
+    const readFromGlobal = () => {
+      return (window as unknown as { __OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__?: unknown }).__OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__ === true;
+    };
+
+    const refreshFromDesktop = async () => {
+      let visible = readFromGlobal();
+
+      if (!isTauriShell()) {
+        applyVisibility(visible);
+        return;
+      }
+
+      try {
+        const tauri = (window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
+        if (typeof tauri?.core?.invoke !== 'function') {
+          return;
+        }
+
+        const result = await tauri.core.invoke('desktop_macos_tab_strip_visible');
+        if (disposed || typeof result !== 'boolean') {
+          return;
+        }
+
+        visible = result;
+        (window as unknown as { __OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__?: boolean }).__OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__ = visible;
+      } catch {
+        // ignore
+      }
+
+      applyVisibility(visible);
+    };
+
+    void refreshFromDesktop();
+
+    const customEventHandler = (event: Event) => {
+      const detail = (event as CustomEvent<{ visible?: unknown }>).detail;
+      if (detail && typeof detail.visible === 'boolean') {
+        (window as unknown as { __OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__?: boolean }).__OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__ = detail.visible;
+        applyVisibility(detail.visible);
+        return;
+      }
+
+      void refreshFromDesktop();
+    };
+
+    const focusHandler = () => {
+      void refreshFromDesktop();
+    };
+
+    const visibilityHandler = () => {
+      if (!document.hidden) {
+        void refreshFromDesktop();
+      }
+    };
+
+    const resizeHandler = () => {
+      void refreshFromDesktop();
+    };
+
+    const intervalId = window.setInterval(() => {
+      void refreshFromDesktop();
+    }, 4000);
+
+    window.addEventListener('openchamber:macos-tab-strip', customEventHandler as EventListener);
+    window.addEventListener('focus', focusHandler);
+    window.addEventListener('resize', resizeHandler);
+    document.addEventListener('visibilitychange', visibilityHandler);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('openchamber:macos-tab-strip', customEventHandler as EventListener);
+      window.removeEventListener('focus', focusHandler);
+      window.removeEventListener('resize', resizeHandler);
+      document.removeEventListener('visibilitychange', visibilityHandler);
+    };
+  }, [isDesktopApp, isMacPlatform, isMobile]);
 
   const currentModel = getCurrentModel();
   const limit = currentModel && typeof currentModel.limit === 'object' && currentModel.limit !== null
@@ -947,7 +1044,6 @@ export const Header: React.FC = () => {
 
   const desktopPaddingClass = React.useMemo(() => {
     if (isDesktopApp && isMacPlatform) {
-      // Always reserve space for Mac traffic lights since header is always on top
       return 'pl-[5.5rem]';
     }
     return 'pl-3';
@@ -965,6 +1061,8 @@ export const Header: React.FC = () => {
     }
     return '';
   }, [isDesktopApp, isMacPlatform, macosMajorVersion]);
+
+  const showMacOSWindowTabSpacer = isDesktopApp && isMacPlatform && !isMobile && macosTabStripVisible;
 
   const updateHeaderHeight = React.useCallback(() => {
     if (typeof document === 'undefined') {
@@ -2429,6 +2527,7 @@ export const Header: React.FC = () => {
         className={headerClassName}
         style={{ ['--padding-scale' as string]: '1' } as React.CSSProperties}
       >
+        {showMacOSWindowTabSpacer && <div className="app-region-drag h-7 w-full" aria-hidden="true" />}
         {isMobile ? renderMobile() : renderDesktop()}
       </header>
       {editingProject && (

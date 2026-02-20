@@ -15,6 +15,7 @@ import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { GitPollingProvider } from '@/hooks/useGitPolling';
+import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
@@ -54,6 +55,7 @@ function App({ apis }: AppProps) {
   const { error, clearError, loadSessions } = useSessionStore();
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
+  const effectiveDirectory = useEffectiveDirectory();
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
   const projects = useProjectsStore((state) => state.projects);
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
@@ -240,33 +242,61 @@ function App({ apis }: AppProps) {
     if (activeProjectPath) {
       return formatDirectoryName(activeProjectPath, homeDirectory) || activeProjectPath;
     }
-    const fallbackDirectory = currentDirectory?.trim();
+    const fallbackDirectory = effectiveDirectory?.trim() || currentDirectory?.trim();
     if (fallbackDirectory) {
       return formatDirectoryName(fallbackDirectory, homeDirectory) || fallbackDirectory;
     }
     return '';
-  }, [activeProjectId, projects, homeDirectory, currentDirectory]);
+  }, [activeProjectId, projects, homeDirectory, effectiveDirectory, currentDirectory]);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') {
       return;
     }
 
-    const title = activeProjectTitle ? `${activeProjectTitle} - OpenChamber` : 'OpenChamber';
-    if (document.title !== title) {
-      document.title = title;
+    const nativeWindowTitle = activeProjectTitle || 'OpenChamber';
+    const documentTitle = activeProjectTitle ? `${activeProjectTitle} - OpenChamber` : 'OpenChamber';
+
+    if (document.title !== documentTitle) {
+      document.title = documentTitle;
     }
 
-    if (!isTauriShell()) {
+    if (!isDesktopShell()) {
       return;
     }
 
-    const tauri = (window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
-    if (typeof tauri?.core?.invoke !== 'function') {
-      return;
-    }
+    let cancelled = false;
+    let attempts = 0;
 
-    void tauri.core.invoke('desktop_set_window_title', { title });
+    const syncNativeTitle = () => {
+      if (cancelled) {
+        return;
+      }
+
+      attempts += 1;
+      const tauri = (window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
+      if (typeof tauri?.core?.invoke !== 'function') {
+        return;
+      }
+
+      void tauri.core.invoke('desktop_set_window_title', { title: nativeWindowTitle }).catch(() => {
+        // ignore
+      });
+    };
+
+    syncNativeTitle();
+
+    const retryTimer = window.setInterval(() => {
+      syncNativeTitle();
+      if (attempts >= 12) {
+        window.clearInterval(retryTimer);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(retryTimer);
+    };
   }, [activeProjectTitle]);
 
   React.useEffect(() => {

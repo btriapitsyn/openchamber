@@ -2675,6 +2675,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "log",
+ "objc2 0.6.3",
  "reqwest",
  "serde",
  "serde_json",

@@ -14,6 +14,8 @@ use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri::utils::config::BackgroundThrottlingPolicy;
+#[cfg(target_os = "macos")]
+use objc2::{msg_send, runtime::AnyObject};
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -427,6 +429,11 @@ fn desktop_set_window_title(window: tauri::WebviewWindow, title: Option<String>)
         .filter(|value| !value.is_empty())
         .unwrap_or("OpenChamber");
     window.set_title(next_title).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+fn desktop_macos_tab_strip_visible(window: tauri::WebviewWindow) -> bool {
+    is_macos_tab_strip_visible_for_window(&window)
 }
 
 #[tauri::command]
@@ -2074,7 +2081,7 @@ fn macos_major_version() -> Option<u32> {
 
 /// Build the initialization script injected into every webview window.
 /// This is computed once and reused for all windows.
-fn build_init_script(local_origin: &str) -> String {
+fn build_init_script(local_origin: &str, macos_tab_strip_visible: bool) -> String {
     let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
     let macos_major = macos_major_version().unwrap_or(0);
 
@@ -2082,7 +2089,7 @@ fn build_init_script(local_origin: &str) -> String {
     let local_json = serde_json::to_string(local_origin).unwrap_or_else(|_| "\"\"".into());
 
     let mut init_script = format!(
-        "(function(){{try{{window.__OPENCHAMBER_HOME__={home_json};window.__OPENCHAMBER_MACOS_MAJOR__={macos_major};window.__OPENCHAMBER_LOCAL_ORIGIN__={local_json};}}catch(_e){{}}}})();"
+        "(function(){{try{{window.__OPENCHAMBER_HOME__={home_json};window.__OPENCHAMBER_MACOS_MAJOR__={macos_major};window.__OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__={macos_tab_strip_visible};window.__OPENCHAMBER_LOCAL_ORIGIN__={local_json};}}catch(_e){{}}}})();"
     );
 
     // Cleanup: older builds injected a native-ish Instance switcher button into pages.
@@ -2135,6 +2142,64 @@ fn is_window_state_visible(app: &tauri::AppHandle, state: &DesktopWindowState) -
     }
 
     false
+}
+
+#[cfg(target_os = "macos")]
+fn is_macos_tab_strip_visible_for_window(window: &tauri::WebviewWindow) -> bool {
+    let Ok(ns_window_ptr) = window.ns_window() else {
+        return false;
+    };
+    if ns_window_ptr.is_null() {
+        return false;
+    }
+
+    let ns_window = ns_window_ptr as *mut AnyObject;
+
+    unsafe {
+        let tab_group: *mut AnyObject = msg_send![ns_window, tabGroup];
+        if tab_group.is_null() {
+            return false;
+        }
+
+        let visible: bool = msg_send![tab_group, isTabBarVisible];
+        visible
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_macos_tab_strip_visible_for_window(_window: &tauri::WebviewWindow) -> bool {
+    false
+}
+
+#[cfg(target_os = "macos")]
+fn is_macos_tab_strip_visible(app: &tauri::AppHandle) -> bool {
+    let windows = app.webview_windows();
+
+    if let Some(focused) = windows
+        .values()
+        .find(|window| window.is_focused().unwrap_or(false))
+    {
+        return is_macos_tab_strip_visible_for_window(focused);
+    }
+
+    windows
+        .values()
+        .any(|window| is_macos_tab_strip_visible_for_window(window))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn is_macos_tab_strip_visible(_app: &tauri::AppHandle) -> bool {
+    false
+}
+
+fn sync_macos_tab_strip_state(app: &tauri::AppHandle) {
+    for window in app.webview_windows().values() {
+        let visible = is_macos_tab_strip_visible_for_window(window);
+        let script = format!(
+            "try{{window.__OPENCHAMBER_MACOS_TAB_STRIP_VISIBLE__={visible};window.dispatchEvent(new CustomEvent('openchamber:macos-tab-strip',{{detail:{{visible:{visible}}}}}));}}catch(_e){{}}"
+        );
+        let _ = window.eval(&script);
+    }
 }
 
 fn capture_window_state(window: &tauri::Window) -> Option<DesktopWindowState> {
@@ -2206,8 +2271,9 @@ fn schedule_window_state_persist(window: tauri::Window, immediate: bool) {
 fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_geometry: bool) -> Result<()> {
     let parsed = url::Url::parse(url).map_err(|err| anyhow!("Invalid URL: {err}"))?;
     let label = next_window_label();
+    let macos_tab_strip_visible_on_load = cfg!(target_os = "macos") && is_macos_tab_strip_visible(app);
 
-    let init_script = build_init_script(local_origin);
+    let init_script = build_init_script(local_origin, macos_tab_strip_visible_on_load);
 
     // Store the init script and local origin so new windows and page reloads can reuse it.
     if let Some(state) = app.try_state::<DesktopUiInjectionState>() {
@@ -2249,8 +2315,7 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_
         builder = builder
             .hidden_title(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .tabbing_identifier("openchamber")
-            .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition { x: 17.0, y: 26.0 }));
+            .tabbing_identifier("openchamber");
     }
 
     let window = builder.build()?;
@@ -2263,6 +2328,7 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_
 
     let _ = window.show();
     let _ = window.set_focus();
+    sync_macos_tab_strip_state(app);
 
     Ok(())
 }
@@ -2521,6 +2587,10 @@ fn main() {
                 if let Some(state) = app.try_state::<WindowFocusState>() {
                     state.set_focused(&label, *focused);
                 }
+
+                if *focused {
+                    sync_macos_tab_strip_state(&app);
+                }
             }
 
             if let tauri::WindowEvent::Destroyed = event {
@@ -2528,6 +2598,8 @@ fn main() {
                 if let Some(state) = app.try_state::<WindowFocusState>() {
                     state.remove_window(&label);
                 }
+
+                sync_macos_tab_strip_state(&app);
 
                 // If this was the last window, kill the sidecar and exit.
                 let remaining = app.webview_windows().len();
@@ -2554,6 +2626,7 @@ fn main() {
             desktop_new_window_at_url,
             desktop_set_auto_worktree_menu,
             desktop_set_window_title,
+            desktop_macos_tab_strip_visible,
             desktop_clear_cache,
             desktop_open_path,
             desktop_filter_installed_apps,
