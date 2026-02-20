@@ -1,0 +1,277 @@
+import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import { getSafeStorage } from './utils/safeStorage';
+
+// --- Types ---
+
+export interface SessionFolder {
+  id: string;
+  name: string;
+  sessionIds: string[];
+  createdAt: number;
+}
+
+type SessionFoldersMap = Record<string, SessionFolder[]>;
+
+interface SessionFoldersState {
+  foldersMap: SessionFoldersMap;
+  collapsedFolderIds: Set<string>;
+}
+
+interface SessionFoldersActions {
+  getFoldersForProject: (projectId: string) => SessionFolder[];
+  createFolder: (projectId: string, name: string) => SessionFolder;
+  renameFolder: (projectId: string, folderId: string, name: string) => void;
+  deleteFolder: (projectId: string, folderId: string) => void;
+  addSessionToFolder: (projectId: string, folderId: string, sessionId: string) => void;
+  removeSessionFromFolder: (projectId: string, sessionId: string) => void;
+  toggleFolderCollapse: (folderId: string) => void;
+  cleanupSessions: (projectId: string, existingSessionIds: Set<string>) => void;
+  getSessionFolderId: (projectId: string, sessionId: string) => string | null;
+}
+
+type SessionFoldersStore = SessionFoldersState & SessionFoldersActions;
+
+// --- Storage ---
+
+const FOLDERS_STORAGE_KEY = 'oc.sessions.folders';
+const COLLAPSED_STORAGE_KEY = 'oc.sessions.folderCollapse';
+
+const safeStorage = getSafeStorage();
+
+const readPersistedFolders = (): SessionFoldersMap => {
+  try {
+    const raw = safeStorage.getItem(FOLDERS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    const result: SessionFoldersMap = {};
+    for (const [projectId, value] of Object.entries(parsed)) {
+      if (!Array.isArray(value)) {
+        continue;
+      }
+      const folders: SessionFolder[] = [];
+      for (const entry of value) {
+        if (!entry || typeof entry !== 'object') continue;
+        const candidate = entry as Record<string, unknown>;
+        const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+        const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
+        const createdAt = typeof candidate.createdAt === 'number' ? candidate.createdAt : 0;
+        if (!id || !name) continue;
+        const sessionIds = Array.isArray(candidate.sessionIds)
+          ? (candidate.sessionIds as unknown[]).filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          : [];
+        folders.push({ id, name, sessionIds, createdAt });
+      }
+      if (folders.length > 0) {
+        result[projectId] = folders;
+      }
+    }
+    return result;
+  } catch {
+    return {};
+  }
+};
+
+const readPersistedCollapsed = (): Set<string> => {
+  try {
+    const raw = safeStorage.getItem(COLLAPSED_STORAGE_KEY);
+    if (!raw) {
+      return new Set();
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+    return new Set(parsed.filter((v): v is string => typeof v === 'string'));
+  } catch {
+    return new Set();
+  }
+};
+
+const persistFolders = (foldersMap: SessionFoldersMap): void => {
+  try {
+    safeStorage.setItem(FOLDERS_STORAGE_KEY, JSON.stringify(foldersMap));
+  } catch {
+    // ignored
+  }
+};
+
+const persistCollapsed = (collapsedFolderIds: Set<string>): void => {
+  try {
+    safeStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(Array.from(collapsedFolderIds)));
+  } catch {
+    // ignored
+  }
+};
+
+const createFolderId = (): string => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+};
+
+// --- Store ---
+
+export const useSessionFoldersStore = create<SessionFoldersStore>()(
+  devtools(
+    (set, get) => ({
+      foldersMap: readPersistedFolders(),
+      collapsedFolderIds: readPersistedCollapsed(),
+
+      getFoldersForProject: (projectId: string): SessionFolder[] => {
+        if (!projectId) return [];
+        return get().foldersMap[projectId] ?? [];
+      },
+
+      createFolder: (projectId: string, name: string): SessionFolder => {
+        const trimmed = name.trim() || 'New folder';
+        const folder: SessionFolder = {
+          id: createFolderId(),
+          name: trimmed,
+          sessionIds: [],
+          createdAt: Date.now(),
+        };
+        const current = get().foldersMap;
+        const projectFolders = current[projectId] ?? [];
+        const nextMap: SessionFoldersMap = {
+          ...current,
+          [projectId]: [...projectFolders, folder],
+        };
+        set({ foldersMap: nextMap });
+        persistFolders(nextMap);
+        return folder;
+      },
+
+      renameFolder: (projectId: string, folderId: string, name: string): void => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const current = get().foldersMap;
+        const projectFolders = current[projectId];
+        if (!projectFolders) return;
+        const nextFolders = projectFolders.map((folder) =>
+          folder.id === folderId ? { ...folder, name: trimmed } : folder,
+        );
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
+        set({ foldersMap: nextMap });
+        persistFolders(nextMap);
+      },
+
+      deleteFolder: (projectId: string, folderId: string): void => {
+        const current = get().foldersMap;
+        const projectFolders = current[projectId];
+        if (!projectFolders) return;
+        const nextFolders = projectFolders.filter((folder) => folder.id !== folderId);
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
+        set({ foldersMap: nextMap });
+        persistFolders(nextMap);
+
+        // Clean up collapsed state
+        const collapsed = get().collapsedFolderIds;
+        if (collapsed.has(folderId)) {
+          const nextCollapsed = new Set(collapsed);
+          nextCollapsed.delete(folderId);
+          set({ collapsedFolderIds: nextCollapsed });
+          persistCollapsed(nextCollapsed);
+        }
+      },
+
+      addSessionToFolder: (projectId: string, folderId: string, sessionId: string): void => {
+        if (!projectId || !folderId || !sessionId) return;
+        const current = get().foldersMap;
+        const projectFolders = current[projectId];
+        if (!projectFolders) return;
+
+        // Remove session from any existing folder first, then add to target
+        const nextFolders = projectFolders.map((folder) => {
+          const withoutSession = folder.sessionIds.filter((id) => id !== sessionId);
+          if (folder.id === folderId) {
+            return { ...folder, sessionIds: [...withoutSession, sessionId] };
+          }
+          if (withoutSession.length !== folder.sessionIds.length) {
+            return { ...folder, sessionIds: withoutSession };
+          }
+          return folder;
+        });
+
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
+        set({ foldersMap: nextMap });
+        persistFolders(nextMap);
+      },
+
+      removeSessionFromFolder: (projectId: string, sessionId: string): void => {
+        if (!projectId || !sessionId) return;
+        const current = get().foldersMap;
+        const projectFolders = current[projectId];
+        if (!projectFolders) return;
+
+        let changed = false;
+        const nextFolders = projectFolders.map((folder) => {
+          const filtered = folder.sessionIds.filter((id) => id !== sessionId);
+          if (filtered.length !== folder.sessionIds.length) {
+            changed = true;
+            return { ...folder, sessionIds: filtered };
+          }
+          return folder;
+        });
+
+        if (!changed) return;
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
+        set({ foldersMap: nextMap });
+        persistFolders(nextMap);
+      },
+
+      toggleFolderCollapse: (folderId: string): void => {
+        const collapsed = get().collapsedFolderIds;
+        const next = new Set(collapsed);
+        if (next.has(folderId)) {
+          next.delete(folderId);
+        } else {
+          next.add(folderId);
+        }
+        set({ collapsedFolderIds: next });
+        persistCollapsed(next);
+      },
+
+      cleanupSessions: (projectId: string, existingSessionIds: Set<string>): void => {
+        if (!projectId) return;
+        const current = get().foldersMap;
+        const projectFolders = current[projectId];
+        if (!projectFolders || projectFolders.length === 0) return;
+
+        let changed = false;
+        const nextFolders = projectFolders.map((folder) => {
+          const filtered = folder.sessionIds.filter((id) => existingSessionIds.has(id));
+          if (filtered.length !== folder.sessionIds.length) {
+            changed = true;
+            return { ...folder, sessionIds: filtered };
+          }
+          return folder;
+        });
+
+        if (!changed) return;
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
+        set({ foldersMap: nextMap });
+        persistFolders(nextMap);
+      },
+
+      getSessionFolderId: (projectId: string, sessionId: string): string | null => {
+        if (!projectId || !sessionId) return null;
+        const projectFolders = get().foldersMap[projectId];
+        if (!projectFolders) return null;
+        for (const folder of projectFolders) {
+          if (folder.sessionIds.includes(sessionId)) {
+            return folder.id;
+          }
+        }
+        return null;
+      },
+    }),
+    { name: 'session-folders-store' },
+  ),
+);

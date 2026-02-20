@@ -26,6 +26,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -42,6 +46,7 @@ import {
   RiErrorWarningLine,
   RiFileCopyLine,
   RiFolderAddLine,
+  RiFolderLine,
   RiGitBranchLine,
   RiGitPullRequestLine,
   RiGitRepositoryLine,
@@ -80,6 +85,8 @@ import { GitHubIssuePickerDialog } from './GitHubIssuePickerDialog';
 import { GitHubPullRequestPickerDialog } from './GitHubPullRequestPickerDialog';
 import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
 import { BranchPickerDialog } from './BranchPickerDialog';
+import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
+import { SessionFolderItem } from './SessionFolderItem';
 
 const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
@@ -589,6 +596,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
   const [stuckProjectHeaders, setStuckProjectHeaders] = React.useState<Set<string>>(new Set());
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
+  const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
+  const [renameFolderDraft, setRenameFolderDraft] = React.useState('');
   const [pinnedSessionIds, setPinnedSessionIds] = React.useState<Set<string>>(() => {
     try {
       const raw = getSafeStorage().getItem(SESSION_PINNED_STORAGE_KEY);
@@ -676,6 +685,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
+
+  // Session Folders store
+  const foldersMap = useSessionFoldersStore((state) => state.foldersMap);
+  const collapsedFolderIds = useSessionFoldersStore((state) => state.collapsedFolderIds);
+  const getFoldersForProject = useSessionFoldersStore((state) => state.getFoldersForProject);
+  const createFolder = useSessionFoldersStore((state) => state.createFolder);
+  const renameFolder = useSessionFoldersStore((state) => state.renameFolder);
+  const deleteFolder = useSessionFoldersStore((state) => state.deleteFolder);
+  const addSessionToFolder = useSessionFoldersStore((state) => state.addSessionToFolder);
+  const removeSessionFromFolder = useSessionFoldersStore((state) => state.removeSessionFromFolder);
+  const toggleFolderCollapse = useSessionFoldersStore((state) => state.toggleFolderCollapse);
+  const cleanupSessions = useSessionFoldersStore((state) => state.cleanupSessions);
+  const getSessionFolderId = useSessionFoldersStore((state) => state.getSessionFolderId);
 
   const gitDirectories = useGitStore((state) => state.directories);
 
@@ -1454,6 +1476,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     };
   }, [normalizedProjects, projectGitBranchesKey]);
 
+  // Session Folders: cleanup stale session IDs when sessions are removed
+  React.useEffect(() => {
+    if (!activeProjectId) return;
+    const existingIds = new Set(sessions.map((s) => s.id));
+    cleanupSessions(activeProjectId, existingIds);
+  }, [sessions, activeProjectId, cleanupSessions]);
+
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
       // In VS Code, only show sessions from the main project directory (skip worktrees)
@@ -2118,6 +2147,71 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         </DropdownMenuItem>
                       </>
                     )}
+                    {/* Move to folder submenu */}
+                    {activeProjectId ? (() => {
+                      const projectFolders = getFoldersForProject(activeProjectId);
+                      const currentFolderId = getSessionFolderId(activeProjectId, session.id);
+                      return (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger className="[&>svg]:mr-1">
+                              <RiFolderLine className="mr-1 h-4 w-4" />
+                              Move to folder
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="min-w-[180px]">
+                              {projectFolders.length === 0 ? (
+                                <DropdownMenuItem disabled className="text-muted-foreground">
+                                  No folders yet
+                                </DropdownMenuItem>
+                              ) : (
+                                projectFolders.map((folder) => (
+                                  <DropdownMenuItem
+                                    key={folder.id}
+                                    onClick={() => {
+                                      if (currentFolderId === folder.id) {
+                                        removeSessionFromFolder(activeProjectId, session.id);
+                                      } else {
+                                        addSessionToFolder(activeProjectId, folder.id, session.id);
+                                      }
+                                    }}
+                                  >
+                                    <span className="flex-1 truncate">{folder.name}</span>
+                                    {currentFolderId === folder.id ? (
+                                      <RiCheckLine className="ml-2 h-3.5 w-3.5 text-primary flex-shrink-0" />
+                                    ) : null}
+                                  </DropdownMenuItem>
+                                ))
+                              )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  const newFolder = createFolder(activeProjectId, 'New folder');
+                                  addSessionToFolder(activeProjectId, newFolder.id, session.id);
+                                  setRenamingFolderId(newFolder.id);
+                                  setRenameFolderDraft('New folder');
+                                }}
+                              >
+                                <RiAddLine className="mr-1 h-4 w-4" />
+                                New folder...
+                              </DropdownMenuItem>
+                              {currentFolderId ? (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    removeSessionFromFolder(activeProjectId, session.id);
+                                  }}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <RiCloseLine className="mr-1 h-4 w-4" />
+                                  Remove from folder
+                                </DropdownMenuItem>
+                              ) : null}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        </>
+                      );
+                    })() : null}
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive [&>svg]:mr-1"
                       onClick={() => handleDeleteSession(session)}
@@ -2162,6 +2256,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       copiedSessionId,
       mobileVariant,
       openMenuSessionId,
+      activeProjectId,
+      getFoldersForProject,
+      getSessionFolderId,
+      addSessionToFolder,
+      removeSessionFromFolder,
+      createFolder,
+      foldersMap,
     ],
   );
 
@@ -2170,8 +2271,25 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const isExpanded = expandedSessionGroups.has(groupKey);
       const isCollapsed = collapsedGroups.has(groupKey);
       const maxVisible = hideDirectoryControls ? 10 : 5;
-      const totalSessions = group.sessions.length;
-      const visibleSessions = isExpanded ? group.sessions : group.sessions.slice(0, maxVisible);
+
+      // --- Session Folders: split into foldered vs ungrouped ---
+      const effectiveProjectId = projectId ?? activeProjectId;
+      const projectFolders = effectiveProjectId ? getFoldersForProject(effectiveProjectId) : [];
+      const sessionIdsInFolders = new Set(projectFolders.flatMap((f) => f.sessionIds));
+      const ungroupedSessions = group.sessions.filter((node) => !sessionIdsInFolders.has(node.session.id));
+
+      // Folders that have sessions in THIS group
+      const foldersWithSessions = projectFolders
+        .map((folder) => {
+          const nodes = folder.sessionIds
+            .map((sid) => group.sessions.find((node) => node.session.id === sid))
+            .filter((n): n is SessionNode => Boolean(n));
+          return { folder, nodes };
+        })
+        .filter(({ nodes }) => nodes.length > 0);
+
+      const totalSessions = ungroupedSessions.length;
+      const visibleSessions = isExpanded ? ungroupedSessions : ungroupedSessions.slice(0, maxVisible);
       const remainingCount = totalSessions - visibleSessions.length;
       const collectGroupSessions = (nodes: SessionNode[]): Session[] => {
         const collected: Session[] = [];
@@ -2200,12 +2318,50 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       // VS Code sessions list uses a separate header (Agent Manager / New Session).
       // When the caller requests a flat list (hideGroupLabel), omit the per-group header entirely.
+      // Shared folder rendering helper (used in both branches)
+      const renderFolderItems = () =>
+        foldersWithSessions.map(({ folder, nodes }) => (
+          <SessionFolderItem
+            key={folder.id}
+            folder={folder}
+            sessions={nodes}
+            isCollapsed={collapsedFolderIds.has(folder.id)}
+            onToggle={() => toggleFolderCollapse(folder.id)}
+            onRename={(name) => {
+              if (effectiveProjectId) renameFolder(effectiveProjectId, folder.id, name);
+            }}
+            onDelete={() => {
+              if (effectiveProjectId) deleteFolder(effectiveProjectId, folder.id);
+            }}
+            renderSessionNode={renderSessionNode}
+            groupDirectory={group.directory}
+            projectId={projectId}
+            mobileVariant={mobileVariant}
+            isRenaming={renamingFolderId === folder.id}
+            renameDraft={renamingFolderId === folder.id ? renameFolderDraft : undefined}
+            onRenameDraftChange={(value) => setRenameFolderDraft(value)}
+            onRenameSave={() => {
+              const trimmed = renameFolderDraft.trim();
+              if (trimmed && effectiveProjectId) {
+                renameFolder(effectiveProjectId, folder.id, trimmed);
+              }
+              setRenamingFolderId(null);
+              setRenameFolderDraft('');
+            }}
+            onRenameCancel={() => {
+              setRenamingFolderId(null);
+              setRenameFolderDraft('');
+            }}
+          />
+        ));
+
       if (hideGroupLabel) {
         return (
           <div className="oc-group">
             <div className="oc-group-body pb-3">
+              {renderFolderItems()}
               {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
-              {totalSessions === 0 ? (
+              {totalSessions === 0 && foldersWithSessions.length === 0 ? (
                 <div className="py-1 text-left typography-micro text-muted-foreground">
                   No sessions in this workspace yet.
                 </div>
@@ -2350,8 +2506,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           </div>
           {!isCollapsed ? (
             <div className="oc-group-body pb-3">
+              {renderFolderItems()}
               {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
-              {totalSessions === 0 ? (
+              {totalSessions === 0 && foldersWithSessions.length === 0 ? (
                 <div className="py-1 text-left typography-micro text-muted-foreground">
                   No sessions in this workspace yet.
                 </div>
@@ -2393,6 +2550,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       mobileVariant,
       setSessionSwitcherOpen,
       openNewSessionDraft,
+      getFoldersForProject,
+      foldersMap,
+      collapsedFolderIds,
+      toggleFolderCollapse,
+      renameFolder,
+      deleteFolder,
+      renamingFolderId,
+      renameFolderDraft,
     ]
   );
 
@@ -2630,6 +2795,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   <TooltipContent side="bottom" sideOffset={4}><p>Manage branches</p></TooltipContent>
                 </Tooltip>
               ) : null}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!activeProjectId) return;
+                      const newFolder = createFolder(activeProjectId, 'New folder');
+                      setRenamingFolderId(newFolder.id);
+                      setRenameFolderDraft('New folder');
+                    }}
+                    className={headerActionButtonClass}
+                    aria-label="New folder"
+                  >
+                    <RiFolderLine className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New folder</p></TooltipContent>
+              </Tooltip>
               {useMobileNotesPanel ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
