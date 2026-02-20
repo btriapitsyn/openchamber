@@ -3,6 +3,7 @@ import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { SidebarSection } from '@/constants/sidebar';
 import { getSafeStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
+import type { ShortcutCombo } from '@/lib/shortcuts';
 
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files';
 export type RightSidebarTab = 'git' | 'files';
@@ -214,6 +215,8 @@ interface UIStore {
   persistChatDraft: boolean;
   isMobileSessionStatusBarCollapsed: boolean;
 
+  shortcutOverrides: Record<string, ShortcutCombo>;
+
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
@@ -297,6 +300,9 @@ interface UIStore {
   setIsMobileSessionStatusBarCollapsed: (value: boolean) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
+  setShortcutOverride: (actionId: string, combo: ShortcutCombo) => void;
+  clearShortcutOverride: (actionId: string) => void;
+  resetAllShortcutOverrides: () => void;
 }
 
 
@@ -384,6 +390,7 @@ export const useUIStore = create<UIStore>()(
         showTerminalQuickKeysOnDesktop: false,
         persistChatDraft: true,
         isMobileSessionStatusBarCollapsed: false,
+        shortcutOverrides: {},
 
         setTheme: (theme) => {
           set({ theme });
@@ -1103,11 +1110,32 @@ export const useUIStore = create<UIStore>()(
         setIsMobileSessionStatusBarCollapsed: (value) => {
           set({ isMobileSessionStatusBarCollapsed: value });
         },
+
+        setShortcutOverride: (actionId, combo) => {
+          set((state) => ({
+            shortcutOverrides: {
+              ...state.shortcutOverrides,
+              [actionId]: combo,
+            },
+          }));
+        },
+
+        clearShortcutOverride: (actionId) => {
+          set((state) => {
+            const rest = { ...state.shortcutOverrides };
+            delete rest[actionId];
+            return { shortcutOverrides: rest };
+          });
+        },
+
+        resetAllShortcutOverrides: () => {
+          set({ shortcutOverrides: {} });
+        },
       }),
       {
         name: 'ui-store',
         storage: createJSONStorage(() => getSafeStorage()),
-        version: 4,
+        version: 5,
         migrate: (persistedState, version) => {
           if (!persistedState || typeof persistedState !== 'object') {
             return persistedState;
@@ -1153,6 +1181,21 @@ export const useUIStore = create<UIStore>()(
 
           if (!state.contextPanelByDirectory || typeof state.contextPanelByDirectory !== 'object') {
             state.contextPanelByDirectory = {};
+          }
+
+          if (version < 5) {
+            if (!state.shortcutOverrides || typeof state.shortcutOverrides !== 'object') {
+              state.shortcutOverrides = {};
+            } else {
+              const overrides = state.shortcutOverrides as Record<string, unknown>;
+              const cleaned: Record<string, string> = {};
+              for (const [key, value] of Object.entries(overrides)) {
+                if (typeof key === 'string' && typeof value === 'string') {
+                  cleaned[key] = value;
+                }
+              }
+              state.shortcutOverrides = cleaned;
+            }
           }
 
           return state;
@@ -1205,6 +1248,7 @@ export const useUIStore = create<UIStore>()(
           maxLastMessageLength: state.maxLastMessageLength,
           persistChatDraft: state.persistChatDraft,
           isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
+          shortcutOverrides: state.shortcutOverrides,
         })
       }
     ),
