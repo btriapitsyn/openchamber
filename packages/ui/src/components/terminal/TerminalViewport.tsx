@@ -340,64 +340,87 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       };
     }, [useHiddenInputOverlay, focusHiddenInput]);
 
-    const copySelectionToClipboard = React.useCallback(async () => {
-      if (typeof window === 'undefined' || typeof document === 'undefined') {
-        return;
+    const getTerminalSelectionText = React.useCallback((): string => {
+      const terminal = terminalRef.current as unknown as {
+        getSelection?: () => string;
+      } | null;
+      if (!terminal || typeof terminal.getSelection !== 'function') {
+        return '';
+      }
+      const text = terminal.getSelection();
+      return typeof text === 'string' ? text : '';
+    }, []);
+
+    const getDomSelectionTextInViewport = React.useCallback((): string => {
+      if (typeof window === 'undefined') {
+        return '';
       }
       const selection = window.getSelection();
       if (!selection) {
-        return;
+        return '';
       }
+
       const text = selection.toString();
       if (!text.trim()) {
-        return;
+        return '';
       }
 
       const container = containerRef.current;
       if (!container) {
-        return;
+        return '';
       }
+
       const anchorNode = selection.anchorNode;
       const focusNode = selection.focusNode;
       if (anchorNode && !container.contains(anchorNode)) {
-        return;
+        return '';
       }
       if (focusNode && !container.contains(focusNode)) {
+        return '';
+      }
+
+      return text;
+    }, []);
+
+    const copySelectionToClipboard = React.useCallback(async () => {
+      if (typeof document === 'undefined') {
+        return;
+      }
+
+      const text = getTerminalSelectionText() || getDomSelectionTextInViewport();
+      if (!text.trim()) {
         return;
       }
 
       await copyTextToClipboard(text);
-    }, []);
+    }, [getDomSelectionTextInViewport, getTerminalSelectionText]);
 
     const hasCopyableSelectionInViewport = React.useCallback((): boolean => {
+      const terminalSelection = getTerminalSelectionText();
+      if (terminalSelection.trim()) {
+        return true;
+      }
+      return Boolean(getDomSelectionTextInViewport().trim());
+    }, [getDomSelectionTextInViewport, getTerminalSelectionText]);
+
+    React.useEffect(() => {
       if (typeof window === 'undefined') {
-        return false;
-      }
-      const selection = window.getSelection();
-      if (!selection) {
-        return false;
-      }
-      const text = selection.toString();
-      if (!text.trim()) {
-        return false;
+        return;
       }
 
-      const container = containerRef.current;
-      if (!container) {
-        return false;
-      }
+      const handleMenuCopy = (event: Event) => {
+        if (!hasCopyableSelectionInViewport()) {
+          return;
+        }
+        event.preventDefault();
+        void copySelectionToClipboard();
+      };
 
-      const anchorNode = selection.anchorNode;
-      const focusNode = selection.focusNode;
-      if (anchorNode && !container.contains(anchorNode)) {
-        return false;
-      }
-      if (focusNode && !container.contains(focusNode)) {
-        return false;
-      }
-
-      return true;
-    }, []);
+      window.addEventListener('openchamber:copy', handleMenuCopy);
+      return () => {
+        window.removeEventListener('openchamber:copy', handleMenuCopy);
+      };
+    }, [copySelectionToClipboard, hasCopyableSelectionInViewport]);
 
     const resetWriteState = React.useCallback(() => {
       pendingWriteRef.current = '';

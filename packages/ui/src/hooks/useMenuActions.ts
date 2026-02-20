@@ -35,6 +35,7 @@ type MenuAction =
   | 'open-diff-tab'
   | 'open-files-tab'
   | 'open-terminal-tab'
+  | 'copy'
   | 'theme-light'
   | 'theme-dark'
   | 'theme-system'
@@ -149,6 +150,15 @@ export const useMenuActions = (
         case 'open-terminal-tab': {
           const { activeMainTab } = useUIStore.getState();
           setActiveMainTab(activeMainTab === 'terminal' ? 'chat' : 'terminal');
+          break;
+        }
+
+        case 'copy': {
+          const copyEvent = new Event('openchamber:copy', { cancelable: true });
+          const wasHandled = !window.dispatchEvent(copyEvent);
+          if (!wasHandled) {
+            document.execCommand('copy');
+          }
           break;
         }
 

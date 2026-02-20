@@ -888,11 +888,8 @@ html:not(.dark) .chat-scroll {
 /* Keep Ghostty's internal focus textarea fully non-painting on desktop. */
 .terminal-viewport-container textarea:not([data-terminal-hidden-input="true"]) {
   opacity: 0 !important;
-  width: 0 !important;
-  height: 0 !important;
   font-size: 0 !important;
   line-height: 0 !important;
-  clip-path: inset(100%) !important;
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
   background: transparent !important;
@@ -908,9 +905,6 @@ input[aria-label="Terminal input"] {
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
   opacity: 0 !important;
-  width: 0 !important;
-  height: 0 !important;
-  clip-path: inset(100%) !important;
   outline: none !important;
 }
 
