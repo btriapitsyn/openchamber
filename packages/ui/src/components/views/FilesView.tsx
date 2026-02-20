@@ -61,13 +61,10 @@ import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/t
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
-import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useGitStatus } from '@/stores/useGitStore';
-import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
-import { InlineCommentCard } from '@/components/comments/InlineCommentCard';
-import { InlineCommentInput } from '@/components/comments/InlineCommentInput';
+import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
@@ -628,14 +625,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [isDragging, setIsDragging] = React.useState(false);
 
   // Session/config for sending comments
-  const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const setMainTabGuard = useUIStore((state) => state.setMainTabGuard);
-
-  const addDraft = useInlineCommentDraftStore((s) => s.addDraft);
-  const updateDraft = useInlineCommentDraftStore((s) => s.updateDraft);
-  const removeDraft = useInlineCommentDraftStore((s) => s.removeDraft);
-  const allDrafts = useInlineCommentDraftStore((s) => s.drafts);
-  const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
 
   // Global mouseup to end drag selection
   React.useEffect(() => {
@@ -648,14 +638,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, []);
 
-  // Clear selection when file changes
-  React.useEffect(() => {
-    setLineSelection(null);
-    setMainTabGuard(null);
-    setDraftContent('');
-    setIsSaving(false);
-  }, [selectedFile?.path, setMainTabGuard]);
-
   React.useEffect(() => {
     return () => {
       if (copiedContentTimeoutRef.current !== null) {
@@ -667,25 +649,60 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     };
   }, []);
 
-  // Click outside to dismiss selection
+  // Extract selected code
+  const extractSelectedCode = React.useCallback((content: string, range: SelectedLineRange): string => {
+    const lines = content.split('\n');
+    const startLine = Math.max(1, range.start);
+    const endLine = Math.min(lines.length, range.end);
+    if (startLine > endLine) return '';
+    return lines.slice(startLine - 1, endLine).join('\n');
+  }, []);
+
+  const fileCommentController = useInlineCommentController<SelectedLineRange>({
+    source: 'file',
+    fileLabel: selectedFile?.path ?? null,
+    language: selectedFile?.path ? getLanguageFromExtension(selectedFile.path) || 'text' : 'text',
+    getCodeForRange: (range) => extractSelectedCode(fileContent, normalizeLineRange(range)),
+    toStoreRange: (range) => ({ startLine: range.start, endLine: range.end }),
+    fromDraftRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
+  });
+
+  const {
+    drafts: filesFileDrafts,
+    commentText,
+    editingDraftId,
+    setSelection: setCommentSelection,
+    saveComment,
+    cancel,
+    reset,
+    startEdit,
+    deleteDraft,
+  } = fileCommentController;
+
+  React.useEffect(() => {
+    setLineSelection(null);
+    reset();
+    setMainTabGuard(null);
+    setDraftContent('');
+    setIsSaving(false);
+  }, [selectedFile?.path, reset, setMainTabGuard]);
+
+  React.useEffect(() => {
+    setCommentSelection(lineSelection);
+  }, [lineSelection, setCommentSelection]);
+
   React.useEffect(() => {
     if (!lineSelection && !editingDraftId) return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
 
-      // Check if click is inside comment UI
       if (target.closest('[data-comment-input="true"]') || target.closest('[data-comment-card="true"]')) return;
-
-      // Check if click is on CM gutter (only gutter should not dismiss)
       if (target.closest('.cm-gutterElement')) return;
-
-      // Check if click is inside toast (sonner)
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
 
-      // Clicking anywhere else (including code content) dismisses selection
       setLineSelection(null);
-      setEditingDraftId(null);
+      cancel();
     };
 
     const timeoutId = setTimeout(() => {
@@ -696,49 +713,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [lineSelection, editingDraftId]);
-
-  // Extract selected code
-  const extractSelectedCode = React.useCallback((content: string, range: SelectedLineRange): string => {
-    const lines = content.split('\n');
-    const startLine = Math.max(1, range.start);
-    const endLine = Math.min(lines.length, range.end);
-    if (startLine > endLine) return '';
-    return lines.slice(startLine - 1, endLine).join('\n');
-  }, []);
+  }, [cancel, editingDraftId, lineSelection]);
 
   const handleSaveComment = React.useCallback((text: string, range?: { start: number; end: number }) => {
-    if (!selectedFile) return;
-
-    const sessionKey = currentSessionId ?? 'draft';
-    const finalRange = range || lineSelection;
-    if (!finalRange) return;
-
-    const code = extractSelectedCode(fileContent, { start: finalRange.start, end: finalRange.end });
-
-    if (editingDraftId) {
-      updateDraft(sessionKey, editingDraftId, {
-        text: text.trim(),
-        code,
-        startLine: finalRange.start,
-        endLine: finalRange.end,
-      });
-    } else {
-      addDraft({
-        sessionKey,
-        source: 'file',
-        fileLabel: selectedFile.path,
-        startLine: finalRange.start,
-        endLine: finalRange.end,
-        code,
-        language: getLanguageFromExtension(selectedFile.path) || 'text',
-        text: text.trim(),
-      });
+    const finalRange = range ?? lineSelection ?? undefined;
+    if (range) {
+      setLineSelection(range);
     }
-
+    saveComment(text, finalRange);
     setLineSelection(null);
-    setEditingDraftId(null);
-  }, [selectedFile, currentSessionId, lineSelection, fileContent, extractSelectedCode, editingDraftId, updateDraft, addDraft]);
+  }, [lineSelection, saveComment]);
 
   const mapDirectoryEntries = React.useCallback((dirPath: string, entries: Array<{ name: string; path: string; isDirectory: boolean }>): FileNode[] => {
     const nodes = entries
@@ -1792,72 +1776,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       </Dialog>
     );
 
-  const filesFileDrafts = React.useMemo(() => {
-    if (!selectedFile) return [];
-    const sessionKey = currentSessionId ?? 'draft';
-    const sessionDrafts = allDrafts[sessionKey] ?? [];
-    return sessionDrafts.filter((d) => d.source === 'file' && d.fileLabel === selectedFile.path);
-  }, [selectedFile, currentSessionId, allDrafts]);
-
   const blockWidgets = React.useMemo(() => {
-    const widgets: import('@/components/ui/CodeMirrorEditor').BlockWidgetDef[] = [];
-
-    for (const draft of filesFileDrafts) {
-      if (draft.id === editingDraftId) {
-        widgets.push({
-          afterLine: draft.endLine,
-          id: `edit-${draft.id}`,
-          content: (
-            <InlineCommentInput
-              key={draft.id}
-              initialText={draft.text}
-              fileLabel={selectedFile?.path}
-              lineRange={{ start: draft.startLine, end: draft.endLine }}
-              isEditing={true}
-              onSave={handleSaveComment}
-              onCancel={() => setEditingDraftId(null)}
-            />
-          ),
-        });
-      } else {
-        widgets.push({
-          afterLine: draft.endLine,
-          id: `card-${draft.id}`,
-          content: (
-            <InlineCommentCard
-              key={draft.id}
-              draft={draft}
-              onEdit={() => {
-                setEditingDraftId(draft.id);
-                setLineSelection(null);
-              }}
-              onDelete={() => removeDraft(draft.sessionKey, draft.id)}
-            />
-          ),
-        });
-      }
-    }
-
-    if (lineSelection && !editingDraftId && !isDragging) {
-      widgets.push({
-        afterLine: lineSelection.end,
-        id: 'files-new-comment-input',
-        content: (
-          <InlineCommentInput
-            key="new-comment"
-            initialText=""
-            fileLabel={selectedFile?.path}
-            lineRange={lineSelection}
-            isEditing={false}
-            onSave={handleSaveComment}
-            onCancel={() => setLineSelection(null)}
-          />
-        ),
-      });
-    }
-
-    return widgets;
-  }, [filesFileDrafts, editingDraftId, lineSelection, isDragging, selectedFile?.path, handleSaveComment, removeDraft]);
+    return buildCodeMirrorCommentWidgets({
+      drafts: filesFileDrafts,
+      editingDraftId,
+      commentText,
+      selection: lineSelection,
+      isDragging,
+      fileLabel: selectedFile?.path ?? '',
+      newWidgetId: 'files-new-comment-input',
+      mapDraftToRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
+      onSave: handleSaveComment,
+      onCancel: () => {
+        setLineSelection(null);
+        cancel();
+      },
+      onEdit: (draft) => {
+        startEdit(draft);
+        setLineSelection({ start: draft.startLine, end: draft.endLine });
+      },
+      onDelete: deleteDraft,
+    });
+  }, [cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, startEdit]);
 
   const fileViewer = (
     <div
