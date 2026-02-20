@@ -98,6 +98,8 @@ const MENU_ITEM_OPEN_FILES_TAB_ID: &str = "menu_open_files_tab";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_OPEN_TERMINAL_TAB_ID: &str = "menu_open_terminal_tab";
 #[cfg(target_os = "macos")]
+const MENU_ITEM_COPY_ID: &str = "menu_copy";
+#[cfg(target_os = "macos")]
 const MENU_ITEM_THEME_LIGHT_ID: &str = "menu_theme_light";
 #[cfg(target_os = "macos")]
 const MENU_ITEM_THEME_DARK_ID: &str = "menu_theme_dark";
@@ -218,6 +220,7 @@ fn build_macos_menu<R: tauri::Runtime>(
         true,
         Some("Cmd+T"),
     )?;
+    let copy = MenuItem::with_id(app, MENU_ITEM_COPY_ID, "Copy", true, Some("Cmd+C"))?;
 
     let theme_light =
         MenuItem::with_id(app, MENU_ITEM_THEME_LIGHT_ID, "Light Theme", true, None::<&str>)?;
@@ -353,7 +356,7 @@ fn build_macos_menu<R: tauri::Runtime>(
                     &PredefinedMenuItem::redo(app, None)?,
                     &PredefinedMenuItem::separator(app)?,
                     &PredefinedMenuItem::cut(app, None)?,
-                    &PredefinedMenuItem::copy(app, None)?,
+                    &copy,
                     &PredefinedMenuItem::paste(app, None)?,
                     &PredefinedMenuItem::select_all(app, None)?,
                 ],
@@ -2460,6 +2463,10 @@ fn main() {
                 }
                 if id == MENU_ITEM_OPEN_TERMINAL_TAB_ID {
                     dispatch_menu_action(app, "open-terminal-tab");
+                    return;
+                }
+                if id == MENU_ITEM_COPY_ID {
+                    dispatch_menu_action(app, "copy");
                     return;
                 }
 

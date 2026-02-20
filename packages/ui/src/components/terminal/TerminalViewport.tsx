@@ -424,6 +424,25 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       return Boolean(getDomSelectionTextInViewport().trim());
     }, [getDomSelectionTextInViewport, getTerminalSelectionText]);
 
+    React.useEffect(() => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+
+      const handleMenuCopy = (event: Event) => {
+        if (!hasCopyableSelectionInViewport()) {
+          return;
+        }
+        event.preventDefault();
+        void copySelectionToClipboard();
+      };
+
+      window.addEventListener('openchamber:copy', handleMenuCopy);
+      return () => {
+        window.removeEventListener('openchamber:copy', handleMenuCopy);
+      };
+    }, [copySelectionToClipboard, hasCopyableSelectionInViewport]);
+
     const resetWriteState = React.useCallback(() => {
       pendingWriteRef.current = '';
       if (writeScheduledRef.current !== null && typeof window !== 'undefined') {
