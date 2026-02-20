@@ -7,31 +7,13 @@ import {
   getCustomizableShortcutActions,
   getEffectiveShortcutCombo,
   isRiskyBrowserShortcut,
+  keyToShortcutToken,
   normalizeCombo,
   UNASSIGNED_SHORTCUT,
   type ShortcutCombo,
 } from '@/lib/shortcuts';
 
 const MODIFIER_KEYS = new Set(['shift', 'control', 'alt', 'meta']);
-
-const keyToToken = (key: string): string => {
-  const lowered = key.toLowerCase();
-
-  if (lowered === ',') return 'comma';
-  if (lowered === '.') return 'period';
-  if (lowered === ' ') return 'space';
-  if (lowered === 'esc') return 'escape';
-  if (lowered === '+') return 'plus';
-  if (lowered === '-') return 'minus';
-  if (lowered === '{') return '[';
-  if (lowered === '}') return ']';
-  if (lowered === 'arrowup') return 'arrowup';
-  if (lowered === 'arrowdown') return 'arrowdown';
-  if (lowered === 'arrowleft') return 'arrowleft';
-  if (lowered === 'arrowright') return 'arrowright';
-
-  return lowered;
-};
 
 const keyboardEventToCombo = (event: React.KeyboardEvent<HTMLInputElement>): ShortcutCombo | null => {
   if (MODIFIER_KEYS.has(event.key.toLowerCase())) {
@@ -50,7 +32,7 @@ const keyboardEventToCombo = (event: React.KeyboardEvent<HTMLInputElement>): Sho
     parts.push('alt');
   }
 
-  const keyToken = keyToToken(event.key);
+  const keyToken = keyToShortcutToken(event.key);
   if (!keyToken) {
     return null;
   }
@@ -231,7 +213,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
 
       {pendingOverwrite && (
         <div className="rounded-md border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] p-3">
-          <p className="typography-meta text-[var(--status-warning-foreground)]">
+          <p className="typography-meta" style={{ color: 'var(--surface-foreground)' }}>
             This combo is already used by another shortcut. Overwrite and clear that other mapping?
           </p>
           <div className="mt-2 flex gap-2">
@@ -242,13 +224,19 @@ export const KeyboardShortcutsSettings: React.FC = () => {
       )}
 
       {errorText && (
-        <div className="rounded-md border border-[var(--status-error-border)] bg-[var(--status-error-background)] p-2 typography-meta text-[var(--status-error-foreground)]">
+        <div
+          className="rounded-md border border-[var(--status-error-border)] bg-[var(--status-error-background)] p-2 typography-meta"
+          style={{ color: 'var(--surface-foreground)' }}
+        >
           {errorText}
         </div>
       )}
 
       {warningText && (
-        <div className="rounded-md border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] p-2 typography-meta text-[var(--status-warning-foreground)]">
+        <div
+          className="rounded-md border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] p-2 typography-meta"
+          style={{ color: 'var(--surface-foreground)' }}
+        >
           {warningText}
         </div>
       )}

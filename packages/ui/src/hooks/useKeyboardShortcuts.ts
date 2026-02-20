@@ -30,6 +30,11 @@ export const useKeyboardShortcuts = () => {
   const { working } = useAssistantStatus();
   const abortPrimedUntilRef = React.useRef<number | null>(null);
   const abortPrimedTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const themeModeRef = React.useRef(themeMode);
+
+  React.useEffect(() => {
+    themeModeRef.current = themeMode;
+  }, [themeMode]);
 
   const resetAbortPriming = React.useCallback(() => {
     if (abortPrimedTimeoutRef.current) {
@@ -88,9 +93,21 @@ export const useKeyboardShortcuts = () => {
       if (eventMatchesShortcut(e, combo('cycle_theme'))) {
         e.preventDefault();
         const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
-        const currentIndex = modes.indexOf(themeMode);
+        const activeElement = document.activeElement as HTMLElement | null;
+        const currentIndex = modes.indexOf(themeModeRef.current);
         const nextIndex = (currentIndex + 1) % modes.length;
         setThemeMode(modes[nextIndex]);
+        requestAnimationFrame(() => {
+          if (typeof document === 'undefined' || typeof window === 'undefined') {
+            return;
+          }
+          if (!document.hasFocus()) {
+            window.focus();
+          }
+          if (activeElement && document.contains(activeElement)) {
+            activeElement.focus({ preventScroll: true });
+          }
+        });
         return;
       }
 
@@ -364,7 +381,6 @@ export const useKeyboardShortcuts = () => {
     setSettingsDialogOpen,
     setModelSelectorOpen,
     setThemeMode,
-    themeMode,
     working,
     armAbortPrompt,
     resetAbortPriming,

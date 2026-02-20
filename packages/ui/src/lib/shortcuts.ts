@@ -5,7 +5,7 @@ export type ShortcutModifier = 'mod' | 'shift' | 'alt' | 'option' | 'ctrl';
 export type ShortcutKey = string;
 export type ShortcutCombo = string;
 
-export const UNASSIGNED_SHORTCUT = '__unassigned__';
+export const UNASSIGNED_SHORTCUT: ShortcutCombo = '__unassigned__';
 
 export interface ShortcutAction {
   id: string;
@@ -59,6 +59,49 @@ const KEY_LABEL_MAP: Record<string, string> = {
 };
 
 const MODIFIER_PRIORITY: ShortcutModifier[] = ['mod', 'ctrl', 'shift', 'alt'];
+
+const SHIFTED_KEY_BASE_MAP: Record<string, string> = {
+  '{': '[',
+  '}': ']',
+  ':': ';',
+  '"': "'",
+  '<': ',',
+  '>': '.',
+  '?': '/',
+  '|': '\\',
+  '~': '`',
+  '!': '1',
+  '@': '2',
+  '#': '3',
+  '$': '4',
+  '%': '5',
+  '^': '6',
+  '&': '7',
+  '*': '8',
+  '(': '9',
+  ')': '0',
+};
+
+function isUnassignedShortcut(combo: ShortcutCombo): boolean {
+  return combo.trim().toLowerCase() === UNASSIGNED_SHORTCUT;
+}
+
+export function keyToShortcutToken(key: string): string {
+  const lowered = key.toLowerCase();
+
+  if (lowered === ',') return 'comma';
+  if (lowered === '.') return 'period';
+  if (lowered === ' ') return 'space';
+  if (lowered === 'esc') return 'escape';
+  if (lowered === '+') return 'plus';
+  if (lowered === '-' || lowered === '_') return 'minus';
+  if (lowered === 'arrowup') return 'arrowup';
+  if (lowered === 'arrowdown') return 'arrowdown';
+  if (lowered === 'arrowleft') return 'arrowleft';
+  if (lowered === 'arrowright') return 'arrowright';
+
+  return SHIFTED_KEY_BASE_MAP[lowered] ?? lowered;
+}
 
 const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   {
@@ -304,6 +347,10 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
 ] as const;
 
 export function normalizeCombo(combo: ShortcutCombo): ShortcutCombo {
+  if (isUnassignedShortcut(combo)) {
+    return UNASSIGNED_SHORTCUT;
+  }
+
   const rawParts = combo
     .toLowerCase()
     .trim()
@@ -329,11 +376,19 @@ export function normalizeCombo(combo: ShortcutCombo): ShortcutCombo {
 }
 
 export function isValidShortcutCombo(combo: ShortcutCombo): boolean {
+  if (isUnassignedShortcut(combo)) {
+    return true;
+  }
+
   const parsed = parseShortcut(combo);
   return parsed.key.trim().length > 0;
 }
 
 export function parseShortcut(combo: ShortcutCombo): ParsedShortcut {
+  if (isUnassignedShortcut(combo)) {
+    return { modifiers: new Set<ShortcutModifier>(), key: UNASSIGNED_SHORTCUT };
+  }
+
   const normalized = normalizeCombo(combo);
   const parts = normalized.split('+');
   const modifiers: Set<ShortcutModifier> = new Set();
@@ -352,6 +407,10 @@ export function parseShortcut(combo: ShortcutCombo): ParsedShortcut {
 }
 
 export function formatShortcutForDisplay(combo: ShortcutCombo): string {
+  if (isUnassignedShortcut(combo)) {
+    return 'Unassigned';
+  }
+
   const parsed = parseShortcut(combo);
 
   if (!parsed.key && parsed.modifiers.size === 0) {
@@ -402,6 +461,10 @@ export function getEffectiveShortcutCombo(
     }
 
     const normalized = normalizeCombo(override);
+    if (normalized === UNASSIGNED_SHORTCUT) {
+      return UNASSIGNED_SHORTCUT;
+    }
+
     if (isValidShortcutCombo(normalized)) {
       return normalized;
     }
@@ -422,6 +485,10 @@ export function getEffectiveShortcutLabel(
 }
 
 export function isRiskyBrowserShortcut(combo: ShortcutCombo): boolean {
+  if (isUnassignedShortcut(combo)) {
+    return false;
+  }
+
   const parsed = parseShortcut(combo);
   if (!parsed.modifiers.has('mod')) {
     return false;
@@ -437,6 +504,10 @@ export function eventMatchesShortcut(
   shortcut: ShortcutAction | ShortcutCombo
 ): boolean {
   const combo = typeof shortcut === 'string' ? shortcut : shortcut.defaultCombo;
+  if (isUnassignedShortcut(combo)) {
+    return false;
+  }
+
   const parsed = parseShortcut(combo);
 
   const expectedMod = parsed.modifiers.has('mod');
@@ -479,15 +550,8 @@ export function eventMatchesShortcut(
     }
   }
 
-  const eventKey = event.key.toLowerCase();
-  const expectedKey = parsed.key.toLowerCase();
-
-  if (expectedKey === 'comma' && event.key === ',') return true;
-  if (expectedKey === 'period' && event.key === '.') return true;
-  if (expectedKey === 'plus' && event.key === '+') return true;
-  if (expectedKey === 'minus' && (event.key === '-' || event.key === '_')) return true;
-  if (expectedKey === '[' && (event.key === '[' || event.key === '{')) return true;
-  if (expectedKey === ']' && (event.key === ']' || event.key === '}')) return true;
+  const eventKey = keyToShortcutToken(event.key);
+  const expectedKey = keyToShortcutToken(parsed.key);
 
   return eventKey === expectedKey;
 }
