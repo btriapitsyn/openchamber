@@ -21,6 +21,7 @@ import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/
 import { OnboardingScreen } from '@/components/onboarding/OnboardingScreen';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
@@ -32,6 +33,7 @@ import { VoiceProvider } from '@/components/voice';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
+import { formatDirectoryName } from '@/lib/utils';
 
 const AboutDialogWrapper: React.FC = () => {
   const { isAboutDialogOpen, setAboutDialogOpen } = useUIStore();
@@ -51,7 +53,10 @@ function App({ apis }: AppProps) {
   const { initializeApp, isInitialized, isConnected } = useConfigStore();
   const { error, clearError, loadSessions } = useSessionStore();
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
+  const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
+  const projects = useProjectsStore((state) => state.projects);
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const { uiFont, monoFont } = useFontPreferences();
   const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
@@ -222,6 +227,47 @@ function App({ apis }: AppProps) {
       setTimeout(() => clearError(), 5000);
     }
   }, [error, clearError]);
+
+  const activeProjectTitle = React.useMemo(() => {
+    const activeProject = activeProjectId
+      ? projects.find((project) => project.id === activeProjectId) ?? null
+      : null;
+    const explicitLabel = activeProject?.label?.trim();
+    if (explicitLabel) {
+      return explicitLabel;
+    }
+    const activeProjectPath = activeProject?.path?.trim();
+    if (activeProjectPath) {
+      return formatDirectoryName(activeProjectPath, homeDirectory) || activeProjectPath;
+    }
+    const fallbackDirectory = currentDirectory?.trim();
+    if (fallbackDirectory) {
+      return formatDirectoryName(fallbackDirectory, homeDirectory) || fallbackDirectory;
+    }
+    return '';
+  }, [activeProjectId, projects, homeDirectory, currentDirectory]);
+
+  React.useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    const title = activeProjectTitle ? `${activeProjectTitle} - OpenChamber` : 'OpenChamber';
+    if (document.title !== title) {
+      document.title = title;
+    }
+
+    if (!isTauriShell()) {
+      return;
+    }
+
+    const tauri = (window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
+    if (typeof tauri?.core?.invoke !== 'function') {
+      return;
+    }
+
+    void tauri.core.invoke('desktop_set_window_title', { title });
+  }, [activeProjectTitle]);
 
   React.useEffect(() => {
     if (!isDesktopShell() || !isDesktopLocalOriginActive()) {

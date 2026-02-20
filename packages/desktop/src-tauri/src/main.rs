@@ -420,6 +420,16 @@ fn desktop_set_auto_worktree_menu(app: tauri::AppHandle, enabled: bool) -> Resul
 }
 
 #[tauri::command]
+fn desktop_set_window_title(window: tauri::WebviewWindow, title: Option<String>) -> Result<(), String> {
+    let next_title = title
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("OpenChamber");
+    window.set_title(next_title).map_err(|err| err.to_string())
+}
+
+#[tauri::command]
 fn desktop_clear_cache(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -2239,6 +2249,7 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_
         builder = builder
             .hidden_title(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .tabbing_identifier("openchamber")
             .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition { x: 17.0, y: 26.0 }));
     }
 
@@ -2542,6 +2553,7 @@ fn main() {
             desktop_new_window,
             desktop_new_window_at_url,
             desktop_set_auto_worktree_menu,
+            desktop_set_window_title,
             desktop_clear_cache,
             desktop_open_path,
             desktop_filter_installed_apps,
