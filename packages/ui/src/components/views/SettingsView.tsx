@@ -31,7 +31,6 @@ import {
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
 import { SettingsSidebarItem } from '@/components/sections/shared/SettingsSidebarItem';
@@ -234,6 +233,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const settingsSlug = resolveSettingsSlug(settingsPageRaw);
 
   const [navQuery, setNavQuery] = React.useState('');
+  const navSearchRef = React.useRef<HTMLInputElement | null>(null);
   const [mobileStage, setMobileStage] = React.useState<MobileStage>('nav');
   const autoNavSlugRef = React.useRef<string | null>(null);
 
@@ -487,27 +487,53 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       <SettingsSidebarLayout
         header={
           <div className="px-3 pt-3 space-y-3">
-            <Input
-              value={navQuery}
-              onChange={(e) => setNavQuery(e.target.value)}
-              placeholder="Search settings…"
-              className="h-9"
-            />
+            <div className="relative">
+              <Input
+                ref={navSearchRef}
+                value={navQuery}
+                onChange={(e) => setNavQuery(e.target.value)}
+                placeholder="Search settings…"
+                className={cn('h-8 text-sm', navQuery.trim().length > 0 && 'pr-9')}
+              />
+              {navQuery.trim().length > 0 && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setNavQuery('');
+                    navSearchRef.current?.focus();
+                  }}
+                  className={cn(
+                    'absolute right-1.5 top-1/2 -translate-y-1/2',
+                    'inline-flex h-6 w-6 items-center justify-center rounded-md',
+                    'text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+                  )}
+                >
+                  <RiCloseLine className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
         }
         footer={
-          <div className="border-t border-border bg-sidebar px-2 py-2 space-y-1">
+          <div className="border-t border-border bg-sidebar px-2 py-1 space-y-0.5">
             {!runtimeCtx.isVSCode && (
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="h-7 w-full justify-start gap-2 px-1.5 rounded-md"
+                  <button
+                    type="button"
+                    className={cn(
+                      'flex h-7 w-full items-center gap-2 rounded-md px-2',
+                      'text-sm font-semibold text-sidebar-foreground/90',
+                      'hover:text-sidebar-foreground hover:bg-interactive-hover',
+                      'transition-all duration-200'
+                    )}
                     onClick={() => void reloadOpenCodeConfiguration({ message: 'Restarting OpenCode…', mode: 'projects', scopes: ['all'] })}
                   >
                     <RiRestartLine className="h-4 w-4" />
                     <span>Reload OpenCode</span>
-                  </Button>
+                  </button>
                 </TooltipTrigger>
                 <TooltipContent>
                   Restart OpenCode and reload its configuration.
@@ -515,14 +541,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               </Tooltip>
             )}
 
-            <Button
-              variant="ghost"
-              className="h-7 w-full justify-start gap-2 px-1.5 rounded-md"
+            <button
+              type="button"
+              className={cn(
+                'flex h-7 w-full items-center gap-2 rounded-md px-2',
+                'text-sm font-semibold text-sidebar-foreground/90',
+                'hover:text-sidebar-foreground hover:bg-interactive-hover',
+                'transition-all duration-200'
+              )}
               onClick={() => useUIStore.getState().setAboutDialogOpen(true)}
             >
               <RiInformationLine className="h-4 w-4" />
               <span>About</span>
-            </Button>
+            </button>
 
             {isMobile && runtimeCtx.isWeb && (
               <div className="px-1.5 pt-2">
@@ -676,19 +707,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             </div>
           )}
 
-          {onClose && (
-            <div className={cn('absolute right-3 z-50', isWindowed ? 'top-2' : 'top-3')}>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close settings"
-                title={`Close Settings (${shortcutKey}+,)`}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <RiCloseLine className="h-5 w-5" />
-              </button>
-            </div>
-          )}
+      {onClose && (
+        <div className={cn('absolute right-0.5 z-50', isWindowed ? 'top-0.5' : 'top-1')}>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close settings"
+            title={`Close Settings (${shortcutKey}+,)`}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md p-0.5 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <RiCloseLine className="h-5 w-5" />
+          </button>
+        </div>
+      )}
         </>
       )}
 

@@ -44,21 +44,23 @@ export const SettingsProjectSelector: React.FC<{ className?: string }> = ({ clas
 
   return (
     <div className={cn(className)}>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Switch project"
-            title="Switch project"
-            className={cn(
-              'flex h-9 w-full items-center gap-1.5 bg-transparent px-2 rounded-lg text-foreground outline-none',
-              'hover:bg-interactive-hover/50 focus-visible:ring-2 focus-visible:ring-ring border border-[var(--interactive-border)]'
-            )}
-          >
-            <RiFolderLine className="h-4 w-4 opacity-70" />
-            <span className="min-w-0 flex-1 truncate typography-ui-label font-medium">{label}</span>
-            <RiArrowDownSLine className="size-4 opacity-50" />
-          </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Switch project"
+              title="Switch project"
+              className={cn(
+                // Mirror Input sizing so headers align visually.
+                'text-foreground border border-border/80 appearance-none flex h-8 w-full min-w-0 rounded-lg bg-transparent px-3 py-1 outline-none',
+                'hover:border-input focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:border-primary/70',
+                'flex items-center gap-1.5 text-left'
+              )}
+            >
+              <RiFolderLine className="h-4 w-4 opacity-70" />
+              <span className="min-w-0 flex-1 truncate typography-ui-label font-medium">{label}</span>
+              <RiArrowDownSLine className="size-4 opacity-50" />
+            </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-auto">
           <DropdownMenuRadioGroup
