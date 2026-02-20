@@ -5,6 +5,8 @@ export type ShortcutModifier = 'mod' | 'shift' | 'alt' | 'option' | 'ctrl';
 export type ShortcutKey = string;
 export type ShortcutCombo = string;
 
+export const UNASSIGNED_SHORTCUT = '__unassigned__';
+
 export interface ShortcutAction {
   id: string;
   defaultCombo: ShortcutCombo;
@@ -351,6 +353,11 @@ export function parseShortcut(combo: ShortcutCombo): ParsedShortcut {
 
 export function formatShortcutForDisplay(combo: ShortcutCombo): string {
   const parsed = parseShortcut(combo);
+
+  if (!parsed.key && parsed.modifiers.size === 0) {
+    return 'Unassigned';
+  }
+
   const parts: string[] = [];
 
   for (const modifier of MODIFIER_PRIORITY) {
@@ -390,6 +397,10 @@ export function getEffectiveShortcutCombo(
 
   const override = overrides?.[actionId];
   if (typeof override === 'string') {
+    if (override.trim().toLowerCase() === UNASSIGNED_SHORTCUT) {
+      return '';
+    }
+
     const normalized = normalizeCombo(override);
     if (isValidShortcutCombo(normalized)) {
       return normalized;
@@ -475,6 +486,8 @@ export function eventMatchesShortcut(
   if (expectedKey === 'period' && event.key === '.') return true;
   if (expectedKey === 'plus' && event.key === '+') return true;
   if (expectedKey === 'minus' && (event.key === '-' || event.key === '_')) return true;
+  if (expectedKey === '[' && (event.key === '[' || event.key === '{')) return true;
+  if (expectedKey === ']' && (event.key === ']' || event.key === '}')) return true;
 
   return eventKey === expectedKey;
 }
