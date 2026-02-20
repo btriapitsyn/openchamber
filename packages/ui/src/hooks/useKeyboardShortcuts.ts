@@ -3,11 +3,11 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useAssistantStatus } from '@/hooks/useAssistantStatus';
-import { hasModifier } from '@/lib/utils';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { showOpenCodeStatus } from '@/lib/openCodeStatus';
+import { eventMatchesShortcut, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 
 export const useKeyboardShortcuts = () => {
   const { openNewSessionDraft, abortCurrentOperation, armAbortPrompt, clearAbortPrompt, currentSessionId } = useSessionStore();
@@ -15,10 +15,16 @@ export const useKeyboardShortcuts = () => {
     toggleCommandPalette,
     toggleHelpDialog,
     toggleSidebar,
+    toggleRightSidebar,
+    setRightSidebarOpen,
+    setRightSidebarTab,
+    toggleBottomTerminal,
+    setBottomTerminalExpanded,
     setSessionSwitcherOpen,
     setActiveMainTab,
     setSettingsDialogOpen,
     setModelSelectorOpen,
+    shortcutOverrides,
   } = useUIStore();
   const { themeMode, setThemeMode } = useThemeSystem();
   const { working } = useAssistantStatus();
@@ -35,70 +41,74 @@ export const useKeyboardShortcuts = () => {
   }, [clearAbortPrompt]);
 
   React.useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const combo = (actionId: string) => getEffectiveShortcutCombo(actionId, shortcutOverrides);
 
-       if (hasModifier(e) && e.key === 'k') {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (eventMatchesShortcut(e, combo('open_command_palette'))) {
         e.preventDefault();
         toggleCommandPalette();
+        return;
       }
 
-      if (hasModifier(e) && e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (eventMatchesShortcut(e, combo('open_status'))) {
         e.preventDefault();
         void showOpenCodeStatus();
         return;
       }
 
-      if (hasModifier(e) && e.key === '.') {
+      if (eventMatchesShortcut(e, combo('open_help'))) {
         e.preventDefault();
         toggleHelpDialog();
+        return;
       }
 
-      if (hasModifier(e) && e.key.toLowerCase() === 'n') {
+      if (eventMatchesShortcut(e, combo('new_chat')) || eventMatchesShortcut(e, combo('new_chat_worktree'))) {
         e.preventDefault();
-        
+
         const isVSCode = isVSCodeRuntime();
         const autoWorktree = useConfigStore.getState().settingsAutoCreateWorktree;
-        // If autoWorktree is true: Cmd+N -> Worktree, Cmd+Shift+N -> Standard
-        // If autoWorktree is false: Cmd+N -> Standard, Cmd+Shift+N -> Worktree
-        // VS Code: always open standard session (no worktree support)
-        const shouldCreateWorktree = isVSCode ? false : (autoWorktree ? !e.shiftKey : e.shiftKey);
+        const matchedPrimaryShortcut = eventMatchesShortcut(e, combo('new_chat'));
+        const shouldCreateWorktree = isVSCode
+          ? false
+          : (matchedPrimaryShortcut ? autoWorktree : !autoWorktree);
 
         if (shouldCreateWorktree) {
-          // Create new session with auto-generated worktree
           setActiveMainTab('chat');
           setSessionSwitcherOpen(false);
           createWorktreeSession();
           return;
         }
-        // Open a new session without worktree
+
         setActiveMainTab('chat');
         setSessionSwitcherOpen(false);
         openNewSessionDraft();
+        return;
       }
 
-       if (hasModifier(e) && e.key === '/') {
+      if (eventMatchesShortcut(e, combo('cycle_theme'))) {
         e.preventDefault();
         const modes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
         const currentIndex = modes.indexOf(themeMode);
         const nextIndex = (currentIndex + 1) % modes.length;
         setThemeMode(modes[nextIndex]);
+        return;
       }
 
-      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 't') {
+      if (eventMatchesShortcut(e, combo('open_timeline'))) {
         e.preventDefault();
         const { isTimelineDialogOpen, setTimelineDialogOpen } = useUIStore.getState();
         setTimelineDialogOpen(!isTimelineDialogOpen);
         return;
       }
 
-      if (hasModifier(e) && !e.shiftKey && e.key === ',') {
+      if (eventMatchesShortcut(e, combo('open_settings'))) {
         e.preventDefault();
         const { isSettingsDialogOpen } = useUIStore.getState();
         setSettingsDialogOpen(!isSettingsDialogOpen);
         return;
       }
 
-      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'l') {
+      if (eventMatchesShortcut(e, combo('toggle_sidebar'))) {
         e.preventDefault();
         const { isMobile, isSessionSwitcherOpen } = useUIStore.getState();
         if (isMobile) {
@@ -109,15 +119,83 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
-      if (hasModifier(e) && !e.shiftKey && e.key.toLowerCase() === 'i') {
+      if (eventMatchesShortcut(e, combo('focus_input'))) {
         e.preventDefault();
         const textarea = document.querySelector<HTMLTextAreaElement>('textarea[data-chat-input="true"]');
         textarea?.focus();
         return;
       }
 
+      if (eventMatchesShortcut(e, combo('toggle_right_sidebar'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        toggleRightSidebar();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('open_right_sidebar_git'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        setRightSidebarOpen(true);
+        setRightSidebarTab('git');
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('open_right_sidebar_files'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        setRightSidebarOpen(true);
+        setRightSidebarTab('files');
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('cycle_right_sidebar_tab'))) {
+        const { isMobile, rightSidebarTab } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+
+        const tabs = ['git', 'files'] as const;
+        const currentIndex = tabs.indexOf(rightSidebarTab);
+        const nextTab = tabs[(currentIndex + 1) % tabs.length];
+
+        e.preventDefault();
+        setRightSidebarOpen(true);
+        setRightSidebarTab(nextTab);
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_terminal'))) {
+        const { isMobile } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        toggleBottomTerminal();
+        return;
+      }
+
+      if (eventMatchesShortcut(e, combo('toggle_terminal_expanded'))) {
+        const { isMobile, isBottomTerminalExpanded } = useUIStore.getState();
+        if (isMobile) {
+          return;
+        }
+        e.preventDefault();
+        setBottomTerminalExpanded(!isBottomTerminalExpanded);
+        return;
+      }
+
       // Cmd/Ctrl+Shift+M: Open model selector (same conditions as double-ESC: chat tab, no overlays)
-      if (hasModifier(e) && e.shiftKey && e.key.toLowerCase() === 'm') {
+      if (eventMatchesShortcut(e, combo('open_model_selector'))) {
         const {
           isSettingsDialogOpen,
           isCommandPaletteOpen,
@@ -147,7 +225,7 @@ export const useKeyboardShortcuts = () => {
       }
 
       // Cmd/Ctrl+Shift+T: Cycle thinking variant (same gating as Shift+M)
-      if (hasModifier(e) && e.shiftKey && e.key.toLowerCase() === 't') {
+      if (eventMatchesShortcut(e, combo('cycle_thinking_variant'))) {
         const {
           isSettingsDialogOpen,
           isCommandPaletteOpen,
@@ -276,6 +354,11 @@ export const useKeyboardShortcuts = () => {
     toggleCommandPalette,
     toggleHelpDialog,
     toggleSidebar,
+    toggleRightSidebar,
+    setRightSidebarOpen,
+    setRightSidebarTab,
+    toggleBottomTerminal,
+    setBottomTerminalExpanded,
     setSessionSwitcherOpen,
     setActiveMainTab,
     setSettingsDialogOpen,
@@ -286,6 +369,7 @@ export const useKeyboardShortcuts = () => {
     armAbortPrompt,
     resetAbortPriming,
     currentSessionId,
+    shortcutOverrides,
   ]);
 
   React.useEffect(() => {
