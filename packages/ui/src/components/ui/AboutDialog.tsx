@@ -23,18 +23,29 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
   const [version, setVersion] = React.useState<string | null>(null);
   const [isCopyingDiagnostics, setIsCopyingDiagnostics] = React.useState(false);
   const [copiedDiagnostics, setCopiedDiagnostics] = React.useState(false);
+  const [diagnosticsReport, setDiagnosticsReport] = React.useState<string | null>(null);
+  const [isPreparingDiagnostics, setIsPreparingDiagnostics] = React.useState(false);
 
   const handleCopyDiagnostics = React.useCallback(async () => {
     if (isCopyingDiagnostics) return;
     setIsCopyingDiagnostics(true);
     setCopiedDiagnostics(false);
     try {
-      const result = await debugUtils.copyDiagnosticsReport();
+      if (!diagnosticsReport) {
+        toast.error('Copy failed', {
+          description: 'Diagnostics not ready yet. Wait a second and retry.',
+        });
+        return;
+      }
+
+      const result = await debugUtils.copyTextToClipboard(diagnosticsReport);
       if (result.ok) {
         setCopiedDiagnostics(true);
         toast.success('Diagnostics copied');
       } else {
-        toast.error('Copy failed');
+        toast.error('Copy failed', {
+          description: result.error,
+        });
       }
     } catch (error) {
       toast.error('Copy failed');
@@ -42,7 +53,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     } finally {
       setIsCopyingDiagnostics(false);
     }
-  }, [isCopyingDiagnostics]);
+  }, [diagnosticsReport, isCopyingDiagnostics]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -63,6 +74,35 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
     } else {
       setVersion(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
     }
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) {
+      setDiagnosticsReport(null);
+      setIsPreparingDiagnostics(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsPreparingDiagnostics(true);
+    void debugUtils.buildDiagnosticsReport()
+      .then((report) => {
+        if (cancelled) return;
+        setDiagnosticsReport(report);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Failed to prepare diagnostics:', error);
+        setDiagnosticsReport(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsPreparingDiagnostics(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   const displayVersion = version;
@@ -98,14 +138,18 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           <div className="flex flex-col items-center gap-2 pt-2">
             <button
               onClick={handleCopyDiagnostics}
-              disabled={isCopyingDiagnostics}
+              disabled={isCopyingDiagnostics || isPreparingDiagnostics || !diagnosticsReport}
               className={cn(
                 'typography-meta text-muted-foreground hover:text-foreground',
                 'underline-offset-2 hover:underline',
                 'disabled:opacity-50 disabled:cursor-not-allowed'
               )}
             >
-              {copiedDiagnostics ? 'Diagnostics copied' : 'Copy diagnostics'}
+              {copiedDiagnostics
+                ? 'Diagnostics copied'
+                : isPreparingDiagnostics
+                  ? 'Preparing diagnostics...'
+                  : 'Copy diagnostics'}
             </button>
             <p className="typography-micro text-muted-foreground">
               Includes OpenChamber state, OpenCode health, directories, and projects.

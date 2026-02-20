@@ -373,13 +373,50 @@ export const debugUtils = {
     return JSON.stringify(report, null, 2);
   },
 
+  async copyTextToClipboard(text: string) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return { ok: true, method: 'clipboard' } as const;
+      } catch (error) {
+        const canFallback = typeof document !== 'undefined';
+        if (!canFallback) {
+          return {
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          } as const;
+        }
+      }
+    }
+
+    if (typeof document !== 'undefined') {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.top = '-1000px';
+      textarea.style.left = '-1000px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      textarea.setSelectionRange(0, textarea.value.length);
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+
+      if (copied) {
+        return { ok: true, method: 'execCommand' } as const;
+      }
+    }
+
+    return {
+      ok: false,
+      error: 'Clipboard access denied in current context',
+    } as const;
+  },
+
   async copyDiagnosticsReport() {
     const report = await this.buildDiagnosticsReport();
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(report);
-      return { ok: true, report } as const;
-    }
-    return { ok: false, report } as const;
+    const result = await this.copyTextToClipboard(report);
+    return { ...result, report } as const;
   },
 
    checkLastMessage() {
