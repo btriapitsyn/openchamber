@@ -116,6 +116,26 @@ const createFolderId = (): string => {
   return `folder_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 };
 
+const syncCollapsedAfterFolderCleanup = (
+  prevFolders: SessionFolder[],
+  nextFolders: SessionFolder[],
+  collapsedFolderIds: Set<string>,
+): Set<string> | null => {
+  const nextFolderIds = new Set(nextFolders.map((folder) => folder.id));
+  let nextCollapsed: Set<string> | null = null;
+
+  for (const folder of prevFolders) {
+    if (!nextFolderIds.has(folder.id) && collapsedFolderIds.has(folder.id)) {
+      if (!nextCollapsed) {
+        nextCollapsed = new Set(collapsedFolderIds);
+      }
+      nextCollapsed.delete(folder.id);
+    }
+  }
+
+  return nextCollapsed;
+};
+
 // --- Store ---
 
 export const useSessionFoldersStore = create<SessionFoldersStore>()(
@@ -199,9 +219,17 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
           return folder;
         });
 
-        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
-        set({ foldersMap: nextMap });
+        const filteredFolders = nextFolders.filter((folder) => folder.sessionIds.length > 0);
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: filteredFolders };
+        const nextCollapsed = syncCollapsedAfterFolderCleanup(projectFolders, filteredFolders, get().collapsedFolderIds);
+
+        set(nextCollapsed
+          ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed }
+          : { foldersMap: nextMap });
         persistFolders(nextMap);
+        if (nextCollapsed) {
+          persistCollapsed(nextCollapsed);
+        }
       },
 
       removeSessionFromFolder: (projectId: string, sessionId: string): void => {
@@ -221,9 +249,17 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         });
 
         if (!changed) return;
-        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
-        set({ foldersMap: nextMap });
+        const filteredFolders = nextFolders.filter((folder) => folder.sessionIds.length > 0);
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: filteredFolders };
+        const nextCollapsed = syncCollapsedAfterFolderCleanup(projectFolders, filteredFolders, get().collapsedFolderIds);
+
+        set(nextCollapsed
+          ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed }
+          : { foldersMap: nextMap });
         persistFolders(nextMap);
+        if (nextCollapsed) {
+          persistCollapsed(nextCollapsed);
+        }
       },
 
       toggleFolderCollapse: (folderId: string): void => {
@@ -255,9 +291,17 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         });
 
         if (!changed) return;
-        const nextMap: SessionFoldersMap = { ...current, [projectId]: nextFolders };
-        set({ foldersMap: nextMap });
+        const filteredFolders = nextFolders.filter((folder) => folder.sessionIds.length > 0);
+        const nextMap: SessionFoldersMap = { ...current, [projectId]: filteredFolders };
+        const nextCollapsed = syncCollapsedAfterFolderCleanup(projectFolders, filteredFolders, get().collapsedFolderIds);
+
+        set(nextCollapsed
+          ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed }
+          : { foldersMap: nextMap });
         persistFolders(nextMap);
+        if (nextCollapsed) {
+          persistCollapsed(nextCollapsed);
+        }
       },
 
       getSessionFolderId: (projectId: string, sessionId: string): string | null => {
