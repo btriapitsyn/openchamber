@@ -8,7 +8,7 @@ import { WebSocketServer } from 'ws';
 import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
-import { createUiAuth } from './lib/ui-auth.js';
+import { createUiAuth } from './lib/opencode/ui-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
 import { prepareNotificationLastMessage } from './lib/notification-message.js';
 import {
@@ -6642,7 +6642,7 @@ async function main(options = {}) {
     removeProviderConfig,
     AGENT_SCOPE,
     COMMAND_SCOPE
-  } = await import('./lib/opencode-config.js');
+  } = await import('./lib/opencode/index.js');
 
   app.get('/api/config/agents/:name', async (req, res) => {
     try {
@@ -6891,7 +6891,7 @@ async function main(options = {}) {
     deleteSkillSupportingFile,
     SKILL_SCOPE,
     SKILL_DIR,
-  } = await import('./lib/opencode-config.js');
+  } = await import('./lib/opencode/index.js');
 
   const findWorktreeRootForSkills = (workingDirectory) => {
     if (!workingDirectory) return null;
@@ -7588,7 +7588,7 @@ async function main(options = {}) {
   let authLibrary = null;
   const getAuthLibrary = async () => {
     if (!authLibrary) {
-      authLibrary = await import('./lib/opencode-auth.js');
+      authLibrary = await import('./lib/opencode/auth.js');
     }
     return authLibrary;
   };
