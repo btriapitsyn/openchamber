@@ -8,6 +8,7 @@ import {
   getEffectiveShortcutCombo,
   isRiskyBrowserShortcut,
   normalizeCombo,
+  UNASSIGNED_SHORTCUT,
   type ShortcutCombo,
 } from '@/lib/shortcuts';
 
@@ -22,6 +23,8 @@ const keyToToken = (key: string): string => {
   if (lowered === 'esc') return 'escape';
   if (lowered === '+') return 'plus';
   if (lowered === '-') return 'minus';
+  if (lowered === '{') return '[';
+  if (lowered === '}') return ']';
   if (lowered === 'arrowup') return 'arrowup';
   if (lowered === 'arrowdown') return 'arrowdown';
   if (lowered === 'arrowleft') return 'arrowleft';
@@ -115,7 +118,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
       return;
     }
 
-    clearShortcutOverride(pendingOverwrite.conflictActionId);
+    setShortcutOverride(pendingOverwrite.conflictActionId, UNASSIGNED_SHORTCUT);
     setShortcutOverride(pendingOverwrite.actionId, pendingOverwrite.combo);
     setPendingOverwrite(null);
     setErrorText('');
@@ -125,7 +128,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
       delete rest[pendingOverwrite.actionId];
       return rest;
     });
-  }, [clearShortcutOverride, pendingOverwrite, setShortcutOverride]);
+  }, [pendingOverwrite, setShortcutOverride]);
 
   const resetOne = React.useCallback((actionId: string) => {
     clearShortcutOverride(actionId);
