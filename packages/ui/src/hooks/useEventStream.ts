@@ -18,7 +18,6 @@ import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { isDesktopLocalOriginActive } from '@/lib/desktop';
 import { triggerSessionStatusPoll } from '@/hooks/useServerSessionStatus';
-import { triggerGlobalFireworks } from '@/contexts/FireworksContext';
 
 interface EventData {
   type: string;
@@ -366,8 +365,6 @@ export const useEventStream = () => {
   const lastResyncAtRef = React.useRef(0);
   const permissionToastShownRef = React.useRef<Set<string>>(new Set());
   const questionToastShownRef = React.useRef<Set<string>>(new Set());
-  // Tracks when a session first became busy — used to decide if completion deserves fireworks.
-  const sessionBusyStartTimeRef = React.useRef<Map<string, number>>(new Map());
   const notifiedMessagesRef = React.useRef<Set<string>>(new Set());
   const notifiedQuestionsRef = React.useRef<Set<string>>(new Set());
   const modeSwitchToastShownRef = React.useRef<Set<string>>(new Set());
@@ -520,16 +517,6 @@ export const useEventStream = () => {
 
     const shouldArmMessageStallCheck = prevType === 'idle' && (nextType === 'busy' || nextType === 'retry');
     const shouldDisarmMessageStallCheck = nextType === 'idle';
-
-    // Track when the session first transitions into a working state so we can
-    // decide whether to show fireworks after a meaningful amount of work.
-    if (prevType === 'idle' && (nextType === 'busy' || nextType === 'retry')) {
-      if (!sessionBusyStartTimeRef.current.has(sessionId)) {
-        sessionBusyStartTimeRef.current.set(sessionId, Date.now());
-      }
-    } else if (nextType === 'idle') {
-      sessionBusyStartTimeRef.current.delete(sessionId);
-    }
 
     if (shouldDisarmMessageStallCheck) {
       const pending = pendingMessageStallTimersRef.current.get(sessionId);
@@ -1352,17 +1339,6 @@ export const useEventStream = () => {
 
 	          completeStreamingMessage(sessionId, messageId);
 	          // Removed: void refreshSessionStatus();
-
-            // Fire a celebratory animation when the current session finishes after
-            // meaningful work (≥ 5 s busy). Keeps it special without triggering on
-            // every quick one-liner reply.
-            if (sessionId === currentSessionIdRef.current) {
-              const busyStart = sessionBusyStartTimeRef.current.get(sessionId);
-              if (busyStart && Date.now() - busyStart >= 5000) {
-                triggerGlobalFireworks();
-              }
-              sessionBusyStartTimeRef.current.delete(sessionId);
-            }
 
 	          const rawMessageSessionId = (message as { sessionID?: string }).sessionID;
           const messageSessionId: string =

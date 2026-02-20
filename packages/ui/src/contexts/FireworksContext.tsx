@@ -9,26 +9,8 @@ interface FireworksContextValue {
 
 const FireworksContext = React.createContext<FireworksContextValue | undefined>(undefined);
 
-// Module-level ref so that code outside React context (e.g. useEventStream) can
-// trigger fireworks without needing to be inside FireworksProvider.
-let globalFireworksTriggerRef: (() => void) | null = null;
-
-/** Trigger fireworks from anywhere — no React context required. */
-// eslint-disable-next-line react-refresh/only-export-components
-export const triggerGlobalFireworks = (): void => {
-  globalFireworksTriggerRef?.();
-};
-
 export const FireworksProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isActive, burstKey, triggerFireworks, dismissFireworks } = useFireworks();
-
-  // Register for global access
-  React.useEffect(() => {
-    globalFireworksTriggerRef = triggerFireworks;
-    return () => {
-      globalFireworksTriggerRef = null;
-    };
-  }, [triggerFireworks]);
 
   const value = React.useMemo<FireworksContextValue>(
     () => ({ triggerFireworks, dismissFireworks }),
