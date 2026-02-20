@@ -17,6 +17,7 @@ interface InlineCommentCardProps {
   onEdit: () => void;
   onDelete: () => void;
   className?: string;
+  maxWidth?: number;
 }
 
 export function InlineCommentCard({
@@ -24,6 +25,7 @@ export function InlineCommentCard({
   onEdit,
   onDelete,
   className,
+  maxWidth,
 }: InlineCommentCardProps) {
   const themeContext = useOptionalThemeSystem();
   const currentTheme = themeContext?.currentTheme;
@@ -42,6 +44,7 @@ export function InlineCommentCard({
       style={{
         backgroundColor: currentTheme?.colors?.surface?.elevated,
         borderColor: currentTheme?.colors?.interactive?.border,
+        maxWidth: maxWidth ? `${Math.max(200, Math.floor(maxWidth))}px` : undefined,
       }}
       data-comment-card="true"
     >
