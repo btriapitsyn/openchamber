@@ -5,6 +5,7 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { streamDebugEnabled } from '@/stores/utils/streamDebug';
+import { copyTextToClipboard as copyPlainTextToClipboard } from '@/lib/clipboard';
 
 export interface DebugMessageInfo {
   messageId: string;
@@ -374,43 +375,7 @@ export const debugUtils = {
   },
 
   async copyTextToClipboard(text: string) {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return { ok: true, method: 'clipboard' } as const;
-      } catch (error) {
-        const canFallback = typeof document !== 'undefined';
-        if (!canFallback) {
-          return {
-            ok: false,
-            error: error instanceof Error ? error.message : String(error),
-          } as const;
-        }
-      }
-    }
-
-    if (typeof document !== 'undefined') {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'fixed';
-      textarea.style.top = '-1000px';
-      textarea.style.left = '-1000px';
-      document.body.appendChild(textarea);
-      textarea.select();
-      textarea.setSelectionRange(0, textarea.value.length);
-      const copied = document.execCommand('copy');
-      document.body.removeChild(textarea);
-
-      if (copied) {
-        return { ok: true, method: 'execCommand' } as const;
-      }
-    }
-
-    return {
-      ok: false,
-      error: 'Clipboard access denied in current context',
-    } as const;
+    return copyPlainTextToClipboard(text);
   },
 
   async copyDiagnosticsReport() {

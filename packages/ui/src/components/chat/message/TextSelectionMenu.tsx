@@ -4,6 +4,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { RiChatNewLine, RiAddLine, RiFileCopyLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 interface TextSelectionMenuProps {
   containerRef: React.RefObject<HTMLElement | null>;
@@ -223,10 +224,9 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
   const handleCopy = React.useCallback(async () => {
     if (!selectedText) return;
 
-    try {
-      await navigator.clipboard.writeText(selectedText);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    const result = await copyTextToClipboard(selectedText);
+    if (!result.ok) {
+      console.error('Failed to copy:', result.error);
     }
 
     hideMenu();

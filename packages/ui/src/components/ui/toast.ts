@@ -3,12 +3,12 @@
 import { isValidElement } from "react"
 import { toast as sonnerToast } from "sonner"
 import type { ExternalToast } from "sonner"
+import { copyTextToClipboard } from '@/lib/clipboard'
 
 const copyToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy to clipboard:', err)
+  const result = await copyTextToClipboard(text)
+  if (!result.ok) {
+    console.error('Failed to copy to clipboard:', result.error)
   }
 }
 

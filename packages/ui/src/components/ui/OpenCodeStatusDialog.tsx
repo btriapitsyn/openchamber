@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from '@/components/ui';
 import { useUIStore } from '@/stores/useUIStore';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 export const OpenCodeStatusDialog: React.FC = () => {
   const {
@@ -16,19 +17,17 @@ export const OpenCodeStatusDialog: React.FC = () => {
     openCodeStatusText,
   } = useUIStore();
 
-  const handleCopy = React.useCallback(() => {
+  const handleCopy = React.useCallback(async () => {
     if (!openCodeStatusText) {
       return;
     }
 
-    void navigator.clipboard
-      .writeText(openCodeStatusText)
-      .then(() => {
-        toast.success('Copied', { description: 'OpenCode status copied to clipboard.' });
-      })
-      .catch(() => {
-        toast.error('Copy failed');
-      });
+    const result = await copyTextToClipboard(openCodeStatusText);
+    if (result.ok) {
+      toast.success('Copied', { description: 'OpenCode status copied to clipboard.' });
+      return;
+    }
+    toast.error('Copy failed');
   }, [openCodeStatusText]);
 
   return (

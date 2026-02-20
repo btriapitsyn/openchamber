@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
 import {
   DndContext,
@@ -1039,9 +1040,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   );
 
   const handleCopyShareUrl = React.useCallback((url: string, sessionId: string) => {
-    navigator.clipboard
-      .writeText(url)
-      .then(() => {
+    void copyTextToClipboard(url)
+      .then((result) => {
+        if (!result.ok) {
+          toast.error('Failed to copy URL');
+          return;
+        }
         setCopiedSessionId(sessionId);
         if (copyTimeout.current) {
           clearTimeout(copyTimeout.current);

@@ -4,6 +4,7 @@ import { isDesktopShell, isTauriShell } from '@/lib/desktop';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 const INSTALL_COMMAND = 'curl -fsSL https://opencode.ai/install | bash';
 const POLL_INTERVAL_MS = 3000;
@@ -146,12 +147,12 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
   }, [opencodeBinary]);
 
   const handleCopy = React.useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(INSTALL_COMMAND);
+    const result = await copyTextToClipboard(INSTALL_COMMAND);
+    if (result.ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    } else {
+      console.error('Failed to copy:', result.error);
     }
   }, []);
 

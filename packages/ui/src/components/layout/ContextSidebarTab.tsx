@@ -8,6 +8,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionStore } from '@/stores/useSessionStore';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 type SessionMessage = { info: Message; parts: Part[] };
 
@@ -303,8 +304,8 @@ export const ContextPanelContent: React.FC = () => {
   }, []);
 
   const handleCopyRawMessage = React.useCallback(async (messageId: string, value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
+    const result = await copyTextToClipboard(value);
+    if (result.ok) {
       setCopiedRawMessageId(messageId);
       if (copyResetTimeoutRef.current !== null) {
         window.clearTimeout(copyResetTimeoutRef.current);
@@ -313,7 +314,7 @@ export const ContextPanelContent: React.FC = () => {
         setCopiedRawMessageId((prev) => (prev === messageId ? null : prev));
         copyResetTimeoutRef.current = null;
       }, 2000);
-    } catch {
+    } else {
       setCopiedRawMessageId(null);
     }
   }, []);

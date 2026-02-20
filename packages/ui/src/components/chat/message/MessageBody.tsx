@@ -27,6 +27,7 @@ import { MULTIRUN_EXECUTION_FORK_PROMPT_META_TEXT } from '@/lib/messages/executi
 import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { TextSelectionMenu } from './TextSelectionMenu';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 type SubtaskPartLike = Part & {
     type: 'subtask';
@@ -165,32 +166,8 @@ const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) 
     const copyOutputToClipboard = React.useCallback(async () => {
         if (!hasOutput) return;
 
-        let succeeded = false;
-
-        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window !== 'undefined' && window.isSecureContext) {
-            try {
-                await navigator.clipboard.writeText(output);
-                succeeded = true;
-            } catch {
-                succeeded = false;
-            }
-        }
-
-        if (!succeeded && typeof document !== 'undefined') {
-            const textarea = document.createElement('textarea');
-            textarea.value = output;
-            textarea.setAttribute('readonly', '');
-            textarea.style.position = 'fixed';
-            textarea.style.top = '-1000px';
-            textarea.style.left = '-1000px';
-            document.body.appendChild(textarea);
-            textarea.select();
-            textarea.setSelectionRange(0, textarea.value.length);
-            succeeded = document.execCommand('copy');
-            document.body.removeChild(textarea);
-        }
-
-        if (!succeeded) return;
+        const result = await copyTextToClipboard(output);
+        if (!result.ok) return;
 
         clearCopiedResetTimeout();
         setCopiedOutput(true);

@@ -8,6 +8,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import { cn } from '@/lib/utils';
 import { RiFileCopyLine, RiCheckLine, RiDownloadLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
@@ -262,9 +263,10 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
     const tableEl = tableRef.current?.querySelector('table');
     if (!tableEl) return;
     
+    const data = extractTableData(tableEl);
+    const content = format === 'csv' ? tableToCSV(data) : tableToTSV(data);
+
     try {
-      const data = extractTableData(tableEl);
-      const content = format === 'csv' ? tableToCSV(data) : tableToTSV(data);
       await navigator.clipboard.write([
         new ClipboardItem({
           'text/plain': new Blob([content], { type: 'text/plain' }),
@@ -275,6 +277,13 @@ const TableCopyButton: React.FC<{ tableRef: React.RefObject<HTMLDivElement | nul
       setShowMenu(false);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
+      const fallbackResult = await copyTextToClipboard(content);
+      if (fallbackResult.ok) {
+        setCopied(true);
+        setShowMenu(false);
+        setTimeout(() => setCopied(false), 2000);
+        return;
+      }
       console.error('Failed to copy table:', err);
     }
   };
@@ -481,12 +490,12 @@ const CodeBlockWrapper: React.FC<CodeBlockWrapperProps> = ({ children, className
   const handleCopy = async () => {
     const code = getCodeContent();
     if (!code) return;
-    try {
-      await navigator.clipboard.writeText(code);
+    const result = await copyTextToClipboard(code);
+    if (result.ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy:', err);
+    } else {
+      console.error('Failed to copy:', result.error);
     }
   };
 
@@ -539,12 +548,12 @@ const MermaidCopyButton: React.FC<{ source: string }> = ({ source }) => {
 
   const handleCopy = async () => {
     if (!source) return;
-    try {
-      await navigator.clipboard.writeText(source);
+    const result = await copyTextToClipboard(source);
+    if (result.ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy diagram:', err);
+    } else {
+      console.error('Failed to copy diagram:', result.error);
     }
   };
 

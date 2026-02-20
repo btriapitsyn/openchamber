@@ -6,6 +6,7 @@ import { isMobileDeviceViaCSS } from '@/lib/device';
 import type { TerminalTheme } from '@/lib/terminalTheme';
 import { getGhosttyTerminalOptions } from '@/lib/terminalTheme';
 import type { TerminalChunk } from '@/stores/useTerminalStore';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 
@@ -365,29 +366,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         return;
       }
 
-      if (navigator.clipboard?.writeText) {
-        const copied = await navigator.clipboard
-          .writeText(text)
-          .then(() => true)
-          .catch(() => false);
-        if (copied) {
-          return;
-        }
-      }
-
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.style.position = 'fixed';
-        textarea.style.opacity = '0';
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-      } catch {
-        return;
-      }
+      await copyTextToClipboard(text);
     }, []);
 
     const hasCopyableSelectionInViewport = React.useCallback((): boolean => {

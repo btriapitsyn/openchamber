@@ -27,6 +27,7 @@ import {
   RiFileCopyLine,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 import {
   DropdownMenu,
@@ -447,8 +448,13 @@ const FileRow: React.FC<FileRowProps> = ({
               )}
               <DropdownMenuItem onClick={(e) => {
                 e.stopPropagation();
-                void navigator.clipboard.writeText(node.path);
-                toast.success('Path copied');
+                void copyTextToClipboard(node.path).then((result) => {
+                  if (result.ok) {
+                    toast.success('Path copied');
+                    return;
+                  }
+                  toast.error('Copy failed');
+                });
               }}>
                 <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
               </DropdownMenuItem>
@@ -2049,8 +2055,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 variant="ghost"
                 size="sm"
                 onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(fileContent);
+                  const result = await copyTextToClipboard(fileContent);
+                  if (result.ok) {
                     setCopiedContent(true);
                     if (copiedContentTimeoutRef.current !== null) {
                       window.clearTimeout(copiedContentTimeoutRef.current);
@@ -2058,7 +2064,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                     copiedContentTimeoutRef.current = window.setTimeout(() => {
                       setCopiedContent(false);
                     }, 1200);
-                  } catch {
+                  } else {
                     toast.error('Copy failed');
                   }
                 }}
@@ -2079,8 +2085,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 variant="ghost"
                 size="sm"
                 onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(displaySelectedPath);
+                  const result = await copyTextToClipboard(displaySelectedPath);
+                  if (result.ok) {
                     setCopiedPath(true);
                     if (copiedPathTimeoutRef.current !== null) {
                       window.clearTimeout(copiedPathTimeoutRef.current);
@@ -2088,7 +2094,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                     copiedPathTimeoutRef.current = window.setTimeout(() => {
                       setCopiedPath(false);
                     }, 1200);
-                  } catch {
+                  } else {
                     toast.error('Copy failed');
                   }
                 }}
@@ -2437,8 +2443,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               variant="ghost"
               size="sm"
               onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(fileContent);
+                const result = await copyTextToClipboard(fileContent);
+                if (result.ok) {
                   setCopiedContent(true);
                   if (copiedContentTimeoutRef.current !== null) {
                     window.clearTimeout(copiedContentTimeoutRef.current);
@@ -2446,7 +2452,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   copiedContentTimeoutRef.current = window.setTimeout(() => {
                     setCopiedContent(false);
                   }, 1200);
-                } catch {
+                } else {
                   toast.error('Copy failed');
                 }
               }}
@@ -2467,8 +2473,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               variant="ghost"
               size="sm"
               onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(displaySelectedPath);
+                const result = await copyTextToClipboard(displaySelectedPath);
+                if (result.ok) {
                   setCopiedPath(true);
                   if (copiedPathTimeoutRef.current !== null) {
                     window.clearTimeout(copiedPathTimeoutRef.current);
@@ -2476,7 +2482,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   copiedPathTimeoutRef.current = window.setTimeout(() => {
                     setCopiedPath(false);
                   }, 1200);
-                } catch {
+                } else {
                   toast.error('Copy failed');
                 }
               }}

@@ -21,6 +21,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
 import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
 import { toast } from '@/components/ui';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 const normalize = (value: string): string => {
   if (!value) return '';
@@ -428,8 +429,8 @@ export const PlanView: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(content);
+                const result = await copyTextToClipboard(content);
+                if (result.ok) {
                   setCopiedContent(true);
                   if (copiedContentTimeoutRef.current !== null) {
                     window.clearTimeout(copiedContentTimeoutRef.current);
@@ -437,7 +438,7 @@ export const PlanView: React.FC = () => {
                   copiedContentTimeoutRef.current = window.setTimeout(() => {
                     setCopiedContent(false);
                   }, 1200);
-                } catch {
+                } else {
                   // ignored
                 }
               }}
@@ -455,8 +456,8 @@ export const PlanView: React.FC = () => {
               variant="ghost"
               size="sm"
               onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(displayPath ?? resolvedPath);
+                const result = await copyTextToClipboard(displayPath ?? resolvedPath);
+                if (result.ok) {
                   setCopiedPath(true);
                   if (copiedTimeoutRef.current !== null) {
                     window.clearTimeout(copiedTimeoutRef.current);
@@ -464,7 +465,7 @@ export const PlanView: React.FC = () => {
                   copiedTimeoutRef.current = window.setTimeout(() => {
                     setCopiedPath(false);
                   }, 1200);
-                } catch {
+                } else {
                   // ignored
                 }
               }}

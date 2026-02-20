@@ -10,6 +10,7 @@ import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { RiCheckLine, RiClipboardLine, RiDownloadCloudLine, RiDownloadLine, RiExternalLinkLine, RiLoaderLine, RiRestartLine, RiTerminalLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { UpdateInfo, UpdateProgress } from '@/lib/desktop';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 type WebUpdateState = 'idle' | 'updating' | 'restarting' | 'reconnecting' | 'error';
 
@@ -172,11 +173,11 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   }, [open]);
 
   const handleCopyCommand = async () => {
-    try {
-      await navigator.clipboard.writeText(updateCommand);
+    const result = await copyTextToClipboard(updateCommand);
+    if (result.ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } else {
       // Clipboard access denied
     }
   };

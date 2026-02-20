@@ -14,6 +14,7 @@ import { toast } from '@/components/ui';
 import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine } from '@remixicon/react';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import { cn } from '@/lib/utils';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import type { ModelMetadata } from '@/types';
 
 const COMPACT_NUMBER_FORMATTER = new Intl.NumberFormat('en-US', {
@@ -448,23 +449,23 @@ export const ProvidersPage: React.FC = () => {
   };
 
   const handleCopyOAuthLink = async (url: string) => {
-    try {
-      await navigator.clipboard.writeText(url);
+    const result = await copyTextToClipboard(url);
+    if (result.ok) {
       toast.success('OAuth link copied');
-    } catch (error) {
-      console.error('Failed to copy OAuth link:', error);
-      toast.error('Failed to copy OAuth link');
+      return;
     }
+    console.error('Failed to copy OAuth link:', result.error);
+    toast.error('Failed to copy OAuth link');
   };
 
   const handleCopyOAuthCode = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
+    const result = await copyTextToClipboard(code);
+    if (result.ok) {
       toast.success('Device code copied');
-    } catch (error) {
-      console.error('Failed to copy device code:', error);
-      toast.error('Failed to copy device code');
+      return;
     }
+    console.error('Failed to copy device code:', result.error);
+    toast.error('Failed to copy device code');
   };
 
   const handleDisconnectProvider = async (providerId: string) => {

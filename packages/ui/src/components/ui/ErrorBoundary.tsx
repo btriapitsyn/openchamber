@@ -2,6 +2,7 @@ import React from 'react';
 import { RiErrorWarningLine, RiRestartLine } from '@remixicon/react';
 import { Button } from './button';
 import { Card, CardContent, CardHeader, CardTitle } from './card';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -41,14 +42,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     const componentStack = this.state.errorInfo?.componentStack ? `\n\nComponent stack:${this.state.errorInfo.componentStack}` : '';
     const payload = `${errorText}${stack}${componentStack}`;
 
-    try {
-      await navigator.clipboard.writeText(payload);
+    const result = await copyTextToClipboard(payload);
+    if (result.ok) {
       this.setState({ copied: true });
       window.setTimeout(() => {
         this.setState((prev) => (prev.copied ? { copied: false } : null));
       }, 1500);
-    } catch {
-      // ignore
     }
   };
 

@@ -45,6 +45,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useGitStatus } from '@/stores/useGitStore';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 
@@ -286,8 +287,13 @@ const FileRow: React.FC<FileRowProps> = ({
               )}
               <DropdownMenuItem onClick={(e) => {
                 e.stopPropagation();
-                void navigator.clipboard.writeText(node.path);
-                toast.success('Path copied');
+                void copyTextToClipboard(node.path).then((result) => {
+                  if (result.ok) {
+                    toast.success('Path copied');
+                    return;
+                  }
+                  toast.error('Copy failed');
+                });
               }}>
                 <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
               </DropdownMenuItem>

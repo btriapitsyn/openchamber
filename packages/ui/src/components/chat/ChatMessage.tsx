@@ -25,6 +25,7 @@ import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from '@/lib/messages/providerAuthError';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import type { TurnGroupingContext } from './hooks/useTurnGrouping';
+import { copyTextToClipboard } from '@/lib/clipboard';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
@@ -578,9 +579,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [isUser, previousRole, turnGroupingContext, streamPhase, message.info]);
 
     const handleCopyCode = React.useCallback((code: string) => {
-        navigator.clipboard.writeText(code);
-        setCopiedCode(code);
-        setTimeout(() => setCopiedCode(null), 2000);
+        void copyTextToClipboard(code).then((result) => {
+            if (!result.ok) {
+                return;
+            }
+            setCopiedCode(code);
+            setTimeout(() => setCopiedCode(null), 2000);
+        });
     }, []);
 
     const userMessageIdForTurn = turnGroupingContext?.turnId;
@@ -704,46 +709,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const hasTextContent = messageTextContent.length > 0;
 
-    const copyTextToClipboard = React.useCallback(async (text: string): Promise<boolean> => {
-        if (!text) {
-            return false;
-        }
-
-        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof window !== 'undefined' && window.isSecureContext) {
-            try {
-                await navigator.clipboard.writeText(text);
-                return true;
-            } catch (error) {
-                void error;
-            }
-        }
-
-        if (typeof document === 'undefined') {
-            return false;
-        }
-
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.top = '-1000px';
-        textarea.style.left = '-1000px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        textarea.setSelectionRange(0, textarea.value.length);
-        const succeeded = document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return succeeded;
-    }, []);
-
     const handleCopyMessage = React.useCallback(async () => {
-        const didCopy = await copyTextToClipboard(messageTextContent);
-        if (!didCopy) {
+        const result = await copyTextToClipboard(messageTextContent);
+        if (!result.ok) {
             return;
         }
         setCopiedMessage(true);
         setTimeout(() => setCopiedMessage(false), 2000);
-    }, [copyTextToClipboard, messageTextContent]);
+    }, [messageTextContent]);
 
     const handleRevert = React.useCallback(() => {
         if (!sessionId || !message.info.id) return;

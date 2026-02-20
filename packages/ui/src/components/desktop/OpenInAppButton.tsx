@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { fetchDesktopInstalledApps, isDesktopLocalOriginActive, isTauriShell, openDesktopPath, type DesktopSettings, type InstalledDesktopAppInfo } from '@/lib/desktop';
 import { RiArrowDownSLine, RiCheckLine, RiFileCopyLine, RiRefreshLine } from '@remixicon/react';
@@ -302,29 +303,9 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
   };
 
   const handleCopyPath = async () => {
-    if (typeof navigator === 'undefined') return;
     const text = directory;
-    let copied = false;
-    if (navigator.clipboard?.writeText) {
-      try {
-        await navigator.clipboard.writeText(text);
-        copied = true;
-      } catch {
-        // fall through
-      }
-    }
-    if (!copied) {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.setAttribute('readonly', '');
-      textarea.style.position = 'absolute';
-      textarea.style.left = '-9999px';
-      document.body.appendChild(textarea);
-      textarea.select();
-      copied = document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-    if (!copied) {
+    const result = await copyTextToClipboard(text);
+    if (!result.ok) {
       return;
     }
     toast.success('Path copied to clipboard');

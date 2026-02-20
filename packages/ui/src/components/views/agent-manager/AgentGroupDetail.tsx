@@ -8,6 +8,7 @@ import {
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useAgentGroupsStore, type AgentGroup, type AgentGroupSession } from '@/stores/useAgentGroupsStore';
@@ -88,14 +89,13 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
       toast.error('No worktree path available');
       return;
     }
-    navigator.clipboard
-      .writeText(selectedSession.path)
-      .then(() => {
+    void copyTextToClipboard(selectedSession.path).then((result) => {
+      if (result.ok) {
         toast.success('Worktree path copied');
-      })
-      .catch(() => {
-        toast.error('Failed to copy path');
-      });
+        return;
+      }
+      toast.error('Failed to copy path');
+    });
   }, [selectedSession?.path]);
 
   const handleRemoveSelectedWorktree = React.useCallback(async () => {
