@@ -526,6 +526,7 @@ export const useSessionStore = create<SessionStore>()(
                     return usePermissionStore.getState().addPermission(permission, contextData);
                 },
                 respondToPermission: (sessionId: string, requestId: string, response: PermissionResponse) => usePermissionStore.getState().respondToPermission(sessionId, requestId, response),
+                dismissPermission: (sessionId: string, requestId: string) => usePermissionStore.getState().dismissPermission(sessionId, requestId),
 
                 addQuestion: (question: QuestionRequest) => useQuestionStore.getState().addQuestion(question),
                 dismissQuestion: (sessionId: string, requestId: string) => useQuestionStore.getState().dismissQuestion(sessionId, requestId),

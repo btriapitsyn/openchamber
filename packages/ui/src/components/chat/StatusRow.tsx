@@ -53,6 +53,7 @@ interface StatusRowProps {
   isWaitingForPermission?: boolean;
   wasAborted?: boolean;
   abortActive?: boolean;
+  retryInfo?: { attempt?: number; next?: number } | null;
   // Abort state (for mobile/vscode)
   showAbort?: boolean;
   onAbort?: () => void;
@@ -67,6 +68,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   isWaitingForPermission,
   wasAborted,
   abortActive,
+  retryInfo,
   showAbort,
   onAbort,
   showAbortStatus,
@@ -211,6 +213,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
               statusText={statusText}
               isGenericStatus={isGenericStatus}
               isWaitingForPermission={isWaitingForPermission}
+              retryInfo={retryInfo}
             />
           ) : null}
         </div>

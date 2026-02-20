@@ -675,6 +675,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
+  const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const gitDirectories = useGitStore((state) => state.directories);
@@ -1810,7 +1811,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const hasChildren = node.children.length > 0;
       const isPinnedSession = pinnedSessionIds.has(session.id);
       const isExpanded = expandedParents.has(session.id);
-      const needsAttention = sessionAttentionStates.get(session.id)?.needsAttention === true;
+      const isSubtaskSession = Boolean((session as Session & { parentID?: string | null }).parentID);
+      const rawNeedsAttention = sessionAttentionStates.get(session.id)?.needsAttention === true;
+      // When notifyOnSubtasks is disabled, suppress attention dots for child sessions.
+      const needsAttention = rawNeedsAttention && (!isSubtaskSession || notifyOnSubtasks);
       const sessionSummary = session.summary as
         | {
           additions?: number | string | null;
@@ -2162,6 +2166,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       copiedSessionId,
       mobileVariant,
       openMenuSessionId,
+      notifyOnSubtasks,
     ],
   );
 
