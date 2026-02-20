@@ -36,6 +36,7 @@ type SkillsMode = 'manual' | 'external';
 interface SkillsCatalogPageProps {
   mode: SkillsMode;
   onModeChange: (mode: SkillsMode) => void;
+  showModeTabs?: boolean;
 }
 
 const loadSettings = async (): Promise<DesktopSettings | null> => {
@@ -61,7 +62,7 @@ const loadSettings = async (): Promise<DesktopSettings | null> => {
   }
 };
 
-export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onModeChange }) => {
+export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onModeChange, showModeTabs = true }) => {
   const {
     sources,
     itemsBySource,
@@ -144,15 +145,17 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
     <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
       <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div className="space-y-3">
-        <AnimatedTabs
-          tabs={[
-            { value: 'manual', label: 'Manual' },
-            { value: 'external', label: 'External' },
-          ]}
-          value={mode}
-          onValueChange={onModeChange}
-          animate={false}
-        />
+        {showModeTabs && (
+          <AnimatedTabs
+            tabs={[
+              { value: 'manual', label: 'Manual' },
+              { value: 'external', label: 'External' },
+            ]}
+            value={mode}
+            onValueChange={onModeChange}
+            animate={false}
+          />
+        )}
 
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-lg">Skills Catalog</h1>

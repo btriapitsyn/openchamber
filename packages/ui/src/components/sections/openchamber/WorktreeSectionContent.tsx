@@ -12,10 +12,14 @@ import { sessionEvents } from '@/lib/sessionEvents';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { formatPathForDisplay } from '@/lib/utils';
 
-export const WorktreeSectionContent: React.FC = () => {
+export interface WorktreeSectionContentProps {
+  projectRef?: { id: string; path: string } | null;
+}
+
+export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ projectRef: projectRefProp = null }) => {
   const activeProject = useProjectsStore((state) => state.getActiveProject());
 
-  const projectPath = activeProject?.path ?? null;
+  const projectPath = projectRefProp?.path ?? activeProject?.path ?? null;
 
   const { sessions, getWorktreeMetadata } = useSessionStore();
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
@@ -27,11 +31,14 @@ export const WorktreeSectionContent: React.FC = () => {
   const [isLoadingWorktrees, setIsLoadingWorktrees] = React.useState(false);
 
   const projectRef = React.useMemo(() => {
+    if (projectRefProp?.id && projectRefProp?.path) {
+      return { id: projectRefProp.id, path: projectRefProp.path };
+    }
     if (!activeProject?.id || !projectPath) {
       return null;
     }
     return { id: activeProject.id, path: projectPath };
-  }, [activeProject?.id, projectPath]);
+  }, [activeProject?.id, projectPath, projectRefProp?.id, projectRefProp?.path]);
 
   const refreshWorktrees = React.useCallback(async () => {
     if (!projectRef || isGitRepoLocal === false) return;

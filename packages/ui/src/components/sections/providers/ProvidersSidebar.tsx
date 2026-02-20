@@ -7,6 +7,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { RiAddLine, RiStackLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
+import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
 
 const ADD_PROVIDER_ID = '__add_provider__';
 
@@ -27,6 +28,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
       <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
+        <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">Total {providers.length}</span>
           <Button

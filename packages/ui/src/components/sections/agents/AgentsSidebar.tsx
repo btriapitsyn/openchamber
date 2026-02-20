@@ -25,6 +25,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import type { Agent } from '@opencode-ai/sdk/v2';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
 
 interface AgentsSidebarProps {
   onItemSelect?: () => void;
@@ -310,6 +311,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
       <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
+        <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">Total {visibleAgents.length}</span>
           <Button

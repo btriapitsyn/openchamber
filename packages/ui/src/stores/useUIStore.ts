@@ -161,6 +161,11 @@ interface UIStore {
   isSettingsDialogOpen: boolean;
   isModelSelectorOpen: boolean;
   sidebarSection: SidebarSection;
+
+  // Settings IA (new shell)
+  settingsPage: string;
+  settingsHasOpenedOnce: boolean;
+  settingsProjectsSelectedId: string | null;
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
   showReasoningTraces: boolean;
@@ -255,6 +260,8 @@ interface UIStore {
   setModelSelectorOpen: (open: boolean) => void;
   applyTheme: () => void;
   setSidebarSection: (section: SidebarSection) => void;
+  setSettingsPage: (slug: string) => void;
+  setSettingsProjectsSelectedId: (projectId: string | null) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
   setShowTextJustificationActivity: (value: boolean) => void;
@@ -342,6 +349,9 @@ export const useUIStore = create<UIStore>()(
         isSettingsDialogOpen: false,
         isModelSelectorOpen: false,
         sidebarSection: 'sessions',
+        settingsPage: 'home',
+        settingsHasOpenedOnce: false,
+        settingsProjectsSelectedId: null,
         eventStreamStatus: 'idle',
         eventStreamHint: null,
         showReasoningTraces: true,
@@ -780,7 +790,15 @@ export const useUIStore = create<UIStore>()(
         },
 
         setSettingsDialogOpen: (open) => {
-          set({ isSettingsDialogOpen: open });
+          set((state) => {
+            if (!open) {
+              return { isSettingsDialogOpen: false };
+            }
+            if (state.settingsHasOpenedOnce) {
+              return { isSettingsDialogOpen: true };
+            }
+            return { isSettingsDialogOpen: true, settingsHasOpenedOnce: true };
+          });
         },
 
         setModelSelectorOpen: (open) => {
@@ -789,6 +807,14 @@ export const useUIStore = create<UIStore>()(
 
         setSidebarSection: (section) => {
           set({ sidebarSection: section });
+        },
+
+        setSettingsPage: (slug) => {
+          set({ settingsPage: slug });
+        },
+
+        setSettingsProjectsSelectedId: (projectId) => {
+          set({ settingsProjectsSelectedId: projectId });
         },
 
         setEventStreamStatus: (status, hint) => {
@@ -1214,6 +1240,9 @@ export const useUIStore = create<UIStore>()(
           isSessionSwitcherOpen: state.isSessionSwitcherOpen,
           activeMainTab: state.activeMainTab,
           sidebarSection: state.sidebarSection,
+          settingsPage: state.settingsPage,
+          settingsHasOpenedOnce: state.settingsHasOpenedOnce,
+          settingsProjectsSelectedId: state.settingsProjectsSelectedId,
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           // Note: isSettingsDialogOpen intentionally NOT persisted
           showReasoningTraces: state.showReasoningTraces,

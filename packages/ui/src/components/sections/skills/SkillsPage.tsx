@@ -23,7 +23,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ButtonLarge } from '@/components/ui/button-large';
-import { AnimatedTabs } from '@/components/ui/animated-tabs';
 import { SkillsCatalogPage } from './catalog/SkillsCatalogPage';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -40,7 +39,15 @@ const LazyCodeMirrorEditor = React.lazy(async () => {
   return { default: module.CodeMirrorEditor };
 });
 
-export const SkillsPage: React.FC = () => {
+export interface SkillsPageProps {
+  view?: 'installed' | 'catalog';
+}
+
+const SkillsCatalogStandalone: React.FC = () => (
+  <SkillsCatalogPage mode="external" onModeChange={() => {}} showModeTabs={false} />
+);
+
+const SkillsInstalledPage: React.FC = () => {
   const { currentTheme } = useThemeSystem();
   const { 
     selectedSkillName, 
@@ -58,14 +65,7 @@ export const SkillsPage: React.FC = () => {
   const isNewSkill = Boolean(skillDraft && skillDraft.name === selectedSkillName && !selectedSkill);
   const hasStaleSelection = Boolean(selectedSkillName && !selectedSkill && !skillDraft);
 
-  type SkillsMode = 'manual' | 'external';
-  const [mode, setMode] = React.useState<SkillsMode>('manual');
-
-  React.useEffect(() => {
-    if (!isNewSkill && mode !== 'manual') {
-      setMode('manual');
-    }
-  }, [isNewSkill, mode]);
+  // Catalog is a first-class Settings page now; keep skill creation/editor focused.
 
   React.useEffect(() => {
     if (!hasStaleSelection) {
@@ -76,17 +76,7 @@ export const SkillsPage: React.FC = () => {
     setSelectedSkill(null);
   }, [hasStaleSelection, setSelectedSkill]);
 
-  const modeTabs = isNewSkill ? (
-    <AnimatedTabs
-      tabs={[
-        { value: 'manual', label: 'Manual' },
-        { value: 'external', label: 'External' },
-      ]}
-      value={mode}
-      onValueChange={setMode}
-      animate={false}
-    />
-  ) : null;
+  const modeTabs = null;
 
   const [draftName, setDraftName] = React.useState('');
   const [draftScope, setDraftScope] = React.useState<SkillScope>('user');
@@ -200,10 +190,6 @@ export const SkillsPage: React.FC = () => {
 
   // Load skill details when selection changes
   React.useEffect(() => {
-    if (mode === 'external') {
-      return;
-    }
-
     const loadSkillDetails = async () => {
       if (isNewSkill && skillDraft) {
         // Prefill from draft (for new or duplicated skills)
@@ -238,7 +224,7 @@ export const SkillsPage: React.FC = () => {
     };
 
     loadSkillDetails();
-  }, [selectedSkill, isNewSkill, selectedSkillName, skills, skillDraft, getSkillDetail, mode]);
+  }, [selectedSkill, isNewSkill, selectedSkillName, skills, skillDraft, getSkillDetail]);
 
   const handleSave = async () => {
     const skillName = isNewSkill ? draftName.trim().replace(/\s+/g, '-').toLowerCase() : selectedSkillName?.trim();
@@ -443,11 +429,6 @@ export const SkillsPage: React.FC = () => {
     setIsDeletingFile(false);
   };
 
-  if (isNewSkill && mode === 'external') {
-    return <SkillsCatalogPage mode={mode} onModeChange={setMode} />;
-  }
-
-
   // Show empty state when nothing is selected or selection is stale
   if ((!selectedSkillName && !skillDraft) || hasStaleSelection) {
     return (
@@ -474,7 +455,7 @@ export const SkillsPage: React.FC = () => {
   return (
     <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
       <div className="mx-auto max-w-3xl space-y-6 p-6">
-      {isNewSkill ? modeTabs : null}
+      {modeTabs}
 
       {/* Header */}
       <div className="space-y-1">
@@ -806,4 +787,8 @@ export const SkillsPage: React.FC = () => {
       </div>
     </ScrollableOverlay>
   );
+};
+
+export const SkillsPage: React.FC<SkillsPageProps> = ({ view = 'installed' }) => {
+  return view === 'catalog' ? <SkillsCatalogStandalone /> : <SkillsInstalledPage />;
 };

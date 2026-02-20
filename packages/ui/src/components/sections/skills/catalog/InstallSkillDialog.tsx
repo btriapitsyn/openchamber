@@ -15,11 +15,13 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import { RiFolderLine, RiRobot2Line, RiUser3Line } from '@remixicon/react';
 
 import type { SkillsCatalogItem } from '@/lib/api/types';
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
 import { InstallConflictsDialog, type ConflictDecision, type SkillConflict } from './InstallConflictsDialog';
 import {
   SKILL_LOCATION_OPTIONS,
@@ -39,6 +41,9 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
   const { installSkills, isInstalling } = useSkillsCatalogStore();
   const [scope, setScope] = React.useState<'user' | 'project'>('user');
   const [targetSource, setTargetSource] = React.useState<'opencode' | 'agents'>('opencode');
+  const projects = useProjectsStore((s) => s.projects);
+  const activeProjectId = useProjectsStore((s) => s.activeProjectId);
+  const [targetProjectId, setTargetProjectId] = React.useState<string | null>(null);
   const [conflictsOpen, setConflictsOpen] = React.useState(false);
   const [conflicts, setConflicts] = React.useState<SkillConflict[]>([]);
   const [baseRequest, setBaseRequest] = React.useState<{
@@ -47,16 +52,43 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     scope: 'user' | 'project';
     targetSource: 'opencode' | 'agents';
     skillDir: string;
+    directoryOverride?: string | null;
   } | null>(null);
 
   React.useEffect(() => {
     if (!open) return;
     setScope('user');
     setTargetSource('opencode');
+    setTargetProjectId(activeProjectId);
     setConflictsOpen(false);
     setConflicts([]);
     setBaseRequest(null);
-  }, [open]);
+  }, [open, activeProjectId]);
+
+  const resolvedTargetProjectId = React.useMemo(() => {
+    if (projects.length === 0) {
+      return null;
+    }
+    if (targetProjectId && projects.some((p) => p.id === targetProjectId)) {
+      return targetProjectId;
+    }
+    if (activeProjectId && projects.some((p) => p.id === activeProjectId)) {
+      return activeProjectId;
+    }
+    return projects[0]?.id ?? null;
+  }, [activeProjectId, projects, targetProjectId]);
+
+  const directoryOverride = React.useMemo(() => {
+    if (scope !== 'project') {
+      return null;
+    }
+    const id = resolvedTargetProjectId;
+    if (!id) {
+      return null;
+    }
+    const project = projects.find((p) => p.id === id);
+    return project?.path ?? null;
+  }, [projects, resolvedTargetProjectId, scope]);
 
   const doInstall = async (request: {
     source: string;
@@ -64,6 +96,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     scope: 'user' | 'project';
     targetSource: 'opencode' | 'agents';
     skillDir: string;
+    directoryOverride?: string | null;
     conflictDecisions?: Record<string, ConflictDecision>;
   }) => {
     // Build selection with clawdhub metadata if present
@@ -86,7 +119,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
       selections: [selection],
       conflictPolicy: 'prompt',
       conflictDecisions: request.conflictDecisions,
-    });
+    }, { directory: request.directoryOverride ?? null });
 
     if (result.ok) {
       toast.success('Skill installed successfully');
@@ -101,6 +134,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
         scope: request.scope,
         targetSource: request.targetSource,
         skillDir: request.skillDir,
+        directoryOverride: request.directoryOverride ?? null,
       });
       setConflicts(result.error.conflicts);
       setConflictsOpen(true);
@@ -119,6 +153,20 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
     return null;
   }
 
+  // computed inline in UI; keep vars minimal
+  const targetProjectLabel = (() => {
+    if (scope !== 'project') {
+      return null;
+    }
+    const id = resolvedTargetProjectId;
+    if (!id) {
+      return null;
+    }
+    const project = projects.find((p) => p.id === id);
+    return project?.label || project?.path || null;
+  })();
+
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,9 +178,93 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
+          <div className="mt-2 space-y-2">
+            <div className="rounded-lg px-2 py-2">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="typography-ui-label font-medium text-foreground">Destination</span>
+                    <span className="typography-meta text-muted-foreground truncate">
+                      {locationLabel(scope, targetSource)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2 pl-0 pr-1 pb-1">
+                <Select
+                  value={locationValueFrom(scope, targetSource)}
+                  onValueChange={(v) => {
+                    const next = locationPartsFrom(v as SkillLocationValue);
+                    setScope(next.scope);
+                    setTargetSource(next.source === 'agents' ? 'agents' : 'opencode');
+                  }}
+                >
+                  <SelectTrigger className="!h-9 w-full justify-between">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
+                      {targetSource === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                      <span className="min-w-0 truncate">{locationLabel(scope, targetSource)}</span>
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent align="start">
+                    {SKILL_LOCATION_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="pr-2 [&>span:first-child]:hidden">
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-2">
+                            {option.scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
+                            {option.source === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
+                            <span>{option.label}</span>
+                          </div>
+                          <span className="typography-micro text-muted-foreground ml-6">{option.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {scope === 'project' ? (
+              <div className="rounded-lg px-2 py-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="typography-ui-label font-medium text-foreground">Project</span>
+                      <span className="typography-meta text-muted-foreground truncate">{targetProjectLabel || 'Choose'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-2 pl-0 pr-1 pb-1">
+                  {projects.length === 0 ? (
+                    <div className="h-9 rounded-lg border border-border/60 bg-[var(--surface-elevated)] px-2 flex items-center typography-meta text-muted-foreground">
+                      No projects available
+                    </div>
+                  ) : (
+                    <Select
+                      value={resolvedTargetProjectId ?? ''}
+                      onValueChange={(v) => setTargetProjectId(v)}
+                      disabled={projects.length === 1}
+                    >
+                      <SelectTrigger className="!h-9 w-full justify-between">
+                        <SelectValue placeholder="Choose project" />
+                      </SelectTrigger>
+                      <SelectContent align="start">
+                        {projects.map((p) => (
+                          <SelectItem key={p.id} value={p.id} className="pr-2 [&>span:first-child]:hidden">
+                            {p.label || p.path}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            ) : null}
+
             {item.warnings?.length ? (
-              <div className="rounded-lg border bg-muted/30 px-3 py-2">
+              <div className="rounded-lg border bg-[var(--surface-elevated)] px-3 py-2">
                 <div className="typography-micro text-muted-foreground">Warnings</div>
                 <ul className="mt-1 space-y-1">
                   {item.warnings.map((w) => (
@@ -143,61 +275,27 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
             ) : null}
           </div>
 
-          <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-            <div className="flex items-center gap-2">
-              <Select
-                value={locationValueFrom(scope, targetSource)}
-                onValueChange={(v) => {
-                  const next = locationPartsFrom(v as SkillLocationValue);
-                  setScope(next.scope);
-                  setTargetSource(next.source === 'agents' ? 'agents' : 'opencode');
-                }}
-              >
-                <SelectTrigger className="!h-9 w-full sm:w-auto">
-                  <span className="flex items-center gap-2 whitespace-nowrap">
-                    {scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
-                    {targetSource === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
-                    <span>{locationLabel(scope, targetSource)}</span>
-                  </span>
-                </SelectTrigger>
-                <SelectContent align="start">
-                  {SKILL_LOCATION_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value} className="pr-2 [&>span:first-child]:hidden">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          {option.scope === 'user' ? <RiUser3Line className="h-4 w-4" /> : <RiFolderLine className="h-4 w-4" />}
-                          {option.source === 'agents' ? <RiRobot2Line className="h-4 w-4" /> : null}
-                          <span>{option.label}</span>
-                        </div>
-                        <span className="typography-micro text-muted-foreground ml-6">{option.description}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <Button className="w-full sm:w-auto" variant="ghost" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button
-                className="w-full sm:w-auto"
-                variant="default"
-                disabled={isInstalling || !item.installable}
-                onClick={() =>
-                  void doInstall({
-                    source: item.repoSource,
-                    subpath: item.repoSubpath,
-                    scope,
-                    targetSource,
-                    skillDir: item.skillDir,
-                  })
-                }
-              >
-                {isInstalling ? 'Installing…' : 'Install'}
-              </Button>
-            </div>
+          <DialogFooter className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button className="w-full sm:w-auto" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              variant="default"
+              disabled={isInstalling || !item.installable || (scope === 'project' && !directoryOverride)}
+              onClick={() =>
+                void doInstall({
+                  source: item.repoSource,
+                  subpath: item.repoSubpath,
+                  scope,
+                  targetSource,
+                  skillDir: item.skillDir,
+                  directoryOverride,
+                })
+              }
+            >
+              {isInstalling ? 'Installing…' : 'Install'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -215,6 +313,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
             targetSource: baseRequest.targetSource,
             skillDir: baseRequest.skillDir,
             conflictDecisions: decisions,
+            directoryOverride: baseRequest.directoryOverride ?? null,
           });
           setConflictsOpen(false);
         }}
