@@ -9,6 +9,7 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiAddLine,
+  RiFolderAddLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { SessionFolder } from '@/stores/useSessionFoldersStore';
@@ -16,6 +17,8 @@ import type { SessionFolder } from '@/stores/useSessionFoldersStore';
 interface SessionFolderItemProps<TSessionNode> {
   folder: SessionFolder;
   sessions: TSessionNode[];
+  /** Sub-folders that belong directly to this folder */
+  subFolderItems?: React.ReactNode;
   isCollapsed: boolean;
   onToggle: () => void;
   onRename: (name: string) => void;
@@ -38,13 +41,18 @@ interface SessionFolderItemProps<TSessionNode> {
   droppableRef?: (node: HTMLElement | null) => void;
   /** Whether a draggable session is currently hovering over this folder */
   isDropTarget?: boolean;
-  /** Create a new session scoped to this folder's group */
+  /** Create a new session scoped to this folder */
   onNewSession?: () => void;
+  /** Create a new sub-folder inside this folder */
+  onNewSubFolder?: () => void;
+  /** Visual indent depth (0 = root folder, 1 = sub-folder) */
+  depth?: number;
 }
 
 const SessionFolderItemBase = <TSessionNode,>({
   folder,
   sessions,
+  subFolderItems,
   isCollapsed,
   onToggle,
   onRename,
@@ -61,6 +69,8 @@ const SessionFolderItemBase = <TSessionNode,>({
   droppableRef,
   isDropTarget = false,
   onNewSession,
+  onNewSubFolder,
+  depth = 0,
 }: SessionFolderItemProps<TSessionNode>) => {
   const [localRenaming, setLocalRenaming] = React.useState(false);
   const [localDraft, setLocalDraft] = React.useState('');
@@ -105,7 +115,7 @@ const SessionFolderItemBase = <TSessionNode,>({
     [isRenaming, onRenameDraftChange],
   );
 
-  // Auto-focus rename when externally triggered (e.g. from session menu)
+  // Auto-focus rename when externally triggered
   React.useEffect(() => {
     if (!isRenaming) return;
     const focusInput = () => {
@@ -123,9 +133,10 @@ const SessionFolderItemBase = <TSessionNode,>({
   }, [isRenaming]);
 
   const FolderIcon = isCollapsed ? RiFolderLine : RiFolderOpenLine;
+  const isSubFolder = depth > 0;
 
   return (
-    <div className="oc-folder">
+    <div className={cn('oc-folder', isSubFolder && 'ml-3')}>
       {/* Folder header – also acts as a drop zone when droppableRef is provided */}
       <div
         ref={droppableRef}
@@ -234,8 +245,24 @@ const SessionFolderItemBase = <TSessionNode,>({
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   aria-label={`New session in ${folder.name}`}
+                  title="New session"
                 >
                   <RiAddLine className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+              {/* Only allow sub-folders at depth 0 (one level deep max) */}
+              {onNewSubFolder && depth === 0 ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onNewSubFolder();
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label={`New sub-folder in ${folder.name}`}
+                  title="New sub-folder"
+                >
+                  <RiFolderAddLine className="h-3.5 w-3.5" />
                 </button>
               ) : null}
               <button
@@ -268,15 +295,18 @@ const SessionFolderItemBase = <TSessionNode,>({
       {/* Folder body */}
       {!isCollapsed ? (
         <div className="pb-1 pl-2">
+          {/* Sub-folders first */}
+          {subFolderItems}
+          {/* Then sessions */}
           {sessions.length > 0 ? (
             sessions.map((node) =>
               renderSessionNode(node, 0, groupDirectory ?? null, projectId ?? null),
             )
-          ) : (
+          ) : !subFolderItems ? (
             <div className="py-1 pl-1.5 text-left typography-micro text-muted-foreground/70">
               Empty folder
             </div>
-          )}
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -848,6 +848,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   // Session Folders store
+  // Subscribe to foldersMap so renderSessionNode/renderGroupSessions re-run when any folder changes.
+  // getFoldersForScope is a stable function selector and does not trigger re-renders on its own.
   const foldersMap = useSessionFoldersStore((state) => state.foldersMap);
   const collapsedFolderIds = useSessionFoldersStore((state) => state.collapsedFolderIds);
   const getFoldersForScope = useSessionFoldersStore((state) => state.getFoldersForScope);
@@ -2451,8 +2453,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       removeSessionFromFolder,
       createFolder,
       notifyOnSubtasks,
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      foldersMap,
+      foldersMap, // trigger re-render when folder data changes (getFoldersForScope is a stable fn selector)
     ],
   );
 
@@ -2469,6 +2470,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const ungroupedSessions = group.sessions.filter((node) => !sessionIdsInFolders.has(node.session.id));
 
       // ALL folders for this scope – including empty ones (so newly created folders show up)
+      // Build enriched list: { folder, nodes } for every folder in scope
       const allFoldersForGroup = scopeFolders.map((folder) => {
         const nodes = folder.sessionIds
           .map((sid) => group.sessions.find((node) => node.session.id === sid))
@@ -2476,6 +2478,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           .sort((a, b) => compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds, sessionAttentionStates));
         return { folder, nodes };
       });
+
+      // Root-level folders (no parentId) — sub-folders are rendered inside their parent
+      const rootFolders = allFoldersForGroup.filter(({ folder }) => !folder.parentId);
 
       const totalSessions = ungroupedSessions.length;
       const visibleSessions = isExpanded ? ungroupedSessions : ungroupedSessions.slice(0, maxVisible);
@@ -2505,17 +2510,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           && normalizedGroupDirectory === currentSessionDirectory,
       );
 
-      // VS Code sessions list uses a separate header (Agent Manager / New Session).
-      // When the caller requests a flat list (hideGroupLabel), omit the per-group header entirely.
-      // Shared folder rendering helper (used in both branches).
-      // Uses DroppableFolderWrapper so each folder header becomes a DnD drop zone.
-      const renderFolderItems = () =>
-        allFoldersForGroup.map(({ folder, nodes }) => (
+      // Helper: render a single folder item (root or sub) wrapped in DroppableFolderWrapper
+      const renderOneFolderItem = (folder: (typeof allFoldersForGroup)[number]['folder'], nodes: SessionNode[], depth: number) => {
+        // Find direct sub-folders of this folder
+        const directSubFolders = allFoldersForGroup.filter(({ folder: f }) => f.parentId === folder.id);
+        const subFolderItems = directSubFolders.length > 0 ? (
+          <>{directSubFolders.map(({ folder: sf, nodes: sn }) => renderOneFolderItem(sf, sn, depth + 1))}</>
+        ) : undefined;
+
+        return (
           <DroppableFolderWrapper key={folder.id} folderId={folder.id}>
             {(droppableRef, isDropTarget) => (
               <SessionFolderItem
                 folder={folder}
                 sessions={nodes}
+                subFolderItems={subFolderItems}
                 isCollapsed={collapsedFolderIds.has(folder.id)}
                 onToggle={() => toggleFolderCollapse(folder.id)}
                 onRename={(name) => {
@@ -2545,6 +2554,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 }}
                 droppableRef={droppableRef}
                 isDropTarget={isDropTarget}
+                depth={depth}
                 onNewSession={() => {
                   if (projectId && projectId !== activeProjectId) {
                     setActiveProject(projectId);
@@ -2555,10 +2565,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   }
                   openNewSessionDraft({ directoryOverride: group.directory, targetFolderId: folder.id });
                 }}
+                onNewSubFolder={depth === 0 ? () => {
+                  if (!folderScopeKey) return;
+                  const newSub = createFolder(folderScopeKey, 'New folder', folder.id);
+                  setRenamingFolderId(newSub.id);
+                  setRenameFolderDraft('New folder');
+                } : undefined}
               />
             )}
           </DroppableFolderWrapper>
-        ));
+        );
+      };
+
+      // VS Code sessions list uses a separate header (Agent Manager / New Session).
+      // When the caller requests a flat list (hideGroupLabel), omit the per-group header entirely.
+      // Shared folder rendering helper (used in both branches).
+      // Uses DroppableFolderWrapper so each folder header becomes a DnD drop zone.
+      const renderFolderItems = () =>
+        rootFolders.map(({ folder, nodes }) => renderOneFolderItem(folder, nodes, 0));
 
       if (hideGroupLabel) {
         return (
@@ -2805,8 +2829,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       renameFolderDraft,
       pinnedSessionIds,
       sessionAttentionStates,
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      foldersMap,
+      foldersMap, // trigger re-render when folder data changes (getFoldersForScope is a stable fn selector)
     ]
   );
 
