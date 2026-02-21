@@ -8,6 +8,7 @@ import {
   RiDeleteBinLine,
   RiCheckLine,
   RiCloseLine,
+  RiAddLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import type { SessionFolder } from '@/stores/useSessionFoldersStore';
@@ -33,6 +34,12 @@ interface SessionFolderItemProps<TSessionNode> {
   onRenameDraftChange?: (value: string) => void;
   onRenameSave?: () => void;
   onRenameCancel?: () => void;
+  /** Ref callback from useDroppable – attach to folder header to make it a drop zone */
+  droppableRef?: (node: HTMLElement | null) => void;
+  /** Whether a draggable session is currently hovering over this folder */
+  isDropTarget?: boolean;
+  /** Create a new session scoped to this folder's group */
+  onNewSession?: () => void;
 }
 
 const SessionFolderItemBase = <TSessionNode,>({
@@ -51,6 +58,9 @@ const SessionFolderItemBase = <TSessionNode,>({
   onRenameDraftChange,
   onRenameSave,
   onRenameCancel,
+  droppableRef,
+  isDropTarget = false,
+  onNewSession,
 }: SessionFolderItemProps<TSessionNode>) => {
   const [localRenaming, setLocalRenaming] = React.useState(false);
   const [localDraft, setLocalDraft] = React.useState('');
@@ -116,11 +126,13 @@ const SessionFolderItemBase = <TSessionNode,>({
 
   return (
     <div className="oc-folder">
-      {/* Folder header */}
+      {/* Folder header – also acts as a drop zone when droppableRef is provided */}
       <div
+        ref={droppableRef}
         className={cn(
           'group/folder flex items-center justify-between gap-1.5 py-1 min-w-0 rounded-sm',
           'hover:bg-interactive-hover/50 cursor-pointer',
+          isDropTarget && 'bg-primary/10 ring-1 ring-inset ring-primary/30',
         )}
         onClick={renaming ? undefined : onToggle}
         role={renaming ? undefined : 'button'}
@@ -138,7 +150,7 @@ const SessionFolderItemBase = <TSessionNode,>({
         aria-label={isCollapsed ? `Expand folder ${folder.name}` : `Collapse folder ${folder.name}`}
       >
         <div className="min-w-0 flex items-center gap-1.5 pl-1.5 flex-1">
-          <FolderIcon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+          <FolderIcon className={cn('h-3.5 w-3.5 flex-shrink-0', isDropTarget ? 'text-primary' : 'text-muted-foreground')} />
 
           {renaming ? (
             <form
@@ -188,7 +200,7 @@ const SessionFolderItemBase = <TSessionNode,>({
             </form>
           ) : (
             <div className="min-w-0 flex items-center gap-1.5 flex-1">
-              <span className="typography-ui-label font-semibold text-muted-foreground truncate">
+              <span className={cn('typography-ui-label font-semibold truncate', isDropTarget ? 'text-primary' : 'text-muted-foreground')}>
                 {folder.name}
               </span>
               <span className="typography-micro text-muted-foreground/70 flex-shrink-0">
@@ -213,6 +225,19 @@ const SessionFolderItemBase = <TSessionNode,>({
                 mobileVariant ? 'opacity-100' : 'opacity-0 group-hover/folder:opacity-100 group-focus-within/folder:opacity-100',
               )}
             >
+              {onNewSession ? (
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onNewSession();
+                  }}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  aria-label={`New session in ${folder.name}`}
+                >
+                  <RiAddLine className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={(event) => {

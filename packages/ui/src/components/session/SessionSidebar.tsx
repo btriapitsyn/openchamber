@@ -11,7 +11,10 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDraggable,
+  useDroppable,
   type Modifier,
+  type DragEndEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -164,11 +167,26 @@ const getSessionCreatedAt = (session: Session): number => {
   return toFiniteNumber(session.time?.created) ?? 0;
 };
 
-const getSessionUpdatedAt = (session: Session): number => {
-  return toFiniteNumber(session.time?.updated) ?? 0;
+const getSessionUpdatedAt = (session: Session, attentionStates?: Map<string, { lastUserMessageAt: number | null; lastStatusChangeAt: number }>): number => {
+  const baseUpdated = toFiniteNumber(session.time?.updated) ?? 0;
+  if (!attentionStates) return baseUpdated;
+
+  const attention = attentionStates.get(session.id);
+  if (!attention) return baseUpdated;
+
+  return Math.max(
+    baseUpdated,
+    attention.lastUserMessageAt ?? 0,
+    attention.lastStatusChangeAt ?? 0
+  );
 };
 
-const compareSessionsByPinnedAndTime = (a: Session, b: Session, pinnedSessionIds: Set<string>): number => {
+const compareSessionsByPinnedAndTime = (
+  a: Session,
+  b: Session,
+  pinnedSessionIds: Set<string>,
+  attentionStates?: Map<string, { lastUserMessageAt: number | null; lastStatusChangeAt: number }>
+): number => {
   const aPinned = pinnedSessionIds.has(a.id);
   const bPinned = pinnedSessionIds.has(b.id);
   if (aPinned !== bPinned) {
@@ -179,7 +197,7 @@ const compareSessionsByPinnedAndTime = (a: Session, b: Session, pinnedSessionIds
     return getSessionCreatedAt(b) - getSessionCreatedAt(a);
   }
 
-  return getSessionUpdatedAt(b) - getSessionUpdatedAt(a);
+  return getSessionUpdatedAt(b, attentionStates) - getSessionUpdatedAt(a, attentionStates);
 };
 
 const centerDragOverlayUnderPointer: Modifier = ({ transform, activeNodeRect, activatorEvent }) => {
@@ -218,6 +236,148 @@ type SessionGroup = {
   directory: string | null;
   sessions: SessionNode[];
 };
+
+// --- Session Folder DnD helpers ---
+
+/**
+ * Wraps a session row so the entire row is draggable onto folder drop zones.
+ * Stops pointer propagation so the outer group-reorder DndContext does not
+ * capture the drag (otherwise dragging a session moves the whole workspace group).
+ */
+const DraggableSessionRow: React.FC<{
+  sessionId: string;
+  sessionDirectory: string | null;
+  sessionTitle: string;
+  children: React.ReactNode;
+}> = ({ sessionId, sessionDirectory, sessionTitle, children }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `session-drag:${sessionId}`,
+    data: { type: 'session', sessionId, sessionDirectory, sessionTitle },
+  });
+
+  const handlePointerDown = React.useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Stop event from bubbling to the outer group-reorder DndContext
+      e.stopPropagation();
+      if (listeners?.onPointerDown) {
+        (listeners.onPointerDown as (event: React.PointerEvent) => void)(e);
+      }
+    },
+    [listeners],
+  );
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      onPointerDown={handlePointerDown}
+      className={isDragging ? 'opacity-40' : undefined}
+    >
+      {children}
+    </div>
+  );
+};
+
+/**
+ * Wraps a <SessionFolderItem> and makes it a droppable target.
+ * Uses a render-prop pattern so the ref/isOver state can be passed
+ * down as props (avoids hooks-in-callbacks restrictions).
+ */
+const DroppableFolderWrapper: React.FC<{
+  folderId: string;
+  children: (
+    droppableRef: (node: HTMLElement | null) => void,
+    isOver: boolean,
+  ) => React.ReactNode;
+}> = ({ folderId, children }) => {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `folder-drop:${folderId}`,
+    data: { type: 'folder', folderId },
+  });
+  return <>{children(setNodeRef, isOver)}</>;
+};
+
+/**
+ * Provides an inner DndContext scoped to one group, allowing sessions to be
+ * dragged onto folder headers within that group.
+ */
+const SessionFolderDndScope: React.FC<{
+  scopeKey: string | null;
+  hasFolders: boolean;
+  onSessionDroppedOnFolder: (sessionId: string, folderId: string) => void;
+  children: React.ReactNode;
+}> = ({ scopeKey, hasFolders, onSessionDroppedOnFolder, children }) => {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+  );
+  const [activeDragId, setActiveDragId] = React.useState<string | null>(null);
+  const [activeDragTitle, setActiveDragTitle] = React.useState<string>('Session');
+  const [activeDragWidth, setActiveDragWidth] = React.useState<number | null>(null);
+  const [activeDragHeight, setActiveDragHeight] = React.useState<number | null>(null);
+
+  // Always need DndContext when scopeKey exists (DraggableSessionRow requires it).
+  // When there are no folders the drag just has nowhere to land – that's fine.
+  if (!scopeKey) {
+    return <>{children}</>;
+  }
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
+    setActiveDragWidth(null);
+    setActiveDragHeight(null);
+    const { active, over } = event;
+    if (!over) return;
+    const activeData = active.data.current as { type?: string; sessionId?: string } | undefined;
+    const overData = over.data.current as { type?: string; folderId?: string } | undefined;
+    if (activeData?.type === 'session' && activeData.sessionId && overData?.type === 'folder' && overData.folderId) {
+      onSessionDroppedOnFolder(activeData.sessionId, overData.folderId);
+    }
+  };
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={(event) => {
+        const data = event.active.data.current as { type?: string; sessionId?: string; sessionTitle?: string } | undefined;
+        if (data?.type === 'session' && data.sessionId) {
+          setActiveDragId(data.sessionId);
+          setActiveDragTitle(data.sessionTitle ?? 'Session');
+          const width = event.active.rect.current.initial?.width;
+          const height = event.active.rect.current.initial?.height;
+          setActiveDragWidth(typeof width === 'number' ? width : null);
+          setActiveDragHeight(typeof height === 'number' ? height : null);
+        }
+      }}
+      onDragCancel={() => {
+        setActiveDragId(null);
+        setActiveDragWidth(null);
+        setActiveDragHeight(null);
+      }}
+      onDragEnd={handleDragEnd}
+    >
+      {children}
+      <DragOverlay dropAnimation={null}>
+        {activeDragId && hasFolders ? (
+          <div 
+            style={{ 
+              width: activeDragWidth ? `${activeDragWidth}px` : 'auto',
+              height: activeDragHeight ? `${activeDragHeight}px` : 'auto'
+            }}
+            className="flex items-center rounded-md border border-border bg-sidebar px-1.5 py-1 shadow-lg opacity-90 pointer-events-none"
+          >
+            <RiStickyNoteLine className="h-4 w-4 text-muted-foreground mr-2 flex-shrink-0" />
+            <div className="min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">
+              {activeDragTitle}
+            </div>
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+};
+
+// --- End Session Folder DnD helpers ---
 
 interface SortableProjectItemProps {
   id: string;
@@ -826,8 +986,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, []);
 
   const sortedSessions = React.useMemo(() => {
-    return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
-  }, [sessions, pinnedSessionIds]);
+    return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates));
+  }, [sessions, pinnedSessionIds, sessionAttentionStates]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -881,9 +1041,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       collection.push(session);
       map.set(parentID, collection);
     });
-    map.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
+    map.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates)));
     return map;
-  }, [sortedSessions, pinnedSessionIds]);
+  }, [sortedSessions, pinnedSessionIds, sessionAttentionStates]);
 
   React.useEffect(() => {
     const directories = new Set<string>();
@@ -1216,7 +1376,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       projectIsRepo: boolean,
     ) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
-      const sortedProjectSessions = [...projectSessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
+      const sortedProjectSessions = [...projectSessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates));
 
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
       const childrenMap = new Map<string, Session[]>();
@@ -1229,7 +1389,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         collection.push(session);
         childrenMap.set(parentID, collection);
       });
-      childrenMap.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
+      childrenMap.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates)));
 
       // Build worktree lookup map
       const worktreeByPath = new Map<string, WorktreeMetadata>();
@@ -1362,7 +1522,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       return groups;
     },
-    [homeDirectory, worktreeMetadata, pinnedSessionIds, gitDirectories]
+    [homeDirectory, worktreeMetadata, pinnedSessionIds, gitDirectories, sessionAttentionStates]
   );
 
   const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
@@ -1491,11 +1651,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       idsByScope.set(directory, new Set([session.id]));
     });
 
-    const allScopeKeys = new Set([...Object.keys(foldersMap), ...idsByScope.keys()]);
+    const currentFoldersMap = useSessionFoldersStore.getState().foldersMap;
+    const allScopeKeys = new Set([...Object.keys(currentFoldersMap), ...idsByScope.keys()]);
     allScopeKeys.forEach((scopeKey) => {
       cleanupSessions(scopeKey, idsByScope.get(scopeKey) ?? new Set<string>());
     });
-  }, [sessions, foldersMap, cleanupSessions]);
+  }, [sessions, cleanupSessions]); // removed foldersMap from deps to prevent cascade re-renders
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
@@ -1973,6 +2134,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       return (
         <React.Fragment key={session.id}>
+          <DraggableSessionRow sessionId={session.id} sessionDirectory={sessionDirectory ?? null} sessionTitle={sessionTitle}>
           <div
             className={cn(
               'group relative flex items-center rounded-md px-1.5 py-1',
@@ -2249,6 +2411,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               </div>
             </div>
           </div>
+          </DraggableSessionRow>
           {hasChildren && isExpanded
             ? node.children.map((child) =>
                 renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory, projectId),
@@ -2288,6 +2451,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       removeSessionFromFolder,
       createFolder,
       notifyOnSubtasks,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      foldersMap,
     ],
   );
 
@@ -2303,15 +2468,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       const sessionIdsInFolders = new Set(scopeFolders.flatMap((f) => f.sessionIds));
       const ungroupedSessions = group.sessions.filter((node) => !sessionIdsInFolders.has(node.session.id));
 
-      // Folders that have sessions in THIS group
-      const foldersWithSessions = scopeFolders
-        .map((folder) => {
-          const nodes = folder.sessionIds
-            .map((sid) => group.sessions.find((node) => node.session.id === sid))
-            .filter((n): n is SessionNode => Boolean(n));
-          return { folder, nodes };
-        })
-        .filter(({ nodes }) => nodes.length > 0);
+      // ALL folders for this scope – including empty ones (so newly created folders show up)
+      const allFoldersForGroup = scopeFolders.map((folder) => {
+        const nodes = folder.sessionIds
+          .map((sid) => group.sessions.find((node) => node.session.id === sid))
+          .filter((n): n is SessionNode => Boolean(n))
+          .sort((a, b) => compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds, sessionAttentionStates));
+        return { folder, nodes };
+      });
 
       const totalSessions = ungroupedSessions.length;
       const visibleSessions = isExpanded ? ungroupedSessions : ungroupedSessions.slice(0, maxVisible);
@@ -2343,50 +2507,73 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       // VS Code sessions list uses a separate header (Agent Manager / New Session).
       // When the caller requests a flat list (hideGroupLabel), omit the per-group header entirely.
-      // Shared folder rendering helper (used in both branches)
+      // Shared folder rendering helper (used in both branches).
+      // Uses DroppableFolderWrapper so each folder header becomes a DnD drop zone.
       const renderFolderItems = () =>
-        foldersWithSessions.map(({ folder, nodes }) => (
-          <SessionFolderItem
-            key={folder.id}
-            folder={folder}
-            sessions={nodes}
-            isCollapsed={collapsedFolderIds.has(folder.id)}
-            onToggle={() => toggleFolderCollapse(folder.id)}
-            onRename={(name) => {
-              if (folderScopeKey) renameFolder(folderScopeKey, folder.id, name);
-            }}
-            onDelete={() => {
-              if (folderScopeKey) deleteFolder(folderScopeKey, folder.id);
-            }}
-            renderSessionNode={renderSessionNode}
-            groupDirectory={group.directory}
-            projectId={projectId}
-            mobileVariant={mobileVariant}
-            isRenaming={renamingFolderId === folder.id}
-            renameDraft={renamingFolderId === folder.id ? renameFolderDraft : undefined}
-            onRenameDraftChange={(value) => setRenameFolderDraft(value)}
-            onRenameSave={() => {
-              const trimmed = renameFolderDraft.trim();
-              if (trimmed && folderScopeKey) {
-                renameFolder(folderScopeKey, folder.id, trimmed);
-              }
-              setRenamingFolderId(null);
-              setRenameFolderDraft('');
-            }}
-            onRenameCancel={() => {
-              setRenamingFolderId(null);
-              setRenameFolderDraft('');
-            }}
-          />
+        allFoldersForGroup.map(({ folder, nodes }) => (
+          <DroppableFolderWrapper key={folder.id} folderId={folder.id}>
+            {(droppableRef, isDropTarget) => (
+              <SessionFolderItem
+                folder={folder}
+                sessions={nodes}
+                isCollapsed={collapsedFolderIds.has(folder.id)}
+                onToggle={() => toggleFolderCollapse(folder.id)}
+                onRename={(name) => {
+                  if (folderScopeKey) renameFolder(folderScopeKey, folder.id, name);
+                }}
+                onDelete={() => {
+                  if (folderScopeKey) deleteFolder(folderScopeKey, folder.id);
+                }}
+                renderSessionNode={renderSessionNode}
+                groupDirectory={group.directory}
+                projectId={projectId}
+                mobileVariant={mobileVariant}
+                isRenaming={renamingFolderId === folder.id}
+                renameDraft={renamingFolderId === folder.id ? renameFolderDraft : undefined}
+                onRenameDraftChange={(value) => setRenameFolderDraft(value)}
+                onRenameSave={() => {
+                  const trimmed = renameFolderDraft.trim();
+                  if (trimmed && folderScopeKey) {
+                    renameFolder(folderScopeKey, folder.id, trimmed);
+                  }
+                  setRenamingFolderId(null);
+                  setRenameFolderDraft('');
+                }}
+                onRenameCancel={() => {
+                  setRenamingFolderId(null);
+                  setRenameFolderDraft('');
+                }}
+                droppableRef={droppableRef}
+                isDropTarget={isDropTarget}
+                onNewSession={() => {
+                  if (projectId && projectId !== activeProjectId) {
+                    setActiveProject(projectId);
+                  }
+                  setActiveMainTab('chat');
+                  if (mobileVariant) {
+                    setSessionSwitcherOpen(false);
+                  }
+                  openNewSessionDraft({ directoryOverride: group.directory, targetFolderId: folder.id });
+                }}
+              />
+            )}
+          </DroppableFolderWrapper>
         ));
 
       if (hideGroupLabel) {
         return (
           <div className="oc-group">
             <div className="oc-group-body pb-3">
+              <SessionFolderDndScope
+                scopeKey={folderScopeKey}
+                hasFolders={allFoldersForGroup.length > 0}
+                onSessionDroppedOnFolder={(sessionId, folderId) => {
+                  if (folderScopeKey) addSessionToFolder(folderScopeKey, folderId, sessionId);
+                }}
+              >
               {renderFolderItems()}
               {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
-              {totalSessions === 0 && foldersWithSessions.length === 0 ? (
+              {totalSessions === 0 && scopeFolders.length === 0 ? (
                 <div className="py-1 text-left typography-micro text-muted-foreground">
                   No sessions in this workspace yet.
                 </div>
@@ -2409,6 +2596,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   Show fewer sessions
                 </button>
               ) : null}
+              </SessionFolderDndScope>
             </div>
           </div>
         );
@@ -2501,12 +2689,27 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     </TooltipContent>
                   </Tooltip>
                 ) : null}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
+                <DropdownMenu>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                          aria-label={`New session or folder in ${group.label}`}
+                        >
+                          <RiAddLine className="h-4 w-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" sideOffset={4}>
+                      <p>New session or folder</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                    <DropdownMenuItem
+                      onClick={() => {
                         if (projectId && projectId !== activeProjectId) {
                           setActiveProject(projectId);
                         }
@@ -2516,46 +2719,62 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         }
                         openNewSessionDraft({ directoryOverride: group.directory });
                       }}
-                      className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                      aria-label={`New session in ${group.label}`}
                     >
-                      <RiAddLine className="h-4 w-4" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={4}>
-                    <p>New session</p>
-                  </TooltipContent>
-                </Tooltip>
+                      <RiAddLine className="mr-1.5 h-4 w-4" />
+                      New session
+                    </DropdownMenuItem>
+                    {folderScopeKey ? (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const newFolder = createFolder(folderScopeKey, 'New folder');
+                          setRenamingFolderId(newFolder.id);
+                          setRenameFolderDraft('New folder');
+                        }}
+                      >
+                        <RiFolderAddLine className="mr-1.5 h-4 w-4" />
+                        New folder
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             ) : null}
           </div>
           {!isCollapsed ? (
             <div className="oc-group-body pb-3">
-              {renderFolderItems()}
-              {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
-              {totalSessions === 0 && foldersWithSessions.length === 0 ? (
-                <div className="py-1 text-left typography-micro text-muted-foreground">
-                  No sessions in this workspace yet.
-                </div>
-              ) : null}
-              {remainingCount > 0 && !isExpanded ? (
-                <button
-                  type="button"
-                  onClick={() => toggleGroupSessionLimit(groupKey)}
-                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
-                >
-                  Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
-                </button>
-              ) : null}
-              {isExpanded && totalSessions > maxVisible ? (
-                <button
-                  type="button"
-                  onClick={() => toggleGroupSessionLimit(groupKey)}
-                  className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
-                >
-                  Show fewer sessions
-                </button>
-              ) : null}
+              <SessionFolderDndScope
+                scopeKey={folderScopeKey}
+                hasFolders={allFoldersForGroup.length > 0}
+                onSessionDroppedOnFolder={(sessionId, folderId) => {
+                  if (folderScopeKey) addSessionToFolder(folderScopeKey, folderId, sessionId);
+                }}
+              >
+                {renderFolderItems()}
+                {visibleSessions.map((node) => renderSessionNode(node, 0, group.directory, projectId))}
+                {totalSessions === 0 && scopeFolders.length === 0 ? (
+                  <div className="py-1 text-left typography-micro text-muted-foreground">
+                    No sessions in this workspace yet.
+                  </div>
+                ) : null}
+                {remainingCount > 0 && !isExpanded ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupSessionLimit(groupKey)}
+                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                  >
+                    Show {remainingCount} more {remainingCount === 1 ? 'session' : 'sessions'}
+                  </button>
+                ) : null}
+                {isExpanded && totalSessions > maxVisible ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupSessionLimit(groupKey)}
+                    className="mt-0.5 flex items-center justify-start rounded-md px-1.5 py-0.5 text-left text-xs text-muted-foreground/70 leading-tight hover:text-foreground hover:underline"
+                  >
+                    Show fewer sessions
+                  </button>
+                ) : null}
+              </SessionFolderDndScope>
             </div>
           ) : null}
         </div>
@@ -2578,10 +2797,16 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       getFoldersForScope,
       collapsedFolderIds,
       toggleFolderCollapse,
+      createFolder,
       renameFolder,
       deleteFolder,
+      addSessionToFolder,
       renamingFolderId,
       renameFolderDraft,
+      pinnedSessionIds,
+      sessionAttentionStates,
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      foldersMap,
     ]
   );
 

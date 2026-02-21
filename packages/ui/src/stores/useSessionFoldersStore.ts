@@ -220,9 +220,8 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
           return folder;
         });
 
-        const filteredFolders = nextFolders.filter((folder) => folder.sessionIds.length > 0);
-        const nextMap: SessionFoldersMap = { ...current, [scopeKey]: filteredFolders };
-        const nextCollapsed = syncCollapsedAfterFolderCleanup(scopeFolders, filteredFolders, get().collapsedFolderIds);
+        const nextMap: SessionFoldersMap = { ...current, [scopeKey]: nextFolders };
+        const nextCollapsed = syncCollapsedAfterFolderCleanup(scopeFolders, nextFolders, get().collapsedFolderIds);
 
         set(nextCollapsed
           ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed }
@@ -250,9 +249,8 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         });
 
         if (!changed) return;
-        const filteredFolders = nextFolders.filter((folder) => folder.sessionIds.length > 0);
-        const nextMap: SessionFoldersMap = { ...current, [scopeKey]: filteredFolders };
-        const nextCollapsed = syncCollapsedAfterFolderCleanup(scopeFolders, filteredFolders, get().collapsedFolderIds);
+        const nextMap: SessionFoldersMap = { ...current, [scopeKey]: nextFolders };
+        const nextCollapsed = syncCollapsedAfterFolderCleanup(scopeFolders, nextFolders, get().collapsedFolderIds);
 
         set(nextCollapsed
           ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed }
@@ -292,9 +290,8 @@ export const useSessionFoldersStore = create<SessionFoldersStore>()(
         });
 
         if (!changed) return;
-        const filteredFolders = nextFolders.filter((folder) => folder.sessionIds.length > 0);
-        const nextMap: SessionFoldersMap = { ...current, [scopeKey]: filteredFolders };
-        const nextCollapsed = syncCollapsedAfterFolderCleanup(scopeFolders, filteredFolders, get().collapsedFolderIds);
+        const nextMap: SessionFoldersMap = { ...current, [scopeKey]: nextFolders };
+        const nextCollapsed = syncCollapsedAfterFolderCleanup(scopeFolders, nextFolders, get().collapsedFolderIds);
 
         set(nextCollapsed
           ? { foldersMap: nextMap, collapsedFolderIds: nextCollapsed }
