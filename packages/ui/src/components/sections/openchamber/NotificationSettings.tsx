@@ -417,8 +417,7 @@ export const NotificationSettings: React.FC = () => {
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
             <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
               <div className="flex min-w-0 flex-col">
-                <span className="typography-ui-label text-foreground">Enable notifications</span>
-                <span className="typography-meta text-muted-foreground">Turns notifications on or off overall</span>
+                <span className="typography-ui-label text-foreground">Enable Notifications</span>
               </div>
               <Switch
                 checked={nativeNotificationsEnabled && canShowNotifications}
@@ -430,8 +429,7 @@ export const NotificationSettings: React.FC = () => {
             {nativeNotificationsEnabled && canShowNotifications && (
               <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                 <div className="flex min-w-0 flex-col">
-                  <span className="typography-ui-label text-foreground">Notify while app is focused</span>
-                  <span className="typography-meta text-muted-foreground">When off, only notify if app is in background</span>
+                  <span className="typography-ui-label text-foreground">Notify While App is Focused</span>
                 </div>
                 <Switch
                   checked={notificationMode === 'always'}
@@ -484,8 +482,7 @@ export const NotificationSettings: React.FC = () => {
               <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                   <div className="flex min-w-0 flex-col">
-                    <span className="typography-ui-label text-foreground">Completion</span>
-                    <span className="typography-meta text-muted-foreground">Agent finished its task</span>
+                    <span className="typography-ui-label text-foreground">Agent Completion</span>
                   </div>
                   <Switch
                     checked={notifyOnCompletion}
@@ -496,8 +493,7 @@ export const NotificationSettings: React.FC = () => {
 
                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                   <div className="flex min-w-0 flex-col">
-                    <span className="typography-ui-label text-foreground">Errors</span>
-                    <span className="typography-meta text-muted-foreground">A tool call failed or encountered an issue</span>
+                    <span className="typography-ui-label text-foreground">Agent Errors</span>
                   </div>
                   <Switch
                     checked={notifyOnError}
@@ -508,8 +504,7 @@ export const NotificationSettings: React.FC = () => {
 
                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                   <div className="flex min-w-0 flex-col">
-                    <span className="typography-ui-label text-foreground">Questions</span>
-                    <span className="typography-meta text-muted-foreground">Agent is asking for input or permission</span>
+                    <span className="typography-ui-label text-foreground">Agent Questions</span>
                   </div>
                   <Switch
                     checked={notifyOnQuestion}
@@ -520,8 +515,7 @@ export const NotificationSettings: React.FC = () => {
 
                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                   <div className="flex min-w-0 flex-col">
-                    <span className="typography-ui-label text-foreground">Subagents</span>
-                    <span className="typography-meta text-muted-foreground">Notify for child sessions started by the main agent</span>
+                    <span className="typography-ui-label text-foreground">Subagent Activity</span>
                   </div>
                   <Switch
                     checked={notifyOnSubtasks}
@@ -588,8 +582,7 @@ export const NotificationSettings: React.FC = () => {
               <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                   <div className="flex min-w-0 flex-col">
-                    <span className="typography-ui-label text-foreground">Summarize last message</span>
-                    <span className="typography-meta text-muted-foreground">Uses AI to shorten the {'{last_message}'} variable</span>
+                    <span className="typography-ui-label text-foreground">Summarize Last Message</span>
                   </div>
                   <Switch
                     checked={summarizeLastMessage}

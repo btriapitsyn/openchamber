@@ -307,8 +307,7 @@ export const GitHubSettings: React.FC = () => {
         ) : (
           <div className="flex items-center justify-between gap-4 px-4 py-4">
             <div className="flex min-w-0 flex-col">
-              <span className="typography-ui-label text-foreground">Not connected</span>
-              <span className="typography-meta text-muted-foreground">Sign in to enable GitHub integrations</span>
+              <span className="typography-ui-label text-foreground">Not Connected</span>
             </div>
             <ButtonSmall variant="default" onClick={startConnect} disabled={isBusy}>
               Connect GitHub

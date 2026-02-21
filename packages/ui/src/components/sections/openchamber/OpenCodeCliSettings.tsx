@@ -92,8 +92,7 @@ export const OpenCodeCliSettings: React.FC = () => {
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
           <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
-            <span className="typography-ui-label text-foreground">Binary Path</span>
-            <span className="typography-meta text-muted-foreground">Useful when launch environment has stale PATH</span>
+            <span className="typography-ui-label text-foreground">OpenCode Binary Path</span>
           </div>
           <div className="flex items-center gap-2 flex-1 justify-end">
             <Input

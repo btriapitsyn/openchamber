@@ -188,9 +188,6 @@ export const KeyboardShortcutsSettings: React.FC = () => {
             <div key={action.id} className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3", index > 0 && "border-t border-[var(--surface-subtle)]")}>
               <div className="flex min-w-0 flex-col sm:w-1/2 shrink-0">
                 <span className="typography-ui-label text-foreground">{action.label}</span>
-                {action.description && (
-                  <span className="typography-meta text-muted-foreground">{action.description}</span>
-                )}
               </div>
               <div className="flex items-center gap-2 flex-1 justify-end">
                 <Input

@@ -1,6 +1,7 @@
 import React from 'react';
-import { RiRestartLine } from '@remixicon/react';
+import { RiRestartLine, RiInformationLine } from '@remixicon/react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
@@ -180,16 +181,12 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             <h3 className="typography-ui-header font-semibold text-foreground">
                                 Theme Preferences
                             </h3>
-                            <p className="typography-meta text-muted-foreground mt-0.5">
-                                Customize the visual color scheme of OpenChamber.
-                            </p>
                         </div>
                         <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
-                            
+
                             <div className="flex items-center justify-between gap-4 px-4 py-3">
                                 <div className="flex min-w-0 flex-col">
                                     <span className="typography-ui-label text-foreground">Color Mode</span>
-                                    <span className="typography-meta text-muted-foreground">Select your interface color scheme</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     {THEME_MODE_OPTIONS.map((option) => (
@@ -208,7 +205,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             <div className="flex items-center justify-between gap-4 px-4 py-3">
                                 <div className="flex min-w-0 flex-col">
                                     <span className="typography-ui-label text-foreground">Light Theme</span>
-                                    <span className="typography-meta text-muted-foreground">Used when in light mode</span>
                                 </div>
                                 <Select value={selectedLightTheme?.metadata.id ?? ''} onValueChange={setLightThemePreference}>
                                     <SelectTrigger aria-label="Select light theme" className="w-fit">
@@ -227,7 +223,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             <div className="flex items-center justify-between gap-4 px-4 py-3">
                                 <div className="flex min-w-0 flex-col">
                                     <span className="typography-ui-label text-foreground">Dark Theme</span>
-                                    <span className="typography-meta text-muted-foreground">Used when in dark mode</span>
                                 </div>
                                 <Select value={selectedDarkTheme?.metadata.id ?? ''} onValueChange={setDarkThemePreference}>
                                     <SelectTrigger aria-label="Select dark theme" className="w-fit">
@@ -275,17 +270,13 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             <h3 className="typography-ui-header font-semibold text-foreground">
                                 UI Scaling & Layout
                             </h3>
-                            <p className="typography-meta text-muted-foreground mt-0.5">
-                                Adjust text sizes, spacing, and structural element scaling.
-                            </p>
                         </div>
                         <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
-                            
+
                             {shouldShow('fontSize') && !isMobile && (
                                 <div className="flex items-center justify-between gap-6 px-4 py-3">
                                     <div className="flex min-w-0 flex-col w-1/3 shrink-0">
-                                        <span className="typography-ui-label text-foreground">Font Size</span>
-                                        <span className="typography-meta text-muted-foreground">Base interface text scale</span>
+                                        <span className="typography-ui-label text-foreground">Interface Font Size</span>
                                     </div>
                                     <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                         <input
@@ -325,7 +316,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 <div className="flex items-center justify-between gap-6 px-4 py-3">
                                     <div className="flex min-w-0 flex-col w-1/3 shrink-0">
                                         <span className="typography-ui-label text-foreground">Terminal Font Size</span>
-                                        <span className="typography-meta text-muted-foreground">Scale text in the terminal view</span>
                                     </div>
                                     <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                         <input
@@ -370,7 +360,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 <div className="flex items-center justify-between gap-6 px-4 py-3">
                                     <div className="flex min-w-0 flex-col w-1/3 shrink-0">
                                         <span className="typography-ui-label text-foreground">Spacing Density</span>
-                                        <span className="typography-meta text-muted-foreground">Adjust padding around elements</span>
                                     </div>
                                     <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                         <input
@@ -415,7 +404,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 <div className="flex items-center justify-between gap-6 px-4 py-3">
                                     <div className="flex min-w-0 flex-col w-1/3 shrink-0">
                                         <span className="typography-ui-label text-foreground">Corner Radius</span>
-                                        <span className="typography-meta text-muted-foreground">Adjust rounded corners of inputs</span>
                                     </div>
                                     <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                         <input
@@ -459,8 +447,17 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             {shouldShow('inputBarOffset') && (
                                 <div className="flex items-center justify-between gap-6 px-4 py-3">
                                     <div className="flex min-w-0 flex-col w-1/3 shrink-0">
-                                        <span className="typography-ui-label text-foreground">Input Bar Offset</span>
-                                        <span className="typography-meta text-muted-foreground">Raise input bar to avoid obstructions</span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="typography-ui-label text-foreground">Input Bar Offset</span>
+                                            <Tooltip delayDuration={1000}>
+                                                <TooltipTrigger asChild>
+                                                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                                                </TooltipTrigger>
+                                                <TooltipContent sideOffset={8} className="max-w-xs">
+                                                    Raise input bar to avoid OS-level screen obstructions like home bars.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                         <input
@@ -512,19 +509,13 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             <h3 className="typography-ui-header font-semibold text-foreground">
                                 Workspace Behavior
                             </h3>
-                            <p className="typography-meta text-muted-foreground mt-0.5">
-                                Configure agent interactions, UI components, and defaults.
-                            </p>
                         </div>
                         <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
-                            
+
                             {shouldShow('toolOutput') && (
                                 <div className="flex items-center justify-between gap-4 px-4 py-3">
                                     <div className="flex min-w-0 flex-col">
                                         <span className="typography-ui-label text-foreground">Default Tool Output</span>
-                                        <span className="typography-meta text-muted-foreground">
-                                            {TOOL_EXPANSION_OPTIONS.find(o => o.value === toolCallExpansion)?.description}
-                                        </span>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         {TOOL_EXPANSION_OPTIONS.map((option) => (
@@ -546,9 +537,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     <div className="flex items-center justify-between gap-4 px-4 py-3">
                                         <div className="flex min-w-0 flex-col">
                                             <span className="typography-ui-label text-foreground">Diff Layout</span>
-                                            <span className="typography-meta text-muted-foreground">
-                                                {DIFF_LAYOUT_OPTIONS.find(o => o.id === diffLayoutPreference)?.description}
-                                            </span>
                                         </div>
                                         <div className="flex items-center gap-1">
                                             {DIFF_LAYOUT_OPTIONS.map((option) => (
@@ -567,9 +555,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     <div className="flex items-center justify-between gap-4 px-4 py-3">
                                         <div className="flex min-w-0 flex-col">
                                             <span className="typography-ui-label text-foreground">Diff View Mode</span>
-                                            <span className="typography-meta text-muted-foreground">
-                                                {DIFF_VIEW_MODE_OPTIONS.find(o => o.id === diffViewMode)?.description}
-                                            </span>
                                         </div>
                                         <div className="flex items-center gap-1">
                                             {DIFF_VIEW_MODE_OPTIONS.map((option) => (
@@ -590,8 +575,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             {shouldShow('dotfiles') && !isVSCodeRuntime() && (
                                 <div className="flex items-center justify-between gap-4 px-4 py-3">
                                     <div className="flex min-w-0 flex-col">
-                                        <span className="typography-ui-label text-foreground">Hidden Files</span>
-                                        <span className="typography-meta text-muted-foreground">Show dotfiles in directories</span>
+                                        <span className="typography-ui-label text-foreground">Show Dotfiles</span>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         {[
@@ -612,14 +596,21 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             )}
 
                             {/* Toggles start here */}
-                            
+
                             {shouldShow('queueMode') && (
                                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                                     <div className="flex min-w-0 flex-col">
-                                        <span className="typography-ui-label text-foreground">Queue Messages</span>
-                                        <span className="typography-meta text-muted-foreground">
-                                            {queueModeEnabled ? `Enter queues messages, ${getModifierLabel()}+Enter sends` : `Enter sends immediately, ${getModifierLabel()}+Enter queues`}
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="typography-ui-label text-foreground">Queue Messages by Default</span>
+                                            <Tooltip delayDuration={1000}>
+                                                <TooltipTrigger asChild>
+                                                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                                                </TooltipTrigger>
+                                                <TooltipContent sideOffset={8} className="max-w-xs">
+                                                    When enabled, Enter queues messages. Use {getModifierLabel()}+Enter to send.
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </div>
                                     </div>
                                     <Switch
                                         checked={queueModeEnabled}
@@ -632,10 +623,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             {shouldShow('persistDraft') && (
                                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                                     <div className="flex min-w-0 flex-col">
-                                        <span className="typography-ui-label text-foreground">Persist Draft</span>
-                                        <span className="typography-meta text-muted-foreground">
-                                            Save typed messages across app reloads
-                                        </span>
+                                        <span className="typography-ui-label text-foreground">Persist Draft Messages</span>
                                     </div>
                                     <Switch
                                         checked={persistChatDraft}
@@ -649,9 +637,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                                     <div className="flex min-w-0 flex-col">
                                         <span className="typography-ui-label text-foreground">Show Reasoning Traces</span>
-                                        <span className="typography-meta text-muted-foreground">
-                                            Display the agent's internal thinking process
-                                        </span>
                                     </div>
                                     <Switch
                                         checked={showReasoningTraces}
@@ -664,10 +649,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             {shouldShow('textJustificationActivity') && (
                                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                                     <div className="flex min-w-0 flex-col">
-                                        <span className="typography-ui-label text-foreground">Text Justification Activity</span>
-                                        <span className="typography-meta text-muted-foreground">
-                                            Show justification details in the activity feed
-                                        </span>
+                                        <span className="typography-ui-label text-foreground">Show Justification Activity</span>
                                     </div>
                                     <Switch
                                         checked={showTextJustificationActivity}
@@ -680,10 +662,17 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             {shouldShow('terminalQuickKeys') && !isMobile && (
                                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                                     <div className="flex min-w-0 flex-col">
-                                        <span className="typography-ui-label text-foreground">Terminal Quick Keys</span>
-                                        <span className="typography-meta text-muted-foreground">
-                                            Show Esc, Ctrl, Arrows in terminal view
-                                        </span>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="typography-ui-label text-foreground">Terminal Quick Keys</span>
+                                            <Tooltip delayDuration={1000}>
+                                                <TooltipTrigger asChild>
+                                                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                                                </TooltipTrigger>
+                                                <TooltipContent sideOffset={8} className="max-w-xs">
+                                                    Show Esc, Ctrl, Arrows in terminal view
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </div>
                                     </div>
                                     <Switch
                                         checked={showTerminalQuickKeysOnDesktop}
@@ -695,7 +684,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         </div>
                     </div>
                 )}
-                
+
             </div>
         </div>
     );

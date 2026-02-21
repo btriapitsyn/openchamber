@@ -54,8 +54,7 @@ export const SessionRetentionSettings: React.FC = () => {
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
         <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30 border-b border-[var(--surface-subtle)]">
           <div className="flex min-w-0 flex-col">
-            <span className="typography-ui-label text-foreground">Enable auto-cleanup</span>
-            <span className="typography-meta text-muted-foreground">Automatically delete old inactive sessions</span>
+            <span className="typography-ui-label text-foreground">Enable Auto-Cleanup</span>
           </div>
           <Switch
             checked={autoDeleteEnabled}
@@ -67,7 +66,6 @@ export const SessionRetentionSettings: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
           <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
             <span className="typography-ui-label text-foreground">Retention Period</span>
-            <span className="typography-meta text-muted-foreground">Days since last activity</span>
           </div>
           <div className="flex items-center gap-3 flex-1 justify-end">
             {isMobile ? (

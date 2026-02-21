@@ -103,8 +103,7 @@ export const MemoryLimitsSettings: React.FC = () => {
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
           <div className="flex min-w-0 flex-col">
-            <span className="typography-ui-label text-foreground">Message limit</span>
-            <span className="typography-meta text-muted-foreground">Messages loaded per session</span>
+            <span className="typography-ui-label text-foreground">Message Limit</span>
           </div>
           <div className="flex items-center gap-2 justify-end">
             {!isDefault && (

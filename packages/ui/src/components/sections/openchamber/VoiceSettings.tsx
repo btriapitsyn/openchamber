@@ -12,7 +12,8 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { NumberInput } from '@/components/ui/number-input';
-import { RiPlayLine, RiStopLine, RiCloseLine, RiAppleLine } from '@remixicon/react';
+import { RiPlayLine, RiStopLine, RiCloseLine, RiAppleLine, RiInformationLine } from '@remixicon/react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
 import { cn } from '@/lib/utils';
 
@@ -332,7 +333,6 @@ export const VoiceSettings: React.FC = () => {
                     <label className="group flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30 border-b border-[var(--surface-subtle)]">
                         <div className="flex min-w-0 flex-col">
                             <span className="typography-ui-label text-foreground">Enable Voice Mode</span>
-                            <span className="typography-meta text-muted-foreground">Turn on microphone input and speech synthesis</span>
                         </div>
                         <Switch
                             checked={voiceModeEnabled}
@@ -345,10 +345,21 @@ export const VoiceSettings: React.FC = () => {
                         <>
                             <div className="flex items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
                                 <div className="flex min-w-0 flex-col">
-                                    <span className="typography-ui-label text-foreground">Provider</span>
-                                    <span className="typography-meta text-muted-foreground">
-                                        {voiceProvider === 'browser' ? 'Free, offline, limited mobile support' : voiceProvider === 'openai' ? 'High quality, mobile ready, needs API key' : 'macOS native. Fast, free, offline'}
-                                    </span>
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="typography-ui-label text-foreground">Provider</span>
+                                        <Tooltip delayDuration={1000}>
+                                            <TooltipTrigger asChild>
+                                                <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                                            </TooltipTrigger>
+                                            <TooltipContent sideOffset={8} className="max-w-xs">
+                                                <ul className="space-y-1">
+                                                    <li><strong>Browser:</strong> Free, offline, limited mobile support.</li>
+                                                    <li><strong>OpenAI:</strong> High quality, mobile ready, needs API key.</li>
+                                                    <li><strong>Say:</strong> macOS native. Fast, free, offline.</li>
+                                                </ul>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </div>
                                 </div>
                                 <div className="flex gap-1 flex-wrap justify-end">
                                     <ButtonSmall
@@ -414,7 +425,6 @@ export const VoiceSettings: React.FC = () => {
                             <div className="flex items-center justify-between gap-4 px-4 py-3">
                                 <div className="flex min-w-0 flex-col">
                                     <span className="typography-ui-label text-foreground">Voice Selection</span>
-                                    <span className="typography-meta text-muted-foreground">Pick a voice actor to speak</span>
                                 </div>
                                 <div className="flex items-center gap-2 justify-end flex-1">
                                     {voiceProvider === 'openai' && isOpenAIAvailable && (
@@ -478,7 +488,6 @@ export const VoiceSettings: React.FC = () => {
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-t border-[var(--surface-subtle)]">
                                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                                     <span className="typography-ui-label text-foreground">Speech Rate</span>
-                                    <span className="typography-meta text-muted-foreground">Speed (0.5x - 2.0x)</span>
                                 </div>
                                 <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                     <input
@@ -504,8 +513,7 @@ export const VoiceSettings: React.FC = () => {
 
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
                                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
-                                    <span className="typography-ui-label text-foreground">Pitch</span>
-                                    <span className="typography-meta text-muted-foreground">Voice pitch (0.5 - 2.0)</span>
+                                    <span className="typography-ui-label text-foreground">Speech Pitch</span>
                                 </div>
                                 <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                     <input
@@ -531,8 +539,7 @@ export const VoiceSettings: React.FC = () => {
 
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
                                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
-                                    <span className="typography-ui-label text-foreground">Volume</span>
-                                    <span className="typography-meta text-muted-foreground">Output volume</span>
+                                    <span className="typography-ui-label text-foreground">Speech Volume</span>
                                 </div>
                                 <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                     <input
@@ -554,7 +561,6 @@ export const VoiceSettings: React.FC = () => {
                             <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-[var(--surface-subtle)]">
                                 <div className="flex min-w-0 flex-col">
                                     <span className="typography-ui-label text-foreground">Language</span>
-                                    <span className="typography-meta text-muted-foreground">Recognition and synthesis</span>
                                 </div>
                                 <div className="flex justify-end flex-1">
                                     <Select value={language} onValueChange={setLanguage} disabled={!isSupported}>
@@ -589,8 +595,7 @@ export const VoiceSettings: React.FC = () => {
                 <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
                     <label className="group flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30 border-b border-[var(--surface-subtle)]">
                         <div className="flex min-w-0 flex-col">
-                            <span className="typography-ui-label text-foreground">Message Read Aloud</span>
-                            <span className="typography-meta text-muted-foreground">Show speaker button on AI responses</span>
+                            <span className="typography-ui-label text-foreground">Message Read Aloud Button</span>
                         </div>
                         <Switch
                             checked={showMessageTTSButtons}
@@ -601,8 +606,7 @@ export const VoiceSettings: React.FC = () => {
 
                     <label className="group flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30 border-b border-[var(--surface-subtle)]">
                         <div className="flex min-w-0 flex-col">
-                            <span className="typography-ui-label text-foreground">Summarize Playback</span>
-                            <span className="typography-meta text-muted-foreground">Summarize long messages before reading aloud</span>
+                            <span className="typography-ui-label text-foreground">Summarize Before Playback</span>
                         </div>
                         <Switch
                             checked={summarizeMessageTTS}
@@ -614,8 +618,7 @@ export const VoiceSettings: React.FC = () => {
                     {voiceModeEnabled && (
                         <label className="group flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30 border-b border-[var(--surface-subtle)]">
                             <div className="flex min-w-0 flex-col">
-                                <span className="typography-ui-label text-foreground">Summarize Voice Responses</span>
-                                <span className="typography-meta text-muted-foreground">Summarize long AI responses during voice mode</span>
+                                <span className="typography-ui-label text-foreground">Summarize Voice Mode Responses</span>
                             </div>
                             <Switch
                                 checked={summarizeVoiceConversation}
@@ -629,8 +632,7 @@ export const VoiceSettings: React.FC = () => {
                         <>
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
                                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
-                                    <span className="typography-ui-label text-foreground">Character Threshold</span>
-                                    <span className="typography-meta text-muted-foreground">Summarize text longer than this</span>
+                                    <span className="typography-ui-label text-foreground">Summarization Threshold</span>
                                 </div>
                                 <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                     <input
@@ -655,8 +657,7 @@ export const VoiceSettings: React.FC = () => {
                             
                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-t border-[var(--surface-subtle)]">
                                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
-                                    <span className="typography-ui-label text-foreground">Summary Length Limit</span>
-                                    <span className="typography-meta text-muted-foreground">Max characters for the summary</span>
+                                    <span className="typography-ui-label text-foreground">Summary Max Length</span>
                                 </div>
                                 <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
                                     <input

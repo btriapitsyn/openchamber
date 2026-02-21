@@ -12,7 +12,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui';
-import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine } from '@remixicon/react';
+import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine, RiInformationLine } from '@remixicon/react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -628,7 +629,17 @@ export const ProvidersPage: React.FC = () => {
                 <div className="rounded-lg bg-[var(--surface-elevated)]/70 p-3 space-y-4">
                   
                   <div className="space-y-2 px-1">
-                    <label className="typography-ui-label font-medium text-foreground">API key</label>
+                    <label className="typography-ui-label font-medium text-foreground flex items-center gap-1.5">
+                      API Key
+                      <Tooltip delayDuration={1000}>
+                        <TooltipTrigger asChild>
+                          <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8} className="max-w-xs">
+                          Keys are sent directly to OpenCode and never stored by OpenChamber.
+                        </TooltipContent>
+                      </Tooltip>
+                    </label>
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <Input
                         type="password"
@@ -650,9 +661,6 @@ export const ProvidersPage: React.FC = () => {
                         {authBusyKey === `api:${candidateProviderId}` ? 'Saving…' : 'Save Key'}
                       </ButtonSmall>
                     </div>
-                    <p className="typography-micro text-muted-foreground mt-1">
-                      Keys are sent directly to OpenCode and never stored by OpenChamber.
-                    </p>
                   </div>
 
                   {(() => {
@@ -832,7 +840,17 @@ export const ProvidersPage: React.FC = () => {
             ) : (
               <div className="px-3 py-3 space-y-4">
                 <div className="space-y-2">
-                  <label className="typography-ui-label font-medium text-foreground">API key</label>
+                  <label className="typography-ui-label font-medium text-foreground flex items-center gap-1.5">
+                    API Key
+                    <Tooltip delayDuration={1000}>
+                      <TooltipTrigger asChild>
+                        <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent sideOffset={8} className="max-w-xs">
+                        Keys are sent directly to OpenCode and never stored by OpenChamber.
+                      </TooltipContent>
+                    </Tooltip>
+                  </label>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                     <Input
                       type="password"
@@ -854,9 +872,6 @@ export const ProvidersPage: React.FC = () => {
                       {authBusyKey === `api:${selectedProvider.id}` ? 'Saving…' : 'Save Key'}
                     </ButtonSmall>
                   </div>
-                  <p className="typography-meta text-muted-foreground">
-                    Keys are sent directly to OpenCode and never stored by OpenChamber.
-                  </p>
                 </div>
 
                 {oauthAuthMethods.length > 0 && (

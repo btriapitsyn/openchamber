@@ -323,9 +323,6 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
               </TooltipContent>
             </Tooltip>
           </div>
-          <p className="typography-meta text-muted-foreground">
-            Manage worktrees for this project
-          </p>
         </div>
 
         {isLoadingWorktrees ? (

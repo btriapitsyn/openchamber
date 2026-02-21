@@ -249,8 +249,17 @@ export const GitIdentitiesPage: React.FC = () => {
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
-                  <span className="typography-ui-label text-foreground">Display Name</span>
-                  <span className="typography-meta text-muted-foreground">Friendly name</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="typography-ui-label text-foreground">Display Name</span>
+                    <Tooltip delayDuration={1000}>
+                      <TooltipTrigger asChild>
+                        <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                      </TooltipTrigger>
+                      <TooltipContent sideOffset={8} className="max-w-xs">
+                        Friendly name to identify this profile. Defaults to User Name if left empty.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
                 <div className="flex-1 max-w-sm flex justify-end">
                   <Input
@@ -265,7 +274,6 @@ export const GitIdentitiesPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                   <span className="typography-ui-label text-foreground">Color</span>
-                  <span className="typography-meta text-muted-foreground">Badge accent color</span>
                 </div>
                 <div className="flex gap-1.5 flex-wrap flex-1 justify-end">
                   {PROFILE_COLORS.map((c) => (
@@ -288,7 +296,6 @@ export const GitIdentitiesPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                   <span className="typography-ui-label text-foreground">Icon</span>
-                  <span className="typography-meta text-muted-foreground">Visual identifier</span>
                 </div>
                 <div className="flex gap-1.5 flex-wrap flex-1 justify-end">
                   {PROFILE_ICONS.map((i) => {
@@ -337,8 +344,16 @@ export const GitIdentitiesPage: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   <span className="typography-ui-label text-foreground">User Name</span>
                   {!isGlobalProfile && <span className="text-[var(--status-error)]">*</span>}
+                  <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                      <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={8} className="max-w-xs">
+                      The name that will appear in Git commit messages.
+                      This is the author name shown in git log and GitHub/GitLab interfaces.
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-                <span className="typography-meta text-muted-foreground">Appears in commit logs</span>
               </div>
               <div className="flex-1 max-w-sm flex justify-end">
                 <Input
@@ -358,8 +373,17 @@ export const GitIdentitiesPage: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                   <span className="typography-ui-label text-foreground">Email Address</span>
                   {!isGlobalProfile && <span className="text-[var(--status-error)]">*</span>}
+                  <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                      <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={8} className="max-w-xs">
+                      The email address for Git commits.
+                      This should match your email in GitHub/GitLab
+                      to ensure proper attribution of commits.
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
-                <span className="typography-meta text-muted-foreground">For commit attribution</span>
               </div>
               <div className="flex-1 max-w-sm flex justify-end">
                 <Input
@@ -395,7 +419,6 @@ export const GitIdentitiesPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                   <span className="typography-ui-label text-foreground">Method</span>
-                  <span className="typography-meta text-muted-foreground">SSH keys vs HTTPS tokens</span>
                 </div>
                 <div className="flex items-center gap-1 flex-1 justify-end">
                   <ButtonSmall
@@ -427,11 +450,11 @@ export const GitIdentitiesPage: React.FC = () => {
                           <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                         </TooltipTrigger>
                         <TooltipContent sideOffset={8} className="max-w-xs">
+                          Optional path to private key for authentication.<br/>
                           Common paths: ~/.ssh/id_rsa, ~/.ssh/id_ed25519
                         </TooltipContent>
                       </Tooltip>
                     </span>
-                    <span className="typography-meta text-muted-foreground">Path to private key (optional)</span>
                   </div>
                   <div className="flex-1 max-w-sm flex justify-end">
                     <Input
@@ -450,8 +473,17 @@ export const GitIdentitiesPage: React.FC = () => {
                     <div className="flex items-center gap-1.5">
                       <span className="typography-ui-label text-foreground">Host</span>
                       <span className="text-[var(--status-error)]">*</span>
+                      <Tooltip delayDuration={1000}>
+                        <TooltipTrigger asChild>
+                          <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8} className="max-w-xs">
+                          The Git host this credential applies to.<br/>
+                          Token will be read from ~/.git-credentials for this host.<br/>
+                          Examples: github.com, gitlab.com
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-                    <span className="typography-meta text-muted-foreground">Git host (e.g., github.com)</span>
                   </div>
                   <div className="flex-1 max-w-sm flex justify-end">
                     <Input

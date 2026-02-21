@@ -219,7 +219,6 @@ export const CommandsPage: React.FC = () => {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                   <span className="typography-ui-label text-foreground">Command Name</span>
-                  <span className="typography-meta text-muted-foreground">Used with slash</span>
                 </div>
                 <div className="flex items-center gap-2 flex-1 justify-end">
                   <div className="flex items-center flex-1 max-w-[200px]">
@@ -257,7 +256,6 @@ export const CommandsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-4 py-3">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0 pt-1">
                 <span className="typography-ui-label text-foreground">Description</span>
-                <span className="typography-meta text-muted-foreground">Short description shown in palette</span>
               </div>
               <div className="flex-1">
                 <Textarea
@@ -289,7 +287,6 @@ export const CommandsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                 <span className="typography-ui-label text-foreground">Override Agent</span>
-                <span className="typography-meta text-muted-foreground">Leave empty to use current agent</span>
               </div>
               <div className="flex-1 max-w-sm flex justify-end">
                 <AgentSelector
@@ -302,7 +299,6 @@ export const CommandsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                 <span className="typography-ui-label text-foreground">Override Model</span>
-                <span className="typography-meta text-muted-foreground">Leave empty to use current model</span>
               </div>
               <div className="flex-1 max-w-sm flex justify-end">
                 <ModelSelector
@@ -322,19 +318,18 @@ export const CommandsPage: React.FC = () => {
             <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
               <div className="flex min-w-0 flex-col">
                 <div className="flex items-center gap-1.5">
-                  <span className="typography-ui-label text-foreground">Force Subagent</span>
+                  <span className="typography-ui-label text-foreground">Force Subagent Context</span>
                   <Tooltip delayDuration={1000}>
                     <TooltipTrigger asChild>
                       <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
-                      When enabled, this command will always execute in a subagent context,<br/>
-                      even if triggered from main agent.<br/>
+                      When enabled, this command will always execute in an isolated subagent context,<br/>
+                      even if triggered from the main agent.<br/>
                       Useful for isolating command logic.
                     </TooltipContent>
                   </Tooltip>
                 </div>
-                <span className="typography-meta text-muted-foreground">Run as an isolated child task</span>
               </div>
               <Switch
                 checked={subtask}

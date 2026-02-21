@@ -324,7 +324,6 @@ export const DefaultsSettings: React.FC = () => {
         <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]")}>
           <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
             <span className="typography-ui-label text-foreground">Default Model</span>
-            <span className="typography-meta text-muted-foreground">Standard model for chats</span>
           </div>
           <div className="flex items-center gap-3 flex-1 max-w-sm justify-end">
             <ModelSelector
@@ -339,7 +338,6 @@ export const DefaultsSettings: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
             <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
               <span className="typography-ui-label text-foreground">Default Thinking</span>
-              <span className="typography-meta text-muted-foreground">Reasoning trace variant</span>
             </div>
             <div className="flex items-center gap-3 flex-1 justify-end">
               <Select value={defaultVariant ?? DEFAULT_VARIANT_VALUE} onValueChange={handleVariantChange}>
@@ -362,7 +360,6 @@ export const DefaultsSettings: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
           <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
             <span className="typography-ui-label text-foreground">Default Agent</span>
-            <span className="typography-meta text-muted-foreground">Starting persona</span>
           </div>
           <div className="flex items-center gap-3 flex-1 max-w-sm justify-end">
             <AgentSelector
@@ -385,7 +382,6 @@ export const DefaultsSettings: React.FC = () => {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <span className="typography-meta text-muted-foreground">Used for background tasks</span>
           </div>
           <div className="flex items-center gap-3 flex-1 justify-end">
             {zenModelsLoading ? (
@@ -412,12 +408,19 @@ export const DefaultsSettings: React.FC = () => {
         {!isVSCode && (
           <label className="group flex cursor-pointer items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-[var(--interactive-hover)]/30">
             <div className="flex min-w-0 flex-col">
-              <span className="typography-ui-label text-foreground">Always create worktree</span>
-              <span className="typography-meta text-muted-foreground">
-                {settingsAutoCreateWorktree
-                  ? `New session (Worktree): ${getModifierLabel()}+N • Standard: Shift+${getModifierLabel()}+N`
-                  : `New session (Standard): ${getModifierLabel()}+N • Worktree: Shift+${getModifierLabel()}+N`}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="typography-ui-label text-foreground">Always Create Worktree</span>
+                <Tooltip delayDuration={1000}>
+                  <TooltipTrigger asChild>
+                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent sideOffset={8} className="max-w-xs">
+                    {settingsAutoCreateWorktree
+                      ? `New session (Worktree): ${getModifierLabel()}+N\nStandard: Shift+${getModifierLabel()}+N`
+                      : `New session (Standard): ${getModifierLabel()}+N\nWorktree: Shift+${getModifierLabel()}+N`}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
             </div>
             <Switch
               checked={settingsAutoCreateWorktree}

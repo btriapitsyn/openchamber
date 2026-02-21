@@ -103,7 +103,6 @@ export const ProjectsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                 <span className="typography-ui-label text-foreground">Project Name</span>
-                <span className="typography-meta text-muted-foreground">Display name in the sidebar</span>
               </div>
               <div className="flex-1 sm:max-w-sm flex justify-end">
                 <Input 
@@ -119,7 +118,6 @@ export const ProjectsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                 <span className="typography-ui-label text-foreground">Accent Color</span>
-                <span className="typography-meta text-muted-foreground">Used for badges and borders</span>
               </div>
               <div className="flex gap-2 flex-wrap flex-1 justify-start sm:justify-end">
                 <button
@@ -153,7 +151,6 @@ export const ProjectsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                 <span className="typography-ui-label text-foreground">Project Icon</span>
-                <span className="typography-meta text-muted-foreground">Visual identifier</span>
               </div>
               <div className="flex gap-2 flex-wrap flex-1 justify-start sm:justify-end">
                 <button

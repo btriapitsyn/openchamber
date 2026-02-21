@@ -99,7 +99,6 @@ export const GitSettings: React.FC = () => {
         <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30 border-b border-[var(--surface-subtle)]">
           <div className="flex min-w-0 flex-col">
             <span className="typography-ui-label text-foreground">Enable Gitmoji Picker</span>
-            <span className="typography-meta text-muted-foreground">Adds a gitmoji selector to the commit message input</span>
           </div>
           <Switch
             checked={settingsGitmojiEnabled}
@@ -111,7 +110,6 @@ export const GitSettings: React.FC = () => {
         <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
           <div className="flex min-w-0 flex-col">
             <span className="typography-ui-label text-foreground">Display Gitignored Files</span>
-            <span className="typography-meta text-muted-foreground">Show ignored files in the Files browser pane and search</span>
           </div>
           <Switch
             checked={showGitignored}
