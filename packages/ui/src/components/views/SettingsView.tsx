@@ -24,6 +24,7 @@ import {
   RiMicLine,
   RiNotification3Line,
   RiPaletteLine,
+  RiListUnordered,
   RiRobot2Line,
   RiRestartLine,
   RiSlashCommands2,
@@ -474,12 +475,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const shortcutKey = getModifierLabel();
 
   const handleBack = React.useCallback(() => {
-    if (mobileStage === 'page-content' && activePageMeta?.kind === 'split') {
-      setMobileStage('page-sidebar');
-      return;
-    }
     setMobileStage('nav');
-  }, [activePageMeta, mobileStage]);
+  }, []);
+
+  const handleOpenPageSidebar = React.useCallback(() => {
+    setMobileStage('page-sidebar');
+  }, []);
 
   const renderNav = (opts?: { showFeatured?: boolean }) => {
     void opts;
@@ -668,7 +669,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
           <button
             type="button"
             onClick={showBackButton ? handleBack : onClose}
-            aria-label={showBackButton ? 'Back' : 'Close settings'}
+            aria-label={showBackButton ? 'Back to Settings' : 'Close settings'}
             className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <RiArrowLeftSLine className="h-5 w-5" />
@@ -679,6 +680,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               ? 'Settings'
               : (activePageMeta?.title ?? 'Settings')}
           </div>
+
+          {mobileStage === 'page-content' && activePageMeta?.kind === 'split' && (
+            <button
+              type="button"
+              onClick={handleOpenPageSidebar}
+              aria-label="Open section list"
+              className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <RiListUnordered className="h-5 w-5" />
+            </button>
+          )}
 
           {onClose && (
             <button
