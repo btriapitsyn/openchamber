@@ -36,6 +36,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { GridLoader } from '@/components/ui/grid-loader';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -127,6 +135,25 @@ const formatDateLabel = (value: string | number) => {
     year: 'numeric',
   });
   return formatted.replace(',', '');
+};
+
+/** Returns relative time if updated today, otherwise falls back to formatDateLabel using updated time. */
+const formatSessionDateLabel = (updatedMs: number): string => {
+  const today = new Date();
+  const updatedDate = new Date(updatedMs);
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+
+  if (isSameDay(updatedDate, today)) {
+    const diff = Date.now() - updatedMs;
+    if (diff < 60_000) return 'Just now';
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}min ago`;
+    return `${Math.floor(diff / 3_600_000)}h ago`;
+  }
+
+  return formatDateLabel(updatedMs);
 };
 
 const normalizePath = (value?: string | null) => {
@@ -758,6 +785,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = React.useState('');
+  const [deleteSessionConfirm, setDeleteSessionConfirm] = React.useState<{
+    session: Session;
+    descendantCount: number;
+  } | null>(null);
+  const [deleteFolderConfirm, setDeleteFolderConfirm] = React.useState<{
+    scopeKey: string;
+    folderId: string;
+    folderName: string;
+    subFolderCount: number;
+    sessionCount: number;
+  } | null>(null);
   const [pinnedSessionIds, setPinnedSessionIds] = React.useState<Set<string>>(() => {
     try {
       const raw = getSafeStorage().getItem(SESSION_PINNED_STORAGE_KEY);
@@ -1277,41 +1315,43 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const deleteSessions = useSessionStore((state) => state.deleteSessions);
 
   const handleDeleteSession = React.useCallback(
-    async (session: Session) => {
+    (session: Session) => {
       const descendants = collectDescendants(session.id);
-
-      if (descendants.length === 0) {
-
-        const success = await deleteSession(session.id);
-        if (success) {
-          toast.success('Session deleted', {
-            action: {
-              label: 'OK',
-              onClick: () => { },
-            },
-          });
-        } else {
-          toast.error('Failed to delete session');
-        }
-      } else {
-
-        const ids = [session.id, ...descendants.map((s) => s.id)];
-        const { deletedIds, failedIds } = await deleteSessions(ids);
-        if (deletedIds.length > 0) {
-          toast.success(`Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`, {
-            action: {
-              label: 'OK',
-              onClick: () => { },
-            },
-          });
-        }
-        if (failedIds.length > 0) {
-          toast.error(`Failed to delete ${failedIds.length} session${failedIds.length === 1 ? '' : 's'}`);
-        }
-      }
+      setDeleteSessionConfirm({ session, descendantCount: descendants.length });
     },
-    [collectDescendants, deleteSession, deleteSessions],
+    [collectDescendants],
   );
+
+  const confirmDeleteSession = React.useCallback(async () => {
+    if (!deleteSessionConfirm) return;
+    const { session } = deleteSessionConfirm;
+    setDeleteSessionConfirm(null);
+    const descendants = collectDescendants(session.id);
+    if (descendants.length === 0) {
+      const success = await deleteSession(session.id);
+      if (success) {
+        toast.success('Session deleted');
+      } else {
+        toast.error('Failed to delete session');
+      }
+    } else {
+      const ids = [session.id, ...descendants.map((s) => s.id)];
+      const { deletedIds, failedIds } = await deleteSessions(ids);
+      if (deletedIds.length > 0) {
+        toast.success(`Deleted ${deletedIds.length} session${deletedIds.length === 1 ? '' : 's'}`);
+      }
+      if (failedIds.length > 0) {
+        toast.error(`Failed to delete ${failedIds.length} session${failedIds.length === 1 ? '' : 's'}`);
+      }
+    }
+  }, [deleteSessionConfirm, collectDescendants, deleteSession, deleteSessions]);
+
+  const confirmDeleteFolder = React.useCallback(() => {
+    if (!deleteFolderConfirm) return;
+    const { scopeKey, folderId } = deleteFolderConfirm;
+    setDeleteFolderConfirm(null);
+    deleteFolder(scopeKey, folderId);
+  }, [deleteFolderConfirm, deleteFolder]);
 
   const handleOpenDirectoryDialog = React.useCallback(() => {
     if (!tauriIpcAvailable || !isDesktopLocalOriginActive()) {
@@ -2024,19 +2064,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         | {
           additions?: number | string | null;
           deletions?: number | string | null;
+          files?: number | null;
           diffs?: Array<{ additions?: number | string | null; deletions?: number | string | null }>;
         }
         | undefined;
-      const diffTotals = sessionSummary?.diffs?.reduce<{ additions: number; deletions: number }>(
-        (acc, diff) => ({
-          additions: acc.additions + (toFiniteNumber(diff?.additions) ?? 0),
-          deletions: acc.deletions + (toFiniteNumber(diff?.deletions) ?? 0),
-        }),
-        { additions: 0, deletions: 0 },
-      );
-      const additions = toFiniteNumber(sessionSummary?.additions) ?? diffTotals?.additions;
-      const deletions = toFiniteNumber(sessionSummary?.deletions) ?? diffTotals?.deletions;
-      const hasSummary = typeof additions === 'number' || typeof deletions === 'number';
 
       if (editingId === session.id) {
         return (
@@ -2098,15 +2129,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     )}
                   </span>
                 ) : null}
-                <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
+                <span className="flex-shrink-0">{formatSessionDateLabel(session.time?.updated || session.time?.created || Date.now())}</span>
                 {session.share ? (
                   <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
                 ) : null}
-                {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
-                  <span className="flex-shrink-0 text-[0.7rem] leading-none">
-                    <span className="text-[color:var(--status-success)]">+{Math.max(0, additions ?? 0)}</span>
-                    <span className="text-muted-foreground/50">/</span>
-                    <span className="text-destructive">-{Math.max(0, deletions ?? 0)}</span>
+                {(sessionSummary?.files ?? 0) > 0 ? (
+                  <span className="flex-shrink-0">
+                    · {sessionSummary!.files} {sessionSummary!.files === 1 ? 'file' : 'files'} changed
                   </span>
                 ) : null}
                 {hasChildren ? (
@@ -2231,15 +2260,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       )}
                     </span>
                   ) : null}
-                  <span className="flex-shrink-0">{formatDateLabel(session.time?.created || Date.now())}</span>
+                  <span className="flex-shrink-0">{formatSessionDateLabel(session.time?.updated || session.time?.created || Date.now())}</span>
                   {session.share ? (
                     <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" />
                   ) : null}
-                  {hasSummary && ((additions ?? 0) !== 0 || (deletions ?? 0) !== 0) ? (
-                    <span className="flex-shrink-0 text-[0.7rem] leading-none">
-                      <span className="text-[color:var(--status-success)]">+{Math.max(0, additions ?? 0)}</span>
-                      <span className="text-muted-foreground/50">/</span>
-                      <span className="text-destructive">-{Math.max(0, deletions ?? 0)}</span>
+                  {(sessionSummary?.files ?? 0) > 0 ? (
+                    <span className="flex-shrink-0">
+                      · {sessionSummary!.files} {sessionSummary!.files === 1 ? 'file' : 'files'} changed
                     </span>
                   ) : null}
                   {hasChildren ? (
@@ -2374,12 +2401,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                               )}
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
-                                onClick={() => {
-                                  const newFolder = createFolder(sessionDirectory, 'New folder');
-                                  addSessionToFolder(sessionDirectory, newFolder.id, session.id);
-                                  setRenamingFolderId(newFolder.id);
-                                  setRenameFolderDraft('New folder');
-                                }}
+                                 onClick={() => {
+                                   const newFolder = createFolder(sessionDirectory, 'New folder');
+                                   addSessionToFolder(sessionDirectory, newFolder.id, session.id);
+                                 }}
                               >
                                 <RiAddLine className="mr-1 h-4 w-4" />
                                 New folder...
@@ -2530,9 +2555,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 onRename={(name) => {
                   if (folderScopeKey) renameFolder(folderScopeKey, folder.id, name);
                 }}
-                onDelete={() => {
-                  if (folderScopeKey) deleteFolder(folderScopeKey, folder.id);
-                }}
+                 onDelete={() => {
+                   if (!folderScopeKey) return;
+                   // Count affected sub-folders and sessions for the confirm dialog
+                   const subFolderCount = allFoldersForGroup.filter(({ folder: f }) => f.parentId === folder.id).length;
+                   const sessionCount = nodes.length;
+                   setDeleteFolderConfirm({
+                     scopeKey: folderScopeKey,
+                     folderId: folder.id,
+                     folderName: folder.name,
+                     subFolderCount,
+                     sessionCount,
+                   });
+                 }}
                 renderSessionNode={renderSessionNode}
                 groupDirectory={group.directory}
                 projectId={projectId}
@@ -2565,12 +2600,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   }
                   openNewSessionDraft({ directoryOverride: group.directory, targetFolderId: folder.id });
                 }}
-                onNewSubFolder={depth === 0 ? () => {
-                  if (!folderScopeKey) return;
-                  const newSub = createFolder(folderScopeKey, 'New folder', folder.id);
-                  setRenamingFolderId(newSub.id);
-                  setRenameFolderDraft('New folder');
-                } : undefined}
+                 onNewSubFolder={depth === 0 ? () => {
+                   if (!folderScopeKey) return;
+                   createFolder(folderScopeKey, 'New folder', folder.id);
+                 } : undefined}
               />
             )}
           </DroppableFolderWrapper>
@@ -2750,10 +2783,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     {folderScopeKey ? (
                       <DropdownMenuItem
                         onClick={() => {
-                          const newFolder = createFolder(folderScopeKey, 'New folder');
-                          setRenamingFolderId(newFolder.id);
-                          setRenameFolderDraft('New folder');
-                        }}
+                           createFolder(folderScopeKey, 'New folder');
+                         }}
                       >
                         <RiFolderAddLine className="mr-1.5 h-4 w-4" />
                         New folder
@@ -3349,6 +3380,66 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           />
         </MobileOverlayPanel>
       ) : null}
+
+      {/* Confirm delete session dialog */}
+      <Dialog open={Boolean(deleteSessionConfirm)} onOpenChange={(open) => { if (!open) setDeleteSessionConfirm(null); }}>
+        <DialogContent showCloseButton={false} className="max-w-sm gap-5">
+          <DialogHeader>
+            <DialogTitle>Delete session?</DialogTitle>
+            <DialogDescription>
+              {deleteSessionConfirm && deleteSessionConfirm.descendantCount > 0
+                ? `"${deleteSessionConfirm.session.title || 'Untitled Session'}" and its ${deleteSessionConfirm.descendantCount} sub-task${deleteSessionConfirm.descendantCount === 1 ? '' : 's'} will be permanently deleted.`
+                : `"${deleteSessionConfirm?.session.title || 'Untitled Session'}" will be permanently deleted.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setDeleteSessionConfirm(null)}
+              className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 typography-ui-label text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void confirmDeleteSession()}
+              className="inline-flex h-8 items-center justify-center rounded-md bg-destructive px-3 typography-ui-label text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+            >
+              Delete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm delete folder dialog */}
+      <Dialog open={Boolean(deleteFolderConfirm)} onOpenChange={(open) => { if (!open) setDeleteFolderConfirm(null); }}>
+        <DialogContent showCloseButton={false} className="max-w-sm gap-5">
+          <DialogHeader>
+            <DialogTitle>Delete folder?</DialogTitle>
+            <DialogDescription>
+              {deleteFolderConfirm && (deleteFolderConfirm.subFolderCount > 0 || deleteFolderConfirm.sessionCount > 0)
+                ? `"${deleteFolderConfirm.folderName}" will be deleted${deleteFolderConfirm.subFolderCount > 0 ? ` along with ${deleteFolderConfirm.subFolderCount} sub-folder${deleteFolderConfirm.subFolderCount === 1 ? '' : 's'}` : ''}. Sessions inside will not be deleted.`
+                : `"${deleteFolderConfirm?.folderName}" will be permanently deleted.`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setDeleteFolderConfirm(null)}
+              className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 typography-ui-label text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteFolder}
+              className="inline-flex h-8 items-center justify-center rounded-md bg-destructive px-3 typography-ui-label text-destructive-foreground hover:bg-destructive/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50"
+            >
+              Delete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
