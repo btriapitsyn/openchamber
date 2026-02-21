@@ -4,12 +4,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
-import { getModifierLabel } from '@/lib/utils';
+import { getModifierLabel, cn } from '@/lib/utils';
 
 interface ZenModel {
   id: string;
@@ -275,8 +275,7 @@ export const DefaultsSettings: React.FC = () => {
     }
   }, [defaultVariant, setCurrentVariant, setSettingsDefaultVariant, supportsVariants]);
 
-  const handleAutoWorktreeChange = React.useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const enabled = e.target.checked;
+  const handleAutoWorktreeChange = React.useCallback(async (enabled: boolean) => {
     setSettingsAutoCreateWorktree(enabled);
     try {
       await updateDesktopSettings({
@@ -303,8 +302,8 @@ export const DefaultsSettings: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
+    <div className="mb-8">
+      <div className="mb-3 px-1">
         <div className="flex items-center gap-2">
           <h3 className="typography-ui-header font-semibold text-foreground">Session Defaults</h3>
           <Tooltip delayDuration={1000}>
@@ -316,48 +315,121 @@ export const DefaultsSettings: React.FC = () => {
             </TooltipContent>
           </Tooltip>
         </div>
+        <p className="typography-meta text-muted-foreground mt-0.5">
+          These settings will apply each time you start a new chat.
+        </p>
       </div>
 
-        <div className="space-y-3">
-         <div className="flex flex-col gap-1.5">
-           <label className="typography-ui-label text-muted-foreground">Default model</label>
-           <ModelSelector
-             providerId={parsedModel.providerId}
-             modelId={parsedModel.modelId}
-             onChange={handleModelChange}
-           />
-         </div>
+      <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+        <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]")}>
+          <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+            <span className="typography-ui-label text-foreground">Default Model</span>
+            <span className="typography-meta text-muted-foreground">Standard model for chats</span>
+          </div>
+          <div className="flex items-center gap-3 flex-1 max-w-sm justify-end">
+            <ModelSelector
+              providerId={parsedModel.providerId}
+              modelId={parsedModel.modelId}
+              onChange={handleModelChange}
+            />
+          </div>
+        </div>
 
-         {supportsVariants && (
-           <div className="flex flex-col gap-1.5">
-             <label className="typography-ui-label text-muted-foreground">Default thinking</label>
-             <Select value={defaultVariant ?? DEFAULT_VARIANT_VALUE} onValueChange={handleVariantChange}>
-               <SelectTrigger className="w-auto max-w-xs typography-meta text-foreground">
-                 <SelectValue placeholder="Thinking" />
-               </SelectTrigger>
-               <SelectContent>
-                 <SelectItem value={DEFAULT_VARIANT_VALUE} className="pr-2 [&>span:first-child]:hidden">Default</SelectItem>
-                 {availableVariants.map((variant) => (
-                   <SelectItem key={variant} value={variant} className="pr-2 [&>span:first-child]:hidden">
-                     {variant}
-                   </SelectItem>
-                 ))}
-               </SelectContent>
-             </Select>
-           </div>
-         )}
- 
-         <div className="flex flex-col gap-1.5">
-           <label className="typography-ui-label text-muted-foreground">Default agent</label>
-           <AgentSelector
-             agentName={defaultAgent || ''}
-             onChange={handleAgentChange}
-           />
-         </div>
-       </div>
+        {supportsVariants && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+            <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+              <span className="typography-ui-label text-foreground">Default Thinking</span>
+              <span className="typography-meta text-muted-foreground">Reasoning trace variant</span>
+            </div>
+            <div className="flex items-center gap-3 flex-1 justify-end">
+              <Select value={defaultVariant ?? DEFAULT_VARIANT_VALUE} onValueChange={handleVariantChange}>
+                <SelectTrigger className="w-fit min-w-[120px]">
+                  <SelectValue placeholder="Thinking" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT_VARIANT_VALUE}>Default</SelectItem>
+                  {availableVariants.map((variant) => (
+                    <SelectItem key={variant} value={variant}>
+                      {variant}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
 
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+          <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+            <span className="typography-ui-label text-foreground">Default Agent</span>
+            <span className="typography-meta text-muted-foreground">Starting persona</span>
+          </div>
+          <div className="flex items-center gap-3 flex-1 max-w-sm justify-end">
+            <AgentSelector
+              agentName={defaultAgent || ''}
+              onChange={handleAgentChange}
+            />
+          </div>
+        </div>
+
+        <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3", !isVSCode && "border-b border-[var(--surface-subtle)]")}>
+          <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="typography-ui-label text-foreground">Zen Model</span>
+              <Tooltip delayDuration={1000}>
+                <TooltipTrigger asChild>
+                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                </TooltipTrigger>
+                <TooltipContent sideOffset={8} className="max-w-xs">
+                  The free model used for lightweight internal tasks like commit message generation, PR descriptions, notification summarization, and TTS text summarization.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <span className="typography-meta text-muted-foreground">Used for background tasks</span>
+          </div>
+          <div className="flex items-center gap-3 flex-1 justify-end">
+            {zenModelsLoading ? (
+              <span className="typography-meta text-muted-foreground">Loading models...</span>
+            ) : zenModels.length > 0 ? (
+              <Select value={selectedZenModel} onValueChange={handleZenModelChange}>
+                <SelectTrigger className="w-fit min-w-[120px]">
+                  <SelectValue placeholder="Select model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {zenModels.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      {model.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <span className="typography-meta text-muted-foreground">No free models available</span>
+            )}
+          </div>
+        </div>
+
+        {!isVSCode && (
+          <label className="group flex cursor-pointer items-center justify-between gap-4 px-4 py-4 transition-colors hover:bg-[var(--interactive-hover)]/30">
+            <div className="flex min-w-0 flex-col">
+              <span className="typography-ui-label text-foreground">Always create worktree</span>
+              <span className="typography-meta text-muted-foreground">
+                {settingsAutoCreateWorktree
+                  ? `New session (Worktree): ${getModifierLabel()}+N • Standard: Shift+${getModifierLabel()}+N`
+                  : `New session (Standard): ${getModifierLabel()}+N • Worktree: Shift+${getModifierLabel()}+N`}
+              </span>
+            </div>
+            <Switch
+              checked={settingsAutoCreateWorktree}
+              onCheckedChange={handleAutoWorktreeChange}
+              className="data-[state=checked]:bg-[var(--primary-base)]"
+            />
+          </label>
+        )}
+      </div>
+      
       {(parsedModel.providerId || defaultAgent) && (
-        <div className="typography-meta text-muted-foreground">
+        <div className="mt-3 px-3 typography-meta text-muted-foreground">
           New sessions will start with:{' '}
           {parsedModel.providerId && (
             <span className="text-foreground">
@@ -369,67 +441,6 @@ export const DefaultsSettings: React.FC = () => {
           {defaultAgent && <span className="text-foreground">{defaultAgent}</span>}
         </div>
       )}
-
-
-      {!isVSCode && (
-        <div className="pt-2">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox
-              checked={settingsAutoCreateWorktree}
-              onChange={(checked) => handleAutoWorktreeChange({ target: { checked } } as React.ChangeEvent<HTMLInputElement>)}
-            />
-            <span className="typography-ui-label text-foreground">
-              Always create worktree for new sessions
-            </span>
-          </label>
-          <p className="typography-meta text-muted-foreground pl-5 mt-1">
-            {settingsAutoCreateWorktree
-              ? `New session (Worktree): ${getModifierLabel()} + N  •  New session (Standard): Shift + ${getModifierLabel()} + N`
-              : `New session (Standard): ${getModifierLabel()} + N  •  New session (Worktree): Shift + ${getModifierLabel()} + N`}
-          </p>
-        </div>
-      )}
-
-      <div className="border-t border-border/40 pt-4 mt-4 space-y-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="typography-ui-header font-semibold text-foreground">Zen Model</h3>
-            <Tooltip delayDuration={1000}>
-              <TooltipTrigger asChild>
-                <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent sideOffset={8} className="max-w-xs">
-                The free model used for lightweight internal tasks like commit message generation, PR descriptions, notification summarization, and TTS text summarization.
-              </TooltipContent>
-            </Tooltip>
-          </div>
-          <p className="typography-meta text-muted-foreground">
-            Used for commit messages, PR descriptions, and text summarization.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="typography-ui-label text-muted-foreground">Model</label>
-          {zenModelsLoading ? (
-            <span className="typography-meta text-muted-foreground">Loading models...</span>
-          ) : zenModels.length > 0 ? (
-            <Select value={selectedZenModel} onValueChange={handleZenModelChange}>
-              <SelectTrigger className="w-auto max-w-xs typography-meta text-foreground">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                {zenModels.map((model) => (
-                  <SelectItem key={model.id} value={model.id} className="pr-2 [&>span:first-child]:hidden">
-                    {model.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <span className="typography-meta text-muted-foreground">No free models available</span>
-          )}
-        </div>
-      </div>
     </div>
   );
 };

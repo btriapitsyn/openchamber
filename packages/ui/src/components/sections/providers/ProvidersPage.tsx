@@ -3,6 +3,7 @@ import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { Button } from '@/components/ui/button';
+import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -510,258 +511,249 @@ export const ProvidersPage: React.FC = () => {
 
   if (isAddMode) {
     return (
-      <ScrollableOverlay outerClassName="h-full" className="w-full">
-        <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <div className="space-y-1">
-          <h1 className="typography-ui-header font-semibold text-lg">Connect provider</h1>
-          <p className="typography-body text-muted-foreground">
-            Choose a provider to connect and set up its authentication.
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="typography-ui-header font-semibold text-foreground">Provider</h2>
-            <p className="typography-meta text-muted-foreground/80">
-              Select a provider that is not connected yet.
+      <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
+        <div className="mx-auto w-full max-w-4xl px-5 py-6">
+          <div className="mb-8">
+            <h1 className="typography-ui-header font-semibold text-foreground">Connect Provider</h1>
+            <p className="typography-meta text-muted-foreground mt-0.5">
+              Choose a provider to connect and set up its authentication.
             </p>
           </div>
 
-          {availableLoading ? (
-            <p className="typography-meta text-muted-foreground">Loading providers…</p>
-          ) : availableError ? (
-            <p className="typography-meta text-muted-foreground">{availableError}</p>
-          ) : unconnectedProviders.length === 0 ? (
-            <p className="typography-meta text-muted-foreground">All available providers are already connected.</p>
-          ) : (
-            <DropdownMenu open={providerDropdownOpen} onOpenChange={(open) => {
-              setProviderDropdownOpen(open);
-              if (!open) setProviderSearchQuery('');
-            }}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex w-fit items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 py-2 typography-ui-label",
-                    "hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  )}
-                >
-                  <span className={candidateProviderId ? "text-foreground" : "text-muted-foreground"}>
-                    {candidateProviderId
-                      ? (unconnectedProviders.find(p => p.id === candidateProviderId)?.name || candidateProviderId)
-                      : "Select provider"}
-                  </span>
-                  <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="start"
-                className="min-w-[200px] p-0"
-                onCloseAutoFocus={(e) => e.preventDefault()}
-              >
-                <div
-                  className="flex items-center gap-2 border-b px-3 py-2"
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  <RiSearchLine className="h-4 w-4 text-muted-foreground" />
-                  <input
-                    type="text"
-                    value={providerSearchQuery}
-                    onChange={(e) => setProviderSearchQuery(e.target.value)}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    placeholder="Search providers..."
-                    className="flex-1 bg-transparent typography-meta outline-none placeholder:text-muted-foreground"
-                    autoFocus
-                  />
+          <div className="mb-8">
+            <div className="mb-3 px-1">
+              <h2 className="typography-ui-header font-semibold text-foreground">Select Provider</h2>
+              <p className="typography-meta text-muted-foreground/80 mt-0.5">
+                Available providers that are not connected yet.
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <div className="flex min-w-0 flex-col">
+                  <span className="typography-ui-label text-foreground">Provider</span>
                 </div>
-                <ScrollableOverlay outerClassName="max-h-[240px]" className="p-1">
-                  {(() => {
-                    const filtered = unconnectedProviders.filter(p => {
-                      const query = providerSearchQuery.toLowerCase();
-                      return (p.name || p.id).toLowerCase().includes(query) || p.id.toLowerCase().includes(query);
-                    });
-                    if (filtered.length === 0) {
-                      return <p className="py-4 text-center typography-meta text-muted-foreground">No providers found</p>;
-                    }
-                    return filtered.map((provider) => (
-                      <DropdownMenuItem
-                        key={provider.id}
-                        onSelect={() => {
-                          setCandidateProviderId(provider.id);
-                          setProviderDropdownOpen(false);
-                          setProviderSearchQuery('');
-                        }}
-                        className="flex items-center justify-between"
+                <div className="flex-1 max-w-xs flex justify-end">
+                  {availableLoading ? (
+                    <p className="typography-meta text-muted-foreground">Loading…</p>
+                  ) : availableError ? (
+                    <p className="typography-meta text-muted-foreground">{availableError}</p>
+                  ) : unconnectedProviders.length === 0 ? (
+                    <p className="typography-meta text-muted-foreground">All providers connected.</p>
+                  ) : (
+                    <DropdownMenu open={providerDropdownOpen} onOpenChange={(open) => {
+                      setProviderDropdownOpen(open);
+                      if (!open) setProviderSearchQuery('');
+                    }}>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            "flex w-full items-center justify-between gap-2 rounded-md border border-[var(--interactive-border)] bg-background px-3 py-1.5 typography-ui-label",
+                            "hover:bg-[var(--interactive-hover)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--primary-base)]"
+                          )}
+                        >
+                          <span className={candidateProviderId ? "text-foreground" : "text-muted-foreground"}>
+                            {candidateProviderId
+                              ? (unconnectedProviders.find(p => p.id === candidateProviderId)?.name || candidateProviderId)
+                              : "Select provider"}
+                          </span>
+                          <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-[200px] p-0"
+                        onCloseAutoFocus={(e) => e.preventDefault()}
                       >
-                        <span>{provider.name || provider.id}</span>
-                        {candidateProviderId === provider.id && (
-                          <RiCheckLine className="h-4 w-4 text-primary" />
-                        )}
-                      </DropdownMenuItem>
-                    ));
-                  })()}
-                </ScrollableOverlay>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-
-        {candidateProviderId && (
-          <div className="space-y-4">
-            <h2 className="typography-ui-header font-semibold text-foreground">Authentication</h2>
-
-            {authLoading ? (
-              <p className="typography-meta text-muted-foreground">Loading authentication methods…</p>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="typography-ui-label font-medium text-foreground">API key</label>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Input
-                      type="password"
-                      value={apiKeyInputs[candidateProviderId] ?? ''}
-                      onChange={(event) =>
-                        setApiKeyInputs((prev) => ({
-                          ...prev,
-                          [candidateProviderId]: event.target.value,
-                        }))
-                      }
-                      placeholder="sk-..."
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => handleSaveApiKey(candidateProviderId)}
-                      disabled={authBusyKey === `api:${candidateProviderId}`}
-                      className="h-8"
-                    >
-                      {authBusyKey === `api:${candidateProviderId}` ? 'Saving…' : 'Save key'}
-                    </Button>
-                  </div>
-                  <p className="typography-meta text-muted-foreground">
-                    Keys are sent directly to OpenCode and never stored by OpenChamber.
-                  </p>
-                </div>
-
-                {(() => {
-                  const candidateAuthMethods = authMethodsByProvider[candidateProviderId] ?? [];
-                  const candidateOAuthMethods = candidateAuthMethods.filter(
-                    (method) => normalizeAuthType(method) === 'oauth'
-                  );
-
-                  if (candidateOAuthMethods.length === 0) {
-                    return null;
-                  }
-
-                  return (
-                    <div className="space-y-3">
-                      {candidateOAuthMethods.map((method, index) => {
-                        const methodLabel = method.label || method.name || `OAuth method ${index + 1}`;
-                        const codeKey = `${candidateProviderId}:${index}`;
-                        const isPending =
-                          pendingOAuth?.providerId === candidateProviderId && pendingOAuth?.methodIndex === index;
-
-                        return (
-                          <div key={`${candidateProviderId}-${methodLabel}`} className="space-y-2">
-                            <div className="flex items-center justify-between gap-2">
-                              <div>
-                                <div className="typography-ui-label font-medium text-foreground">{methodLabel}</div>
-                                {(method.description || method.help) && (
-                                  <div className="typography-meta text-muted-foreground">
-                                    {String(method.description || method.help)}
-                                  </div>
-                                )}
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOAuthStart(candidateProviderId, index)}
-                                disabled={authBusyKey === `oauth:${candidateProviderId}:${index}`}
-                                className="h-8"
+                        <div
+                          className="flex items-center gap-2 border-b border-[var(--surface-subtle)] px-3 py-2"
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
+                          <RiSearchLine className="h-4 w-4 text-muted-foreground" />
+                          <input
+                            type="text"
+                            value={providerSearchQuery}
+                            onChange={(e) => setProviderSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
+                            placeholder="Search..."
+                            className="flex-1 bg-transparent typography-meta outline-none placeholder:text-muted-foreground"
+                            autoFocus
+                          />
+                        </div>
+                        <ScrollableOverlay outerClassName="max-h-[240px]" className="p-1">
+                          {(() => {
+                            const filtered = unconnectedProviders.filter(p => {
+                              const query = providerSearchQuery.toLowerCase();
+                              return (p.name || p.id).toLowerCase().includes(query) || p.id.toLowerCase().includes(query);
+                            });
+                            if (filtered.length === 0) {
+                              return <p className="py-4 text-center typography-meta text-muted-foreground">No providers found</p>;
+                            }
+                            return filtered.map((provider) => (
+                              <DropdownMenuItem
+                                key={provider.id}
+                                onSelect={() => {
+                                  setCandidateProviderId(provider.id);
+                                  setProviderDropdownOpen(false);
+                                  setProviderSearchQuery('');
+                                }}
+                                className="flex items-center justify-between"
                               >
-                                Connect
-                              </Button>
-                            </div>
-
-                            {oauthDetails[codeKey]?.instructions && (
-                              <p className="typography-meta text-muted-foreground">
-                                {oauthDetails[codeKey]?.instructions}
-                              </p>
-                            )}
-
-                            {oauthDetails[codeKey]?.userCode && (
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <Input value={oauthDetails[codeKey]?.userCode} readOnly />
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}
-                                  className="h-8"
-                                >
-                                  Copy code
-                                </Button>
-                              </div>
-                            )}
-
-                            {oauthDetails[codeKey]?.url && (
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <Input value={oauthDetails[codeKey]?.url} readOnly />
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-8"
-                                    asChild
-                                  >
-                                    <a href={oauthDetails[codeKey]?.url} target="_blank" rel="noopener noreferrer">
-                                      Open link
-                                    </a>
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}
-                                    className="h-8"
-                                  >
-                                    Copy link
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-
-                            {isPending && (
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <Input
-                                  value={oauthCodes[codeKey] ?? ''}
-                                  onChange={(event) =>
-                                    setOauthCodes((prev) => ({
-                                      ...prev,
-                                      [codeKey]: event.target.value,
-                                    }))
-                                  }
-                                  placeholder="Authorization code (if required)"
-                                />
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleOAuthComplete(candidateProviderId, index)}
-                                  disabled={authBusyKey === `oauth-complete:${candidateProviderId}:${index}`}
-                                  className="h-8"
-                                >
-                                  {authBusyKey === `oauth-complete:${candidateProviderId}:${index}`
-                                    ? 'Saving…'
-                                    : 'Complete'}
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })()}
+                                <span>{provider.name || provider.id}</span>
+                                {candidateProviderId === provider.id && (
+                                  <RiCheckLine className="h-4 w-4 text-[var(--primary-base)]" />
+                                )}
+                              </DropdownMenuItem>
+                            ));
+                          })()}
+                        </ScrollableOverlay>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
               </div>
-            )}
+            </div>
           </div>
-        )}
+
+          {candidateProviderId && (
+            <div className="mb-8">
+              <div className="mb-3 px-1">
+                <h2 className="typography-ui-header font-semibold text-foreground">Authentication</h2>
+              </div>
+
+              {authLoading ? (
+                <p className="typography-meta text-muted-foreground px-1">Loading authentication methods…</p>
+              ) : (
+                <div className="rounded-lg bg-[var(--surface-elevated)]/70 p-3 space-y-4">
+                  
+                  <div className="space-y-2 px-1">
+                    <label className="typography-ui-label font-medium text-foreground">API key</label>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                      <Input
+                        type="password"
+                        value={apiKeyInputs[candidateProviderId] ?? ''}
+                        onChange={(event) =>
+                          setApiKeyInputs((prev) => ({
+                            ...prev,
+                            [candidateProviderId]: event.target.value,
+                          }))
+                        }
+                        placeholder="sk-..."
+                        className="flex-1 font-mono text-xs focus-visible:ring-[var(--primary-base)]"
+                      />
+                      <ButtonSmall
+                        onClick={() => handleSaveApiKey(candidateProviderId)}
+                        disabled={authBusyKey === `api:${candidateProviderId}`}
+                        className="shrink-0"
+                      >
+                        {authBusyKey === `api:${candidateProviderId}` ? 'Saving…' : 'Save Key'}
+                      </ButtonSmall>
+                    </div>
+                    <p className="typography-micro text-muted-foreground mt-1">
+                      Keys are sent directly to OpenCode and never stored by OpenChamber.
+                    </p>
+                  </div>
+
+                  {(() => {
+                    const candidateAuthMethods = authMethodsByProvider[candidateProviderId] ?? [];
+                    const candidateOAuthMethods = candidateAuthMethods.filter(
+                      (method) => normalizeAuthType(method) === 'oauth'
+                    );
+
+                    if (candidateOAuthMethods.length === 0) {
+                      return null;
+                    }
+
+                    return (
+                      <div className="space-y-4 pt-4 border-t border-[var(--surface-subtle)] px-1">
+                        {candidateOAuthMethods.map((method, index) => {
+                          const methodLabel = method.label || method.name || `OAuth method ${index + 1}`;
+                          const codeKey = `${candidateProviderId}:${index}`;
+                          const isPending =
+                            pendingOAuth?.providerId === candidateProviderId && pendingOAuth?.methodIndex === index;
+
+                          return (
+                            <div key={`${candidateProviderId}-${methodLabel}`} className="space-y-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="typography-ui-label font-medium text-foreground">{methodLabel}</div>
+                                  {(method.description || method.help) && (
+                                    <div className="typography-meta text-muted-foreground">
+                                      {String(method.description || method.help)}
+                                    </div>
+                                  )}
+                                </div>
+                                <ButtonSmall
+                                  variant="outline"
+                                  onClick={() => handleOAuthStart(candidateProviderId, index)}
+                                  disabled={authBusyKey === `oauth:${candidateProviderId}:${index}`}
+                                >
+                                  Connect
+                                </ButtonSmall>
+                              </div>
+
+                              {oauthDetails[codeKey]?.instructions && (
+                                <p className="typography-meta text-[var(--primary-base)] bg-[var(--primary-base)]/10 px-2 py-1.5 rounded">
+                                  {oauthDetails[codeKey]?.instructions}
+                                </p>
+                              )}
+
+                              {oauthDetails[codeKey]?.userCode && (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Input value={oauthDetails[codeKey]?.userCode} readOnly className="font-mono text-center tracking-widest bg-muted/50" />
+                                  <ButtonSmall
+                                    variant="outline"
+                                    onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}
+                                  >
+                                    Copy Code
+                                  </ButtonSmall>
+                                </div>
+                              )}
+
+                              {oauthDetails[codeKey]?.url && (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Input value={oauthDetails[codeKey]?.url} readOnly className="text-xs text-muted-foreground bg-muted/50" />
+                                  <div className="flex gap-1 shrink-0">
+                                  <Button size="sm" variant="outline" className="h-8" asChild>
+                                    <a href={oauthDetails[codeKey]?.url} target="_blank" rel="noopener noreferrer">Open</a>
+                                  </Button>
+                                    <ButtonSmall variant="outline" onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}>Copy</ButtonSmall>
+                                  </div>
+                                </div>
+                              )}
+
+                              {isPending && (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <Input
+                                    value={oauthCodes[codeKey] ?? ''}
+                                    onChange={(event) =>
+                                      setOauthCodes((prev) => ({
+                                        ...prev,
+                                        [codeKey]: event.target.value,
+                                      }))
+                                    }
+                                    placeholder="Paste authorization code"
+                                    className="font-mono text-xs"
+                                  />
+                                  <ButtonSmall
+                                    onClick={() => handleOAuthComplete(candidateProviderId, index)}
+                                    disabled={authBusyKey === `oauth-complete:${candidateProviderId}:${index}`}
+                                  >
+                                    {authBusyKey === `oauth-complete:${candidateProviderId}:${index}` ? 'Saving…' : 'Complete'}
+                                  </ButtonSmall>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </ScrollableOverlay>
     );
@@ -780,7 +772,6 @@ export const ProvidersPage: React.FC = () => {
   }
 
   const providerModels = Array.isArray(selectedProvider.models) ? selectedProvider.models : [];
-
   const providerAuthMethods = authMethodsByProvider[selectedProvider.id] ?? [];
   const oauthAuthMethods = providerAuthMethods.filter((method) => normalizeAuthType(method) === 'oauth');
 
@@ -793,170 +784,269 @@ export const ProvidersPage: React.FC = () => {
   });
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <ProviderLogo providerId={selectedProvider.id} className="h-5 w-5" />
-          <h1 className="typography-ui-header font-semibold text-lg">
-            {selectedProvider.name || selectedProvider.id}
-          </h1>
-        </div>
-        <p className="typography-body text-muted-foreground">
-          Provider ID: {selectedProvider.id}
-        </p>
-      </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="typography-ui-header font-semibold text-foreground">Authentication</h2>
-          {selectedProviderId !== ADD_PROVIDER_ID && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowAuthPanel((prev) => !prev)}
-              className="h-8"
-            >
-              {showAuthPanel ? 'Hide' : 'Reconnect'}
-            </Button>
-          )}
-        </div>
-
-        {!showAuthPanel && selectedProviderId !== ADD_PROVIDER_ID ? (
-          <p className="typography-meta text-muted-foreground">
-            Connected. Use Reconnect to update credentials.
-          </p>
-        ) : authLoading ? (
-          <p className="typography-meta text-muted-foreground">Loading authentication methods…</p>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground">API key</label>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  type="password"
-                  value={apiKeyInputs[selectedProvider.id] ?? ''}
-                  onChange={(event) =>
-                    setApiKeyInputs((prev) => ({
-                      ...prev,
-                      [selectedProvider.id]: event.target.value,
-                    }))
-                  }
-                  placeholder="sk-..."
-                />
-                <Button
-                  size="sm"
-                  onClick={() => handleSaveApiKey(selectedProvider.id)}
-                  disabled={authBusyKey === `api:${selectedProvider.id}`}
-                  className="h-8"
-                >
-                  {authBusyKey === `api:${selectedProvider.id}` ? 'Saving…' : 'Save key'}
-                </Button>
-              </div>
-              <p className="typography-meta text-muted-foreground">
-                Keys are sent directly to OpenCode and never stored by OpenChamber.
+    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
+      <div className="mx-auto w-full max-w-4xl px-5 py-6">
+        
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="min-w-0 flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-muted)]">
+              <ProviderLogo providerId={selectedProvider.id} className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="typography-ui-header font-semibold text-foreground truncate">
+                {selectedProvider.name || selectedProvider.id}
+              </h1>
+              <p className="typography-meta text-muted-foreground truncate">
+                ID: <span className="font-mono">{selectedProvider.id}</span>
               </p>
             </div>
+          </div>
+        </div>
 
-            {oauthAuthMethods.length > 0 && (
-              <div className="space-y-3">
-                {oauthAuthMethods.map((method, index) => {
-                  const methodLabel = method.label || method.name || `OAuth method ${index + 1}`;
-                  const codeKey = `${selectedProvider.id}:${index}`;
-                  const isPending =
-                    pendingOAuth?.providerId === selectedProvider.id && pendingOAuth?.methodIndex === index;
+        {/* Authentication */}
+        <div className="mb-8">
+          <div className="mb-3 px-1 flex items-center justify-between gap-2">
+            <div>
+              <h2 className="typography-ui-header font-semibold text-foreground">Authentication</h2>
+              <p className="typography-meta text-muted-foreground mt-0.5">Manage API keys and OAuth</p>
+            </div>
+            <ButtonSmall
+              variant="outline"
+              onClick={() => setShowAuthPanel((prev) => !prev)}
+            >
+              {showAuthPanel ? 'Hide' : 'Reconnect'}
+            </ButtonSmall>
+          </div>
 
-                  return (
-                    <div key={`${selectedProvider.id}-${methodLabel}`} className="space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <div className="typography-ui-label font-medium text-foreground">{methodLabel}</div>
-                          {(method.description || method.help) && (
-                            <div className="typography-meta text-muted-foreground">
-                              {String(method.description || method.help)}
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+            {!showAuthPanel ? (
+              <div className="flex items-center justify-between gap-4 px-4 py-3">
+                <div className="flex min-w-0 flex-col">
+                  <span className="typography-ui-label text-foreground flex items-center gap-1.5"><RiCheckLine className="w-4 h-4 text-[var(--status-success)]" /> Connected</span>
+                  <span className="typography-meta text-muted-foreground ml-5.5">Use Reconnect to update credentials</span>
+                </div>
+              </div>
+            ) : authLoading ? (
+              <div className="py-2 px-3 typography-meta text-muted-foreground">Loading authentication methods…</div>
+            ) : (
+              <div className="px-3 py-3 space-y-4">
+                <div className="space-y-2">
+                  <label className="typography-ui-label font-medium text-foreground">API key</label>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <Input
+                      type="password"
+                      value={apiKeyInputs[selectedProvider.id] ?? ''}
+                      onChange={(event) =>
+                        setApiKeyInputs((prev) => ({
+                          ...prev,
+                          [selectedProvider.id]: event.target.value,
+                        }))
+                      }
+                      placeholder="sk-..."
+                      className="flex-1 font-mono text-xs focus-visible:ring-[var(--primary-base)]"
+                    />
+                    <ButtonSmall
+                      onClick={() => handleSaveApiKey(selectedProvider.id)}
+                      disabled={authBusyKey === `api:${selectedProvider.id}`}
+                      className="shrink-0"
+                    >
+                      {authBusyKey === `api:${selectedProvider.id}` ? 'Saving…' : 'Save Key'}
+                    </ButtonSmall>
+                  </div>
+                  <p className="typography-meta text-muted-foreground">
+                    Keys are sent directly to OpenCode and never stored by OpenChamber.
+                  </p>
+                </div>
+
+                {oauthAuthMethods.length > 0 && (
+                  <div className="space-y-4 pt-4 border-t border-[var(--surface-subtle)]">
+                    {oauthAuthMethods.map((method, index) => {
+                      const methodLabel = method.label || method.name || `OAuth method ${index + 1}`;
+                      const codeKey = `${selectedProvider.id}:${index}`;
+                      const isPending =
+                        pendingOAuth?.providerId === selectedProvider.id && pendingOAuth?.methodIndex === index;
+
+                      return (
+                        <div key={`${selectedProvider.id}-${methodLabel}`} className="space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="typography-ui-label font-medium text-foreground">{methodLabel}</div>
+                              {(method.description || method.help) && (
+                                <div className="typography-meta text-muted-foreground">
+                                  {String(method.description || method.help)}
+                                </div>
+                              )}
+                            </div>
+                            <ButtonSmall
+                              variant="outline"
+                              onClick={() => handleOAuthStart(selectedProvider.id, index)}
+                              disabled={authBusyKey === `oauth:${selectedProvider.id}:${index}`}
+                            >
+                              Connect
+                            </ButtonSmall>
+                          </div>
+
+                          {oauthDetails[codeKey]?.instructions && (
+                            <p className="typography-meta text-[var(--primary-base)] bg-[var(--primary-base)]/10 px-2 py-1.5 rounded">
+                              {oauthDetails[codeKey]?.instructions}
+                            </p>
+                          )}
+
+                          {oauthDetails[codeKey]?.userCode && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Input value={oauthDetails[codeKey]?.userCode} readOnly className="font-mono text-center tracking-widest bg-muted/50" />
+                              <ButtonSmall
+                                variant="outline"
+                                onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}
+                              >
+                                Copy Code
+                              </ButtonSmall>
+                            </div>
+                          )}
+
+                          {oauthDetails[codeKey]?.url && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Input value={oauthDetails[codeKey]?.url} readOnly className="text-xs text-muted-foreground bg-muted/50" />
+                              <div className="flex gap-1 shrink-0">
+                                  <Button size="sm" variant="outline" className="h-8" asChild>
+                                    <a href={oauthDetails[codeKey]?.url} target="_blank" rel="noopener noreferrer">Open</a>
+                                  </Button>
+                                <ButtonSmall variant="outline" onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}>Copy</ButtonSmall>
+                              </div>
+                            </div>
+                          )}
+
+                          {isPending && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Input
+                                value={oauthCodes[codeKey] ?? ''}
+                                onChange={(event) =>
+                                  setOauthCodes((prev) => ({
+                                    ...prev,
+                                    [codeKey]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Paste authorization code"
+                                className="font-mono text-xs"
+                              />
+                              <ButtonSmall
+                                onClick={() => handleOAuthComplete(selectedProvider.id, index)}
+                                disabled={authBusyKey === `oauth-complete:${selectedProvider.id}:${index}`}
+                              >
+                                {authBusyKey === `oauth-complete:${selectedProvider.id}:${index}` ? 'Saving…' : 'Complete'}
+                              </ButtonSmall>
                             </div>
                           )}
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleOAuthStart(selectedProvider.id, index)}
-                          disabled={authBusyKey === `oauth:${selectedProvider.id}:${index}`}
-                          className="h-8"
-                        >
-                          Connect
-                        </Button>
-                      </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
-                      {oauthDetails[codeKey]?.instructions && (
-                        <p className="typography-meta text-muted-foreground">
-                          {oauthDetails[codeKey]?.instructions}
-                        </p>
+        {/* Connection */}
+        <div className="mb-8">
+          <div className="mb-3 px-1">
+            <h2 className="typography-ui-header font-semibold text-foreground">Connection Details</h2>
+            <p className="typography-meta text-muted-foreground mt-0.5">Configuration origins and status</p>
+          </div>
+          
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-col">
+              {selectedSources && (selectedSources.auth.exists || selectedSources.user.exists || selectedSources.project.exists || selectedSources.custom?.exists) ? (
+                <span className="typography-meta text-muted-foreground">
+                  Configured in: {[
+                    selectedSources.auth.exists ? 'auth credentials' : null,
+                    selectedSources.user.exists ? 'user config' : null,
+                    selectedSources.project.exists ? 'project config' : null,
+                    selectedSources.custom?.exists ? 'custom config' : null,
+                  ].filter(Boolean).join(', ')}
+                </span>
+              ) : (
+                <span className="typography-meta text-muted-foreground">No active configuration source</span>
+              )}
+            </div>
+            
+            <ButtonSmall
+              variant="outline"
+              onClick={() => handleDisconnectProvider(selectedProvider.id)}
+              disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
+              className="text-[var(--status-error)] hover:text-[var(--status-error)] border-[var(--status-error)]/30 hover:bg-[var(--status-error)]/10"
+            >
+              {authBusyKey === `disconnect:${selectedProvider.id}` ? 'Disconnecting…' : 'Disconnect Provider'}
+            </ButtonSmall>
+          </div>
+        </div>
+
+        {/* Models */}
+        <div className="mb-8">
+          <div className="mb-3 px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="typography-ui-header font-semibold text-foreground">Available Models</h2>
+              <p className="typography-meta text-muted-foreground mt-0.5">
+                Models exposed by this provider
+              </p>
+            </div>
+            <div className="relative">
+              <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={modelQuery}
+                onChange={(event) => setModelQuery(event.target.value)}
+                placeholder="Filter models..."
+                className="pl-8 h-8 w-full sm:w-[200px]"
+              />
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 py-1 border border-[var(--surface-subtle)]">
+            {filteredModels.length === 0 ? (
+              <p className="typography-meta text-muted-foreground py-4 px-3 text-center">No models match this filter.</p>
+            ) : (
+              <div className="divide-y divide-[var(--surface-subtle)]">
+                {filteredModels.map((model) => {
+                  const modelId = typeof model?.id === 'string' ? model.id : '';
+                  const modelName = typeof model?.name === 'string' ? model.name : modelId;
+                  const metadata = modelId ? getModelMetadata(selectedProvider.id, modelId) as ModelMetadata | undefined : undefined;
+
+                  const contextTokens = formatTokens(metadata?.limit?.context);
+                  const outputTokens = formatTokens(metadata?.limit?.output);
+
+                  const capabilityIcons: Array<{ key: string; icon: typeof RiToolsLine; label: string }> = [];
+                  if (metadata?.tool_call) capabilityIcons.push({ key: 'tools', icon: RiToolsLine, label: 'Tool calling' });
+                  if (metadata?.reasoning) capabilityIcons.push({ key: 'reasoning', icon: RiBrainAi3Line, label: 'Reasoning' });
+                  if (metadata?.attachment) capabilityIcons.push({ key: 'image', icon: RiFileImageLine, label: 'Image input' });
+
+                  return (
+                    <div
+                      key={modelId}
+                      className="flex items-center gap-3 px-3 py-2.5"
+                    >
+                      <span className="typography-meta font-medium text-foreground truncate flex-1 min-w-0">
+                        {modelName}
+                      </span>
+                      {(contextTokens || outputTokens) && (
+                        <span className="typography-micro text-muted-foreground flex-shrink-0 bg-[var(--surface-muted)] px-1.5 py-0.5 rounded">
+                          {contextTokens ? `${contextTokens} ctx` : ''}
+                          {contextTokens && outputTokens ? ' · ' : ''}
+                          {outputTokens ? `${outputTokens} out` : ''}
+                        </span>
                       )}
-
-                      {oauthDetails[codeKey]?.userCode && (
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <Input value={oauthDetails[codeKey]?.userCode} readOnly />
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}
-                            className="h-8"
-                          >
-                            Copy code
-                          </Button>
-                        </div>
-                      )}
-
-                      {oauthDetails[codeKey]?.url && (
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <Input value={oauthDetails[codeKey]?.url} readOnly />
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8"
-                              asChild
+                      {capabilityIcons.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
+                          {capabilityIcons.map(({ key, icon: Icon, label }) => (
+                            <span
+                              key={key}
+                              className="flex h-5 w-5 rounded items-center justify-center text-muted-foreground bg-[var(--surface-muted)]"
+                              title={label}
+                              aria-label={label}
                             >
-                              <a href={oauthDetails[codeKey]?.url} target="_blank" rel="noopener noreferrer">
-                                Open link
-                              </a>
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}
-                              className="h-8"
-                            >
-                              Copy link
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
-
-                      {isPending && (
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                          <Input
-                            value={oauthCodes[codeKey] ?? ''}
-                            onChange={(event) =>
-                              setOauthCodes((prev) => ({
-                                ...prev,
-                                [codeKey]: event.target.value,
-                              }))
-                            }
-                            placeholder="Paste authorization code"
-                          />
-                          <Button
-                            size="sm"
-                            onClick={() => handleOAuthComplete(selectedProvider.id, index)}
-                            disabled={authBusyKey === `oauth-complete:${selectedProvider.id}:${index}`}
-                            className="h-8"
-                          >
-                            {authBusyKey === `oauth-complete:${selectedProvider.id}:${index}`
-                              ? 'Saving…'
-                              : 'Complete'}
-                          </Button>
+                              <Icon className="h-3 w-3" />
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -965,98 +1055,7 @@ export const ProvidersPage: React.FC = () => {
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        <h2 className="typography-ui-header font-semibold text-foreground">Connection</h2>
-        {selectedSources && (selectedSources.auth.exists || selectedSources.user.exists || selectedSources.project.exists || selectedSources.custom?.exists) && (
-          <div className="typography-meta text-muted-foreground">
-            Configured in: {[
-              selectedSources.auth.exists ? 'auth credentials' : null,
-              selectedSources.user.exists ? 'user config' : null,
-              selectedSources.project.exists ? 'project config' : null,
-              selectedSources.custom?.exists ? 'custom config' : null,
-            ].filter(Boolean).join(', ')}
-          </div>
-        )}
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handleDisconnectProvider(selectedProvider.id)}
-          disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
-          className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-        >
-          {authBusyKey === `disconnect:${selectedProvider.id}` ? 'Disconnecting…' : 'Disconnect provider'}
-        </Button>
-      </div>
-
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="typography-ui-header font-semibold text-foreground">Models</h2>
-          <p className="typography-meta text-muted-foreground/80">
-            Browse and filter models exposed by this provider.
-          </p>
         </div>
-
-        <Input
-          value={modelQuery}
-          onChange={(event) => setModelQuery(event.target.value)}
-          placeholder="Filter models..."
-        />
-
-        <div className="border-t border-border/40">
-          {filteredModels.length === 0 ? (
-            <p className="typography-meta text-muted-foreground py-3 px-2">No models match this filter.</p>
-          ) : (
-            filteredModels.map((model) => {
-              const modelId = typeof model?.id === 'string' ? model.id : '';
-              const modelName = typeof model?.name === 'string' ? model.name : modelId;
-              const metadata = modelId ? getModelMetadata(selectedProvider.id, modelId) as ModelMetadata | undefined : undefined;
-
-              const contextTokens = formatTokens(metadata?.limit?.context);
-              const outputTokens = formatTokens(metadata?.limit?.output);
-
-              const capabilityIcons: Array<{ key: string; icon: typeof RiToolsLine; label: string }> = [];
-              if (metadata?.tool_call) capabilityIcons.push({ key: 'tools', icon: RiToolsLine, label: 'Tool calling' });
-              if (metadata?.reasoning) capabilityIcons.push({ key: 'reasoning', icon: RiBrainAi3Line, label: 'Reasoning' });
-              if (metadata?.attachment) capabilityIcons.push({ key: 'image', icon: RiFileImageLine, label: 'Image input' });
-
-              return (
-                <div
-                  key={modelId}
-                  className="flex items-center gap-2 px-2 py-1.5 border-b border-border/40"
-                >
-                  <span className="typography-meta font-medium text-foreground truncate flex-1 min-w-0">
-                    {modelName}
-                  </span>
-                  {(contextTokens || outputTokens) && (
-                    <span className="typography-micro text-muted-foreground flex-shrink-0">
-                      {contextTokens ? `${contextTokens} ctx` : ''}
-                      {contextTokens && outputTokens ? ' · ' : ''}
-                      {outputTokens ? `${outputTokens} out` : ''}
-                    </span>
-                  )}
-                  {capabilityIcons.length > 0 && (
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {capabilityIcons.map(({ key, icon: Icon, label }) => (
-                        <span
-                          key={key}
-                          className="flex h-4 w-4 items-center justify-center text-muted-foreground"
-                          title={label}
-                          aria-label={label}
-                        >
-                          <Icon className="h-3 w-3" />
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
       </div>
     </ScrollableOverlay>
   );

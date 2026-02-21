@@ -7,6 +7,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { DEFAULT_MESSAGE_LIMIT } from '@/stores/types/sessionTypes';
+import { cn } from '@/lib/utils';
 
 const MIN_LIMIT = 10;
 const MAX_LIMIT = 500;
@@ -80,8 +81,8 @@ export const MemoryLimitsSettings: React.FC = () => {
   const isDefault = messageLimit === DEFAULT_MESSAGE_LIMIT;
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
+    <div className="mb-8">
+      <div className="mb-3 px-1">
         <div className="flex items-center gap-2">
           <h3 className="typography-ui-header font-semibold text-foreground">Message Memory</h3>
           <Tooltip delayDuration={1000}>
@@ -94,32 +95,34 @@ export const MemoryLimitsSettings: React.FC = () => {
             </TooltipContent>
           </Tooltip>
         </div>
+        <p className="typography-meta text-muted-foreground mt-0.5">
+          Limit how many messages are loaded per session in memory.
+        </p>
       </div>
 
-      <div className="space-y-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-col">
-              <span className="typography-ui-label text-foreground">Message limit</span>
-              <span className="typography-meta text-muted-foreground">Messages loaded per session</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {!isDefault && (
-                <span className="typography-meta text-muted-foreground/60">(default: {DEFAULT_MESSAGE_LIMIT})</span>
-              )}
-              {isMobile ? (
-                <MobileInput value={messageLimit} min={MIN_LIMIT} max={MAX_LIMIT} onChange={handleChange} />
-              ) : (
-                <NumberInput
-                  value={messageLimit}
-                  onValueChange={handleChange}
-                  min={MIN_LIMIT}
-                  max={MAX_LIMIT}
-                  step={10}
-                  aria-label="Message limit"
-                />
-              )}
-            </div>
+      <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+          <div className="flex min-w-0 flex-col">
+            <span className="typography-ui-label text-foreground">Message limit</span>
+            <span className="typography-meta text-muted-foreground">Messages loaded per session</span>
+          </div>
+          <div className="flex items-center gap-2 justify-end">
+            {!isDefault && (
+              <span className="typography-meta text-muted-foreground/60 mr-2">(default: {DEFAULT_MESSAGE_LIMIT})</span>
+            )}
+            {isMobile ? (
+              <MobileInput value={messageLimit} min={MIN_LIMIT} max={MAX_LIMIT} onChange={handleChange} />
+            ) : (
+              <NumberInput
+                value={messageLimit}
+                onValueChange={handleChange}
+                min={MIN_LIMIT}
+                max={MAX_LIMIT}
+                step={10}
+                aria-label="Message limit"
+                className="w-20 tabular-nums"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -171,7 +174,10 @@ const MobileInput: React.FC<{ value: number; min: number; max: number; onChange:
       onChange={handleChange}
       onBlur={handleBlur}
       aria-label="Message limit"
-      className="h-8 w-20 rounded-lg border border-border bg-background px-2 text-center typography-ui-label text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/50"
+      className={cn(
+        "h-8 w-20 rounded-md border border-[var(--interactive-border)] bg-background px-2 text-center",
+        "typography-ui-label text-foreground focus:outline-none focus:ring-1 focus:ring-[var(--primary-base)]"
+      )}
     />
   );
 };

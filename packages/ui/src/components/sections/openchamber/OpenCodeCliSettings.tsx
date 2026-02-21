@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Button } from '@/components/ui/button';
+import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import { isDesktopShell, isTauriShell } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
@@ -79,44 +79,54 @@ export const OpenCodeCliSettings: React.FC = () => {
   }, [value]);
 
   return (
-    <div className="space-y-3">
-      <div className="space-y-1">
-        <h3 className="typography-ui-header font-semibold text-foreground">OpenCode CLI</h3>
-        <p className="typography-meta text-muted-foreground">
+    <div className="mb-8">
+      <div className="mb-3 px-1">
+        <h3 className="typography-ui-header font-semibold text-foreground">
+          OpenCode CLI
+        </h3>
+        <p className="typography-meta text-muted-foreground mt-0.5">
           Optional absolute path to the <code className="font-mono text-xs">opencode</code> binary.
-          Useful when your desktop app launch environment has a stale PATH.
-          If your <code className="font-mono text-xs">opencode</code> shim requires Node/Bun (e.g. <code className="font-mono text-xs">env node</code> or <code className="font-mono text-xs">env bun</code>), make sure that runtime is installed.
         </p>
       </div>
 
-      <div className="flex gap-2">
-        <Input
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="/Users/you/.bun/bin/opencode"
-          disabled={isLoading || isSaving}
-          className="flex-1 font-mono text-xs"
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={handleBrowse}
-          disabled={isLoading || isSaving || !isDesktopShell() || !isTauriShell()}
-        >
-          Browse
-        </Button>
-        <Button
-          type="button"
-          onClick={handleSaveAndReload}
-          disabled={isLoading || isSaving}
-        >
-          {isSaving ? 'Saving…' : 'Save + Reload'}
-        </Button>
-      </div>
+      <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+          <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+            <span className="typography-ui-label text-foreground">Binary Path</span>
+            <span className="typography-meta text-muted-foreground">Useful when launch environment has stale PATH</span>
+          </div>
+          <div className="flex items-center gap-2 flex-1 justify-end">
+            <Input
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder="/Users/you/.bun/bin/opencode"
+              disabled={isLoading || isSaving}
+              className="flex-1 max-w-sm font-mono text-xs h-8 border-[var(--interactive-border)] focus-visible:ring-[var(--primary-base)]"
+            />
+            <ButtonSmall
+              type="button"
+              variant="outline"
+              onClick={handleBrowse}
+              disabled={isLoading || isSaving || !isDesktopShell() || !isTauriShell()}
+            >
+              Browse
+            </ButtonSmall>
+          </div>
+        </div>
 
-      <div className="typography-micro text-muted-foreground">
-        Tip: you can also use <span className="font-mono">OPENCODE_BINARY</span> env var, but this setting persists in
-        <span className="font-mono"> ~/.config/openchamber/settings.json</span>.
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-4">
+          <div className="typography-micro text-muted-foreground/70 flex-1">
+            Tip: you can also use <span className="font-mono">OPENCODE_BINARY</span> env var, but this setting persists in <span className="font-mono">~/.config/openchamber/settings.json</span>.
+          </div>
+          <ButtonSmall
+            type="button"
+            onClick={handleSaveAndReload}
+            disabled={isLoading || isSaving}
+            className="shrink-0"
+          >
+            {isSaving ? 'Saving…' : 'Save + Reload'}
+          </ButtonSmall>
+        </div>
       </div>
     </div>
   );

@@ -11,9 +11,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiInformationLine } from '@remixicon/react';
 import type { UsageWindows, QuotaProviderId } from '@/types';
 import { getAllModelFamilies, getDisplayModelName, sortModelFamilies, groupModelsByFamilyWithGetter } from '@/lib/quota/model-families';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -83,7 +84,6 @@ export const UsagePage: React.FC = () => {
     void updateDesktopSettings({ usageDropdownProviders: next });
   }, [dropdownProviderIds, selectedProviderId, setDropdownProviderIds]);
 
-  // Get models for the selected provider
   const providerModels = React.useMemo((): ModelInfo[] => {
     if (!usage?.models) return [];
     return Object.entries(usage.models)
@@ -91,14 +91,12 @@ export const UsagePage: React.FC = () => {
       .filter((model) => Object.keys(model.windows.windows).length > 0);
   }, [usage?.models]);
 
-  // Apply default selections on mount if no prior selections exist
   React.useEffect(() => {
     if (selectedProviderId && providerModels.length > 0) {
       applyDefaultSelections(selectedProviderId, providerModels.map((m) => m.name));
     }
   }, [selectedProviderId, providerModels, applyDefaultSelections]);
 
-  // Group models by family
   const modelsByFamily = React.useMemo(() => {
     if (!selectedProviderId || providerModels.length === 0) {
       return new Map<string | null, ModelInfo[]>();
@@ -110,16 +108,13 @@ export const UsagePage: React.FC = () => {
     );
   }, [providerModels, selectedProviderId]);
 
-  // Get sorted families
   const sortedFamilies = React.useMemo(() => {
     if (!selectedProviderId) return [];
     const families = getAllModelFamilies(selectedProviderId as QuotaProviderId);
     return sortModelFamilies(families);
   }, [selectedProviderId]);
 
-  // Collapsible state for family sections (persist per provider)
   const [collapsedFamilies, setCollapsedFamilies] = React.useState<Record<string, boolean>>(() => {
-    // Default: all families start expanded (not collapsed)
     return {};
   });
 
@@ -133,7 +128,6 @@ export const UsagePage: React.FC = () => {
   const handleModelToggle = React.useCallback((modelName: string) => {
     if (!selectedProviderId) return;
     toggleModelSelected(selectedProviderId, modelName);
-    // Also update settings to persist
     const currentSelected = selectedModels[selectedProviderId] ?? [];
     const isSelected = currentSelected.includes(modelName);
     const nextSelected = isSelected
@@ -143,7 +137,6 @@ export const UsagePage: React.FC = () => {
     void updateDesktopSettings({ usageSelectedModels: nextSettings });
   }, [selectedProviderId, selectedModels, toggleModelSelected]);
 
-  // Get selected models for this provider
   const providerSelectedModels = selectedProviderId ? (selectedModels[selectedProviderId] ?? []) : [];
 
   if (!selectedProviderId) {
@@ -155,178 +148,219 @@ export const UsagePage: React.FC = () => {
   }
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <div className="space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <ProviderLogo providerId={selectedProviderId} className="h-5 w-5" />
-                <h1 className="typography-ui-header font-semibold text-lg">{providerName} Usage</h1>
-              </div>
-              <p className="typography-meta text-muted-foreground">
-                {isLoading ? 'Refreshing usage...' : `Last updated ${formatTime(lastUpdated)}`}
+    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
+      <div className="mx-auto w-full max-w-4xl px-5 py-6">
+        
+        {/* Header */}
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-muted)]">
+              <ProviderLogo providerId={selectedProviderId} className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="typography-ui-header font-semibold text-foreground truncate flex items-center gap-2">
+                {providerName} Usage
+              </h1>
+              <p className="typography-meta text-muted-foreground truncate">
+                {isLoading ? (
+                  <span className="animate-pulse">Refreshing usage...</span>
+                ) : (
+                  `Last updated: ${formatTime(lastUpdated)}`
+                )}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="typography-micro text-muted-foreground">Show in dropdown</span>
-            <Switch
-              checked={showInDropdown}
-              onCheckedChange={handleDropdownToggle}
-              aria-label={`Show ${providerName} in usage dropdown`}
-              className="data-[state=checked]:bg-[var(--status-info)]"
-            />
+        </div>
+
+        {/* Global Options */}
+        <div className="mb-8">
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+            <label className="group flex cursor-pointer items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
+              <div className="flex min-w-0 flex-col">
+                <div className="flex items-center gap-1.5">
+                  <span className="typography-ui-label text-foreground">Show in Dropdown</span>
+                  <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                      <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={8} className="max-w-xs">
+                      When enabled, this provider's usage will be visible in the quick access dropdown menu in the app header.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <span className="typography-meta text-muted-foreground">Pin {providerName} usage to the header menu</span>
+              </div>
+              <Switch
+                checked={showInDropdown}
+                onCheckedChange={handleDropdownToggle}
+                className="data-[state=checked]:bg-[var(--primary-base)]"
+              />
+            </label>
           </div>
         </div>
 
+        {/* State Messages */}
         {!selectedResult && (
-          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
-            <p className="typography-body">No usage data available yet.</p>
+          <div className="mb-8 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-6 text-center">
+            <p className="typography-ui-label text-foreground">No usage data available yet.</p>
           </div>
         )}
 
         {error && (
-          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
-            <p className="typography-body">Failed to refresh usage data.</p>
-            <p className="typography-meta mt-1">{error}</p>
+          <div className="mb-8 rounded-lg border border-[var(--status-error-border)] bg-[var(--status-error-background)] px-4 py-3">
+            <p className="typography-ui-label font-medium text-[var(--status-error)]">Failed to refresh usage data</p>
+            <p className="typography-meta text-[var(--status-error)]/80 mt-1">{error}</p>
           </div>
         )}
 
         {selectedResult && !selectedResult.configured && (
-          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
-            <p className="typography-body">Provider is not configured yet.</p>
-            <p className="typography-meta mt-1">
+          <div className="mb-8 rounded-lg border border-[var(--status-warning-border)] bg-[var(--status-warning-background)] px-4 py-3">
+            <p className="typography-ui-label font-medium text-[var(--status-warning)]">Provider not configured</p>
+            <p className="typography-meta text-[var(--status-warning)]/80 mt-1">
               Add credentials in the Providers tab to enable usage tracking.
             </p>
           </div>
         )}
 
+        {/* Overall Usage Windows */}
         {usage?.windows && Object.keys(usage.windows).length > 0 && (
-          <div className="space-y-3">
-            {Object.entries(usage.windows).map(([label, window]) => (
-              <UsageCard key={label} title={label} window={window} />
-            ))}
+          <div className="mb-8 rounded-lg bg-[var(--surface-elevated)]/70 py-1 border border-[var(--surface-subtle)]">
+            <div className="divide-y divide-[var(--surface-subtle)]">
+              {Object.entries(usage.windows).map(([label, window]) => (
+                <UsageCard key={label} title={label} window={window} />
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Models Section - Grouped by Family */}
+        {/* Models Section */}
         {providerModels.length > 0 && (
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <h2 className="typography-ui-header font-semibold text-foreground">Models</h2>
-              <p className="typography-meta text-muted-foreground">
-                Toggle on to show in header dropdown
+          <div className="mb-8">
+            <div className="mb-3 px-1">
+              <h2 className="typography-ui-header font-semibold text-foreground">Model Quotas</h2>
+              <p className="typography-meta text-muted-foreground mt-0.5">
+                Toggle models to show them in the quick access dropdown.
               </p>
             </div>
 
-            {/* Predefined families (Gemini, Claude) */}
-            {sortedFamilies.map((family) => {
-              const familyModels = modelsByFamily.get(family.id) ?? [];
-              if (familyModels.length === 0) return null;
+            <div className="space-y-4">
+              {/* Predefined families */}
+              {sortedFamilies.map((family) => {
+                const familyModels = modelsByFamily.get(family.id) ?? [];
+                if (familyModels.length === 0) return null;
 
-              const isCollapsed = collapsedFamilies[family.id] ?? false;
+                const isCollapsed = collapsedFamilies[family.id] ?? false;
 
-              return (
-                <Collapsible
-                  key={family.id}
-                  open={!isCollapsed}
-                  onOpenChange={() => toggleFamilyCollapsed(family.id)}
-                >
-                  <CollapsibleTrigger className="flex w-full items-center justify-between py-2 text-left group">
-                    <div className="space-y-0.5">
-                      <div className="typography-ui-label font-semibold text-foreground">{family.label}</div>
-                      <p className="typography-meta text-muted-foreground">
-                        {familyModels.length} model{familyModels.length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    {isCollapsed ? (
-                      <RiArrowRightSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    ) : (
-                      <RiArrowDownSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    )}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-2 space-y-3">
-                    {familyModels.map((model) => {
-                      const entries = Object.entries(model.windows.windows);
-                      if (entries.length === 0) return null;
-                      const [label, window] = entries[0];
-                      const isSelected = providerSelectedModels.includes(model.name);
+                return (
+                  <div key={family.id} className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden">
+                    <Collapsible
+                      open={!isCollapsed}
+                      onOpenChange={() => toggleFamilyCollapsed(family.id)}
+                    >
+                      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 hover:bg-[var(--interactive-hover)]/30 transition-colors group">
+                        <div className="flex flex-col text-left">
+                          <span className="typography-ui-label font-semibold text-foreground">{family.label}</span>
+                          <span className="typography-meta text-muted-foreground">
+                            {familyModels.length} model{familyModels.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {isCollapsed ? (
+                          <RiArrowRightSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                        ) : (
+                          <RiArrowDownSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                        )}
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="border-t border-[var(--surface-subtle)]">
+                        <div className="divide-y divide-[var(--surface-subtle)]">
+                          {familyModels.map((model) => {
+                            const entries = Object.entries(model.windows.windows);
+                            if (entries.length === 0) return null;
+                            const [label, window] = entries[0];
+                            const isSelected = providerSelectedModels.includes(model.name);
 
-                      return (
-                        <UsageCard
-                          key={model.name}
-                          title={label}
-                          subtitle={getDisplayModelName(model.name)}
-                          window={window}
-                          showToggle
-                          toggleEnabled={isSelected}
-                          onToggle={() => handleModelToggle(model.name)}
-                        />
-                      );
-                    })}
-                  </CollapsibleContent>
-                </Collapsible>
-              );
-            })}
+                            return (
+                              <UsageCard
+                                key={model.name}
+                                title={label}
+                                subtitle={getDisplayModelName(model.name)}
+                                window={window}
+                                showToggle
+                                toggleEnabled={isSelected}
+                                onToggle={() => handleModelToggle(model.name)}
+                              />
+                            );
+                          })}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                );
+              })}
 
-            {/* Other family */}
-            {(() => {
-              const otherModels = modelsByFamily.get(null) ?? [];
-              if (otherModels.length === 0) return null;
+              {/* Other family */}
+              {(() => {
+                const otherModels = modelsByFamily.get(null) ?? [];
+                if (otherModels.length === 0) return null;
 
-              const isCollapsed = collapsedFamilies['other'] ?? false;
+                const isCollapsed = collapsedFamilies['other'] ?? false;
 
-              return (
-                <Collapsible
-                  open={!isCollapsed}
-                  onOpenChange={() => toggleFamilyCollapsed('other')}
-                >
-                  <CollapsibleTrigger className="flex w-full items-center justify-between py-2 text-left group">
-                    <div className="space-y-0.5">
-                      <div className="typography-ui-label font-semibold text-foreground">Other</div>
-                      <p className="typography-meta text-muted-foreground">
-                        {otherModels.length} model{otherModels.length !== 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    {isCollapsed ? (
-                      <RiArrowRightSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    ) : (
-                      <RiArrowDownSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
-                    )}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-2 space-y-3">
-                    {otherModels.map((model) => {
-                      const entries = Object.entries(model.windows.windows);
-                      if (entries.length === 0) return null;
-                      const [label, window] = entries[0];
-                      const isSelected = providerSelectedModels.includes(model.name);
+                return (
+                  <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden">
+                    <Collapsible
+                      open={!isCollapsed}
+                      onOpenChange={() => toggleFamilyCollapsed('other')}
+                    >
+                      <CollapsibleTrigger className="flex w-full items-center justify-between px-4 py-3 hover:bg-[var(--interactive-hover)]/30 transition-colors group">
+                        <div className="flex flex-col text-left">
+                          <span className="typography-ui-label font-semibold text-foreground">Other Models</span>
+                          <span className="typography-meta text-muted-foreground">
+                            {otherModels.length} model{otherModels.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {isCollapsed ? (
+                          <RiArrowRightSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                        ) : (
+                          <RiArrowDownSLine className="h-5 w-5 text-muted-foreground group-hover:text-foreground transition-colors" />
+                        )}
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="border-t border-[var(--surface-subtle)]">
+                        <div className="divide-y divide-[var(--surface-subtle)]">
+                          {otherModels.map((model) => {
+                            const entries = Object.entries(model.windows.windows);
+                            if (entries.length === 0) return null;
+                            const [label, window] = entries[0];
+                            const isSelected = providerSelectedModels.includes(model.name);
 
-                      return (
-                        <UsageCard
-                          key={model.name}
-                          title={label}
-                          subtitle={getDisplayModelName(model.name)}
-                          window={window}
-                          showToggle
-                          toggleEnabled={isSelected}
-                          onToggle={() => handleModelToggle(model.name)}
-                        />
-                      );
-                    })}
-                  </CollapsibleContent>
-                </Collapsible>
-              );
-            })()}
+                            return (
+                              <UsageCard
+                                key={model.name}
+                                title={label}
+                                subtitle={getDisplayModelName(model.name)}
+                                window={window}
+                                showToggle
+                                toggleEnabled={isSelected}
+                                onToggle={() => handleModelToggle(model.name)}
+                              />
+                            );
+                          })}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         )}
 
         {selectedResult?.configured && usage && Object.keys(usage.windows ?? {}).length === 0 &&
           providerModels.length === 0 && (
-          <div className="rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-4 text-muted-foreground">
-            <p className="typography-body">No quota windows reported for this provider.</p>
+          <div className="mb-8 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)]/60 p-6 text-center">
+            <p className="typography-ui-label text-foreground">No quota windows reported</p>
+            <p className="typography-meta text-muted-foreground mt-1">This provider does not currently report any rate limits or usage quotas.</p>
           </div>
         )}
+
       </div>
     </ScrollableOverlay>
   );

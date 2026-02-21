@@ -1,11 +1,11 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
+import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { useGitIdentitiesStore, type GitIdentityProfile, type GitIdentityAuthType } from '@/stores/useGitIdentitiesStore';
 import {
   RiUser3Line,
-  RiSaveLine,
   RiDeleteBinLine,
   RiGitBranchLine,
   RiBriefcaseLine,
@@ -27,6 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ButtonLarge } from '@/components/ui/button-large';
 
 const PROFILE_COLORS = [
   { key: 'keyword', label: 'Green', cssVar: 'var(--syntax-keyword)' },
@@ -53,7 +54,6 @@ export const GitIdentitiesPage: React.FC = () => {
     deleteProfile,
   } = useGitIdentitiesStore();
 
-  // Parse import: prefix for credential import flow
   const importData = React.useMemo(() => {
     if (selectedProfileId?.startsWith('import:')) {
       const [, host, username] = selectedProfileId.split(':');
@@ -164,7 +164,6 @@ export const GitIdentitiesPage: React.FC = () => {
 
   const handleDelete = () => {
     if (!selectedProfileId || isNewProfile) return;
-
     setIsDeleteDialogOpen(true);
   };
 
@@ -208,298 +207,281 @@ export const GitIdentitiesPage: React.FC = () => {
   }
 
   return (
-    <ScrollableOverlay outerClassName="h-full" className="w-full">
-        <div className="mx-auto max-w-3xl space-y-6 p-6">
-        {/* Header */}
-        <div className="space-y-1">
-          <h1 className="typography-ui-header font-semibold text-lg">
-            {importData ? 'Import Credential' : isNewProfile ? 'New Git Profile' : isGlobalProfile ? 'Global Identity' : name || 'Edit Profile'}
-          </h1>
-          <p className="typography-body text-muted-foreground mt-1">
-            {importData
-              ? `Import token credential for ${importData.host} - please fill in your email address`
-              : isNewProfile
-              ? 'Create a new Git identity profile for your repositories'
-              : isGlobalProfile
-              ? 'System-wide Git identity from global configuration (read-only)'
-              : 'Configure Git identity settings for this profile'}
-          </p>
-        </div>
-
-        {}
-        {!isGlobalProfile && (
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="typography-ui-header font-semibold text-foreground">Profile Information</h2>
-            <p className="typography-meta text-muted-foreground/80">
-              Basic profile settings and display name
+    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
+      <div className="mx-auto w-full max-w-4xl px-5 py-6">
+        
+        {/* Header & Actions */}
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="typography-ui-header font-semibold text-foreground truncate">
+              {importData ? 'Import Credential' : isNewProfile ? 'New Git Profile' : isGlobalProfile ? 'Global Identity' : name || 'Edit Profile'}
+            </h2>
+            <p className="typography-meta text-muted-foreground truncate mt-0.5">
+              {importData
+                ? `Import token credential for ${importData.host}`
+                : isNewProfile
+                ? 'Create a new Git identity profile for your repositories'
+                : isGlobalProfile
+                ? 'System-wide Git identity (read-only)'
+                : 'Configure Git identity settings for this profile'}
             </p>
           </div>
-
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Display Name
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Work Profile, Personal, etc."
-            />
-            <p className="typography-meta text-muted-foreground">
-              Friendly name to identify this profile (optional, defaults to user name)
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground">
-                Color
-              </label>
-              <div className="flex gap-2 flex-wrap">
-                {PROFILE_COLORS.map((c) => (
-                  <button
-                    key={c.key}
-                    onClick={() => setColor(c.key)}
-                    className={cn(
-                      'w-8 h-8 rounded-lg border-2 transition-all',
-                      color === c.key
-                        ? 'border-foreground scale-110'
-                        : 'border-transparent hover:border-border'
-                    )}
-                    style={{ backgroundColor: c.cssVar }}
-                    title={c.label}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground">
-                Icon
-              </label>
-              <div className="flex gap-2 flex-wrap">
-                {PROFILE_ICONS.map((i) => {
-                  const IconComponent = i.Icon;
-                  return (
-                    <button
-                      key={i.key}
-                      onClick={() => setIcon(i.key)}
-                      className={cn(
-                        'w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center',
-                        icon === i.key
-                          ? 'border-primary bg-accent scale-110'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                      title={i.label}
-                    >
-                      <IconComponent
-                        className="w-4 h-4"
-
-                        style={{ color: currentColorValue }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-        )}
-
-        {}
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">Git Configuration</h2>
-            <p className="typography-meta text-muted-foreground/80">
-              Git user settings that will be applied to repositories
-            </p>
-          </div>
-
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
-                User Name {!isGlobalProfile && <span className="text-destructive">*</span>}
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    The name that will appear in Git commit messages.<br/>
-                    This is the author name shown in git log and GitHub/GitLab interfaces.
-                  </TooltipContent>
-                </Tooltip>
-              </label>
-            <Input
-              value={userName}
-              onChange={(e) => setUserName(e.target.value)}
-              placeholder="John Doe"
-              required={!isGlobalProfile}
-              readOnly={isGlobalProfile}
-              disabled={isGlobalProfile}
-            />
-            <p className="typography-meta text-muted-foreground">
-              Git user.name configuration value
-            </p>
-          </div>
-
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
-                User Email {!isGlobalProfile && <span className="text-destructive">*</span>}
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    The email address for Git commits.<br/>
-                    This should match your email in GitHub/GitLab<br/>
-                    to ensure proper attribution of commits.
-                  </TooltipContent>
-                </Tooltip>
-              </label>
-            <Input
-              type="email"
-              value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
-              placeholder="john@example.com"
-              required={!isGlobalProfile}
-              readOnly={isGlobalProfile}
-              disabled={isGlobalProfile}
-            />
-            <p className="typography-meta text-muted-foreground">
-              Git user.email configuration value
-            </p>
-          </div>
-
-          {/* Auth Type Selector */}
           {!isGlobalProfile && (
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
-                Authentication Type
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    SSH: Uses SSH key for authentication<br/>
-                    Token: Uses personal access token from ~/.git-credentials
-                  </TooltipContent>
-                </Tooltip>
-              </label>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAuthType('ssh')}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all',
-                    authType === 'ssh'
-                      ? 'border-primary bg-accent'
-                      : 'border-border hover:border-primary/50'
-                  )}
-                >
-                  <RiLock2Line className="w-4 h-4" />
-                  <span className="typography-ui-label">SSH Key</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthType('token')}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all',
-                    authType === 'token'
-                      ? 'border-primary bg-accent'
-                      : 'border-border hover:border-primary/50'
-                  )}
-                >
-                  <RiKeyLine className="w-4 h-4" />
-                  <span className="typography-ui-label">Token (HTTPS)</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* SSH Key Path - only for SSH auth type */}
-          {authType === 'ssh' && (
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
-                SSH Key Path
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    Path to SSH private key used for Git authentication.<br/>
-                    This key will be used for SSH Git operations.<br/>
-                    Common paths: ~/.ssh/id_rsa, ~/.ssh/id_ed25519
-                  </TooltipContent>
-                </Tooltip>
-              </label>
-              <Input
-                value={sshKey}
-                onChange={(e) => setSshKey(e.target.value)}
-                placeholder="/Users/username/.ssh/id_rsa"
-                readOnly={isGlobalProfile}
-                disabled={isGlobalProfile}
-              />
-              <p className="typography-meta text-muted-foreground">
-                Path to SSH private key for authentication (optional)
-              </p>
-            </div>
-          )}
-
-          {/* Host - only for Token auth type */}
-          {authType === 'token' && !isGlobalProfile && (
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground flex items-center gap-2">
-                Host {<span className="text-destructive">*</span>}
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    The Git host this credential applies to.<br/>
-                    Token will be read from ~/.git-credentials for this host.<br/>
-                    Examples: github.com, gitlab.com
-                  </TooltipContent>
-                </Tooltip>
-              </label>
-              <Input
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                placeholder="github.com"
-                required
-              />
-              <p className="typography-meta text-muted-foreground">
-                Git host for token authentication (from ~/.git-credentials)
-              </p>
-            </div>
-          )}
-
-        {}
-        {!isGlobalProfile && (
-        <div className="flex justify-between border-t border-border/40 pt-4">
-          {!isNewProfile && (
-            <Button
-              size="sm"
-              variant="destructive"
-              onClick={handleDelete}
-              className="gap-2 h-6 px-2 text-xs"
-            >
-              <RiDeleteBinLine className="h-3 w-3" />
-              Delete Profile
-            </Button>
-          )}
-          <div className={cn('flex gap-2', isNewProfile && 'ml-auto')}>
-            <Button
-              size="sm"
-              variant="default"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="gap-2 h-6 px-2 text-xs"
-            >
-              <RiSaveLine className="h-3 w-3" />
+            <Button onClick={handleSave} disabled={isSaving} size="sm">
               {isSaving ? 'Saving...' : 'Save Profile'}
             </Button>
+          )}
+        </div>
+
+        {/* Profile Information */}
+        {!isGlobalProfile && (
+          <div className="mb-8">
+            <div className="mb-3 px-1">
+              <h3 className="typography-ui-header font-semibold text-foreground">
+                Profile Display
+              </h3>
+              <p className="typography-meta text-muted-foreground mt-0.5">
+                Customize how this profile looks in OpenChamber.
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+                <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                  <span className="typography-ui-label text-foreground">Display Name</span>
+                  <span className="typography-meta text-muted-foreground">Friendly name</span>
+                </div>
+                <div className="flex-1 max-w-sm flex justify-end">
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Work Profile, Personal, etc."
+                    className="h-8 focus-visible:ring-[var(--primary-base)]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+                <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                  <span className="typography-ui-label text-foreground">Color</span>
+                  <span className="typography-meta text-muted-foreground">Badge accent color</span>
+                </div>
+                <div className="flex gap-1.5 flex-wrap flex-1 justify-end">
+                  {PROFILE_COLORS.map((c) => (
+                    <button
+                      key={c.key}
+                      onClick={() => setColor(c.key)}
+                      className={cn(
+                        'w-7 h-7 rounded-md border-2 transition-all cursor-pointer',
+                        color === c.key
+                          ? 'border-foreground scale-110'
+                          : 'border-transparent hover:border-border'
+                      )}
+                      style={{ backgroundColor: c.cssVar }}
+                      title={c.label}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+                <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                  <span className="typography-ui-label text-foreground">Icon</span>
+                  <span className="typography-meta text-muted-foreground">Visual identifier</span>
+                </div>
+                <div className="flex gap-1.5 flex-wrap flex-1 justify-end">
+                  {PROFILE_ICONS.map((i) => {
+                    const IconComponent = i.Icon;
+                    return (
+                      <button
+                        key={i.key}
+                        onClick={() => setIcon(i.key)}
+                        className={cn(
+                          'w-8 h-8 rounded-md border-2 transition-all flex items-center justify-center cursor-pointer',
+                          icon === i.key
+                            ? 'border-[var(--interactive-border)] bg-[var(--surface-muted)] scale-110'
+                            : 'border-transparent hover:border-[var(--interactive-border)] hover:bg-[var(--surface-muted)]/50'
+                        )}
+                        title={i.label}
+                      >
+                        <IconComponent
+                          className="w-4 h-4"
+                          style={{ color: icon === i.key ? currentColorValue : 'var(--surface-muted-foreground)' }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
+
+        {/* Git Configuration */}
+        <div className="mb-8">
+          <div className="mb-3 px-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Git Author Settings
+            </h3>
+            <p className="typography-meta text-muted-foreground mt-0.5">
+              These settings configure <code className="font-mono text-[10px] bg-[var(--surface-muted)] px-1 rounded">user.name</code> and <code className="font-mono text-[10px] bg-[var(--surface-muted)] px-1 rounded">user.email</code>
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="typography-ui-label text-foreground">User Name</span>
+                  {!isGlobalProfile && <span className="text-[var(--status-error)]">*</span>}
+                </div>
+                <span className="typography-meta text-muted-foreground">Appears in commit logs</span>
+              </div>
+              <div className="flex-1 max-w-sm flex justify-end">
+                <Input
+                  value={userName}
+                  onChange={(e) => setUserName(e.target.value)}
+                  placeholder="John Doe"
+                  required={!isGlobalProfile}
+                  readOnly={isGlobalProfile}
+                  disabled={isGlobalProfile}
+                  className="h-8 focus-visible:ring-[var(--primary-base)]"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="typography-ui-label text-foreground">Email Address</span>
+                  {!isGlobalProfile && <span className="text-[var(--status-error)]">*</span>}
+                </div>
+                <span className="typography-meta text-muted-foreground">For commit attribution</span>
+              </div>
+              <div className="flex-1 max-w-sm flex justify-end">
+                <Input
+                  type="email"
+                  value={userEmail}
+                  onChange={(e) => setUserEmail(e.target.value)}
+                  placeholder="john@example.com"
+                  required={!isGlobalProfile}
+                  readOnly={isGlobalProfile}
+                  disabled={isGlobalProfile}
+                  className="h-8 focus-visible:ring-[var(--primary-base)]"
+                />
+              </div>
+            </div>
+
           </div>
         </div>
+
+        {/* Authentication */}
+        {!isGlobalProfile && (
+          <div className="mb-8">
+            <div className="mb-3 px-1">
+              <h3 className="typography-ui-header font-semibold text-foreground">
+                Authentication
+              </h3>
+              <p className="typography-meta text-muted-foreground mt-0.5">
+                Credentials used to push to remote repositories.
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+                <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                  <span className="typography-ui-label text-foreground">Method</span>
+                  <span className="typography-meta text-muted-foreground">SSH keys vs HTTPS tokens</span>
+                </div>
+                <div className="flex items-center gap-1 flex-1 justify-end">
+                  <ButtonSmall
+                    type="button"
+                    variant={authType === 'ssh' ? 'default' : 'outline'}
+                    onClick={() => setAuthType('ssh')}
+                    className={cn(authType === 'ssh' ? undefined : 'text-foreground')}
+                  >
+                    <RiLock2Line className="w-3.5 h-3.5 mr-1" /> SSH Key
+                  </ButtonSmall>
+                  <ButtonSmall
+                    type="button"
+                    variant={authType === 'token' ? 'default' : 'outline'}
+                    onClick={() => setAuthType('token')}
+                    className={cn(authType === 'token' ? undefined : 'text-foreground')}
+                  >
+                    <RiKeyLine className="w-3.5 h-3.5 mr-1" /> HTTPS Token
+                  </ButtonSmall>
+                </div>
+              </div>
+
+              {authType === 'ssh' && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+                  <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                    <span className="typography-ui-label text-foreground flex items-center gap-1.5">
+                      SSH Key Path
+                      <Tooltip delayDuration={1000}>
+                        <TooltipTrigger asChild>
+                          <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={8} className="max-w-xs">
+                          Common paths: ~/.ssh/id_rsa, ~/.ssh/id_ed25519
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                    <span className="typography-meta text-muted-foreground">Path to private key (optional)</span>
+                  </div>
+                  <div className="flex-1 max-w-sm flex justify-end">
+                    <Input
+                      value={sshKey}
+                      onChange={(e) => setSshKey(e.target.value)}
+                      placeholder="/Users/username/.ssh/id_rsa"
+                      className="h-8 focus-visible:ring-[var(--primary-base)] font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {authType === 'token' && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+                  <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="typography-ui-label text-foreground">Host</span>
+                      <span className="text-[var(--status-error)]">*</span>
+                    </div>
+                    <span className="typography-meta text-muted-foreground">Git host (e.g., github.com)</span>
+                  </div>
+                  <div className="flex-1 max-w-sm flex justify-end">
+                    <Input
+                      value={host}
+                      onChange={(e) => setHost(e.target.value)}
+                      placeholder="github.com"
+                      required
+                      className="h-8 focus-visible:ring-[var(--primary-base)] font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
         )}
+
+        {/* Delete Action */}
+        {!isGlobalProfile && !isNewProfile && (
+          <div className="mt-8 flex justify-end">
+            <ButtonSmall
+              variant="outline"
+              onClick={handleDelete}
+              className="text-[var(--status-error)] hover:text-[var(--status-error)] border-[var(--status-error)]/30 hover:bg-[var(--status-error)]/10"
+            >
+              <RiDeleteBinLine className="w-3.5 h-3.5 mr-1" /> Delete Profile
+            </ButtonSmall>
+          </div>
+        )}
+
       </div>
 
       <Dialog
@@ -521,13 +503,12 @@ export const GitIdentitiesPage: React.FC = () => {
             <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => void handleConfirmDelete()} disabled={isDeleting}>
+            <ButtonLarge onClick={() => void handleConfirmDelete()} disabled={isDeleting} className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white border-0">
               Delete
-            </Button>
+            </ButtonLarge>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      </div>
     </ScrollableOverlay>
   );
 };

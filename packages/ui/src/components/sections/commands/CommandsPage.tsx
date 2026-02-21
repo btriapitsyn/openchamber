@@ -2,10 +2,10 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui';
 import { useCommandsStore, type CommandConfig, type CommandScope } from '@/stores/useCommandsStore';
-import { RiInformationLine, RiSaveLine, RiTerminalBoxLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
+import { RiInformationLine, RiTerminalBoxLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
 import { ModelSelector } from '../agents/ModelSelector';
 import { AgentSelector } from './AgentSelector';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -15,6 +15,7 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 
 export const CommandsPage: React.FC = () => {
@@ -43,7 +44,6 @@ export const CommandsPage: React.FC = () => {
 
   React.useEffect(() => {
     if (isNewCommand && commandDraft) {
-      // Prefill from draft (for new or duplicated commands)
       const draftNameValue = commandDraft.name || '';
       const draftScopeValue = commandDraft.scope || 'user';
       const descriptionValue = commandDraft.description || '';
@@ -127,7 +127,6 @@ export const CommandsPage: React.FC = () => {
       return;
     }
 
-    // Check for duplicate name when creating new command
     if (isNewCommand && commands.some((cmd) => cmd.name === commandName)) {
       toast.error('A command with this name already exists');
       return;
@@ -153,7 +152,7 @@ export const CommandsPage: React.FC = () => {
       if (isNewCommand) {
         success = await createCommand(config);
         if (success) {
-          setCommandDraft(null); // Clear draft after successful creation
+          setCommandDraft(null); 
         }
       } else {
         success = await updateCommand(commandName, config);
@@ -185,232 +184,208 @@ export const CommandsPage: React.FC = () => {
   }
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
-        {/* Header */}
-        <div className="space-y-1">
-          <h1 className="typography-ui-header font-semibold text-lg">
-            {isNewCommand ? 'New Command' : `/${selectedCommandName}`}
-          </h1>
-        </div>
-
-        {}
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="typography-ui-header font-semibold text-foreground">Basic Information</h2>
-            <p className="typography-meta text-muted-foreground/80">
-              Configure command identity and metadata
+    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
+      <div className="mx-auto w-full max-w-4xl px-5 py-6">
+        
+        {/* Header & Actions */}
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="typography-ui-header font-semibold text-foreground truncate">
+              {isNewCommand ? 'New Command' : `/${selectedCommandName}`}
+            </h2>
+            <p className="typography-meta text-muted-foreground truncate">
+              {isNewCommand ? 'Configure a new slash command' : 'Edit command settings'}
             </p>
           </div>
-
-          {isNewCommand && (
-            <div className="space-y-2">
-              <label className="typography-ui-label font-medium text-foreground">
-                Command Name & Scope
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center flex-1">
-                  <span className="typography-ui-label text-muted-foreground mr-1">/</span>
-                  <Input
-                    value={draftName}
-                    onChange={(e) => setDraftName(e.target.value)}
-                    placeholder="command-name"
-                    className="flex-1 text-foreground placeholder:text-muted-foreground"
-                  />
-                </div>
-                <Select value={draftScope} onValueChange={(v) => setDraftScope(v as CommandScope)}>
-                  <SelectTrigger className="!h-9 w-auto gap-1.5">
-                    {draftScope === 'user' ? (
-                      <RiUser3Line className="h-4 w-4" />
-                    ) : (
-                      <RiFolderLine className="h-4 w-4" />
-                    )}
-                    <span className="capitalize">{draftScope}</span>
-                  </SelectTrigger>
-                  <SelectContent align="end">
-                    <SelectItem value="user" className="pr-2 [&>span:first-child]:hidden">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <RiUser3Line className="h-4 w-4" />
-                          <span>User</span>
-                        </div>
-                        <span className="typography-micro text-muted-foreground ml-6">Available in all projects</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="project" className="pr-2 [&>span:first-child]:hidden">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-2">
-                          <RiFolderLine className="h-4 w-4" />
-                          <span>Project</span>
-                        </div>
-                        <span className="typography-micro text-muted-foreground ml-6">Only in current project</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Description
-            </label>
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="What does this command do?"
-              rows={3}
-            />
-          </div>
-        </div>
-
-        {}
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">Model & Agent Configuration</h2>
-            <p className="typography-meta text-muted-foreground/80">
-              Configure model and agent for command execution
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Agent
-            </label>
-            <AgentSelector
-              agentName={agent}
-              onChange={(agentName: string) => setAgent(agentName)}
-            />
-            <p className="typography-meta text-muted-foreground">
-              Agent to execute this command (optional)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">
-              Model
-            </label>
-            <ModelSelector
-              providerId={model ? model.split('/')[0] : ''}
-              modelId={model ? model.split('/')[1] : ''}
-              onChange={(providerId: string, modelId: string) => {
-                if (providerId && modelId) {
-                  setModel(`${providerId}/${modelId}`);
-                } else {
-                  setModel('');
-                }
-              }}
-            />
-            <p className="typography-meta text-muted-foreground">
-              Default model for this command (optional)
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground flex items-center gap-2 cursor-pointer">
-              <Checkbox
-                checked={subtask}
-                onChange={(checked) => setSubtask(checked)}
-              />
-              Force Subagent Invocation
-            </label>
-            <div className="flex items-center gap-2">
-              <p className="typography-meta text-muted-foreground">
-                Force command to run in a subagent context
-              </p>
-              <Tooltip delayDuration={1000}>
-                <TooltipTrigger asChild>
-                  <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-                </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    When enabled, this command will always execute in a subagent context,<br/>
-                    even if triggered from main agent.<br/>
-                    Useful for isolating command logic and maintaining clean separation of concerns.
-                  </TooltipContent>
-              </Tooltip>
-            </div>
-          </div>
-        </div>
-
-        {}
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <h2 className="typography-h2 font-semibold text-foreground">Command Template</h2>
-            <p className="typography-meta text-muted-foreground/80">
-              Define the prompt template for this command. Use $ARGUMENTS for user input.
-            </p>
-          </div>
-          <Textarea
-            value={template}
-            onChange={(e) => setTemplate(e.target.value)}
-            placeholder={`Your command template here...
-
-Use $ARGUMENTS to reference user input.
-Use !\`shell command\` to inject shell output.
-Use @filename to include file contents.`}
-            rows={12}
-            className="font-mono typography-meta"
-          />
-          <div className="typography-meta text-muted-foreground/80 space-y-1">
-            <p className="font-medium">Template Features:</p>
-            <ul className="list-disc list-inside space-y-0.5 ml-2">
-              <li className="flex items-center gap-2">
-                <code className="bg-muted px-1 rounded">$ARGUMENTS</code>
-                <span>- User input after command</span>
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    Replaced with everything the user types after the command name.<br/>
-                    Example: "/deploy staging" makes $ARGUMENTS = "staging"
-                  </TooltipContent>
-                </Tooltip>
-              </li>
-              <li className="flex items-center gap-2">
-                <code className="bg-muted px-1 rounded">!`command`</code>
-                <span>- Inject shell command output</span>
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    Executes shell command and replaces this placeholder with its output.<br/>
-                    Example: !`git branch --show-current` gets current branch name
-                  </TooltipContent>
-                </Tooltip>
-              </li>
-              <li className="flex items-center gap-2">
-                <code className="bg-muted px-1 rounded">@filename</code>
-                <span>- Include file contents</span>
-                <Tooltip delayDuration={1000}>
-                  <TooltipTrigger asChild>
-                    <RiInformationLine className="h-3 w-3 text-muted-foreground/60 cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent sideOffset={8} className="max-w-xs">
-                    Replaces with the full contents of the specified file.<br/>
-                    Example: @package.json includes the package.json content in the prompt
-                  </TooltipContent>
-                </Tooltip>
-              </li>
-            </ul>
-          </div>
-
-        {}
-        <div className="flex justify-end border-t border-border/40 pt-4">
-          <Button
-            size="sm"
-            variant="default"
-            onClick={handleSave}
-            disabled={isSaving || !isDirty}
-            className="gap-2 h-6 px-2 text-xs w-fit"
-          >
-            <RiSaveLine className="h-3 w-3" />
+          <Button onClick={handleSave} disabled={isSaving || !isDirty} size="sm">
             {isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
-      </div>
+
+        {/* Basic Information */}
+        <div className="mb-8">
+          <div className="mb-3 px-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Identity
+            </h3>
+            <p className="typography-meta text-muted-foreground mt-0.5">
+              Configure command name and description.
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+            
+            {isNewCommand && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+                <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                  <span className="typography-ui-label text-foreground">Command Name</span>
+                  <span className="typography-meta text-muted-foreground">Used with slash</span>
+                </div>
+                <div className="flex items-center gap-2 flex-1 justify-end">
+                  <div className="flex items-center flex-1 max-w-[200px]">
+                    <span className="typography-ui-label text-muted-foreground mr-1">/</span>
+                    <Input
+                      value={draftName}
+                      onChange={(e) => setDraftName(e.target.value)}
+                      placeholder="command-name"
+                      className="flex-1 h-8 px-2 focus-visible:ring-[var(--primary-base)]"
+                    />
+                  </div>
+                  <Select value={draftScope} onValueChange={(v) => setDraftScope(v as CommandScope)}>
+                    <SelectTrigger className="h-8 w-fit min-w-[100px]">
+                      <SelectValue placeholder="Scope" />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      <SelectItem value="user">
+                        <div className="flex items-center gap-2">
+                          <RiUser3Line className="h-3.5 w-3.5" />
+                          <span>Global</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="project">
+                        <div className="flex items-center gap-2">
+                          <RiFolderLine className="h-3.5 w-3.5" />
+                          <span>Project</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-4 py-3">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0 pt-1">
+                <span className="typography-ui-label text-foreground">Description</span>
+                <span className="typography-meta text-muted-foreground">Short description shown in palette</span>
+              </div>
+              <div className="flex-1">
+                <Textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="What does this command do?"
+                  rows={2}
+                  className="w-full resize-none min-h-[60px] bg-transparent focus-visible:ring-[var(--primary-base)]"
+                />
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Model & Agent Configuration */}
+        <div className="mb-8">
+          <div className="mb-3 px-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Execution Context
+            </h3>
+            <p className="typography-meta text-muted-foreground mt-0.5">
+              Configure which model and agent handles this command.
+            </p>
+          </div>
+
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                <span className="typography-ui-label text-foreground">Override Agent</span>
+                <span className="typography-meta text-muted-foreground">Leave empty to use current agent</span>
+              </div>
+              <div className="flex-1 max-w-sm flex justify-end">
+                <AgentSelector
+                  agentName={agent}
+                  onChange={(agentName: string) => setAgent(agentName)}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                <span className="typography-ui-label text-foreground">Override Model</span>
+                <span className="typography-meta text-muted-foreground">Leave empty to use current model</span>
+              </div>
+              <div className="flex-1 max-w-sm flex justify-end">
+                <ModelSelector
+                  providerId={model ? model.split('/')[0] : ''}
+                  modelId={model ? model.split('/')[1] : ''}
+                  onChange={(providerId: string, modelId: string) => {
+                    if (providerId && modelId) {
+                      setModel(`${providerId}/${modelId}`);
+                    } else {
+                      setModel('');
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
+              <div className="flex min-w-0 flex-col">
+                <div className="flex items-center gap-1.5">
+                  <span className="typography-ui-label text-foreground">Force Subagent</span>
+                  <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                      <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={8} className="max-w-xs">
+                      When enabled, this command will always execute in a subagent context,<br/>
+                      even if triggered from main agent.<br/>
+                      Useful for isolating command logic.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <span className="typography-meta text-muted-foreground">Run as an isolated child task</span>
+              </div>
+              <Switch
+                checked={subtask}
+                onCheckedChange={setSubtask}
+                className="data-[state=checked]:bg-[var(--primary-base)]"
+              />
+            </label>
+
+          </div>
+        </div>
+
+        {/* Command Template */}
+        <div className="mb-8">
+          <div className="mb-3 px-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Command Template
+            </h3>
+            <p className="typography-meta text-muted-foreground mt-0.5">
+              Define the prompt template for this command. Use variables for user input.
+            </p>
+          </div>
+          
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+            <Textarea
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              placeholder={`Your command template here...\n\nUse $ARGUMENTS to reference user input.\nUse !\`shell command\` to inject shell output.\nUse @filename to include file contents.`}
+              rows={12}
+              className="w-full font-mono typography-meta min-h-[160px] bg-transparent focus-visible:ring-[var(--primary-base)] border-none shadow-none focus-visible:outline-none resize-y"
+            />
+          </div>
+
+          <div className="mt-4 rounded-lg bg-muted/30 p-3">
+            <p className="typography-meta text-foreground font-medium mb-2">Template Features</p>
+            <ul className="list-disc list-inside space-y-1.5 ml-1 typography-meta text-muted-foreground">
+              <li className="flex items-center gap-2">
+                <code className="bg-background border border-[var(--interactive-border)] px-1 rounded text-foreground">$ARGUMENTS</code>
+                <span>- User input after command</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <code className="bg-background border border-[var(--interactive-border)] px-1 rounded text-foreground">!`command`</code>
+                <span>- Inject shell command output</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <code className="bg-background border border-[var(--interactive-border)] px-1 rounded text-foreground">@filename</code>
+                <span>- Include file contents</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
       </div>
     </ScrollableOverlay>
   );

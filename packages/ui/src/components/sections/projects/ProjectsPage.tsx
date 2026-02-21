@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { PROJECT_COLORS, PROJECT_ICONS, PROJECT_COLOR_MAP as COLOR_MAP } from '@/lib/projectMeta';
+import { RiCloseLine } from '@remixicon/react';
 import { WorktreeSectionContent } from '@/components/sections/openchamber/WorktreeSectionContent';
 
 export const ProjectsPage: React.FC = () => {
@@ -60,7 +61,7 @@ export const ProjectsPage: React.FC = () => {
   if (!selectedProject) {
     return (
       <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
-        <div className="mx-auto max-w-3xl p-6">
+        <div className="mx-auto w-full max-w-4xl px-5 py-6">
           <p className="typography-meta text-muted-foreground">No projects available.</p>
         </div>
       </ScrollableOverlay>
@@ -70,96 +71,146 @@ export const ProjectsPage: React.FC = () => {
   const currentColorVar = color ? (COLOR_MAP[color] ?? null) : null;
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
-      <div className="mx-auto max-w-3xl space-y-6 p-6">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="typography-ui-header font-semibold text-foreground truncate">{selectedProject.label ?? 'Project'}</h2>
-              <p className="typography-meta text-muted-foreground truncate" title={selectedProject.path}>{selectedProject.path}</p>
+    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
+      <div className="mx-auto w-full max-w-4xl px-5 py-6">
+        
+        {/* Top Header & Actions */}
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h2 className="typography-ui-header font-semibold text-foreground truncate">
+              {selectedProject.label ?? 'Project Settings'}
+            </h2>
+            <p className="typography-meta text-muted-foreground truncate" title={selectedProject.path}>
+              {selectedProject.path}
+            </p>
+          </div>
+        </div>
+
+        {/* Identity Group */}
+        <div className="mb-8">
+          <div className="mb-3 px-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Identity
+            </h3>
+            <p className="typography-meta text-muted-foreground mt-0.5">
+              Customize how this project appears in your workspace.
+            </p>
+          </div>
+          
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
+            
+            {/* Name */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                <span className="typography-ui-label text-foreground">Project Name</span>
+                <span className="typography-meta text-muted-foreground">Display name in the sidebar</span>
+              </div>
+              <div className="flex-1 sm:max-w-sm flex justify-end">
+                <Input 
+                  value={name} 
+                  onChange={(e) => setName(e.target.value)} 
+                  placeholder="Project name" 
+                  className="w-full sm:max-w-[240px]" 
+                />
+              </div>
             </div>
-            <Button onClick={handleSave} disabled={!hasChanges || name.trim().length === 0}>
-              Save
+
+            {/* Color */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                <span className="typography-ui-label text-foreground">Accent Color</span>
+                <span className="typography-meta text-muted-foreground">Used for badges and borders</span>
+              </div>
+              <div className="flex gap-2 flex-wrap flex-1 justify-start sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setColor(null)}
+                  className={cn(
+                    'w-7 h-7 rounded-md border-2 transition-all flex items-center justify-center',
+                    color === null ? 'border-foreground scale-110' : 'border-transparent hover:border-border hover:bg-[var(--surface-muted)]'
+                  )}
+                  title="None"
+                >
+                  <RiCloseLine className="w-4 h-4 text-muted-foreground" />
+                </button>
+                {PROJECT_COLORS.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setColor(c.key)}
+                    className={cn(
+                      'w-7 h-7 rounded-md border-2 transition-all',
+                      color === c.key ? 'border-foreground scale-110' : 'border-transparent hover:scale-105'
+                    )}
+                    style={{ backgroundColor: c.cssVar }}
+                    title={c.label}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Icon */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3">
+              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+                <span className="typography-ui-label text-foreground">Project Icon</span>
+                <span className="typography-meta text-muted-foreground">Visual identifier</span>
+              </div>
+              <div className="flex gap-2 flex-wrap flex-1 justify-start sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIcon(null)}
+                  className={cn(
+                    'w-8 h-8 rounded-md border-2 transition-all flex items-center justify-center',
+                    icon === null ? 'border-foreground scale-110 bg-[var(--surface-muted)]' : 'border-transparent hover:border-border hover:bg-[var(--surface-muted)]'
+                  )}
+                  title="None"
+                >
+                  <RiCloseLine className="w-5 h-5 text-muted-foreground" />
+                </button>
+                {PROJECT_ICONS.map((i) => {
+                  const IconComponent = i.Icon;
+                  return (
+                    <button
+                      key={i.key}
+                      type="button"
+                      onClick={() => setIcon(i.key)}
+                      className={cn(
+                        'w-8 h-8 rounded-md border-2 transition-all flex items-center justify-center',
+                        icon === i.key ? 'border-foreground scale-110 bg-[var(--surface-muted)]' : 'border-transparent hover:scale-105 hover:bg-[var(--surface-muted)]'
+                      )}
+                      title={i.label}
+                    >
+                      <IconComponent className="w-4 h-4" style={currentColorVar && icon === i.key ? { color: currentColorVar } : undefined} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+          
+          <div className="mt-4 flex justify-end">
+            <Button onClick={handleSave} disabled={!hasChanges || name.trim().length === 0} size="sm">
+              Save Changes
             </Button>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">Name</label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" />
+        {/* Worktree Group */}
+        <div className="mb-8">
+          <div className="mb-3 px-1">
+            <h3 className="typography-ui-header font-semibold text-foreground">
+              Worktree
+            </h3>
+            <p className="typography-meta text-muted-foreground mt-0.5">
+              Setup commands and existing worktrees for this project.
+            </p>
           </div>
-
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">Color</label>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setColor(null)}
-                className={cn(
-                  'w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center',
-                  color === null ? 'border-foreground scale-110' : 'border-border hover:border-border/80'
-                )}
-                title="None"
-              >
-                <span className="w-4 h-0.5 bg-muted-foreground/40 rotate-45 rounded-full" />
-              </button>
-              {PROJECT_COLORS.map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setColor(c.key)}
-                  className={cn(
-                    'w-8 h-8 rounded-lg border-2 transition-all',
-                    color === c.key ? 'border-foreground scale-110' : 'border-transparent hover:border-border'
-                  )}
-                  style={{ backgroundColor: c.cssVar }}
-                  title={c.label}
-                />
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="typography-ui-label font-medium text-foreground">Icon</label>
-            <div className="flex gap-2 flex-wrap">
-              <button
-                type="button"
-                onClick={() => setIcon(null)}
-                className={cn(
-                  'w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center',
-                  icon === null ? 'border-foreground scale-110 bg-[var(--surface-elevated)]' : 'border-border hover:border-border/80'
-                )}
-                title="None"
-              >
-                <span className="w-4 h-0.5 bg-muted-foreground/40 rotate-45 rounded-full" />
-              </button>
-              {PROJECT_ICONS.map((i) => {
-                const IconComponent = i.Icon;
-                return (
-                  <button
-                    key={i.key}
-                    type="button"
-                    onClick={() => setIcon(i.key)}
-                    className={cn(
-                      'w-8 h-8 rounded-lg border-2 transition-all flex items-center justify-center',
-                      icon === i.key ? 'border-foreground scale-110 bg-[var(--surface-elevated)]' : 'border-border hover:border-border/80'
-                    )}
-                    title={i.label}
-                  >
-                    <IconComponent className="w-4 h-4" style={currentColorVar ? { color: currentColorVar } : undefined} />
-                  </button>
-                );
-              })}
-            </div>
+          <div className="rounded-lg bg-[var(--surface-elevated)]/70 p-4">
+            <WorktreeSectionContent projectRef={{ id: selectedProject.id, path: selectedProject.path }} />
           </div>
         </div>
 
-        <div className="border-t border-border/40 pt-6">
-          <div className="space-y-1 mb-4">
-            <h3 className="typography-ui-header font-semibold text-foreground">Worktree</h3>
-            <p className="typography-meta text-muted-foreground">Setup commands and existing worktrees for this project.</p>
-          </div>
-          <WorktreeSectionContent projectRef={{ id: selectedProject.id, path: selectedProject.path }} />
-        </div>
       </div>
     </ScrollableOverlay>
   );
