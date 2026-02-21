@@ -672,7 +672,8 @@ export const SimpleMarkdownRenderer: React.FC<{
   content: string;
   className?: string;
   variant?: MarkdownVariant;
-}> = ({ content, className, variant = 'assistant' }) => {
+  disableLinkSafety?: boolean;
+}> = ({ content, className, variant = 'assistant', disableLinkSafety }) => {
   const shikiThemes = useMarkdownShikiThemes();
   const { options: mermaidOptions, mermaidRenderKey } = useStreamdownMermaidOptions();
 
@@ -691,6 +692,8 @@ export const SimpleMarkdownRenderer: React.FC<{
         plugins={streamdownPlugins}
         mermaid={mermaidOptions}
         components={streamdownComponents}
+        // @ts-expect-error Streamdown type missing linkSafety in older minor
+        linkSafety={disableLinkSafety ? { enabled: false } : undefined}
       >
         {content}
       </Streamdown>
