@@ -2,6 +2,7 @@ import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -11,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui';
-import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine } from '@remixicon/react';
+import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine, RiEyeLine, RiEyeOffLine } from '@remixicon/react';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -140,6 +141,7 @@ export const ProvidersPage: React.FC = () => {
   const selectedProviderId = useConfigStore((state) => state.selectedProviderId);
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
   const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
+  const { toggleHiddenModel, isHiddenModel, hideAllModels, showAllModels } = useUIStore();
 
   const [authMethodsByProvider, setAuthMethodsByProvider] = React.useState<Record<string, AuthMethod[]>>({});
   const [authLoading, setAuthLoading] = React.useState(false);
@@ -992,11 +994,36 @@ export const ProvidersPage: React.FC = () => {
       </div>
 
       <div className="space-y-4">
-        <div className="space-y-1">
-          <h2 className="typography-ui-header font-semibold text-foreground">Models</h2>
-          <p className="typography-meta text-muted-foreground/80">
-            Browse and filter models exposed by this provider.
-          </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="space-y-1">
+            <h2 className="typography-ui-header font-semibold text-foreground">Models</h2>
+            <p className="typography-meta text-muted-foreground/80">
+              Click the eye icon to hide/show individual models in the selector.
+            </p>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0 pt-0.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => {
+                const allIds = providerModels
+                  .map((m) => (typeof m?.id === 'string' ? m.id : ''))
+                  .filter(Boolean);
+                hideAllModels(selectedProvider.id, allIds);
+              }}
+            >
+              Hide all
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => showAllModels(selectedProvider.id)}
+            >
+              Show all
+            </Button>
+          </div>
         </div>
 
         <Input
@@ -1013,6 +1040,7 @@ export const ProvidersPage: React.FC = () => {
               const modelId = typeof model?.id === 'string' ? model.id : '';
               const modelName = typeof model?.name === 'string' ? model.name : modelId;
               const metadata = modelId ? getModelMetadata(selectedProvider.id, modelId) as ModelMetadata | undefined : undefined;
+              const isHidden = isHiddenModel(selectedProvider.id, modelId);
 
               const contextTokens = formatTokens(metadata?.limit?.context);
               const outputTokens = formatTokens(metadata?.limit?.output);
@@ -1025,7 +1053,10 @@ export const ProvidersPage: React.FC = () => {
               return (
                 <div
                   key={modelId}
-                  className="flex items-center gap-2 px-2 py-1.5 border-b border-border/40"
+                  className={cn(
+                    "flex items-center gap-2 px-2 py-1.5 border-b border-border/40",
+                    isHidden && "opacity-50"
+                  )}
                 >
                   <span className="typography-meta font-medium text-foreground truncate flex-1 min-w-0">
                     {modelName}
@@ -1051,6 +1082,15 @@ export const ProvidersPage: React.FC = () => {
                       ))}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => toggleHiddenModel(selectedProvider.id, modelId)}
+                    className="flex h-5 w-5 items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    title={isHidden ? 'Show model in selector' : 'Hide model from selector'}
+                    aria-label={isHidden ? 'Show model' : 'Hide model'}
+                  >
+                    {isHidden ? <RiEyeOffLine className="h-3.5 w-3.5" /> : <RiEyeLine className="h-3.5 w-3.5" />}
+                  </button>
                 </div>
               );
             })

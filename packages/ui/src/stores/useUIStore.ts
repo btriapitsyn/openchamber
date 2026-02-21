@@ -178,6 +178,7 @@ interface UIStore {
   inputBarOffset: number;
 
   favoriteModels: Array<{ providerID: string; modelID: string }>;
+  hiddenModels: Array<{ providerID: string; modelID: string }>;
   recentModels: Array<{ providerID: string; modelID: string }>;
   recentAgents: string[];
   recentEfforts: Record<string, string[]>;
@@ -274,6 +275,10 @@ interface UIStore {
   updateProportionalSidebarWidths: () => void;
   toggleFavoriteModel: (providerID: string, modelID: string) => void;
   isFavoriteModel: (providerID: string, modelID: string) => boolean;
+  toggleHiddenModel: (providerID: string, modelID: string) => void;
+  isHiddenModel: (providerID: string, modelID: string) => boolean;
+  hideAllModels: (providerID: string, modelIDs: string[]) => void;
+  showAllModels: (providerID: string) => void;
   addRecentModel: (providerID: string, modelID: string) => void;
   addRecentAgent: (agentName: string) => void;
   addRecentEffort: (providerID: string, modelID: string, variant: string | undefined) => void;
@@ -357,6 +362,7 @@ export const useUIStore = create<UIStore>()(
         cornerRadius: 12,
         inputBarOffset: 0,
         favoriteModels: [],
+        hiddenModels: [],
         recentModels: [],
         recentAgents: [],
         recentEfforts: {},
@@ -967,6 +973,53 @@ export const useUIStore = create<UIStore>()(
           );
         },
 
+        toggleHiddenModel: (providerID, modelID) => {
+          set((state) => {
+            const exists = state.hiddenModels.some(
+              (h) => h.providerID === providerID && h.modelID === modelID
+            );
+            
+            if (exists) {
+              return {
+                hiddenModels: state.hiddenModels.filter(
+                  (h) => !(h.providerID === providerID && h.modelID === modelID)
+                ),
+              };
+            } else {
+              return {
+                hiddenModels: [{ providerID, modelID }, ...state.hiddenModels],
+              };
+            }
+          });
+        },
+
+        isHiddenModel: (providerID, modelID) => {
+          const { hiddenModels } = get();
+          return hiddenModels.some(
+            (h) => h.providerID === providerID && h.modelID === modelID
+          );
+        },
+
+        hideAllModels: (providerID, modelIDs) => {
+          set((state) => {
+            const existing = new Set(
+              state.hiddenModels
+                .filter(h => h.providerID === providerID)
+                .map(h => h.modelID)
+            );
+            const toAdd = modelIDs
+              .filter(id => !existing.has(id))
+              .map(id => ({ providerID, modelID: id }));
+            return { hiddenModels: [...state.hiddenModels, ...toAdd] };
+          });
+        },
+
+        showAllModels: (providerID) => {
+          set((state) => ({
+            hiddenModels: state.hiddenModels.filter(h => h.providerID !== providerID),
+          }));
+        },
+
         addRecentModel: (providerID, modelID) => {
           set((state) => {
             // Remove existing instance if any
@@ -1228,6 +1281,7 @@ export const useUIStore = create<UIStore>()(
           padding: state.padding,
           cornerRadius: state.cornerRadius,
           favoriteModels: state.favoriteModels,
+          hiddenModels: state.hiddenModels,
           recentModels: state.recentModels,
           recentAgents: state.recentAgents,
           recentEfforts: state.recentEfforts,
