@@ -86,7 +86,7 @@ function codeBlockLanguageResolver(info: string): Language | LanguageDescription
     case 'c':
     case 'cpp':
     case 'h':
-    case 'hpp'
+    case 'hpp':
       return cpp().language;
     case 'go':
       return go().language;
