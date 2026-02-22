@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonLarge } from '@/components/ui/button-large';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { SidebarGroup } from '@/components/sections/shared/SidebarGroup';
 
 interface SkillsSidebarProps {
   onItemSelect?: () => void;
@@ -190,6 +191,27 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
   const projectSkills = skills.filter((s) => s.scope === 'project');
   const userSkills = skills.filter((s) => s.scope === 'user');
 
+  // Helper: group a list of skills by their domain folder
+  function groupSkillsByFolder(list: DiscoveredSkill[]) {
+    const groups: Record<string, DiscoveredSkill[]> = {};
+    const ungrouped: DiscoveredSkill[] = [];
+    for (const skill of list) {
+      if (skill.group) {
+        if (!groups[skill.group]) groups[skill.group] = [];
+        groups[skill.group].push(skill);
+      } else {
+        ungrouped.push(skill);
+      }
+    }
+    const sortedGroups = Object.keys(groups)
+      .sort((a, b) => a.localeCompare(b))
+      .map((name) => ({ name, skills: groups[name] }));
+    return { sortedGroups, ungrouped };
+  }
+
+  const groupedProjectSkills = useMemo(() => groupSkillsByFolder(projectSkills), [projectSkills]);
+  const groupedUserSkills = useMemo(() => groupSkillsByFolder(userSkills), [userSkills]);
+
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
       <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
@@ -221,7 +243,33 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                 <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Project Skills
                 </div>
-                {projectSkills.map((skill) => (
+                {groupedProjectSkills.sortedGroups.map(({ name: groupName, skills: groupSkills }) => (
+                  <SidebarGroup
+                    key={groupName}
+                    label={groupName}
+                    count={groupSkills.length}
+                    storageKey="project-skills"
+                  >
+                    {groupSkills.map((skill) => (
+                      <SkillListItem
+                        key={skill.name}
+                        skill={skill}
+                        isSelected={selectedSkillName === skill.name}
+                        onSelect={() => {
+                          setSelectedSkill(skill.name);
+                          onItemSelect?.();
+                          if (isMobile) {
+                            setSidebarOpen(false);
+                          }
+                        }}
+                        onRename={() => handleOpenRenameDialog(skill)}
+                        onDelete={() => handleDeleteSkill(skill)}
+                        onDuplicate={() => handleDuplicateSkill(skill)}
+                      />
+                    ))}
+                  </SidebarGroup>
+                ))}
+                {groupedProjectSkills.ungrouped.map((skill) => (
                   <SkillListItem
                     key={skill.name}
                     skill={skill}
@@ -246,7 +294,33 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                 <div className="px-2 pb-1.5 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   User Skills
                 </div>
-                {userSkills.map((skill) => (
+                {groupedUserSkills.sortedGroups.map(({ name: groupName, skills: groupSkills }) => (
+                  <SidebarGroup
+                    key={groupName}
+                    label={groupName}
+                    count={groupSkills.length}
+                    storageKey="user-skills"
+                  >
+                    {groupSkills.map((skill) => (
+                      <SkillListItem
+                        key={skill.name}
+                        skill={skill}
+                        isSelected={selectedSkillName === skill.name}
+                        onSelect={() => {
+                          setSelectedSkill(skill.name);
+                          onItemSelect?.();
+                          if (isMobile) {
+                            setSidebarOpen(false);
+                          }
+                        }}
+                        onRename={() => handleOpenRenameDialog(skill)}
+                        onDelete={() => handleDeleteSkill(skill)}
+                        onDuplicate={() => handleDuplicateSkill(skill)}
+                      />
+                    ))}
+                  </SidebarGroup>
+                ))}
+                {groupedUserSkills.ungrouped.map((skill) => (
                   <SkillListItem
                     key={skill.name}
                     skill={skill}

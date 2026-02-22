@@ -45,12 +45,44 @@ function getProjectAgentPath(workingDirectory, agentName) {
 }
 
 /**
- * Get user-level agent path
+ * Walk a directory recursively and return the first .md file matching agentName.
+ * Stops after finding the first match (agents names are unique).
+ */
+function findAgentMdInDir(dir, agentName) {
+  if (!fs.existsSync(dir)) return null;
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+  for (const entry of entries) {
+    if (entry.isFile() && entry.name === `${agentName}.md`) {
+      return path.join(dir, entry.name);
+    }
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const found = findAgentMdInDir(path.join(dir, entry.name), agentName);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Get user-level agent path — walks subfolders to support grouped layouts.
+ * e.g. ~/.config/opencode/agents/business/ceo-diginno.md
  */
 function getUserAgentPath(agentName) {
+  // 1. Check flat path first (legacy / newly created agents)
   const pluralPath = path.join(AGENT_DIR, `${agentName}.md`);
+  if (fs.existsSync(pluralPath)) return pluralPath;
+
   const legacyPath = path.join(AGENT_DIR, '..', 'agent', `${agentName}.md`);
-  if (fs.existsSync(legacyPath) && !fs.existsSync(pluralPath)) return legacyPath;
+  if (fs.existsSync(legacyPath)) return legacyPath;
+
+  // 2. Walk subfolders for grouped layout
+  const found = findAgentMdInDir(AGENT_DIR, agentName);
+  if (found) return found;
+
+  // 3. Return expected flat path as default (for new agent creation)
   return pluralPath;
 }
 
