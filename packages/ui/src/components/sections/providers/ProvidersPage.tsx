@@ -2,6 +2,7 @@ import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useUIStore } from '@/stores/useUIStore';
 import { Button } from '@/components/ui/button';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
@@ -12,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui';
-import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine, RiInformationLine } from '@remixicon/react';
+import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine, RiInformationLine, RiEyeLine, RiEyeOffLine } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -144,6 +145,10 @@ export const ProvidersPage: React.FC = () => {
   const selectedProviderId = useConfigStore((state) => state.selectedProviderId);
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
   const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
+  const hiddenModels = useUIStore((state) => state.hiddenModels);
+  const toggleHiddenModel = useUIStore((state) => state.toggleHiddenModel);
+  const hideAllModels = useUIStore((state) => state.hideAllModels);
+  const showAllModels = useUIStore((state) => state.showAllModels);
 
   const [authMethodsByProvider, setAuthMethodsByProvider] = React.useState<Record<string, AuthMethod[]>>({});
   const [authLoading, setAuthLoading] = React.useState(false);
@@ -1008,14 +1013,35 @@ export const ProvidersPage: React.FC = () => {
                 Models exposed by this provider
               </p>
             </div>
-            <div className="relative">
-              <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={modelQuery}
-                onChange={(event) => setModelQuery(event.target.value)}
-                placeholder="Filter models..."
-                className="pl-8 h-8 w-full sm:w-[200px]"
-              />
+            <div className={cn('flex items-center gap-2', isMobile ? 'w-full flex-wrap' : 'justify-end')}>
+              <ButtonSmall
+                variant="outline"
+                onClick={() => {
+                  const allIds = providerModels
+                    .map((model) => (typeof model?.id === 'string' ? model.id : ''))
+                    .filter((id) => id.length > 0);
+                  hideAllModels(selectedProvider.id, allIds);
+                }}
+                className="text-foreground"
+              >
+                Hide all
+              </ButtonSmall>
+              <ButtonSmall
+                variant="outline"
+                onClick={() => showAllModels(selectedProvider.id)}
+                className="text-foreground"
+              >
+                Show all
+              </ButtonSmall>
+              <div className={cn('relative', isMobile ? 'w-full' : undefined)}>
+                <RiSearchLine className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={modelQuery}
+                  onChange={(event) => setModelQuery(event.target.value)}
+                  placeholder="Filter models..."
+                  className="pl-8 h-8 w-full sm:w-[200px]"
+                />
+              </div>
             </div>
           </div>
 
@@ -1028,6 +1054,9 @@ export const ProvidersPage: React.FC = () => {
                   const modelId = typeof model?.id === 'string' ? model.id : '';
                   const modelName = typeof model?.name === 'string' ? model.name : modelId;
                   const metadata = modelId ? getModelMetadata(selectedProvider.id, modelId) as ModelMetadata | undefined : undefined;
+                  const isHidden = hiddenModels.some(
+                    (item) => item.providerID === selectedProvider.id && item.modelID === modelId
+                  );
 
                   const contextTokens = formatTokens(metadata?.limit?.context);
                   const outputTokens = formatTokens(metadata?.limit?.output);
@@ -1042,6 +1071,7 @@ export const ProvidersPage: React.FC = () => {
                       key={modelId}
                       className={cn(
                         "px-3 py-2.5",
+                        isHidden && 'opacity-50',
                         isMobile ? "flex flex-col gap-2" : "flex items-center gap-3"
                       )}
                     >
@@ -1073,6 +1103,15 @@ export const ProvidersPage: React.FC = () => {
                             ))}
                           </div>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => toggleHiddenModel(selectedProvider.id, modelId)}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-[var(--interactive-hover)]/50"
+                          title={isHidden ? 'Show model in selectors' : 'Hide model from selectors'}
+                          aria-label={isHidden ? 'Show model' : 'Hide model'}
+                        >
+                          {isHidden ? <RiEyeOffLine className="h-3.5 w-3.5" /> : <RiEyeLine className="h-3.5 w-3.5" />}
+                        </button>
                       </div>
                     </div>
                   );

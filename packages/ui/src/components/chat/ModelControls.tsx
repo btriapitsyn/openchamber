@@ -363,6 +363,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         isModelSelectorOpen,
         setModelSelectorOpen,
     } = useUIStore();
+    const hiddenModels = useUIStore((state) => state.hiddenModels);
 
     // Separate state for agent selector to avoid conflict with model selector
     const [isAgentSelectorOpen, setIsAgentSelectorOpen] = React.useState(false);
@@ -534,6 +535,21 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const currentProvider = getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
+
+    const visibleProviders = React.useMemo(() => {
+        return providers
+            .map((provider) => {
+                const providerModels = Array.isArray(provider.models) ? provider.models : [];
+                const visibleModels = providerModels.filter((model: ProviderModel) => {
+                    const modelId = typeof model?.id === 'string' ? model.id : '';
+                    return !hiddenModels.some(
+                        (item) => item.providerID === String(provider.id) && item.modelID === modelId
+                    );
+                });
+                return { ...provider, models: visibleModels };
+            })
+            .filter((provider) => provider.models.length > 0);
+    }, [providers, hiddenModels]);
 
     const currentMetadata =
         currentProviderId && currentModelId ? getModelMetadata(currentProviderId, currentModelId) : undefined;
@@ -1439,7 +1455,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (!isCompact) return null;
 
         const normalizedQuery = mobileModelQuery.trim();
-        const filteredProviders = providers
+        const filteredProviders = visibleProviders
             .map((provider) => {
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
                 const matchesProvider = normalizedQuery.length === 0
@@ -2092,7 +2108,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         });
 
         // Filter providers and their models
-        const filteredProviders = providers
+        const filteredProviders = visibleProviders
             .map((provider) => {
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
                 const filteredModels = providerModels.filter((model: ProviderModel) => {
