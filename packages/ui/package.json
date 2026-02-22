@@ -8,7 +8,9 @@
     "dev": "tsc --noEmit --watch",
     "build": "tsc --noEmit",
     "type-check": "tsc --noEmit",
-    "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js"
+    "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
@@ -80,6 +82,8 @@
     "@eslint/js": "^9.33.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@tauri-apps/api": "^2.9.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^24.3.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
@@ -94,12 +98,14 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
+    "jsdom": "^28.1.0",
     "nodemon": "^3.1.7",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.20.6",
     "tw-animate-css": "^1.3.8",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.39.1",
-    "vite": "^7.1.2"
+    "vite": "^7.1.2",
+    "vitest": "^4.0.18"
   }
 }

@@ -55,7 +55,9 @@
     "release:prepare": "bun run build && bun run type-check && bun run lint",
     "release:test": "./scripts/test-release-build.sh",
     "release:test:intel": "./scripts/test-release-build.sh x86_64",
-    "release:test:arm": "./scripts/test-release-build.sh aarch64"
+    "release:test:arm": "./scripts/test-release-build.sh aarch64",
+    "test": "bun run --cwd packages/ui test",
+    "test:watch": "bun run --cwd packages/ui test:watch"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",

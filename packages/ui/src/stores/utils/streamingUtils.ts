@@ -19,6 +19,31 @@ export const touchStreamingLifecycle = (
     return next;
 };
 
+/**
+ * Touch multiple messageIds in ONE Map allocation instead of one Map per messageId.
+ * Use this in the batched flush path where multiple assistant messages may need
+ * lifecycle updates within a single animation frame.
+ */
+export const touchStreamingLifecycleBatch = (
+    source: Map<string, MessageStreamLifecycle>,
+    messageIds: string[]
+): Map<string, MessageStreamLifecycle> => {
+    if (messageIds.length === 0) {
+        return source;
+    }
+    const now = Date.now();
+    const next = new Map(source);
+    for (const messageId of messageIds) {
+        const existing = source.get(messageId);
+        next.set(messageId, {
+            phase: 'streaming',
+            startedAt: existing?.startedAt ?? now,
+            lastUpdateAt: now,
+        });
+    }
+    return next;
+};
+
 
 export const removeLifecycleEntries = (
     source: Map<string, MessageStreamLifecycle>,

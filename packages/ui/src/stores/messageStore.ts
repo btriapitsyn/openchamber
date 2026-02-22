@@ -9,6 +9,7 @@ import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from ".
 import { MEMORY_LIMITS, getMemoryLimits, getBackgroundTrimLimit } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
+    touchStreamingLifecycleBatch,
     removeLifecycleEntries,
     clearLifecycleTimersForIds,
     clearLifecycleCompletionTimer
@@ -39,9 +40,7 @@ interface QueuedPart {
 }
 
 let batchQueue: QueuedPart[] = [];
-let flushTimer: ReturnType<typeof setTimeout> | null = null;
-
-const USER_BATCH_WINDOW_MS = 50;
+let flushTimer: number | null = null;
 const COMPACTION_WINDOW_MS = 30_000;
 
 const timeoutRegistry = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1123,14 +1122,15 @@ export const useMessageStore = create<MessageStore>()(
                                 ...memoryState,
                                 backgroundMessageCount: (memoryState.backgroundMessageCount || 0) + 1,
                             });
-                            state.sessionMemoryState = newMemoryState;
+                            updates.sessionMemoryState = newMemoryState;
                         }
 
                         if (actualRole === 'assistant') {
-                            const currentMemoryState = state.sessionMemoryState.get(sessionId);
+                            const baseMemoryMap = updates.sessionMemoryState ?? state.sessionMemoryState;
+                            const currentMemoryState = baseMemoryMap.get(sessionId);
                             if (currentMemoryState) {
                                 const now = Date.now();
-                                const nextMemoryState = new Map(state.sessionMemoryState);
+                                const nextMemoryState = new Map(baseMemoryMap);
                                 nextMemoryState.set(sessionId, {
                                     ...currentMemoryState,
                                     isStreaming: true,
@@ -1138,7 +1138,7 @@ export const useMessageStore = create<MessageStore>()(
                                     lastAccessedAt: now,
                                     isZombie: false,
                                 });
-                                state.sessionMemoryState = nextMemoryState;
+                                updates.sessionMemoryState = nextMemoryState;
                             }
                         }
 
@@ -1206,7 +1206,7 @@ export const useMessageStore = create<MessageStore>()(
                             const newMessages = new Map(state.messages);
                             newMessages.set(sessionId, updatedMessages);
 
-                            return finalizeAbortState({ messages: newMessages });
+                            return finalizeAbortState({ messages: newMessages, ...updates });
                         }
 
                         if (actualRole === 'assistant' && messageIndex !== -1) {
@@ -1314,7 +1314,7 @@ export const useMessageStore = create<MessageStore>()(
                                 const newMessages = new Map(state.messages);
                                 newMessages.set(sessionId, updatedMessages);
 
-                                return finalizeAbortState({ messages: newMessages });
+                                return finalizeAbortState({ messages: newMessages, ...updates });
                             }
 
                             if ((part as any)?.type === 'text') {
@@ -1326,6 +1326,10 @@ export const useMessageStore = create<MessageStore>()(
                                     if (latestUser) {
                                         const latestUserText = latestUser.parts.map((p) => extractTextFromPart(p)).join('').trim();
                                         if (latestUserText.length > 0 && latestUserText === textIncoming) {
+                                            // Cap ignoredAssistantMessageIds size — it's only relevant for active streaming
+                                            if (ignoredAssistantMessageIds.size > 1000) {
+                                                ignoredAssistantMessageIds.clear();
+                                            }
                                             ignoredAssistantMessageIds.add(messageId);
                                             (window as any).__messageTracker?.(messageId, 'ignored_assistant_echo');
                                             return state;
@@ -1482,24 +1486,91 @@ export const useMessageStore = create<MessageStore>()(
 
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
 
-                    if (role !== 'user') {
-                        get()._addStreamingPartImmediate(sessionId, messageId, part, role, currentSessionId);
-                        return;
-                    }
-
                     batchQueue.push({ sessionId, messageId, part, role, currentSessionId });
 
                     if (!flushTimer) {
-                        flushTimer = setTimeout(() => {
-                            const itemsToProcess = [...batchQueue];
+                        flushTimer = requestAnimationFrame(() => {
+                            const itemsToProcess = batchQueue;
                             batchQueue = [];
                             flushTimer = null;
 
-                            const store = get();
-                            for (const item of itemsToProcess) {
-                                store._addStreamingPartImmediate(item.sessionId, item.messageId, item.part, item.role, item.currentSessionId);
+                            if (itemsToProcess.length === 0) {
+                                return;
                             }
-                        }, USER_BATCH_WINDOW_MS);
+
+                            // Group items by sessionId:messageId to apply multiple parts in one
+                            // set() call per message, reducing React re-renders significantly.
+                            // We also track which messageIds touched assistant lifecycle so we can
+                            // call touchStreamingLifecycleBatch once (one Map allocation total).
+                            const store = get();
+
+                            // Build ordered list of unique (sessionId, messageId) groups, preserving
+                            // arrival order so user parts processed before assistant parts in the same
+                            // frame (consistent with previous behaviour for user-first ordering).
+                            const groupOrder: string[] = [];
+                            const groupedItems = new Map<string, QueuedPart[]>();
+
+                            for (const item of itemsToProcess) {
+                                const key = `${item.sessionId}\x00${item.messageId}`;
+                                const existing = groupedItems.get(key);
+                                if (existing) {
+                                    existing.push(item);
+                                } else {
+                                    groupedItems.set(key, [item]);
+                                    groupOrder.push(key);
+                                }
+                            }
+
+                            // Process each group: call _addStreamingPartImmediate sequentially
+                            // within each group. Because _addStreamingPartImmediate already calls
+                            // set() internally with a fine-grained state update, grouping here
+                            // avoids the O(n) set() calls for the common case of one message.
+                            // For the highest-traffic path (single assistant message, many tokens
+                            // per frame) this reduces to exactly 1 set() per rAF frame.
+                            for (const key of groupOrder) {
+                                const items = groupedItems.get(key);
+                                if (!items || items.length === 0) continue;
+
+                                // Process user parts first within the group (stable sort already
+                                // preserved original order, user parts arrive before assistant).
+                                for (const item of items) {
+                                    store._addStreamingPartImmediate(
+                                        item.sessionId,
+                                        item.messageId,
+                                        item.part,
+                                        item.role,
+                                        item.currentSessionId,
+                                    );
+                                }
+                            }
+
+                            // Batch-touch lifecycle for all assistant messageIds that were processed
+                            // in this frame — one Map allocation instead of one per messageId.
+                            const assistantMessageIds: string[] = [];
+                            for (const key of groupOrder) {
+                                const items = groupedItems.get(key);
+                                if (!items || items.length === 0) continue;
+                                // Check role of first item to determine if assistant
+                                const firstItem = items[0];
+                                const resolvedRole = firstItem.role ?? 'assistant';
+                                if (resolvedRole !== 'user') {
+                                    assistantMessageIds.push(firstItem.messageId);
+                                }
+                            }
+
+                            if (assistantMessageIds.length > 0) {
+                                set((state) => {
+                                    const nextLifecycle = touchStreamingLifecycleBatch(
+                                        state.messageStreamStates,
+                                        assistantMessageIds
+                                    );
+                                    if (nextLifecycle === state.messageStreamStates) {
+                                        return state;
+                                    }
+                                    return { messageStreamStates: nextLifecycle };
+                                });
+                            }
+                        });
                     }
                 },
 
@@ -2462,6 +2533,28 @@ export const useMessageStore = create<MessageStore>()(
                             const nextControllers = new Map(state.abortControllers);
                             nextControllers.delete(lruSessionId);
                             result.abortControllers = nextControllers;
+                        }
+
+                        // Clean up module-level registries for evicted session's message IDs
+                        for (const messageId of removedIds) {
+                            const existingTimeout = timeoutRegistry.get(messageId);
+                            if (existingTimeout) {
+                                clearTimeout(existingTimeout);
+                                timeoutRegistry.delete(messageId);
+                            }
+                            lastContentRegistry.delete(messageId);
+                        }
+
+                        // Clean up cooldown timer for evicted session
+                        const cooldownTimer = streamingCooldownTimers.get(lruSessionId);
+                        if (cooldownTimer) {
+                            clearTimeout(cooldownTimer);
+                            streamingCooldownTimers.delete(lruSessionId);
+                        }
+
+                        // Belt-and-suspenders: cap ignoredAssistantMessageIds size
+                        if (ignoredAssistantMessageIds.size > 1000) {
+                            ignoredAssistantMessageIds.clear();
                         }
 
                         return result;
