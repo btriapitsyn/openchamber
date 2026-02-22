@@ -21,7 +21,6 @@ import { RiAddLine, RiTerminalBoxLine, RiMore2Line, RiDeleteBinLine, RiFileCopyL
 import { useCommandsStore, isCommandBuiltIn, type Command } from '@/stores/useCommandsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
 import { useDeviceInfo } from '@/lib/device';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { cn } from '@/lib/utils';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
@@ -50,7 +49,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
 
   const { isMobile } = useDeviceInfo();
 
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   React.useEffect(() => {
     loadCommands();
@@ -73,7 +71,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     }
   }, [selectedCommandName, setSelectedCommand, skillNames]);
 
-  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
+  const bgClass = 'bg-background';
 
   const handleCreateNew = () => {
     // Generate unique name

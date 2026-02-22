@@ -20,7 +20,6 @@ import {
 import { RiAddLine, RiAiAgentFill, RiAiAgentLine, RiDeleteBinLine, RiFileCopyLine, RiMore2Line, RiRobot2Line, RiRobotLine, RiRestartLine, RiEditLine } from '@remixicon/react';
 import { useAgentsStore, isAgentBuiltIn, isAgentHidden, type AgentScope, type AgentDraft } from '@/stores/useAgentsStore';
 import { useDeviceInfo } from '@/lib/device';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import type { Agent } from '@opencode-ai/sdk/v2';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -118,13 +117,11 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
 
   const { isMobile } = useDeviceInfo();
 
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-
   React.useEffect(() => {
     loadAgents();
   }, [loadAgents]);
 
-  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
+  const bgClass = 'bg-background';
 
   const handleCreateNew = () => {
     // Generate unique name

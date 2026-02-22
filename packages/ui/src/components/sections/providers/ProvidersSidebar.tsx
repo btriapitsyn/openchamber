@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useDeviceInfo } from '@/lib/device';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { RiAddLine, RiStackLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
@@ -43,8 +42,6 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
   const { isMobile } = useDeviceInfo();
-
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
   const [sourcesByProvider, setSourcesByProvider] = React.useState<Record<string, ProviderSources>>({});
   const directory = React.useMemo(() => {
@@ -99,7 +96,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
     };
   }, [directory, providers]);
 
-  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
+  const bgClass = 'bg-background';
 
   const projectProviders = React.useMemo(() => {
     return providers.filter((p) => Boolean(sourcesByProvider[p.id]?.project?.exists));

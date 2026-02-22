@@ -65,6 +65,7 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
 
   return (
     <SettingsSidebarLayout
+      variant="background"
       header={
         <div className={cn('border-b px-3', 'pt-4 pb-3')}>
           <h2 className="text-base font-semibold text-foreground mb-3">Projects</h2>

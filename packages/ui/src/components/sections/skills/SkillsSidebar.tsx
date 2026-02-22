@@ -20,7 +20,6 @@ import {
 import { RiAddLine, RiDeleteBinLine, RiFileCopyLine, RiMore2Line, RiEditLine, RiBookOpenLine } from '@remixicon/react';
 import { useSkillsStore, type DiscoveredSkill } from '@/stores/useSkillsStore';
 import { useDeviceInfo } from '@/lib/device';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SettingsProjectSelector } from '@/components/sections/shared/SettingsProjectSelector';
@@ -47,11 +46,9 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
 
   const { isMobile } = useDeviceInfo();
 
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-
   // Skills are loaded by the Settings shell when this page is active.
 
-  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
+  const bgClass = 'bg-background';
 
   const handleCreateNew = () => {
     // Generate unique name

@@ -12,6 +12,8 @@ interface SettingsSidebarLayoutProps {
   children: React.ReactNode;
   /** Additional className for the outer container */
   className?: string;
+  /** Background style for the sidebar container */
+  variant?: 'sidebar' | 'background';
 }
 
 /**
@@ -32,6 +34,7 @@ export const SettingsSidebarLayout: React.FC<SettingsSidebarLayoutProps> = ({
   footer,
   children,
   className,
+  variant = 'sidebar',
 }) => {
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
@@ -39,12 +42,14 @@ export const SettingsSidebarLayout: React.FC<SettingsSidebarLayoutProps> = ({
   const [showTopShadow, setShowTopShadow] = React.useState(false);
   const [showBottomShadow, setShowBottomShadow] = React.useState(false);
 
-  // Desktop app: transparent for blur effect
-  // VS Code: bg-background (same as page content)
-  // Web/mobile: bg-sidebar
-  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
-  const bgVar = isVSCode ? 'var(--surface-background)' : 'var(--surface-muted)';
+  const bgClass = variant === 'background'
+    ? 'bg-background'
+    : (isVSCode ? 'bg-background' : 'bg-sidebar');
 
+  const bgVar = bgClass === 'bg-background'
+    ? 'var(--surface-background)'
+    : 'var(--surface-muted)';
+  
   const updateScrollShadows = React.useCallback(() => {
     const el = scrollRef.current;
     if (!el) {

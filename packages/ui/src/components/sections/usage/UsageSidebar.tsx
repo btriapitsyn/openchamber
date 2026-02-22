@@ -6,7 +6,6 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDeviceInfo } from '@/lib/device';
-import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
 import { QUOTA_PROVIDERS, resolveUsageTone } from '@/lib/quota';
 import { useQuotaStore } from '@/stores/useQuotaStore';
@@ -43,8 +42,6 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
   const loadUsageSettings = useQuotaStore((state) => state.loadSettings);
   const { isMobile } = useDeviceInfo();
 
-  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
-
   React.useEffect(() => {
     void loadUsageSettings();
   }, [loadUsageSettings]);
@@ -79,7 +76,7 @@ export const UsageSidebar: React.FC<UsageSidebarProps> = ({ onItemSelect }) => {
     void persistUsageSettings({ usageDisplayMode: value });
   }, [persistUsageSettings, setUsageDisplayMode]);
 
-  const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
+  const bgClass = 'bg-background';
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
