@@ -5710,6 +5710,7 @@ async function main(options = {}) {
     if (
       req.path.startsWith('/api/config/agents') ||
       req.path.startsWith('/api/config/commands') ||
+      req.path.startsWith('/api/config/mcp') ||
       req.path.startsWith('/api/config/settings') ||
       req.path.startsWith('/api/config/skills') ||
       req.path.startsWith('/api/fs') ||
@@ -6771,7 +6772,12 @@ async function main(options = {}) {
     getProviderSources,
     removeProviderConfig,
     AGENT_SCOPE,
-    COMMAND_SCOPE
+    COMMAND_SCOPE,
+    listMcpConfigs,
+    getMcpConfig,
+    createMcpConfig,
+    updateMcpConfig,
+    deleteMcpConfig,
   } = await import('./lib/opencode/index.js');
 
   app.get('/api/config/agents/:name', async (req, res) => {
@@ -6896,6 +6902,96 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to delete agent:', error);
       res.status(500).json({ error: error.message || 'Failed to delete agent' });
+    }
+  });
+
+  // ============================================================
+  // MCP Config Routes
+  // ============================================================
+
+  app.get('/api/config/mcp', async (_req, res) => {
+    try {
+      const configs = listMcpConfigs();
+      res.json(configs);
+    } catch (error) {
+      console.error('[API:GET /api/config/mcp] Failed:', error);
+      res.status(500).json({ error: error.message || 'Failed to list MCP configs' });
+    }
+  });
+
+  app.get('/api/config/mcp/:name', async (req, res) => {
+    try {
+      const name = req.params.name;
+      const config = getMcpConfig(name);
+      if (!config) {
+        return res.status(404).json({ error: `MCP server "${name}" not found` });
+      }
+      res.json(config);
+    } catch (error) {
+      console.error('[API:GET /api/config/mcp/:name] Failed:', error);
+      res.status(500).json({ error: error.message || 'Failed to get MCP config' });
+    }
+  });
+
+  app.post('/api/config/mcp/:name', async (req, res) => {
+    try {
+      const name = req.params.name;
+      const config = req.body;
+      console.log(`[API:POST /api/config/mcp] Creating MCP server: ${name}`);
+
+      createMcpConfig(name, config);
+      await refreshOpenCodeAfterConfigChange('mcp creation', { mcpName: name });
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: `MCP server "${name}" created. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('[API:POST /api/config/mcp/:name] Failed:', error);
+      res.status(500).json({ error: error.message || 'Failed to create MCP server' });
+    }
+  });
+
+  app.patch('/api/config/mcp/:name', async (req, res) => {
+    try {
+      const name = req.params.name;
+      const updates = req.body;
+      console.log(`[API:PATCH /api/config/mcp] Updating MCP server: ${name}`);
+
+      updateMcpConfig(name, updates);
+      await refreshOpenCodeAfterConfigChange('mcp update');
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: `MCP server "${name}" updated. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('[API:PATCH /api/config/mcp/:name] Failed:', error);
+      res.status(500).json({ error: error.message || 'Failed to update MCP server' });
+    }
+  });
+
+  app.delete('/api/config/mcp/:name', async (req, res) => {
+    try {
+      const name = req.params.name;
+      console.log(`[API:DELETE /api/config/mcp] Deleting MCP server: ${name}`);
+
+      deleteMcpConfig(name);
+      await refreshOpenCodeAfterConfigChange('mcp deletion');
+
+      res.json({
+        success: true,
+        requiresReload: true,
+        message: `MCP server "${name}" deleted. Reloading interface…`,
+        reloadDelayMs: CLIENT_RELOAD_DELAY_MS,
+      });
+    } catch (error) {
+      console.error('[API:DELETE /api/config/mcp/:name] Failed:', error);
+      res.status(500).json({ error: error.message || 'Failed to delete MCP server' });
     }
   });
 
