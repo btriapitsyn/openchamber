@@ -2725,9 +2725,9 @@ mod tests {
 
     #[test]
     fn sanitize_host_url_for_storage_keeps_query_params() {
-        let input = "https://openchamber--raptors--shekohex.coder.0iq.xyz?coder_session_token=xxxxxx";
+        let input = "https://example.com?coder_session_token=xxxxxx";
         let sanitized = sanitize_host_url_for_storage(input).expect("sanitized url");
-        assert_eq!(sanitized, "https://openchamber--raptors--shekohex.coder.0iq.xyz/?coder_session_token=xxxxxx");
+        assert_eq!(sanitized, "https://example.com/?coder_session_token=xxxxxx");
     }
 
     #[test]
@@ -2744,8 +2744,7 @@ mod tests {
             hosts: vec![DesktopHost {
                 id: "remote-1".to_string(),
                 label: "Remote".to_string(),
-                url: "https://openchamber--raptors--shekohex.coder.0iq.xyz?coder_session_token=xxxxxx"
-                    .to_string(),
+                url: "https://example.com?coder_session_token=xxxxxx".to_string(),
             }],
             default_host_id: Some("remote-1".to_string()),
         };
@@ -2757,7 +2756,7 @@ mod tests {
         assert_eq!(read_back.hosts.len(), 1);
         assert_eq!(
             read_back.hosts[0].url,
-            "https://openchamber--raptors--shekohex.coder.0iq.xyz/?coder_session_token=xxxxxx"
+            "https://example.com/?coder_session_token=xxxxxx"
         );
         assert_eq!(read_back.default_host_id.as_deref(), Some("remote-1"));
     }
