@@ -6,6 +6,28 @@ import {
   finishConfigUpdate,
 } from '@/lib/configUpdate';
 import { refreshAfterOpenCodeRestart } from '@/stores/useAgentsStore';
+import { useProjectsStore } from '@/stores/useProjectsStore';
+import { opencodeClient } from '@/lib/opencode/client';
+
+export type McpScope = 'user' | 'project';
+
+const getConfigDirectory = (): string | null => {
+  try {
+    const projectsStore = useProjectsStore.getState();
+    const activeProject = projectsStore.getActiveProject?.();
+    if (activeProject?.path?.trim()) {
+      return activeProject.path.trim();
+    }
+
+    const clientDir = opencodeClient.getDirectory();
+    if (clientDir?.trim()) {
+      return clientDir.trim();
+    }
+  } catch (err) {
+    console.warn('[McpConfigStore] Error resolving config directory:', err);
+  }
+  return null;
+};
 
 // ============== TYPES ==============
 
@@ -24,9 +46,11 @@ export interface McpRemoteConfig {
 }
 
 export type McpServerConfig = (McpLocalConfig | McpRemoteConfig) & { name: string };
+export type McpServerWithScope = McpServerConfig & { scope?: McpScope | null };
 
 export interface McpDraft {
   name: string;
+  scope: McpScope;
   type: 'local' | 'remote';
   command: string[];
   url: string;
@@ -52,7 +76,7 @@ const CLIENT_RELOAD_DELAY_MS = 800;
 // ============== STORE ==============
 
 interface McpConfigStore {
-  mcpServers: McpServerConfig[];
+  mcpServers: McpServerWithScope[];
   selectedMcpName: string | null;
   isLoading: boolean;
   mcpDraft: McpDraft | null;
@@ -63,7 +87,7 @@ interface McpConfigStore {
   createMcp: (config: McpDraft) => Promise<boolean>;
   updateMcp: (name: string, config: Partial<McpDraft>) => Promise<boolean>;
   deleteMcp: (name: string) => Promise<boolean>;
-  getMcpByName: (name: string) => McpServerConfig | undefined;
+  getMcpByName: (name: string) => McpServerWithScope | undefined;
 }
 
 export const useMcpConfigStore = create<McpConfigStore>()(
@@ -82,11 +106,15 @@ export const useMcpConfigStore = create<McpConfigStore>()(
         loadMcpConfigs: async () => {
           set({ isLoading: true });
           try {
-            const response = await fetch('/api/config/mcp');
+            const configDirectory = getConfigDirectory();
+            const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : '';
+            const response = await fetch(`/api/config/mcp${queryParams}`, {
+              headers: configDirectory ? { 'x-opencode-directory': configDirectory } : undefined,
+            });
             if (!response.ok) {
               throw new Error('Failed to load MCP configs');
             }
-            const data: McpServerConfig[] = await response.json();
+            const data: McpServerWithScope[] = await response.json();
             set({ mcpServers: data, isLoading: false });
             return true;
           } catch (error) {
@@ -101,9 +129,14 @@ export const useMcpConfigStore = create<McpConfigStore>()(
           let requiresReload = false;
           try {
             const body = buildMcpBody(config);
-            const response = await fetch(`/api/config/mcp/${encodeURIComponent(config.name)}`, {
+            const configDirectory = getConfigDirectory();
+            const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : '';
+            const response = await fetch(`/api/config/mcp/${encodeURIComponent(config.name)}${queryParams}`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(configDirectory ? { 'x-opencode-directory': configDirectory } : {}),
+              },
               body: JSON.stringify(body),
             });
 
@@ -137,9 +170,14 @@ export const useMcpConfigStore = create<McpConfigStore>()(
           let requiresReload = false;
           try {
             const body = buildMcpBody(config);
-            const response = await fetch(`/api/config/mcp/${encodeURIComponent(name)}`, {
+            const configDirectory = getConfigDirectory();
+            const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : '';
+            const response = await fetch(`/api/config/mcp/${encodeURIComponent(name)}${queryParams}`, {
               method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(configDirectory ? { 'x-opencode-directory': configDirectory } : {}),
+              },
               body: JSON.stringify(body),
             });
 
@@ -172,8 +210,11 @@ export const useMcpConfigStore = create<McpConfigStore>()(
           startConfigUpdate('Deleting MCP server configuration…');
           let requiresReload = false;
           try {
-            const response = await fetch(`/api/config/mcp/${encodeURIComponent(name)}`, {
+            const configDirectory = getConfigDirectory();
+            const queryParams = configDirectory ? `?directory=${encodeURIComponent(configDirectory)}` : '';
+            const response = await fetch(`/api/config/mcp/${encodeURIComponent(name)}${queryParams}`, {
               method: 'DELETE',
+              headers: configDirectory ? { 'x-opencode-directory': configDirectory } : undefined,
             });
 
             const payload = await response.json().catch(() => null);
@@ -222,6 +263,8 @@ export const useMcpConfigStore = create<McpConfigStore>()(
 
 function buildMcpBody(config: Partial<McpDraft>): Record<string, unknown> {
   const body: Record<string, unknown> = {};
+
+  if (config.scope !== undefined) body.scope = config.scope;
 
   if (config.type !== undefined) body.type = config.type;
 

@@ -86,6 +86,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
 
     const draft: McpDraft = {
       name: newName,
+      scope: 'user',
       type: 'local',
       command: [],
       url: '',

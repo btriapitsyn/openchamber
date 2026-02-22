@@ -400,11 +400,25 @@ export type McpConfigPayload = McpLocalConfig | McpRemoteConfig;
 
 export type McpConfigEntry = {
   name: string;
+  scope?: AgentScope | null;
   type: 'local' | 'remote';
   command?: string[];
   url?: string;
   environment?: Record<string, string>;
   enabled: boolean;
+};
+
+const resolveMcpScopeFromPath = (layers: ReturnType<typeof readConfigLayers>, sourcePath?: string | null): AgentScope | null => {
+  if (!sourcePath) return null;
+  return sourcePath === layers.paths.projectPath ? AGENT_SCOPE.PROJECT : AGENT_SCOPE.USER;
+};
+
+const ensureProjectMcpConfigPath = (workingDirectory: string): string => {
+  const projectConfigDir = path.join(workingDirectory, '.opencode');
+  if (!fs.existsSync(projectConfigDir)) {
+    fs.mkdirSync(projectConfigDir, { recursive: true });
+  }
+  return path.join(projectConfigDir, 'opencode.json');
 };
 
 const validateMcpName = (name: string): void => {
@@ -445,42 +459,81 @@ const buildMcpEntry = (data: Record<string, unknown>): Omit<McpConfigEntry, 'nam
   return entry;
 };
 
-export const listMcpConfigs = (): McpConfigEntry[] => {
-  const config = readConfigFile(CONFIG_FILE);
-  const mcp = isPlainObject(config.mcp) ? config.mcp : {};
+export const listMcpConfigs = (workingDirectory?: string): McpConfigEntry[] => {
+  const layers = readConfigLayers(workingDirectory);
+  const merged = (layers.mergedConfig as Record<string, unknown>) || {};
+  const mcp = isPlainObject(merged.mcp) ? merged.mcp : {};
   return Object.entries(mcp)
     .filter(([, value]) => isPlainObject(value))
-    .map(([name, value]) => ({ name, ...buildMcpEntry(value as Record<string, unknown>) }));
+    .map(([name, value]) => {
+      const source = getJsonEntrySource(layers, 'mcp', name);
+      return {
+        name,
+        ...buildMcpEntry(value as Record<string, unknown>),
+        scope: resolveMcpScopeFromPath(layers, source.path),
+      };
+    });
 };
 
-export const getMcpConfig = (name: string): McpConfigEntry | null => {
-  const config = readConfigFile(CONFIG_FILE);
-  const mcp = isPlainObject(config.mcp) ? config.mcp : {};
+export const getMcpConfig = (name: string, workingDirectory?: string): McpConfigEntry | null => {
+  const layers = readConfigLayers(workingDirectory);
+  const merged = (layers.mergedConfig as Record<string, unknown>) || {};
+  const mcp = isPlainObject(merged.mcp) ? merged.mcp : {};
   const entry = mcp[name];
   if (!isPlainObject(entry)) {
     return null;
   }
-  return { name, ...buildMcpEntry(entry as Record<string, unknown>) };
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  return {
+    name,
+    ...buildMcpEntry(entry as Record<string, unknown>),
+    scope: resolveMcpScopeFromPath(layers, source.path),
+  };
 };
 
-export const createMcpConfig = (name: string, mcpConfig: Record<string, unknown>): void => {
+export const createMcpConfig = (
+  name: string,
+  mcpConfig: Record<string, unknown>,
+  workingDirectory?: string,
+  scope?: AgentScope,
+): void => {
   validateMcpName(name);
 
-  const config = readConfigFile(CONFIG_FILE);
-  const mcp = isPlainObject(config.mcp) ? { ...config.mcp } : {};
-  if (mcp[name] !== undefined) {
+  const layers = readConfigLayers(workingDirectory);
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  if (source.exists) {
     throw new Error(`MCP server "${name}" already exists`);
   }
+
+  let targetPath = CONFIG_FILE;
+  let config: Record<string, unknown> = {};
+
+  if (scope === AGENT_SCOPE.PROJECT) {
+    if (!workingDirectory) {
+      throw new Error('Project scope requires working directory');
+    }
+    targetPath = ensureProjectMcpConfigPath(workingDirectory);
+    config = readConfigFile(targetPath);
+  } else {
+    const jsonTarget = getJsonWriteTarget(layers, AGENT_SCOPE.USER);
+    targetPath = jsonTarget.path || CONFIG_FILE;
+    config = (jsonTarget.config || {}) as Record<string, unknown>;
+  }
+
+  const mcp = isPlainObject(config.mcp) ? { ...config.mcp } : {};
 
   const { name: _ignoredName, ...entryData } = mcpConfig;
   void _ignoredName;
   mcp[name] = buildMcpEntry(entryData);
   config.mcp = mcp;
-  writeConfig(config, CONFIG_FILE);
+  writeConfig(config, targetPath);
 };
 
-export const updateMcpConfig = (name: string, updates: Record<string, unknown>): void => {
-  const config = readConfigFile(CONFIG_FILE);
+export const updateMcpConfig = (name: string, updates: Record<string, unknown>, workingDirectory?: string): void => {
+  const layers = readConfigLayers(workingDirectory);
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  const targetPath = source.path || CONFIG_FILE;
+  const config = (source.config || readConfigFile(targetPath)) as Record<string, unknown>;
   const mcp = isPlainObject(config.mcp) ? { ...config.mcp } : {};
   const existing = isPlainObject(mcp[name]) ? mcp[name] : {};
 
@@ -488,11 +541,14 @@ export const updateMcpConfig = (name: string, updates: Record<string, unknown>):
   void _ignoredName;
   mcp[name] = buildMcpEntry({ ...(existing as Record<string, unknown>), ...updateData });
   config.mcp = mcp;
-  writeConfig(config, CONFIG_FILE);
+  writeConfig(config, targetPath);
 };
 
-export const deleteMcpConfig = (name: string): void => {
-  const config = readConfigFile(CONFIG_FILE);
+export const deleteMcpConfig = (name: string, workingDirectory?: string): void => {
+  const layers = readConfigLayers(workingDirectory);
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  const targetPath = source.path || CONFIG_FILE;
+  const config = (source.config || readConfigFile(targetPath)) as Record<string, unknown>;
   const mcp = isPlainObject(config.mcp) ? { ...config.mcp } : {};
 
   if (mcp[name] === undefined) {
@@ -506,12 +562,12 @@ export const deleteMcpConfig = (name: string): void => {
     config.mcp = mcp;
   }
 
-  writeConfig(config, CONFIG_FILE);
+  writeConfig(config, targetPath);
 };
 
 const getJsonEntrySource = (
   layers: ReturnType<typeof readConfigLayers>,
-  sectionKey: 'agent' | 'command',
+  sectionKey: 'agent' | 'command' | 'mcp',
   entryName: string
 ) => {
   const { userConfig, projectConfig, customConfig, paths } = layers;

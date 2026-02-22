@@ -6909,9 +6909,13 @@ async function main(options = {}) {
   // MCP Config Routes
   // ============================================================
 
-  app.get('/api/config/mcp', async (_req, res) => {
+  app.get('/api/config/mcp', async (req, res) => {
     try {
-      const configs = listMcpConfigs();
+      const { directory, error } = await resolveOptionalProjectDirectory(req);
+      if (error) {
+        return res.status(400).json({ error });
+      }
+      const configs = listMcpConfigs(directory);
       res.json(configs);
     } catch (error) {
       console.error('[API:GET /api/config/mcp] Failed:', error);
@@ -6922,7 +6926,11 @@ async function main(options = {}) {
   app.get('/api/config/mcp/:name', async (req, res) => {
     try {
       const name = req.params.name;
-      const config = getMcpConfig(name);
+      const { directory, error } = await resolveOptionalProjectDirectory(req);
+      if (error) {
+        return res.status(400).json({ error });
+      }
+      const config = getMcpConfig(name, directory);
       if (!config) {
         return res.status(404).json({ error: `MCP server "${name}" not found` });
       }
@@ -6936,10 +6944,14 @@ async function main(options = {}) {
   app.post('/api/config/mcp/:name', async (req, res) => {
     try {
       const name = req.params.name;
-      const config = req.body;
+      const { scope, ...config } = req.body || {};
+      const { directory, error } = await resolveOptionalProjectDirectory(req);
+      if (error) {
+        return res.status(400).json({ error });
+      }
       console.log(`[API:POST /api/config/mcp] Creating MCP server: ${name}`);
 
-      createMcpConfig(name, config);
+      createMcpConfig(name, config, directory, scope);
       await refreshOpenCodeAfterConfigChange('mcp creation', { mcpName: name });
 
       res.json({
@@ -6958,9 +6970,13 @@ async function main(options = {}) {
     try {
       const name = req.params.name;
       const updates = req.body;
+      const { directory, error } = await resolveOptionalProjectDirectory(req);
+      if (error) {
+        return res.status(400).json({ error });
+      }
       console.log(`[API:PATCH /api/config/mcp] Updating MCP server: ${name}`);
 
-      updateMcpConfig(name, updates);
+      updateMcpConfig(name, updates, directory);
       await refreshOpenCodeAfterConfigChange('mcp update');
 
       res.json({
@@ -6978,9 +6994,13 @@ async function main(options = {}) {
   app.delete('/api/config/mcp/:name', async (req, res) => {
     try {
       const name = req.params.name;
+      const { directory, error } = await resolveOptionalProjectDirectory(req);
+      if (error) {
+        return res.status(400).json({ error });
+      }
       console.log(`[API:DELETE /api/config/mcp] Deleting MCP server: ${name}`);
 
-      deleteMcpConfig(name);
+      deleteMcpConfig(name, directory);
       await refreshOpenCodeAfterConfigChange('mcp deletion');
 
       res.json({

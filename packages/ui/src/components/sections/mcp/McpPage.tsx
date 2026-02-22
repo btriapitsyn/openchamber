@@ -8,6 +8,7 @@ import {
   useMcpConfigStore,
   envRecordToArray,
   type McpDraft,
+  type McpScope,
 } from '@/stores/useMcpConfigStore';
 import { useMcpStore } from '@/stores/useMcpStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -17,8 +18,10 @@ import {
   RiDeleteBinLine,
   RiEyeLine,
   RiEyeOffLine,
+  RiFolderLine,
   RiPlugLine,
   RiSaveLine,
+  RiUser3Line,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -31,6 +34,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select';
 
 // ─────────────────────────────────────────────────────────────
 // CommandTextarea  — one arg per line, paste-friendly
@@ -382,6 +391,7 @@ export const McpPage: React.FC = () => {
 
   // ── form state ──
   const [draftName, setDraftName] = React.useState('');
+  const [draftScope, setDraftScope] = React.useState<McpScope>('user');
   const [mcpType, setMcpType] = React.useState<'local' | 'remote'>('local');
   const [command, setCommand] = React.useState<string[]>([]);
   const [url, setUrl] = React.useState('');
@@ -401,6 +411,7 @@ export const McpPage: React.FC = () => {
   React.useEffect(() => {
     if (isNewServer && mcpDraft) {
       setDraftName(mcpDraft.name);
+      setDraftScope(mcpDraft.scope || 'user');
       setMcpType(mcpDraft.type);
       setCommand(mcpDraft.command);
       setUrl(mcpDraft.url);
@@ -413,6 +424,7 @@ export const McpPage: React.FC = () => {
       return;
     }
     if (selectedServer) {
+      setDraftScope(selectedServer.scope === 'project' ? 'project' : 'user');
       const envArr = envRecordToArray(selectedServer.environment);
       const t = selectedServer.type;
       const cmd = t === 'local' ? ((selectedServer as { command?: string[] }).command ?? []) : [];
@@ -447,7 +459,7 @@ export const McpPage: React.FC = () => {
       toast.error('URL cannot be empty for a remote server'); return;
     }
 
-    const draft: McpDraft = { name, type: mcpType, command, url, environment: envEntries, enabled };
+    const draft: McpDraft = { name, scope: draftScope, type: mcpType, command, url, environment: envEntries, enabled };
     setIsSaving(true);
     try {
       const success = isNewServer ? await createMcp(draft) : await updateMcp(name, draft);
@@ -536,6 +548,39 @@ export const McpPage: React.FC = () => {
                 </p>
               )}
             </div>
+
+            {isNewServer && (
+              <Select value={draftScope} onValueChange={(value) => setDraftScope(value as McpScope)}>
+                <SelectTrigger className="!h-8 w-auto gap-1.5">
+                  {draftScope === 'user' ? (
+                    <RiUser3Line className="h-4 w-4" />
+                  ) : (
+                    <RiFolderLine className="h-4 w-4" />
+                  )}
+                  <span className="capitalize">{draftScope}</span>
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="user" className="pr-2 [&>span:first-child]:hidden">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <RiUser3Line className="h-4 w-4" />
+                        <span>User</span>
+                      </div>
+                      <span className="typography-micro text-muted-foreground ml-6">Available in all projects</span>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="project" className="pr-2 [&>span:first-child]:hidden">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <RiFolderLine className="h-4 w-4" />
+                        <span>Project</span>
+                      </div>
+                      <span className="typography-micro text-muted-foreground ml-6">Only in current project</span>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            )}
 
             {!isNewServer && (
               <Button

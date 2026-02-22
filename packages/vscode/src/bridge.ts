@@ -1971,12 +1971,16 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:config/mcp': {
-        const { method, name, body } = (payload || {}) as { method?: string; name?: string; body?: Record<string, unknown> };
+        const { method, name, body, directory } = (payload || {}) as { method?: string; name?: string; body?: Record<string, unknown>; directory?: string };
         const normalizedMethod = typeof method === 'string' && method.trim() ? method.trim().toUpperCase() : 'GET';
         const mcpName = typeof name === 'string' ? name.trim() : '';
 
+        const workingDirectory = (typeof directory === 'string' && directory.trim())
+          ? directory.trim()
+          : (ctx?.manager?.getWorkingDirectory() || vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
+
         if (normalizedMethod === 'GET' && !mcpName) {
-          const configs = listMcpConfigs();
+          const configs = listMcpConfigs(workingDirectory);
           return { id, type, success: true, data: configs };
         }
 
@@ -1985,7 +1989,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
 
         if (normalizedMethod === 'GET') {
-          const config = getMcpConfig(mcpName);
+          const config = getMcpConfig(mcpName, workingDirectory);
           if (!config) {
             return { id, type, success: false, error: `MCP server "${mcpName}" not found` };
           }
@@ -1993,7 +1997,8 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
 
         if (normalizedMethod === 'POST') {
-          createMcpConfig(mcpName, (body || {}) as Record<string, unknown>);
+          const scope = body?.scope as 'user' | 'project' | undefined;
+          createMcpConfig(mcpName, (body || {}) as Record<string, unknown>, workingDirectory, scope);
           await ctx?.manager?.restart();
           return {
             id,
@@ -2009,7 +2014,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
 
         if (normalizedMethod === 'PATCH') {
-          updateMcpConfig(mcpName, (body || {}) as Record<string, unknown>);
+          updateMcpConfig(mcpName, (body || {}) as Record<string, unknown>, workingDirectory);
           await ctx?.manager?.restart();
           return {
             id,
@@ -2025,7 +2030,7 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         }
 
         if (normalizedMethod === 'DELETE') {
-          deleteMcpConfig(mcpName);
+          deleteMcpConfig(mcpName, workingDirectory);
           await ctx?.manager?.restart();
           return {
             id,

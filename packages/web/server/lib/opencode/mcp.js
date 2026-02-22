@@ -1,7 +1,12 @@
 import fs from 'fs';
+import path from 'path';
 import {
   CONFIG_FILE,
+  AGENT_SCOPE,
   readConfigFile,
+  readConfigLayers,
+  getJsonEntrySource,
+  getJsonWriteTarget,
   writeConfig,
 } from './shared.js';
 
@@ -22,75 +27,123 @@ function validateMcpName(name) {
 /**
  * List all MCP server configs from user-level opencode.json
  */
-function listMcpConfigs() {
-  const config = readConfigFile(CONFIG_FILE);
-  const mcp = config?.mcp || {};
+function resolveMcpScopeFromPath(layers, sourcePath) {
+  if (!sourcePath) return null;
+  return sourcePath === layers.paths.projectPath ? AGENT_SCOPE.PROJECT : AGENT_SCOPE.USER;
+}
 
-  return Object.entries(mcp).map(([name, entry]) => ({
-    name,
-    ...entry,
-  }));
+function ensureProjectMcpConfigPath(workingDirectory) {
+  const configDir = path.join(workingDirectory, '.opencode');
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true });
+  }
+  return path.join(configDir, 'opencode.json');
+}
+
+function listMcpConfigs(workingDirectory) {
+  const layers = readConfigLayers(workingDirectory);
+  const mcp = layers?.mergedConfig?.mcp || {};
+
+  return Object.entries(mcp)
+    .filter(([, entry]) => entry && typeof entry === 'object' && !Array.isArray(entry))
+    .map(([name, entry]) => {
+      const source = getJsonEntrySource(layers, 'mcp', name);
+      return {
+        name,
+        ...buildMcpEntry(entry),
+        scope: resolveMcpScopeFromPath(layers, source.path),
+      };
+    });
 }
 
 /**
  * Get a single MCP server config by name
  */
-function getMcpConfig(name) {
-  const config = readConfigFile(CONFIG_FILE);
-  const entry = config?.mcp?.[name];
+function getMcpConfig(name, workingDirectory) {
+  const layers = readConfigLayers(workingDirectory);
+  const entry = layers?.mergedConfig?.mcp?.[name];
 
   if (!entry) {
     return null;
   }
-
-  return { name, ...entry };
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  return {
+    name,
+    ...buildMcpEntry(entry),
+    scope: resolveMcpScopeFromPath(layers, source.path),
+  };
 }
 
 /**
  * Create a new MCP server config entry
  */
-function createMcpConfig(name, mcpConfig) {
+function createMcpConfig(name, mcpConfig, workingDirectory, scope) {
   validateMcpName(name);
 
-  const config = fs.existsSync(CONFIG_FILE) ? readConfigFile(CONFIG_FILE) : {};
-
-  if (!config.mcp) config.mcp = {};
-
-  if (config.mcp[name] !== undefined) {
+  const layers = readConfigLayers(workingDirectory);
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  if (source.exists) {
     throw new Error(`MCP server "${name}" already exists`);
+  }
+
+  let targetPath = CONFIG_FILE;
+  let config = {};
+
+  if (scope === AGENT_SCOPE.PROJECT) {
+    if (!workingDirectory) {
+      throw new Error('Project scope requires working directory');
+    }
+    targetPath = ensureProjectMcpConfigPath(workingDirectory);
+    config = fs.existsSync(targetPath) ? readConfigFile(targetPath) : {};
+  } else {
+    const jsonTarget = getJsonWriteTarget(layers, AGENT_SCOPE.USER);
+    targetPath = jsonTarget.path || CONFIG_FILE;
+    config = jsonTarget.config || {};
+  }
+
+  if (!config.mcp || typeof config.mcp !== 'object' || Array.isArray(config.mcp)) {
+    config.mcp = {};
   }
 
   const { name: _ignoredName, ...entryData } = mcpConfig;
   config.mcp[name] = buildMcpEntry(entryData);
 
-  writeConfig(config, CONFIG_FILE);
+  writeConfig(config, targetPath);
   console.log(`Created MCP server config: ${name}`);
 }
 
 /**
  * Update an existing MCP server config entry
  */
-function updateMcpConfig(name, updates) {
-  const config = fs.existsSync(CONFIG_FILE) ? readConfigFile(CONFIG_FILE) : {};
+function updateMcpConfig(name, updates, workingDirectory) {
+  const layers = readConfigLayers(workingDirectory);
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  const targetPath = source.path || CONFIG_FILE;
+  const config = source.config || (fs.existsSync(targetPath) ? readConfigFile(targetPath) : {});
 
-  if (!config.mcp) config.mcp = {};
+  if (!config.mcp || typeof config.mcp !== 'object' || Array.isArray(config.mcp)) {
+    config.mcp = {};
+  }
 
   const existing = config.mcp[name] ?? {};
   const { name: _ignoredName, ...updateData } = updates;
 
   config.mcp[name] = buildMcpEntry({ ...existing, ...updateData });
 
-  writeConfig(config, CONFIG_FILE);
+  writeConfig(config, targetPath);
   console.log(`Updated MCP server config: ${name}`);
 }
 
 /**
  * Delete an MCP server config entry
  */
-function deleteMcpConfig(name) {
-  const config = fs.existsSync(CONFIG_FILE) ? readConfigFile(CONFIG_FILE) : {};
+function deleteMcpConfig(name, workingDirectory) {
+  const layers = readConfigLayers(workingDirectory);
+  const source = getJsonEntrySource(layers, 'mcp', name);
+  const targetPath = source.path || CONFIG_FILE;
+  const config = source.config || (fs.existsSync(targetPath) ? readConfigFile(targetPath) : {});
 
-  if (!config.mcp || config.mcp[name] === undefined) {
+  if (!config.mcp || typeof config.mcp !== 'object' || config.mcp[name] === undefined) {
     throw new Error(`MCP server "${name}" not found`);
   }
 
@@ -100,7 +153,7 @@ function deleteMcpConfig(name) {
     delete config.mcp;
   }
 
-  writeConfig(config, CONFIG_FILE);
+  writeConfig(config, targetPath);
   console.log(`Deleted MCP server config: ${name}`);
 }
 
