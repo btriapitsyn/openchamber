@@ -363,6 +363,23 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         isModelSelectorOpen,
         setModelSelectorOpen,
     } = useUIStore();
+    const hiddenModels = useUIStore((state) => state.hiddenModels);
+
+    // Pre-filter providers by hidden models so all dropdowns stay in sync
+    const visibleProviders = React.useMemo(() => {
+        return providers
+            .map((provider) => {
+                const models = Array.isArray(provider.models) ? provider.models : [];
+                const visible = models.filter((model: ProviderModel) => {
+                    const modelId = typeof model?.id === 'string' ? model.id : '';
+                    return !hiddenModels.some(
+                        (h) => h.providerID === String(provider.id) && h.modelID === modelId
+                    );
+                });
+                return { ...provider, models: visible };
+            })
+            .filter((provider) => provider.models.length > 0);
+    }, [providers, hiddenModels]);
 
     // Separate state for agent selector to avoid conflict with model selector
     const [isAgentSelectorOpen, setIsAgentSelectorOpen] = React.useState(false);
@@ -1439,7 +1456,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (!isCompact) return null;
 
         const normalizedQuery = mobileModelQuery.trim();
-        const filteredProviders = providers
+        const filteredProviders = visibleProviders
             .map((provider) => {
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
                 const matchesProvider = normalizedQuery.length === 0
@@ -2091,8 +2108,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return filterByQuery(modelName, providerName, desktopModelQuery);
         });
 
-        // Filter providers and their models
-        const filteredProviders = providers
+        // Filter providers and their models (visibleProviders already excludes hidden models)
+        const filteredProviders = visibleProviders
             .map((provider) => {
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
                 const filteredModels = providerModels.filter((model: ProviderModel) => {

@@ -57,6 +57,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => {
     const { providers, modelsMetadata } = useConfigStore();
     const isMobile = useUIStore(state => state.isMobile);
+    const hiddenModels = useUIStore(state => state.hiddenModels);
     const { toggleFavoriteModel, isFavoriteModel, addRecentModel } = useUIStore();
     const { favoriteModelsList, recentModelsList } = useModelLists();
     const { isMobile: deviceIsMobile } = useDeviceInfo();
@@ -77,11 +78,19 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     }, [allowedProviderIds]);
 
     const visibleProviders = React.useMemo(() => {
-        if (!allowedProviderSet) {
-            return providers;
-        }
-        return providers.filter((provider) => allowedProviderSet.has(String(provider.id)));
-    }, [providers, allowedProviderSet]);
+        const baseProviders = allowedProviderSet
+            ? providers.filter((provider) => allowedProviderSet.has(String(provider.id)))
+            : providers;
+        
+        return baseProviders.map((provider) => {
+            const models = Array.isArray(provider.models) ? provider.models : [];
+            const visibleModels = models.filter((model: ProviderModel) => {
+                const modelId = typeof model?.id === 'string' ? model.id : '';
+                return !hiddenModels.some(h => h.providerID === String(provider.id) && h.modelID === modelId);
+            });
+            return { ...provider, models: visibleModels };
+        }).filter((provider) => Array.isArray(provider.models) && provider.models.length > 0);
+    }, [providers, allowedProviderSet, hiddenModels]);
 
     const closeMobilePanel = () => setIsMobilePanelOpen(false);
     const toggleMobileProviderExpansion = (provId: string) => {
