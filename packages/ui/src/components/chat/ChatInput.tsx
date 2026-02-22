@@ -1,11 +1,14 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Textarea } from '@/components/ui/textarea';
 import {
     RiAddCircleLine,
     RiAiAgentLine,
     RiAttachment2,
+    RiCloseLine,
     RiCommandLine,
     RiFileUploadLine,
+    RiFullscreenLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
 import { BrowserVoiceButton } from '@/components/voice';
@@ -21,7 +24,7 @@ import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
 import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
 import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomplete';
-import { cn } from '@/lib/utils';
+import { cn, isMacOS } from '@/lib/utils';
 import { ServerFilePicker } from './ServerFilePicker';
 import { ModelControls } from './ModelControls';
 import { UnifiedControlsDrawer } from './UnifiedControlsDrawer';
@@ -38,6 +41,7 @@ import { useMessageStore } from '@/stores/messageStore';
 import { isDesktopLocalOriginActive, isTauriShell, isVSCodeRuntime } from '@/lib/desktop';
 import { isIMECompositionEvent } from '@/lib/ime';
 import { StopIcon } from '@/components/icons/StopIcon';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { MobileControlsPanel } from './mobileControlsUtils';
 import {
     DropdownMenu,
@@ -55,22 +59,42 @@ interface ChatInputProps {
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
 }
 
-const CHAT_INPUT_DRAFT_KEY = 'openchamber_chat_input_draft';
+// Per-session draft key — preserves in-progress messages across project switches
+const getDraftKey = (sessionId: string | null): string =>
+    `openchamber_chat_input_draft_${sessionId ?? 'new'}`;
 
-// Helper to safely read from localStorage
-const getStoredDraft = (): string => {
+// Helper to safely read from localStorage for a given session
+const getStoredDraft = (sessionId: string | null): string => {
     try {
-        return localStorage.getItem(CHAT_INPUT_DRAFT_KEY) ?? '';
+        return localStorage.getItem(getDraftKey(sessionId)) ?? '';
     } catch {
         return '';
+    }
+};
+
+// Helper to safely write/clear a per-session draft
+const saveStoredDraft = (sessionId: string | null, draft: string): void => {
+    try {
+        if (draft) {
+            localStorage.setItem(getDraftKey(sessionId), draft);
+        } else {
+            localStorage.removeItem(getDraftKey(sessionId));
+        }
+    } catch {
+        // Ignore localStorage errors
     }
 };
 
 export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBottom }) => {
     // Track if we restored a draft on mount (for text selection)
     const initialDraftRef = React.useRef<string | null>(null);
+    // Track initial session ID (captured at mount time for draft restoration)
+    const initialSessionIdRef = React.useRef<string | null>(null);
     const [message, setMessage] = React.useState(() => {
-        const draft = getStoredDraft();
+        // Read per-session draft at mount time using the current session from the store
+        const sessionId = useSessionStore.getState().currentSessionId;
+        initialSessionIdRef.current = sessionId;
+        const draft = getStoredDraft(sessionId);
         if (draft) {
             initialDraftRef.current = draft;
         }
@@ -92,11 +116,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [historyIndex, setHistoryIndex] = React.useState(-1); // -1 = not browsing, 0+ = index from most recent
     const [draftMessage, setDraftMessage] = React.useState(''); // Preserves input when entering history mode
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+    const expandedTextareaRef = React.useRef<HTMLTextAreaElement>(null);
     const dropZoneRef = React.useRef<HTMLDivElement>(null);
     const canAcceptDropRef = React.useRef(false);
     const mentionRef = React.useRef<FileMentionHandle>(null);
     const commandRef = React.useRef<CommandAutocompleteHandle>(null);
     const skillRef = React.useRef<SkillAutocompleteHandle>(null);
+    // Ref to track current message value without triggering re-renders in effects
+    const messageRef = React.useRef(message);
 
     const sendMessage = useSessionStore((state) => state.sendMessage);
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -118,7 +145,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const { currentProviderId, currentModelId, currentVariant, currentAgentName, setAgent, getVisibleAgents } = useConfigStore();
     const agents = getVisibleAgents();
     const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
-    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius, persistChatDraft } = useUIStore();
+    const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius, persistChatDraft, isExpandedInput, setExpandedInput } = useUIStore();
     const { working } = useAssistantStatus();
     const { currentTheme } = useThemeSystem();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
@@ -177,6 +204,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             .reverse(); // Most recent first
     }, [sessionMessages]);
 
+    // Keep messageRef in sync with message state
+    React.useEffect(() => {
+        messageRef.current = message;
+    }, [message]);
+
     // Handle initial draft restoration and text selection
     const hasHandledInitialDraftRef = React.useRef(false);
     React.useEffect(() => {
@@ -190,7 +222,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             // Setting disabled - clear the restored draft
             setMessage('');
             try {
-                localStorage.removeItem(CHAT_INPUT_DRAFT_KEY);
+                localStorage.removeItem(getDraftKey(initialSessionIdRef.current));
             } catch {
                 // Ignore
             }
@@ -202,24 +234,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [persistChatDraft]);
 
-    // Handle session switching: clear draft if persist disabled, select if enabled
+    // Handle session switching: save draft for old session, restore draft for new session
     const prevSessionIdRef = React.useRef(currentSessionId);
     React.useEffect(() => {
         if (prevSessionIdRef.current !== currentSessionId) {
+            const oldSessionId = prevSessionIdRef.current;
             prevSessionIdRef.current = currentSessionId;
             setInputMode('normal');
-            
-            if (!persistChatDraft) {
-                // Clear draft when switching sessions if persist is disabled
+
+            if (persistChatDraft) {
+                // Save current draft for the session we're leaving
+                saveStoredDraft(oldSessionId, messageRef.current);
+                // Restore draft for the session we're entering
+                const newDraft = getStoredDraft(currentSessionId);
+                setMessage(newDraft);
+                if (newDraft) {
+                    requestAnimationFrame(() => {
+                        textareaRef.current?.select();
+                    });
+                }
+            } else {
+                // Persist disabled: clear input without saving
                 setMessage('');
-            } else if (message) {
-                // Select text if there's any draft when switching sessions
-                requestAnimationFrame(() => {
-                    textareaRef.current?.select();
-                });
             }
         }
-    }, [currentSessionId, persistChatDraft, message]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentSessionId, persistChatDraft]);
 
     // Focus textarea when new session draft is opened
     const prevNewSessionDraftOpenRef = React.useRef(newSessionDraftOpen);
@@ -238,27 +278,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         prevNewSessionDraftOpenRef.current = newSessionDraftOpen;
     }, [newSessionDraftOpen, isMobile]);
 
-    // Persist chat input draft to localStorage (only if setting enabled)
+    // Persist chat input draft to localStorage per session (only if setting enabled)
     React.useEffect(() => {
         if (!persistChatDraft) {
-            // Clear stored draft when setting is disabled
+            // Clear stored draft for current session when setting is disabled
             try {
-                localStorage.removeItem(CHAT_INPUT_DRAFT_KEY);
+                localStorage.removeItem(getDraftKey(currentSessionId));
             } catch {
                 // Ignore
             }
             return;
         }
-        try {
-            if (message) {
-                localStorage.setItem(CHAT_INPUT_DRAFT_KEY, message);
-            } else {
-                localStorage.removeItem(CHAT_INPUT_DRAFT_KEY);
-            }
-        } catch {
-            // Ignore localStorage errors
-        }
-    }, [message, persistChatDraft]);
+        saveStoredDraft(currentSessionId, message);
+    }, [message, persistChatDraft, currentSessionId]);
 
     // Session activity for auto-send on idle
     const { phase: sessionPhase } = useCurrentSessionActivity();
@@ -528,12 +560,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
         if (!queuedOnly) {
             setMessage('');
+            // Clear per-session draft on submit
+            saveStoredDraft(currentSessionId, '');
             // Reset message history navigation state
             setHistoryIndex(-1);
             setDraftMessage('');
             if (attachedFiles.length > 0) {
                 clearAttachedFiles();
             }
+            // Close expanded input overlay when submitting
+            setExpandedInput(false);
         }
 
         if (isMobile) {
@@ -810,6 +846,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 }
             }
         }
+    };
+
+    // Auto-focus the expanded textarea when focus mode opens
+    React.useEffect(() => {
+        if (isExpandedInput) {
+            requestAnimationFrame(() => {
+                const ta = expandedTextareaRef.current;
+                if (ta) {
+                    ta.focus();
+                    // Place cursor at end
+                    const len = ta.value.length;
+                    ta.setSelectionRange(len, len);
+                }
+            });
+        } else {
+            // Return focus to normal textarea when closing
+            requestAnimationFrame(() => {
+                textareaRef.current?.focus();
+            });
+        }
+    }, [isExpandedInput]);
+
+    // Keydown handler for the expanded overlay textarea
+    const handleExpandedKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            setExpandedInput(false);
+            return;
+        }
+        // Reuse normal keydown for everything else (Enter to submit, arrows, etc.)
+        handleKeyDown(e);
     };
 
     const startAbortIndicator = React.useCallback(() => {
@@ -1856,7 +1923,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, []);
 
     return (
-
+        <>
         <form
             onSubmit={(e) => { e.preventDefault(); handlePrimaryAction(); }}
             className={cn(
@@ -2060,6 +2127,33 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             <>
                                 <div className={cn("flex items-center flex-shrink-0", footerGapClass)}>
                                     {attachmentsControls}
+                                    <Tooltip delayDuration={600}>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className={cn(
+                                                    footerIconButtonClass,
+                                                    'rounded-md',
+                                                    isExpandedInput
+                                                        ? 'text-primary'
+                                                        : 'text-muted-foreground hover:bg-[var(--interactive-hover)]/40 hover:text-foreground'
+                                                )}
+                                                onClick={() => setExpandedInput(!isExpandedInput)}
+                                                aria-label="Toggle focus mode"
+                                                aria-pressed={isExpandedInput}
+                                            >
+                                                <RiFullscreenLine className={cn(iconSizeClass)} />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" sideOffset={8}>
+                                            <div className="flex flex-col gap-0.5 text-center">
+                                                <span>Focus mode</span>
+                                                <span className="font-mono opacity-60">
+                                                    {isMacOS() ? '⌘⇧E' : 'Ctrl+Shift+E'}
+                                                </span>
+                                            </div>
+                                        </TooltipContent>
+                                    </Tooltip>
                                 </div>
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
                                     <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
@@ -2075,5 +2169,124 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 </div>
             </div>
         </form>
+
+        {/* Expanded input focus mode overlay */}
+        {isExpandedInput && createPortal(
+            <div
+                className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 sm:p-6"
+                style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+                onClick={(e) => { if (e.target === e.currentTarget) setExpandedInput(false); }}
+                aria-modal="true"
+                role="dialog"
+                aria-label="Focus mode input"
+            >
+                <div
+                    className="w-full max-w-3xl flex flex-col"
+                    style={{
+                        backgroundColor: currentTheme?.colors?.surface?.elevated,
+                        borderRadius: cornerRadius,
+                        border: `1px solid ${currentTheme?.colors?.interactive?.border}`,
+                        maxHeight: '75vh',
+                        minHeight: '300px',
+                    }}
+                >
+                    {/* Header */}
+                    <div
+                        className="flex items-center justify-between px-4 py-2.5 flex-shrink-0"
+                        style={{ borderBottom: `1px solid ${currentTheme?.colors?.interactive?.border}` }}
+                    >
+                        <div className="flex items-center gap-2">
+                            <RiFullscreenLine
+                                className="h-4 w-4"
+                                style={{ color: currentTheme?.colors?.primary?.base }}
+                            />
+                            <span
+                                className="text-xs font-medium"
+                                style={{ color: currentTheme?.colors?.surface?.mutedForeground }}
+                            >
+                                Focus Mode
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span
+                                className="text-xs px-1.5 py-0.5 rounded font-mono hidden sm:inline-block"
+                                style={{
+                                    color: currentTheme?.colors?.surface?.mutedForeground,
+                                    backgroundColor: currentTheme?.colors?.surface?.muted,
+                                    border: `1px solid ${currentTheme?.colors?.interactive?.border}`,
+                                }}
+                            >
+                                Esc
+                            </span>
+                            <button
+                                type="button"
+                                className="flex items-center justify-center h-6 w-6 rounded-md transition-none outline-none focus:outline-none"
+                                style={{ color: currentTheme?.colors?.surface?.mutedForeground }}
+                                onClick={() => setExpandedInput(false)}
+                                aria-label="Close focus mode"
+                            >
+                                <RiCloseLine className="h-4 w-4" />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Textarea */}
+                    <Textarea
+                        ref={expandedTextareaRef}
+                        data-chat-input="true"
+                        value={message}
+                        onChange={handleTextChange}
+                        onKeyDown={handleExpandedKeyDown}
+                        onPaste={handlePaste}
+                        placeholder={currentSessionId || newSessionDraftOpen
+                            ? inputMode === 'shell'
+                                ? "Enter shell command..."
+                                : "@ for files/agents; / for commands; ! for shell"
+                            : "Select or create a session to start chatting"}
+                        disabled={!currentSessionId && !newSessionDraftOpen}
+                        autoCorrect="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        outerClassName="focus-within:ring-0 flex-1 min-h-0"
+                        className={cn(
+                            'h-full min-h-[200px] resize-none border-0 px-4 py-4 bg-transparent appearance-none rounded-none',
+                            inputMode === 'shell' && 'font-mono',
+                        )}
+                        style={{ flex: '1 1 0%' }}
+                        rows={1}
+                    />
+
+                    {/* Footer */}
+                    <div
+                        className="flex items-center justify-between px-3 py-2 bg-transparent flex-shrink-0"
+                        style={{ borderTop: `1px solid ${currentTheme?.colors?.interactive?.border}` }}
+                    >
+                        <div className="flex items-center gap-x-1.5 text-xs" style={{ color: currentTheme?.colors?.surface?.mutedForeground }}>
+                            {inputMode === 'shell' && (
+                                <span className="font-mono text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: currentTheme?.colors?.surface?.muted }}>
+                                    shell
+                                </span>
+                            )}
+                        </div>
+                        <button
+                            type="button"
+                            disabled={!canSend || (!currentSessionId && !newSessionDraftOpen)}
+                            onClick={() => void handleSubmitRef.current()}
+                            className={cn(
+                                'flex items-center justify-center h-7 w-7 rounded-md transition-none outline-none focus:outline-none flex-shrink-0',
+                                canSend && (currentSessionId || newSessionDraftOpen)
+                                    ? 'text-primary hover:text-primary'
+                                    : 'opacity-30 text-muted-foreground'
+                            )}
+                            aria-label="Send message"
+                        >
+                            <RiSendPlane2Line className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>,
+            document.body
+        )}
+        </>
     );
 };

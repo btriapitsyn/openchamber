@@ -24,6 +24,7 @@ export const useKeyboardShortcuts = () => {
     setActiveMainTab,
     setSettingsDialogOpen,
     setModelSelectorOpen,
+    toggleExpandedInput,
     shortcutOverrides,
   } = useUIStore();
   const { themeMode, setThemeMode } = useThemeSystem();
@@ -286,6 +287,12 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
+      if (eventMatchesShortcut(e, combo('expand_input'))) {
+        e.preventDefault();
+        toggleExpandedInput();
+        return;
+      }
+
       if (e.key === 'Escape') {
         const target = e.target as Element | null;
         const isInsideDialog = Boolean(target?.closest('[role="dialog"]'));
@@ -380,6 +387,7 @@ export const useKeyboardShortcuts = () => {
     setActiveMainTab,
     setSettingsDialogOpen,
     setModelSelectorOpen,
+    toggleExpandedInput,
     setThemeMode,
     working,
     armAbortPrompt,
