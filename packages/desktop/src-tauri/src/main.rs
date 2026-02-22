@@ -3,17 +3,24 @@
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
+use std::env;
+use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::{Path, PathBuf},
+};
 use std::{
     net::TcpListener,
     process::Command,
-    sync::{atomic::{AtomicU64, Ordering}, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
     time::Duration,
 };
-use std::{collections::{HashMap, HashSet}, fs, path::{Path, PathBuf}};
-use std::env;
-use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri::utils::config::BackgroundThrottlingPolicy;
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -146,8 +153,16 @@ fn build_macos_menu<R: tauri::Runtime>(
         .map(|state| *state.auto_worktree.lock().expect("menu state mutex"))
         .unwrap_or(false);
 
-    let new_session_shortcut = if auto_worktree { "Cmd+Shift+N" } else { "Cmd+N" };
-    let new_worktree_shortcut = if auto_worktree { "Cmd+N" } else { "Cmd+Shift+N" };
+    let new_session_shortcut = if auto_worktree {
+        "Cmd+Shift+N"
+    } else {
+        "Cmd+N"
+    };
+    let new_worktree_shortcut = if auto_worktree {
+        "Cmd+N"
+    } else {
+        "Cmd+Shift+N"
+    };
 
     let about = MenuItem::with_id(
         app,
@@ -211,8 +226,13 @@ fn build_macos_menu<R: tauri::Runtime>(
         MenuItem::with_id(app, MENU_ITEM_OPEN_GIT_TAB_ID, "Git", true, Some("Cmd+G"))?;
     let open_diff_tab =
         MenuItem::with_id(app, MENU_ITEM_OPEN_DIFF_TAB_ID, "Diff", true, Some("Cmd+E"))?;
-    let open_files_tab =
-        MenuItem::with_id(app, MENU_ITEM_OPEN_FILES_TAB_ID, "Files", true, None::<&str>)?;
+    let open_files_tab = MenuItem::with_id(
+        app,
+        MENU_ITEM_OPEN_FILES_TAB_ID,
+        "Files",
+        true,
+        None::<&str>,
+    )?;
     let open_terminal_tab = MenuItem::with_id(
         app,
         MENU_ITEM_OPEN_TERMINAL_TAB_ID,
@@ -222,12 +242,27 @@ fn build_macos_menu<R: tauri::Runtime>(
     )?;
     let copy = MenuItem::with_id(app, MENU_ITEM_COPY_ID, "Copy", true, Some("Cmd+C"))?;
 
-    let theme_light =
-        MenuItem::with_id(app, MENU_ITEM_THEME_LIGHT_ID, "Light Theme", true, None::<&str>)?;
-    let theme_dark =
-        MenuItem::with_id(app, MENU_ITEM_THEME_DARK_ID, "Dark Theme", true, None::<&str>)?;
-    let theme_system =
-        MenuItem::with_id(app, MENU_ITEM_THEME_SYSTEM_ID, "System Theme", true, None::<&str>)?;
+    let theme_light = MenuItem::with_id(
+        app,
+        MENU_ITEM_THEME_LIGHT_ID,
+        "Light Theme",
+        true,
+        None::<&str>,
+    )?;
+    let theme_dark = MenuItem::with_id(
+        app,
+        MENU_ITEM_THEME_DARK_ID,
+        "Dark Theme",
+        true,
+        None::<&str>,
+    )?;
+    let theme_system = MenuItem::with_id(
+        app,
+        MENU_ITEM_THEME_SYSTEM_ID,
+        "System Theme",
+        true,
+        None::<&str>,
+    )?;
 
     let toggle_sidebar = MenuItem::with_id(
         app,
@@ -261,8 +296,13 @@ fn build_macos_menu<R: tauri::Runtime>(
         Some("Cmd+Shift+L"),
     )?;
 
-    let report_bug =
-        MenuItem::with_id(app, MENU_ITEM_REPORT_BUG_ID, "Report a Bug", true, None::<&str>)?;
+    let report_bug = MenuItem::with_id(
+        app,
+        MENU_ITEM_REPORT_BUG_ID,
+        "Report a Bug",
+        true,
+        None::<&str>,
+    )?;
     let request_feature = MenuItem::with_id(
         app,
         MENU_ITEM_REQUEST_FEATURE_ID,
@@ -270,14 +310,28 @@ fn build_macos_menu<R: tauri::Runtime>(
         true,
         None::<&str>,
     )?;
-    let join_discord =
-        MenuItem::with_id(app, MENU_ITEM_JOIN_DISCORD_ID, "Join Discord", true, None::<&str>)?;
+    let join_discord = MenuItem::with_id(
+        app,
+        MENU_ITEM_JOIN_DISCORD_ID,
+        "Join Discord",
+        true,
+        None::<&str>,
+    )?;
 
-    let clear_cache =
-        MenuItem::with_id(app, MENU_ITEM_CLEAR_CACHE_ID, "Clear Cache", true, None::<&str>)?;
+    let clear_cache = MenuItem::with_id(
+        app,
+        MENU_ITEM_CLEAR_CACHE_ID,
+        "Clear Cache",
+        true,
+        None::<&str>,
+    )?;
 
-    let theme_submenu =
-        Submenu::with_items(app, "Theme", true, &[&theme_light, &theme_dark, &theme_system])?;
+    let theme_submenu = Submenu::with_items(
+        app,
+        "Theme",
+        true,
+        &[&theme_light, &theme_dark, &theme_system],
+    )?;
 
     let window_menu = Submenu::with_id_and_items(
         app,
@@ -435,7 +489,10 @@ fn desktop_clear_cache(app: tauri::AppHandle) -> Result<(), String> {
         }
 
         if !failures.is_empty() {
-            return Err(format!("Failed to clear browsing data for some windows: {}", failures.join("; ")));
+            return Err(format!(
+                "Failed to clear browsing data for some windows: {}",
+                failures.join("; ")
+            ));
         }
 
         // Reload all windows after clearing persisted browsing data so in-memory state is reset too.
@@ -461,7 +518,11 @@ fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         let mut command = Command::new("open");
-        if let Some(app_name) = app.as_ref().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+        if let Some(app_name) = app
+            .as_ref()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+        {
             command.arg("-a").arg(app_name);
         }
         command.arg(trimmed);
@@ -578,9 +639,11 @@ fn desktop_get_installed_apps(
             let cached_icon_map: HashMap<String, String> = HashMap::new();
             tauri::async_runtime::spawn_blocking(move || {
                 log::info!("[open-in] scan start: {} candidates", app_names.len());
-                let refreshed = build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
+                let refreshed =
+                    build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
                 if log::log_enabled!(log::Level::Info) {
-                    let names: Vec<String> = refreshed.iter().map(|entry| entry.name.clone()).collect();
+                    let names: Vec<String> =
+                        refreshed.iter().map(|entry| entry.name.clone()).collect();
                     log::info!("[open-in] scan apps: {:?}", names);
                 }
                 log::info!("[open-in] scan done: {} installed", refreshed.len());
@@ -603,9 +666,11 @@ fn desktop_get_installed_apps(
             let cached_icon_map: HashMap<String, String> = HashMap::new();
             tauri::async_runtime::spawn_blocking(move || {
                 log::info!("[open-in] scan start: {} candidates", app_names.len());
-                let refreshed = build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
+                let refreshed =
+                    build_installed_apps(&app_names, &cached_icon_map, force_icon_refresh);
                 if log::log_enabled!(log::Level::Info) {
-                    let names: Vec<String> = refreshed.iter().map(|entry| entry.name.clone()).collect();
+                    let names: Vec<String> =
+                        refreshed.iter().map(|entry| entry.name.clone()).collect();
                     log::info!("[open-in] scan apps: {:?}", names);
                 }
                 log::info!("[open-in] scan done: {} installed", refreshed.len());
@@ -714,7 +779,10 @@ fn resolve_app_bundle_path(app_name: &str) -> Option<PathBuf> {
         }
     }
 
-    if let Ok(output) = Command::new("mdfind").args(["-name", &bundle_name]).output() {
+    if let Ok(output) = Command::new("mdfind")
+        .args(["-name", &bundle_name])
+        .output()
+    {
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
@@ -735,9 +803,10 @@ fn resolve_app_bundle_path(app_name: &str) -> Option<PathBuf> {
 
 #[cfg(target_os = "macos")]
 fn installed_apps_cache_path() -> PathBuf {
-    let home = env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("/"));
-    home
-        .join(".config")
+    let home = env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/"));
+    home.join(".config")
         .join("openchamber")
         .join(INSTALLED_APPS_CACHE_FILE)
 }
@@ -776,10 +845,10 @@ fn build_installed_apps(
             let icon_data_url = if force_icon_refresh {
                 resolve_app_icon_path(&app_path).and_then(|icon| icon_to_data_url(&icon, trimmed))
             } else {
-                cached_icon_map
-                    .get(trimmed)
-                    .cloned()
-                    .or_else(|| resolve_app_icon_path(&app_path).and_then(|icon| icon_to_data_url(&icon, trimmed)))
+                cached_icon_map.get(trimmed).cloned().or_else(|| {
+                    resolve_app_icon_path(&app_path)
+                        .and_then(|icon| icon_to_data_url(&icon, trimmed))
+                })
             };
             results.push(InstalledAppInfo {
                 name: trimmed.to_string(),
@@ -807,17 +876,19 @@ fn resolve_app_icon_path(app_path: &Path) -> Option<PathBuf> {
     }
 
     if let Some(icon_file) = read_bundle_icon_file(app_path) {
-        let icon_path = app_path
-            .join("Contents")
-            .join("Resources")
-            .join(&icon_file);
+        let icon_path = app_path.join("Contents").join("Resources").join(&icon_file);
         if icon_path.exists() {
             return Some(icon_path);
         }
     }
 
     if let Ok(output) = Command::new("mdls")
-        .args(["-name", "kMDItemIconFile", "-raw", &app_path.to_string_lossy()])
+        .args([
+            "-name",
+            "kMDItemIconFile",
+            "-raw",
+            &app_path.to_string_lossy(),
+        ])
         .output()
     {
         if output.status.success() {
@@ -829,10 +900,7 @@ fn resolve_app_icon_path(app_path: &Path) -> Option<PathBuf> {
                 } else {
                     format!("{icon_name}.icns")
                 };
-                let icon_path = app_path
-                    .join("Contents")
-                    .join("Resources")
-                    .join(icon_file);
+                let icon_path = app_path.join("Contents").join("Resources").join(icon_file);
                 if icon_path.exists() {
                     return Some(icon_path);
                 }
@@ -949,7 +1017,10 @@ fn is_app_bundle_installed(bundle_name: &str) -> bool {
     let system_app_path = format!("/System/Applications/{bundle_name}");
     let utilities_path = format!("/System/Applications/Utilities/{bundle_name}");
 
-    if Path::new(&app_path).exists() || Path::new(&system_app_path).exists() || Path::new(&utilities_path).exists() {
+    if Path::new(&app_path).exists()
+        || Path::new(&system_app_path).exists()
+        || Path::new(&utilities_path).exists()
+    {
         return true;
     }
 
@@ -1077,12 +1148,44 @@ fn normalize_host_url(raw: &str) -> Option<String> {
         return None;
     }
     let host = parsed.host_str()?;
-    let mut normalized = format!("{}://{}", scheme, host);
+
+    let mut normalized = format!("{scheme}://{host}");
     if let Some(port) = parsed.port() {
         normalized.push(':');
         normalized.push_str(&port.to_string());
     }
+
+    let path = parsed.path();
+    if path.is_empty() {
+        normalized.push('/');
+    } else {
+        normalized.push_str(path);
+    }
+
+    if let Some(query) = parsed.query() {
+        normalized.push('?');
+        normalized.push_str(query);
+    }
+
     Some(normalized)
+}
+
+fn sanitize_host_url_for_storage(raw: &str) -> Option<String> {
+    normalize_host_url(raw)
+}
+
+fn build_health_url(base_url: &str) -> Option<String> {
+    let normalized = normalize_host_url(base_url)?;
+    let mut parsed = url::Url::parse(&normalized).ok()?;
+    let current_path = parsed.path();
+    let trimmed_path = current_path.trim_end_matches('/');
+    let health_path = if trimmed_path.is_empty() {
+        "/health".to_string()
+    } else {
+        format!("{trimmed_path}/health")
+    };
+    parsed.set_path(&health_path);
+    Some(parsed.to_string())
 }
 
 fn settings_file_path() -> PathBuf {
@@ -1108,7 +1211,13 @@ fn read_desktop_local_port_from_disk() -> Option<u16> {
         .as_ref()
         .and_then(|v| v.get("desktopLocalPort"))
         .and_then(|v| v.as_u64())
-        .and_then(|v| if v > 0 && v <= u16::MAX as u64 { Some(v as u16) } else { None })
+        .and_then(|v| {
+            if v > 0 && v <= u16::MAX as u64 {
+                Some(v as u16)
+            } else {
+                None
+            }
+        })
 }
 
 fn write_desktop_local_port_to_disk(port: u16) -> Result<()> {
@@ -1132,9 +1241,11 @@ fn write_desktop_local_port_to_disk(port: u16) -> Result<()> {
     Ok(())
 }
 
-
 fn read_desktop_hosts_config_from_disk() -> DesktopHostsConfig {
-    let path = settings_file_path();
+    read_desktop_hosts_config_from_path(&settings_file_path())
+}
+
+fn read_desktop_hosts_config_from_path(path: &Path) -> DesktopHostsConfig {
     let raw = fs::read_to_string(path).ok();
     let parsed = raw
         .as_deref()
@@ -1158,7 +1269,7 @@ fn read_desktop_hosts_config_from_disk() -> DesktopHostsConfig {
                 if host.id.trim().is_empty() || host.id == LOCAL_HOST_ID {
                     continue;
                 }
-                if let Some(url) = normalize_host_url(&host.url) {
+                if let Some(url) = sanitize_host_url_for_storage(&host.url) {
                     hosts.push(DesktopHost {
                         id: host.id,
                         label: if host.label.trim().is_empty() {
@@ -1215,7 +1326,10 @@ fn write_desktop_window_state_to_disk(state: &DesktopWindowState) -> Result<()> 
 }
 
 fn write_desktop_hosts_config_to_disk(config: &DesktopHostsConfig) -> Result<()> {
-    let path = settings_file_path();
+    write_desktop_hosts_config_to_path(&settings_file_path(), config)
+}
+
+fn write_desktop_hosts_config_to_path(path: &Path, config: &DesktopHostsConfig) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -1238,7 +1352,7 @@ fn write_desktop_hosts_config_to_disk(config: &DesktopHostsConfig) -> Result<()>
             if id.is_empty() || id == LOCAL_HOST_ID {
                 return None;
             }
-            let url = normalize_host_url(&h.url)?;
+            let url = sanitize_host_url_for_storage(&h.url)?;
             Some(DesktopHost {
                 id: id.to_string(),
                 label: if h.label.trim().is_empty() {
@@ -1271,7 +1385,6 @@ fn desktop_hosts_set(config: DesktopHostsConfig) -> Result<(), String> {
     write_desktop_hosts_config_to_disk(&config).map_err(|err| err.to_string())
 }
 
-
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HostProbeResult {
@@ -1281,8 +1394,7 @@ struct HostProbeResult {
 
 #[tauri::command]
 async fn desktop_host_probe(url: String) -> Result<HostProbeResult, String> {
-    let normalized = normalize_host_url(&url).ok_or_else(|| "Invalid URL".to_string())?;
-    let health = format!("{}/health", normalized.trim_end_matches('/'));
+    let health = build_health_url(&url).ok_or_else(|| "Invalid URL".to_string())?;
     let client = reqwest::Client::builder()
         .no_proxy()
         .timeout(Duration::from_secs(2))
@@ -1356,7 +1468,8 @@ fn is_nonempty_string(value: &str) -> bool {
     !value.trim().is_empty()
 }
 
-const CHANGELOG_URL: &str = "https://raw.githubusercontent.com/btriapitsyn/openchamber/main/CHANGELOG.md";
+const CHANGELOG_URL: &str =
+    "https://raw.githubusercontent.com/btriapitsyn/openchamber/main/CHANGELOG.md";
 
 fn parse_semver_num(value: &str) -> Option<u32> {
     let trimmed = value.trim().trim_start_matches('v');
@@ -1423,7 +1536,10 @@ async fn fetch_changelog_notes(from_version: &str, to_version: &str) -> Option<S
     let mut relevant: Vec<String> = Vec::new();
     for idx in 0..markers.len() {
         let (start, ver_num) = markers[idx];
-        let end = markers.get(idx + 1).map(|m| m.0).unwrap_or_else(|| changelog.len());
+        let end = markers
+            .get(idx + 1)
+            .map(|m| m.0)
+            .unwrap_or_else(|| changelog.len());
         let Some(ver_num) = ver_num else {
             continue;
         };
@@ -1594,8 +1710,15 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
         }
 
         let mut candidate = value.to_string();
-        if fs::metadata(&candidate).map(|m| m.is_dir()).unwrap_or(false) {
-            let bin_name = if cfg!(windows) { "opencode.exe" } else { "opencode" };
+        if fs::metadata(&candidate)
+            .map(|m| m.is_dir())
+            .unwrap_or(false)
+        {
+            let bin_name = if cfg!(windows) {
+                "opencode.exe"
+            } else {
+                "opencode"
+            };
             candidate = PathBuf::from(candidate)
                 .join(bin_name)
                 .to_string_lossy()
@@ -1652,13 +1775,13 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
     push_unique("/usr/sbin".to_string());
     push_unique("/sbin".to_string());
 
-        if let Some(home) = resolved_home_dir.as_deref() {
-            // OpenCode installer default.
-            push_unique(format!("{home}/.opencode/bin"));
-            push_unique(format!("{home}/.local/bin"));
-            push_unique(format!("{home}/.bun/bin"));
-            push_unique(format!("{home}/.cargo/bin"));
-            push_unique(format!("{home}/bin"));
+    if let Some(home) = resolved_home_dir.as_deref() {
+        // OpenCode installer default.
+        push_unique(format!("{home}/.opencode/bin"));
+        push_unique(format!("{home}/.local/bin"));
+        push_unique(format!("{home}/.bun/bin"));
+        push_unique(format!("{home}/.cargo/bin"));
+        push_unique(format!("{home}/bin"));
     }
 
     if let Ok(existing) = env::var("PATH") {
@@ -1782,21 +1905,7 @@ fn resolve_web_dist_dir(app: &tauri::AppHandle) -> Result<PathBuf> {
 }
 
 fn normalize_server_url(input: &str) -> Option<String> {
-    let trimmed = input.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-
-    match url::Url::parse(trimmed) {
-        Ok(url) => {
-            if url.scheme() == "http" || url.scheme() == "https" {
-                Some(trimmed.trim_end_matches('/').to_string())
-            } else {
-                None
-            }
-        }
-        Err(_) => None,
-    }
+    normalize_host_url(input)
 }
 
 #[derive(Deserialize)]
@@ -1959,7 +2068,13 @@ fn desktop_new_window_at_url(app: tauri::AppHandle, url: String) -> Result<(), S
 
     let local_origin = app
         .try_state::<DesktopUiInjectionState>()
-        .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone())
+        .and_then(|state| {
+            state
+                .local_origin
+                .lock()
+                .expect("desktop local origin mutex")
+                .clone()
+        })
         .ok_or_else(|| "Local origin not yet known (sidecar may still be starting)".to_string())?;
 
     create_window(&app, &url, &local_origin, false).map_err(|e| e.to_string())
@@ -1974,7 +2089,8 @@ fn desktop_read_file(path: String) -> Result<FileContent, String> {
     let path = Path::new(&path);
 
     // Check file size (max 50MB)
-    let metadata = std::fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {e}"))?;
+    let metadata =
+        std::fs::metadata(path).map_err(|e| format!("Failed to read file metadata: {e}"))?;
     let size = metadata.len();
     if size > 50 * 1024 * 1024 {
         return Err("File is too large. Maximum size is 50MB.".to_string());
@@ -1984,7 +2100,11 @@ fn desktop_read_file(path: String) -> Result<FileContent, String> {
     let bytes = std::fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
 
     // Detect mime type from extension
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
     let mime = match ext.as_str() {
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
@@ -2036,11 +2156,16 @@ fn macos_major_version() -> Option<u32> {
 
     // Use marketing version (sw_vers), but map legacy 10.x to minor (10.15 -> 15).
     // This matches WebKit UA fallback logic in the UI.
-    if let Some(raw) = cmd_stdout("/usr/bin/sw_vers", &["-productVersion"]).or_else(|| cmd_stdout("sw_vers", &["-productVersion"])) {
+    if let Some(raw) = cmd_stdout("/usr/bin/sw_vers", &["-productVersion"])
+        .or_else(|| cmd_stdout("sw_vers", &["-productVersion"]))
+    {
         let raw = raw.trim();
         let mut parts = raw.split('.');
         let major = parts.next().and_then(|v| v.parse::<u32>().ok())?;
-        let minor = parts.next().and_then(|v| v.parse::<u32>().ok()).unwrap_or(0);
+        let minor = parts
+            .next()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(0);
         return Some(if major == 10 { minor } else { major });
     }
 
@@ -2068,7 +2193,8 @@ fn macos_major_version() -> Option<u32> {
 /// Build the initialization script injected into every webview window.
 /// This is computed once and reused for all windows.
 fn build_init_script(local_origin: &str) -> String {
-    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
+    let home =
+        std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
     let macos_major = macos_major_version().unwrap_or(0);
 
     let home_json = serde_json::to_string(&home).unwrap_or_else(|_| "\"\"".into());
@@ -2142,8 +2268,12 @@ fn capture_window_state(window: &tauri::Window) -> Option<DesktopWindowState> {
     Some(DesktopWindowState {
         x: (position.x as f64 / scale).round() as i32,
         y: (position.y as f64 / scale).round() as i32,
-        width: (size.width as f64 / scale).round().max(MIN_WINDOW_WIDTH as f64) as u32,
-        height: (size.height as f64 / scale).round().max(MIN_WINDOW_HEIGHT as f64) as u32,
+        width: (size.width as f64 / scale)
+            .round()
+            .max(MIN_WINDOW_WIDTH as f64) as u32,
+        height: (size.height as f64 / scale)
+            .round()
+            .max(MIN_WINDOW_HEIGHT as f64) as u32,
         maximized: window.is_maximized().unwrap_or(false),
         fullscreen: window.is_fullscreen().unwrap_or(false),
     })
@@ -2160,7 +2290,10 @@ fn schedule_window_state_persist(window: tauri::Window, immediate: bool) {
         let Some(state) = app.try_state::<WindowGeometryDebounceState>() else {
             return;
         };
-        let mut guard = state.revisions.lock().expect("window geometry debounce mutex");
+        let mut guard = state
+            .revisions
+            .lock()
+            .expect("window geometry debounce mutex");
         let next = guard.get(&label).copied().unwrap_or(0).saturating_add(1);
         guard.insert(label.clone(), next);
         next
@@ -2196,7 +2329,12 @@ fn schedule_window_state_persist(window: tauri::Window, immediate: bool) {
 }
 
 /// Create a new window with a unique label, pointing at the given URL.
-fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_geometry: bool) -> Result<()> {
+fn create_window(
+    app: &tauri::AppHandle,
+    url: &str,
+    local_origin: &str,
+    restore_geometry: bool,
+) -> Result<()> {
     let parsed = url::Url::parse(url).map_err(|err| anyhow!("Invalid URL: {err}"))?;
     let label = next_window_label();
 
@@ -2205,7 +2343,10 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_
     // Store the init script and local origin so new windows and page reloads can reuse it.
     if let Some(state) = app.try_state::<DesktopUiInjectionState>() {
         *state.script.lock().expect("desktop ui injection mutex") = Some(init_script.clone());
-        *state.local_origin.lock().expect("desktop local origin mutex") = Some(local_origin.to_string());
+        *state
+            .local_origin
+            .lock()
+            .expect("desktop local origin mutex") = Some(local_origin.to_string());
     }
 
     let restored_state = if restore_geometry {
@@ -2221,8 +2362,7 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_
         .decorations(true)
         .visible(false)
         .initialization_script(&init_script)
-        .background_throttling(BackgroundThrottlingPolicy::Disabled)
-        ;
+        .background_throttling(BackgroundThrottlingPolicy::Disabled);
 
     let apply_restored_state = restored_state
         .as_ref()
@@ -2242,7 +2382,10 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_
         builder = builder
             .hidden_title(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition { x: 17.0, y: 26.0 }));
+            .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition {
+                x: 17.0,
+                y: 26.0,
+            }));
     }
 
     let window = builder.build()?;
@@ -2282,7 +2425,13 @@ fn create_window(app: &tauri::AppHandle, url: &str, local_origin: &str, restore_
 fn open_new_window(app: &tauri::AppHandle) {
     let local_origin = app
         .try_state::<DesktopUiInjectionState>()
-        .and_then(|state| state.local_origin.lock().expect("desktop local origin mutex").clone());
+        .and_then(|state| {
+            state
+                .local_origin
+                .lock()
+                .expect("desktop local origin mutex")
+                .clone()
+        });
 
     let Some(local_origin) = local_origin else {
         log::warn!("[desktop] cannot open new window: local origin not yet known (sidecar may still be starting)");
@@ -2317,11 +2466,20 @@ fn open_new_window(app: &tauri::AppHandle) {
     if target_url != local_ui_url {
         let is_cached_unreachable = app
             .try_state::<DesktopUiInjectionState>()
-            .map(|state| state.unreachable_hosts.lock().expect("unreachable hosts mutex").contains(&target_url))
+            .map(|state| {
+                state
+                    .unreachable_hosts
+                    .lock()
+                    .expect("unreachable hosts mutex")
+                    .contains(&target_url)
+            })
             .unwrap_or(false);
 
         if is_cached_unreachable {
-            log::info!("[desktop] new window: default host ({}) cached as unreachable, using local", target_url);
+            log::info!(
+                "[desktop] new window: default host ({}) cached as unreachable, using local",
+                target_url
+            );
             target_url = local_ui_url;
         }
     }
@@ -2680,7 +2838,10 @@ fn main() {
                 kill_sidecar(app_handle.clone());
             }
             #[cfg(target_os = "macos")]
-            tauri::RunEvent::Reopen { has_visible_windows, .. } => {
+            tauri::RunEvent::Reopen {
+                has_visible_windows,
+                ..
+            } => {
                 // macOS: clicking dock icon when no windows are open opens a new one.
                 if !has_visible_windows {
                     open_new_window(app_handle);
@@ -2689,4 +2850,57 @@ fn main() {
             _ => {}
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_settings_path(test_name: &str) -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock drift")
+            .as_nanos();
+        std::env::temp_dir().join(format!("openchamber-{test_name}-{nanos}-settings.json"))
+    }
+
+    #[test]
+    fn sanitize_host_url_for_storage_keeps_query_params() {
+        let input = "https://openchamber--raptors--shekohex.coder.0iq.xyz?coder_session_token=xxxxxx";
+        let sanitized = sanitize_host_url_for_storage(input).expect("sanitized url");
+        assert_eq!(sanitized, "https://openchamber--raptors--shekohex.coder.0iq.xyz/?coder_session_token=xxxxxx");
+    }
+
+    #[test]
+    fn sanitize_host_url_for_storage_strips_fragment_and_keeps_query() {
+        let input = "https://example.com/workspace?coder_session_token=xxxxxx#ignored";
+        let sanitized = sanitize_host_url_for_storage(input).expect("sanitized url");
+        assert_eq!(sanitized, "https://example.com/workspace?coder_session_token=xxxxxx");
+    }
+
+    #[test]
+    fn write_and_read_hosts_config_preserves_query_params() {
+        let path = unique_settings_path("desktop-hosts-query");
+        let config = DesktopHostsConfig {
+            hosts: vec![DesktopHost {
+                id: "remote-1".to_string(),
+                label: "Remote".to_string(),
+                url: "https://openchamber--raptors--shekohex.coder.0iq.xyz?coder_session_token=xxxxxx"
+                    .to_string(),
+            }],
+            default_host_id: Some("remote-1".to_string()),
+        };
+
+        write_desktop_hosts_config_to_path(&path, &config).expect("write config");
+        let read_back = read_desktop_hosts_config_from_path(&path);
+        let _ = fs::remove_file(&path);
+
+        assert_eq!(read_back.hosts.len(), 1);
+        assert_eq!(
+            read_back.hosts[0].url,
+            "https://openchamber--raptors--shekohex.coder.0iq.xyz/?coder_session_token=xxxxxx"
+        );
+        assert_eq!(read_back.default_host_id.as_deref(), Some("remote-1"));
+    }
 }
