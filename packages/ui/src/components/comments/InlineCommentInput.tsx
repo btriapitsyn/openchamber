@@ -13,6 +13,7 @@ export interface InlineCommentInputProps {
   lineRange?: { start: number; end: number; side?: 'additions' | 'deletions' };
   isEditing?: boolean;
   className?: string;
+  maxWidth?: number;
 }
 
 export function InlineCommentInput({
@@ -23,6 +24,7 @@ export function InlineCommentInput({
   lineRange,
   isEditing = false,
   className,
+  maxWidth,
 }: InlineCommentInputProps) {
   const themeContext = useOptionalThemeSystem();
   const currentTheme = themeContext?.currentTheme;
@@ -112,12 +114,13 @@ export function InlineCommentInput({
   return (
     <div
       className={cn(
-        "rounded-lg border shadow-sm w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200",
+        "rounded-lg border shadow-sm w-full max-w-[min(100%,calc(var(--oc-context-panel-width,100vw)-var(--oc-editor-gutter-width,0px)))] overflow-hidden animate-in fade-in zoom-in-95 duration-200",
         className
       )}
       style={{
         backgroundColor: currentTheme?.colors?.surface?.elevated,
         borderColor: currentTheme?.colors?.interactive?.border,
+        maxWidth: maxWidth ? `${Math.max(200, Math.floor(maxWidth))}px` : undefined,
       }}
       data-comment-input="true"
       onPointerDown={(e) => e.stopPropagation()}

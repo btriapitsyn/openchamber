@@ -209,15 +209,15 @@ function DropdownMenuSubTrigger({
   inset?: boolean
 }) {
   return (
-    <DropdownMenuPrimitive.SubTrigger
-      data-slot="dropdown-menu-sub-trigger"
-      data-inset={inset}
-      className={cn(
-        "data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover flex cursor-default items-center rounded-lg px-2 py-1 typography-ui-label outline-hidden select-none data-[inset]:pl-8",
-        className
-      )}
-      {...props}
-    >
+      <DropdownMenuPrimitive.SubTrigger
+        data-slot="dropdown-menu-sub-trigger"
+        data-inset={inset}
+        className={cn(
+          "data-[highlighted]:bg-interactive-hover hover:bg-interactive-hover [&_svg:not([class*='text-'])]:text-muted-foreground relative flex cursor-default items-center gap-2 rounded-lg px-2 py-1 typography-ui-label outline-hidden select-none data-[inset]:pl-8 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+          className
+        )}
+        {...props}
+      >
       {children}
       <RiArrowRightSLine className="ml-auto size-3.5" />
     </DropdownMenuPrimitive.SubTrigger>

@@ -28,6 +28,7 @@ interface WorkingSummary {
     abortActive: boolean;
     lastCompletionId: string | null;
     isComplete: boolean;
+    retryInfo: { attempt?: number; next?: number } | null;
 }
 
 interface FormingSummary {
@@ -70,6 +71,7 @@ const DEFAULT_WORKING: WorkingSummary = {
     abortActive: false,
     lastCompletionId: null,
     isComplete: false,
+    retryInfo: null,
 };
 
 const isAssistantMessage = (message: Message): message is AssistantMessageWithState => message.role === 'assistant';
@@ -122,6 +124,18 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
     );
 
     const { phase: activityPhase, isWorking: isPhaseWorking } = useCurrentSessionActivity();
+
+    const sessionRetryAttempt = useSessionStore((state) => {
+        if (!currentSessionId || !state.sessionStatus) return undefined;
+        const s = state.sessionStatus.get(currentSessionId);
+        return s?.type === 'retry' ? s.attempt : undefined;
+    });
+
+    const sessionRetryNext = useSessionStore((state) => {
+        if (!currentSessionId || !state.sessionStatus) return undefined;
+        const s = state.sessionStatus.get(currentSessionId);
+        return s?.type === 'retry' ? s.next : undefined;
+    });
 
     const sessionMessages = React.useMemo<Array<{ info: Message; parts: Part[] }>>(() => {
         if (!currentSessionId) {
@@ -293,12 +307,14 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                 isCooldown: false,
                 statusText: null,
                 canAbort: false,
+                retryInfo: null,
             };
         }
 
         const isWorking = isPhaseWorking;
         const isStreaming = activityPhase === 'busy';
         const isCooldown = false;
+        const isRetry = activityPhase === 'retry';
 
         let activity: AssistantActivity = 'idle';
         if (isWorking) {
@@ -308,6 +324,10 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
                 activity = isCooldown ? 'cooldown' : 'streaming';
             }
         }
+
+        const retryInfo = isRetry
+            ? { attempt: sessionRetryAttempt, next: sessionRetryNext }
+            : null;
 
         return {
             activity,
@@ -328,8 +348,9 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             abortActive: false,
             lastCompletionId: null,
             isComplete: false,
+            retryInfo,
         };
-    }, [activityPhase, isPhaseWorking, parsedStatus, abortState]);
+    }, [activityPhase, isPhaseWorking, parsedStatus, abortState, sessionRetryAttempt, sessionRetryNext]);
 
     const forming = React.useMemo<FormingSummary>(() => {
 
@@ -380,6 +401,7 @@ export function useAssistantStatus(): AssistantStatusSnapshot {
             statusText: 'waiting for permission',
             isWaitingForPermission: true,
             canAbort: false,
+            retryInfo: null,
         };
     }, [currentSessionId, permissions, baseWorking]);
 

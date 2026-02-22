@@ -1,12 +1,12 @@
 import React from 'react';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
-import { useFloatingComments } from '@/components/comments/useFloatingComments';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Button } from '@/components/ui/button';
 import { useUIStore } from '@/stores/useUIStore';
+import { buildCodeMirrorCommentWidgets, normalizeLineRange, useInlineCommentController } from '@/components/comments';
 
 import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import { useDeviceInfo } from '@/lib/device';
@@ -19,8 +19,6 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
-import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
-import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
 const normalize = (value: string): string => {
@@ -86,22 +84,10 @@ export const PlanView: React.FC = () => {
   const sessions = useSessionStore((state) => state.sessions);
   const homeDirectory = useDirectoryStore((state) => state.homeDirectory);
   const runtimeApis = useRuntimeAPIs();
-  const newSessionDraftOpen = useSessionStore((state) => state.newSessionDraft?.open);
   useUIStore();
   const { isMobile } = useDeviceInfo();
   const { currentTheme } = useThemeSystem();
   React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
-
-  // Inline comment drafts
-  const addDraft = useInlineCommentDraftStore((state) => state.addDraft);
-  const updateDraft = useInlineCommentDraftStore((state) => state.updateDraft);
-  const removeDraft = useInlineCommentDraftStore((state) => state.removeDraft);
-  const allDrafts = useInlineCommentDraftStore((state) => state.drafts);
-
-  // Get session key for drafts
-  const getSessionKey = React.useCallback(() => {
-    return currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
-  }, [currentSessionId, newSessionDraftOpen]);
 
   const session = React.useMemo(() => {
     if (!currentSessionId) return null;
@@ -121,6 +107,9 @@ export const PlanView: React.FC = () => {
     return toDisplayPath(resolvedPath, { currentDirectory: sessionDirectory, homeDirectory });
   }, [resolvedPath, sessionDirectory, homeDirectory]);
   const [content, setContent] = React.useState<string>('');
+  const planFileLabel = React.useMemo(() => {
+    return displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
+  }, [displayPath]);
   const [loading, setLoading] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
   const [copiedContent, setCopiedContent] = React.useState(false);
@@ -129,8 +118,6 @@ export const PlanView: React.FC = () => {
   const copiedContentTimeoutRef = React.useRef<number | null>(null);
 
   const [lineSelection, setLineSelection] = React.useState<SelectedLineRange | null>(null);
-  const [commentText, setCommentText] = React.useState('');
-  const [editingDraftId, setEditingDraftId] = React.useState<string | null>(null);
   const editorViewRef = React.useRef<EditorView | null>(null);
   const editorWrapperRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -171,23 +158,66 @@ export const PlanView: React.FC = () => {
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, []);
 
+  const extractSelectedCode = React.useCallback((text: string, range: SelectedLineRange): string => {
+    const lines = text.split('\n');
+    const startLine = Math.max(1, range.start);
+    const endLine = Math.min(lines.length, range.end);
+    if (startLine > endLine) return '';
+    return lines.slice(startLine - 1, endLine).join('\n');
+  }, []);
+
+  const commentController = useInlineCommentController<SelectedLineRange>({
+    source: 'plan',
+    fileLabel: planFileLabel,
+    language: resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown',
+    getCodeForRange: (range) => extractSelectedCode(content, normalizeLineRange(range)),
+    toStoreRange: (range) => ({ startLine: range.start, endLine: range.end }),
+    fromDraftRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
+  });
+
+  const {
+    drafts: planFileDrafts,
+    commentText,
+    editingDraftId,
+    setSelection: setCommentSelection,
+    saveComment,
+    cancel,
+    reset,
+    startEdit,
+    deleteDraft,
+  } = commentController;
+
   React.useEffect(() => {
     setLineSelection(null);
-    setCommentText('');
-    setEditingDraftId(null);
-  }, [content]);
+    reset();
+  }, [content, reset]);
+
+  React.useEffect(() => {
+    setCommentSelection(lineSelection);
+  }, [lineSelection, setCommentSelection]);
+
+  const handleCancelComment = React.useCallback(() => {
+    setLineSelection(null);
+    cancel();
+  }, [cancel]);
+
+  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
+    if (rangeOverride) {
+      setLineSelection(rangeOverride);
+    }
+    saveComment(textToSave, rangeOverride ?? lineSelection ?? undefined);
+    setLineSelection(null);
+  }, [lineSelection, saveComment]);
 
   React.useEffect(() => {
     if (!lineSelection) return;
-    
-    // Auto-scroll input into view on mobile
+
     if (isMobile && !editingDraftId) {
-       // We rely on InlineCommentInput doing this now via useEffect
+      // Input handles mobile scroll/focus behavior.
     }
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      // Check if click is inside any comment component
       if (
         target.closest('[data-comment-card="true"]') ||
         target.closest('[data-comment-input="true"]') ||
@@ -195,15 +225,12 @@ export const PlanView: React.FC = () => {
       ) {
         return;
       }
-      
+
       if (target.closest('.cm-gutterElement')) return;
       if (target.closest('[data-sonner-toast]') || target.closest('[data-sonner-toaster]')) return;
-      
-      // If clicking outside while editing, maybe we should save or ask confirmation?
-      // For now, cancel edit
+
       setLineSelection(null);
-      setCommentText('');
-      setEditingDraftId(null);
+      cancel();
     };
 
     const timeoutId = window.setTimeout(() => {
@@ -214,63 +241,7 @@ export const PlanView: React.FC = () => {
       window.clearTimeout(timeoutId);
       document.removeEventListener('click', handleClickOutside);
     };
-  }, [lineSelection, editingDraftId, isMobile]);
-
-  const extractSelectedCode = React.useCallback((text: string, range: SelectedLineRange): string => {
-    const lines = text.split('\n');
-    const startLine = Math.max(1, range.start);
-    const endLine = Math.min(lines.length, range.end);
-    if (startLine > endLine) return '';
-    return lines.slice(startLine - 1, endLine).join('\n');
-  }, []);
-
-  const handleCancelComment = React.useCallback(() => {
-    setCommentText('');
-    setLineSelection(null);
-    setEditingDraftId(null);
-  }, []);
-
-  const handleSaveComment = React.useCallback((textToSave: string, rangeOverride?: { start: number; end: number }) => {
-    // Use provided range override or fall back to current selection
-    const targetRange = rangeOverride ?? lineSelection;
-    if (!targetRange || !textToSave.trim()) return;
-
-    const sessionKey = getSessionKey();
-    if (!sessionKey) {
-      toast.error('Select a session to save comment');
-      return;
-    }
-
-    const code = extractSelectedCode(content, targetRange);
-    const fileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
-    const language = resolvedPath ? getLanguageFromExtension(resolvedPath) || 'markdown' : 'markdown';
-
-    if (editingDraftId) {
-      updateDraft(sessionKey, editingDraftId, {
-        fileLabel,
-        startLine: targetRange.start,
-        endLine: targetRange.end,
-        code,
-        language,
-        text: textToSave.trim(),
-      });
-    } else {
-      addDraft({
-        sessionKey,
-        source: 'plan',
-        fileLabel,
-        startLine: targetRange.start,
-        endLine: targetRange.end,
-        code,
-        language,
-        text: textToSave.trim(),
-      });
-    }
-
-    setCommentText('');
-    setLineSelection(null);
-    setEditingDraftId(null);
-  }, [lineSelection, content, displayPath, resolvedPath, addDraft, updateDraft, getSessionKey, extractSelectedCode, editingDraftId]);
+  }, [cancel, editingDraftId, isMobile, lineSelection]);
 
 
   const editorExtensions = React.useMemo(() => {
@@ -380,33 +351,25 @@ export const PlanView: React.FC = () => {
     };
   }, []);
 
-  const planFileLabel = displayPath ? displayPath.split('/').pop() || 'plan' : 'plan';
-
-  const planFileDrafts = React.useMemo(() => {
-    const sessionKey = getSessionKey();
-    if (!sessionKey) return [];
-    const sessionDrafts = allDrafts[sessionKey] ?? [];
-    return sessionDrafts.filter((d) => d.source === 'plan' && d.fileLabel === planFileLabel);
-  }, [getSessionKey, allDrafts, planFileLabel]);
-
-  const floatingComments = useFloatingComments({
-    editorView: editorViewRef.current,
-    wrapperRef: editorWrapperRef,
-    fileDrafts: planFileDrafts,
-    editingDraftId,
-    commentText,
-    lineSelection,
-    isDragging,
-    fileLabel: planFileLabel,
-    onSaveComment: handleSaveComment,
-    onCancelComment: handleCancelComment,
-    onEditDraft: (draft) => {
-      setLineSelection({ start: draft.startLine, end: draft.endLine });
-      setCommentText(draft.text);
-      setEditingDraftId(draft.id);
-    },
-    onDeleteDraft: (draft) => removeDraft(draft.sessionKey, draft.id),
-  });
+  const blockWidgets = React.useMemo(() => {
+    return buildCodeMirrorCommentWidgets({
+      drafts: planFileDrafts,
+      editingDraftId,
+      commentText,
+      selection: lineSelection,
+      isDragging,
+      fileLabel: planFileLabel,
+      newWidgetId: 'plan-new-comment-input',
+      mapDraftToRange: (draft) => ({ start: draft.startLine, end: draft.endLine }),
+      onSave: handleSaveComment,
+      onCancel: handleCancelComment,
+      onEdit: (draft) => {
+        startEdit(draft);
+        setLineSelection({ start: draft.startLine, end: draft.endLine });
+      },
+      onDelete: deleteDraft,
+    });
+  }, [commentText, deleteDraft, editingDraftId, handleCancelComment, handleSaveComment, isDragging, lineSelection, planFileDrafts, planFileLabel, startEdit]);
 
   return (
     <div className="relative flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden bg-background">
@@ -489,103 +452,95 @@ export const PlanView: React.FC = () => {
             <div className="p-3 typography-ui text-muted-foreground">Loading…</div>
           ) : (
             <div className="relative h-full">
-              <div
-                className="h-full"
-                style={{
-                  ['--oc-plan-comment-pad' as string]: '0px',
-                }}
-              >
-                <div className="h-full oc-plan-editor">
-                  {mdViewMode === 'preview' ? (
-                    <div className="h-full overflow-auto p-3">
-                      <ErrorBoundary
-                        fallback={
-                          <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
-                            <div className="mb-1 font-medium text-destructive">Preview unavailable</div>
-                            <div className="text-sm text-muted-foreground">
-                              Switch to edit mode to fix the issue.
-                            </div>
+              <div className="h-full oc-plan-editor">
+                {mdViewMode === 'preview' ? (
+                  <div className="h-full overflow-auto p-3">
+                    <ErrorBoundary
+                      fallback={
+                        <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
+                          <div className="mb-1 font-medium text-destructive">Preview unavailable</div>
+                          <div className="text-sm text-muted-foreground">
+                            Switch to edit mode to fix the issue.
                           </div>
+                        </div>
+                      }
+                    >
+                      <SimpleMarkdownRenderer content={content} className="typography-markdown-body" />
+                    </ErrorBoundary>
+                  </div>
+                ) : (
+                  <div className="relative h-full" ref={editorWrapperRef}>
+                    <CodeMirrorEditor
+                      value={content}
+                      onChange={() => {
+                        // read-only
+                      }}
+                      readOnly={true}
+                      className="h-full"
+                      extensions={editorExtensions}
+                      onViewReady={(view) => { editorViewRef.current = view; }}
+                      onViewDestroy={() => { editorViewRef.current = null; }}
+                      blockWidgets={blockWidgets}
+                      highlightLines={lineSelection
+                        ? {
+                          start: Math.min(lineSelection.start, lineSelection.end),
+                          end: Math.max(lineSelection.start, lineSelection.end),
                         }
-                      >
-                        <SimpleMarkdownRenderer content={content} className="typography-markdown-body" />
-                      </ErrorBoundary>
-                    </div>
-                  ) : (
-                    <div className="relative h-full" ref={editorWrapperRef}>
-                      <CodeMirrorEditor
-                        value={content}
-                        onChange={() => {
-                          // read-only
-                        }}
-                        readOnly={true}
-                        className="h-full [&_.cm-scroller]:pb-[var(--oc-plan-comment-pad)] [&_.cm-scroller]:relative"
-                        extensions={editorExtensions}
-                        onViewReady={(view) => { editorViewRef.current = view; }}
-                        onViewDestroy={() => { editorViewRef.current = null; }}
-                        highlightLines={lineSelection
-                          ? {
-                            start: Math.min(lineSelection.start, lineSelection.end),
-                            end: Math.max(lineSelection.start, lineSelection.end),
-                          }
-                          : undefined}
-                        lineNumbersConfig={{
-                          domEventHandlers: {
-                            mousedown: (view, line, event) => {
-                              if (!(event instanceof MouseEvent)) return false;
-                              if (event.button !== 0) return false;
-                              event.preventDefault();
-                              const lineNumber = view.state.doc.lineAt(line.from).number;
-
-                              if (isMobile && lineSelection && !event.shiftKey) {
-                                const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
-                                const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
-                                setLineSelection({ start, end });
-                                isSelectingRef.current = false;
-                                selectionStartRef.current = null;
-                                // Mobile tap-extend is atomic, so we don't start drag
-                                setIsDragging(false);
-                                return true;
-                              }
-
-                              isSelectingRef.current = true;
-                              selectionStartRef.current = lineNumber;
-                              setIsDragging(true);
-
-                              if (lineSelection && event.shiftKey) {
-                                const start = Math.min(lineSelection.start, lineNumber);
-                                const end = Math.max(lineSelection.end, lineNumber);
-                                setLineSelection({ start, end });
-                              } else {
-                                setLineSelection({ start: lineNumber, end: lineNumber });
-                              }
-
-                              return true;
-                            },
-                            mouseover: (view, line, event) => {
-                              if (!(event instanceof MouseEvent)) return false;
-                              if (event.buttons !== 1) return false;
-                              if (!isSelectingRef.current || selectionStartRef.current === null) return false;
+                        : undefined}
+                      lineNumbersConfig={{
+                        domEventHandlers: {
+                          mousedown: (view, line, event) => {
+                            if (!(event instanceof MouseEvent)) return false;
+                            if (event.button !== 0) return false;
+                            event.preventDefault();
                             const lineNumber = view.state.doc.lineAt(line.from).number;
-                              const start = Math.min(selectionStartRef.current, lineNumber);
-                              const end = Math.max(selectionStartRef.current, lineNumber);
+
+                            if (isMobile && lineSelection && !event.shiftKey) {
+                              const start = Math.min(lineSelection.start, lineSelection.end, lineNumber);
+                              const end = Math.max(lineSelection.start, lineSelection.end, lineNumber);
                               setLineSelection({ start, end });
-                              setIsDragging(true);
-                              return false;
-                            },
-                            mouseup: () => {
                               isSelectingRef.current = false;
                               selectionStartRef.current = null;
                               setIsDragging(false);
-                              return false;
-                            },
+                              return true;
+                            }
+
+                            isSelectingRef.current = true;
+                            selectionStartRef.current = lineNumber;
+                            setIsDragging(true);
+
+                            if (lineSelection && event.shiftKey) {
+                              const start = Math.min(lineSelection.start, lineNumber);
+                              const end = Math.max(lineSelection.end, lineNumber);
+                              setLineSelection({ start, end });
+                            } else {
+                              setLineSelection({ start: lineNumber, end: lineNumber });
+                            }
+
+                            return true;
                           },
-                      }}
-                    />
-                      {floatingComments}
-                  </div>
-                  )}
+                          mouseover: (view, line, event) => {
+                            if (!(event instanceof MouseEvent)) return false;
+                            if (event.buttons !== 1) return false;
+                            if (!isSelectingRef.current || selectionStartRef.current === null) return false;
+                            const lineNumber = view.state.doc.lineAt(line.from).number;
+                            const start = Math.min(selectionStartRef.current, lineNumber);
+                            const end = Math.max(selectionStartRef.current, lineNumber);
+                            setLineSelection({ start, end });
+                            setIsDragging(true);
+                            return false;
+                          },
+                          mouseup: () => {
+                            isSelectingRef.current = false;
+                            selectionStartRef.current = null;
+                            setIsDragging(false);
+                            return false;
+                          },
+                        },
+                    }}
+                  />
                 </div>
+                )}
               </div>
             </div>
           )}

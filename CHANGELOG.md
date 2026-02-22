@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.7.3] - 2026-02-21
+
+- Settings: added customizable keyboard shortcuts for chat actions, panel toggles, and services, so you can better match OpenChamber to your workflow (thanks to @nelsonPires5).
+- Sessions: added custom folders to group chat sessions, with move/rename/delete flows and persisted collapse state per project (thanks to @nguyenngothuong).
+- Notifications: improved agent progress notifications and permission handling to reduce noisy prompts during active runs (thanks to @nguyenngothuong).
+- Diff/Plans/Files: restored inline comments making more like a GitHub style again (thanks to @nelsonPires5).
+- Terminal: restored terminal text copy behavior, so selecting and copying command output works reliably again (thanks to @shekohex).
+- UI: unified clipboard copy behavior across Desktop app, Web app, and VS Code extension for more consistent copy actions and feedback.
+- Reliability: improved startup environment detection by capturing login-shell environment snapshots, reducing missing PATH/tool issues on launch.
+- Reliability: refactored OpenCode config/auth integration into domain modules for steadier provider auth and command loading flows (thanks to @nelsonPires5).
+
+
 ## [1.7.2] - 2026-02-20
 
 - Chat: question prompts now guide you to unanswered items before submit, making tool-question flows faster.

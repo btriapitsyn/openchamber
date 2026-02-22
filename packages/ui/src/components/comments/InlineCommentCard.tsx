@@ -17,6 +17,7 @@ interface InlineCommentCardProps {
   onEdit: () => void;
   onDelete: () => void;
   className?: string;
+  maxWidth?: number;
 }
 
 export function InlineCommentCard({
@@ -24,6 +25,7 @@ export function InlineCommentCard({
   onEdit,
   onDelete,
   className,
+  maxWidth,
 }: InlineCommentCardProps) {
   const themeContext = useOptionalThemeSystem();
   const currentTheme = themeContext?.currentTheme;
@@ -36,12 +38,13 @@ export function InlineCommentCard({
   return (
     <div
       className={cn(
-        "rounded-lg border shadow-sm w-full overflow-hidden transition-all duration-200",
+        "rounded-lg border shadow-sm w-full max-w-[min(100%,calc(var(--oc-context-panel-width,100vw)-var(--oc-editor-gutter-width,0px)))] overflow-hidden transition-all duration-200",
         className
       )}
       style={{
         backgroundColor: currentTheme?.colors?.surface?.elevated,
         borderColor: currentTheme?.colors?.interactive?.border,
+        maxWidth: maxWidth ? `${Math.max(200, Math.floor(maxWidth))}px` : undefined,
       }}
       data-comment-card="true"
     >

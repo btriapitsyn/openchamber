@@ -42,7 +42,6 @@ declare global {
   }
 }
 
-const ENABLE_EMPTY_RESPONSE_DETECTION = false;
 const TEXT_SHRINK_TOLERANCE = 50;
 const RESYNC_DEBOUNCE_MS = 750;
 const QUESTION_RECONCILE_COOLDOWN_MS = 1500;
@@ -109,6 +108,7 @@ export const useEventStream = () => {
     updateMessageInfo,
     updateSessionCompaction,
     addPermission,
+    dismissPermission,
     addQuestion,
     dismissQuestion,
     currentSessionId,
@@ -357,7 +357,6 @@ export const useEventStream = () => {
   const unsubscribeRef = React.useRef<(() => void) | null>(null);
   const reconnectTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = React.useRef(0);
-  const emptyResponseToastShownRef = React.useRef<Set<string>>(new Set());
   const missingMessageHydrationRef = React.useRef<Set<string>>(new Set());
   const metadataRefreshTimestampsRef = React.useRef<Map<string, number>>(new Map());
   const sessionRefreshTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -1338,75 +1337,6 @@ export const useEventStream = () => {
 
           void saveSessionCursor(sessionId, messageId, timeCompleted);
 
-          if (ENABLE_EMPTY_RESPONSE_DETECTION) {
-            const completedMessage = getMessageFromStore(sessionId, messageId);
-            if (completedMessage) {
-              const storedParts = Array.isArray(completedMessage.parts) ? completedMessage.parts : [];
-              const eventParts = partsArray;
-
-              const combinedParts: Part[] = [...storedParts];
-              for (let i = 0; i < eventParts.length; i++) {
-                const rawPart = eventParts[i];
-                if (!rawPart) continue;
-
-                const normalized: Part = {
-                  ...rawPart,
-                  type: (rawPart as { type?: string }).type || 'text',
-                } as Part;
-
-                const alreadyPresent = combinedParts.some(
-                  (existing) =>
-                    existing.id === normalized.id &&
-                    existing.type === normalized.type &&
-                    (existing as { callID?: string }).callID === (normalized as { callID?: string }).callID
-                );
-
-                if (!alreadyPresent) {
-                  combinedParts.push(normalized);
-                }
-              }
-
-              let hasStepMarkers = false;
-              let hasTextContent = false;
-              let hasTools = false;
-              let hasReasoning = false;
-              let hasFiles = false;
-
-              for (let i = 0; i < combinedParts.length; i++) {
-                const part = combinedParts[i];
-                if (!part) continue;
-
-                if (part.type === 'step-start' || part.type === 'step-finish') {
-                  hasStepMarkers = true;
-                } else if (part.type === 'text') {
-                  const text = (part as { text?: string }).text;
-                  if (typeof text === 'string' && text.trim().length > 0) {
-                    hasTextContent = true;
-                  }
-                } else if (part.type === 'tool') {
-                  hasTools = true;
-                } else if (part.type === 'reasoning') {
-                  hasReasoning = true;
-                } else if (part.type === 'file') {
-                  hasFiles = true;
-                }
-              }
-
-              const hasMeaningfulContent = hasTextContent || hasTools || hasReasoning || hasFiles;
-              const isEmptyResponse = !hasMeaningfulContent && !hasStepMarkers;
-
-              if (isEmptyResponse && !emptyResponseToastShownRef.current.has(messageId)) {
-                emptyResponseToastShownRef.current.add(messageId);
-                import('sonner').then(({ toast }) => {
-                  toast.info('Assistant response was empty', {
-                    description: 'Try sending your message again or rephrase it.',
-                    duration: 5000,
-                  });
-                });
-              }
-            }
-          }
-
 	          completeStreamingMessage(sessionId, messageId);
 	          // Removed: void refreshSessionStatus();
 
@@ -1536,6 +1466,7 @@ export const useEventStream = () => {
               import('sonner').then(({ toast }) => {
                 toast.warning('Permission required', {
                   description: sessionTitle,
+                  duration: Infinity,
                   action: {
                     label: 'Open',
                     onClick: () => {
@@ -1552,8 +1483,16 @@ export const useEventStream = () => {
         break;
       }
 
-      case 'permission.replied':
+      case 'permission.replied': {
+        const sessionId = typeof props.sessionID === 'string' ? props.sessionID : null;
+        const requestId =
+          typeof props.requestID === 'string' ? props.requestID :
+          typeof props.id === 'string' ? props.id : null;
+        if (sessionId && requestId) {
+          dismissPermission(sessionId, requestId);
+        }
         break;
+      }
 
       case 'question.asked': {
         if (!('sessionID' in props) || typeof props.sessionID !== 'string') {
@@ -1598,6 +1537,7 @@ export const useEventStream = () => {
             import('sonner').then(({ toast }) => {
               toast.info('Input needed', {
                 description: sessionTitle,
+                duration: Infinity,
                 action: {
                   label: 'Open',
                   onClick: () => {
@@ -1680,6 +1620,7 @@ export const useEventStream = () => {
     completeStreamingMessage,
     updateMessageInfo,
     addPermission,
+    dismissPermission,
     addQuestion,
     dismissQuestion,
     checkConnection,

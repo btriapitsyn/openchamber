@@ -194,6 +194,17 @@ export const ContextPanel: React.FC = () => {
     return null;
   }
 
+  const panelStyle: React.CSSProperties = isExpanded
+    ? {
+        ['--oc-context-panel-width' as string]: '100vw',
+      }
+    : {
+        width: `${width}px`,
+        minWidth: `${width}px`,
+        maxWidth: `${width}px`,
+        ['--oc-context-panel-width' as string]: `${width}px`,
+      };
+
   return (
     <aside
       ref={panelRef}
@@ -207,13 +218,7 @@ export const ContextPanel: React.FC = () => {
         isResizing ? 'transition-none' : 'transition-[width] duration-200 ease-in-out'
       )}
       onKeyDownCapture={handlePanelKeyDownCapture}
-      style={isExpanded
-        ? undefined
-        : {
-            width: `${width}px`,
-            minWidth: `${width}px`,
-            maxWidth: `${width}px`,
-          }}
+      style={panelStyle}
     >
       {!isExpanded && (
         <div
