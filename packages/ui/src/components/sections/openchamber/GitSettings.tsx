@@ -1,6 +1,4 @@
 import React from 'react';
-import { RiInformationLine } from '@remixicon/react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -83,16 +81,11 @@ export const GitSettings: React.FC = () => {
 
   return (
     <div className="mb-8">
-      <div className="mb-3 px-1 flex items-center gap-2">
-        <h3 className="typography-ui-header font-semibold text-foreground">Git Integration</h3>
-        <Tooltip delayDuration={1000}>
-          <TooltipTrigger asChild>
-            <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-          </TooltipTrigger>
-          <TooltipContent sideOffset={8} className="max-w-xs">
-            Configure Git commit message options and file visibility.
-          </TooltipContent>
-        </Tooltip>
+      <div className="mb-3 px-1">
+        <h3 className="typography-ui-header font-semibold text-foreground">Preferences</h3>
+        <p className="typography-meta text-muted-foreground mt-0.5">
+          Commit message options and file visibility settings.
+        </p>
       </div>
 
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

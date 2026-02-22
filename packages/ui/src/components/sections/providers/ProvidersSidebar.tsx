@@ -111,7 +111,8 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
-      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
+      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'pt-4 pb-3')}>
+        <h2 className="text-base font-semibold text-foreground mb-3">Providers</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">Total {providers.length}</span>

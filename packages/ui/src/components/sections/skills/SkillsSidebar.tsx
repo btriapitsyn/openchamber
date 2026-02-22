@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RiAddLine, RiDeleteBinLine, RiFileCopyLine, RiMore2Line, RiEditLine, RiBookOpenLine } from '@remixicon/react';
 import { useSkillsStore, type DiscoveredSkill } from '@/stores/useSkillsStore';
-import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
@@ -43,18 +42,14 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     setSkillDraft,
     createSkill,
     deleteSkill,
-    loadSkills,
     getSkillDetail,
   } = useSkillsStore();
 
-  const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
-  React.useEffect(() => {
-    loadSkills();
-  }, [loadSkills]);
+  // Skills are loaded by the Settings shell when this page is active.
 
   const bgClass = isVSCode ? 'bg-background' : 'bg-sidebar';
 
@@ -74,7 +69,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     onItemSelect?.();
 
     if (isMobile) {
-      setSidebarOpen(false);
+      // Settings mobile drilldown handles navigation.
     }
   };
 
@@ -126,7 +121,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
     setSelectedSkill(newName);
 
     if (isMobile) {
-      setSidebarOpen(false);
+      // Settings mobile drilldown handles navigation.
     }
   };
 
@@ -193,7 +188,8 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
-      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
+      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'pt-4 pb-3')}>
+        <h2 className="text-base font-semibold text-foreground mb-3">Skills</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">Total {skills.length}</span>
@@ -232,7 +228,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                       setSelectedSkill(skill.name);
                       onItemSelect?.();
                       if (isMobile) {
-                        setSidebarOpen(false);
+                        // Settings mobile drilldown handles navigation.
                       }
                     }}
                     onRename={() => handleOpenRenameDialog(skill)}
@@ -257,7 +253,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                       setSelectedSkill(skill.name);
                       onItemSelect?.();
                       if (isMobile) {
-                        setSidebarOpen(false);
+                        // Settings mobile drilldown handles navigation.
                       }
                     }}
                     onRename={() => handleOpenRenameDialog(skill)}

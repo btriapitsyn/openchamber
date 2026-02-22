@@ -855,7 +855,7 @@ export const AgentsPage: React.FC = () => {
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="You are an expert coding assistant..."
               rows={8}
-              className="w-full font-mono typography-meta min-h-[120px] bg-transparent focus-visible:ring-[var(--primary-base)] border-none shadow-none focus-visible:outline-none resize-y"
+              className="w-full font-mono typography-meta min-h-[120px] max-h-[60vh] bg-transparent focus-visible:ring-[var(--primary-base)] border-none shadow-none focus-visible:outline-none resize-y"
             />
           </div>
         </div>

@@ -1,12 +1,12 @@
 import React from 'react';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { Button } from '@/components/ui/button';
 import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
-import { SettingsSidebarHeader } from '@/components/sections/shared/SettingsSidebarHeader';
 import { SettingsSidebarItem } from '@/components/sections/shared/SettingsSidebarItem';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
-import { RiFolderLine } from '@remixicon/react';
+import { RiAddLine, RiFolderLine } from '@remixicon/react';
 import { isDesktopLocalOriginActive, isTauriShell, isVSCodeRuntime } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { toast } from '@/components/ui';
@@ -66,12 +66,24 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
   return (
     <SettingsSidebarLayout
       header={
-        <SettingsSidebarHeader
-          count={projects.length}
-          label="Projects"
-          onAdd={isVSCode ? undefined : handleAddProject}
-          addButtonLabel="Add project"
-        />
+        <div className={cn('border-b px-3', 'pt-4 pb-3')}>
+          <h2 className="text-base font-semibold text-foreground mb-3">Projects</h2>
+          <div className="flex items-center justify-between gap-2">
+            <span className="typography-meta text-muted-foreground">Total {projects.length}</span>
+            {!isVSCode && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 -my-1 text-muted-foreground"
+                onClick={handleAddProject}
+                aria-label="Add project"
+              >
+                <RiAddLine className="size-4" />
+              </Button>
+            )}
+          </div>
+        </div>
       }
     >
       {projects.map((project) => {

@@ -20,7 +20,6 @@ import {
 import { RiAddLine, RiTerminalBoxLine, RiMore2Line, RiDeleteBinLine, RiFileCopyLine, RiRestartLine, RiEditLine } from '@remixicon/react';
 import { useCommandsStore, isCommandBuiltIn, type Command } from '@/stores/useCommandsStore';
 import { useSkillsStore } from '@/stores/useSkillsStore';
-import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -49,7 +48,6 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   } = useCommandsStore();
   const { skills, loadSkills } = useSkillsStore();
 
-  const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
@@ -93,7 +91,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     onItemSelect?.();
 
     if (isMobile) {
-      setSidebarOpen(false);
+      // Settings mobile drilldown handles navigation.
     }
   };
 
@@ -168,7 +166,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
     setSelectedCommand(newName);
 
     if (isMobile) {
-      setSidebarOpen(false);
+      // Settings mobile drilldown handles navigation.
     }
   };
 
@@ -228,7 +226,8 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
-      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
+      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'pt-4 pb-3')}>
+        <h2 className="text-base font-semibold text-foreground mb-3">Commands</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">Total {commandOnlyItems.length}</span>
@@ -267,7 +266,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                       setSelectedCommand(command.name);
                       onItemSelect?.();
                       if (isMobile) {
-                        setSidebarOpen(false);
+                        // Settings mobile drilldown handles navigation.
                       }
                     }}
                     onReset={() => handleResetCommand(command)}
@@ -291,7 +290,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                       setSelectedCommand(command.name);
                       onItemSelect?.();
                       if (isMobile) {
-                        setSidebarOpen(false);
+                        // Settings mobile drilldown handles navigation.
                       }
                     }}
                     onRename={() => handleOpenRenameDialog(command)}

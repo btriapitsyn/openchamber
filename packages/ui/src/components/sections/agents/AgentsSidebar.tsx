@@ -19,7 +19,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { RiAddLine, RiAiAgentFill, RiAiAgentLine, RiDeleteBinLine, RiFileCopyLine, RiMore2Line, RiRobot2Line, RiRobotLine, RiRestartLine, RiEditLine } from '@remixicon/react';
 import { useAgentsStore, isAgentBuiltIn, isAgentHidden, type AgentScope, type AgentDraft } from '@/stores/useAgentsStore';
-import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { cn } from '@/lib/utils';
@@ -117,7 +116,6 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     loadAgents,
   } = useAgentsStore();
 
-  const { setSidebarOpen } = useUIStore();
   const { isMobile } = useDeviceInfo();
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
@@ -144,7 +142,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     onItemSelect?.();
 
     if (isMobile) {
-      setSidebarOpen(false);
+      // Settings mobile drilldown handles navigation.
     }
   };
 
@@ -227,7 +225,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
     setSelectedAgent(newName);
 
     if (isMobile) {
-      setSidebarOpen(false);
+      // Settings mobile drilldown handles navigation.
     }
   };
 
@@ -310,7 +308,8 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
 
   return (
     <div className={cn('flex h-full flex-col', bgClass)}>
-      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'py-3')}>
+      <div className={cn('border-b px-3', isMobile ? 'mt-2 py-3' : 'pt-4 pb-3')}>
+        <h2 className="text-base font-semibold text-foreground mb-3">Agents</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
           <span className="typography-meta text-muted-foreground">Total {visibleAgents.length}</span>
@@ -349,7 +348,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
                       setSelectedAgent(agent.name);
                       onItemSelect?.();
                       if (isMobile) {
-                        setSidebarOpen(false);
+                        // Settings mobile drilldown handles navigation.
                       }
                     }}
                     onReset={() => handleResetAgent(agent)}
@@ -374,7 +373,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
                       setSelectedAgent(agent.name);
                       onItemSelect?.();
                       if (isMobile) {
-                        setSidebarOpen(false);
+                        // Settings mobile drilldown handles navigation.
                       }
                     }}
                     onRename={() => handleOpenRenameDialog(agent)}

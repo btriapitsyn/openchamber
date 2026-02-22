@@ -19,7 +19,6 @@ import {
   RiCloudLine,
   RiFoldersLine,
   RiGitBranchLine,
-  RiGithubFill,
   RiInformationLine,
   RiMicLine,
   RiNotification3Line,
@@ -28,13 +27,9 @@ import {
   RiRobot2Line,
   RiRestartLine,
   RiSlashCommands2,
-  RiUser3Line,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Input } from '@/components/ui/input';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
-import { SettingsSidebarLayout } from '@/components/sections/shared/SettingsSidebarLayout';
-import { SettingsSidebarItem } from '@/components/sections/shared/SettingsSidebarItem';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
@@ -47,8 +42,7 @@ import { ProvidersSidebar } from '@/components/sections/providers/ProvidersSideb
 import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
 import { UsageSidebar } from '@/components/sections/usage/UsageSidebar';
 import { UsagePage } from '@/components/sections/usage/UsagePage';
-import { GitIdentitiesSidebar } from '@/components/sections/git-identities/GitIdentitiesSidebar';
-import { GitIdentitiesPage } from '@/components/sections/git-identities/GitIdentitiesPage';
+import { GitPage } from '@/components/sections/git-identities/GitPage';
 import type { OpenChamberSection } from '@/components/sections/openchamber/types';
 import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPage';
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
@@ -59,7 +53,6 @@ import {
   SETTINGS_PAGE_METADATA,
   getSettingsPageMeta,
   resolveSettingsSlug,
-  type SettingsPageGroup,
   type SettingsPageSlug,
   type SettingsRuntimeContext,
   type SettingsPageMeta,
@@ -68,7 +61,7 @@ import {
 // Same constraints as main sidebar
 const SETTINGS_NAV_MIN_WIDTH = 176;
 const SETTINGS_NAV_MAX_WIDTH = 280;
-const SETTINGS_NAV_DEFAULT_WIDTH = 160;
+const SETTINGS_NAV_RAIL_WIDTH = 48;
 
 type MobileStage = 'nav' | 'page-sidebar' | 'page-content';
 
@@ -80,15 +73,21 @@ interface SettingsViewProps {
   isWindowed?: boolean;
 }
 
-const groupOrder: SettingsPageGroup[] = [
+const pageOrder: SettingsPageSlug[] = [
   'appearance',
-  'projects',
-  'general',
-  'opencode',
-  'skills',
+  'chat',
+  'notifications',
+  'sessions',
+  'shortcuts',
   'git',
+  'projects',
+  'agents',
+  'commands',
+  'providers',
   'usage',
-  'advanced',
+  'skills.installed',
+  'skills.catalog',
+  'voice',
 ];
 
 function buildRuntimeContext(isDesktop: boolean): SettingsRuntimeContext {
@@ -102,19 +101,6 @@ function isPageAvailable(page: SettingsPageMeta, ctx: SettingsRuntimeContext): b
     return true;
   }
   return page.isAvailable(ctx);
-}
-
-function pageMatchesQuery(page: SettingsPageMeta, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) {
-    return true;
-  }
-  const haystack = [
-    page.title,
-    ...(page.keywords ?? []),
-    page.slug,
-  ].join(' ').toLowerCase();
-  return haystack.includes(q);
 }
 
 function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ className?: string }> | null {
@@ -146,10 +132,6 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
 
     case 'git':
       return RiGitBranchLine;
-    case 'github':
-      return RiGithubFill;
-    case 'git-identities':
-      return RiUser3Line;
 
     case 'usage':
       return RiBarChart2Line;
@@ -168,7 +150,7 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
       <div className="mx-auto w-full max-w-3xl px-6 py-6 space-y-6">
         <div className="space-y-1">
           <h1 className="typography-ui-header font-semibold text-foreground">Settings</h1>
-          <p className="typography-ui text-muted-foreground">Search or jump to common pages.</p>
+          <p className="typography-ui text-muted-foreground">Jump to common pages.</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -233,20 +215,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const settingsSlug = resolveSettingsSlug(settingsPageRaw);
 
-  const [navQuery, setNavQuery] = React.useState('');
-  const navSearchRef = React.useRef<HTMLInputElement | null>(null);
   const [mobileStage, setMobileStage] = React.useState<MobileStage>('nav');
   const autoNavSlugRef = React.useRef<string | null>(null);
 
-  const [navWidth, setNavWidth] = React.useState(() => {
-    if (typeof window !== 'undefined') {
-      return Math.min(
-        SETTINGS_NAV_MAX_WIDTH,
-        Math.max(SETTINGS_NAV_MIN_WIDTH, Math.floor(window.innerWidth * 0.12))
-      );
-    }
-    return SETTINGS_NAV_DEFAULT_WIDTH;
-  });
+  const [navWidth, setNavWidth] = React.useState(216);
   const [hasManuallyResized, setHasManuallyResized] = React.useState(false);
   const [isResizing, setIsResizing] = React.useState(false);
   const startXRef = React.useRef(0);
@@ -268,25 +240,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       .filter((page) => isPageAvailable(page, runtimeCtx));
   }, [runtimeCtx]);
 
-  const filteredPages = React.useMemo(() => {
-    const q = navQuery.trim();
-    if (!q) {
-      return visiblePages;
-    }
-    return visiblePages.filter((page) => pageMatchesQuery(page, q));
-  }, [navQuery, visiblePages]);
-
   const sortedFilteredPages = React.useMemo(() => {
-    const rank = new Map<SettingsPageGroup, number>(groupOrder.map((g, i) => [g, i]));
-    return filteredPages
+    const rank = new Map<SettingsPageSlug, number>(pageOrder.map((s, i) => [s, i]));
+    return visiblePages
       .slice()
-      .sort((a, b) => {
-        const ga = rank.get(a.group) ?? 999;
-        const gb = rank.get(b.group) ?? 999;
-        if (ga !== gb) return ga - gb;
-        return a.title.localeCompare(b.title);
-      });
-  }, [filteredPages]);
+      .sort((a, b) => (rank.get(a.slug) ?? 999) - (rank.get(b.slug) ?? 999));
+  }, [visiblePages]);
 
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
 
@@ -343,8 +302,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return;
     }
     if (settingsSlug === 'skills.installed' || settingsSlug === 'skills.catalog') {
-      void useSkillsStore.getState().loadSkills();
-      void useSkillsCatalogStore.getState().loadCatalog();
+      setTimeout(() => {
+        void useSkillsStore.getState().loadSkills();
+        void useSkillsCatalogStore.getState().loadCatalog();
+      }, 0);
     }
   }, [activeProjectId, settingsSlug]);
 
@@ -365,13 +326,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     return getSettingsPageMeta(settingsSlug);
   }, [settingsSlug]);
 
+  // Collapse main nav to icon rail when active page has its own sidebar
+  const isNavCollapsed = !isMobile && activePageMeta?.kind === 'split';
+
   const openChamberSectionBySlug: Partial<Record<SettingsPageSlug, OpenChamberSection>> = React.useMemo(() => ({
     appearance: 'visual',
     chat: 'chat',
     shortcuts: 'shortcuts',
     sessions: 'sessions',
-    git: 'git',
-    github: 'github',
     notifications: 'notifications',
     voice: 'voice',
   }), []);
@@ -401,8 +363,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <ProvidersSidebar onItemSelect={opts.onItemSelect} />;
       case 'usage':
         return <UsageSidebar onItemSelect={opts.onItemSelect} />;
-      case 'git-identities':
-        return <GitIdentitiesSidebar onItemSelect={opts.onItemSelect} />;
       default:
         return null;
     }
@@ -431,14 +391,12 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <ProvidersPage />;
       case 'usage':
         return <UsagePage />;
-      case 'git-identities':
-        return <GitIdentitiesPage />;
+      case 'git':
+        return <GitPage />;
       case 'appearance':
       case 'chat':
       case 'shortcuts':
       case 'sessions':
-      case 'git':
-      case 'github':
       case 'notifications':
       case 'voice': {
         const section = openChamberSectionBySlug[slug] ?? 'visual';
@@ -482,42 +440,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     setMobileStage('page-sidebar');
   }, []);
 
-  const renderNav = (opts?: { showFeatured?: boolean }) => {
-    void opts;
+  const renderSettingsNav = (collapsed: boolean) => {
     return (
-      <SettingsSidebarLayout
-        header={
-          <div className="px-3 pt-3 space-y-3">
-            <div className="relative">
-              <Input
-                ref={navSearchRef}
-                value={navQuery}
-                onChange={(e) => setNavQuery(e.target.value)}
-                placeholder="Search settings…"
-                className={cn('h-8 text-sm', navQuery.trim().length > 0 && 'pr-9')}
-              />
-              {navQuery.trim().length > 0 && (
-                <button
-                  type="button"
-                  aria-label="Clear search"
-                  onClick={() => {
-                    setNavQuery('');
-                    navSearchRef.current?.focus();
-                  }}
-                  className={cn(
-                    'absolute right-1.5 top-1/2 -translate-y-1/2',
-                    'inline-flex h-6 w-6 items-center justify-center rounded-md',
-                    'text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+      <div className="flex h-full flex-col overflow-hidden">
+        {/* Scrollable nav items */}
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div className="flex flex-col gap-0.5 pt-4 pb-2 px-2">
+            {sortedFilteredPages.map((page) => {
+              const selected = settingsSlug === page.slug;
+              const Icon = getSettingsNavIcon(page.slug);
+              if (!Icon) return null;
+
+              return (
+                <Tooltip key={page.slug} delayDuration={collapsed ? 100 : 600}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => openPage(page.slug)}
+                      className={cn(
+                        'flex h-8 items-center gap-2 rounded-md px-2 overflow-hidden',
+                        selected
+                          ? 'bg-interactive-selection text-foreground'
+                          : 'text-foreground hover:bg-interactive-hover'
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span
+                        className={cn(
+                          'flex items-center gap-1.5 whitespace-nowrap overflow-hidden transition-opacity duration-150',
+                          collapsed ? 'opacity-0' : 'opacity-100'
+                        )}
+                      >
+                        <span className="typography-ui-label font-normal truncate">{page.title}</span>
+                        {page.slug === 'voice' && (
+                          <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">
+                            beta
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </TooltipTrigger>
+                  {collapsed && (
+                    <TooltipContent side="right" sideOffset={8}>
+                      {page.title}
+                    </TooltipContent>
                   )}
-                >
-                  <RiCloseLine className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+                </Tooltip>
+              );
+            })}
           </div>
-        }
-        footer={
+        </div>
+
+        {/* Footer — hidden when collapsed via overflow on parent */}
+        <div
+          className={cn(
+            'overflow-hidden transition-opacity duration-150',
+            collapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          )}
+        >
           <div className="border-t border-border bg-sidebar px-2 py-1 space-y-0.5">
             {!runtimeCtx.isVSCode && (
               <Tooltip delayDuration={300}>
@@ -525,14 +505,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   <button
                     type="button"
                     className={cn(
-                      'flex h-7 w-full items-center gap-2 rounded-md px-2',
+                      'flex h-7 w-full items-center gap-2 rounded-md px-2 overflow-hidden whitespace-nowrap',
                       'text-sm font-semibold text-sidebar-foreground/90',
                       'hover:text-sidebar-foreground hover:bg-interactive-hover',
-                      'transition-all duration-200'
                     )}
                     onClick={() => void reloadOpenCodeConfiguration({ message: 'Restarting OpenCode…', mode: 'projects', scopes: ['all'] })}
                   >
-                    <RiRestartLine className="h-4 w-4" />
+                    <RiRestartLine className="h-4 w-4 shrink-0" />
                     <span>Reload OpenCode</span>
                   </button>
                 </TooltipTrigger>
@@ -545,14 +524,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             <button
               type="button"
               className={cn(
-                'flex h-7 w-full items-center gap-2 rounded-md px-2',
+                'flex h-7 w-full items-center gap-2 rounded-md px-2 overflow-hidden whitespace-nowrap',
                 'text-sm font-semibold text-sidebar-foreground/90',
                 'hover:text-sidebar-foreground hover:bg-interactive-hover',
-                'transition-all duration-200'
               )}
               onClick={() => useUIStore.getState().setAboutDialogOpen(true)}
             >
-              <RiInformationLine className="h-4 w-4" />
+              <RiInformationLine className="h-4 w-4 shrink-0" />
               <span>About</span>
             </button>
 
@@ -562,28 +540,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               </div>
             )}
           </div>
-        }
-      >
-        {sortedFilteredPages.map((page) => (
-          (() => {
-            const selected = settingsSlug === page.slug;
-            const Icon = getSettingsNavIcon(page.slug);
-            const icon = Icon
-              ? <Icon className={cn('h-4 w-4', selected ? 'text-foreground' : 'text-muted-foreground/70')} />
-              : null;
-
-            return (
-              <SettingsSidebarItem
-                key={page.slug}
-                title={page.title}
-                icon={icon}
-                selected={selected}
-                onSelect={() => openPage(page.slug)}
-              />
-            );
-          })()
-        ))}
-      </SettingsSidebarLayout>
+        </div>
+      </div>
     );
   };
 
@@ -592,7 +550,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       return (
         <div className={cn('flex-1 overflow-hidden', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')}>
           <div className="flex h-full min-h-0 flex-col">
-            <ErrorBoundary>{renderNav({ showFeatured: true })}</ErrorBoundary>
+            <ErrorBoundary>{renderSettingsNav(false)}</ErrorBoundary>
           </div>
         </div>
       );
@@ -748,25 +706,29 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                   : runtimeCtx.isVSCode
                     ? 'bg-background'
                     : 'bg-sidebar',
-                isResizing ? 'transition-none' : ''
+                isResizing && !isNavCollapsed ? '' : 'transition-[width,min-width] duration-200 ease-[cubic-bezier(0.25,0.1,0.25,1)]'
               )}
               style={{
-                width: `${navWidth}px`,
-                minWidth: `${navWidth}px`,
+                width: isNavCollapsed ? `${SETTINGS_NAV_RAIL_WIDTH}px` : `${navWidth}px`,
+                minWidth: isNavCollapsed ? `${SETTINGS_NAV_RAIL_WIDTH}px` : `${navWidth}px`,
                 borderColor: 'var(--interactive-border)',
               }}
             >
-              <div
-                className={cn(
-                  'absolute right-0 top-0 z-20 h-full w-[6px] -mr-[3px] cursor-col-resize',
-                  isResizing ? 'bg-primary/30' : 'bg-transparent hover:bg-primary/20'
-                )}
-                onPointerDown={handlePointerDown}
-                role="separator"
-                aria-orientation="vertical"
-                aria-label="Resize settings navigation"
-              />
-              <ErrorBoundary>{renderNav()}</ErrorBoundary>
+              {!isNavCollapsed && (
+                <div
+                  className={cn(
+                    'absolute right-0 top-0 z-20 h-full w-[6px] -mr-[3px] cursor-col-resize',
+                    isResizing ? 'bg-primary/30' : 'bg-transparent hover:bg-primary/20'
+                  )}
+                  onPointerDown={handlePointerDown}
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize settings navigation"
+                />
+              )}
+              <ErrorBoundary>
+                {renderSettingsNav(isNavCollapsed)}
+              </ErrorBoundary>
             </div>
 
             <div className="flex-1 overflow-hidden bg-background">

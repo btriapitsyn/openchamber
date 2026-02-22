@@ -358,7 +358,7 @@ export const CommandsPage: React.FC = () => {
               onChange={(e) => setTemplate(e.target.value)}
               placeholder={`Your command template here...\n\nUse $ARGUMENTS to reference user input.\nUse !\`shell command\` to inject shell output.\nUse @filename to include file contents.`}
               rows={12}
-              className="w-full font-mono typography-meta min-h-[160px] bg-transparent focus-visible:ring-[var(--primary-base)] border-none shadow-none focus-visible:outline-none resize-y"
+              className="w-full font-mono typography-meta min-h-[160px] max-h-[60vh] bg-transparent focus-visible:ring-[var(--primary-base)] border-none shadow-none focus-visible:outline-none resize-y"
             />
           </div>
 

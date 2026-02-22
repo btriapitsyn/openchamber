@@ -9,13 +9,11 @@ export type SettingsPageSlug =
   | 'commands'
   | 'skills.installed'
   | 'skills.catalog'
-  | 'git-identities'
+  | 'git'
   | 'appearance'
   | 'chat'
   | 'shortcuts'
   | 'sessions'
-  | 'git'
-  | 'github'
   | 'notifications'
   | 'voice';
 
@@ -115,11 +113,11 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     keywords: ['install', 'catalog', 'external', 'repository', 'skills catalog'],
   },
   {
-    slug: 'git-identities',
-    title: 'Identities',
+    slug: 'git',
+    title: 'Git',
     group: 'git',
-    kind: 'split',
-    keywords: ['git', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys'],
+    kind: 'single',
+    keywords: ['git', 'github', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys', 'commit', 'gitmoji', 'oauth', 'prs', 'issues'],
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
@@ -150,8 +148,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     kind: 'single',
     keywords: ['defaults', 'default agent', 'default model', 'retention', 'memory', 'limits', 'zen'],
   },
-  { slug: 'git', title: 'Git', group: 'git', kind: 'single', keywords: ['commit', 'worktree'], isAvailable: (ctx) => !ctx.isVSCode },
-  { slug: 'github', title: 'GitHub', group: 'git', kind: 'single', keywords: ['oauth', 'prs', 'issues'], isAvailable: (ctx) => !ctx.isVSCode },
+
   { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
   { slug: 'voice', title: 'Voice', group: 'advanced', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
 ] as const;
@@ -163,7 +160,7 @@ export const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, Set
   skills: 'skills.installed',
   providers: 'providers',
   usage: 'usage',
-  'git-identities': 'git-identities',
+  'git-identities': 'git',
   settings: 'home',
 };
 

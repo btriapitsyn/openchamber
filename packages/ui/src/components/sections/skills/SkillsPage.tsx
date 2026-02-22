@@ -1,6 +1,4 @@
 import React from 'react';
-import type { Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
 import { Button } from '@/components/ui/button';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
@@ -25,8 +23,6 @@ import {
 } from '@/components/ui/dialog';
 import { ButtonLarge } from '@/components/ui/button-large';
 import { SkillsCatalogPage } from './catalog/SkillsCatalogPage';
-import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { useThemeSystem } from '@/contexts/useThemeSystem';
 import {
   SKILL_LOCATION_OPTIONS,
   locationLabel,
@@ -34,11 +30,6 @@ import {
   locationValueFrom,
   type SkillLocationValue,
 } from './skillLocations';
-
-const LazyCodeMirrorEditor = React.lazy(async () => {
-  const module = await import('@/components/ui/CodeMirrorEditor');
-  return { default: module.CodeMirrorEditor };
-});
 
 export interface SkillsPageProps {
   view?: 'installed' | 'catalog';
@@ -49,7 +40,6 @@ const SkillsCatalogStandalone: React.FC = () => (
 );
 
 const SkillsInstalledPage: React.FC = () => {
-  const { currentTheme } = useThemeSystem();
   const { 
     selectedSkillName, 
     getSkillByName, 
@@ -95,82 +85,6 @@ const SkillsInstalledPage: React.FC = () => {
   const [originalFileContent, setOriginalFileContent] = React.useState('');
   const [deleteFilePath, setDeleteFilePath] = React.useState<string | null>(null);
   const [isDeletingFile, setIsDeletingFile] = React.useState(false);
-  const [instructionsEditorHeight, setInstructionsEditorHeight] = React.useState(320);
-  const [instructionsLanguage, setInstructionsLanguage] = React.useState<Extension | null>(null);
-  const [supportingFileLanguage, setSupportingFileLanguage] = React.useState<Extension | null>(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const loadInstructionsLanguage = async () => {
-      const { languageByExtension } = await import('@/lib/codemirror/languageByExtension');
-      if (cancelled) return;
-      setInstructionsLanguage(languageByExtension('SKILL.md'));
-    };
-
-    void loadInstructionsLanguage();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const loadSupportingFileLanguage = async () => {
-      const targetPath = newFileName.trim();
-      if (!targetPath) {
-        setSupportingFileLanguage(null);
-        return;
-      }
-
-      const { languageByExtension } = await import('@/lib/codemirror/languageByExtension');
-      if (cancelled) return;
-      setSupportingFileLanguage(languageByExtension(targetPath));
-    };
-
-    void loadSupportingFileLanguage();
-    return () => {
-      cancelled = true;
-    };
-  }, [newFileName]);
-
-  const instructionsEditorExtensions = React.useMemo(() => {
-    const extensions: Extension[] = [createFlexokiCodeMirrorTheme(currentTheme), EditorView.lineWrapping];
-    if (instructionsLanguage) {
-      extensions.push(instructionsLanguage);
-    }
-    return extensions;
-  }, [currentTheme, instructionsLanguage]);
-
-  const supportingFileEditorExtensions = React.useMemo(() => {
-    const extensions: Extension[] = [createFlexokiCodeMirrorTheme(currentTheme), EditorView.lineWrapping];
-    if (supportingFileLanguage) {
-      extensions.push(supportingFileLanguage);
-    }
-    return extensions;
-  }, [currentTheme, supportingFileLanguage]);
-
-  const handleStartInstructionsResize = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const startY = event.clientY;
-    const startHeight = instructionsEditorHeight;
-
-    const onMouseMove = (moveEvent: MouseEvent) => {
-      const deltaY = moveEvent.clientY - startY;
-      const viewportMax = typeof window !== 'undefined' ? Math.floor(window.innerHeight * 0.75) : 800;
-      const nextHeight = Math.max(220, Math.min(viewportMax, startHeight + deltaY));
-      setInstructionsEditorHeight(nextHeight);
-    };
-
-    const onMouseUp = () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }, [instructionsEditorHeight]);
   
   const hasSkillChanges = isNewSkill 
     ? (draftName.trim() !== '' || description.trim() !== '' || instructions.trim() !== '' || pendingFiles.length > 0)
@@ -542,43 +456,13 @@ const SkillsInstalledPage: React.FC = () => {
               Detailed instructions for the agent when this skill is loaded.
             </p>
           </div>
-          
-          <div
-            className="relative min-h-[220px] max-h-[75vh] rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] overflow-hidden flex flex-col"
-            style={{ height: `${instructionsEditorHeight}px` }}
-          >
-            <div className="flex-1 min-h-0">
-              <React.Suspense
-                fallback={(
-                  <Textarea
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder="Step-by-step instructions, guidelines, or reference content..."
-                    className="h-full w-full border-0 rounded-none font-mono typography-meta resize-none bg-transparent"
-                  />
-                )}
-              >
-                <LazyCodeMirrorEditor
-                  value={instructions}
-                  onChange={setInstructions}
-                  extensions={instructionsEditorExtensions}
-                  className="h-full"
-                />
-              </React.Suspense>
-            </div>
-            <div
-              role="separator"
-              aria-label="Resize instructions editor"
-              onMouseDown={handleStartInstructionsResize}
-              className="absolute right-1.5 bottom-1.5 z-10 h-4 w-4 cursor-nwse-resize opacity-50 hover:opacity-100"
-            >
-              <svg viewBox="0 0 16 16" className="h-4 w-4 text-muted-foreground" aria-hidden="true">
-                <path d="M6 14L14 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M10 14L14 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                <path d="M2 14L14 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </div>
-          </div>
+
+          <Textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            placeholder="Step-by-step instructions, guidelines, or reference content..."
+            className="min-h-[220px] max-h-[60vh] font-mono typography-meta"
+          />
         </div>
 
         {/* Supporting Files */}
@@ -717,25 +601,13 @@ const SkillsInstalledPage: React.FC = () => {
                 <label className="typography-ui-label font-medium text-foreground flex-shrink-0">
                   Content
                 </label>
-                <div className="h-[45vh] min-h-[250px] max-h-[55vh] rounded-md border border-[var(--interactive-border)] bg-[var(--surface-elevated)] overflow-hidden">
-                  <React.Suspense
-                    fallback={(
-                      <Textarea
-                        value={newFileContent}
-                        onChange={(e) => setNewFileContent(e.target.value)}
-                        placeholder="File content..."
-                        className="h-full border-0 rounded-none font-mono typography-meta resize-none bg-transparent"
-                      />
-                    )}
-                  >
-                    <LazyCodeMirrorEditor
-                      value={newFileContent}
-                      onChange={setNewFileContent}
-                      extensions={supportingFileEditorExtensions}
-                      className="h-full"
-                    />
-                  </React.Suspense>
-                </div>
+                <Textarea
+                  value={newFileContent}
+                  onChange={(e) => setNewFileContent(e.target.value)}
+                  placeholder="File content..."
+                  outerClassName="h-[45vh] min-h-[250px] max-h-[55vh]"
+                  className="h-full min-h-0 font-mono typography-meta"
+                />
               </div>
             </div>
           )}
