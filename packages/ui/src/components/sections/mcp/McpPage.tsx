@@ -583,9 +583,8 @@ export const McpPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Row 3: type selector (only show if creating new or editing type) */}
-          {(isNewServer || true) && (
-            <div className="flex gap-1 pt-1 border-t border-[var(--interactive-border)]">
+          {/* Row 3: type selector — always visible so user can switch type */}
+          <div className="flex gap-1 pt-1 border-t border-[var(--interactive-border)]">
               <ButtonSmall
                 variant={mcpType === 'local' ? 'default' : 'outline'}
                 onClick={() => setMcpType('local')}
@@ -601,7 +600,6 @@ export const McpPage: React.FC = () => {
                 Remote · SSE
               </ButtonSmall>
             </div>
-          )}
         </div>
 
         {/* ── Connection ── */}
