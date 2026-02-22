@@ -382,6 +382,133 @@ const writeConfig = (config: Record<string, unknown>, filePath: string = CONFIG_
   fs.writeFileSync(filePath, JSON.stringify(config, null, 2), 'utf8');
 };
 
+export type McpLocalConfig = {
+  type: 'local';
+  command?: string[];
+  environment?: Record<string, string>;
+  enabled?: boolean;
+};
+
+export type McpRemoteConfig = {
+  type: 'remote';
+  url?: string;
+  environment?: Record<string, string>;
+  enabled?: boolean;
+};
+
+export type McpConfigPayload = McpLocalConfig | McpRemoteConfig;
+
+export type McpConfigEntry = {
+  name: string;
+  type: 'local' | 'remote';
+  command?: string[];
+  url?: string;
+  environment?: Record<string, string>;
+  enabled: boolean;
+};
+
+const validateMcpName = (name: string): void => {
+  if (!name || typeof name !== 'string') {
+    throw new Error('MCP server name is required');
+  }
+  if (!/^[a-z0-9][a-z0-9_-]*[a-z0-9]$|^[a-z0-9]$/.test(name)) {
+    throw new Error('MCP server name must be lowercase alphanumeric with hyphens/underscores');
+  }
+};
+
+const buildMcpEntry = (data: Record<string, unknown>): Omit<McpConfigEntry, 'name'> => {
+  const entry: Omit<McpConfigEntry, 'name'> = {
+    type: data.type === 'remote' ? 'remote' : 'local',
+    enabled: data.enabled !== false,
+  };
+
+  if (entry.type === 'local') {
+    if (Array.isArray(data.command) && data.command.length > 0) {
+      entry.command = data.command.map((value) => String(value));
+    }
+  } else if (typeof data.url === 'string' && data.url.trim()) {
+    entry.url = data.url.trim();
+  }
+
+  if (isPlainObject(data.environment)) {
+    const cleaned: Record<string, string> = {};
+    for (const [key, value] of Object.entries(data.environment)) {
+      if (key && value != null) {
+        cleaned[key] = String(value);
+      }
+    }
+    if (Object.keys(cleaned).length > 0) {
+      entry.environment = cleaned;
+    }
+  }
+
+  return entry;
+};
+
+export const listMcpConfigs = (): McpConfigEntry[] => {
+  const config = readConfigFile(CONFIG_FILE);
+  const mcp = isPlainObject(config.mcp) ? config.mcp : {};
+  return Object.entries(mcp)
+    .filter(([, value]) => isPlainObject(value))
+    .map(([name, value]) => ({ name, ...buildMcpEntry(value as Record<string, unknown>) }));
+};
+
+export const getMcpConfig = (name: string): McpConfigEntry | null => {
+  const config = readConfigFile(CONFIG_FILE);
+  const mcp = isPlainObject(config.mcp) ? config.mcp : {};
+  const entry = mcp[name];
+  if (!isPlainObject(entry)) {
+    return null;
+  }
+  return { name, ...buildMcpEntry(entry as Record<string, unknown>) };
+};
+
+export const createMcpConfig = (name: string, mcpConfig: Record<string, unknown>): void => {
+  validateMcpName(name);
+
+  const config = readConfigFile(CONFIG_FILE);
+  const mcp = isPlainObject(config.mcp) ? { ...config.mcp } : {};
+  if (mcp[name] !== undefined) {
+    throw new Error(`MCP server "${name}" already exists`);
+  }
+
+  const { name: _ignoredName, ...entryData } = mcpConfig;
+  void _ignoredName;
+  mcp[name] = buildMcpEntry(entryData);
+  config.mcp = mcp;
+  writeConfig(config, CONFIG_FILE);
+};
+
+export const updateMcpConfig = (name: string, updates: Record<string, unknown>): void => {
+  const config = readConfigFile(CONFIG_FILE);
+  const mcp = isPlainObject(config.mcp) ? { ...config.mcp } : {};
+  const existing = isPlainObject(mcp[name]) ? mcp[name] : {};
+
+  const { name: _ignoredName, ...updateData } = updates;
+  void _ignoredName;
+  mcp[name] = buildMcpEntry({ ...(existing as Record<string, unknown>), ...updateData });
+  config.mcp = mcp;
+  writeConfig(config, CONFIG_FILE);
+};
+
+export const deleteMcpConfig = (name: string): void => {
+  const config = readConfigFile(CONFIG_FILE);
+  const mcp = isPlainObject(config.mcp) ? { ...config.mcp } : {};
+
+  if (mcp[name] === undefined) {
+    throw new Error(`MCP server "${name}" not found`);
+  }
+
+  delete mcp[name];
+  if (Object.keys(mcp).length === 0) {
+    delete config.mcp;
+  } else {
+    config.mcp = mcp;
+  }
+
+  writeConfig(config, CONFIG_FILE);
+};
+
 const getJsonEntrySource = (
   layers: ReturnType<typeof readConfigLayers>,
   sectionKey: 'agent' | 'command',
