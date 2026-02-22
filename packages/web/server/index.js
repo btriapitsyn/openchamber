@@ -10488,6 +10488,49 @@ Context:
     }
   });
 
+  // Reveal a file or folder in the system file manager (Finder on macOS, Explorer on Windows, etc.)
+  app.post('/api/fs/reveal', async (req, res) => {
+    const { path: targetPath } = req.body || {};
+    if (!targetPath || typeof targetPath !== 'string') {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    try {
+      const resolved = path.resolve(targetPath.trim());
+
+      // Verify path exists
+      await fsPromises.access(resolved);
+
+      const platform = process.platform;
+      if (platform === 'darwin') {
+        // macOS: open -R selects the file in Finder; open opens a folder
+        const stat = await fsPromises.stat(resolved);
+        if (stat.isDirectory()) {
+          spawn('open', [resolved], { stdio: 'ignore', detached: true }).unref();
+        } else {
+          spawn('open', ['-R', resolved], { stdio: 'ignore', detached: true }).unref();
+        }
+      } else if (platform === 'win32') {
+        // Windows: explorer /select, highlights the file
+        spawn('explorer', ['/select,', resolved], { stdio: 'ignore', detached: true }).unref();
+      } else {
+        // Linux: xdg-open opens the parent directory
+        const stat = await fsPromises.stat(resolved);
+        const dir = stat.isDirectory() ? resolved : path.dirname(resolved);
+        spawn('xdg-open', [dir], { stdio: 'ignore', detached: true }).unref();
+      }
+
+      res.json({ success: true, path: resolved });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Path not found' });
+      }
+      console.error('Failed to reveal path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to reveal path' });
+    }
+  });
+
   // Execute shell commands in a directory (for worktree setup)
   // NOTE: This route supports background execution to avoid tying up browser connections.
   const execJobs = new Map();
