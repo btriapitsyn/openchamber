@@ -1679,8 +1679,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     };
   }, [normalizedProjects, projectGitBranchesKey]);
 
-  // Session Folders: cleanup stale session IDs when sessions are removed
+  // Session Folders: cleanup stale session IDs when sessions are removed.
+  // Guard: skip cleanup while sessions are still loading to avoid wiping folder
+  // assignments before the server has returned its full session list.
+  const isSessionsLoading = useSessionStore((state) => state.isLoading);
   React.useEffect(() => {
+    if (isSessionsLoading) return;
     const idsByScope = new Map<string, Set<string>>();
     sessions.forEach((session) => {
       const directory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
@@ -1698,7 +1702,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     allScopeKeys.forEach((scopeKey) => {
       cleanupSessions(scopeKey, idsByScope.get(scopeKey) ?? new Set<string>());
     });
-  }, [sessions, cleanupSessions]); // removed foldersMap from deps to prevent cascade re-renders
+  }, [sessions, isSessionsLoading, cleanupSessions]); // removed foldersMap from deps to prevent cascade re-renders
 
   const getSessionsForProject = React.useCallback(
     (project: { normalizedPath: string }) => {
