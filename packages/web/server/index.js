@@ -20,7 +20,7 @@ import {
   parseRequestPathname,
   pruneRebindTimestamps,
   readTerminalInputWsControlFrame,
-} from './lib/terminal-input-ws-protocol.js';
+} from './lib/terminal/index.js';
 import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
