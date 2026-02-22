@@ -25,6 +25,8 @@ import {
 import { RiAddLine, RiDeleteBinLine, RiRefreshLine, RiDownloadLine, RiStarLine, RiSearchLine } from '@remixicon/react';
 
 import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
+import { useDeviceInfo } from '@/lib/device';
+import { cn } from '@/lib/utils';
 import type { SkillsCatalogItem } from '@/lib/api/types';
 
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -33,7 +35,6 @@ import type { DesktopSettings, SkillCatalogConfig } from '@/lib/desktop';
 
 import { AddCatalogDialog } from './AddCatalogDialog';
 import { InstallSkillDialog } from './InstallSkillDialog';
-import { cn } from '@/lib/utils';
 
 type SkillsMode = 'manual' | 'external';
 
@@ -67,6 +68,7 @@ const loadSettings = async (): Promise<DesktopSettings | null> => {
 };
 
 export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onModeChange, showModeTabs = true }) => {
+  const { isMobile } = useDeviceInfo();
   const {
     sources,
     itemsBySource,
@@ -147,7 +149,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
 
   return (
     <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
-      <div className="mx-auto w-full max-w-4xl px-5 py-6">
+      <div className="openchamber-page-body mx-auto w-full max-w-3xl space-y-6 p-3 sm:p-6">
         
         {/* Header */}
         <div className="mb-8">
@@ -175,12 +177,12 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
 
         {/* Filters and Actions */}
         <div className="mb-8 rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
-            <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+          <div className={cn("px-4 py-3 border-b border-[var(--surface-subtle)]", isMobile ? "flex flex-col gap-3" : "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
+            <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "sm:w-1/3 shrink-0")}>
               <span className="typography-ui-label text-foreground">Source Repository</span>
               <span className="typography-meta text-muted-foreground">Select a catalog to browse</span>
             </div>
-            <div className="flex items-center gap-2 flex-1 justify-end">
+            <div className={cn("flex items-center gap-2 flex-wrap", isMobile ? "w-full" : "flex-1 justify-end")}>
               <Select
                 value={selectedSourceId || ''}
                 onValueChange={(v) => setSelectedSource(v)}

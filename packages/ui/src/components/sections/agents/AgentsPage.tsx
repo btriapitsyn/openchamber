@@ -8,6 +8,7 @@ import { useAgentsStore, type AgentConfig, type AgentScope } from '@/stores/useA
 import { useConfigStore } from '@/stores/useConfigStore';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useDeviceInfo } from '@/lib/device';
 import { opencodeClient } from '@/lib/opencode/client';
 import { RiAddLine, RiAiAgentFill, RiAiAgentLine, RiInformationLine, RiRobot2Line, RiRobotLine, RiSubtractLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
 import { cn } from '@/lib/utils';
@@ -181,6 +182,7 @@ const buildPermissionConfigWithGlobal = (
 
 
 export const AgentsPage: React.FC = () => {
+  const { isMobile } = useDeviceInfo();
   const { selectedAgentName, getAgentByName, createAgent, updateAgent, agents, agentDraft, setAgentDraft } = useAgentsStore();
   useConfigStore();
 
@@ -679,30 +681,42 @@ export const AgentsPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 px-4 py-3">
-              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
+            <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-4")}>
+              <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "sm:w-1/3 shrink-0")}>
                 <span className="typography-ui-label text-foreground">Mode</span>
                 <span className="typography-meta text-muted-foreground">Primary vs Subagent visibility</span>
               </div>
-              <div className="flex gap-1 flex-wrap flex-1 justify-end">
+              <div className={cn("flex gap-1 flex-wrap", isMobile ? "w-full" : "flex-1 justify-end")}>
                 <ButtonSmall
-                  variant={mode === 'primary' ? 'default' : 'outline'}
+                  variant="outline"
                   onClick={() => setMode('primary')}
-                  className={cn(mode === 'primary' ? undefined : 'text-foreground')}
+                  className={cn(
+                    mode === 'primary'
+                      ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                      : 'text-foreground'
+                  )}
                 >
                   <RiAiAgentLine className="h-3.5 w-3.5 mr-1" /> Primary
                 </ButtonSmall>
                 <ButtonSmall
-                  variant={mode === 'subagent' ? 'default' : 'outline'}
+                  variant="outline"
                   onClick={() => setMode('subagent')}
-                  className={cn(mode === 'subagent' ? undefined : 'text-foreground')}
+                  className={cn(
+                    mode === 'subagent'
+                      ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                      : 'text-foreground'
+                  )}
                 >
                   <RiRobotLine className="h-3.5 w-3.5 mr-1" /> Subagent
                 </ButtonSmall>
                 <ButtonSmall
-                  variant={mode === 'all' ? 'default' : 'outline'}
+                  variant="outline"
                   onClick={() => setMode('all')}
-                  className={cn(mode === 'all' ? undefined : 'text-foreground')}
+                  className={cn(
+                    mode === 'all'
+                      ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                      : 'text-foreground'
+                  )}
                 >
                   <RiAiAgentFill className="h-3.5 w-3.5 mr-1" /> All
                 </ButtonSmall>

@@ -125,7 +125,7 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
     return (
       <div
         className={cn(
-          "flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-background",
+          "flex h-8 items-stretch overflow-hidden rounded-lg border border-border bg-background shrink-0",
           "focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]",
           disabled && "opacity-50",
           containerClassName
@@ -158,19 +158,19 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
           )}
         />
 
-        <div className="flex w-6 flex-col border-l border-border">
+        <div className="flex w-8 sm:w-6 flex-col border-l border-border">
           <button
             type="button"
             aria-label="Increase value"
             disabled={incrementDisabled}
             onClick={handleIncrement}
             className={cn(
-              "flex flex-1 items-center justify-center",
+              "flex flex-1 items-center justify-center min-h-[16px] sm:min-h-0",
               "text-muted-foreground hover:bg-interactive-hover hover:text-foreground",
               "disabled:pointer-events-none disabled:opacity-50"
             )}
           >
-            <RiArrowUpSLine className="h-3.5 w-3.5" />
+            <RiArrowUpSLine className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
           </button>
           <button
             type="button"
@@ -178,12 +178,12 @@ const NumberInput = React.forwardRef<HTMLInputElement, NumberInputProps>(
             disabled={decrementDisabled}
             onClick={handleDecrement}
             className={cn(
-              "flex flex-1 items-center justify-center border-t border-border",
+              "flex flex-1 items-center justify-center min-h-[16px] sm:min-h-0 border-t border-border",
               "text-muted-foreground hover:bg-interactive-hover hover:text-foreground",
               "disabled:pointer-events-none disabled:opacity-50"
             )}
           >
-            <RiArrowDownSLine className="h-3.5 w-3.5" />
+            <RiArrowDownSLine className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
           </button>
         </div>
       </div>

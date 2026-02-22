@@ -15,6 +15,7 @@ import { toast } from '@/components/ui';
 import { RiStackLine, RiToolsLine, RiBrainAi3Line, RiFileImageLine, RiArrowDownSLine, RiCheckLine, RiSearchLine, RiInformationLine } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
+import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import type { ModelMetadata } from '@/types';
@@ -138,6 +139,7 @@ const parseProvidersPayload = (payload: unknown): ProviderOption[] => {
 };
 
 export const ProvidersPage: React.FC = () => {
+  const { isMobile } = useDeviceInfo();
   const providers = useConfigStore((state) => state.providers);
   const selectedProviderId = useConfigStore((state) => state.selectedProviderId);
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
@@ -1038,32 +1040,40 @@ export const ProvidersPage: React.FC = () => {
                   return (
                     <div
                       key={modelId}
-                      className="flex items-center gap-3 px-3 py-2.5"
+                      className={cn(
+                        "px-3 py-2.5",
+                        isMobile ? "flex flex-col gap-2" : "flex items-center gap-3"
+                      )}
                     >
-                      <span className="typography-meta font-medium text-foreground truncate flex-1 min-w-0">
+                      <span className={cn(
+                        "typography-meta font-medium text-foreground truncate",
+                        isMobile ? "w-full" : "flex-1 min-w-0"
+                      )}>
                         {modelName}
                       </span>
-                      {(contextTokens || outputTokens) && (
-                        <span className="typography-micro text-muted-foreground flex-shrink-0 bg-[var(--surface-muted)] px-1.5 py-0.5 rounded">
-                          {contextTokens ? `${contextTokens} ctx` : ''}
-                          {contextTokens && outputTokens ? ' · ' : ''}
-                          {outputTokens ? `${outputTokens} out` : ''}
-                        </span>
-                      )}
-                      {capabilityIcons.length > 0 && (
-                        <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
-                          {capabilityIcons.map(({ key, icon: Icon, label }) => (
-                            <span
-                              key={key}
-                              className="flex h-5 w-5 rounded items-center justify-center text-muted-foreground bg-[var(--surface-muted)]"
-                              title={label}
-                              aria-label={label}
-                            >
-                              <Icon className="h-3 w-3" />
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <div className={cn("flex items-center gap-2", isMobile ? "w-full" : "flex-shrink-0")}>
+                        {(contextTokens || outputTokens) && (
+                          <span className="typography-micro text-muted-foreground flex-shrink-0 bg-[var(--surface-muted)] px-1.5 py-0.5 rounded">
+                            {contextTokens ? `${contextTokens} ctx` : ''}
+                            {contextTokens && outputTokens ? ' · ' : ''}
+                            {outputTokens ? `${outputTokens} out` : ''}
+                          </span>
+                        )}
+                        {capabilityIcons.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-1">
+                            {capabilityIcons.map(({ key, icon: Icon, label }) => (
+                              <span
+                                key={key}
+                                className="flex h-5 w-5 rounded items-center justify-center text-muted-foreground bg-[var(--surface-muted)]"
+                                title={label}
+                                aria-label={label}
+                              >
+                                <Icon className="h-3 w-3" />
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}

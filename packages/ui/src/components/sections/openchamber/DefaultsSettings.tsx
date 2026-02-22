@@ -341,7 +341,7 @@ export const DefaultsSettings: React.FC = () => {
             </div>
             <div className="flex items-center gap-3 flex-1 justify-end">
               <Select value={defaultVariant ?? DEFAULT_VARIANT_VALUE} onValueChange={handleVariantChange}>
-                <SelectTrigger className="w-fit min-w-[120px]">
+                <SelectTrigger className="w-fit min-w-[120px] bg-interactive-selection/20 border-border/20 hover:bg-interactive-hover/30 shadow-none focus:ring-0">
                   <SelectValue placeholder="Thinking" />
                 </SelectTrigger>
                 <SelectContent>
@@ -388,7 +388,7 @@ export const DefaultsSettings: React.FC = () => {
               <span className="typography-meta text-muted-foreground">Loading models...</span>
             ) : zenModels.length > 0 ? (
               <Select value={selectedZenModel} onValueChange={handleZenModelChange}>
-                <SelectTrigger className="w-fit min-w-[120px]">
+                <SelectTrigger className="w-fit min-w-[120px] bg-interactive-selection/20 border-border/20 hover:bg-interactive-hover/30 shadow-none focus:ring-0">
                   <SelectValue placeholder="Select model" />
                 </SelectTrigger>
                 <SelectContent>

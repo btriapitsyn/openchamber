@@ -5,18 +5,20 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useDeviceInfo } from '@/lib/device';
 import { checkIsGitRepository } from '@/lib/gitApi';
 import { getWorktreeSetupCommands, saveWorktreeSetupCommands } from '@/lib/openchamberConfig';
 import { listProjectWorktrees } from '@/lib/worktrees/worktreeManager';
 import { sessionEvents } from '@/lib/sessionEvents';
 import type { WorktreeMetadata } from '@/types/worktree';
-import { formatPathForDisplay } from '@/lib/utils';
+import { formatPathForDisplay, cn } from '@/lib/utils';
 
 export interface WorktreeSectionContentProps {
   projectRef?: { id: string; path: string } | null;
 }
 
 export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ projectRef: projectRefProp = null }) => {
+  const { isMobile } = useDeviceInfo();
   const activeProject = useProjectsStore((state) => state.getActiveProject());
 
   const projectPath = projectRefProp?.path ?? activeProject?.path ?? null;
@@ -354,7 +356,10 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
                 <button
                   type="button"
                   onClick={() => handleDeleteWorktree(worktree)}
-                  className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className={cn(
+                    "flex-shrink-0 flex h-7 w-7 items-center justify-center rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                    isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  )}
                   aria-label={`Delete worktree ${worktree.branch || worktree.label}`}
                 >
                   <RiDeleteBinLine className="h-4 w-4" />

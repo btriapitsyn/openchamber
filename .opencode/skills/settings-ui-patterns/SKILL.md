@@ -1,3 +1,10 @@
+---
+name: settings-ui-patterns
+description: Use when creating or modifying UI components, styling, or visual elements related to Settings in OpenChamber.
+license: MIT
+compatibility: opencode
+---
+
 # Settings UI Patterns Skill
 
 ## Purpose

@@ -12,7 +12,7 @@ function ButtonSmall({
     <Button
       variant={variant}
       size="sm"
-      className={cn("h-6 px-2 text-xs", className)}
+      className={cn("h-8 px-2.5", className)}
       {...props}
     />
   )

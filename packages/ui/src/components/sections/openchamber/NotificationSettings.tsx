@@ -1,6 +1,7 @@
 import React from 'react';
 import { useUIStore } from '@/stores/useUIStore';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { useDeviceInfo } from '@/lib/device';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
@@ -16,6 +17,7 @@ const DEFAULT_NOTIFICATION_TEMPLATES = {
 } as const;
 
 export const NotificationSettings: React.FC = () => {
+  const { isMobile } = useDeviceInfo();
   const isDesktop = React.useMemo(() => isDesktopShell(), []);
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const isBrowser = !isDesktop && !isVSCode;
@@ -400,8 +402,7 @@ export const NotificationSettings: React.FC = () => {
   };
 
   return (
-    <div className="w-full h-full overflow-y-auto bg-background">
-      <div className="mx-auto w-full max-w-4xl px-5 py-6">
+    <div className="space-y-8">
 
         {/* --- Global Delivery Settings --- */}
         <div className="mb-8">
@@ -645,12 +646,12 @@ export const NotificationSettings: React.FC = () => {
                     </div>
                   </>
                 ) : (
-                  <div className="flex items-center justify-between gap-6 px-4 py-3 mt-1 border-t border-[var(--surface-subtle)]">
-                    <div className="flex min-w-0 flex-col w-1/3 shrink-0">
+                  <div className={cn("px-4 py-3 mt-1 border-t border-[var(--surface-subtle)]", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-6")}>
+                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-1/3 shrink-0")}>
                       <span className="typography-ui-label text-foreground">Max Length</span>
                       <span className="typography-meta text-muted-foreground">Truncate {'{last_message}'} to this length</span>
                     </div>
-                    <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
+                    <div className={cn("flex items-center gap-3", isMobile ? "w-full" : "flex-1 max-w-xs justify-end")}>
                       <input
                         type="range"
                         min={50}
@@ -658,7 +659,7 @@ export const NotificationSettings: React.FC = () => {
                         step={10}
                         value={maxLastMessageLength}
                         onChange={(e) => setMaxLastMessageLength(Number(e.target.value))}
-                        className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)]"
+                        className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
                       />
                       <NumberInput
                         value={maxLastMessageLength}
@@ -725,7 +726,6 @@ export const NotificationSettings: React.FC = () => {
           </div>
         )}
 
-      </div>
     </div>
   );
 };

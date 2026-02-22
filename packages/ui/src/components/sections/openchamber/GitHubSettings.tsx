@@ -5,6 +5,8 @@ import { toast } from '@/components/ui';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import type { GitHubAuthStatus } from '@/lib/api/types';
+import { useDeviceInfo } from '@/lib/device';
+import { cn } from '@/lib/utils';
 import { RiGithubFill } from '@remixicon/react';
 
 type GitHubUser = {
@@ -30,6 +32,7 @@ type DeviceFlowCompleteResponse =
   | { connected: false; status?: string; error?: string };
 
 export const GitHubSettings: React.FC = () => {
+  const { isMobile } = useDeviceInfo();
   const runtimeGitHub = getRegisteredRuntimeAPIs()?.github;
   const status = useGitHubAuthStore((state) => state.status);
   const isLoading = useGitHubAuthStore((state) => state.isLoading);
@@ -270,8 +273,8 @@ export const GitHubSettings: React.FC = () => {
 
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
         {connected ? (
-          <div className="flex items-center justify-between gap-4 px-4 py-3">
-            <div className="flex min-w-0 items-center gap-4">
+          <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-4")}>
+            <div className={cn("flex min-w-0 items-center gap-4", isMobile ? "w-full" : undefined)}>
               {user?.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
@@ -284,23 +287,23 @@ export const GitHubSettings: React.FC = () => {
                 <div className="h-10 w-10 shrink-0 rounded-full border border-[var(--interactive-border)] bg-[var(--surface-muted)]" />
               )}
 
-              <div className="min-w-0">
-                <div className="typography-ui-label text-foreground truncate">
+              <div className="min-w-0 flex-1">
+                <div className="typography-ui-label text-foreground">
                   {user?.name?.trim() || user?.login || 'GitHub'}
                 </div>
-                <div className="flex items-center gap-2 typography-meta text-muted-foreground truncate mt-0.5">
-                  <RiGithubFill className="h-3.5 w-3.5" />
+                <div className={cn("flex items-center gap-2 typography-meta text-muted-foreground mt-0.5", isMobile ? "flex-wrap" : "truncate")}>
+                  <RiGithubFill className="h-3.5 w-3.5 shrink-0" />
                   <span className="font-mono">{user?.login || 'unknown'}</span>
                   {user?.email && <span className="opacity-50">•</span>}
                   {user?.email && <span>{user.email}</span>}
                 </div>
                 {status?.scope && (
-                  <div className="typography-micro text-muted-foreground/70 truncate mt-0.5">Scopes: {status.scope}</div>
+                  <div className="typography-micro text-muted-foreground/70 mt-0.5">Scopes: {status.scope}</div>
                 )}
               </div>
             </div>
 
-            <ButtonSmall variant="outline" onClick={disconnect} disabled={isBusy} className="text-[var(--status-error)] hover:text-[var(--status-error)]">
+            <ButtonSmall variant="outline" onClick={disconnect} disabled={isBusy} className={cn("text-[var(--status-error)] hover:text-[var(--status-error)]", isMobile ? "w-full" : undefined)}>
               Disconnect
             </ButtonSmall>
           </div>

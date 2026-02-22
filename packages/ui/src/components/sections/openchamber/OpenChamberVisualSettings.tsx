@@ -171,8 +171,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const hasBehaviorSettings = shouldShow('toolOutput') || shouldShow('diffLayout') || shouldShow('dotfiles') || shouldShow('reasoning') || shouldShow('queueMode') || shouldShow('textJustificationActivity') || shouldShow('terminalQuickKeys') || shouldShow('persistDraft');
 
     return (
-        <div className="w-full h-full overflow-y-auto bg-background">
-            <div className="mx-auto w-full max-w-4xl px-5 py-6">
+        <div className="space-y-8">
 
                 {/* --- Appearance & Themes --- */}
                 {hasAppearanceSettings && (
@@ -189,16 +188,20 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     <span className="typography-ui-label text-foreground">Color Mode</span>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    {THEME_MODE_OPTIONS.map((option) => (
-                                        <ButtonSmall
-                                            key={option.value}
-                                            variant={themeMode === option.value ? 'default' : 'outline'}
-                                            className={cn(themeMode === option.value ? undefined : 'text-foreground')}
-                                            onClick={() => setThemeMode(option.value)}
-                                        >
-                                            {option.label}
-                                        </ButtonSmall>
-                                    ))}
+                                {THEME_MODE_OPTIONS.map((option) => (
+                                    <ButtonSmall
+                                        key={option.value}
+                                        variant="outline"
+                                        className={cn(
+                                            themeMode === option.value
+                                                ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                                                : 'text-foreground'
+                                        )}
+                                        onClick={() => setThemeMode(option.value)}
+                                    >
+                                        {option.label}
+                                    </ButtonSmall>
+                                ))}
                                 </div>
                             </div>
 
@@ -313,11 +316,11 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             )}
 
                             {shouldShow('terminalFontSize') && (
-                                <div className="flex items-center justify-between gap-6 px-4 py-3">
-                                    <div className="flex min-w-0 flex-col w-1/3 shrink-0">
+                                <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-6")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-1/3 shrink-0")}>
                                         <span className="typography-ui-label text-foreground">Terminal Font Size</span>
                                     </div>
-                                    <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
+                                    <div className={cn("flex items-center gap-3", isMobile ? "w-full" : "flex-1 max-w-xs justify-end")}>
                                         <input
                                             type="range"
                                             min="9"
@@ -325,7 +328,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step="1"
                                             value={terminalFontSize}
                                             onChange={(e) => setTerminalFontSize(Number(e.target.value))}
-                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
+                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
                                         />
                                         {!isMobile ? (
                                             <NumberInput
@@ -357,11 +360,11 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             )}
 
                             {shouldShow('spacing') && (
-                                <div className="flex items-center justify-between gap-6 px-4 py-3">
-                                    <div className="flex min-w-0 flex-col w-1/3 shrink-0">
+                                <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-6")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-1/3 shrink-0")}>
                                         <span className="typography-ui-label text-foreground">Spacing Density</span>
                                     </div>
-                                    <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
+                                    <div className={cn("flex items-center gap-3", isMobile ? "w-full" : "flex-1 max-w-xs justify-end")}>
                                         <input
                                             type="range"
                                             min="50"
@@ -369,7 +372,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step="5"
                                             value={padding}
                                             onChange={(e) => setPadding(Number(e.target.value))}
-                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
+                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
                                         />
                                         {!isMobile ? (
                                             <NumberInput
@@ -401,11 +404,11 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             )}
 
                             {shouldShow('cornerRadius') && (
-                                <div className="flex items-center justify-between gap-6 px-4 py-3">
-                                    <div className="flex min-w-0 flex-col w-1/3 shrink-0">
+                                <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-6")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-1/3 shrink-0")}>
                                         <span className="typography-ui-label text-foreground">Corner Radius</span>
                                     </div>
-                                    <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
+                                    <div className={cn("flex items-center gap-3", isMobile ? "w-full" : "flex-1 max-w-xs justify-end")}>
                                         <input
                                             type="range"
                                             min="0"
@@ -413,7 +416,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step="1"
                                             value={cornerRadius}
                                             onChange={(e) => setCornerRadius(Number(e.target.value))}
-                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
+                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
                                         />
                                         {!isMobile ? (
                                             <NumberInput
@@ -445,8 +448,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             )}
 
                             {shouldShow('inputBarOffset') && (
-                                <div className="flex items-center justify-between gap-6 px-4 py-3">
-                                    <div className="flex min-w-0 flex-col w-1/3 shrink-0">
+                                <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-6")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-1/3 shrink-0")}>
                                         <div className="flex items-center gap-1.5">
                                             <span className="typography-ui-label text-foreground">Input Bar Offset</span>
                                             <Tooltip delayDuration={1000}>
@@ -459,7 +462,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             </Tooltip>
                                         </div>
                                     </div>
-                                    <div className="flex items-center gap-3 flex-1 max-w-xs justify-end">
+                                    <div className={cn("flex items-center gap-3", isMobile ? "w-full" : "flex-1 max-w-xs justify-end")}>
                                         <input
                                             type="range"
                                             min="0"
@@ -467,7 +470,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step="5"
                                             value={inputBarOffset}
                                             onChange={(e) => setInputBarOffset(Number(e.target.value))}
-                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
+                                            className="flex-1 min-w-0 h-2 bg-[var(--surface-subtle)] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0"
                                         />
                                         {!isMobile ? (
                                             <NumberInput
@@ -503,7 +506,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 )}
 
                 {/* --- Workspace Behavior --- */}
-                {hasBehaviorSettings && (
+                {hasBehaviorSettings && !isMobile && (
                     <div className="mb-8">
                         <div className="mb-3 px-1">
                             <h3 className="typography-ui-header font-semibold text-foreground">
@@ -513,16 +516,20 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
 
                             {shouldShow('toolOutput') && (
-                                <div className="flex items-center justify-between gap-4 px-4 py-3">
-                                    <div className="flex min-w-0 flex-col">
+                                <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-4")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "shrink-0")}>
                                         <span className="typography-ui-label text-foreground">Default Tool Output</span>
                                     </div>
-                                    <div className="flex items-center gap-1">
+                                    <div className={cn("flex items-center gap-1", isMobile ? "w-full" : "justify-end")}>
                                         {TOOL_EXPANSION_OPTIONS.map((option) => (
                                             <ButtonSmall
                                                 key={option.value}
-                                                variant={toolCallExpansion === option.value ? 'default' : 'outline'}
-                                                className={cn(toolCallExpansion === option.value ? undefined : 'text-foreground')}
+                                                variant="outline"
+                                                className={cn(
+                                                    toolCallExpansion === option.value
+                                                        ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                                                        : 'text-foreground'
+                                                )}
                                                 onClick={() => setToolCallExpansion(option.value)}
                                             >
                                                 {option.label}
@@ -542,8 +549,12 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             {DIFF_LAYOUT_OPTIONS.map((option) => (
                                                 <ButtonSmall
                                                     key={option.id}
-                                                    variant={diffLayoutPreference === option.id ? 'default' : 'outline'}
-                                                    className={cn(diffLayoutPreference === option.id ? undefined : 'text-foreground')}
+                                                    variant="outline"
+                                                    className={cn(
+                                                        diffLayoutPreference === option.id
+                                                            ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                                                            : 'text-foreground'
+                                                    )}
                                                     onClick={() => setDiffLayoutPreference(option.id)}
                                                 >
                                                     {option.label}
@@ -560,8 +571,12 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             {DIFF_VIEW_MODE_OPTIONS.map((option) => (
                                                 <ButtonSmall
                                                     key={option.id}
-                                                    variant={diffViewMode === option.id ? 'default' : 'outline'}
-                                                    className={cn(diffViewMode === option.id ? undefined : 'text-foreground')}
+                                                    variant="outline"
+                                                    className={cn(
+                                                        diffViewMode === option.id
+                                                            ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                                                            : 'text-foreground'
+                                                    )}
                                                     onClick={() => setDiffViewMode(option.id)}
                                                 >
                                                     {option.label}
@@ -573,19 +588,23 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                             )}
 
                             {shouldShow('dotfiles') && !isVSCodeRuntime() && (
-                                <div className="flex items-center justify-between gap-4 px-4 py-3">
-                                    <div className="flex min-w-0 flex-col">
+                                <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-4")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "shrink-0")}>
                                         <span className="typography-ui-label text-foreground">Show Dotfiles</span>
                                     </div>
-                                    <div className="flex items-center gap-1">
+                                    <div className={cn("flex items-center gap-1", isMobile ? "w-full" : "justify-end")}>
                                         {[
                                             { id: 'hide', label: 'Hide', value: false },
                                             { id: 'show', label: 'Show', value: true },
                                         ].map((option) => (
                                             <ButtonSmall
                                                 key={option.id}
-                                                variant={directoryShowHidden === option.value ? 'default' : 'outline'}
-                                                className={cn(directoryShowHidden === option.value ? undefined : 'text-foreground')}
+                                                variant="outline"
+                                                className={cn(
+                                                    directoryShowHidden === option.value
+                                                        ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                                                        : 'text-foreground'
+                                                )}
                                                 onClick={() => setDirectoryShowHidden(option.value)}
                                             >
                                                 {option.label}
@@ -686,6 +705,5 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 )}
 
             </div>
-        </div>
     );
 };
