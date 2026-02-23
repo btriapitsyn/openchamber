@@ -1128,13 +1128,24 @@ export const PullRequestSection: React.FC<{
     if (!directory) return;
     setIsGenerating(true);
     try {
-      const zenModel = useConfigStore.getState().settingsZenModel;
-      const generated = await generatePullRequestDescription(directory, {
+      const { settingsGitProviderId, settingsGitModelId, settingsZenModel } = useConfigStore.getState();
+      const payload: { base: string; head: string; context?: string; zenModel?: string; providerId?: string; modelId?: string } = {
         base: targetBaseBranch,
         head: branch,
-        context: additionalContext,
-        ...(zenModel ? { zenModel } : {}),
-      });
+      };
+      if (additionalContext) {
+        payload.context = additionalContext;
+      }
+      if (settingsZenModel) {
+        payload.zenModel = settingsZenModel;
+      }
+      if (settingsGitProviderId) {
+        payload.providerId = settingsGitProviderId;
+      }
+      if (settingsGitModelId) {
+        payload.modelId = settingsGitModelId;
+      }
+      const generated = await generatePullRequestDescription(directory, payload);
 
       if (generated.title?.trim()) {
         setTitle(generated.title.trim());
