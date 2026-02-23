@@ -487,9 +487,9 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
           </div>
 
           <DialogFooter className="flex-shrink-0">
-            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            <ButtonLarge variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
-            </Button>
+            </ButtonLarge>
             <ButtonLarge
               disabled={isInstalling || selectedDirs.length === 0 || !source.trim() || (scope === 'project' && !directoryOverride)}
               onClick={() => void doInstall({})}

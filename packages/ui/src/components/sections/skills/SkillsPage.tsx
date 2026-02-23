@@ -424,20 +424,18 @@ const SkillsInstalledPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-4 py-3">
-              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0 pt-1">
+            <div className="px-4 py-3">
+              <div className="mb-2">
                 <span className="typography-ui-label text-foreground">Description <span className="text-[var(--status-error)]">*</span></span>
-                <span className="typography-meta text-muted-foreground">The agent uses this to decide when to load the skill</span>
+                <span className="typography-meta text-muted-foreground ml-2">The agent uses this to decide when to load the skill</span>
               </div>
-              <div className="flex-1">
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Brief description of what this skill does..."
-                  rows={2}
-                  className="w-full resize-none min-h-[60px] max-h-32 bg-transparent focus-visible:ring-[var(--primary-base)]"
-                />
-              </div>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Brief description of what this skill does..."
+                rows={2}
+                className="w-full resize-none min-h-[60px] max-h-32 bg-transparent focus-visible:ring-[var(--primary-base)]"
+              />
             </div>
 
           </div>
@@ -540,13 +538,13 @@ const SkillsInstalledPage: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
+            <ButtonLarge
               variant="ghost"
               onClick={() => setDeleteFilePath(null)}
               disabled={isDeletingFile}
             >
               Cancel
-            </Button>
+            </ButtonLarge>
             <ButtonLarge onClick={handleConfirmDeleteFile} disabled={isDeletingFile} className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white border-0">
               Delete
             </ButtonLarge>
@@ -603,7 +601,7 @@ const SkillsInstalledPage: React.FC = () => {
             </div>
           )}
           <DialogFooter className="mt-4">
-            <Button
+            <ButtonLarge
               variant="ghost"
               onClick={() => {
                 setIsFileDialogOpen(false);
@@ -611,7 +609,7 @@ const SkillsInstalledPage: React.FC = () => {
               }}
             >
               Cancel
-            </Button>
+            </ButtonLarge>
             <ButtonLarge onClick={handleSaveFile} disabled={isLoadingFile || !hasFileChanges}>
               {editingFilePath ? 'Save Changes' : 'Create File'}
             </ButtonLarge>

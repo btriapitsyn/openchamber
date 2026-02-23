@@ -1,6 +1,5 @@
 import React from 'react';
 
-import { Button } from '@/components/ui/button';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -381,13 +380,13 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               <DialogDescription>Are you sure you want to remove this catalog?</DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button
+              <ButtonLarge
                 variant="ghost"
                 onClick={() => setIsRemoveCatalogDialogOpen(false)}
                 disabled={isRemovingCatalog}
               >
                 Cancel
-              </Button>
+              </ButtonLarge>
               <ButtonLarge className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
                 Remove Catalog
               </ButtonLarge>

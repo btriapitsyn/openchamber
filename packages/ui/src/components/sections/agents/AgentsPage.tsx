@@ -662,19 +662,17 @@ export const AgentsPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
-              <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0 pt-1">
+            <div className="px-4 py-3 border-b border-[var(--surface-subtle)]">
+              <div className="mb-2">
                 <span className="typography-ui-label text-foreground">Description</span>
               </div>
-              <div className="flex-1">
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What does this agent do?"
-                  rows={2}
-                  className="w-full resize-none min-h-[60px] bg-transparent focus-visible:ring-[var(--primary-base)]"
-                />
-              </div>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What does this agent do?"
+                rows={2}
+                className="w-full resize-none min-h-[60px] bg-transparent focus-visible:ring-[var(--primary-base)]"
+              />
             </div>
 
             <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-4")}>

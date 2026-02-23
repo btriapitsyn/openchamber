@@ -113,9 +113,9 @@ export const InstallConflictsDialog: React.FC<InstallConflictsDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <ButtonLarge variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
-          </Button>
+          </ButtonLarge>
           <ButtonLarge
             onClick={() => onConfirm(decisions)}
             disabled={!canConfirm}
