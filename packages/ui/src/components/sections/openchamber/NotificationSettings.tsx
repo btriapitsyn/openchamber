@@ -494,6 +494,17 @@ export const NotificationSettings: React.FC = () => {
 
                 <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
                   <div className="flex min-w-0 flex-col">
+                    <span className="typography-ui-label text-foreground">Subagent Completion</span>
+                  </div>
+                  <Switch
+                    checked={notifyOnSubtasks}
+                    onCheckedChange={(checked: boolean) => setNotifyOnSubtasks(checked)}
+                    className="data-[state=checked]:bg-[var(--primary-base)]"
+                  />
+                </label>
+
+                <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
+                  <div className="flex min-w-0 flex-col">
                     <span className="typography-ui-label text-foreground">Agent Errors</span>
                   </div>
                   <Switch
@@ -513,17 +524,6 @@ export const NotificationSettings: React.FC = () => {
                     className="data-[state=checked]:bg-[var(--primary-base)]"
                   />
                 </label>
-
-                <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30">
-                  <div className="flex min-w-0 flex-col">
-                    <span className="typography-ui-label text-foreground">Subagent Activity</span>
-                  </div>
-                  <Switch
-                    checked={notifyOnSubtasks}
-                    onCheckedChange={(checked: boolean) => setNotifyOnSubtasks(checked)}
-                    className="data-[state=checked]:bg-[var(--primary-base)]"
-                  />
-                </label>
               </div>
             </div>
 
@@ -534,14 +534,16 @@ export const NotificationSettings: React.FC = () => {
                   Templates
                 </h3>
                 <p className="typography-meta text-muted-foreground mt-0.5">
-                  Customize the content. Variables: <code className="text-[var(--primary-base)]">{'{project_name}'}</code> <code className="text-[var(--primary-base)]">{'{worktree}'}</code> <code className="text-[var(--primary-base)]">{'{branch}'}</code> <code className="text-[var(--primary-base)]">{'{session_name}'}</code> <code className="text-[var(--primary-base)]">{'{agent_name}'}</code> <code className="text-[var(--primary-base)]">{'{last_message}'}</code>
+                  Customize the content. Variables: <code className="text-[var(--primary-base)]">{'{project_name}'}</code> <code className="text-[var(--primary-base)]">{'{worktree}'}</code> <code className="text-[var(--primary-base)]">{'{branch}'}</code> <code className="text-[var(--primary-base)]">{'{session_name}'}</code> <code className="text-[var(--primary-base)]">{'{agent_name}'}</code> <code className="text-[var(--primary-base)]">{'{model_name}'}</code> <code className="text-[var(--primary-base)]">{'{last_message}'}</code>
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {(['completion', 'error', 'question', 'subtask'] as const).map((event) => (
+                {(['completion', 'subtask', 'error', 'question'] as const).map((event) => (
                   <div key={event} className="rounded-lg bg-[var(--surface-elevated)]/70 py-3 px-4">
-                    <span className="typography-ui-label text-foreground font-medium capitalize mb-3 block">{event}</span>
+                    <span className="typography-ui-label text-foreground font-medium capitalize mb-3 block">
+                      {event === 'subtask' ? 'Subagent Completion' : event}
+                    </span>
                     <div className="space-y-3">
                       <div>
                         <label className="typography-micro text-muted-foreground block mb-1">Title</label>

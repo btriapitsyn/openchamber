@@ -17,12 +17,8 @@ interface ZenModel {
   owned_by?: string;
 }
 
-const FALLBACK_PROVIDER_ID = 'opencode';
-const FALLBACK_MODEL_ID = 'big-pickle';
-
 const getDisplayModel = (
-  storedModel: string | undefined,
-  providers: Array<{ id: string; models: Array<{ id: string }> }>
+  storedModel: string | undefined
 ): { providerId: string; modelId: string } => {
   if (storedModel) {
     const parts = storedModel.split('/');
@@ -31,16 +27,8 @@ const getDisplayModel = (
     }
   }
   
-  const fallbackProvider = providers.find(p => p.id === FALLBACK_PROVIDER_ID);
-  if (fallbackProvider?.models.some(m => m.id === FALLBACK_MODEL_ID)) {
-    return { providerId: FALLBACK_PROVIDER_ID, modelId: FALLBACK_MODEL_ID };
-  }
-  
-  const firstProvider = providers[0];
-  if (firstProvider?.models[0]) {
-    return { providerId: firstProvider.id, modelId: firstProvider.models[0].id };
-  }
-  
+  // Return empty values when no model is explicitly set
+  // This allows showing "Not selected" instead of a fallback
   return { providerId: '', modelId: '' };
 };
 
@@ -68,8 +56,8 @@ export const DefaultsSettings: React.FC = () => {
   const [zenModelsLoading, setZenModelsLoading] = React.useState(true);
 
   const parsedModel = React.useMemo(() => {
-    return getDisplayModel(defaultModel, providers);
-  }, [defaultModel, providers]);
+    return getDisplayModel(defaultModel);
+  }, [defaultModel]);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
@@ -337,13 +325,12 @@ export const DefaultsSettings: React.FC = () => {
           </div>
         </div>
 
-        {supportsVariants && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
+          <div className={cn("flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]", !supportsVariants && "opacity-60")}>
             <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
               <span className="typography-ui-label text-foreground">Default Thinking</span>
             </div>
             <div className="flex items-center gap-3 flex-1 justify-end">
-              <Select value={defaultVariant ?? DEFAULT_VARIANT_VALUE} onValueChange={handleVariantChange}>
+              <Select value={defaultVariant ?? DEFAULT_VARIANT_VALUE} onValueChange={handleVariantChange} disabled={!supportsVariants}>
                 <SelectTrigger size="lg" className="w-fit min-w-[120px] bg-interactive-selection/20 border-border/20 hover:bg-interactive-hover/30 shadow-none focus:ring-0">
                   <SelectValue placeholder="Thinking" />
                 </SelectTrigger>
@@ -358,7 +345,6 @@ export const DefaultsSettings: React.FC = () => {
               </Select>
             </div>
           </div>
-        )}
 
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
           <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
@@ -445,19 +431,23 @@ export const DefaultsSettings: React.FC = () => {
         )}
       </div>
       
-      {(parsedModel.providerId || defaultAgent) && (
-        <div className="mt-3 px-3 typography-meta text-muted-foreground">
-          New sessions will start with:{' '}
-          {parsedModel.providerId && (
-            <span className="text-foreground">
-              {parsedModel.providerId}/{parsedModel.modelId}
-              {supportsVariants ? ` (${defaultVariant ?? 'default'})` : ''}
-            </span>
-          )}
-          {parsedModel.providerId && defaultAgent && ' / '}
-          {defaultAgent && <span className="text-foreground">{defaultAgent}</span>}
-        </div>
-      )}
+      <div className="mt-3 px-3 typography-meta text-muted-foreground">
+        New sessions will start with:{' '}
+        {parsedModel.providerId ? (
+          <span className="text-foreground">
+            {parsedModel.providerId}/{parsedModel.modelId}
+            {supportsVariants ? ` (${defaultVariant ?? 'default'})` : ''}
+          </span>
+        ) : (
+          <span className="text-foreground">opencode agent default</span>
+        )}
+        {defaultAgent && (
+          <>
+            {' / '}
+            <span className="text-foreground">{defaultAgent}</span>
+          </>
+        )}
+      </div>
     </div>
   );
 };
