@@ -194,25 +194,14 @@ const getSessionCreatedAt = (session: Session): number => {
   return toFiniteNumber(session.time?.created) ?? 0;
 };
 
-const getSessionUpdatedAt = (session: Session, attentionStates?: Map<string, { lastUserMessageAt: number | null; lastStatusChangeAt: number }>): number => {
-  const baseUpdated = toFiniteNumber(session.time?.updated) ?? 0;
-  if (!attentionStates) return baseUpdated;
-
-  const attention = attentionStates.get(session.id);
-  if (!attention) return baseUpdated;
-
-  return Math.max(
-    baseUpdated,
-    attention.lastUserMessageAt ?? 0,
-    attention.lastStatusChangeAt ?? 0
-  );
+const getSessionUpdatedAt = (session: Session): number => {
+  return toFiniteNumber(session.time?.updated) ?? toFiniteNumber(session.time?.created) ?? 0;
 };
 
 const compareSessionsByPinnedAndTime = (
   a: Session,
   b: Session,
-  pinnedSessionIds: Set<string>,
-  attentionStates?: Map<string, { lastUserMessageAt: number | null; lastStatusChangeAt: number }>
+  pinnedSessionIds: Set<string>
 ): number => {
   const aPinned = pinnedSessionIds.has(a.id);
   const bPinned = pinnedSessionIds.has(b.id);
@@ -224,7 +213,7 @@ const compareSessionsByPinnedAndTime = (
     return getSessionCreatedAt(b) - getSessionCreatedAt(a);
   }
 
-  return getSessionUpdatedAt(b, attentionStates) - getSessionUpdatedAt(a, attentionStates);
+  return getSessionUpdatedAt(b) - getSessionUpdatedAt(a);
 };
 
 const centerDragOverlayUnderPointer: Modifier = ({ transform, activeNodeRect, activatorEvent }) => {
@@ -1026,8 +1015,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, []);
 
   const sortedSessions = React.useMemo(() => {
-    return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates));
-  }, [sessions, pinnedSessionIds, sessionAttentionStates]);
+    return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
+  }, [sessions, pinnedSessionIds]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1081,9 +1070,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       collection.push(session);
       map.set(parentID, collection);
     });
-    map.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates)));
+    map.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
     return map;
-  }, [sortedSessions, pinnedSessionIds, sessionAttentionStates]);
+  }, [sortedSessions, pinnedSessionIds]);
 
   React.useEffect(() => {
     const directories = new Set<string>();
@@ -1396,6 +1385,24 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
   }, [safeStorage]);
 
+  const createFolderAndStartRename = React.useCallback(
+    (scopeKey: string, parentId?: string | null) => {
+      if (!scopeKey) {
+        return null;
+      }
+
+      if (parentId && collapsedFolderIds.has(parentId)) {
+        toggleFolderCollapse(parentId);
+      }
+
+      const newFolder = createFolder(scopeKey, 'New folder', parentId);
+      setRenamingFolderId(newFolder.id);
+      setRenameFolderDraft(newFolder.name);
+      return newFolder;
+    },
+    [collapsedFolderIds, toggleFolderCollapse, createFolder],
+  );
+
   const buildNode = React.useCallback(
     (session: Session): SessionNode => {
       const children = childrenMap.get(session.id) ?? [];
@@ -1418,7 +1425,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       projectIsRepo: boolean,
     ) => {
       const normalizedProjectRoot = normalizePath(projectRoot ?? null);
-      const sortedProjectSessions = [...projectSessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates));
+      const sortedProjectSessions = [...projectSessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
 
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
       const childrenMap = new Map<string, Session[]>();
@@ -1431,7 +1438,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         collection.push(session);
         childrenMap.set(parentID, collection);
       });
-      childrenMap.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds, sessionAttentionStates)));
+      childrenMap.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
 
       // Build worktree lookup map
       const worktreeByPath = new Map<string, WorktreeMetadata>();
@@ -1564,7 +1571,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       return groups;
     },
-    [homeDirectory, worktreeMetadata, pinnedSessionIds, gitDirectories, sessionAttentionStates]
+    [homeDirectory, worktreeMetadata, pinnedSessionIds, gitDirectories]
   );
 
   const toggleGroupSessionLimit = React.useCallback((groupId: string) => {
@@ -2406,9 +2413,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                  onClick={() => {
-                                   const newFolder = createFolder(sessionDirectory, 'New folder');
-                                   addSessionToFolder(sessionDirectory, newFolder.id, session.id);
-                                 }}
+                                    const newFolder = createFolderAndStartRename(sessionDirectory);
+                                    if (!newFolder) {
+                                      return;
+                                    }
+                                    addSessionToFolder(sessionDirectory, newFolder.id, session.id);
+                                  }}
                               >
                                 <RiAddLine className="mr-1 h-4 w-4" />
                                 New folder...
@@ -2480,7 +2490,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       getSessionFolderId,
       addSessionToFolder,
       removeSessionFromFolder,
-      createFolder,
+      createFolderAndStartRename,
       notifyOnSubtasks,
       foldersMap, // trigger re-render when folder data changes (getFoldersForScope is a stable fn selector)
     ],
@@ -2504,7 +2514,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         const nodes = folder.sessionIds
           .map((sid) => group.sessions.find((node) => node.session.id === sid))
           .filter((n): n is SessionNode => Boolean(n))
-          .sort((a, b) => compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds, sessionAttentionStates));
+          .sort((a, b) => compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds));
         return { folder, nodes };
       });
 
@@ -2604,10 +2614,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   }
                   openNewSessionDraft({ directoryOverride: group.directory, targetFolderId: folder.id });
                 }}
-                 onNewSubFolder={depth === 0 ? () => {
-                   if (!folderScopeKey) return;
-                   createFolder(folderScopeKey, 'New folder', folder.id);
-                 } : undefined}
+                onNewSubFolder={depth === 0 ? () => {
+                  if (!folderScopeKey) return;
+                  createFolderAndStartRename(folderScopeKey, folder.id);
+                } : undefined}
               />
             )}
           </DroppableFolderWrapper>
@@ -2768,7 +2778,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       <p>New session or folder</p>
                     </TooltipContent>
                   </Tooltip>
-                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                  <DropdownMenuContent
+                    align="end"
+                    className="min-w-[160px]"
+                    onClick={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                  >
                     <DropdownMenuItem
                       onClick={() => {
                         if (projectId && projectId !== activeProjectId) {
@@ -2787,8 +2802,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                     {folderScopeKey ? (
                       <DropdownMenuItem
                         onClick={() => {
-                           createFolder(folderScopeKey, 'New folder');
-                         }}
+                          createFolderAndStartRename(folderScopeKey);
+                        }}
                       >
                         <RiFolderAddLine className="mr-1.5 h-4 w-4" />
                         New folder
@@ -2856,14 +2871,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       getFoldersForScope,
       collapsedFolderIds,
       toggleFolderCollapse,
-      createFolder,
+      createFolderAndStartRename,
       renameFolder,
       deleteFolder,
       addSessionToFolder,
       renamingFolderId,
       renameFolderDraft,
       pinnedSessionIds,
-      sessionAttentionStates,
       foldersMap, // trigger re-render when folder data changes (getFoldersForScope is a stable fn selector)
     ]
   );
