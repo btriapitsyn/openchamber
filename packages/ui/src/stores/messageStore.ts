@@ -9,7 +9,6 @@ import type { SessionMemoryState, MessageStreamLifecycle, AttachedFile } from ".
 import { MEMORY_LIMITS, getMemoryLimits, getBackgroundTrimLimit } from "./types/sessionTypes";
 import {
     touchStreamingLifecycle,
-    touchStreamingLifecycleBatch,
     removeLifecycleEntries,
     clearLifecycleTimersForIds,
     clearLifecycleCompletionTimer
@@ -31,16 +30,6 @@ const cleanupPendingUserMessageMeta = (
     return nextPending;
 };
 
-interface QueuedPart {
-    sessionId: string;
-    messageId: string;
-    part: Part;
-    role?: string;
-    currentSessionId?: string;
-}
-
-let batchQueue: QueuedPart[] = [];
-let flushTimer: number | null = null;
 const COMPACTION_WINDOW_MS = 30_000;
 
 const timeoutRegistry = new Map<string, ReturnType<typeof setTimeout>>();
@@ -1485,93 +1474,7 @@ export const useMessageStore = create<MessageStore>()(
                 },
 
                 addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => {
-
-                    batchQueue.push({ sessionId, messageId, part, role, currentSessionId });
-
-                    if (!flushTimer) {
-                        flushTimer = requestAnimationFrame(() => {
-                            const itemsToProcess = batchQueue;
-                            batchQueue = [];
-                            flushTimer = null;
-
-                            if (itemsToProcess.length === 0) {
-                                return;
-                            }
-
-                            // Group items by sessionId:messageId to apply multiple parts in one
-                            // set() call per message, reducing React re-renders significantly.
-                            // We also track which messageIds touched assistant lifecycle so we can
-                            // call touchStreamingLifecycleBatch once (one Map allocation total).
-                            const store = get();
-
-                            // Build ordered list of unique (sessionId, messageId) groups, preserving
-                            // arrival order so user parts processed before assistant parts in the same
-                            // frame (consistent with previous behaviour for user-first ordering).
-                            const groupOrder: string[] = [];
-                            const groupedItems = new Map<string, QueuedPart[]>();
-
-                            for (const item of itemsToProcess) {
-                                const key = `${item.sessionId}\x00${item.messageId}`;
-                                const existing = groupedItems.get(key);
-                                if (existing) {
-                                    existing.push(item);
-                                } else {
-                                    groupedItems.set(key, [item]);
-                                    groupOrder.push(key);
-                                }
-                            }
-
-                            // Process each group: call _addStreamingPartImmediate sequentially
-                            // within each group. Because _addStreamingPartImmediate already calls
-                            // set() internally with a fine-grained state update, grouping here
-                            // avoids the O(n) set() calls for the common case of one message.
-                            // For the highest-traffic path (single assistant message, many tokens
-                            // per frame) this reduces to exactly 1 set() per rAF frame.
-                            for (const key of groupOrder) {
-                                const items = groupedItems.get(key);
-                                if (!items || items.length === 0) continue;
-
-                                // Process user parts first within the group (stable sort already
-                                // preserved original order, user parts arrive before assistant).
-                                for (const item of items) {
-                                    store._addStreamingPartImmediate(
-                                        item.sessionId,
-                                        item.messageId,
-                                        item.part,
-                                        item.role,
-                                        item.currentSessionId,
-                                    );
-                                }
-                            }
-
-                            // Batch-touch lifecycle for all assistant messageIds that were processed
-                            // in this frame — one Map allocation instead of one per messageId.
-                            const assistantMessageIds: string[] = [];
-                            for (const key of groupOrder) {
-                                const items = groupedItems.get(key);
-                                if (!items || items.length === 0) continue;
-                                // Check role of first item to determine if assistant
-                                const firstItem = items[0];
-                                const resolvedRole = firstItem.role ?? 'assistant';
-                                if (resolvedRole !== 'user') {
-                                    assistantMessageIds.push(firstItem.messageId);
-                                }
-                            }
-
-                            if (assistantMessageIds.length > 0) {
-                                set((state) => {
-                                    const nextLifecycle = touchStreamingLifecycleBatch(
-                                        state.messageStreamStates,
-                                        assistantMessageIds
-                                    );
-                                    if (nextLifecycle === state.messageStreamStates) {
-                                        return state;
-                                    }
-                                    return { messageStreamStates: nextLifecycle };
-                                });
-                            }
-                        });
-                    }
+                    get()._addStreamingPartImmediate(sessionId, messageId, part, role, currentSessionId);
                 },
 
                 forceCompleteMessage: (sessionId: string | null | undefined, messageId: string, source: "timeout" | "cooldown" = "timeout") => {
