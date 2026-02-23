@@ -35,6 +35,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const [confirmActionCommand, setConfirmActionCommand] = React.useState<Command | null>(null);
   const [confirmActionType, setConfirmActionType] = React.useState<'delete' | 'reset' | null>(null);
   const [isConfirmActionPending, setIsConfirmActionPending] = React.useState(false);
+  const [openMenuCommand, setOpenMenuCommand] = React.useState<string | null>(null);
 
   const {
     selectedCommandName,
@@ -269,6 +270,8 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                     }}
                     onReset={() => handleResetCommand(command)}
                     onDuplicate={() => handleDuplicateCommand(command)}
+                    isMenuOpen={openMenuCommand === command.name}
+                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.name : null)}
                   />
                 ))}
               </>
@@ -294,6 +297,8 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
                     onRename={() => handleOpenRenameDialog(command)}
                     onDelete={() => handleDeleteCommand(command)}
                     onDuplicate={() => handleDuplicateCommand(command)}
+                    isMenuOpen={openMenuCommand === command.name}
+                    onMenuOpenChange={(open) => setOpenMenuCommand(open ? command.name : null)}
                   />
                 ))}
               </>
@@ -381,6 +386,8 @@ interface CommandListItemProps {
   onReset?: () => void;
   onRename?: () => void;
   onDuplicate: () => void;
+  isMenuOpen: boolean;
+  onMenuOpenChange: (open: boolean) => void;
 }
 
 const CommandListItem: React.FC<CommandListItemProps> = ({
@@ -391,13 +398,19 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
   onReset,
   onRename,
   onDuplicate,
+  isMenuOpen,
+  onMenuOpenChange,
 }) => {
   return (
     <div
       className={cn(
-        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
+        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none',
         isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
       )}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenuOpenChange(true);
+      }}
     >
       <div className="flex min-w-0 flex-1 items-center">
         <button
@@ -423,7 +436,7 @@ const CommandListItem: React.FC<CommandListItemProps> = ({
           )}
         </button>
 
-        <DropdownMenu>
+        <DropdownMenu open={isMenuOpen} onOpenChange={onMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button
               size="icon"

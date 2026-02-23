@@ -71,6 +71,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
 
   const [deleteTarget, setDeleteTarget] = React.useState<McpServerConfig | null>(null);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [openMenuMcp, setOpenMenuMcp] = React.useState<string | null>(null);
 
   const projectServers = React.useMemo(
     () => mcpServers.filter((server) => server.scope === 'project'),
@@ -167,9 +168,13 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
                     <div
                       key={server.name}
                       className={cn(
-                        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
+                        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none',
                         isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover',
                       )}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setOpenMenuMcp(server.name);
+                      }}
                     >
                       <button
                         onClick={() => {
@@ -193,7 +198,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
                         </div>
                       </button>
 
-                      <DropdownMenu>
+                      <DropdownMenu open={openMenuMcp === server.name} onOpenChange={(open) => setOpenMenuMcp(open ? server.name : null)}>
                         <DropdownMenuTrigger asChild>
                           <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                             <RiMore2Line className="h-3.5 w-3.5" />
@@ -232,9 +237,13 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
                     <div
                       key={server.name}
                       className={cn(
-                        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
+                        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none',
                         isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover',
                       )}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setOpenMenuMcp(server.name);
+                      }}
                     >
                       <button
                         onClick={() => {
@@ -258,7 +267,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
                         </div>
                       </button>
 
-                      <DropdownMenu>
+                      <DropdownMenu open={openMenuMcp === server.name} onOpenChange={(open) => setOpenMenuMcp(open ? server.name : null)}>
                         <DropdownMenuTrigger asChild>
                           <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                             <RiMore2Line className="h-3.5 w-3.5" />

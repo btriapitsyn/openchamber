@@ -105,6 +105,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
   const [confirmActionAgent, setConfirmActionAgent] = React.useState<Agent | null>(null);
   const [confirmActionType, setConfirmActionType] = React.useState<'delete' | 'reset' | null>(null);
   const [isConfirmActionPending, setIsConfirmActionPending] = React.useState(false);
+  const [openMenuAgent, setOpenMenuAgent] = React.useState<string | null>(null);
 
   const {
     selectedAgentName,
@@ -371,6 +372,8 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
                     onReset={() => handleResetAgent(agent)}
                     onDuplicate={() => handleDuplicateAgent(agent)}
                     getAgentModeIcon={getAgentModeIcon}
+                    isMenuOpen={openMenuAgent === agent.name}
+                    onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.name : null)}
                   />
                 ))}
               </>
@@ -406,6 +409,8 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
                         onDelete={() => handleDeleteAgent(agent)}
                         onDuplicate={() => handleDuplicateAgent(agent)}
                         getAgentModeIcon={getAgentModeIcon}
+                        isMenuOpen={openMenuAgent === agent.name}
+                        onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.name : null)}
                       />
                     ))}
                   </SidebarGroup>
@@ -428,6 +433,8 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
                     onDelete={() => handleDeleteAgent(agent)}
                     onDuplicate={() => handleDuplicateAgent(agent)}
                     getAgentModeIcon={getAgentModeIcon}
+                    isMenuOpen={openMenuAgent === agent.name}
+                    onMenuOpenChange={(open) => setOpenMenuAgent(open ? agent.name : null)}
                   />
                 ))}
               </>
@@ -516,6 +523,8 @@ interface AgentListItemProps {
   onRename?: () => void;
   onDuplicate: () => void;
   getAgentModeIcon: (mode?: string) => React.ReactNode;
+  isMenuOpen: boolean;
+  onMenuOpenChange: (open: boolean) => void;
 }
 
 const AgentListItem: React.FC<AgentListItemProps> = ({
@@ -527,15 +536,21 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
   onRename,
   onDuplicate,
   getAgentModeIcon,
+  isMenuOpen,
+  onMenuOpenChange,
 }) => {
   const extAgent = agent as Agent & { scope?: AgentScope };
   
   return (
     <div
       className={cn(
-        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
+        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none',
         isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
       )}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenuOpenChange(true);
+      }}
     >
       <div className="flex min-w-0 flex-1 items-center">
         <button
@@ -562,7 +577,7 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
           )}
         </button>
 
-        <DropdownMenu>
+        <DropdownMenu open={isMenuOpen} onOpenChange={onMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button
               size="icon"

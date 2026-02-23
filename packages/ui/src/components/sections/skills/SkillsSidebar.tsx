@@ -34,6 +34,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
   const [renameNewName, setRenameNewName] = React.useState('');
   const [deleteDialogSkill, setDeleteDialogSkill] = React.useState<DiscoveredSkill | null>(null);
   const [isDeletePending, setIsDeletePending] = React.useState(false);
+  const [openMenuSkill, setOpenMenuSkill] = React.useState<string | null>(null);
 
   const {
     selectedSkillName,
@@ -260,6 +261,8 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                         onRename={() => handleOpenRenameDialog(skill)}
                         onDelete={() => handleDeleteSkill(skill)}
                         onDuplicate={() => handleDuplicateSkill(skill)}
+                        isMenuOpen={openMenuSkill === skill.name}
+                        onMenuOpenChange={(open) => setOpenMenuSkill(open ? skill.name : null)}
                       />
                     ))}
                   </SidebarGroup>
@@ -279,6 +282,8 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                     onRename={() => handleOpenRenameDialog(skill)}
                     onDelete={() => handleDeleteSkill(skill)}
                     onDuplicate={() => handleDuplicateSkill(skill)}
+                    isMenuOpen={openMenuSkill === skill.name}
+                    onMenuOpenChange={(open) => setOpenMenuSkill(open ? skill.name : null)}
                   />
                 ))}
               </>
@@ -311,6 +316,8 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                         onRename={() => handleOpenRenameDialog(skill)}
                         onDelete={() => handleDeleteSkill(skill)}
                         onDuplicate={() => handleDuplicateSkill(skill)}
+                        isMenuOpen={openMenuSkill === skill.name}
+                        onMenuOpenChange={(open) => setOpenMenuSkill(open ? skill.name : null)}
                       />
                     ))}
                   </SidebarGroup>
@@ -330,6 +337,8 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
                     onRename={() => handleOpenRenameDialog(skill)}
                     onDelete={() => handleDeleteSkill(skill)}
                     onDuplicate={() => handleDuplicateSkill(skill)}
+                    isMenuOpen={openMenuSkill === skill.name}
+                    onMenuOpenChange={(open) => setOpenMenuSkill(open ? skill.name : null)}
                   />
                 ))}
               </>
@@ -414,6 +423,8 @@ interface SkillListItemProps {
   onDelete: () => void;
   onRename: () => void;
   onDuplicate: () => void;
+  isMenuOpen: boolean;
+  onMenuOpenChange: (open: boolean) => void;
 }
 
 const SkillListItem: React.FC<SkillListItemProps> = ({
@@ -423,13 +434,19 @@ const SkillListItem: React.FC<SkillListItemProps> = ({
   onDelete,
   onRename,
   onDuplicate,
+  isMenuOpen,
+  onMenuOpenChange,
 }) => {
   return (
     <div
       className={cn(
-        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200',
+        'group relative flex items-center rounded-md px-1.5 py-1 transition-all duration-200 select-none',
         isSelected ? 'bg-interactive-selection' : 'hover:bg-interactive-hover'
       )}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenuOpenChange(true);
+      }}
     >
       <div className="flex min-w-0 flex-1 items-center">
         <button
@@ -457,7 +474,7 @@ const SkillListItem: React.FC<SkillListItemProps> = ({
           </div>
         </button>
 
-        <DropdownMenu>
+        <DropdownMenu open={isMenuOpen} onOpenChange={onMenuOpenChange}>
           <DropdownMenuTrigger asChild>
             <Button
               size="icon"
