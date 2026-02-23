@@ -90,14 +90,11 @@ export const MemoryLimitsSettings: React.FC = () => {
               <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
             </TooltipTrigger>
             <TooltipContent sideOffset={8} className="max-w-xs">
-              How many messages to keep in view per session.<br />
+              Limit how many messages are loaded per session in memory.<br />
               Older messages are available via "Load more". Background sessions are trimmed automatically.
             </TooltipContent>
           </Tooltip>
         </div>
-        <p className="typography-meta text-muted-foreground mt-0.5">
-          Limit how many messages are loaded per session in memory.
-        </p>
       </div>
 
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

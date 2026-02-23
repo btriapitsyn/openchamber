@@ -228,7 +228,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
             {!isGlobalProfile && (
               <div className="space-y-3">
                 <div>
-                  <label className="typography-ui-label text-foreground block mb-1.5">Display Name</label>
+                  <label className="typography-ui-label text-foreground block mb-1.5">Profile Name</label>
                   <Input
                     value={name}
                     onChange={(e) => setName(e.target.value)}

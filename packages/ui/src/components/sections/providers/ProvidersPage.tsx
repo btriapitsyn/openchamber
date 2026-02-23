@@ -525,17 +525,11 @@ export const ProvidersPage: React.FC = () => {
         <div className="mx-auto w-full max-w-4xl p-3 sm:p-6 sm:pt-8">
           <div className="mb-8">
             <h1 className="typography-ui-header font-semibold text-foreground">Connect Provider</h1>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Choose a provider to connect and set up its authentication.
-            </p>
           </div>
 
           <div className="mb-8">
             <div className="mb-3 px-1">
               <h2 className="typography-ui-header font-semibold text-foreground">Select Provider</h2>
-              <p className="typography-meta text-muted-foreground/80 mt-0.5">
-                Available providers that are not connected yet.
-              </p>
             </div>
 
             <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -832,7 +826,6 @@ export const ProvidersPage: React.FC = () => {
           <div className="mb-3 px-1 flex items-center justify-between gap-2">
             <div>
               <h2 className="typography-ui-header font-semibold text-foreground">Authentication</h2>
-              <p className="typography-meta text-muted-foreground mt-0.5">Manage API keys and OAuth</p>
             </div>
             <ButtonSmall
               variant="outline"
@@ -982,7 +975,6 @@ export const ProvidersPage: React.FC = () => {
         <div className="mb-8">
           <div className="mb-3 px-1">
             <h2 className="typography-ui-header font-semibold text-foreground">Connection Details</h2>
-            <p className="typography-meta text-muted-foreground mt-0.5">Configuration origins and status</p>
           </div>
           
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1017,9 +1009,6 @@ export const ProvidersPage: React.FC = () => {
           <div className="mb-3 px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <h2 className="typography-ui-header font-semibold text-foreground">Available Models</h2>
-              <p className="typography-meta text-muted-foreground mt-0.5">
-                Models exposed by this provider
-              </p>
             </div>
             <div className={cn('flex items-center gap-2', isMobile ? 'w-full flex-wrap' : 'justify-end')}>
               <ButtonSmall

@@ -2,6 +2,8 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { RiInformationLine } from '@remixicon/react';
 import { useUIStore } from '@/stores/useUIStore';
 import { cn } from '@/lib/utils';
 import {
@@ -129,11 +131,16 @@ export const KeyboardShortcutsSettings: React.FC = () => {
   return (
     <div className="mb-8">
       <div className="mb-3 px-1 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-2">
           <h3 className="typography-ui-header font-semibold text-foreground">Keyboard Shortcuts</h3>
-          <p className="typography-meta text-muted-foreground mt-0.5">
-            Capture a new key combo, save it, and bindings will update immediately.
-          </p>
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent sideOffset={8} className="max-w-xs">
+              Capture a new key combo, save it, and bindings will update immediately.
+            </TooltipContent>
+          </Tooltip>
         </div>
         <Button
           type="button"

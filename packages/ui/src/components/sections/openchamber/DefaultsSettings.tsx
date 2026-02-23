@@ -297,18 +297,7 @@ export const DefaultsSettings: React.FC = () => {
       <div className="mb-3 px-1">
         <div className="flex items-center gap-2">
           <h3 className="typography-ui-header font-semibold text-foreground">Session Defaults</h3>
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
-            </TooltipTrigger>
-            <TooltipContent sideOffset={8} className="max-w-xs">
-              Configure default behaviors for new sessions.
-            </TooltipContent>
-          </Tooltip>
         </div>
-        <p className="typography-meta text-muted-foreground mt-0.5">
-          These settings will apply each time you start a new chat.
-        </p>
       </div>
 
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

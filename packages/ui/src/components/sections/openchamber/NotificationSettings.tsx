@@ -408,11 +408,8 @@ export const NotificationSettings: React.FC = () => {
         <div className="mb-8">
           <div className="mb-3 px-1">
             <h3 className="typography-ui-header font-semibold text-foreground">
-              Delivery
+              Notification Delivery
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Customize when and how notifications show up.
-            </p>
           </div>
           
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -473,11 +470,8 @@ export const NotificationSettings: React.FC = () => {
             <div className="mb-8">
               <div className="mb-3 px-1">
                 <h3 className="typography-ui-header font-semibold text-foreground">
-                  Events
+                  Notification Events
                 </h3>
-                <p className="typography-meta text-muted-foreground mt-0.5">
-                  Choose which specific events trigger notifications.
-                </p>
               </div>
 
               <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -531,10 +525,10 @@ export const NotificationSettings: React.FC = () => {
             <div className="mb-8">
               <div className="mb-3 px-1">
                 <h3 className="typography-ui-header font-semibold text-foreground">
-                  Templates
+                  Notification Templates
                 </h3>
                 <p className="typography-meta text-muted-foreground mt-0.5">
-                  Customize the content. Variables: <code className="text-[var(--primary-base)]">{'{project_name}'}</code> <code className="text-[var(--primary-base)]">{'{worktree}'}</code> <code className="text-[var(--primary-base)]">{'{branch}'}</code> <code className="text-[var(--primary-base)]">{'{session_name}'}</code> <code className="text-[var(--primary-base)]">{'{agent_name}'}</code> <code className="text-[var(--primary-base)]">{'{model_name}'}</code> <code className="text-[var(--primary-base)]">{'{last_message}'}</code>
+                  Variables: <code className="text-[var(--primary-base)]">{'{project_name}'}</code> <code className="text-[var(--primary-base)]">{'{worktree}'}</code> <code className="text-[var(--primary-base)]">{'{branch}'}</code> <code className="text-[var(--primary-base)]">{'{session_name}'}</code> <code className="text-[var(--primary-base)]">{'{agent_name}'}</code> <code className="text-[var(--primary-base)]">{'{model_name}'}</code> <code className="text-[var(--primary-base)]">{'{last_message}'}</code>
                 </p>
               </div>
 
@@ -575,11 +569,8 @@ export const NotificationSettings: React.FC = () => {
             <div className="mb-8">
               <div className="mb-3 px-1">
                 <h3 className="typography-ui-header font-semibold text-foreground">
-                  Summarization
+                  AI Summarization
                 </h3>
-                <p className="typography-meta text-muted-foreground mt-0.5">
-                  Summarize long messages in notifications using AI.
-                </p>
               </div>
 
               <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -684,11 +675,8 @@ export const NotificationSettings: React.FC = () => {
           <div className="mb-8">
             <div className="mb-3 px-1">
               <h3 className="typography-ui-header font-semibold text-foreground">
-                Background (Push)
+                Background Push Notifications
               </h3>
-              <p className="typography-meta text-muted-foreground mt-0.5">
-                Get notified even if this page is closed. Clicking a notification opens the relevant session.
-              </p>
             </div>
 
             <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

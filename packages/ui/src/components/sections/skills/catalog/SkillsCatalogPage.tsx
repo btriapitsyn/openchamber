@@ -169,9 +169,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
             )}
 
             <h1 className="typography-ui-header font-semibold text-foreground">Skills Catalog</h1>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Browse curated repositories and install skills into your OpenCode configuration.
-            </p>
           </div>
         </div>
 
@@ -180,7 +177,6 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
           <div className={cn("px-4 py-3 border-b border-[var(--surface-subtle)]", isMobile ? "flex flex-col gap-3" : "flex flex-col sm:flex-row sm:items-center justify-between gap-4")}>
             <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "sm:w-1/3 shrink-0")}>
               <span className="typography-ui-label text-foreground">Source Repository</span>
-              <span className="typography-meta text-muted-foreground">Select a catalog to browse</span>
             </div>
             <div className={cn("flex items-center gap-2 flex-wrap", isMobile ? "w-full" : "flex-1 justify-end")}>
               <Select

@@ -48,7 +48,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
             <MobileOverlayPanel
                 open={isMobilePanelOpen}
                 onClose={closeMobilePanel}
-                title="Select Agent"
+                title="Select agent"
             >
                 <div className="space-y-1">
                     <button

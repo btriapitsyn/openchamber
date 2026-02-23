@@ -208,9 +208,6 @@ export const CommandsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Identity
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Configure command name and description.
-            </p>
           </div>
 
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -277,9 +274,6 @@ export const CommandsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Execution Context
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Configure which model and agent handles this command.
-            </p>
           </div>
 
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -347,9 +341,6 @@ export const CommandsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Command Template
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Define the prompt template for this command. Use variables for user input.
-            </p>
           </div>
           
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

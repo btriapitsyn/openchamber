@@ -1,6 +1,8 @@
 import * as React from 'react';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { RiInformationLine } from '@remixicon/react';
 import { isDesktopShell, isTauriShell } from '@/lib/desktop';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
@@ -81,12 +83,19 @@ export const OpenCodeCliSettings: React.FC = () => {
   return (
     <div className="mb-8">
       <div className="mb-3 px-1">
-        <h3 className="typography-ui-header font-semibold text-foreground">
-          OpenCode CLI
-        </h3>
-        <p className="typography-meta text-muted-foreground mt-0.5">
-          Optional absolute path to the <code className="font-mono text-xs">opencode</code> binary.
-        </p>
+        <div className="flex items-center gap-2">
+          <h3 className="typography-ui-header font-semibold text-foreground">
+            OpenCode CLI
+          </h3>
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent sideOffset={8} className="max-w-xs">
+              Optional absolute path to the <code className="font-mono text-xs">opencode</code> binary.
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

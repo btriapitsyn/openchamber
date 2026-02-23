@@ -266,12 +266,18 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
       {/* Setup commands */}
       <div className="space-y-4">
         <div className="space-y-1">
-          <h3 className="typography-ui-header font-semibold text-foreground">Setup commands</h3>
-          <p className="typography-meta text-muted-foreground">
-            Run automatically inside the new worktree directory when a worktree is created.
-            <br />
-            Use <code className="font-mono text-xs bg-sidebar-accent/50 px-1 rounded">$ROOT_PROJECT_PATH</code> for the project root.
-          </p>
+          <div className="flex items-center gap-2">
+            <h3 className="typography-ui-header font-semibold text-foreground">Setup commands</h3>
+            <Tooltip delayDuration={1000}>
+              <TooltipTrigger asChild>
+                <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent sideOffset={8} className="max-w-xs">
+                Run automatically inside the new worktree directory when a worktree is created.
+                Use <code className="font-mono text-xs bg-sidebar-accent/50 px-1 rounded">$ROOT_PROJECT_PATH</code> for the project root.
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         {isLoadingCommands ? (

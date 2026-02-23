@@ -121,11 +121,8 @@ export const GitPage: React.FC = () => {
           {/* Identities Section */}
           <div className="border-t border-border/40 pt-6">
             <div className="mb-3 px-1 flex items-start justify-between gap-4">
-              <div>
+              <div className="flex items-center gap-2">
                 <h3 className="typography-ui-header font-semibold text-foreground">Identities</h3>
-                <p className="typography-meta text-muted-foreground mt-0.5">
-                  Manage Git author identities for different projects and hosts.
-                </p>
               </div>
               <ButtonSmall variant="outline" onClick={() => openEditor('new')}>
                 <RiAddLine className="w-3.5 h-3.5 mr-1" /> New

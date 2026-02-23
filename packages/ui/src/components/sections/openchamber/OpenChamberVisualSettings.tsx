@@ -271,7 +271,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                     <div className="mb-8">
                         <div className="mb-3 px-1">
                             <h3 className="typography-ui-header font-semibold text-foreground">
-                                UI Scaling & Layout
+                                Scaling & Layout
                             </h3>
                         </div>
                         <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

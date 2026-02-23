@@ -237,9 +237,6 @@ export const UsagePage: React.FC = () => {
           <div className="mb-8">
             <div className="mb-3 px-1">
               <h2 className="typography-ui-header font-semibold text-foreground">Model Quotas</h2>
-              <p className="typography-meta text-muted-foreground mt-0.5">
-                Toggle models to show them in the quick access dropdown.
-              </p>
             </div>
 
             <div className="space-y-4">

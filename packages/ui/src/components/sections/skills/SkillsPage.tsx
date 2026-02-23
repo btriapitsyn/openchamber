@@ -371,9 +371,6 @@ const SkillsInstalledPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Basic Information
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Configure skill identity and description.
-            </p>
           </div>
 
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -452,9 +449,6 @@ const SkillsInstalledPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Instructions
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Detailed instructions for the agent when this skill is loaded.
-            </p>
           </div>
 
           <Textarea
@@ -472,9 +466,6 @@ const SkillsInstalledPage: React.FC = () => {
               <h3 className="typography-ui-header font-semibold text-foreground">
                 Supporting Files
               </h3>
-              <p className="typography-meta text-muted-foreground mt-0.5">
-                Reference documentation, scripts, or templates for this skill.
-              </p>
             </div>
             <ButtonSmall variant="outline" onClick={handleAddFile}>
               <RiAddLine className="h-3.5 w-3.5 mr-1" /> Add File

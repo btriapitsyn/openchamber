@@ -92,9 +92,6 @@ export const ProjectsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Identity
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Customize how this project appears in your workspace.
-            </p>
           </div>
           
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -199,9 +196,6 @@ export const ProjectsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Worktree
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Setup commands and existing worktrees for this project.
-            </p>
           </div>
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 p-4">
             <WorktreeSectionContent projectRef={{ id: selectedProject.id, path: selectedProject.path }} />

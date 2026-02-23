@@ -597,7 +597,7 @@ export const AgentsPage: React.FC = () => {
   return (
     <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
       <div className="mx-auto w-full max-w-4xl p-3 sm:p-6 sm:pt-8">
-        
+
         {/* Header & Actions */}
         <div className="mb-8 flex items-center justify-between gap-4">
           <div className="min-w-0">
@@ -619,13 +619,10 @@ export const AgentsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Identity & Role
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Configure agent identity and behavior mode.
-            </p>
           </div>
 
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
-            
+
             {isNewAgent && (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
                 <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
@@ -668,7 +665,6 @@ export const AgentsPage: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0 pt-1">
                 <span className="typography-ui-label text-foreground">Description</span>
-                <span className="typography-meta text-muted-foreground">Short description of capabilities</span>
               </div>
               <div className="flex-1">
                 <Textarea
@@ -683,8 +679,17 @@ export const AgentsPage: React.FC = () => {
 
             <div className={cn("px-4 py-3", isMobile ? "flex flex-col gap-3" : "flex items-center justify-between gap-4")}>
               <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "sm:w-1/3 shrink-0")}>
-                <span className="typography-ui-label text-foreground">Mode</span>
-                <span className="typography-meta text-muted-foreground">Primary vs Subagent visibility</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="typography-ui-label text-foreground">Mode</span>
+                  <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                      <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={8} className="max-w-xs">
+                      Primary vs Subagent visibility
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               <div className={cn("flex gap-1 flex-wrap", isMobile ? "w-full" : "flex-1 justify-end")}>
                 <ButtonSmall
@@ -732,17 +737,13 @@ export const AgentsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               Model & Parameters
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Select specific model and fine-tune generation settings.
-            </p>
           </div>
 
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
-            
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 py-3 border-b border-[var(--surface-subtle)]">
               <div className="flex min-w-0 flex-col sm:w-1/3 shrink-0">
                 <span className="typography-ui-label text-foreground">Override Model</span>
-                <span className="typography-meta text-muted-foreground">Leave empty to use defaults</span>
               </div>
               <div className="flex-1 max-w-sm flex justify-end">
                 <ModelSelector
@@ -858,9 +859,6 @@ export const AgentsPage: React.FC = () => {
             <h3 className="typography-ui-header font-semibold text-foreground">
               System Prompt
             </h3>
-            <p className="typography-meta text-muted-foreground mt-0.5">
-              Provide context, rules, and behavioral guidelines.
-            </p>
           </div>
 
           <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -881,11 +879,6 @@ export const AgentsPage: React.FC = () => {
               <h3 className="typography-ui-header font-semibold text-foreground">
                 Tool Permissions
               </h3>
-              <p className="typography-meta text-muted-foreground mt-0.5">
-                {showPermissionEditor
-                  ? 'Set a global default; tools only saved when different from global.'
-                  : 'Manage granular access to tools and filesystem capabilities.'}
-              </p>
             </div>
             <ButtonSmall
               variant="outline"

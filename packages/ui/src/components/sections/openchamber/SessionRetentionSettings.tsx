@@ -1,4 +1,6 @@
 import React from 'react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { RiInformationLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { NumberInput } from '@/components/ui/number-input';
 import { ButtonSmall } from '@/components/ui/button-small';
@@ -43,12 +45,19 @@ export const SessionRetentionSettings: React.FC = () => {
   return (
     <div className="mb-8">
       <div className="mb-3 px-1">
-        <h3 className="typography-ui-header font-semibold text-foreground">
-          Session Retention
-        </h3>
-        <p className="typography-meta text-muted-foreground mt-0.5">
-          Automatically delete inactive sessions based on their last activity. Keeps recent 5 sessions.
-        </p>
+        <div className="flex items-center gap-2">
+          <h3 className="typography-ui-header font-semibold text-foreground">
+            Session Retention
+          </h3>
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent sideOffset={8} className="max-w-xs">
+              Automatically delete inactive sessions based on their last activity. Keeps recent 5 sessions.
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
 
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

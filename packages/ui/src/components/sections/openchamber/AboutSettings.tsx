@@ -137,9 +137,6 @@ export const AboutSettings: React.FC = () => {
         <h3 className="typography-ui-header font-semibold text-foreground">
           About OpenChamber
         </h3>
-        <p className="typography-meta text-muted-foreground mt-0.5">
-          Version information and community links.
-        </p>
       </div>
 
       <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

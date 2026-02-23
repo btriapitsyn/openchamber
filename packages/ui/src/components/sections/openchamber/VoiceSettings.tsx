@@ -325,9 +325,6 @@ export const VoiceSettings: React.FC = () => {
                     <h3 className="typography-ui-header font-semibold text-foreground">
                         Voice Setup
                     </h3>
-                    <p className="typography-meta text-muted-foreground mt-0.5">
-                        Enable voice features and pick your synthesis provider.
-                    </p>
                 </div>
                 
                 <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">
@@ -611,11 +608,8 @@ export const VoiceSettings: React.FC = () => {
             <div className="mb-8">
                 <div className="mb-3 px-1">
                     <h3 className="typography-ui-header font-semibold text-foreground">
-                        Voice Features
+                        Playback & Summarization
                     </h3>
-                    <p className="typography-meta text-muted-foreground mt-0.5">
-                        Options for playback and auto-summarization.
-                    </p>
                 </div>
                 
                 <div className="rounded-lg bg-[var(--surface-elevated)]/70 overflow-hidden flex flex-col">

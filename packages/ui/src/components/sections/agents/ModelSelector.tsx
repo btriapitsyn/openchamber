@@ -263,7 +263,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             <MobileOverlayPanel
                 open={isMobilePanelOpen}
                 onClose={closeMobilePanel}
-                title="Select Model"
+                title="Select model"
             >
                 <div className="space-y-1">
                     {/* Favorites Section for Mobile */}

@@ -7,7 +7,8 @@ import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import type { GitHubAuthStatus } from '@/lib/api/types';
 import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
-import { RiGithubFill } from '@remixicon/react';
+import { RiGithubFill, RiInformationLine } from '@remixicon/react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 type GitHubUser = {
   login: string;
@@ -258,11 +259,16 @@ export const GitHubSettings: React.FC = () => {
   return (
     <div className="mb-8">
       <div className="mb-3 px-1 flex items-start justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-2">
           <h3 className="typography-ui-header font-semibold text-foreground">GitHub</h3>
-          <p className="typography-meta text-muted-foreground mt-0.5">
-            Connect a GitHub account for in-app PR and issue workflows.
-          </p>
+          <Tooltip delayDuration={1000}>
+            <TooltipTrigger asChild>
+              <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent sideOffset={8} className="max-w-xs">
+              Connect a GitHub account for in-app PR and issue workflows.
+            </TooltipContent>
+          </Tooltip>
         </div>
         {connected && (
           <ButtonSmall variant="outline" onClick={startConnect} disabled={isBusy}>

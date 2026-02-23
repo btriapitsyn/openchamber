@@ -111,10 +111,7 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange }) =>
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="typography-micro text-muted-foreground">
-          One argument per line. Blank lines are ignored.
-        </p>
+      <div className="flex items-center justify-end gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -593,16 +590,14 @@ export const McpPage: React.FC = () => {
 
           <label className="group flex cursor-pointer items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-[var(--interactive-hover)]/30 border-b border-[var(--surface-subtle)]">
             <div className="flex min-w-0 flex-col">
-              <span className="typography-ui-label text-foreground">Server Enabled</span>
-              <span className="typography-meta text-muted-foreground">Allow this server to be used in sessions</span>
+              <span className="typography-ui-label text-foreground">Enable Server</span>
             </div>
             <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="Toggle MCP server enabled" />
           </label>
 
           <div className={cn('px-4 py-3', isMobile ? 'flex flex-col gap-3' : 'flex items-center justify-between gap-4')}>
             <div className={cn('flex min-w-0 flex-col', isMobile ? 'w-full' : 'shrink-0')}>
-              <span className="typography-ui-label text-foreground">Transport</span>
-              <span className="typography-meta text-muted-foreground">Choose local stdio or remote SSE</span>
+              <span className="typography-ui-label text-foreground">Transport Mode</span>
             </div>
             <div className={cn('flex gap-1 flex-wrap', isMobile ? 'w-full' : 'justify-end')}>
               <ButtonSmall
@@ -643,7 +638,7 @@ export const McpPage: React.FC = () => {
           ) : (
             <>
               <label className="typography-ui-label font-medium text-foreground">
-                Server URL
+                Server URL (SSE endpoint)
               </label>
               <Input
                 value={url}
@@ -651,9 +646,6 @@ export const McpPage: React.FC = () => {
                 placeholder="https://mcp.example.com/mcp"
                 className="font-mono typography-meta"
               />
-              <p className="typography-micro text-muted-foreground">
-                SSE endpoint URL of the remote MCP server
-              </p>
             </>
           )}
         </div>
