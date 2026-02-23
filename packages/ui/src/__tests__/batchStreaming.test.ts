@@ -7,7 +7,7 @@
  * Since the actual messageStore has heavy dependencies (SDK client, etc.),
  * we test the batch queue logic in isolation by simulating the pattern.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 interface QueuedPart {
   sessionId: string;

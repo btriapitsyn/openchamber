@@ -9,7 +9,6 @@ import {
   touchStreamingLifecycle,
   touchStreamingLifecycleBatch,
   removeLifecycleEntries,
-  clearLifecycleCompletionTimer,
 } from '@/stores/utils/streamingUtils';
 import type { MessageStreamLifecycle } from '@/stores/types/sessionTypes';
 

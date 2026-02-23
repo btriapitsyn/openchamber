@@ -93,14 +93,14 @@ function escapeHtml(text: string): string {
 }
 
 // ── Component ────────────────────────────────────────────────────────
-export const VirtualizedCodeBlock: React.FC<VirtualizedCodeBlockProps> = React.memo(({
-  lines,
-  language,
-  syntaxTheme: _syntaxTheme,
-  maxHeight = '60vh',
-  showLineNumbers = true,
-  lineStyles,
-}) => {
+export const VirtualizedCodeBlock: React.FC<VirtualizedCodeBlockProps> = React.memo((props) => {
+  const {
+    lines,
+    language,
+    maxHeight = '60vh',
+    showLineNumbers = true,
+    lineStyles,
+  } = props;
   // Highlight once for the whole block
   const highlightedHtml = React.useMemo(
     () => highlightLines(lines, language),
