@@ -11,13 +11,10 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { getModifierLabel } from '@/lib/utils';
 
-interface ZenModel {
-  id: string;
-  owned_by?: string;
-}
-
 const FALLBACK_PROVIDER_ID = 'opencode';
 const FALLBACK_MODEL_ID = 'big-pickle';
+const UTILITY_PROVIDER_ID = 'zen';
+const UTILITY_PREFERRED_MODEL_ID = 'big-pickle';
 
 const getDisplayModel = (
   storedModel: string | undefined,
@@ -43,6 +40,45 @@ const getDisplayModel = (
   return { providerId: '', modelId: '' };
 };
 
+const getUtilityDisplayModel = (
+  storedGitProviderId: string | undefined,
+  storedGitModelId: string | undefined,
+  zenModel: string | undefined,
+  providers: Array<{ id: string; models: Array<{ id: string }> }>
+): { providerId: string; modelId: string } => {
+  if (storedGitProviderId && storedGitModelId) {
+    const provider = providers.find(p => p.id === storedGitProviderId);
+    if (provider?.models.some(m => m.id === storedGitModelId)) {
+      return { providerId: storedGitProviderId, modelId: storedGitModelId };
+    }
+  }
+
+  const utilityProvider = providers.find((p) => p.id === UTILITY_PROVIDER_ID);
+  if (zenModel && utilityProvider?.models.some((m) => m.id === zenModel)) {
+    return { providerId: UTILITY_PROVIDER_ID, modelId: zenModel };
+  }
+
+  const preferredUtilityModel = utilityProvider?.models.find((m) => m.id === UTILITY_PREFERRED_MODEL_ID);
+  if (preferredUtilityModel) {
+    return { providerId: UTILITY_PROVIDER_ID, modelId: preferredUtilityModel.id };
+  }
+
+  if (utilityProvider?.models.length) {
+    const randomIndex = Math.floor(Math.random() * utilityProvider.models.length);
+    const randomModel = utilityProvider.models[randomIndex];
+    if (randomModel?.id) {
+      return { providerId: UTILITY_PROVIDER_ID, modelId: randomModel.id };
+    }
+  }
+
+  const firstProvider = providers[0];
+  if (firstProvider?.models[0]) {
+    return { providerId: firstProvider.id, modelId: firstProvider.models[0].id };
+  }
+
+  return { providerId: '', modelId: '' };
+};
+
 export const DefaultsSettings: React.FC = () => {
   const setProvider = useConfigStore((state) => state.setProvider);
   const setModel = useConfigStore((state) => state.setModel);
@@ -55,14 +91,16 @@ export const DefaultsSettings: React.FC = () => {
   const setSettingsAutoCreateWorktree = useConfigStore((state) => state.setSettingsAutoCreateWorktree);
   const settingsZenModel = useConfigStore((state) => state.settingsZenModel);
   const setSettingsZenModel = useConfigStore((state) => state.setSettingsZenModel);
+  const settingsGitProviderId = useConfigStore((state) => state.settingsGitProviderId);
+  const settingsGitModelId = useConfigStore((state) => state.settingsGitModelId);
+  const setSettingsGitProviderId = useConfigStore((state) => state.setSettingsGitProviderId);
+  const setSettingsGitModelId = useConfigStore((state) => state.setSettingsGitModelId);
   const providers = useConfigStore((state) => state.providers);
 
   const [defaultModel, setDefaultModel] = React.useState<string | undefined>();
   const [defaultVariant, setDefaultVariant] = React.useState<string | undefined>();
   const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
   const [isLoading, setIsLoading] = React.useState(true);
-  const [zenModels, setZenModels] = React.useState<ZenModel[]>([]);
-  const [zenModelsLoading, setZenModelsLoading] = React.useState(true);
 
   const parsedModel = React.useMemo(() => {
     return getDisplayModel(defaultModel, providers);
@@ -70,43 +108,22 @@ export const DefaultsSettings: React.FC = () => {
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
 
-  // Load zen models list
-  React.useEffect(() => {
-    const loadZenModels = async () => {
-      try {
-        const response = await fetch('/api/zen/models', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        });
-        if (response.ok) {
-          const data = await response.json() as { models?: ZenModel[] };
-          if (Array.isArray(data?.models)) {
-            setZenModels(data.models);
-          }
-        }
-      } catch (error) {
-        console.warn('Failed to load zen models:', error);
-      } finally {
-        setZenModelsLoading(false);
-      }
-    };
-    loadZenModels();
-  }, []);
-
-  // Resolve which zen model to display as selected
-  const selectedZenModel = React.useMemo(() => {
-    if (settingsZenModel && zenModels.some((m) => m.id === settingsZenModel)) {
-      return settingsZenModel;
-    }
-    // Default to first free model in the list
-    return zenModels[0]?.id ?? '';
-  }, [settingsZenModel, zenModels]);
+  const utilityDisplayModel = React.useMemo(() => {
+    return getUtilityDisplayModel(settingsGitProviderId, settingsGitModelId, settingsZenModel, providers);
+  }, [settingsGitProviderId, settingsGitModelId, settingsZenModel, providers]);
 
   // Load current settings
   React.useEffect(() => {
     const loadSettings = async () => {
       try {
-        let data: { defaultModel?: string; defaultVariant?: string; defaultAgent?: string; zenModel?: string } | null = null;
+        let data: {
+          defaultModel?: string;
+          defaultVariant?: string;
+          defaultAgent?: string;
+          zenModel?: string;
+          gitProviderId?: string;
+          gitModelId?: string;
+        } | null = null;
 
         // 1. Runtime settings API (VSCode)
         if (!data) {
@@ -121,6 +138,8 @@ export const DefaultsSettings: React.FC = () => {
                   defaultVariant: typeof (settings as Record<string, unknown>).defaultVariant === 'string' ? ((settings as Record<string, unknown>).defaultVariant as string) : undefined,
                   defaultAgent: typeof settings.defaultAgent === 'string' ? settings.defaultAgent : undefined,
                   zenModel: typeof (settings as Record<string, unknown>).zenModel === 'string' ? ((settings as Record<string, unknown>).zenModel as string) : undefined,
+                  gitProviderId: typeof (settings as Record<string, unknown>).gitProviderId === 'string' ? ((settings as Record<string, unknown>).gitProviderId as string) : undefined,
+                  gitModelId: typeof (settings as Record<string, unknown>).gitModelId === 'string' ? ((settings as Record<string, unknown>).gitModelId as string) : undefined,
                 };
               }
             } catch {
@@ -145,6 +164,8 @@ export const DefaultsSettings: React.FC = () => {
            const variant = typeof data.defaultVariant === 'string' && data.defaultVariant.trim().length > 0 ? data.defaultVariant.trim() : undefined;
            const agent = typeof data.defaultAgent === 'string' && data.defaultAgent.trim().length > 0 ? data.defaultAgent.trim() : undefined;
            const zen = typeof data.zenModel === 'string' && data.zenModel.trim().length > 0 ? data.zenModel.trim() : undefined;
+           const gitProviderId = typeof data.gitProviderId === 'string' && data.gitProviderId.trim().length > 0 ? data.gitProviderId.trim() : undefined;
+           const gitModelId = typeof data.gitModelId === 'string' && data.gitModelId.trim().length > 0 ? data.gitModelId.trim() : undefined;
 
            if (model !== undefined) {
              setDefaultModel(model);
@@ -158,6 +179,12 @@ export const DefaultsSettings: React.FC = () => {
            if (zen !== undefined) {
              setSettingsZenModel(zen);
            }
+           if (gitProviderId !== undefined) {
+             setSettingsGitProviderId(gitProviderId);
+           }
+           if (gitModelId !== undefined) {
+             setSettingsGitModelId(gitModelId);
+           }
          }
       } catch (error) {
         console.warn('Failed to load defaults settings:', error);
@@ -166,7 +193,7 @@ export const DefaultsSettings: React.FC = () => {
       }
     };
     loadSettings();
-  }, [setSettingsZenModel]);
+  }, [setSettingsGitModelId, setSettingsGitProviderId, setSettingsZenModel]);
 
 
   const handleModelChange = React.useCallback(async (providerId: string, modelId: string) => {
@@ -287,16 +314,22 @@ export const DefaultsSettings: React.FC = () => {
     }
   }, [setSettingsAutoCreateWorktree]);
 
-  const handleZenModelChange = React.useCallback(async (modelId: string) => {
-    setSettingsZenModel(modelId);
+  const handleUtilityModelChange = React.useCallback(async (providerId: string, modelId: string) => {
+    setSettingsGitProviderId(providerId);
+    setSettingsGitModelId(modelId);
+    if (providerId === UTILITY_PROVIDER_ID) {
+      setSettingsZenModel(modelId);
+    }
     try {
       await updateDesktopSettings({
-        zenModel: modelId,
+        gitProviderId: providerId,
+        gitModelId: modelId,
+        ...(providerId === UTILITY_PROVIDER_ID ? { zenModel: modelId } : {}),
       });
     } catch (error) {
-      console.warn('Failed to save zen model setting:', error);
+      console.warn('Failed to save utility model setting:', error);
     }
-  }, [setSettingsZenModel]);
+  }, [setSettingsGitProviderId, setSettingsGitModelId, setSettingsZenModel]);
 
   if (isLoading) {
     return null;
@@ -393,13 +426,13 @@ export const DefaultsSettings: React.FC = () => {
       <div className="border-t border-border/40 pt-4 mt-4 space-y-3">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h3 className="typography-ui-header font-semibold text-foreground">Zen Model</h3>
+            <h3 className="typography-ui-header font-semibold text-foreground">Utility Model</h3>
             <Tooltip delayDuration={1000}>
               <TooltipTrigger asChild>
                 <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
               </TooltipTrigger>
               <TooltipContent sideOffset={8} className="max-w-xs">
-                The free model used for lightweight internal tasks like commit message generation, PR descriptions, notification summarization, and TTS text summarization.
+                The model used for lightweight background tasks like commit messages, PR descriptions, and summarization.
               </TooltipContent>
             </Tooltip>
           </div>
@@ -410,24 +443,11 @@ export const DefaultsSettings: React.FC = () => {
 
         <div className="flex flex-col gap-1.5">
           <label className="typography-ui-label text-muted-foreground">Model</label>
-          {zenModelsLoading ? (
-            <span className="typography-meta text-muted-foreground">Loading models...</span>
-          ) : zenModels.length > 0 ? (
-            <Select value={selectedZenModel} onValueChange={handleZenModelChange}>
-              <SelectTrigger className="w-auto max-w-xs typography-meta text-foreground">
-                <SelectValue placeholder="Select model" />
-              </SelectTrigger>
-              <SelectContent>
-                {zenModels.map((model) => (
-                  <SelectItem key={model.id} value={model.id} className="pr-2 [&>span:first-child]:hidden">
-                    {model.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <span className="typography-meta text-muted-foreground">No free models available</span>
-          )}
+          <ModelSelector
+            providerId={utilityDisplayModel.providerId}
+            modelId={utilityDisplayModel.modelId}
+            onChange={handleUtilityModelChange}
+          />
         </div>
       </div>
     </div>
