@@ -16,6 +16,15 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { toast } from '@/components/ui';
 import { isTauriShell, isDesktopLocalOriginActive } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 interface MobileSessionStatusBarProps {
   onSessionSwitch?: (sessionId: string) => void;
@@ -384,6 +393,7 @@ interface SessionStatusHeaderProps {
   currentProjectIcon?: string | null;
   currentProjectColor?: string | null;
   onToggle: () => void;
+  isExpanded?: boolean;
 }
 
 function SessionStatusHeader({
@@ -391,7 +401,8 @@ function SessionStatusHeader({
   currentProjectLabel,
   currentProjectIcon,
   currentProjectColor,
-  onToggle
+  onToggle,
+  isExpanded = false
 }: SessionStatusHeaderProps) {
   const ProjectIcon = currentProjectIcon ? PROJECT_ICON_MAP[currentProjectIcon] : null;
   const projectColorVar = currentProjectColor ? (PROJECT_COLOR_MAP[currentProjectColor] ?? null) : null;
@@ -402,7 +413,7 @@ function SessionStatusHeader({
       onClick={onToggle}
       className="w-full flex flex-col px-2 py-0 text-left transition-colors hover:bg-[var(--interactive-hover)]"
     >
-      {currentProjectLabel && (
+      {!isExpanded && currentProjectLabel && (
         <div className="flex flex-col items-start">
           <div className="flex items-center gap-0.5 leading-none">
             {ProjectIcon && (
@@ -416,7 +427,7 @@ function SessionStatusHeader({
               style={projectColorVar ? { color: projectColorVar } : undefined}
             >
               {currentProjectLabel}
-            </span>
+              </span>
           </div>
           <div className="w-full h-px bg-[var(--interactive-border)] my-0.5" />
         </div>
@@ -593,6 +604,119 @@ function useDrawerSwipe() {
   };
 }
 
+// Hook for long press
+function useLongPress(
+  onLongPress: () => void,
+  onClick: () => void,
+  ms = 500
+) {
+  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isLongPress = React.useRef(false);
+
+  const start = React.useCallback(() => {
+    isLongPress.current = false;
+    timerRef.current = setTimeout(() => {
+      isLongPress.current = true;
+      onLongPress();
+    }, ms);
+  }, [onLongPress, ms]);
+
+  const end = React.useCallback(() => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
+
+  const handleClick = React.useCallback(() => {
+    if (!isLongPress.current) {
+      onClick();
+    }
+  }, [onClick]);
+
+  return {
+    onMouseDown: start,
+    onMouseUp: end,
+    onMouseLeave: end,
+    onTouchStart: start,
+    onTouchEnd: end,
+    onClick: handleClick,
+  };
+}
+
+// Project button component with long press support
+interface ProjectButtonProps {
+  project: ProjectEntry;
+  isActive: boolean;
+  status: { hasRunning: boolean; hasUnread: boolean };
+  projectColorVar: string | null;
+  onProjectSwitch: () => void;
+  onRemoveProject?: () => void;
+  formatProjectLabel: (project: ProjectEntry) => string;
+}
+
+function ProjectButton({
+  project,
+  isActive,
+  status,
+  projectColorVar,
+  onProjectSwitch,
+  onRemoveProject,
+  formatProjectLabel,
+}: ProjectButtonProps) {
+  const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+
+  const longPressHandlers = useLongPress(
+    () => {
+      if (onRemoveProject) {
+        onRemoveProject();
+      }
+    },
+    onProjectSwitch,
+    600
+  );
+
+  return (
+    <button
+      type="button"
+      data-project-id={project.id}
+      className={cn(
+        "flex items-center gap-1 px-2 !py-1.5 rounded-md text-[11px] whitespace-nowrap transition-colors shrink-0 border !min-h-0 leading-none select-none",
+        isActive
+          ? "bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)] border-transparent"
+          : "bg-[var(--surface-elevated)] text-[var(--surface-foreground)] border-[var(--interactive-border)]/50 hover:bg-[var(--interactive-hover)]"
+      )}
+      {...longPressHandlers}
+    >
+      {/* Status indicators */}
+      <div className="flex items-center gap-0.5">
+        {status.hasRunning && (
+          <RiLoader4Line className="h-2 w-2 animate-spin text-[var(--status-info)]" />
+        )}
+        {!status.hasRunning && status.hasUnread && (
+          <div className="h-1 w-1 rounded-full bg-[var(--status-error)]" />
+        )}
+      </div>
+
+      {/* Icon */}
+      {ProjectIcon && (
+        <ProjectIcon
+          className="h-3 w-3"
+          style={projectColorVar ? { color: projectColorVar } : undefined}
+        />
+      )}
+
+      {/* Label */}
+      <span
+        className="truncate max-w-[100px]"
+        style={isActive && projectColorVar ? { color: projectColorVar } : undefined}
+      >
+        {formatProjectLabel(project)}
+      </span>
+    </button>
+  );
+}
+
 // Project bar component for expanded view
 interface ProjectBarProps {
   projects: ProjectEntry[];
@@ -600,6 +724,7 @@ interface ProjectBarProps {
   getProjectStatus: (path: string) => { hasRunning: boolean; hasUnread: boolean };
   onProjectSwitch: (projectId: string) => void;
   onAddProject: () => void;
+  onRemoveProject?: (projectId: string) => void;
   homeDirectory: string | null;
 }
 
@@ -609,9 +734,12 @@ function ProjectBar({
   getProjectStatus,
   onProjectSwitch,
   onAddProject,
+  onRemoveProject,
   homeDirectory
 }: ProjectBarProps) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [projectToDelete, setProjectToDelete] = React.useState<ProjectEntry | null>(null);
 
   // Scroll active project into view
   React.useEffect(() => {
@@ -623,17 +751,30 @@ function ProjectBar({
     }
   }, [activeProjectId]);
 
+  const handleLongPress = (project: ProjectEntry) => {
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (projectToDelete && onRemoveProject) {
+      onRemoveProject(projectToDelete.id);
+    }
+    setDeleteDialogOpen(false);
+    setProjectToDelete(null);
+  };
+
   if (projects.length === 0) {
     return (
-      <div className="flex items-center gap-2 px-2 py-0.5 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)]/30">
-        <span className="text-xs text-[var(--surface-mutedForeground)]">No projects</span>
+      <div className="flex items-center gap-2 px-2 py-1 border-b border-[var(--interactive-border)] bg-transparent">
+        <span className="text-[11px] text-[var(--surface-mutedForeground)]">No projects</span>
         <button
           type="button"
           onClick={onAddProject}
-          className="flex items-center gap-1 px-1.5 py-[2px] text-xs rounded bg-[var(--interactive-hover)] text-[var(--surface-foreground)]"
+          className="flex items-center justify-center !py-1.5 px-2 rounded-md bg-[var(--surface-elevated)] border border-[var(--interactive-border)]/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] !min-h-0"
+          aria-label="Add project"
         >
           <RiAddLine className="h-3 w-3" />
-          Add
         </button>
       </div>
     );
@@ -673,10 +814,10 @@ function ProjectBar({
   };
 
   return (
-    <div className="flex items-center gap-1 px-2 py-0.5 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)]/30">
+    <div className="flex items-center gap-1.5 px-2 py-1.5 bg-transparent">
       <div
         ref={scrollRef}
-        className="flex-1 flex items-center gap-1 overflow-x-auto scrollbar-none touch-pan-x"
+        className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none touch-pan-x"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -685,48 +826,19 @@ function ProjectBar({
         {projects.map((project) => {
           const isActive = project.id === activeProjectId;
           const status = getProjectStatus(project.path);
-          const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
           const projectColorVar = project.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
 
           return (
-            <button
+            <ProjectButton
               key={project.id}
-              type="button"
-              data-project-id={project.id}
-              onClick={() => onProjectSwitch(project.id)}
-              className={cn(
-                "flex items-center gap-0.5 px-1.5 py-[2px] rounded text-xs whitespace-nowrap transition-colors shrink-0",
-                isActive
-                  ? "bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]"
-                  : "bg-[var(--surface-elevated)] text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)]"
-              )}
-            >
-              {/* Status indicators */}
-              <div className="flex items-center gap-0.5">
-                {status.hasRunning && (
-                  <RiLoader4Line className="h-2 w-2 animate-spin text-[var(--status-info)]" />
-                )}
-                {!status.hasRunning && status.hasUnread && (
-                  <div className="h-1 w-1 rounded-full bg-[var(--status-error)]" />
-                )}
-              </div>
-
-              {/* Icon */}
-              {ProjectIcon && (
-                <ProjectIcon
-                  className="h-3 w-3"
-                  style={projectColorVar ? { color: projectColorVar } : undefined}
-                />
-              )}
-
-              {/* Label */}
-              <span
-                className="truncate max-w-[100px]"
-                style={isActive && projectColorVar ? { color: projectColorVar } : undefined}
-              >
-                {formatProjectLabel(project)}
-              </span>
-            </button>
+              project={project}
+              isActive={isActive}
+              status={status}
+              projectColorVar={projectColorVar}
+              onProjectSwitch={() => onProjectSwitch(project.id)}
+              onRemoveProject={onRemoveProject ? () => handleLongPress(project) : undefined}
+              formatProjectLabel={formatProjectLabel}
+            />
           );
         })}
       </div>
@@ -735,11 +847,31 @@ function ProjectBar({
       <button
         type="button"
         onClick={onAddProject}
-        className="flex items-center justify-center h-6 w-6 rounded-md bg-[var(--interactive-hover)] text-[var(--surface-foreground)] hover:bg-[var(--interactive-selection)] shrink-0"
+        className="flex items-center justify-center !py-1.5 px-2 rounded-md bg-[var(--surface-elevated)] border border-[var(--interactive-border)]/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] shrink-0 !min-h-0"
         aria-label="Add project"
       >
-        <RiAddLine className="h-4 w-4" />
+        <RiAddLine className="h-3 w-3" />
       </button>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Remove Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to remove <span className="font-medium text-foreground">{projectToDelete?.label || formatDirectoryName(projectToDelete?.path || '', homeDirectory)}</span>?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -831,6 +963,7 @@ function ExpandedView({
   onSessionDoubleClick,
   onProjectSwitch,
   onAddProject,
+  onRemoveProject,
   getSessionAgentName,
   getSessionTitle,
   needsAttention,
@@ -857,6 +990,7 @@ function ExpandedView({
   onSessionDoubleClick?: () => void;
   onProjectSwitch: (projectId: string) => void;
   onAddProject: () => void;
+  onRemoveProject?: (projectId: string) => void;
   getSessionAgentName: (s: Session) => string;
   getSessionTitle: (s: Session) => string;
   needsAttention: (sessionId: string) => boolean;
@@ -871,6 +1005,7 @@ function ExpandedView({
   const [collapsedHeight, setCollapsedHeight] = React.useState<number | null>(null);
   const [hasMeasured, setHasMeasured] = React.useState(false);
   const { handleTouchStart, handleTouchMove, handleTouchEnd } = useDrawerSwipe();
+  const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
 
   React.useEffect(() => {
     if (containerRef.current && !hasMeasured && !isExpanded) {
@@ -879,8 +1014,36 @@ function ExpandedView({
     }
   }, [hasMeasured, isExpanded]);
 
+  // Filter sessions by active project
+  const filteredSessions = React.useMemo(() => {
+    if (!activeProjectId) return sessions;
+    
+    const activeProject = projects.find(p => p.id === activeProjectId);
+    if (!activeProject) return sessions;
+
+    const projectRoot = normalize(activeProject.path);
+    const projectDirs = new Set<string>([projectRoot]);
+    
+    // Add worktrees
+    const worktrees = availableWorktreesByProject.get(projectRoot) ?? [];
+    for (const meta of worktrees) {
+      const p = (meta && typeof meta === 'object' && 'path' in meta) ? (meta as { path?: unknown }).path : null;
+      if (typeof p === 'string' && p.trim()) {
+        const normalized = normalize(p);
+        if (normalized) projectDirs.add(normalized);
+      }
+    }
+
+    return sessions.filter(session => {
+      const sessionDir = normalize((session as { directory?: string | null }).directory ?? '');
+      return projectDirs.has(sessionDir);
+    });
+  }, [sessions, activeProjectId, projects, availableWorktreesByProject]);
+
   const previewHeight = collapsedHeight ?? undefined;
-  const displaySessions = hasMeasured || isExpanded ? sessions : sessions.slice(0, 3);
+  const displaySessions = hasMeasured || isExpanded
+    ? filteredSessions.filter(s => s.id !== currentSessionId)
+    : filteredSessions.slice(0, 3);
 
   return (
     <div
@@ -894,7 +1057,7 @@ function ExpandedView({
       onTouchEnd={handleTouchEnd}
     >
       {/* Header row */}
-      <div className="flex items-center justify-between px-2 py-1.5">
+      <div className="flex items-center justify-between px-2 py-1.5 border-b border-[var(--interactive-border)]">
         <div className="flex-1 min-w-0 mr-1">
           <SessionStatusHeader
             currentSessionTitle={currentSessionTitle}
@@ -902,6 +1065,7 @@ function ExpandedView({
             currentProjectIcon={currentProjectIcon}
             currentProjectColor={currentProjectColor}
             onToggle={onToggleCollapse}
+            isExpanded={true}
           />
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -940,6 +1104,7 @@ function ExpandedView({
         getProjectStatus={getProjectStatus}
         onProjectSwitch={onProjectSwitch}
         onAddProject={onAddProject}
+        onRemoveProject={onRemoveProject}
         homeDirectory={homeDirectory}
       />
 
@@ -949,18 +1114,24 @@ function ExpandedView({
         className="flex flex-col overflow-y-auto"
         style={{ maxHeight: isExpanded ? '60vh' : previewHeight }}
       >
-        {displaySessions.map((session) => (
-          <SessionItem
-            key={session.id}
-            session={session}
-            isCurrent={session.id === currentSessionId}
-            getSessionAgentName={getSessionAgentName}
-            getSessionTitle={getSessionTitle}
-            onClick={() => onSessionClick(session.id)}
-            onDoubleClick={onSessionDoubleClick}
-            needsAttention={needsAttention}
-          />
-        ))}
+        {displaySessions.length === 0 ? (
+          <div className="flex items-center justify-center py-3 text-[11px] text-[var(--surface-mutedForeground)]">
+            <span>No sessions in this project</span>
+          </div>
+        ) : (
+          displaySessions.map((session) => (
+            <SessionItem
+              key={session.id}
+              session={session}
+              isCurrent={session.id === currentSessionId}
+              getSessionAgentName={getSessionAgentName}
+              getSessionTitle={getSessionTitle}
+              onClick={() => onSessionClick(session.id)}
+              onDoubleClick={onSessionDoubleClick}
+              needsAttention={needsAttention}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -987,6 +1158,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const setActiveProject = useProjectsStore((state) => state.setActiveProject);
   const addProject = useProjectsStore((state) => state.addProject);
+  const removeProject = useProjectsStore((state) => state.removeProject);
   const getActiveProject = useProjectsStore((state) => state.getActiveProject);
 
   // Directory store
@@ -1112,6 +1284,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       onSessionDoubleClick={handleSessionDoubleClick}
       onProjectSwitch={handleProjectSwitch}
       onAddProject={handleAddProject}
+      onRemoveProject={removeProject}
       getSessionAgentName={getSessionAgentName}
       getSessionTitle={getSessionTitle}
       needsAttention={needsAttention}
