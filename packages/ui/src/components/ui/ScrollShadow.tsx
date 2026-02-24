@@ -5,6 +5,7 @@ export type ScrollShadowProps = React.HTMLAttributes<HTMLDivElement> & {
   offset?: number;
   size?: number;
   isEnabled?: boolean;
+  hideTopShadow?: boolean;
   hideBottomShadow?: boolean;
   observeMutations?: boolean;
   onVisibilityChange?: (state: "both" | "none" | "top" | "bottom" | "left" | "right") => void;
@@ -29,6 +30,7 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
         offset = 0,
         size = 48,
         isEnabled = true,
+        hideTopShadow = false,
         hideBottomShadow = false,
         observeMutations = true,
         onVisibilityChange,
@@ -85,11 +87,15 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
         return;
       }
 
-      const hasBefore = orientation === "vertical" ? el.scrollTop > offset : el.scrollLeft > offset;
+      let hasBefore = orientation === "vertical" ? el.scrollTop > offset : el.scrollLeft > offset;
       let hasAfter =
         orientation === "vertical"
           ? el.scrollTop + el.clientHeight + offset < el.scrollHeight
           : el.scrollLeft + el.clientWidth + offset < el.scrollWidth;
+
+      if (hideTopShadow && orientation === "vertical") {
+        hasBefore = false;
+      }
 
       if (hideBottomShadow && orientation === "vertical") {
         hasAfter = false;
@@ -102,7 +108,7 @@ export const ScrollShadow = React.forwardRef<HTMLDivElement, ScrollShadowProps>(
         visibleRef.current = next;
         onVisibilityChange?.(next);
       }
-    }, [clearAttributes, hideBottomShadow, isEnabled, offset, onVisibilityChange, orientation, setAttributes]);
+    }, [clearAttributes, hideTopShadow, hideBottomShadow, isEnabled, offset, onVisibilityChange, orientation, setAttributes]);
 
     React.useEffect(() => {
       const el = internalRef.current;

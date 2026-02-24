@@ -523,6 +523,7 @@ export const ChatContainer: React.FC = () => {
                         className="absolute inset-0 overflow-y-auto overflow-x-hidden z-0 chat-scroll overlay-scrollbar-target"
                         ref={scrollRef}
                         observeMutations={false}
+                        hideTopShadow={isMobile}
                         data-scroll-shadow="true"
                         data-scrollbar="chat"
                     >
