@@ -14,6 +14,7 @@ import { useUIStore } from '@/stores/useUIStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
+import type { ToolPopupContent } from '../types';
 
 import {
     renderListOutput,
@@ -27,6 +28,7 @@ import {
     formatInputForDisplay,
     parseReadToolOutput,
 } from '../toolRenderers';
+import { VirtualizedCodeBlock, type CodeLine } from './VirtualizedCodeBlock';
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
 
@@ -37,6 +39,7 @@ interface ToolPartProps {
     syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
     onContentChange?: (reason?: ContentChangeReason) => void;
+    onShowPopup?: (content: ToolPopupContent) => void;
     hasPrevTool?: boolean;
     hasNextTool?: boolean;
 }
@@ -455,7 +458,8 @@ const TaskToolSummary: React.FC<{
     hasNextTool: boolean;
     output?: string;
     sessionId?: string;
-}> = ({ entries, isExpanded, hasPrevTool, hasNextTool, output, sessionId }) => {
+    onShowPopup?: (content: ToolPopupContent) => void;
+}> = ({ entries, isExpanded, hasPrevTool, hasNextTool, output, sessionId, onShowPopup }) => {
     const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
     const displayEntries = React.useMemo(() => {
         const nonPending = entries.filter((entry) => entry.state?.status !== 'pending');
@@ -554,7 +558,7 @@ const TaskToolSummary: React.FC<{
                     {isOutputExpanded ? (
                         <ToolScrollableSection maxHeightClass="max-h-[50vh]">
                             <div className="w-full min-w-0">
-                                <SimpleMarkdownRenderer content={trimmedOutput} variant="tool" />
+                                <SimpleMarkdownRenderer content={trimmedOutput} variant="tool" onShowPopup={onShowPopup} />
                             </div>
                         </ToolScrollableSection>
                     ) : null}
@@ -570,74 +574,48 @@ interface DiffPreviewProps {
     input?: ToolStateWithMetadata['input'];
 }
 
-const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, syntaxTheme, input }) => (
-    <div className="typography-code px-1 pb-1 pt-0 space-y-0">
-        {parseDiffToUnified(diff).map((hunk, hunkIdx) => (
-            <div key={hunkIdx} className="-mx-1 px-1 last:border-b-0" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
-                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground break-words -mx-1" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
-                    {`${hunk.file} (line ${hunk.oldStart})`}
-                </div>
+const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, syntaxTheme, input }) => {
+    const hunks = React.useMemo(() => parseDiffToUnified(diff), [diff]);
 
-                <div>
-                    {hunk.lines.map((line, lineIdx) => (
-                        <div
-                            key={lineIdx}
-                            className={cn(
-                                'typography-code font-mono px-2 py-0.5 flex -mx-2',
-                                line.type === 'context' && 'bg-transparent',
-                                line.type === 'removed' && 'bg-transparent',
-                                line.type === 'added' && 'bg-transparent'
-                            )}
-                            style={
-                                line.type === 'removed'
-                                    ? { backgroundColor: 'var(--tools-edit-removed-bg)' }
-                                    : line.type === 'added'
-                                        ? { backgroundColor: 'var(--tools-edit-added-bg)' }
-                                        : {}
-                            }
-                        >
-                            <span className="w-10 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
-                                {line.lineNumber || ''}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                                <SyntaxHighlighter
-                                    style={syntaxTheme}
-                                    language={getLanguageFromExtension(typeof input?.file_path === 'string' ? input.file_path : typeof input?.filePath === 'string' ? input.filePath : hunk.file) || 'text'}
-                                    PreTag="div"
-                                    wrapLines
-                                    wrapLongLines
-                                customStyle={{
-                                    margin: 0,
-                                    padding: 0,
-                                    fontSize: 'inherit',
-                                    background: 'transparent',
-                                    backgroundColor: 'transparent',
-                                    borderRadius: 0,
-                                    overflow: 'visible',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-all',
-                                    overflowWrap: 'anywhere',
-                                    color: line.type === 'removed' ? 'var(--tools-edit-removed)' : line.type === 'added' ? 'var(--tools-edit-added)' : 'inherit',
-                                }}
-                                codeTagProps={{
-                                    style: { 
-                                        background: 'transparent', 
-                                        backgroundColor: 'transparent', 
-                                        fontSize: 'inherit',
-                                        color: line.type === 'removed' ? 'var(--tools-edit-removed)' : line.type === 'added' ? 'var(--tools-edit-added)' : 'inherit',
-                                    },
-                                }}
-                            >
-                                {line.content}
-                            </SyntaxHighlighter>
-                            </div>
+    return (
+        <div className="typography-code px-1 pb-1 pt-0 space-y-0">
+            {hunks.map((hunk, hunkIdx) => {
+                const lang = getLanguageFromExtension(
+                    typeof input?.file_path === 'string' ? input.file_path
+                    : typeof input?.filePath === 'string' ? input.filePath
+                    : hunk.file
+                ) || 'text';
+
+                const codeLines: CodeLine[] = hunk.lines.map((line) => ({
+                    text: line.content,
+                    lineNumber: line.lineNumber || null,
+                    type: line.type as CodeLine['type'],
+                }));
+
+                return (
+                    <div key={hunkIdx} className="-mx-1 px-1 last:border-b-0" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
+                        <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground break-words -mx-1" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
+                            {`${hunk.file} (line ${hunk.oldStart})`}
                         </div>
-                    ))}
-                </div>
-            </div>
-        ))}
-    </div>
-));
+                        <VirtualizedCodeBlock
+                            lines={codeLines}
+                            language={lang}
+                            syntaxTheme={syntaxTheme}
+                            maxHeight="50vh"
+                            lineStyles={(line) =>
+                                line.type === 'removed'
+                                    ? { backgroundColor: 'var(--tools-edit-removed-bg)', color: 'var(--tools-edit-removed)' }
+                                    : line.type === 'added'
+                                        ? { backgroundColor: 'var(--tools-edit-added-bg)', color: 'var(--tools-edit-added)' }
+                                        : undefined
+                            }
+                        />
+                    </div>
+                );
+            })}
+        </div>
+    );
+});
 
 DiffPreview.displayName = 'DiffPreview';
 
@@ -649,13 +627,20 @@ interface WriteInputPreviewProps {
 }
 
 const WriteInputPreview: React.FC<WriteInputPreviewProps> = React.memo(({ content, syntaxTheme, filePath, displayPath }) => {
-    const lines = React.useMemo(() => content.split('\n'), [content]);
     const language = React.useMemo(
         () => getLanguageFromExtension(filePath ?? '') || detectLanguageFromOutput(content, 'write', filePath ? { filePath } : undefined),
         [content, filePath]
     );
 
-    const lineCount = Math.max(lines.length, 1);
+    const codeLines: CodeLine[] = React.useMemo(() => {
+        const rawLines = content.split('\n');
+        return rawLines.map((text, idx) => ({
+            text: text || ' ',
+            lineNumber: idx + 1,
+        }));
+    }, [content]);
+
+    const lineCount = Math.max(codeLines.length, 1);
     const headerLineLabel = lineCount === 1 ? 'line 1' : `lines 1-${lineCount}`;
 
     return (
@@ -663,46 +648,82 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = React.memo(({ conten
             <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground rounded-lg mb-1" style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}>
                 {`${displayPath} (${headerLineLabel})`}
             </div>
-            <div className="space-y-0">
-                {lines.map((line, lineIdx) => (
-                    <div key={lineIdx} className="typography-code font-mono px-2 py-0.5 flex -mx-1">
-                        <span className="w-10 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
-                            {lineIdx + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                            <SyntaxHighlighter
-                                style={syntaxTheme}
-                                language={language || 'text'}
-                                PreTag="div"
-                                wrapLines
-                                wrapLongLines
-                                customStyle={{
-                                    margin: 0,
-                                    padding: 0,
-                                    fontSize: 'inherit',
-                                    background: 'transparent',
-                                    backgroundColor: 'transparent',
-                                    borderRadius: 0,
-                                    overflow: 'visible',
-                                    whiteSpace: 'pre-wrap',
-                                    wordBreak: 'break-all',
-                                    overflowWrap: 'anywhere',
-                                }}
-                                codeTagProps={{
-                                    style: { background: 'transparent', backgroundColor: 'transparent', fontSize: 'inherit' },
-                                }}
-                            >
-                                {line || ' '}
-                            </SyntaxHighlighter>
-                        </div>
-                    </div>
-                ))}
-            </div>
+            <VirtualizedCodeBlock
+                lines={codeLines}
+                language={language || 'text'}
+                syntaxTheme={syntaxTheme}
+                maxHeight="50vh"
+            />
         </div>
     );
 });
 
 WriteInputPreview.displayName = 'WriteInputPreview';
+
+// ── PERF-007: Read tool output with virtualised highlighting ─────────
+interface ReadToolVirtualizedProps {
+    outputString: string;
+    input?: Record<string, unknown>;
+    syntaxTheme: { [key: string]: React.CSSProperties };
+    toolName: string;
+    renderScrollableBlock: (
+        content: React.ReactNode,
+        options?: { maxHeightClass?: string; className?: string; disableHorizontal?: boolean; outerClassName?: string }
+    ) => React.ReactNode;
+}
+
+const ReadToolVirtualized: React.FC<ReadToolVirtualizedProps> = React.memo(({
+    outputString,
+    input,
+    syntaxTheme,
+    toolName,
+    renderScrollableBlock,
+}) => {
+    const parsedReadOutput = React.useMemo(() => parseReadToolOutput(outputString), [outputString]);
+    const offset = typeof input?.offset === 'number' ? input.offset : 0;
+
+    const codeLines: CodeLine[] = React.useMemo(() => {
+        const hasExplicitLineNumbers = parsedReadOutput.lines.some((line) => line.lineNumber !== null);
+        let fallbackLineCursor = offset;
+
+        return parsedReadOutput.lines.map((line) => {
+            if (line.lineNumber !== null) {
+                fallbackLineCursor = line.lineNumber;
+            }
+            const shouldAssignFallback =
+                parsedReadOutput.type === 'file'
+                && !hasExplicitLineNumbers
+                && line.lineNumber === null
+                && !line.isInfo;
+            const effectiveLineNumber = line.lineNumber ?? (shouldAssignFallback
+                ? (fallbackLineCursor += 1)
+                : null);
+
+            return {
+                text: line.text,
+                lineNumber: effectiveLineNumber,
+                isInfo: line.isInfo,
+            };
+        });
+    }, [parsedReadOutput, offset]);
+
+    const language = React.useMemo(() => {
+        const contentForLanguage = parsedReadOutput.lines.map((l) => l.text).join('\n');
+        return detectLanguageFromOutput(contentForLanguage, toolName, input as Record<string, unknown>);
+    }, [parsedReadOutput, toolName, input]);
+
+    return renderScrollableBlock(
+        <VirtualizedCodeBlock
+            lines={codeLines}
+            language={language}
+            syntaxTheme={syntaxTheme}
+            maxHeight="55vh"
+        />,
+        { className: 'p-1' }
+    ) as React.ReactElement;
+});
+
+ReadToolVirtualized.displayName = 'ReadToolVirtualized';
 
 interface ImagePreviewProps {
     content: string;
@@ -752,6 +773,7 @@ interface ToolExpandedContentProps {
     syntaxTheme: { [key: string]: React.CSSProperties };
     isMobile: boolean;
     currentDirectory: string;
+    onShowPopup?: (content: ToolPopupContent) => void;
     hasPrevTool: boolean;
     hasNextTool: boolean;
 }
@@ -762,6 +784,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     syntaxTheme,
     isMobile,
     currentDirectory,
+    onShowPopup,
     hasPrevTool,
     hasNextTool,
 }) => {
@@ -928,7 +951,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (part.tool === 'task' && hasStringOutput) {
             return renderScrollableBlock(
                 <div className="w-full min-w-0">
-                    <SimpleMarkdownRenderer content={outputString} variant="tool" />
+                    <SimpleMarkdownRenderer content={outputString} variant="tool" onShowPopup={onShowPopup} />
                 </div>
             );
         }
@@ -947,7 +970,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (part.tool === 'codesearch' && hasStringOutput) {
             return renderScrollableBlock(
                 <div className="w-full min-w-0">
-                    <SimpleMarkdownRenderer content={outputString} variant="tool" />
+                    <SimpleMarkdownRenderer content={outputString} variant="tool" onShowPopup={onShowPopup} />
                 </div>
             );
         }
@@ -955,7 +978,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         if (part.tool === 'skill' && hasStringOutput) {
             return renderScrollableBlock(
                 <div className="w-full min-w-0">
-                    <SimpleMarkdownRenderer content={outputString} variant="tool" />
+                    <SimpleMarkdownRenderer content={outputString} variant="tool" onShowPopup={onShowPopup} />
                 </div>
             );
         }
@@ -969,72 +992,13 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
         if (hasStringOutput && outputString.trim()) {
             if (part.tool === 'read') {
-                const parsedReadOutput = parseReadToolOutput(outputString);
-                const offset = typeof input?.offset === 'number' ? input.offset : 0;
-                const contentForLanguage = parsedReadOutput.lines.map((line) => line.text).join('\n');
-                let fallbackLineCursor = offset;
-                const hasExplicitLineNumbers = parsedReadOutput.lines.some((line) => line.lineNumber !== null);
-
-                return renderScrollableBlock(
-                    <div className="typography-code w-full min-w-0 space-y-1">
-                        {parsedReadOutput.lines.map((line, idx) => {
-                            if (line.lineNumber !== null) {
-                                fallbackLineCursor = line.lineNumber;
-                            }
-                            const shouldAssignFallbackLineNumber =
-                                parsedReadOutput.type === 'file'
-                                && !hasExplicitLineNumbers
-                                && line.lineNumber === null
-                                && !line.isInfo;
-                            const effectiveLineNumber = line.lineNumber ?? (shouldAssignFallbackLineNumber
-                                ? (fallbackLineCursor += 1)
-                                : null);
-                            const shouldShowLineNumber = !line.isInfo && effectiveLineNumber !== null;
-
-                            return (
-                                <div key={idx} className={cn('typography-code font-mono flex w-full min-w-0', line.isInfo && 'text-muted-foreground/70 italic')}>
-                                    <span className="w-10 flex-shrink-0 text-right pr-3 select-none border-r mr-3 -my-0.5 py-0.5" style={{ color: 'var(--tools-edit-line-number)', borderColor: 'var(--tools-border)' }}>
-                                        {shouldShowLineNumber ? effectiveLineNumber : ''}
-                                    </span>
-                                    <div className="flex-1 min-w-0">
-                                        {line.isInfo ? (
-                                            <div className="whitespace-pre-wrap break-words">{line.text}</div>
-                                        ) : (
-                                            <SyntaxHighlighter
-                                                style={syntaxTheme}
-                                                language={detectLanguageFromOutput(contentForLanguage, part.tool, input as Record<string, unknown>)}
-                                                PreTag="div"
-                                                wrapLines
-                                                wrapLongLines
-                                                customStyle={{
-                                                    margin: 0,
-                                                    padding: 0,
-                                                    fontSize: 'inherit',
-                                                    background: 'transparent',
-                                                    backgroundColor: 'transparent',
-                                                    borderRadius: 0,
-                                                    overflow: 'visible',
-                                                    whiteSpace: 'pre-wrap',
-                                                    wordBreak: 'break-all',
-                                                    overflowWrap: 'anywhere',
-                                                }}
-                                                codeTagProps={{
-                                                    style: {
-                                                        background: 'transparent',
-                                                        backgroundColor: 'transparent',
-                                                    },
-                                                }}
-                                            >
-                                                {line.text}
-                                            </SyntaxHighlighter>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>,
-                    { className: 'p-1' }
-                );
+                return <ReadToolVirtualized
+                    outputString={outputString}
+                    input={input}
+                    syntaxTheme={syntaxTheme}
+                    toolName={part.tool}
+                    renderScrollableBlock={renderScrollableBlock}
+                />;
             }
 
             return renderScrollableBlock(
@@ -1147,7 +1111,17 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
 ToolExpandedContent.displayName = 'ToolExpandedContent';
 
-const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxTheme, isMobile, onContentChange, hasPrevTool = false, hasNextTool = false }) => {
+const ToolPart: React.FC<ToolPartProps> = ({
+    part,
+    isExpanded,
+    onToggle,
+    syntaxTheme,
+    isMobile,
+    onContentChange,
+    onShowPopup,
+    hasPrevTool = false,
+    hasNextTool = false,
+}) => {
     const state = part.state;
     const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
 
@@ -1454,6 +1428,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                     hasNextTool={hasNextTool}
                     output={taskOutputString}
                     sessionId={taskSessionId}
+                    onShowPopup={onShowPopup}
                 />
             ) : null}
 
@@ -1464,6 +1439,7 @@ const ToolPart: React.FC<ToolPartProps> = ({ part, isExpanded, onToggle, syntaxT
                     syntaxTheme={syntaxTheme}
                     isMobile={isMobile}
                     currentDirectory={currentDirectory}
+                    onShowPopup={onShowPopup}
                     hasPrevTool={hasPrevTool}
                     hasNextTool={hasNextTool}
                 />

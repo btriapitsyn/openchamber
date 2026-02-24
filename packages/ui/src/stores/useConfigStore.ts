@@ -153,9 +153,6 @@ const resolveGitGenerationModelSelection = ({
     const zenModel = normalizeOptionalString(settingsZenModel);
 
     if (!Array.isArray(providers) || providers.length === 0) {
-        if (gitProviderId && gitModelId) {
-            return { providerId: gitProviderId, modelId: gitModelId };
-        }
         if (zenModel) {
             return { providerId: GIT_UTILITY_PROVIDER_ID, modelId: zenModel };
         }
@@ -1111,16 +1108,21 @@ export const useConfigStore = create<ConfigStore>()(
                             const defaultGitModelId = normalizeOptionalString(openChamberDefaults.gitModelId);
                             const defaultZenModel = normalizeOptionalString(openChamberDefaults.zenModel);
 
-                            const candidateGitProviderId = existingGitProviderId || defaultGitProviderId;
-                            const candidateGitModelId = existingGitModelId || defaultGitModelId;
-                            const candidateZenModel = existingZenModel || defaultZenModel;
-
-                            const resolvedGitSelection = resolveGitGenerationModelSelection({
+                            const resolvedExistingGitSelection = resolveGitGenerationModelSelection({
                                 providers,
-                                settingsGitProviderId: candidateGitProviderId,
-                                settingsGitModelId: candidateGitModelId,
-                                settingsZenModel: candidateZenModel,
+                                settingsGitProviderId: existingGitProviderId,
+                                settingsGitModelId: existingGitModelId,
+                                settingsZenModel: existingZenModel,
                             });
+
+                            const resolvedDefaultGitSelection = resolveGitGenerationModelSelection({
+                                providers,
+                                settingsGitProviderId: defaultGitProviderId,
+                                settingsGitModelId: defaultGitModelId,
+                                settingsZenModel: defaultZenModel,
+                            });
+
+                            const resolvedGitSelection = resolvedExistingGitSelection || resolvedDefaultGitSelection;
                             const resolvedGitProviderId = resolvedGitSelection?.providerId;
                             const resolvedGitModelId = resolvedGitSelection?.modelId;
                             const resolvedZenModel =
