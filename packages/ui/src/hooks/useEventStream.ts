@@ -45,6 +45,7 @@ declare global {
 const TEXT_SHRINK_TOLERANCE = 50;
 const RESYNC_DEBOUNCE_MS = 750;
 const QUESTION_RECONCILE_COOLDOWN_MS = 1500;
+const PERMISSION_RECONCILE_COOLDOWN_MS = 1500;
 
 const textLengthCache = new WeakMap<Part[], number>();
 const computeTextLength = (parts: Part[] | undefined | null): number => {
@@ -196,31 +197,47 @@ export const useEventStream = () => {
     void bootstrapPendingQuestions();
   }, [bootstrapPendingQuestions]);
 
-  React.useEffect(() => {
-    let cancelled = false;
+  const bootstrapPendingPermissions = React.useCallback(async () => {
+    try {
+      const projects = useProjectsStore.getState().projects;
+      const projectDirs = projects.map((project) => project.path);
+      // Use getState() to avoid sessions dependency which causes cascading updates
+      const currentSessions = useSessionStore.getState().sessions;
+      const sessionDirs = currentSessions.map((session) => (session as { directory?: string | null }).directory);
 
-    const bootstrapPendingPermissions = async () => {
-      try {
-        const pending = await opencodeClient.listPendingPermissions();
-        if (cancelled || pending.length === 0) {
-          return;
-        }
-
-        for (const request of pending) {
-          addPermission(request as unknown as PermissionRequest);
-        }
-      } catch {
-        // ignored
+      const directories = [effectiveDirectory, ...projectDirs, ...sessionDirs];
+      const pending = await opencodeClient.listPendingPermissions({ directories });
+      if (pending.length === 0) {
+        return;
       }
-    };
 
+      for (const request of pending) {
+        addPermission(request as unknown as PermissionRequest);
+      }
+    } catch {
+      // ignored
+    }
+  }, [addPermission, effectiveDirectory]);
+
+  const lastPermissionRefreshAtRef = React.useRef(0);
+  const requestPendingPermissionsRefresh = React.useCallback((force = false) => {
+    const now = Date.now();
+    if (!force && now - lastPermissionRefreshAtRef.current < PERMISSION_RECONCILE_COOLDOWN_MS) {
+      return;
+    }
+    lastPermissionRefreshAtRef.current = now;
     void bootstrapPendingPermissions();
-    requestPendingQuestionsRefresh(true);
+  }, [bootstrapPendingPermissions]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [addPermission, requestPendingQuestionsRefresh]);
+  const requestPendingPermissionsRefreshRef = React.useRef(requestPendingPermissionsRefresh);
+  React.useEffect(() => {
+    requestPendingPermissionsRefreshRef.current = requestPendingPermissionsRefresh;
+  }, [requestPendingPermissionsRefresh]);
+
+  React.useEffect(() => {
+    requestPendingPermissionsRefresh(true);
+    requestPendingQuestionsRefresh(true);
+  }, [requestPendingPermissionsRefresh, requestPendingQuestionsRefresh]);
 
   const normalizeDirectory = React.useCallback((value: string | null | undefined): string | null => {
     if (typeof value !== 'string') return null;
@@ -1754,7 +1771,7 @@ export const useEventStream = () => {
     trackMessage,
     reportMessage,
     requestPendingQuestionsRefresh,
-    
+
     updateSession,
     removeSessionFromStore,
     bootstrapState,
@@ -1875,9 +1892,7 @@ export const useEventStream = () => {
       checkConnection();
       triggerSessionStatusPoll();
 
-      // Always refresh session status on connect to detect any
-      // already-running sessions (e.g., started via CLI before UI opened)
-      // Removed: void refreshSessionStatus();
+      requestPendingPermissionsRefreshRef.current(shouldRefresh);
 
        if (shouldRefresh) {
          void stableBootstrapState('sse_reconnected');
@@ -1885,14 +1900,14 @@ export const useEventStream = () => {
          const sessionId = currentSessionIdRef.current;
          if (sessionId) {
            setTimeout(() => {
-            scheduleSoftResyncRef.current(sessionId, 'sse_reconnected', getMessageLimit())
-              .then(() => requestSessionMetadataRefresh(sessionId))
-              .catch((error: unknown) => {
-                console.warn('[useEventStream] Failed to resync messages after reconnect:', error);
-              });
-            }, 0);
-          }
-        }
+           scheduleSoftResyncRef.current(sessionId, 'sse_reconnected', getMessageLimit())
+             .then(() => requestSessionMetadataRefresh(sessionId))
+             .catch((error: unknown) => {
+               console.warn('[useEventStream] Failed to resync messages after reconnect:', error);
+             });
+           }, 0);
+         }
+       }
       };
 
     if (streamDebugEnabled()) {
@@ -2045,6 +2060,7 @@ export const useEventStream = () => {
           scheduleSoftResync(sessionId, 'visibility_restore', getMessageLimit());
           requestSessionMetadataRefresh(sessionId);
         }
+        requestPendingPermissionsRefreshRef.current(false);
 
         // Removed: void refreshSessionStatus();
         triggerSessionStatusPoll();
@@ -2073,18 +2089,20 @@ export const useEventStream = () => {
              requestSessionMetadataRefresh(sessionId);
              scheduleSoftResync(sessionId, 'window_focus', getMessageLimit());
            }
+           requestPendingPermissionsRefreshRef.current(false);
            // Removed: void refreshSessionStatus();
            triggerSessionStatusPoll();
 
-          publishStatus('connecting', 'Resuming stream');
-          startStream({ resetAttempts: true });
-        }
+           publishStatus('connecting', 'Resuming stream');
+           startStream({ resetAttempts: true });
+         }
       }
     };
 
       const handleOnline = () => {
         onlineStatusRef.current = true;
         maybeBootstrapIfStale('network_restored');
+        requestPendingPermissionsRefreshRef.current(false);
         if (pendingResumeRef.current || !unsubscribeRef.current) {
           triggerSessionStatusPoll();
           publishStatus('connecting', 'Network restored');
@@ -2115,6 +2133,7 @@ export const useEventStream = () => {
             void scheduleSoftResync(sessionId, 'page_show', getMessageLimit());
             requestSessionMetadataRefresh(sessionId);
           }
+          requestPendingPermissionsRefreshRef.current(false);
           // Removed: void refreshSessionStatus();
           triggerSessionStatusPoll();
           startStream({ resetAttempts: true });
