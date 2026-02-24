@@ -83,7 +83,7 @@ const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft';
+export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -119,6 +119,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
     const persistChatDraft = useUIStore(state => state.persistChatDraft);
     const setPersistChatDraft = useUIStore(state => state.setPersistChatDraft);
+    const showMobileSessionStatusBar = useUIStore(state => state.showMobileSessionStatusBar);
+    const setShowMobileSessionStatusBar = useUIStore(state => state.setShowMobileSessionStatusBar);
     const {
         themeMode,
         setThemeMode,
@@ -171,6 +173,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('cornerRadius') || shouldShow('inputBarOffset');
     const hasBehaviorSettings = shouldShow('toolOutput')
         || shouldShow('diffLayout')
+        || shouldShow('mobileStatusBar')
         || shouldShow('dotfiles')
         || shouldShow('reasoning')
         || shouldShow('queueMode')
@@ -545,8 +548,31 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </section>
                             )}
 
-                            {(shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('reasoning') || shouldShow('textJustificationActivity')) && (
+                            {(shouldShow('mobileStatusBar') || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('reasoning') || shouldShow('textJustificationActivity')) && (
                                 <section className="p-2 space-y-0.5">
+                                    {shouldShow('mobileStatusBar') && (
+                                        <div
+                                            className="group flex cursor-pointer items-center gap-2 py-1.5"
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-pressed={showMobileSessionStatusBar}
+                                            onClick={() => setShowMobileSessionStatusBar(!showMobileSessionStatusBar)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === ' ' || event.key === 'Enter') {
+                                                    event.preventDefault();
+                                                    setShowMobileSessionStatusBar(!showMobileSessionStatusBar);
+                                                }
+                                            }}
+                                        >
+                                            <Checkbox
+                                                checked={showMobileSessionStatusBar}
+                                                onChange={setShowMobileSessionStatusBar}
+                                                ariaLabel="Show mobile status bar"
+                                            />
+                                            <span className="typography-ui-label text-foreground">Show Mobile Status Bar</span>
+                                        </div>
+                                    )}
+
                                     {shouldShow('dotfiles') && !isVSCodeRuntime() && (
                                         <div
                                             className="group flex cursor-pointer items-center gap-2 py-1.5"

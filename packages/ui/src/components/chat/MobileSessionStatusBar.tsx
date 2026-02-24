@@ -268,8 +268,8 @@ function StatusIndicator({ isRunning, needsAttention }: { isRunning: boolean; ne
 function RunningIndicator({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="flex items-center gap-0.5 text-xs text-[var(--status-info)]">
-      <RiLoader4Line className="h-3 w-3 animate-spin" />
+    <span className="flex items-center gap-1 text-[13px] text-[var(--status-info)]">
+      <RiLoader4Line className="h-3.5 w-3.5 animate-spin" />
       {count}
     </span>
   );
@@ -278,8 +278,8 @@ function RunningIndicator({ count }: { count: number }) {
 function UnreadIndicator({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="flex items-center gap-0.5 text-xs text-[var(--status-error)]">
-      <div className="h-1.5 w-1.5 rounded-full bg-[var(--status-error)]" />
+    <span className="flex items-center gap-1 text-[13px] text-[var(--status-error)]">
+      <div className="h-2 w-2 rounded-full bg-[var(--status-error)]" />
       {count}
     </span>
   );
@@ -380,7 +380,7 @@ function TokenUsageIndicator({ contextUsage }: { contextUsage: SessionContextUsa
     percentage >= 75 ? 'text-[var(--status-warning)]' : 'text-[var(--status-success)]';
 
   return (
-    <span className={cn("text-[11px] tabular-nums font-medium", colorClass)}>
+    <span className={cn("text-[12px] tabular-nums font-medium", colorClass)}>
       {percentage.toFixed(1)}%
     </span>
   );
@@ -410,28 +410,28 @@ function SessionStatusHeader({
     <button
       type="button"
       onClick={onToggle}
-      className="w-full flex flex-col px-2 py-0 text-left transition-colors hover:bg-[var(--interactive-hover)]"
+      className="w-full flex flex-col px-2 py-0.5 text-left transition-colors hover:bg-[var(--interactive-hover)]"
     >
       {!isExpanded && currentProjectLabel && (
         <div className="flex flex-col items-start">
-          <div className="flex items-center gap-0.5 leading-none">
+          <div className="flex items-center gap-1 leading-none">
             {ProjectIcon && (
               <ProjectIcon
-                className="h-2 w-2"
+                className="h-2.5 w-2.5"
                 style={projectColorVar ? { color: projectColorVar } : undefined}
               />
             )}
             <span
-              className="text-[9px] leading-none text-[var(--surface-mutedForeground)] truncate max-w-[120px]"
+              className="text-[11px] leading-none text-[var(--surface-mutedForeground)] truncate max-w-[120px]"
               style={projectColorVar ? { color: projectColorVar } : undefined}
             >
               {currentProjectLabel}
               </span>
           </div>
-          <div className="w-full h-px bg-[var(--interactive-border)] my-0.5" />
+          <div className="w-full h-px bg-[var(--interactive-border)] my-1" />
         </div>
       )}
-      <span className="text-xs text-[var(--surface-foreground)] truncate leading-none">
+      <span className="text-[13px] text-[var(--surface-foreground)] truncate leading-none">
         {currentSessionTitle}
       </span>
     </button>
@@ -517,27 +517,27 @@ function ProjectButton({
       type="button"
       data-project-id={project.id}
       className={cn(
-        "flex items-center gap-1 px-2 !py-1.5 rounded-md text-[11px] whitespace-nowrap transition-colors shrink-0 border !min-h-0 leading-none select-none",
+        "flex items-center gap-1 px-2.5 !py-1.5 rounded-md text-[12px] whitespace-nowrap transition-colors shrink-0 border !min-h-0 leading-none select-none",
         isActive
-          ? "bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)] border-transparent"
-          : "bg-[var(--surface-elevated)] text-[var(--surface-foreground)] border-[var(--interactive-border)]/50 hover:bg-[var(--interactive-hover)]"
+          ? "border-[var(--primary-base)]/60 text-[var(--primary-base)]/80 bg-[var(--primary-base)]/5 hover:text-[var(--primary-base)] hover:bg-[var(--primary-base)]/10"
+          : "border-[var(--interactive-border)] text-[var(--surface-foreground)] bg-[var(--surface-elevated)] hover:bg-[var(--interactive-hover)]"
       )}
       {...longPressHandlers}
     >
       {/* Status indicators */}
       <div className="flex items-center gap-0.5">
         {status.hasRunning && (
-          <RiLoader4Line className="h-2 w-2 animate-spin text-[var(--status-info)]" />
+          <RiLoader4Line className="h-2.5 w-2.5 animate-spin text-[var(--status-info)]" />
         )}
         {!status.hasRunning && status.hasUnread && (
-          <div className="h-1 w-1 rounded-full bg-[var(--status-error)]" />
+          <div className="h-1.5 w-1.5 rounded-full bg-[var(--status-error)]" />
         )}
       </div>
 
       {/* Icon */}
       {ProjectIcon && (
         <ProjectIcon
-          className="h-3 w-3"
+          className="h-3.5 w-3.5"
           style={projectColorVar ? { color: projectColorVar } : undefined}
         />
       )}
@@ -607,7 +607,7 @@ function ProjectBar({
         <button
           type="button"
           onClick={onAddProject}
-          className="flex items-center justify-center !py-1.5 px-2 rounded-md bg-[var(--surface-elevated)] border border-[var(--interactive-border)]/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] !min-h-0"
+          className="flex items-center justify-center !py-1.5 px-2 rounded-md border border-[var(--primary-base)]/60 bg-[var(--primary-base)]/5 text-[var(--primary-base)]/80 hover:text-[var(--primary-base)] hover:bg-[var(--primary-base)]/10 !min-h-0"
           aria-label="Add project"
         >
           <RiAddLine className="h-3 w-3" />
@@ -683,10 +683,10 @@ function ProjectBar({
       <button
         type="button"
         onClick={onAddProject}
-        className="flex items-center justify-center !py-1.5 px-2 rounded-md bg-[var(--surface-elevated)] border border-[var(--interactive-border)]/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] shrink-0 !min-h-0"
+        className="flex items-center justify-center !py-1.5 px-2 rounded-md border border-[var(--primary-base)]/60 bg-[var(--primary-base)]/5 text-[var(--primary-base)]/80 hover:text-[var(--primary-base)] hover:bg-[var(--primary-base)]/10 shrink-0 !min-h-0"
         aria-label="Add project"
       >
-        <RiAddLine className="h-3 w-3" />
+        <RiAddLine className="h-3.5 w-3.5" />
       </button>
 
       {/* Delete confirmation dialog */}
@@ -739,7 +739,7 @@ function CollapsedView({
 
   return (
     <div
-      className="w-full flex items-center justify-between px-2 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left overflow-hidden"
+      className="w-full flex items-center justify-between px-2 py-1 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left overflow-hidden"
       style={{
         borderTopLeftRadius: cornerRadius,
         borderTopRightRadius: cornerRadius,
@@ -773,7 +773,7 @@ function CollapsedView({
             e.stopPropagation();
             onNewSession();
           }}
-          className="flex items-center gap-0.5 px-1.5 py-1 text-[11px] leading-tight !min-h-0 rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] self-center"
+          className="flex items-center gap-0.5 px-2 py-1 text-[12px] leading-tight !min-h-0 rounded border border-[var(--primary-base)]/60 bg-[var(--primary-base)]/5 text-[var(--primary-base)]/80 hover:text-[var(--primary-base)] hover:bg-[var(--primary-base)]/10 self-center"
         >
           New
         </button>
@@ -912,7 +912,7 @@ function ExpandedView({
               e.stopPropagation();
               onNewSession();
             }}
-            className="flex items-center gap-0.5 px-1.5 py-1 text-[11px] leading-tight !min-h-0 rounded border border-border/50 text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] self-start"
+            className="flex items-center gap-0.5 px-2 py-1 text-[12px] leading-tight !min-h-0 rounded border border-[var(--primary-base)]/60 bg-[var(--primary-base)]/5 text-[var(--primary-base)]/80 hover:text-[var(--primary-base)] hover:bg-[var(--primary-base)]/10 self-start"
           >
             New
           </button>
@@ -968,11 +968,11 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const sessionStatus = useSessionStore((state) => state.sessionStatus);
   const sessionAttentionStates = useSessionStore((state) => state.sessionAttentionStates);
   const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
-  const createSession = useSessionStore((state) => state.createSession);
+  const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
   const agents = useConfigStore((state) => state.agents);
   const { getCurrentModel } = useConfigStore();
-  const { isMobile, isMobileSessionStatusBarCollapsed, setIsMobileSessionStatusBarCollapsed } = useUIStore();
+  const { isMobile, showMobileSessionStatusBar, isMobileSessionStatusBarCollapsed, setIsMobileSessionStatusBarCollapsed } = useUIStore();
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
 
   // Project store
@@ -1012,7 +1012,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const [isExpanded, setIsExpanded] = React.useState(false);
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
 
-  if (!isMobile || totalCount === 0) {
+  if (!isMobile || !showMobileSessionStatusBar || totalCount === 0) {
     return null;
   }
 
@@ -1027,12 +1027,8 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     setActiveMainTab('chat');
   };
 
-  const handleCreateSession = async () => {
-    const newSession = await createSession();
-    if (newSession) {
-      setCurrentSession(newSession.id);
-      onSessionSwitch?.(newSession.id);
-    }
+  const handleCreateSession = () => {
+    openNewSessionDraft();
   };
 
   const handleProjectSwitch = (projectId: string) => {
