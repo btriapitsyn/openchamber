@@ -246,6 +246,10 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
     fetchIdentity,
     setLogMaxCount,
   } = useGitStore();
+  const isMobile = useUIStore((state) => state.isMobile);
+  const openContextDiff = useUIStore((state) => state.openContextDiff);
+  const navigateToDiff = useUIStore((state) => state.navigateToDiff);
+  const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen);
 
   const initialSnapshot = React.useMemo(() => {
     if (!currentDirectory) return null;
@@ -1713,11 +1717,14 @@ export const GitView: React.FC<GitViewProps> = ({ mode = 'full' }) => {
                         onSelectAll={selectAll}
                         onClearSelection={clearSelection}
                         onViewDiff={(path) => {
-                          if (isSidebarMode && currentDirectory) {
-                            useUIStore.getState().openContextDiff(currentDirectory, path);
+                          if (isSidebarMode && currentDirectory && !isMobile) {
+                            openContextDiff(currentDirectory, path);
                             return;
                           }
-                          useUIStore.getState().navigateToDiff(path);
+                          navigateToDiff(path);
+                          if (isSidebarMode && isMobile) {
+                            setRightSidebarOpen(false);
+                          }
                         }}
                         onRevertFile={handleRevertFile}
                       />

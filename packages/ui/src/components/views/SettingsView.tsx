@@ -335,6 +335,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   const openPage = React.useCallback((slug: SettingsPageSlug) => {
     setSettingsPage(slug);
+    autoNavSlugRef.current = slug;
     if (!isMobile) {
       return;
     }
