@@ -54,7 +54,7 @@ import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPa
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
 import { McpIcon } from '@/components/icons/McpIcon';
 import { useDeviceInfo } from '@/lib/device';
-import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
+import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import {
   SETTINGS_PAGE_METADATA,
@@ -101,7 +101,7 @@ const pageOrder: SettingsPageSlug[] = [
 
 function buildRuntimeContext(isDesktop: boolean): SettingsRuntimeContext {
   const isVSCode = isVSCodeRuntime();
-  const isWeb = isWebRuntime();
+  const isWeb = !isDesktop && isWebRuntime();
   return { isVSCode, isWeb, isDesktop };
 }
 
@@ -251,8 +251,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   const isDesktopApp = React.useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+    return isDesktopShell();
   }, []);
 
   // keep platform check available for future window chrome tweaks
