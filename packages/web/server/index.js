@@ -5973,10 +5973,22 @@ async function main(options = {}) {
     console.log('UI password protection enabled for browser sessions');
   }
 
-  app.get('/auth/session', (req, res) => uiAuthController.handleSessionStatus(req, res));
+  app.get('/auth/session', async (req, res) => {
+    try {
+      await uiAuthController.handleSessionStatus(req, res);
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
   app.post('/auth/session', (req, res) => uiAuthController.handleSessionCreate(req, res));
 
-  app.use('/api', (req, res, next) => uiAuthController.requireAuth(req, res, next));
+  app.use('/api', async (req, res, next) => {
+    try {
+      await uiAuthController.requireAuth(req, res, next);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   const parsePushSubscribeBody = (body) => {
     if (!body || typeof body !== 'object') return null;
@@ -6017,7 +6029,7 @@ async function main(options = {}) {
     await ensurePushInitialized();
 
     const uiToken = uiAuthController?.ensureSessionToken
-      ? uiAuthController.ensureSessionToken(req, res)
+      ? await uiAuthController.ensureSessionToken(req, res)
       : getUiSessionTokenFromRequest(req);
     if (!uiToken) {
       return res.status(401).json({ error: 'UI session missing' });
@@ -6065,7 +6077,7 @@ async function main(options = {}) {
     await ensurePushInitialized();
 
     const uiToken = uiAuthController?.ensureSessionToken
-      ? uiAuthController.ensureSessionToken(req, res)
+      ? await uiAuthController.ensureSessionToken(req, res)
       : getUiSessionTokenFromRequest(req);
     if (!uiToken) {
       return res.status(401).json({ error: 'UI session missing' });
@@ -6080,9 +6092,9 @@ async function main(options = {}) {
     res.json({ ok: true });
   });
 
-  app.post('/api/push/visibility', (req, res) => {
+  app.post('/api/push/visibility', async (req, res) => {
     const uiToken = uiAuthController?.ensureSessionToken
-      ? uiAuthController.ensureSessionToken(req, res)
+      ? await uiAuthController.ensureSessionToken(req, res)
       : getUiSessionTokenFromRequest(req);
     if (!uiToken) {
       return res.status(401).json({ error: 'UI session missing' });

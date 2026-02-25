@@ -10,17 +10,21 @@ import { DesktopHostSwitcherInline } from '@/components/desktop/DesktopHostSwitc
 const STATUS_CHECK_ENDPOINT = '/auth/session';
 
 const fetchSessionStatus = async (): Promise<Response> => {
-  return fetch(STATUS_CHECK_ENDPOINT, {
+  console.log('[Frontend Auth] Checking session status...');
+  const response = await fetch(STATUS_CHECK_ENDPOINT, {
     method: 'GET',
     credentials: 'include',
     headers: {
       Accept: 'application/json',
     },
   });
+  console.log('[Frontend Auth] Session status response:', response.status, response.statusText);
+  return response;
 };
 
 const submitPassword = async (password: string): Promise<Response> => {
-  return fetch(STATUS_CHECK_ENDPOINT, {
+  console.log('[Frontend Auth] Submitting password...');
+  const response = await fetch(STATUS_CHECK_ENDPOINT, {
     method: 'POST',
     credentials: 'include',
     headers: {
@@ -29,6 +33,8 @@ const submitPassword = async (password: string): Promise<Response> => {
     },
     body: JSON.stringify({ password }),
   });
+  console.log('[Frontend Auth] Password submit response:', response.status, response.statusText);
+  return response;
 };
 
 const AuthShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -134,30 +140,58 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
 
   const checkStatus = React.useCallback(async () => {
     if (skipAuth) {
+      console.log('[Frontend Auth] VSCode runtime, skipping auth');
       setState('authenticated');
       return;
     }
 
+    // 检查 cookie 是否存在
+    const cookies = document.cookie;
+    const hasAccessToken = cookies.includes('oc_ui_session=');
+    const hasRefreshToken = cookies.includes('oc_ui_refresh=');
+    console.log('[Frontend Auth] Cookies check - access:', hasAccessToken, 'refresh:', hasRefreshToken);
+    console.log('[Frontend Auth] All cookies:', cookies.split(';').map(c => c.trim().split('=')[0]));
+
     setState((prev) => (prev === 'authenticated' ? prev : 'pending'));
     try {
       const response = await fetchSessionStatus();
+      const responseText = await response.text();
+      console.log('[Frontend Auth] Raw response:', response.status, responseText);
+      
       if (response.ok) {
+        console.log('[Frontend Auth] Session is authenticated');
         setState('authenticated');
         setErrorMessage('');
         setRetryAfter(undefined);
         return;
       }
       if (response.status === 401) {
+        let data: { debug?: { hasRefreshToken: boolean; message: string } } = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = {};
+        }
+        console.warn('[Frontend Auth] Session is locked (401)', data);
+        if (data.debug) {
+          console.warn('[Frontend Auth] Debug info:', data.debug);
+        }
         setState('locked');
         setRetryAfter(undefined);
         return;
       }
       if (response.status === 429) {
-        const data = await response.json().catch(() => ({}));
+        let data: { retryAfter?: number } = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = {};
+        }
         setRetryAfter(data.retryAfter);
         setState('rate-limited');
         return;
       }
+      console.error('[Frontend Auth] Unexpected response status:', response.status);
       setState('error');
     } catch (error) {
       console.warn('Failed to check session status:', error);
@@ -254,24 +288,34 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
     try {
       const response = await submitPassword(password);
       if (response.ok) {
+        console.log('[Frontend Auth] Login successful');
+        // 检查登录后 cookie 是否被设置
+        const cookies = document.cookie;
+        const hasAccessToken = cookies.includes('oc_ui_session=');
+        const hasRefreshToken = cookies.includes('oc_ui_refresh=');
+        console.log('[Frontend Auth] After login - access:', hasAccessToken, 'refresh:', hasRefreshToken);
+        console.log('[Frontend Auth] All cookies after login:', cookies.split(';').map(c => c.trim().split('=')[0]).filter(Boolean));
         setPassword('');
         setState('authenticated');
         return;
       }
 
       if (response.status === 401) {
+        console.warn('[Frontend Auth] Login failed: Invalid password');
         setErrorMessage('Incorrect password. Try again.');
         setState('locked');
         return;
       }
 
       if (response.status === 429) {
+        console.warn('[Frontend Auth] Login failed: Rate limited');
         const data = await response.json().catch(() => ({}));
         setRetryAfter(data.retryAfter);
         setState('rate-limited');
         return;
       }
 
+      console.error('[Frontend Auth] Login failed: Unexpected response', response.status);
       setErrorMessage('Unexpected response from server.');
       setState('error');
     } catch (error) {

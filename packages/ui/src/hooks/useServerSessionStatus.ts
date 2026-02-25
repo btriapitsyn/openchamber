@@ -78,6 +78,10 @@ export function useServerSessionStatus() {
           headers: { Accept: 'application/json' },
         }).then(async (r) => {
           if (!r.ok) {
+            console.warn('[useServerSessionStatus] API returned', r.status);
+            if (r.status === 401) {
+              console.warn('[useServerSessionStatus] Authentication required - session may have expired');
+            }
             throw new Error(String(r.status));
           }
           return (await r.json()) as ServerSnapshotResponse;
