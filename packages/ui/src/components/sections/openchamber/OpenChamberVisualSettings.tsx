@@ -83,7 +83,7 @@ const DIFF_VIEW_MODE_OPTIONS: Option<'single' | 'stacked'>[] = [
     },
 ];
 
-export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'toolOutput' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft';
+export type VisibleSetting = 'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'toolOutput' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -119,6 +119,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
     const persistChatDraft = useUIStore(state => state.persistChatDraft);
     const setPersistChatDraft = useUIStore(state => state.setPersistChatDraft);
+    const isNavRailExpanded = useUIStore(state => state.isNavRailExpanded);
+    const setNavRailExpanded = useUIStore(state => state.setNavRailExpanded);
     const showMobileSessionStatusBar = useUIStore(state => state.showMobileSessionStatusBar);
     const setShowMobileSessionStatusBar = useUIStore(state => state.setShowMobileSessionStatusBar);
     const {
@@ -170,6 +172,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
     const hasAppearanceSettings = shouldShow('theme') && !isVSCodeRuntime();
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('cornerRadius') || shouldShow('inputBarOffset');
+    const hasNavigationSettings = shouldShow('navRail') && !isMobile;
     const hasBehaviorSettings = shouldShow('toolOutput')
         || shouldShow('diffLayout')
         || (shouldShow('mobileStatusBar') && isMobile)
@@ -442,6 +445,37 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </div>
                             )}
 
+                        </section>
+                    </div>
+                )}
+
+                {/* --- Navigation --- */}
+                {hasNavigationSettings && (
+                    <div className="space-y-3">
+                        <section className="px-2 pb-2 pt-0">
+                            <h4 className="typography-ui-header font-medium text-foreground">Navigation</h4>
+                            <div
+                                className="group mt-1.5 flex cursor-pointer items-center gap-2 py-1.5"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => setNavRailExpanded(!isNavRailExpanded)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        setNavRailExpanded(!isNavRailExpanded);
+                                    }
+                                }}
+                            >
+                                <Checkbox
+                                    checked={isNavRailExpanded}
+                                    onChange={setNavRailExpanded}
+                                    ariaLabel="Expand project rail by default"
+                                />
+                                <span className="typography-ui-label text-foreground">Expand project rail</span>
+                            </div>
+                            <p className="typography-meta text-muted-foreground/70 mt-0.5 px-6">
+                                Show project names in the left rail when multiple projects are open. Auto-collapses with a single project.
+                            </p>
                         </section>
                     </div>
                 )}
