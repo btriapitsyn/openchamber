@@ -3,6 +3,7 @@ import type { SidebarSection } from '@/constants/sidebar';
 export type SettingsPageSlug =
   | 'home'
   | 'projects'
+  | 'remote-instances'
   | 'providers'
   | 'usage'
   | 'agents'
@@ -70,6 +71,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'projects',
     kind: 'split',
     keywords: ['project', 'projects', 'worktree', 'worktrees', 'repo', 'repository', 'directory'],
+  },
+  {
+    slug: 'remote-instances',
+    title: 'Remote Instances',
+    group: 'projects',
+    kind: 'split',
+    keywords: ['ssh', 'remote', 'instances', 'tunnels', 'forwarding', 'connection'],
+    isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb && !ctx.isVSCode,
   },
   {
     slug: 'providers',

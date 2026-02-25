@@ -27,6 +27,7 @@ import {
   RiListUnordered,
   RiRobot2Line,
   RiRestartLine,
+  RiServerLine,
   RiSlashCommands2,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -41,6 +42,8 @@ import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
 import { ProjectsSidebar } from '@/components/sections/projects/ProjectsSidebar';
 import { ProjectsPage } from '@/components/sections/projects/ProjectsPage';
+import { RemoteInstancesSidebar } from '@/components/sections/remote-instances/RemoteInstancesSidebar';
+import { RemoteInstancesPage } from '@/components/sections/remote-instances/RemoteInstancesPage';
 import { ProvidersSidebar } from '@/components/sections/providers/ProvidersSidebar';
 import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
 import { UsageSidebar } from '@/components/sections/usage/UsageSidebar';
@@ -85,6 +88,7 @@ const pageOrder: SettingsPageSlug[] = [
   'shortcuts',
   'git',
   'projects',
+  'remote-instances',
   'agents',
   'commands',
   'mcp',
@@ -112,6 +116,8 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
   switch (slug) {
     case 'projects':
       return RiFoldersLine;
+    case 'remote-instances':
+      return RiServerLine;
     case 'appearance':
       return RiPaletteLine;
     case 'chat':
@@ -379,6 +385,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     switch (slug) {
       case 'projects':
         return <ProjectsSidebar onItemSelect={opts.onItemSelect} />;
+      case 'remote-instances':
+        return <RemoteInstancesSidebar onItemSelect={opts.onItemSelect} />;
       case 'agents':
         return <AgentsSidebar onItemSelect={opts.onItemSelect} />;
       case 'commands':
@@ -407,6 +415,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <SettingsHome onOpen={openPage} />;
       case 'projects':
         return <ProjectsPage />;
+      case 'remote-instances':
+        return <RemoteInstancesPage />;
       case 'agents':
         return <AgentsPage />;
       case 'commands':

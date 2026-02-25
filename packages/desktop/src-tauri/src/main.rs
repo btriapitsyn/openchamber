@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod remote_ssh;
+
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -14,6 +16,7 @@ use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri::utils::config::BackgroundThrottlingPolicy;
+use remote_ssh::DesktopSshManagerState;
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -2365,6 +2368,7 @@ fn main() {
         .manage(WindowFocusState::default())
         .manage(WindowGeometryDebounceState::default())
         .manage(MenuRuntimeState::default())
+        .manage(DesktopSshManagerState::default())
         .manage(PendingUpdate(Mutex::new(None)))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -2547,6 +2551,9 @@ fn main() {
                 // If this was the last window, kill the sidecar and exit.
                 let remaining = app.webview_windows().len();
                 if remaining == 0 {
+                    if let Some(state) = app.try_state::<DesktopSshManagerState>() {
+                        state.shutdown_all(&app);
+                    }
                     kill_sidecar(app.clone());
                     app.exit(0);
                 }
@@ -2576,6 +2583,14 @@ fn main() {
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,
+            remote_ssh::desktop_ssh_instances_get,
+            remote_ssh::desktop_ssh_instances_set,
+            remote_ssh::desktop_ssh_import_hosts,
+            remote_ssh::desktop_ssh_connect,
+            remote_ssh::desktop_ssh_disconnect,
+            remote_ssh::desktop_ssh_status,
+            remote_ssh::desktop_ssh_logs,
+            remote_ssh::desktop_ssh_logs_clear,
             desktop_read_file,
         ])
         .setup(|app| {
@@ -2693,9 +2708,15 @@ fn main() {
         match event {
             tauri::RunEvent::ExitRequested { .. } => {
                 // Best-effort cleanup; never block shutdown.
+                if let Some(state) = app_handle.try_state::<DesktopSshManagerState>() {
+                    state.shutdown_all(app_handle);
+                }
                 kill_sidecar(app_handle.clone());
             }
             tauri::RunEvent::Exit => {
+                if let Some(state) = app_handle.try_state::<DesktopSshManagerState>() {
+                    state.shutdown_all(app_handle);
+                }
                 kill_sidecar(app_handle.clone());
             }
             #[cfg(target_os = "macos")]

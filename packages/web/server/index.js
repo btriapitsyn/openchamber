@@ -36,6 +36,19 @@ const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
+const OPENCHAMBER_VERSION = (() => {
+  try {
+    const packagePath = path.resolve(__dirname, '..', 'package.json');
+    const raw = fs.readFileSync(packagePath, 'utf8');
+    const pkg = JSON.parse(raw);
+    if (pkg && typeof pkg.version === 'string' && pkg.version.trim().length > 0) {
+      return pkg.version.trim();
+    }
+  } catch {
+    // ignore
+  }
+  return 'unknown';
+})();
 const fsPromises = fs.promises;
 const DEFAULT_FILE_SEARCH_LIMIT = 60;
 const MAX_FILE_SEARCH_LIMIT = 400;
@@ -5680,6 +5693,7 @@ async function main(options = {}) {
   }
 
   const app = express();
+  const serverStartedAt = new Date().toISOString();
   app.set('trust proxy', true);
   expressApp = app;
   server = http.createServer(app);
@@ -5708,6 +5722,15 @@ async function main(options = {}) {
     res.json({ ok: true });
     gracefulShutdown({ exitProcess: false }).catch((error) => {
       console.error('Shutdown request failed:', error?.message || error);
+    });
+  });
+
+  app.get('/api/system/info', (req, res) => {
+    res.json({
+      openchamberVersion: OPENCHAMBER_VERSION,
+      runtime: process.env.OPENCHAMBER_RUNTIME || 'web',
+      pid: process.pid,
+      startedAt: serverStartedAt,
     });
   });
 
