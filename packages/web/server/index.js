@@ -6745,7 +6745,7 @@ async function main(options = {}) {
     const publicUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
     const active = Boolean(publicUrl);
     if (active && publicUrl && tunnelPassword) {
-      const passwordUrl = `${publicUrl}?p=${tunnelPassword}`;
+      const passwordUrl = `${publicUrl}?token=${tunnelPassword}`;
       res.json({ active, url: publicUrl, passwordUrl });
     } else {
       res.json({ active: false, url: null, passwordUrl: null });
@@ -6755,7 +6755,7 @@ async function main(options = {}) {
   app.post('/api/openchamber/tunnel/start', async (_req, res) => {
     const existingUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
     if (existingUrl) {
-      const passwordUrl = tunnelPassword ? `${existingUrl}?p=${tunnelPassword}` : existingUrl;
+      const passwordUrl = tunnelPassword ? `${existingUrl}?token=${tunnelPassword}` : existingUrl;
       return res.json({ ok: true, url: existingUrl, passwordUrl });
     }
 
@@ -6779,7 +6779,7 @@ async function main(options = {}) {
       }
 
       tunnelPassword = crypto.randomUUID();
-      const passwordUrl = `${publicUrl}?p=${tunnelPassword}`;
+      const passwordUrl = `${publicUrl}?token=${tunnelPassword}`;
 
       printTunnelWarning();
       console.log(`Cloudflare tunnel active: ${publicUrl}`);
