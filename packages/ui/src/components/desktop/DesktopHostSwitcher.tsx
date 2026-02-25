@@ -300,7 +300,6 @@ export function DesktopHostSwitcherDialog({
     setIsSaving(true);
     setError('');
     try {
-      // Persist only remote hosts; Local is derived.
       const remote = nextHosts.filter((h) => h.id !== LOCAL_HOST_ID);
       await desktopHostsSet({ hosts: remote, defaultHostId: nextDefaultHostId });
       setConfigHosts(remote);
@@ -1141,12 +1140,9 @@ export function DesktopHostSwitcherButton({ headerIconButtonClass }: DesktopHost
       connecting: false,
     });
 
-    try {
-      const cfg = await desktopHostsGet();
-      await desktopHostsSet({ hosts: cfg.hosts, defaultHostId: LOCAL_HOST_ID });
-    } catch {
-      // ignore
-    }
+    await desktopHostsGet()
+      .then((cfg) => desktopHostsSet({ hosts: cfg.hosts, defaultHostId: LOCAL_HOST_ID }))
+      .catch(() => undefined);
 
     window.location.assign(toNavigationUrl(getLocalOrigin()));
   }, []);
@@ -1222,23 +1218,11 @@ export function DesktopHostSwitcherButton({ headerIconButtonClass }: DesktopHost
     return null;
   }
 
-  const isCurrentlyLocal = (() => {
-    try {
-      return locationMatchesHost(window.location.href, getLocalOrigin());
-    } catch {
-      return false;
-    }
-  })();
+  const isCurrentlyLocal = locationMatchesHost(window.location.href, getLocalOrigin());
 
-  // Fallback label when Tauri IPC is temporarily unavailable.
-  const fallbackLabel = (() => {
-    try {
-      const host = typeof window !== 'undefined' ? window.location.hostname : '';
-      return host ? host : 'Instance';
-    } catch {
-      return 'Instance';
-    }
-  })();
+  const fallbackLabel = typeof window !== 'undefined' && window.location.hostname
+    ? window.location.hostname
+    : 'Instance';
 
   const effectiveLabel = isCurrentlyLocal
     ? 'Local'

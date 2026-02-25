@@ -209,11 +209,12 @@ const openExternalUrl = async (url: string): Promise<boolean> => {
 
   const tauri = (window as unknown as { __TAURI__?: TauriShell }).__TAURI__;
   if (tauri?.shell?.open) {
-    try {
-      await tauri.shell.open(target);
+    const openedWithTauri = await tauri.shell
+      .open(target)
+      .then(() => true)
+      .catch(() => false);
+    if (openedWithTauri) {
       return true;
-    } catch {
-      // fall through
     }
   }
 
@@ -322,7 +323,7 @@ export const RemoteInstancesPage: React.FC = () => {
   }, [load, loadImports]);
 
   React.useEffect(() => {
-    setDraft(selectedInstance ? JSON.parse(JSON.stringify(selectedInstance)) : null);
+    setDraft(selectedInstance);
   }, [selectedInstance]);
 
   React.useEffect(() => {
@@ -455,7 +456,7 @@ export const RemoteInstancesPage: React.FC = () => {
     [createImportedInstance],
   );
 
-  const handlePatternCreate = React.useCallback(() => {
+  const handlePatternCreate = React.useCallback(async () => {
     const host = patternHost;
     const destination = patternDestination.trim();
     if (!host) {
@@ -467,14 +468,15 @@ export const RemoteInstancesPage: React.FC = () => {
     }
 
     setPatternCreating(true);
-    void (async () => {
+    try {
       const created = await createImportedInstance(host, destination);
-      setPatternCreating(false);
       if (created) {
         setPatternHost(null);
         setPatternDestination('');
       }
-    })();
+    } finally {
+      setPatternCreating(false);
+    }
   }, [createImportedInstance, patternDestination, patternHost]);
 
   const connectWithPortRecovery = React.useCallback(async () => {

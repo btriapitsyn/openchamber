@@ -45,7 +45,6 @@ const OPENCHAMBER_VERSION = (() => {
       return pkg.version.trim();
     }
   } catch {
-    // ignore
   }
   return 'unknown';
 })();

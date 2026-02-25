@@ -862,25 +862,6 @@ fn resolve_ssh_config(parsed: &DesktopSshParsedCommand) -> Result<HashMap<String
     Ok(resolved)
 }
 
-fn ssh_probe_batch(parsed: &DesktopSshParsedCommand, timeout_sec: u16) -> Result<()> {
-    let args = vec![
-        "-o".to_string(),
-        "BatchMode=yes".to_string(),
-        "-o".to_string(),
-        format!("ConnectTimeout={timeout_sec}"),
-        "-T".to_string(),
-    ];
-    let mut command = build_ssh_command(parsed, &args, Some("echo ok"));
-    let (code, stdout, stderr) = run_output(&mut command)?;
-    if code != 0 {
-        return Err(anyhow!(stderr.trim().to_string()));
-    }
-    if stdout.trim() != "ok" {
-        return Err(anyhow!("SSH connectivity probe failed"));
-    }
-    Ok(())
-}
-
 fn ensure_session_dir(instance_id: &str) -> Result<PathBuf> {
     let base = settings_file_path()
         .parent()
@@ -1937,8 +1918,6 @@ impl DesktopSshManagerInner {
             0,
             false,
         );
-
-        ssh_probe_batch(&parsed, instance.connection_timeout_sec)?;
 
         let session_dir = ensure_session_dir(&id)?;
         let control_path = control_path_for_instance(&session_dir, &id);

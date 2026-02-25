@@ -175,6 +175,7 @@ const parseInstance = (value: unknown): DesktopSshInstance | null => {
   const id = readString(value, 'id');
   const sshCommand = readString(value, 'sshCommand') || readString(value, 'ssh_command');
   if (!id || !sshCommand) return null;
+  const nickname = readString(value, 'nickname');
 
   const parsedRaw = value.sshParsed;
   const parsed = isRecord(parsedRaw)
@@ -226,9 +227,15 @@ const parseInstance = (value: unknown): DesktopSshInstance | null => {
     .map((item) => parseForward(item))
     .filter((item): item is DesktopSshPortForward => Boolean(item));
 
+  const preferredPort = readNumber(remoteRaw, 'preferredPort') ?? readNumber(remoteRaw, 'preferred_port');
+  const preferredLocalPort =
+    readNumber(localRaw, 'preferredLocalPort') ?? readNumber(localRaw, 'preferred_local_port');
+  const sshPassword = parseStoredSecret(authRaw.sshPassword || authRaw.ssh_password);
+  const openchamberPassword = parseStoredSecret(authRaw.openchamberPassword || authRaw.openchamber_password);
+
   return {
     id,
-    ...(readString(value, 'nickname') ? { nickname: readString(value, 'nickname') || undefined } : {}),
+    ...(nickname ? { nickname } : {}),
     sshCommand,
     ...(parsed && parsed.destination ? { sshParsed: parsed } : {}),
     connectionTimeoutSec:
@@ -238,14 +245,7 @@ const parseInstance = (value: unknown): DesktopSshInstance | null => {
     remoteOpenchamber: {
       mode,
       keepRunning: readBoolean(remoteRaw, 'keepRunning') ?? readBoolean(remoteRaw, 'keep_running') ?? true,
-      ...(readNumber(remoteRaw, 'preferredPort') ?? readNumber(remoteRaw, 'preferred_port')
-        ? {
-            preferredPort:
-              readNumber(remoteRaw, 'preferredPort') ??
-              readNumber(remoteRaw, 'preferred_port') ??
-              undefined,
-          }
-        : {}),
+      ...(preferredPort ? { preferredPort } : {}),
       installMethod,
       uploadBundleOverSsh:
         readBoolean(remoteRaw, 'uploadBundleOverSsh') ??
@@ -253,27 +253,12 @@ const parseInstance = (value: unknown): DesktopSshInstance | null => {
         false,
     },
     localForward: {
-      ...(readNumber(localRaw, 'preferredLocalPort') ?? readNumber(localRaw, 'preferred_local_port')
-        ? {
-            preferredLocalPort:
-              readNumber(localRaw, 'preferredLocalPort') ??
-              readNumber(localRaw, 'preferred_local_port') ??
-              undefined,
-          }
-        : {}),
+      ...(preferredLocalPort ? { preferredLocalPort } : {}),
       bindHost,
     },
     auth: {
-      ...(parseStoredSecret(authRaw.sshPassword || authRaw.ssh_password)
-        ? { sshPassword: parseStoredSecret(authRaw.sshPassword || authRaw.ssh_password) }
-        : {}),
-      ...(parseStoredSecret(authRaw.openchamberPassword || authRaw.openchamber_password)
-        ? {
-            openchamberPassword: parseStoredSecret(
-              authRaw.openchamberPassword || authRaw.openchamber_password,
-            ),
-          }
-        : {}),
+      ...(sshPassword ? { sshPassword } : {}),
+      ...(openchamberPassword ? { openchamberPassword } : {}),
     },
     portForwards,
   };
@@ -464,10 +449,6 @@ export const listenDesktopSshStatus = async (
   });
 
   return async () => {
-    try {
-      await unlisten();
-    } catch {
-      // ignore
-    }
+    await unlisten();
   };
 };

@@ -63,7 +63,7 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
       }
 
       if (!get().listenerReady) {
-        const unlisten = await listenDesktopSshStatus((status) => {
+        await listenDesktopSshStatus((status) => {
           set((state) => ({
             statusesById: {
               ...state.statusesById,
@@ -71,7 +71,6 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
             },
           }));
         });
-        void unlisten;
       }
 
       set({
@@ -148,6 +147,7 @@ export const useDesktopSshStore = create<DesktopSshState>((set, get) => ({
   },
 
   removeInstance: async (id) => {
+    await desktopSshDisconnect(id).catch(() => undefined);
     const next = get().instances.filter((item) => item.id !== id);
     await get().setInstances(next);
     set((state) => {
