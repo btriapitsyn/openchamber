@@ -4856,7 +4856,8 @@ async function restartOpenCode() {
     if (isExternalOpenCode) {
       console.log('Re-probing external OpenCode server...');
       const probePort = openCodePort || ENV_CONFIGURED_OPENCODE_PORT || 4096;
-      const healthy = await probeExternalOpenCode(probePort);
+      const probeOrigin = openCodeBaseUrl ?? ENV_CONFIGURED_OPENCODE_HOST?.origin;
+      const healthy = await probeExternalOpenCode(probePort, probeOrigin);
       if (healthy) {
         console.log(`External OpenCode server on port ${probePort} is healthy`);
         setOpenCodePort(probePort);
