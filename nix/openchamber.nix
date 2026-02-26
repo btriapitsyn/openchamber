@@ -4,6 +4,8 @@
   callPackage,
   bun,
   nodejs_20,
+  git,
+  opencode,
   makeBinaryWrapper,
   node_modules ? callPackage ./node_modules.nix { },
 }:
@@ -104,7 +106,8 @@ stdenvNoCC.mkDerivation (finalAttrs: {
 
     # Wrapper: run with bun (the project runtime)
     makeBinaryWrapper ${bun}/bin/bun $out/bin/openchamber \
-      --add-flags "$out/lib/openchamber/bin/cli.js"
+      --add-flags "$out/lib/openchamber/bin/cli.js" \
+      --prefix PATH : ${lib.makeBinPath [ git opencode ]}
 
     runHook postInstall
   '';
