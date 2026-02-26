@@ -50,3 +50,8 @@ packages/intellij/
 
 # OS
 Thumbs.db
+
+
+# Nix
+result
+.direnv
