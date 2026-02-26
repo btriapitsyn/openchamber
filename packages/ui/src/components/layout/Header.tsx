@@ -1573,20 +1573,41 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))]">
                       <div className="bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
                         <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex flex-col min-w-0">
                             <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
                             <span className="truncate typography-ui-label text-muted-foreground">
                               Last updated {formatTime(quotaLastUpdated)}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <AnimatedTabs<'usage' | 'remaining'>
-                              value={quotaDisplayMode}
-                              onValueChange={handleDisplayModeChange}
-                              tabs={quotaDisplayTabs}
-                              size="sm"
-                              className="w-[10.5rem]"
-                            />
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Light-weight text toggle for Used/Remaining */}
+                            <div className="flex items-center h-6">
+                              <button
+                                type="button"
+                                onClick={() => handleDisplayModeChange('usage')}
+                                className={cn(
+                                  'typography-ui-label px-1 pb-0.5 transition-colors',
+                                  quotaDisplayMode === 'usage'
+                                    ? 'text-foreground border-b-2 border-[var(--primary-base)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                )}
+                              >
+                                Used
+                              </button>
+                              <span className="text-muted-foreground typography-ui-label px-0.5">·</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDisplayModeChange('remaining')}
+                                className={cn(
+                                  'typography-ui-label px-1 pb-0.5 transition-colors',
+                                  quotaDisplayMode === 'remaining'
+                                    ? 'text-foreground border-b-2 border-[var(--primary-base)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                )}
+                              >
+                                Remaining
+                              </button>
+                            </div>
                             <button
                               type="button"
                               className={cn(
