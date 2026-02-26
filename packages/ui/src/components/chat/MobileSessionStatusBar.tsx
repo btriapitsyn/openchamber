@@ -902,7 +902,18 @@ function ExpandedView({
             isExpanded={true}
           />
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div
+          className="flex items-center gap-2 flex-shrink-0 cursor-pointer !min-h-0"
+          onClick={onToggleCollapse}
+          tabIndex={0}
+          role="button"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onToggleCollapse();
+            }
+          }}
+        >
           <RunningIndicator count={runningCount} />
           <UnreadIndicator count={unreadCount} />
           <TokenUsageIndicator contextUsage={contextUsage} />
