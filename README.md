@@ -120,6 +120,26 @@ openchamber update                   # Update to latest version
 
 Download from [Releases](https://github.com/btriapitsyn/openchamber/releases).
 
+### Docker Compose
+
+```bash
+docker compose up -d
+```
+
+The service will be available at `http://localhost:3000`.
+
+**Data Directory Permission Note:** The `data/` directory is mounted into the container for persistent storage (config, sessions, SSH keys, workspaces). Before running, ensure the directory exists and has proper permissions:
+
+```bash
+# Create data directories with correct ownership
+mkdir -p data/openchamber data/opencode/share data/opencode/config data/ssh data/workspaces
+
+# Fix permissions (replace $USER with your username)
+chown -R 1000:1000 data/
+```
+
+Without proper permissions, the container may fail to start or encounter permission denied errors when writing to these directories.
+
 ## Prerequisites
 
 - [OpenCode CLI](https://opencode.ai) installed
@@ -131,16 +151,19 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 ## Tech Stack
 
 ### Frontend
+
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=flat&logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
 
 ### State & UI
+
 ![Zustand](https://img.shields.io/badge/Zustand-State_Management-FF6B6B?style=flat)
 ![Radix UI](https://img.shields.io/badge/Radix_UI-Components-8B5CF6?style=flat&logo=radixui&logoColor=white)
 
 ### Backend & Desktop
+
 ![Express](https://img.shields.io/badge/Express.js-Server-000000?style=flat&logo=express&logoColor=white)
 ![Tauri](https://img.shields.io/badge/Tauri-Desktop-FFC131?style=flat&logo=tauri&logoColor=white)
 ![OpenCode SDK](https://img.shields.io/badge/OpenCode-SDK-4F46E5?style=flat)

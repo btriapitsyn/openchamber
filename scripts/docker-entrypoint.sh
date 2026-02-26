@@ -27,7 +27,7 @@ if [ ! -f "${SSH_PRIVATE_KEY_PATH}" ] || [ ! -f "${SSH_PUBLIC_KEY_PATH}" ]; then
     exit 1
   fi
 
-  echo "[entrypoint] ssh key not found, generating ed25519 key pair at ${SSH_PRIVATE_KEY_PATH}"
+  echo "[entrypoint] generating SSH key..."
   ssh-keygen -t ed25519 -N "" -f "${SSH_PRIVATE_KEY_PATH}" >/dev/null
 fi
 
@@ -39,23 +39,25 @@ if ! chmod 644 "${SSH_PUBLIC_KEY_PATH}" 2>/dev/null; then
   echo "[entrypoint] warning: cannot chmod ${SSH_PUBLIC_KEY_PATH}, continuing"
 fi
 
-echo "[entrypoint] ssh public key:"
+echo "[entrypoint] SSH public key:"
 cat "${SSH_PUBLIC_KEY_PATH}"
 
 OMO_INSTALL_ARGS="--no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no --kimi-for-coding=no --skip-auth"
 
 if [ "${OH_MY_OPENCODE:-false}" = "true" ]; then
 
+  echo "[entrypoint] npm installing oh-my-opencode..."
   npm install -g oh-my-opencode
 
   OMO_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/oh-my-opencode.json"
 
   if [ ! -f "${OMO_CONFIG_FILE}" ]; then
-    echo "[entrypoint] ${OMO_CONFIG_FILE} not found, installing oh-my-opencode "
-
+    echo "[entrypoint] oh-my-opencode installing..."
     oh-my-opencode install ${OMO_INSTALL_ARGS}
   fi
 fi
+
+echo "[entrypoint] starting..."
 
 if [ "$#" -gt 0 ]; then
   exec "$@"

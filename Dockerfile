@@ -21,9 +21,18 @@ USER root
 
 RUN apt-get update && apt-get install -y --no-install-recommends git npm openssh-client && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g opencode-ai
+# 配置 npm 全局安装到用户可写目录
+RUN npm config set prefix /home/bun/.npm-global && mkdir -p /home/bun/.npm-global
+
+ENV NPM_CONFIG_PREFIX=/home/bun/.npm-global
+ENV PATH=${NPM_CONFIG_PREFIX}/bin:${PATH}
+
+# 确保 bun 用户对全局 npm 目录有写权限
+RUN chown -R bun:bun /home/bun/.npm-global
 
 USER bun
+
+RUN npm install -g opencode-ai
 
 RUN mkdir -p /home/bun/.local /home/bun/.config /home/bun/.ssh
 

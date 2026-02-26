@@ -15,4 +15,6 @@ services:
       - ./data/opencode/config:/home/bun/.config/opencode
       - ./data/ssh:/home/bun/.ssh
       - ./workspaces:/home/bun/workspaces
+    #    environment:
+    #      OH_MY_OPENCODE: true # enable oh-my-opencode
     restart: unless-stopped
