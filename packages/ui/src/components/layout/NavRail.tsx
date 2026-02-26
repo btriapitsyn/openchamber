@@ -44,7 +44,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { cn, formatDirectoryName, hasModifier } from '@/lib/utils';
 import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP } from '@/lib/projectMeta';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, requestDirectoryAccess } from '@/lib/desktop';
 import { useLongPress } from '@/hooks/useLongPress';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -480,8 +480,7 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
       sessionEvents.requestDirectoryDialog();
       return;
     }
-    import('@/lib/desktop')
-      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+    requestDirectoryAccess('')
       .then((result) => {
         if (result.success && result.path) {
           const added = addProject(result.path, { id: result.projectId });

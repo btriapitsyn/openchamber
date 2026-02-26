@@ -23,6 +23,8 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useAgentLoopWatcher } from '@/hooks/useAgentLoopWatcher';
+import { usePlanningSessionDetector } from '@/hooks/usePlanningSessionDetector';
+import { useLoopSessionDetector } from '@/hooks/useLoopSessionDetector';
 import { cn } from '@/lib/utils';
 
 import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
@@ -70,10 +72,13 @@ export const MainLayout: React.FC = () => {
         multiRunLauncherPrefillPrompt,
         isAgentLoopLauncherOpen,
         setAgentLoopLauncherOpen,
+        agentLoopLauncherPrefill,
     } = useUIStore();
 
-    // Watch for agent loop session completions
+    // Watch for agent loop session completions and re-register [Plan]/[Loop] sessions after refresh
     useAgentLoopWatcher();
+    usePlanningSessionDetector();
+    useLoopSessionDetector();
 
     const { isMobile } = useDeviceInfo();
     const effectiveDirectory = useEffectiveDirectory() ?? '';
@@ -764,6 +769,7 @@ export const MainLayout: React.FC = () => {
                                 <AgentLoopLauncher
                                     onCreated={() => setAgentLoopLauncherOpen(false)}
                                     onCancel={() => setAgentLoopLauncherOpen(false)}
+                                    prefill={agentLoopLauncherPrefill}
                                 />
                             </ErrorBoundary>
                         </div>
@@ -836,6 +842,7 @@ export const MainLayout: React.FC = () => {
                                     <AgentLoopLauncher
                                         onCreated={() => setAgentLoopLauncherOpen(false)}
                                         onCancel={() => setAgentLoopLauncherOpen(false)}
+                                        prefill={agentLoopLauncherPrefill}
                                     />
                                 </ErrorBoundary>
                             </div>

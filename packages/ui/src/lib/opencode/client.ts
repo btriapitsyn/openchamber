@@ -381,11 +381,12 @@ class OpencodeService {
     return Array.isArray(response.data) ? response.data : [];
   }
 
-  async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
+  async createSession(params?: { parentID?: string; title?: string; permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }> }): Promise<Session> {
     const response = await this.client.session.create({
       ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
       parentID: params?.parentID,
-      title: params?.title
+      title: params?.title,
+      ...(params?.permission ? { permission: params.permission } : {}),
     });
     if (!response.data) throw new Error('Failed to create session');
     return response.data;
@@ -2044,6 +2045,54 @@ class OpencodeService {
     } catch (error) {
       console.error('Failed to list directory contents:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Read the text content of a local file.
+   * Uses the /fs/read endpoint (mirroring the /fs/list endpoint pattern).
+   * Returns null if the file cannot be read.
+   */
+  async readLocalFile(filePath: string): Promise<string | null> {
+    const desktopFiles = getDesktopFilesApi();
+    const desktopFilesAny = desktopFiles as unknown as Record<string, unknown>;
+    if (desktopFiles && typeof desktopFilesAny.readFile === 'function') {
+      try {
+        const result = await (desktopFilesAny.readFile as (p: string) => Promise<string>)(filePath);
+        return typeof result === 'string' ? result : null;
+      } catch {
+        // fall through to HTTP
+      }
+    }
+
+    try {
+      const params = new URLSearchParams({ path: filePath });
+      if (this.currentDirectory) {
+        params.set('directory', this.currentDirectory);
+      }
+      const response = await fetch(`${this.baseUrl}/fs/read?${params.toString()}`);
+      if (!response.ok) {
+        console.warn('[readLocalFile] /fs/read failed:', response.status, response.statusText, '| path:', filePath, '| directory:', this.currentDirectory);
+        const errorBody = await response.text().catch(() => '');
+        if (errorBody) console.warn('[readLocalFile] server response:', errorBody);
+      }
+      if (!response.ok) return null;
+      return await response.text();
+    } catch (err) {
+      console.warn('[readLocalFile] /fs/read error:', err, '| path:', filePath, '| directory:', this.currentDirectory);
+      // try legacy endpoint
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/files/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, directory: this.currentDirectory }),
+      });
+      if (!response.ok) return null;
+      return await response.text();
+    } catch {
+      return null;
     }
   }
 

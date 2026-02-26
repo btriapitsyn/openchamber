@@ -12,7 +12,7 @@ import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP } from '@/lib/projectMeta';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { toast } from '@/components/ui';
-import { isTauriShell, isDesktopLocalOriginActive } from '@/lib/desktop';
+import { isTauriShell, isDesktopLocalOriginActive, requestDirectoryAccess } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import {
   Dialog,
@@ -1053,8 +1053,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       sessionEvents.requestDirectoryDialog();
       return;
     }
-    import('@/lib/desktop')
-      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+    requestDirectoryAccess('')
       .then((result) => {
         if (result.success && result.path) {
           const added = addProject(result.path, { id: result.projectId });

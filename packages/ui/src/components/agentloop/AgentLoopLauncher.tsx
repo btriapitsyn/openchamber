@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiCloseLine, RiUploadLine, RiFileTextLine } from '@remixicon/react';
+import { RiCloseLine, RiUploadLine, RiFileTextLine, RiFolderLine, RiArrowRightSLine, RiArrowLeftSLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,66 +10,61 @@ import { useAgentLoopStore } from '@/stores/useAgentLoopStore';
 import { validateWorkpackageFile, type WorkpackageFile } from '@/types/agentloop';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/multirun/AgentSelector';
+import { opencodeClient } from '@/lib/opencode/client';
+import type { FilesystemEntry } from '@/lib/opencode/client';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 
-type LauncherStep = 'choose-source' | 'select-file' | 'configure';
+type LauncherStep = 'choose-source' | 'browse-files' | 'select-file' | 'configure';
 
-/** Prompt template for AI-assisted workpackage plan generation */
-const PLAN_GENERATION_PROMPT = `You are a project planning assistant. The user wants to accomplish the following:
-
-{USER_GOAL}
-
-Analyze the codebase and create a workpackage plan as a JSON file. The JSON must follow this exact schema:
-{
-  "name": "Short name for the plan",
-  "workpackages": [
-    {
-      "id": "unique-id-1",
-      "title": "Short task title",
-      "description": "Detailed description of what needs to be done for this specific task. Include enough context so an AI agent can complete it independently.",
-      "status": "pending"
-    }
-  ]
+interface AgentLoopLauncherPrefill {
+  workpackageFile: WorkpackageFile;
+  providerID?: string;
+  modelID?: string;
+  agent?: string;
 }
-
-Rules:
-- Break the work into small, focused tasks that can each be completed independently
-- Each task should be self-contained with all necessary context
-- Order tasks logically (dependencies first)
-- Use descriptive IDs (e.g., "setup-database", "add-auth-middleware")
-- Keep tasks focused on a single concern
-- Output ONLY the JSON, no explanation
-
-Output the JSON now:`;
 
 interface AgentLoopLauncherProps {
   onCreated?: () => void;
   onCancel?: () => void;
+  prefill?: AgentLoopLauncherPrefill | null;
 }
 
 /**
  * Launcher form for starting a new Agent Loop.
- * Step 1: Choose whether to select an existing workpackage file or describe a new one.
- * Step 2: If selecting, pick/upload a JSON file. If generating, we create a session to make it.
+ * Step 1: Choose whether to browse for an existing workpackage file or describe a new one.
+ * Step 2a (browse): In-app file browser — navigate and pick a .json file.
+ * Step 2b (generate): Describe the goal, pick a model, generate the plan.
  * Step 3: Configure model, agent, and prompt then start the loop.
  */
 export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
   onCreated,
   onCancel,
+  prefill,
 }) => {
-  const [step, setStep] = React.useState<LauncherStep>('choose-source');
-  const [workpackageFile, setWorkpackageFile] = React.useState<WorkpackageFile | null>(null);
+  const [step, setStep] = React.useState<LauncherStep>(prefill?.workpackageFile ? 'configure' : 'choose-source');
+  const [workpackageFile, setWorkpackageFile] = React.useState<WorkpackageFile | null>(prefill?.workpackageFile ?? null);
   const [systemPrompt, setSystemPrompt] = React.useState('');
-  const [selectedProviderId, setSelectedProviderId] = React.useState('');
-  const [selectedModelId, setSelectedModelId] = React.useState('');
-  const [selectedAgent, setSelectedAgent] = React.useState('');
+  const [selectedProviderId, setSelectedProviderId] = React.useState(prefill?.providerID ?? '');
+  const [selectedModelId, setSelectedModelId] = React.useState(prefill?.modelID ?? '');
+  const [selectedAgent, setSelectedAgent] = React.useState(prefill?.agent ?? '');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [parseError, setParseError] = React.useState<string | null>(null);
   const [generatePrompt, setGeneratePrompt] = React.useState('');
+
+  // In-app file browser state
+  const [browserPath, setBrowserPath] = React.useState<string | null>(null);
+  const [browserEntries, setBrowserEntries] = React.useState<FilesystemEntry[]>([]);
+  const [browserLoading, setBrowserLoading] = React.useState(false);
+  const [browserError, setBrowserError] = React.useState<string | null>(null);
+
+  // System file picker fallback
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const currentProviderId = useConfigStore((s) => s.currentProviderId);
   const currentModelId = useConfigStore((s) => s.currentModelId);
+  const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
   const { startLoop, isCreating, error: loopError } = useAgentLoopStore();
+  const startPlanningSession = useAgentLoopStore((s) => s.startPlanningSession);
   const setCurrentSession = useSessionStore((s) => s.setCurrentSession);
 
   // Default to current model
@@ -78,6 +73,81 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
     if (!selectedModelId && currentModelId) setSelectedModelId(currentModelId);
   }, [currentProviderId, currentModelId, selectedProviderId, selectedModelId]);
 
+  // Load directory entries when entering or navigating the browser
+  const loadBrowserDir = React.useCallback(async (path: string | null) => {
+    setBrowserLoading(true);
+    setBrowserError(null);
+    try {
+      const target = path ?? currentDirectory ?? null;
+      const entries = await opencodeClient.listLocalDirectory(target);
+      // Dirs first (non-hidden), then .json files
+      const dirs = entries
+        .filter((e) => e.isDirectory && !e.name.startsWith('.'))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      const jsonFiles = entries
+        .filter((e) => e.isFile && e.name.endsWith('.json'))
+        .sort((a, b) => a.name.localeCompare(b.name));
+      setBrowserEntries([...dirs, ...jsonFiles]);
+      setBrowserPath(target);
+    } catch (err) {
+      setBrowserError(err instanceof Error ? err.message : 'Failed to list directory');
+    } finally {
+      setBrowserLoading(false);
+    }
+  }, [currentDirectory]);
+
+  const handleOpenBrowser = React.useCallback(() => {
+    setParseError(null);
+    setStep('browse-files');
+    void loadBrowserDir(null);
+  }, [loadBrowserDir]);
+
+  const handleBrowserEntry = React.useCallback(async (entry: FilesystemEntry) => {
+    if (entry.isDirectory) {
+      void loadBrowserDir(entry.path);
+      return;
+    }
+    // It's a .json file — try to read and validate
+    setBrowserLoading(true);
+    setParseError(null);
+    try {
+      console.log('[AgentLoopLauncher] Reading file:', entry.path, '| browserPath:', browserPath, '| currentDirectory:', currentDirectory);
+      const content = await opencodeClient.readLocalFile(entry.path);
+      console.log('[AgentLoopLauncher] readLocalFile result:', content ? `${content.length} chars` : 'null');
+      if (!content) {
+        // HTTP file reading not available — fall back to system file picker
+        setParseError(
+          `Cannot read files directly in this environment. Use the system file picker below to select "${entry.name}".`
+        );
+        setBrowserLoading(false);
+        return;
+      }
+      const parsed = JSON.parse(content) as unknown;
+      if (!validateWorkpackageFile(parsed)) {
+        setParseError('Invalid workpackage file. Expected JSON with "name" and "workpackages" array.');
+        setBrowserLoading(false);
+        return;
+      }
+      setWorkpackageFile({ ...parsed, filePath: entry.path });
+      setStep('configure');
+    } catch {
+      setParseError(
+        `Could not parse the selected file. Use the system file picker below to select "${entry.name}".`
+      );
+    } finally {
+      setBrowserLoading(false);
+    }
+  }, [loadBrowserDir, browserPath, currentDirectory]);
+
+  const handleBrowserNavigateUp = React.useCallback(() => {
+    if (!browserPath) return;
+    const parent = browserPath.includes('/')
+      ? browserPath.replace(/\/[^/]+\/?$/, '') || '/'
+      : null;
+    void loadBrowserDir(parent);
+  }, [browserPath, loadBrowserDir]);
+
+  // System file picker fallback
   const handleFileUpload = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -91,15 +161,10 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
     reader.onload = (e) => {
       try {
         const content = e.target?.result;
-        if (typeof content !== 'string') {
-          setParseError('Failed to read file');
-          return;
-        }
+        if (typeof content !== 'string') { setParseError('Failed to read file'); return; }
         const parsed = JSON.parse(content) as unknown;
         if (!validateWorkpackageFile(parsed)) {
-          setParseError(
-            'Invalid workpackage file. Expected JSON with "name" (string) and "workpackages" (array of {id, title, description}).'
-          );
+          setParseError('Invalid workpackage file. Expected JSON with "name" and "workpackages" array.');
           return;
         }
         setParseError(null);
@@ -110,11 +175,7 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
       }
     };
     reader.readAsText(file);
-
-    // Reset input so re-selecting the same file triggers onChange
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
   const handleGenerate = React.useCallback(async () => {
@@ -122,7 +183,6 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
       toast.error('Please describe what you want to accomplish');
       return;
     }
-
     if (!selectedProviderId || !selectedModelId) {
       toast.error('Please select a model first');
       return;
@@ -130,55 +190,24 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
 
     setIsSubmitting(true);
     try {
-      // Create a session to generate the workpackage file
-      const { opencodeClient } = await import('@/lib/opencode/client');
-      const session = await opencodeClient.createSession({
-        title: '🔄 Generate Workpackage Plan',
-      });
-
-      const planPrompt = PLAN_GENERATION_PROMPT.replace('{USER_GOAL}', generatePrompt.trim());
-
-      await opencodeClient.sendMessage({
-        id: session.id,
+      const sessionId = await startPlanningSession({
+        goal: generatePrompt.trim(),
         providerID: selectedProviderId,
         modelID: selectedModelId,
-        text: planPrompt,
         agent: selectedAgent || undefined,
-        format: {
-          type: 'json_schema',
-          schema: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              workpackages: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    title: { type: 'string' },
-                    description: { type: 'string' },
-                    status: { type: 'string', enum: ['pending'] },
-                  },
-                  required: ['id', 'title', 'description', 'status'],
-                },
-              },
-            },
-            required: ['name', 'workpackages'],
-          },
-        },
       });
 
-      // Switch to the generation session so the user can see the output
-      setCurrentSession(session.id);
-      toast.info('Generating workpackage plan — once complete, save the JSON response as a .json file and use "Select existing file" to start the loop.');
-      onCreated?.();
+      if (sessionId) {
+        setCurrentSession(sessionId);
+        toast.info('Generating workpackage plan — "View plan" and "Implement" buttons will appear when ready.');
+        onCreated?.();
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to generate workpackage plan');
+      toast.error(err instanceof Error ? err.message : 'Failed to start planning session');
     } finally {
       setIsSubmitting(false);
     }
-  }, [generatePrompt, selectedProviderId, selectedModelId, selectedAgent, setCurrentSession, onCreated]);
+  }, [generatePrompt, selectedProviderId, selectedModelId, selectedAgent, startPlanningSession, setCurrentSession, onCreated]);
 
   const handleStartLoop = React.useCallback(async () => {
     if (!workpackageFile) return;
@@ -199,9 +228,7 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
 
       if (loopId) {
         const loop = useAgentLoopStore.getState().loops.get(loopId);
-        if (loop?.parentSessionId) {
-          setCurrentSession(loop.parentSessionId);
-        }
+        if (loop?.parentSessionId) setCurrentSession(loop.parentSessionId);
         toast.success(`Agent loop "${workpackageFile.name}" started`);
         onCreated?.();
       }
@@ -230,6 +257,8 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-lg space-y-6">
+
+          {/* ── Step 1: Choose source ─────────────────────────────────────── */}
           {step === 'choose-source' && (
             <div className="space-y-4">
               <p className="typography-body text-foreground-muted">
@@ -239,17 +268,17 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
               <div className="grid gap-3">
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={handleOpenBrowser}
                   className={cn(
                     'flex items-center gap-3 rounded-lg border border-border p-4',
                     'hover:bg-interactive-hover transition-colors text-left'
                   )}
                 >
-                  <RiUploadLine className="h-6 w-6 text-foreground-muted shrink-0" />
+                  <RiFolderLine className="h-6 w-6 text-foreground-muted shrink-0" />
                   <div>
                     <div className="typography-label text-foreground">Select existing file</div>
                     <div className="typography-meta text-foreground-muted">
-                      Upload a .json workpackage file from your repo
+                      Browse your project for a .json workpackage file
                     </div>
                   </div>
                 </button>
@@ -278,6 +307,96 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
             </div>
           )}
 
+          {/* ── Step 2a: In-app file browser ─────────────────────────────── */}
+          {step === 'browse-files' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setStep('choose-source')}>
+                  ← Back
+                </Button>
+                <h3 className="typography-heading-sm text-foreground">Select workpackage file</h3>
+              </div>
+
+              {/* Path breadcrumb + up button */}
+              <div className="flex items-center gap-1 typography-meta text-foreground-muted min-w-0">
+                {browserPath && browserPath !== (currentDirectory ?? '/') && (
+                  <button
+                    type="button"
+                    onClick={handleBrowserNavigateUp}
+                    className="shrink-0 hover:text-foreground transition-colors"
+                    aria-label="Go up one directory"
+                  >
+                    <RiArrowLeftSLine className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <span className="truncate">{browserPath ?? currentDirectory ?? '/'}</span>
+              </div>
+
+              {/* File list */}
+              <div className="rounded-lg border border-border overflow-hidden">
+                {browserLoading ? (
+                  <div className="flex items-center justify-center py-8 text-foreground-muted typography-meta">
+                    Loading…
+                  </div>
+                ) : browserError ? (
+                  <div className="px-3 py-4 typography-meta text-destructive">{browserError}</div>
+                ) : browserEntries.length === 0 ? (
+                  <div className="flex items-center justify-center py-8 text-foreground-muted typography-meta">
+                    No directories or .json files here
+                  </div>
+                ) : (
+                  <div className="max-h-72 overflow-y-auto divide-y divide-border">
+                    {browserEntries.map((entry) => (
+                      <button
+                        key={entry.path}
+                        type="button"
+                        onClick={() => void handleBrowserEntry(entry)}
+                        disabled={browserLoading}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-3 py-2 text-left',
+                          'hover:bg-interactive-hover transition-colors',
+                        )}
+                      >
+                        {entry.isDirectory
+                          ? <RiFolderLine className="h-4 w-4 shrink-0 text-accent" />
+                          : <RiFileTextLine className="h-4 w-4 shrink-0 text-foreground-muted" />
+                        }
+                        <span className="typography-label text-foreground truncate flex-1">
+                          {entry.name}
+                        </span>
+                        {entry.isDirectory && (
+                          <RiArrowRightSLine className="h-3.5 w-3.5 shrink-0 text-foreground-muted" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {parseError && (
+                <div className="rounded-md bg-destructive/10 px-3 py-2 typography-meta text-destructive">
+                  {parseError}
+                </div>
+              )}
+
+              {/* System file picker fallback */}
+              <div className="flex items-center gap-2 pt-1">
+                <div className="flex-1 h-px bg-border" />
+                <span className="typography-meta text-foreground-muted shrink-0">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 typography-meta text-foreground-muted hover:text-foreground transition-colors"
+              >
+                <RiUploadLine className="h-3.5 w-3.5 shrink-0" />
+                Browse with system file picker…
+              </button>
+            </div>
+          )}
+
+          {/* ── Step 2b: Generate plan ────────────────────────────────────── */}
           {step === 'select-file' && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -323,11 +442,12 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
                 disabled={isSubmitting || !generatePrompt.trim() || !selectedModelId}
                 className="w-full"
               >
-                {isSubmitting ? 'Generating...' : 'Generate Workpackage Plan'}
+                {isSubmitting ? 'Generating…' : 'Generate Workpackage Plan'}
               </Button>
             </div>
           )}
 
+          {/* ── Step 3: Configure & start ─────────────────────────────────── */}
           {step === 'configure' && workpackageFile && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -392,7 +512,7 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
                 />
               </div>
 
-              {(loopError) && (
+              {loopError && (
                 <div className="rounded-md bg-destructive/10 px-3 py-2 typography-meta text-destructive">
                   {loopError}
                 </div>
@@ -403,14 +523,14 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
                 disabled={isSubmitting || isCreating || !selectedModelId}
                 className="w-full"
               >
-                {isSubmitting || isCreating ? 'Starting...' : `Start Agent Loop (${workpackageFile.workpackages.length} tasks)`}
+                {isSubmitting || isCreating ? 'Starting…' : `Start Agent Loop (${workpackageFile.workpackages.length} tasks)`}
               </Button>
             </div>
           )}
         </div>
       </div>
 
-      {/* Hidden file input */}
+      {/* Hidden system file input (fallback) */}
       <input
         ref={fileInputRef}
         type="file"

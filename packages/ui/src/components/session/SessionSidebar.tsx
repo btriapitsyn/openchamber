@@ -2,7 +2,7 @@ import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, requestDirectoryAccess } from '@/lib/desktop';
 import {
   DndContext,
   DragOverlay,
@@ -1460,8 +1460,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return;
     }
 
-    import('@/lib/desktop')
-      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+    requestDirectoryAccess('')
       .then((result) => {
         if (result.success && result.path) {
           const added = addProject(result.path, { id: result.projectId });

@@ -7,7 +7,7 @@ import { SettingsSidebarItem } from '@/components/sections/shared/SettingsSideba
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP } from '@/lib/projectMeta';
 import { cn } from '@/lib/utils';
 import { RiAddLine, RiFolderLine } from '@remixicon/react';
-import { isDesktopLocalOriginActive, isTauriShell, isVSCodeRuntime } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isTauriShell, isVSCodeRuntime, requestDirectoryAccess } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { toast } from '@/components/ui';
 
@@ -26,8 +26,7 @@ export const ProjectsSidebar: React.FC<{ onItemSelect?: () => void }> = ({ onIte
       return;
     }
 
-    import('@/lib/desktop')
-      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+    requestDirectoryAccess('')
       .then((result) => {
         if (result.success && result.path) {
           const added = addProject(result.path, { id: result.projectId });

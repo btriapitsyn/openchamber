@@ -22,6 +22,8 @@ export interface Workpackage {
   sessionId?: string;
   /** Error message if the task failed */
   error?: string;
+  /** Number of times this workpackage has been retried due to stalling */
+  retryCount?: number;
 }
 
 /** The JSON schema for a workpackage file */
@@ -30,10 +32,15 @@ export interface WorkpackageFile {
   name: string;
   /** List of tasks to process sequentially */
   workpackages: Workpackage[];
+  /**
+   * Absolute path to the file on disk (set at runtime, not stored in JSON).
+   * Used by implementation sessions to track and update task statuses.
+   */
+  filePath?: string;
 }
 
 /** Status of the overall agent loop */
-export type AgentLoopStatus = 'idle' | 'running' | 'paused' | 'completed' | 'error';
+export type AgentLoopStatus = 'idle' | 'running' | 'paused' | 'completed' | 'stopped' | 'error';
 
 /** Parameters for starting an agent loop */
 export interface StartAgentLoopParams {
@@ -61,6 +68,8 @@ export interface AgentLoopInstance {
   status: AgentLoopStatus;
   /** The workpackages with their current statuses */
   workpackages: Workpackage[];
+  /** The originating workpackage file (carries filePath for progress tracking) */
+  workpackageFile?: WorkpackageFile;
   /** Model configuration */
   providerID: string;
   modelID: string;
@@ -75,6 +84,8 @@ export interface AgentLoopInstance {
   startedAt: number;
   /** Error message if the loop errored */
   error?: string;
+  /** Timestamp of the last observed activity (message part or status change) for the current workpackage */
+  lastActivityAt?: number;
 }
 
 /**
