@@ -56,16 +56,7 @@
               librsvg
               libappindicator-gtk3
               dbus
-            ]
-            ++ lib.optionals stdenv.hostPlatform.isDarwin (
-              with darwin.apple_sdk.frameworks;
-              [
-                WebKit
-                AppKit
-                CoreServices
-                Security
-              ]
-            );
+            ];
 
           env = {
             RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
