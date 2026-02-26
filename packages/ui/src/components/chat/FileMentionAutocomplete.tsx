@@ -368,7 +368,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   return (
       <div
         ref={containerRef}
-        className="absolute z-[100] min-w-0 w-full max-w-[520px] max-h-64 bg-background border-2 border-border/60 rounded-xl shadow-none bottom-full mb-2 left-0 flex flex-col"
+        className="absolute z-[100] min-w-0 w-full max-w-[640px] max-h-64 bg-background border-2 border-border/60 rounded-xl shadow-none bottom-full mb-2 left-0 flex flex-col"
         style={style}
       >
         {showTabs ? (
@@ -446,7 +446,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             {files.map((file, index) => {
               const rowIndex = visibleAgents.length + index;
               const relativePath = file.relativePath || file.name;
-              const displayPath = truncatePathMiddle(relativePath, { maxLength: 45 });
+              const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
               const isOverflowing = overflowMap[rowIndex] ?? false;
               const marqueeDuration = marqueeDurations[rowIndex] ?? 2.6;

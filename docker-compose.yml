@@ -1,0 +1,20 @@
+services:
+  openchamber:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: openchamber:local
+    container_name: openchamber
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./data/openchamber:/home/bun/.config/openchamber
+      - ./data/opencode/share:/home/bun/.local/share/opencode
+      - ./data/opencode/config:/home/bun/.config/opencode
+      - ./data/ssh:/home/bun/.ssh
+      - ./workspaces:/home/bun/workspaces
+    #    environment:
+    #      OH_MY_OPENCODE: true # enable oh-my-opencode
+    restart: unless-stopped

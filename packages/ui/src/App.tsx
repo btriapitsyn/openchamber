@@ -12,6 +12,7 @@ import { useMenuActions } from '@/hooks/useMenuActions';
 import { useSessionStatusBootstrap } from '@/hooks/useSessionStatusBootstrap';
 import { useServerSessionStatus } from '@/hooks/useServerSessionStatus';
 import { useSessionAutoCleanup } from '@/hooks/useSessionAutoCleanup';
+import { useQueuedMessageAutoSend } from '@/hooks/useQueuedMessageAutoSend';
 import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { GitPollingProvider } from '@/hooks/useGitPolling';
@@ -203,6 +204,7 @@ function App({ apis }: AppProps) {
 
   useSessionStatusBootstrap();
   useSessionAutoCleanup();
+  useQueuedMessageAutoSend();
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

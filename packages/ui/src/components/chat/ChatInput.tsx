@@ -136,7 +136,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const acknowledgeSessionAbort = useSessionStore((state) => state.acknowledgeSessionAbort);
     const abortPromptSessionId = useSessionStore((state) => state.abortPromptSessionId);
     const clearAbortPrompt = useSessionStore((state) => state.clearAbortPrompt);
-    const sessionAbortFlags = useSessionStore((state) => state.sessionAbortFlags);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
     const addAttachedFile = useSessionStore((state) => state.addAttachedFile);
     const addServerFile = useSessionStore((state) => state.addServerFile);
@@ -297,10 +296,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         saveStoredDraft(currentSessionId, message);
     }, [message, persistChatDraft, currentSessionId]);
 
-    // Session activity for auto-send on idle
+    // Session activity for queue availability and controls
     const { phase: sessionPhase } = useCurrentSessionActivity();
-    const prevSessionPhaseRef = React.useRef(sessionPhase);
-    const autoSendTriggeredRef = React.useRef(false);
 
     const handleTextareaPointerDownCapture = React.useCallback((event: React.PointerEvent<HTMLTextAreaElement>) => {
         if (!isMobile) {
@@ -688,45 +685,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             void handleSubmitRef.current();
         }
     }, [inputMode, hasContent, currentSessionId, sessionPhase, queueModeEnabled, handleQueueMessage]);
-
-    // Auto-send queued messages when session becomes idle (but not after abort)
-    React.useEffect(() => {
-        const wasWorking = prevSessionPhaseRef.current === 'busy' || prevSessionPhaseRef.current === 'retry';
-        const isNowIdle = sessionPhase === 'idle';
-
-        // Check if session was recently aborted (within last 2 seconds)
-        const wasRecentlyAborted = currentSessionId && sessionAbortFlags.has(currentSessionId) && (() => {
-            const abortRecord = sessionAbortFlags.get(currentSessionId);
-            if (!abortRecord) return false;
-            const timeSinceAbort = Date.now() - abortRecord.timestamp;
-            return timeSinceAbort < 2000;
-        })();
-
-        // Detect transition from working to idle, but skip if aborted
-        if (wasWorking && isNowIdle && queuedMessages.length > 0 && !autoSendTriggeredRef.current && !wasRecentlyAborted) {
-            // Prevent double-triggering
-            autoSendTriggeredRef.current = true;
-
-            const targetSessionId = currentSessionId;
-
-            // Use setTimeout to avoid calling during render
-            setTimeout(() => {
-                const activeSessionId = useSessionStore.getState().currentSessionId;
-                const currentStatus = targetSessionId
-                    ? useSessionStore.getState().sessionStatus?.get(targetSessionId)
-                    : null;
-                const stillIdle = currentStatus?.type === 'idle';
-                const sessionUnchanged = Boolean(targetSessionId) && activeSessionId === targetSessionId;
-
-                if (sessionUnchanged && stillIdle && targetSessionId && currentProviderId && currentModelId) {
-                    void handleSubmitRef.current({ queuedOnly: true });
-                }
-                autoSendTriggeredRef.current = false;
-            }, 100);
-        }
-
-        prevSessionPhaseRef.current = sessionPhase;
-    }, [sessionPhase, queuedMessages.length, currentSessionId, currentProviderId, currentModelId, sessionAbortFlags]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         // Early return during IME composition to prevent interference with autocomplete.
