@@ -393,6 +393,7 @@ interface SessionStatusHeaderProps {
   currentProjectColor?: string | null;
   onToggle: () => void;
   isExpanded?: boolean;
+  childIndicators?: Array<{ session: Session; isRunning: boolean }>;
 }
 
 function SessionStatusHeader({
@@ -401,10 +402,12 @@ function SessionStatusHeader({
   currentProjectIcon,
   currentProjectColor,
   onToggle,
-  isExpanded = false
+  isExpanded = false,
+  childIndicators = []
 }: SessionStatusHeaderProps) {
   const ProjectIcon = currentProjectIcon ? PROJECT_ICON_MAP[currentProjectIcon] : null;
   const projectColorVar = currentProjectColor ? (PROJECT_COLOR_MAP[currentProjectColor] ?? null) : null;
+  const extraCount = childIndicators.length > 3 ? childIndicators.length - 3 : 0;
 
   return (
     <button
@@ -431,9 +434,40 @@ function SessionStatusHeader({
           <div className="w-full h-px bg-[var(--interactive-border)] my-1" />
         </div>
       )}
-      <span className="text-[13px] text-[var(--surface-foreground)] truncate leading-none">
-        {currentSessionTitle}
-      </span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[13px] text-[var(--surface-foreground)] truncate leading-none">
+          {currentSessionTitle}
+        </span>
+        {childIndicators.length > 0 && (
+          <div className="flex items-center gap-0.5 text-[var(--surface-mutedForeground)]">
+            <span className="text-[10px]">[</span>
+            <div className="flex items-center gap-0.5">
+              {childIndicators.slice(0, 3).map((child) => {
+                const childAgent = (child.session as { agent?: string }).agent || 'agent';
+                const childColor = getAgentColor(childAgent);
+                return (
+                  <div
+                    key={child.session.id}
+                    className="flex-shrink-0"
+                    title={`Sub-session: ${child.session.title || 'Untitled'}`}
+                  >
+                    <RiLoader4Line
+                      className="h-2.5 w-2.5 animate-spin"
+                      style={{ color: `var(${childColor.var})` }}
+                    />
+                  </div>
+                );
+              })}
+              {extraCount > 0 && (
+                <span className="text-[10px] text-[var(--surface-mutedForeground)]">
+                  +{extraCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px]">]</span>
+          </div>
+        )}
+      </div>
     </button>
   );
 }
@@ -723,6 +757,7 @@ function CollapsedView({
   onNewSession,
   cornerRadius,
   contextUsage,
+  childIndicators = [],
 }: {
   runningCount: number;
   unreadCount: number;
@@ -734,6 +769,7 @@ function CollapsedView({
   onNewSession: () => void;
   cornerRadius?: number;
   contextUsage: SessionContextUsage | null;
+  childIndicators?: Array<{ session: Session; isRunning: boolean }>;
 }) {
   const { handleTouchStart, handleTouchMove, handleTouchEnd } = useDrawerSwipe();
 
@@ -755,6 +791,7 @@ function CollapsedView({
           currentProjectIcon={currentProjectIcon}
           currentProjectColor={currentProjectColor}
           onToggle={onToggle}
+          childIndicators={childIndicators}
         />
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -808,6 +845,7 @@ function ExpandedView({
   activeProjectId,
   getProjectStatus,
   homeDirectory,
+  childIndicators = [],
 }: {
   sessions: SessionWithStatus[];
   currentSessionId: string;
@@ -834,6 +872,7 @@ function ExpandedView({
   activeProjectId: string | null;
   getProjectStatus: (path: string) => { hasRunning: boolean; hasUnread: boolean };
   homeDirectory: string | null;
+  childIndicators?: Array<{ session: Session; isRunning: boolean }>;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [collapsedHeight, setCollapsedHeight] = React.useState<number | null>(null);
@@ -900,6 +939,7 @@ function ExpandedView({
             currentProjectColor={currentProjectColor}
             onToggle={onToggleCollapse}
             isExpanded={true}
+            childIndicators={childIndicators}
           />
         </div>
         <div
@@ -1006,6 +1046,10 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     ? getSessionTitle(currentSession)
     : '← Swipe here to open sidebars →';
 
+  // Calculate current session's child indicators
+  const currentSessionWithStatus = sortedSessions.find((s) => s.id === currentSessionId);
+  const currentSessionChildIndicators = currentSessionWithStatus?._childIndicators ?? [];
+
   const activeProject = getActiveProject();
   const currentProjectLabel = activeProject?.label || formatDirectoryName(activeProject?.path || '', homeDirectory);
   const currentProjectIcon = activeProject?.icon;
@@ -1088,6 +1132,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         onNewSession={handleCreateSession}
         cornerRadius={cornerRadius}
         contextUsage={contextUsage}
+        childIndicators={currentSessionChildIndicators}
       />
     );
   }
@@ -1122,6 +1167,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       activeProjectId={activeProjectId}
       getProjectStatus={getProjectStatus}
       homeDirectory={homeDirectory}
+      childIndicators={currentSessionChildIndicators}
     />
   );
 };
