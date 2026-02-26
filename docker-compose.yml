@@ -13,5 +13,6 @@ services:
       - ./data/openchamber:/home/bun/.config/openchamber
       - ./data/opencode/share:/home/bun/.local/share/opencode
       - ./data/opencode/config:/home/bun/.config/opencode
+      - ./data/ssh:/home/bun/.ssh
       - ./workspaces:/home/bun/workspaces
     restart: unless-stopped

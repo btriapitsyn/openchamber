@@ -12,35 +12,49 @@ fi
 OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-${HOME}/.config/opencode}"
 export OPENCODE_CONFIG_DIR
 
-OMO_INSTALL_ARGS="--no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no --kimi-for-coding=no --skip-auth"
+SSH_DIR="${HOME}/.ssh"
+SSH_PRIVATE_KEY_PATH="${SSH_DIR}/id_ed25519"
+SSH_PUBLIC_KEY_PATH="${SSH_PRIVATE_KEY_PATH}.pub"
 
-needs_init="false"
-has_bootstrap_artifacts="false"
-
-if [ ! -d "${OPENCODE_CONFIG_DIR}" ]; then
-  needs_init="true"
-else
-  for bootstrap_path in opencode.json agents commands skills; do
-    if [ -e "${OPENCODE_CONFIG_DIR}/${bootstrap_path}" ]; then
-      has_bootstrap_artifacts="true"
-      break
-    fi
-  done
-
-  if [ "${has_bootstrap_artifacts}" != "true" ]; then
-    needs_init="true"
-  fi
+mkdir -p "${SSH_DIR}"
+if ! chmod 700 "${SSH_DIR}" 2>/dev/null; then
+  echo "[entrypoint] warning: cannot chmod ${SSH_DIR}, continuing with existing permissions"
 fi
 
-if [ "${needs_init}" = "true" ]; then
-  echo "[entrypoint] opencode bootstrap artifacts missing, initializing: ${OPENCODE_CONFIG_DIR}"
-
-  if ! command -v oh-my-opencode >/dev/null 2>&1; then
-    echo "[entrypoint] error: oh-my-opencode not found; cannot initialize opencode config." >&2
+if [ ! -f "${SSH_PRIVATE_KEY_PATH}" ] || [ ! -f "${SSH_PUBLIC_KEY_PATH}" ]; then
+  if [ ! -w "${SSH_DIR}" ]; then
+    echo "[entrypoint] error: ssh key missing and ${SSH_DIR} is not writable" >&2
     exit 1
   fi
 
-  oh-my-opencode install ${OMO_INSTALL_ARGS}
+  echo "[entrypoint] ssh key not found, generating ed25519 key pair at ${SSH_PRIVATE_KEY_PATH}"
+  ssh-keygen -t ed25519 -N "" -f "${SSH_PRIVATE_KEY_PATH}" >/dev/null
+fi
+
+if ! chmod 600 "${SSH_PRIVATE_KEY_PATH}" 2>/dev/null; then
+  echo "[entrypoint] warning: cannot chmod ${SSH_PRIVATE_KEY_PATH}, continuing"
+fi
+
+if ! chmod 644 "${SSH_PUBLIC_KEY_PATH}" 2>/dev/null; then
+  echo "[entrypoint] warning: cannot chmod ${SSH_PUBLIC_KEY_PATH}, continuing"
+fi
+
+echo "[entrypoint] ssh public key:"
+cat "${SSH_PUBLIC_KEY_PATH}"
+
+OMO_INSTALL_ARGS="--no-tui --claude=no --openai=no --gemini=no --copilot=no --opencode-zen=no --zai-coding-plan=no --kimi-for-coding=no --skip-auth"
+
+if [ "${OH_MY_OPENCODE:-false}" = "true" ]; then
+
+  npm install -g oh-my-opencode
+
+  OMO_CONFIG_FILE="${OPENCODE_CONFIG_DIR}/oh-my-opencode.json"
+
+  if [ ! -f "${OMO_CONFIG_FILE}" ]; then
+    echo "[entrypoint] ${OMO_CONFIG_FILE} not found, installing oh-my-opencode "
+
+    oh-my-opencode install ${OMO_INSTALL_ARGS}
+  fi
 fi
 
 if [ "$#" -gt 0 ]; then

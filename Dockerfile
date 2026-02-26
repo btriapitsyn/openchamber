@@ -19,13 +19,13 @@ ENV PATH=${BUN_INSTALL}/bin:${PATH}
 
 USER root
 
-RUN apt-get update && apt-get install -y --no-install-recommends git npm && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends git npm openssh-client && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g opencode-ai oh-my-opencode
+RUN npm install -g opencode-ai
 
 USER bun
 
-RUN mkdir -p /home/bun/.local /home/bun/.config
+RUN mkdir -p /home/bun/.local /home/bun/.config /home/bun/.ssh
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/web/node_modules ./packages/web/node_modules
