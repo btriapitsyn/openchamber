@@ -14,7 +14,11 @@ const enableReactScan = reactScanToggle === '1' || reactScanToggle === 'true' ||
 export default defineConfig({
   root: path.resolve(__dirname, '.'),
   plugins: [
-    react(),
+    react({
+      babel: {
+        plugins: ['babel-plugin-react-compiler'],
+      },
+    }),
     {
       name: 'inject-react-scan-script',
       transformIndexHtml() {
