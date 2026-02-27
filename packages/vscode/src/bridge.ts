@@ -107,10 +107,67 @@ export interface BridgeContext {
 
 const SETTINGS_KEY = 'openchamber.settings';
 const CLIENT_RELOAD_DELAY_MS = 800;
+const MAX_FILE_ATTACH_SIZE_BYTES = 10 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
 const OPENCHAMBER_SHARED_SETTINGS_PATH = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+
+const guessMimeTypeFromExtension = (ext: string) => {
+  switch (ext) {
+    case '.png':
+    case '.jpg':
+    case '.jpeg':
+    case '.gif':
+    case '.bmp':
+    case '.webp':
+      return `image/${ext.replace('.', '')}`;
+    case '.pdf':
+      return 'application/pdf';
+    case '.txt':
+    case '.log':
+      return 'text/plain';
+    case '.json':
+      return 'application/json';
+    case '.md':
+    case '.markdown':
+      return 'text/markdown';
+    default:
+      return 'application/octet-stream';
+  }
+};
+
+const readUriAsAttachment = async (
+  uri: vscode.Uri,
+  fallbackName?: string,
+): Promise<
+  | { file: { name: string; mimeType: string; size: number; dataUrl: string } }
+  | { skipped: { name: string; reason: string } }
+> => {
+  const name = path.basename(uri.fsPath || uri.path || fallbackName || 'file');
+
+  try {
+    const stat = await vscode.workspace.fs.stat(uri);
+    if ((stat.type & vscode.FileType.Directory) !== 0) {
+      return { skipped: { name, reason: 'Folders are not supported' } };
+    }
+
+    const size = stat.size ?? 0;
+    if (size > MAX_FILE_ATTACH_SIZE_BYTES) {
+      return { skipped: { name, reason: 'File exceeds 10MB limit' } };
+    }
+
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    const ext = path.extname(name).toLowerCase();
+    const mimeType = guessMimeTypeFromExtension(ext);
+    const base64 = Buffer.from(bytes).toString('base64');
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+
+    return { file: { name, mimeType, size, dataUrl } };
+  } catch (error) {
+    return { skipped: { name, reason: error instanceof Error ? error.message : 'Failed to read file' } };
+  }
+};
 
 const isPathInside = (candidatePath: string, parentPath: string): boolean => {
   const normalizedCandidate = path.resolve(candidatePath);
@@ -1660,7 +1717,6 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:files/pick': {
-        const MAX_SIZE = 10 * 1024 * 1024;
         const allowMany = (payload as { allowMany?: boolean })?.allowMany !== false;
         const defaultUri = vscode.workspace.workspaceFolders?.[0]?.uri;
 
@@ -1679,50 +1735,12 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         const files: Array<{ name: string; mimeType: string; size: number; dataUrl: string }> = [];
         const skipped: Array<{ name: string; reason: string }> = [];
 
-        const guessMime = (ext: string) => {
-          switch (ext) {
-            case '.png':
-            case '.jpg':
-            case '.jpeg':
-            case '.gif':
-            case '.bmp':
-            case '.webp':
-              return `image/${ext.replace('.', '')}`;
-            case '.pdf':
-              return 'application/pdf';
-            case '.txt':
-            case '.log':
-              return 'text/plain';
-            case '.json':
-              return 'application/json';
-            case '.md':
-            case '.markdown':
-              return 'text/markdown';
-            default:
-              return 'application/octet-stream';
-          }
-        };
-
         for (const uri of picks) {
-          try {
-            const stat = await vscode.workspace.fs.stat(uri);
-            const size = stat.size ?? 0;
-            const name = path.basename(uri.fsPath);
-
-            if (size > MAX_SIZE) {
-              skipped.push({ name, reason: 'File exceeds 10MB limit' });
-              continue;
-            }
-
-            const bytes = await vscode.workspace.fs.readFile(uri);
-            const ext = path.extname(name).toLowerCase();
-            const mimeType = guessMime(ext);
-            const base64 = Buffer.from(bytes).toString('base64');
-            const dataUrl = `data:${mimeType};base64,${base64}`;
-            files.push({ name, mimeType, size, dataUrl });
-          } catch (error) {
-            const name = path.basename(uri.fsPath);
-            skipped.push({ name, reason: error instanceof Error ? error.message : 'Failed to read file' });
+          const result = await readUriAsAttachment(uri);
+          if ('file' in result) {
+            files.push(result.file);
+          } else {
+            skipped.push(result.skipped);
           }
         }
 
@@ -1730,7 +1748,6 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:files/drop': {
-        const MAX_SIZE = 10 * 1024 * 1024;
         const uris = Array.isArray((payload as { uris?: unknown[] })?.uris)
           ? (payload as { uris: unknown[] }).uris.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
           : [];
@@ -1741,30 +1758,6 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
         const files: Array<{ name: string; mimeType: string; size: number; dataUrl: string }> = [];
         const skipped: Array<{ name: string; reason: string }> = [];
-
-        const guessMime = (ext: string) => {
-          switch (ext) {
-            case '.png':
-            case '.jpg':
-            case '.jpeg':
-            case '.gif':
-            case '.bmp':
-            case '.webp':
-              return `image/${ext.replace('.', '')}`;
-            case '.pdf':
-              return 'application/pdf';
-            case '.txt':
-            case '.log':
-              return 'text/plain';
-            case '.json':
-              return 'application/json';
-            case '.md':
-            case '.markdown':
-              return 'text/markdown';
-            default:
-              return 'application/octet-stream';
-          }
-        };
 
         const dedupedUris = Array.from(new Set(uris.map((value) => value.trim())));
 
@@ -1790,27 +1783,11 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
 
           const name = path.basename(uri.fsPath || uri.path || rawUri);
 
-          try {
-            const stat = await vscode.workspace.fs.stat(uri);
-            if ((stat.type & vscode.FileType.Directory) !== 0) {
-              skipped.push({ name, reason: 'Folders are not supported' });
-              continue;
-            }
-
-            const size = stat.size ?? 0;
-            if (size > MAX_SIZE) {
-              skipped.push({ name, reason: 'File exceeds 10MB limit' });
-              continue;
-            }
-
-            const bytes = await vscode.workspace.fs.readFile(uri);
-            const ext = path.extname(name).toLowerCase();
-            const mimeType = guessMime(ext);
-            const base64 = Buffer.from(bytes).toString('base64');
-            const dataUrl = `data:${mimeType};base64,${base64}`;
-            files.push({ name, mimeType, size, dataUrl });
-          } catch (error) {
-            skipped.push({ name, reason: error instanceof Error ? error.message : 'Failed to read file' });
+          const result = await readUriAsAttachment(uri, name);
+          if ('file' in result) {
+            files.push(result.file);
+          } else {
+            skipped.push(result.skipped);
           }
         }
 
