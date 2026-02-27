@@ -22,6 +22,7 @@ import {
   RiFolderAddLine,
   RiDeleteBinLine,
   RiEditLine,
+  RiEyeLine,
   RiFileCopyLine,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
@@ -42,7 +43,7 @@ import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { languageByExtension, loadLanguageByExtension } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
-import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
+import { File as PierreFile } from '@pierre/diffs/react';
 import {
   Dialog,
   DialogContent,
@@ -70,6 +71,8 @@ import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
+import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
+import { getDefaultTheme } from '@/lib/theme/themes';
 
 type FileNode = {
   name: string;
@@ -374,8 +377,7 @@ interface FilesViewProps {
 
 export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const { files, runtime } = useRuntimeAPIs();
-  const { currentTheme } = useThemeSystem();
-  React.useMemo(() => generateSyntaxTheme(currentTheme), [currentTheme]);
+  const { currentTheme, availableThemes, lightThemeId, darkThemeId } = useThemeSystem();
   const { isMobile, screenWidth } = useDeviceInfo();
   const showHidden = useDirectoryShowHidden();
   const showGitignored = useFilesViewShowGitignored();
@@ -393,6 +395,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [wrapLines, setWrapLines] = React.useState(isMobile);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
   const [isSearchOpen, setIsSearchOpen] = React.useState(false);
+  const [textViewMode, setTextViewMode] = React.useState<'view' | 'edit'>('view');
+
+  const lightTheme = React.useMemo(
+    () => availableThemes.find((theme) => theme.metadata.id === lightThemeId) ?? getDefaultTheme(false),
+    [availableThemes, lightThemeId],
+  );
+  const darkTheme = React.useMemo(
+    () => availableThemes.find((theme) => theme.metadata.id === darkThemeId) ?? getDefaultTheme(true),
+    [availableThemes, darkThemeId],
+  );
+
+  React.useEffect(() => {
+    ensurePierreThemeRegistered(lightTheme);
+    ensurePierreThemeRegistered(darkTheme);
+  }, [lightTheme, darkTheme]);
 
   const EMPTY_PATHS: string[] = React.useMemo(() => [], []);
   const openPaths = useFilesViewTabsStore((state) => (root ? (state.byRoot[root]?.openPaths ?? EMPTY_PATHS) : EMPTY_PATHS));
@@ -1461,6 +1478,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && fileContent.length > 0);
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
   const canEdit = Boolean(selectedFile && !isSelectedImage && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
+  const isMarkdown = Boolean(selectedFile?.path && isMarkdownFile(selectedFile.path));
+  const isTextFile = Boolean(selectedFile && !isSelectedImage);
+  const canUseShikiFileView = isTextFile && !isMarkdown;
   const staticLanguageExtension = React.useMemo(
     () => (selectedFile?.path ? languageByExtension(selectedFile.path) : null),
     [selectedFile?.path],
@@ -1487,6 +1507,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       cancelled = true;
     };
   }, [selectedFile?.path, staticLanguageExtension]);
+
+  React.useEffect(() => {
+    if (!canEdit && textViewMode === 'edit') {
+      setTextViewMode('view');
+    }
+  }, [canEdit, textViewMode]);
+
+  React.useEffect(() => {
+    setTextViewMode('view');
+  }, [selectedFile?.path]);
 
   const nudgeEditorSelectionAboveKeyboard = React.useCallback((view: EditorView | null) => {
     if (!isMobile || !view || !view.hasFocus || typeof window === 'undefined') {
@@ -1574,6 +1604,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     }
     return extensions;
   }, [currentTheme, selectedFile?.path, staticLanguageExtension, dynamicLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
+
+  const pierreTheme = React.useMemo(
+    () => ({ light: lightTheme.metadata.id, dark: darkTheme.metadata.id }),
+    [lightTheme.metadata.id, darkTheme.metadata.id],
+  );
 
   const imageSrc = selectedFile?.path && isSelectedImage
     ? (runtime.isDesktop
@@ -1711,6 +1746,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       onDelete: deleteDraft,
     });
   }, [cancel, commentText, deleteDraft, editingDraftId, filesFileDrafts, handleSaveComment, isDragging, lineSelection, selectedFile?.path, startEdit]);
+
+  const renderShikiFileView = React.useCallback((file: FileNode, content: string) => {
+    return (
+      <div className="h-full">
+        <PierreFile
+          file={{
+            name: file.name,
+            contents: content,
+            lang: getLanguageFromExtension(file.path) || undefined,
+          }}
+          options={{
+            disableFileHeader: true,
+            overflow: wrapLines ? 'wrap' : 'scroll',
+            theme: pierreTheme,
+            themeType: currentTheme.metadata.variant === 'dark' ? 'dark' : 'light',
+          }}
+          className="block h-full w-full"
+          style={{ height: '100%' }}
+        />
+      </div>
+    );
+  }, [currentTheme.metadata.variant, pierreTheme, wrapLines]);
 
   const fileViewer = (
     <div
@@ -1887,7 +1944,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         {/* Row 2: Actions (right-aligned) */}
         {selectedFile && (
           <div className="flex items-center justify-end gap-1 px-3 pb-1.5">
-            {canEdit && (
+            {canEdit && textViewMode === 'edit' && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1909,6 +1966,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
             )}
 
+            {canUseShikiFileView && canEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setTextViewMode((prev) => (prev === 'view' ? 'edit' : 'view'))}
+                className={cn(
+                  'h-5 w-5 p-0 transition-opacity',
+                  textViewMode === 'edit' ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-70 hover:opacity-100'
+                )}
+                title={textViewMode === 'view' ? 'Switch to edit mode' : 'Switch to highlighted view'}
+              >
+                {textViewMode === 'view' ? <RiEditLine className="size-4" /> : <RiEyeLine className="size-4" />}
+              </Button>
+            )}
+
             {!isSelectedImage && (
               <>
                 <Button
@@ -1923,26 +1995,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 >
                   <RiTextWrap className="size-4" />
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsSearchOpen(!isSearchOpen)}
-                  className={cn(
-                    'h-5 w-5 p-0 transition-opacity',
-                    isSearchOpen ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
-                  )}
-                  title="Find in file"
-                >
-                  <RiSearchLine className="size-4" />
-                </Button>
+                {textViewMode === 'edit' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsSearchOpen(!isSearchOpen)}
+                    className={cn(
+                      'h-5 w-5 p-0 transition-opacity',
+                      isSearchOpen ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
+                    )}
+                    title="Find in file"
+                  >
+                    <RiSearchLine className="size-4" />
+                  </Button>
+                )}
               </>
             )}
 
-            {(canCopy || canCopyPath || isMarkdownFile(selectedFile.path)) && (canEdit || !isSelectedImage) && (
+            {(canCopy || canCopyPath || isMarkdown) && (canEdit || !isSelectedImage) && (
               <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
             )}
 
-            {isMarkdownFile(selectedFile.path) && (
+            {isMarkdown && (
               <PreviewToggleButton
                 currentMode={getMdViewMode()}
                 onToggle={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
@@ -2051,7 +2125,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 className="max-w-full max-h-[70vh] object-contain rounded-md border border-border/30 bg-primary/10"
               />
             </div>
-          ) : selectedFile && isMarkdownFile(selectedFile.path) && getMdViewMode() === 'preview' ? (
+          ) : selectedFile && isMarkdown && getMdViewMode() === 'preview' ? (
             <div className="h-full overflow-auto p-3">
               {fileContent.length > 500 * 1024 && (
                 <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
@@ -2071,6 +2145,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 <SimpleMarkdownRenderer content={fileContent} className="typography-markdown-body" />
               </ErrorBoundary>
             </div>
+          ) : selectedFile && canUseShikiFileView && textViewMode === 'view' ? (
+            renderShikiFileView(selectedFile, draftContent)
           ) : (
             <div
               className="relative h-full"
@@ -2289,7 +2365,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         </div>
 
         <div className="flex items-center gap-1">
-          {canEdit && (
+          {canEdit && textViewMode === 'edit' && (
             <Button
               variant="ghost"
               size="sm"
@@ -2311,6 +2387,21 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
           )}
 
+          {canUseShikiFileView && canEdit && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTextViewMode((prev) => (prev === 'view' ? 'edit' : 'view'))}
+              className={cn(
+                'h-6 w-6 p-0 transition-opacity',
+                textViewMode === 'edit' ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-70 hover:opacity-100'
+              )}
+              title={textViewMode === 'view' ? 'Switch to edit mode' : 'Switch to highlighted view'}
+            >
+              {textViewMode === 'view' ? <RiEditLine className="size-4" /> : <RiEyeLine className="size-4" />}
+            </Button>
+          )}
+
           {!isSelectedImage && (
             <Button
               variant="ghost"
@@ -2326,11 +2417,11 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             </Button>
           )}
 
-          {(canCopy || canCopyPath || isMarkdownFile(selectedFile.path)) && (canEdit || !isSelectedImage) && (
+          {(canCopy || canCopyPath || isMarkdown) && (canEdit || !isSelectedImage) && (
             <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
           )}
 
-          {isMarkdownFile(selectedFile.path) && (
+          {isMarkdown && (
             <PreviewToggleButton
               currentMode={getMdViewMode()}
               onToggle={() => saveMdViewMode(getMdViewMode() === 'preview' ? 'edit' : 'preview')}
@@ -2429,7 +2520,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 className="max-w-full max-h-full object-contain rounded-md border border-border/30 bg-primary/10"
               />
             </div>
-          ) : isMarkdownFile(selectedFile.path) && getMdViewMode() === 'preview' ? (
+          ) : isMarkdown && getMdViewMode() === 'preview' ? (
             <div className="h-full overflow-auto p-4">
               {fileContent.length > 500 * 1024 && (
                 <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
@@ -2449,6 +2540,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 <SimpleMarkdownRenderer content={fileContent} className="typography-markdown-body" />
               </ErrorBoundary>
             </div>
+          ) : canUseShikiFileView && textViewMode === 'view' ? (
+            renderShikiFileView(selectedFile, draftContent)
           ) : (
             <div className="h-full">
               <CodeMirrorEditor
