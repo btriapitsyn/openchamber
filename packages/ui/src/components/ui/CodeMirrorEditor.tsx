@@ -302,8 +302,11 @@ export function CodeMirrorEditor({
       view.dispatch({
         changes: { from: 0, to: current.length, insert: value },
       });
+      forceParsingCompat(view, view.state.doc.length, 300);
+      view.requestMeasure();
+      requestAnimationFrame(() => syncEditorCssVars(view));
     }
-  }, [value]);
+  }, [value, syncEditorCssVars]);
 
   return (
     <>
