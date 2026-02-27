@@ -324,7 +324,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
 
     React.useEffect(() => {
       const container = containerRef.current;
-      if (!useHiddenInputOverlay || !container) {
+      if (!useHiddenInputOverlay || !container || enableTouchScroll) {
         return;
       }
 
@@ -349,7 +349,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       return () => {
         container.removeEventListener('focusin', handleContainerFocusIn, true);
       };
-    }, [useHiddenInputOverlay, focusHiddenInput]);
+    }, [enableTouchScroll, useHiddenInputOverlay, focusHiddenInput]);
 
     const getTerminalSelectionText = React.useCallback((): string => {
       const terminal = terminalRef.current as unknown as {
@@ -845,9 +845,8 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         scrollByPixels(deltaPixels);
       };
 
-        const handleTouchEnd = (event: TouchEvent) => {
+      const handleTouchEnd = (event: TouchEvent) => {
         const wasTap = !state.didMove;
-
 
         state.lastY = null;
         state.lastTime = null;
@@ -968,7 +967,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
             return;
           }
 
-          const options = getGhosttyTerminalOptions(fontFamily, fontSize, theme, ghostty, useHiddenInputOverlay);
+          const options = getGhosttyTerminalOptions(fontFamily, fontSize, theme, ghostty, false);
 
           const terminal = new GhosttyTerminal(options);
           followOutputRef.current = true;
@@ -1469,14 +1468,35 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
         className={cn('relative h-full w-full terminal-viewport-container', className)}
         style={{ backgroundColor: theme.background }}
         onTouchStart={(event) => {
-          if (useHiddenInputOverlay) {
+          if (!useHiddenInputOverlay || enableTouchScroll) {
+            return;
+          }
+          if (!hasCopyableSelectionInViewport()) {
             const touch = event.touches?.[0];
             focusHiddenInput(touch?.clientX, touch?.clientY);
           }
         }}
         onClick={(event) => {
           if (useHiddenInputOverlay) {
+            if (enableTouchScroll) {
+              return;
+            }
+            if (hasCopyableSelectionInViewport()) {
+              return;
+            }
             focusHiddenInput(event.clientX, event.clientY);
+          } else {
+            terminalRef.current?.focus();
+          }
+        }}
+        onMouseUp={() => {
+          if (!enableTouchScroll && hasCopyableSelectionInViewport()) {
+            void copySelectionToClipboard();
+          }
+        }}
+        onTouchEnd={() => {
+          if (!enableTouchScroll && hasCopyableSelectionInViewport()) {
+            void copySelectionToClipboard();
           }
         }}
       >
