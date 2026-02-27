@@ -19,10 +19,19 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/components/ui';
+import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
+import { isDesktopShell } from '@/lib/desktop';
 import {
   getProjectActionsState,
   saveProjectActionsState,
@@ -30,6 +39,7 @@ import {
   type ProjectRef,
 } from '@/lib/openchamberConfig';
 import {
+  buildProjectActionDesktopForwardOptions,
   PROJECT_ACTION_ICON_MAP,
   PROJECT_ACTION_ICONS,
   PROJECT_ACTIONS_UPDATED_EVENT,
@@ -57,11 +67,22 @@ interface ProjectActionsSectionProps {
 }
 
 export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ projectRef }) => {
+  const isDesktopShellApp = React.useMemo(() => isDesktopShell(), []);
+  const desktopSshInstances = useDesktopSshStore((state) => state.instances);
+  const loadDesktopSsh = useDesktopSshStore((state) => state.load);
+
   const [actions, setActions] = React.useState<EditableProjectAction[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [initialSnapshot, setInitialSnapshot] = React.useState<string | null>(null);
   const [expandedActions, setExpandedActions] = React.useState<Record<string, boolean>>({});
+
+  React.useEffect(() => {
+    if (!isDesktopShellApp) {
+      return;
+    }
+    void loadDesktopSsh().catch(() => undefined);
+  }, [isDesktopShellApp, loadDesktopSsh]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -92,6 +113,13 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
       cancelled = true;
     };
   }, [projectRef]);
+
+  const desktopForwardOptions = React.useMemo(() => {
+    if (!isDesktopShellApp) {
+      return [];
+    }
+    return buildProjectActionDesktopForwardOptions(desktopSshInstances);
+  }, [desktopSshInstances, isDesktopShellApp]);
 
   const validationError = React.useMemo(() => {
     const hasIncomplete = actions.some((entry) => {
@@ -341,6 +369,39 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
                                 </TooltipContent>
                               </Tooltip>
                             </div>
+
+                            {isDesktopShellApp ? (
+                              <div className="mt-2">
+                                <p className="typography-meta mb-0.5 text-muted-foreground">Desktop SSH forward</p>
+                                {desktopForwardOptions.length > 0 ? (
+                                  <Select
+                                    value={
+                                      action.desktopOpenSshForward && desktopForwardOptions.some((entry) => entry.id === action.desktopOpenSshForward)
+                                        ? action.desktopOpenSshForward
+                                        : '__none__'
+                                    }
+                                    onValueChange={(value) => {
+                                      updateAction(action.id, (current) => ({
+                                        ...current,
+                                        ...(value === '__none__' ? { desktopOpenSshForward: undefined } : { desktopOpenSshForward: value }),
+                                      }));
+                                    }}
+                                  >
+                                    <SelectTrigger className="h-7 w-full max-w-[30rem]">
+                                      <SelectValue placeholder="Use output/manual URL" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="__none__">Use output/manual URL</SelectItem>
+                                      {desktopForwardOptions.map((entry) => (
+                                        <SelectItem key={entry.id} value={entry.id}>{entry.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <p className="typography-meta text-muted-foreground">No enabled local SSH forwards available.</p>
+                                )}
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>

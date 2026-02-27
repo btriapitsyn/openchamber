@@ -11181,6 +11181,13 @@ async function main(options = {}) {
   const terminalSessions = new Map();
   const MAX_TERMINAL_SESSIONS = 20;
   const TERMINAL_IDLE_TIMEOUT = 30 * 60 * 1000;
+  const sanitizeTerminalEnv = (env) => {
+    const next = { ...env };
+    delete next.BASH_XTRACEFD;
+    delete next.BASH_ENV;
+    delete next.ENV;
+    return next;
+  };
   const terminalInputCapabilities = {
     input: {
       preferred: 'ws',
@@ -11404,7 +11411,7 @@ async function main(options = {}) {
                         Math.random().toString(36).substring(2, 15);
 
       const envPath = buildAugmentedPath();
-      const resolvedEnv = { ...process.env, PATH: envPath };
+      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath });
 
       const pty = await getPtyProvider();
       const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
@@ -11618,7 +11625,7 @@ async function main(options = {}) {
                           Math.random().toString(36).substring(2, 15);
 
       const envPath = buildAugmentedPath();
-      const resolvedEnv = { ...process.env, PATH: envPath };
+      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath });
 
       const pty = await getPtyProvider();
       const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {

@@ -16,8 +16,11 @@ import {
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useDeviceInfo } from '@/lib/device';
+import { isDesktopShell } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import { useTerminalStore } from '@/stores/useTerminalStore';
+import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
 import {
   getProjectActionsState,
   type OpenChamberProjectAction,
@@ -27,6 +30,7 @@ import {
   normalizeProjectActionDirectory,
   PROJECT_ACTIONS_UPDATED_EVENT,
   PROJECT_ACTION_ICON_MAP,
+  resolveProjectActionDesktopForwardUrl,
   toProjectActionRunKey,
 } from '@/lib/projectActions';
 
@@ -45,6 +49,12 @@ type UrlWatchEntry = {
   tail: string;
 };
 
+const sleep = (ms: number): Promise<void> => {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+};
+
 interface ProjectActionsButtonProps {
   projectRef: ProjectRef | null;
   directory: string;
@@ -54,6 +64,22 @@ interface ProjectActionsButtonProps {
 const ANSI_ESCAPE_PREFIX = String.fromCharCode(27);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ANSI_ESCAPE_PREFIX}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
 const URL_GLOBAL_PATTERN = /https?:\/\/[^\s<>'"`]+/gi;
+
+const stripControlChars = (value: string): string => {
+  let next = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    const isControl = (code >= 0 && code <= 8)
+      || code === 11
+      || code === 12
+      || (code >= 14 && code <= 31)
+      || code === 127;
+    if (!isControl) {
+      next += value[index];
+    }
+  }
+  return next;
+};
 
 const normalizeManualOpenUrl = (value: string | undefined): string | null => {
   const raw = (value || '').trim();
@@ -127,6 +153,11 @@ const extractBestUrl = (value: string): string | null => {
 
 export const ProjectActionsButton = ({ projectRef, directory, className }: ProjectActionsButtonProps) => {
   const { terminal, runtime } = useRuntimeAPIs();
+  const { isMobile } = useDeviceInfo();
+  const isDesktopShellApp = React.useMemo(() => isDesktopShell(), []);
+  const desktopSshInstances = useDesktopSshStore((state) => state.instances);
+  const loadDesktopSsh = useDesktopSshStore((state) => state.load);
+
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen);
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
@@ -156,6 +187,13 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
     }
     return { id: projectId, path: projectPath };
   }, [projectId, projectPath]);
+
+  React.useEffect(() => {
+    if (!isDesktopShellApp) {
+      return;
+    }
+    void loadDesktopSsh().catch(() => undefined);
+  }, [isDesktopShellApp, loadDesktopSsh]);
 
   const openExternal = React.useCallback(async (url: string) => {
     try {
@@ -347,6 +385,10 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
   }, [ensureDirectory, normalizedDirectory, setActiveMainTab, setActiveTab, setBottomTerminalOpen, setTabLabel]);
 
   const runAction = React.useCallback(async (action: OpenChamberProjectAction) => {
+    if (runtime.isVSCode || isMobile) {
+      return;
+    }
+
     if (!normalizedDirectory) {
       toast.error('No active directory for action');
       return;
@@ -361,12 +403,14 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
     try {
       const { key, tabId, sessionId } = await getOrCreateActionTab(action);
       let activeSessionId = sessionId;
+      let createdSession = false;
 
       if (!activeSessionId) {
         setConnecting(normalizedDirectory, tabId, true);
         try {
           const created = await terminal.createSession({ cwd: normalizedDirectory });
           activeSessionId = created.sessionId;
+          createdSession = true;
           setTabSessionId(normalizedDirectory, tabId, activeSessionId);
         } finally {
           setConnecting(normalizedDirectory, tabId, false);
@@ -375,6 +419,10 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
 
       if (!activeSessionId) {
         throw new Error('Failed to create terminal session');
+      }
+
+      if (createdSession) {
+        await sleep(350);
       }
 
       setRunningByKey((prev) => ({
@@ -388,22 +436,36 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
           status: 'running',
         },
       }));
+
       const hasCustomOpenUrl = action.autoOpenUrl === true && (action.openUrl || '').trim().length > 0;
+      const hasDesktopForwardSelection = action.autoOpenUrl === true
+        && isDesktopShellApp
+        && (action.desktopOpenSshForward || '').trim().length > 0;
       const manualOpenUrl = action.autoOpenUrl ? normalizeManualOpenUrl(action.openUrl) : null;
-      if (manualOpenUrl) {
+      const desktopForwardUrl = action.autoOpenUrl && isDesktopShellApp
+        ? resolveProjectActionDesktopForwardUrl(action.desktopOpenSshForward, desktopSshInstances)
+        : null;
+
+      if (desktopForwardUrl) {
+        void openExternal(desktopForwardUrl);
+        toast.success('Opened forwarded URL');
+      } else if (manualOpenUrl) {
         void openExternal(manualOpenUrl);
         toast.success('Opened action URL');
       } else if (hasCustomOpenUrl) {
         toast.error('Invalid custom URL format');
+      } else if (hasDesktopForwardSelection) {
+        toast.error('Selected desktop SSH forward is unavailable');
       }
+
       urlWatchByRunKeyRef.current[key] = {
         lastSeenChunkId: null,
-        openedUrl: Boolean(manualOpenUrl) || hasCustomOpenUrl,
+        openedUrl: Boolean(desktopForwardUrl) || Boolean(manualOpenUrl) || hasCustomOpenUrl,
         tail: '',
       };
 
-      const normalizedCommand = action.command.trim().replace(/\r\n|\n|\r/g, '\r');
-      await terminal.sendInput(activeSessionId, `${normalizedCommand}\rexit\r`);
+      const normalizedCommand = stripControlChars(action.command.trim().replace(/\r\n|\r/g, '\n'));
+      await terminal.sendInput(activeSessionId, `${normalizedCommand}\n`);
     } catch (error) {
       setRunningByKey((prev) => {
         const next = { ...prev };
@@ -413,7 +475,19 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
       delete urlWatchByRunKeyRef.current[runKey];
       toast.error(error instanceof Error ? error.message : 'Failed to run action');
     }
-  }, [getOrCreateActionTab, normalizedDirectory, openExternal, runningByKey, setConnecting, setTabSessionId, terminal]);
+  }, [
+    desktopSshInstances,
+    getOrCreateActionTab,
+    isMobile,
+    isDesktopShellApp,
+    normalizedDirectory,
+    openExternal,
+    runningByKey,
+    runtime.isVSCode,
+    setConnecting,
+    setTabSessionId,
+    terminal,
+  ]);
 
   const stopAction = React.useCallback(async (action: OpenChamberProjectAction) => {
     const runKey = toProjectActionRunKey(normalizedDirectory, action.id);
@@ -500,7 +574,7 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
     setSettingsDialogOpen(true);
   }, [setSettingsDialogOpen, setSettingsPage, setSettingsProjectsSelectedId, stableProjectRef?.id]);
 
-  if (runtime.isVSCode || !stableProjectRef || actions.length === 0 || !normalizedDirectory) {
+  if (runtime.isVSCode || isMobile || !stableProjectRef || actions.length === 0 || !normalizedDirectory) {
     return null;
   }
 
