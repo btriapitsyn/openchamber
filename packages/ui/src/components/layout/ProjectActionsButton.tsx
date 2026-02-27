@@ -20,13 +20,10 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useTerminalStore } from '@/stores/useTerminalStore';
 import {
   getProjectActionsState,
-  saveProjectActionsState,
   type OpenChamberProjectAction,
   type ProjectRef,
 } from '@/lib/openchamberConfig';
 import {
-  getCurrentProjectActionPlatform,
-  isProjectActionEnabledOnPlatform,
   normalizeProjectActionDirectory,
   PROJECT_ACTIONS_UPDATED_EVENT,
   PROJECT_ACTION_ICON_MAP,
@@ -57,6 +54,24 @@ interface ProjectActionsButtonProps {
 const ANSI_ESCAPE_PREFIX = String.fromCharCode(27);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ANSI_ESCAPE_PREFIX}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
 const URL_GLOBAL_PATTERN = /https?:\/\/[^\s<>'"`]+/gi;
+
+const normalizeManualOpenUrl = (value: string | undefined): string | null => {
+  const raw = (value || '').trim();
+  if (!raw) {
+    return null;
+  }
+
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
 
 const extractBestUrl = (value: string): string | null => {
   const cleaned = value.replace(ANSI_ESCAPE_PATTERN, '');
@@ -171,14 +186,9 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
     setIsLoading(true);
     try {
       const state = await getProjectActionsState(stableProjectRef);
-      const platform = getCurrentProjectActionPlatform();
-      const filtered = state.actions.filter((entry) => isProjectActionEnabledOnPlatform(entry, platform));
+      const filtered = state.actions;
       setActions(filtered);
-
-      const preferred = state.primaryActionId && filtered.some((entry) => entry.id === state.primaryActionId)
-        ? state.primaryActionId
-        : filtered[0]?.id ?? null;
-      setSelectedActionId(preferred);
+      setSelectedActionId(filtered[0]?.id ?? null);
     } catch {
       setActions([]);
       setSelectedActionId(null);
@@ -212,17 +222,6 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
       window.removeEventListener(PROJECT_ACTIONS_UPDATED_EVENT, handler);
     };
   }, [loadActions, projectId]);
-
-  const persistPrimarySelection = React.useCallback(async (actionId: string | null) => {
-    if (!stableProjectRef) {
-      return;
-    }
-
-    await saveProjectActionsState(stableProjectRef, {
-      actions,
-      primaryActionId: actionId,
-    });
-  }, [actions, stableProjectRef]);
 
   React.useEffect(() => {
     if (!selectedActionId) {
@@ -389,7 +388,19 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
           status: 'running',
         },
       }));
-      urlWatchByRunKeyRef.current[key] = { lastSeenChunkId: null, openedUrl: false, tail: '' };
+      const hasCustomOpenUrl = action.autoOpenUrl === true && (action.openUrl || '').trim().length > 0;
+      const manualOpenUrl = action.autoOpenUrl ? normalizeManualOpenUrl(action.openUrl) : null;
+      if (manualOpenUrl) {
+        void openExternal(manualOpenUrl);
+        toast.success('Opened action URL');
+      } else if (hasCustomOpenUrl) {
+        toast.error('Invalid custom URL format');
+      }
+      urlWatchByRunKeyRef.current[key] = {
+        lastSeenChunkId: null,
+        openedUrl: Boolean(manualOpenUrl) || hasCustomOpenUrl,
+        tail: '',
+      };
 
       const normalizedCommand = action.command.trim().replace(/\r\n|\n|\r/g, '\r');
       await terminal.sendInput(activeSessionId, `${normalizedCommand}\rexit\r`);
@@ -402,7 +413,7 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
       delete urlWatchByRunKeyRef.current[runKey];
       toast.error(error instanceof Error ? error.message : 'Failed to run action');
     }
-  }, [getOrCreateActionTab, normalizedDirectory, runningByKey, setConnecting, setTabSessionId, terminal]);
+  }, [getOrCreateActionTab, normalizedDirectory, openExternal, runningByKey, setConnecting, setTabSessionId, terminal]);
 
   const stopAction = React.useCallback(async (action: OpenChamberProjectAction) => {
     const runKey = toProjectActionRunKey(normalizedDirectory, action.id);
@@ -477,9 +488,8 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
 
   const handleSelectAction = React.useCallback((action: OpenChamberProjectAction) => {
     setSelectedActionId(action.id);
-    void persistPrimarySelection(action.id);
     void runAction(action);
-  }, [persistPrimarySelection, runAction]);
+  }, [runAction]);
 
   const openProjectActionsSettings = React.useCallback(() => {
     if (!stableProjectRef?.id) {
@@ -518,7 +528,7 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
         onClick={handlePrimaryClick}
         disabled={isLoading || isStoppingSelected}
         className={cn(
-          'inline-flex h-full items-center gap-2 px-3 typography-ui-label font-medium text-foreground hover:bg-interactive-hover',
+          'inline-flex h-full items-center gap-2 pl-2 pr-3 typography-ui-label font-medium text-foreground hover:bg-interactive-hover',
           'transition-colors disabled:opacity-50'
         )}
         aria-label={selectedRunning ? `Stop ${resolvedSelected.name}` : `Run ${resolvedSelected.name}`}
@@ -547,7 +557,7 @@ export const ProjectActionsButton = ({ projectRef, directory, className }: Proje
             <RiArrowDownSLine className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64 max-h-[70vh] overflow-y-auto">
+        <DropdownMenuContent align="center" alignOffset={8} className="w-52 max-h-[70vh] overflow-y-auto">
           <DropdownMenuItem className="flex items-center gap-2" onClick={openProjectActionsSettings}>
             <RiAddLine className="h-4 w-4" />
             <span className="typography-ui-label text-foreground">Add new action</span>

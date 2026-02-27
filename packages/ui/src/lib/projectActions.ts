@@ -1,8 +1,20 @@
 import {
+  RiBrainAi3Line,
+  RiCheckboxCircleLine,
   RiBugLine,
+  RiCodeLine,
+  RiCommandLine,
+  RiFileTextLine,
   RiFlaskLine,
+  RiGitBranchLine,
+  RiHammerLine,
   RiPlayLine,
   RiRocketLine,
+  RiRobot2Line,
+  RiSearchLine,
+  RiServerLine,
+  RiSettings3Line,
+  RiStackLine,
   RiTerminalBoxLine,
   RiToolsLine,
 } from '@remixicon/react';
@@ -12,7 +24,25 @@ import type {
   OpenChamberProjectActionPlatform,
 } from '@/lib/openchamberConfig';
 
-export type ProjectActionIconKey = 'play' | 'tools' | 'bug' | 'flask' | 'terminal' | 'rocket';
+export type ProjectActionIconKey =
+  | 'play'
+  | 'build'
+  | 'lint'
+  | 'terminal'
+  | 'tools'
+  | 'bug'
+  | 'flask'
+  | 'rocket'
+  | 'code'
+  | 'server'
+  | 'branch'
+  | 'search'
+  | 'settings'
+  | 'brain'
+  | 'stack'
+  | 'robot'
+  | 'command'
+  | 'file';
 
 export const PROJECT_ACTION_ICONS: Array<{
   key: ProjectActionIconKey;
@@ -20,11 +50,23 @@ export const PROJECT_ACTION_ICONS: Array<{
   Icon: ComponentType<{ className?: string }>;
 }> = [
   { key: 'play', label: 'Play', Icon: RiPlayLine },
+  { key: 'build', label: 'Build', Icon: RiHammerLine },
+  { key: 'lint', label: 'Lint', Icon: RiCheckboxCircleLine },
+  { key: 'terminal', label: 'Terminal', Icon: RiTerminalBoxLine },
   { key: 'tools', label: 'Tools', Icon: RiToolsLine },
   { key: 'bug', label: 'Bug', Icon: RiBugLine },
   { key: 'flask', label: 'Flask', Icon: RiFlaskLine },
-  { key: 'terminal', label: 'Terminal', Icon: RiTerminalBoxLine },
   { key: 'rocket', label: 'Rocket', Icon: RiRocketLine },
+  { key: 'code', label: 'Code', Icon: RiCodeLine },
+  { key: 'server', label: 'Server', Icon: RiServerLine },
+  { key: 'branch', label: 'Branch', Icon: RiGitBranchLine },
+  { key: 'search', label: 'Search', Icon: RiSearchLine },
+  { key: 'settings', label: 'Settings', Icon: RiSettings3Line },
+  { key: 'brain', label: 'Brain', Icon: RiBrainAi3Line },
+  { key: 'stack', label: 'Stack', Icon: RiStackLine },
+  { key: 'robot', label: 'Robot', Icon: RiRobot2Line },
+  { key: 'command', label: 'Command', Icon: RiCommandLine },
+  { key: 'file', label: 'File', Icon: RiFileTextLine },
 ];
 
 export const PROJECT_ACTION_ICON_MAP = Object.fromEntries(
