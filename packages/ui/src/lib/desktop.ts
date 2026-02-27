@@ -84,6 +84,8 @@ export type DesktopSettings = {
   }>;  // Per-provider custom model groups configuration
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
+  tunnelBootstrapTtlMs?: number | null;
+  tunnelSessionTtlMs?: number;
   defaultModel?: string; // format: "provider/model"
   defaultVariant?: string;
   defaultAgent?: string;

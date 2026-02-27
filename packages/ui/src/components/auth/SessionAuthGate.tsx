@@ -106,25 +106,6 @@ interface ErrorScreenProps {
   retryAfter?: number;
 }
 
-const getTokenFromUrl = (): string | null => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('token');
-  } catch {
-    return null;
-  }
-};
-
-const clearTokenFromUrl = () => {
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.delete('token');
-    window.history.replaceState({}, '', url.toString());
-  } catch {
-    // Ignore errors
-  }
-};
-
 export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) => {
   const vscodeRuntime = React.useMemo(() => isVSCodeRuntime(), []);
   const skipAuth = vscodeRuntime;
@@ -134,9 +115,9 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [errorMessage, setErrorMessage] = React.useState('');
   const [retryAfter, setRetryAfter] = React.useState<number | undefined>(undefined);
+  const [isTunnelLocked, setIsTunnelLocked] = React.useState(false);
   const passwordInputRef = React.useRef<HTMLInputElement | null>(null);
   const hasResyncedRef = React.useRef(skipAuth);
-  const hasTriedUrlTokenRef = React.useRef(false);
 
   const checkStatus = React.useCallback(async () => {
     if (skipAuth) {
@@ -158,28 +139,30 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
       const responseText = await response.text();
       console.log('[Frontend Auth] Raw response:', response.status, responseText);
       
-      if (response.ok) {
-        console.log('[Frontend Auth] Session is authenticated');
-        setState('authenticated');
-        setErrorMessage('');
-        setRetryAfter(undefined);
-        return;
-      }
-      if (response.status === 401) {
-        let data: { debug?: { hasRefreshToken: boolean; message: string } } = {};
-        try {
-          data = JSON.parse(responseText);
-        } catch {
-          data = {};
+        if (response.ok) {
+          console.log('[Frontend Auth] Session is authenticated');
+          setState('authenticated');
+          setIsTunnelLocked(false);
+          setErrorMessage('');
+          setRetryAfter(undefined);
+          return;
         }
+        if (response.status === 401) {
+          let data: { tunnelLocked?: boolean; debug?: { hasRefreshToken: boolean; message: string } } = {};
+          try {
+            data = JSON.parse(responseText);
+          } catch {
+            data = {};
+          }
         console.warn('[Frontend Auth] Session is locked (401)', data);
-        if (data.debug) {
-          console.warn('[Frontend Auth] Debug info:', data.debug);
+          if (data.debug) {
+            console.warn('[Frontend Auth] Debug info:', data.debug);
+          }
+          setIsTunnelLocked(data.tunnelLocked === true);
+          setState('locked');
+          setRetryAfter(undefined);
+          return;
         }
-        setState('locked');
-        setRetryAfter(undefined);
-        return;
-      }
       if (response.status === 429) {
         let data: { retryAfter?: number } = {};
         try {
@@ -188,14 +171,17 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
           data = {};
         }
         setRetryAfter(data.retryAfter);
+        setIsTunnelLocked(false);
         setState('rate-limited');
         return;
       }
       console.error('[Frontend Auth] Unexpected response status:', response.status);
       setState('error');
+      setIsTunnelLocked(false);
     } catch (error) {
       console.warn('Failed to check session status:', error);
       setState('error');
+      setIsTunnelLocked(false);
     }
   }, [skipAuth]);
 
@@ -219,49 +205,6 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
     }
   }, [state]);
 
-  // Auto-login with URL token parameter
-  React.useEffect(() => {
-    if (skipAuth || state !== 'locked' || hasTriedUrlTokenRef.current || isSubmitting) {
-      return;
-    }
-
-    const urlToken = getTokenFromUrl();
-    if (!urlToken) {
-      return;
-    }
-
-    hasTriedUrlTokenRef.current = true;
-    clearTokenFromUrl();
-
-    // Auto-submit the password from URL
-    setIsSubmitting(true);
-    setErrorMessage('');
-
-    submitPassword(urlToken)
-      .then((response) => {
-        if (response.ok) {
-          setPassword('');
-          setState('authenticated');
-          return;
-        }
-        if (response.status === 401) {
-          setErrorMessage('URL token invalid. Please enter password manually.');
-          setState('locked');
-          return;
-        }
-        setErrorMessage('Unexpected response from server.');
-        setState('error');
-      })
-      .catch((error) => {
-        console.warn('Failed to submit URL token:', error);
-        setErrorMessage('Network error. Check connection and retry.');
-        setState('error');
-      })
-      .finally(() => {
-        setIsSubmitting(false);
-      });
-  }, [skipAuth, state, isSubmitting]);
-
   React.useEffect(() => {
     if (skipAuth) {
       return;
@@ -278,6 +221,9 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isTunnelLocked) {
+      return;
+    }
     if (!password || isSubmitting) {
       return;
     }
@@ -296,6 +242,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
         console.log('[Frontend Auth] After login - access:', hasAccessToken, 'refresh:', hasRefreshToken);
         console.log('[Frontend Auth] All cookies after login:', cookies.split(';').map(c => c.trim().split('=')[0]).filter(Boolean));
         setPassword('');
+        setIsTunnelLocked(false);
         setState('authenticated');
         return;
       }
@@ -303,6 +250,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
       if (response.status === 401) {
         console.warn('[Frontend Auth] Login failed: Invalid password');
         setErrorMessage('Incorrect password. Try again.');
+        setIsTunnelLocked(false);
         setState('locked');
         return;
       }
@@ -311,16 +259,19 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
         console.warn('[Frontend Auth] Login failed: Rate limited');
         const data = await response.json().catch(() => ({}));
         setRetryAfter(data.retryAfter);
+        setIsTunnelLocked(false);
         setState('rate-limited');
         return;
       }
 
       console.error('[Frontend Auth] Login failed: Unexpected response', response.status);
       setErrorMessage('Unexpected response from server.');
+      setIsTunnelLocked(false);
       setState('error');
     } catch (error) {
       console.warn('Failed to submit UI password:', error);
       setErrorMessage('Network error. Check connection and retry.');
+      setIsTunnelLocked(false);
       setState('error');
     } finally {
       setIsSubmitting(false);
@@ -345,55 +296,59 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
         <div className="flex flex-col items-center gap-6 w-full max-w-xs">
           <div className="flex flex-col items-center gap-1 text-center">
             <h1 className="text-xl font-semibold text-foreground">
-              Unlock OpenChamber
+              {isTunnelLocked ? 'Tunnel access required' : 'Unlock OpenChamber'}
             </h1>
             <p className="typography-meta text-muted-foreground">
-              This session is password-protected.
+              {isTunnelLocked
+                ? 'Open this tunnel using the one-time connect link from the desktop app.'
+                : 'This session is password-protected.'}
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="w-full space-y-2" data-keyboard-avoid="true">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <RiLockLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
-                <Input
-                  id="openchamber-ui-password"
-                  ref={passwordInputRef}
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(event) => {
-                    setPassword(event.target.value);
-                    if (errorMessage) {
-                      setErrorMessage('');
-                    }
-                  }}
-                  className="pl-10"
-                  aria-invalid={Boolean(errorMessage) || undefined}
-                  aria-describedby={errorMessage ? 'oc-ui-auth-error' : undefined}
-                  disabled={isSubmitting}
-                />
+          {!isTunnelLocked && (
+            <form onSubmit={handleSubmit} className="w-full space-y-2" data-keyboard-avoid="true">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <RiLockLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+                  <Input
+                    id="openchamber-ui-password"
+                    ref={passwordInputRef}
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      if (errorMessage) {
+                        setErrorMessage('');
+                      }
+                    }}
+                    className="pl-10"
+                    aria-invalid={Boolean(errorMessage) || undefined}
+                    aria-describedby={errorMessage ? 'oc-ui-auth-error' : undefined}
+                    disabled={isSubmitting}
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!password || isSubmitting}
+                  aria-label={isSubmitting ? 'Unlocking' : 'Unlock'}
+                >
+                  {isSubmitting ? (
+                    <RiLoader4Line className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RiLockUnlockLine className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!password || isSubmitting}
-                aria-label={isSubmitting ? 'Unlocking' : 'Unlock'}
-              >
-                {isSubmitting ? (
-                  <RiLoader4Line className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RiLockUnlockLine className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-            {errorMessage && (
-              <p id="oc-ui-auth-error" className="typography-meta text-destructive">
-                {errorMessage}
-              </p>
-            )}
-          </form>
+              {errorMessage && (
+                <p id="oc-ui-auth-error" className="typography-meta text-destructive">
+                  {errorMessage}
+                </p>
+              )}
+            </form>
+          )}
 
           {showHostSwitcher && (
             <div className="w-full">

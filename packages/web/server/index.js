@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
 import { createUiAuth } from './lib/opencode/ui-auth.js';
+import { createTunnelAuth } from './lib/opencode/tunnel-auth.js';
 import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
 import { prepareNotificationLastMessage } from './lib/notifications/index.js';
 import {
@@ -36,6 +37,12 @@ const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
+const TUNNEL_BOOTSTRAP_TTL_DEFAULT_MS = 3 * 60 * 1000;
+const TUNNEL_BOOTSTRAP_TTL_MIN_MS = 60 * 1000;
+const TUNNEL_BOOTSTRAP_TTL_MAX_MS = 24 * 60 * 60 * 1000;
+const TUNNEL_SESSION_TTL_DEFAULT_MS = 8 * 60 * 60 * 1000;
+const TUNNEL_SESSION_TTL_MIN_MS = 5 * 60 * 1000;
+const TUNNEL_SESSION_TTL_MAX_MS = 24 * 60 * 60 * 1000;
 const OPENCHAMBER_VERSION = (() => {
   try {
     const packagePath = path.resolve(__dirname, '..', 'package.json');
@@ -95,6 +102,25 @@ const OPENCHAMBER_USER_THEMES_DIR = path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'the
 const MAX_THEME_JSON_BYTES = 512 * 1024;
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const normalizeTunnelBootstrapTtlMs = (value) => {
+  if (value === null) {
+    return null;
+  }
+  if (!Number.isFinite(value)) {
+    return TUNNEL_BOOTSTRAP_TTL_DEFAULT_MS;
+  }
+  return clampNumber(Math.round(value), TUNNEL_BOOTSTRAP_TTL_MIN_MS, TUNNEL_BOOTSTRAP_TTL_MAX_MS);
+};
+
+const normalizeTunnelSessionTtlMs = (value) => {
+  if (!Number.isFinite(value)) {
+    return TUNNEL_SESSION_TTL_DEFAULT_MS;
+  }
+  return clampNumber(Math.round(value), TUNNEL_SESSION_TTL_MIN_MS, TUNNEL_SESSION_TTL_MAX_MS);
+};
 
 const isValidThemeColor = (value) => isNonEmptyString(value);
 
@@ -1612,6 +1638,14 @@ const sanitizeSettingsUpdate = (payload) => {
     const normalizedDays = Math.max(1, Math.min(365, Math.round(candidate.autoDeleteAfterDays)));
     result.autoDeleteAfterDays = normalizedDays;
   }
+  if (candidate.tunnelBootstrapTtlMs === null) {
+    result.tunnelBootstrapTtlMs = null;
+  } else if (typeof candidate.tunnelBootstrapTtlMs === 'number' && Number.isFinite(candidate.tunnelBootstrapTtlMs)) {
+    result.tunnelBootstrapTtlMs = normalizeTunnelBootstrapTtlMs(candidate.tunnelBootstrapTtlMs);
+  }
+  if (typeof candidate.tunnelSessionTtlMs === 'number' && Number.isFinite(candidate.tunnelSessionTtlMs)) {
+    result.tunnelSessionTtlMs = normalizeTunnelSessionTtlMs(candidate.tunnelSessionTtlMs);
+  }
 
   const typography = sanitizeTypographySizesPartial(candidate.typographySizes);
   if (typography) {
@@ -2904,7 +2938,7 @@ let isExternalOpenCode = false;
 let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
-let tunnelPassword = null;
+const tunnelAuthController = createTunnelAuth();
 let terminalInputWsServer = null;
 const userProvidedOpenCodePassword =
   typeof hmrState.userProvidedOpenCodePassword === 'string' && hmrState.userProvidedOpenCodePassword.length > 0
@@ -5870,7 +5904,7 @@ async function gracefulShutdown(options = {}) {
     console.log('Stopping Cloudflare tunnel...');
     cloudflareTunnelController.stop();
     cloudflareTunnelController = null;
-    tunnelPassword = null;
+    tunnelAuthController.clearActiveTunnel();
   }
 
   console.log('Graceful shutdown complete');
@@ -6032,16 +6066,65 @@ async function main(options = {}) {
   }
 
   app.get('/auth/session', async (req, res) => {
+    const requestScope = tunnelAuthController.classifyRequestScope(req);
+    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+      const tunnelSession = tunnelAuthController.getTunnelSessionFromRequest(req);
+      if (tunnelSession) {
+        return res.json({ authenticated: true, scope: 'tunnel' });
+      }
+      tunnelAuthController.clearTunnelSessionCookie(req, res);
+      return res.status(401).json({ authenticated: false, locked: true, tunnelLocked: true });
+    }
+
     try {
       await uiAuthController.handleSessionStatus(req, res);
     } catch (err) {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
-  app.post('/auth/session', (req, res) => uiAuthController.handleSessionCreate(req, res));
+  app.post('/auth/session', (req, res) => {
+    const requestScope = tunnelAuthController.classifyRequestScope(req);
+    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+      return res.status(403).json({ error: 'Password login is disabled for tunnel scope', tunnelLocked: true });
+    }
+    return uiAuthController.handleSessionCreate(req, res);
+  });
+
+  app.get('/connect', async (req, res) => {
+    try {
+      const token = typeof req.query?.t === 'string' ? req.query.t : '';
+      const settings = await readSettingsFromDiskMigrated();
+      const tunnelSessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
+
+      const exchange = tunnelAuthController.exchangeBootstrapToken({
+        req,
+        res,
+        token,
+        sessionTtlMs: tunnelSessionTtlMs,
+      });
+
+      res.setHeader('Cache-Control', 'no-store');
+
+      if (!exchange.ok) {
+        if (exchange.reason === 'rate-limited') {
+          res.setHeader('Retry-After', String(exchange.retryAfter || 60));
+          return res.status(429).type('text/plain').send('Too many attempts. Please try again later.');
+        }
+        return res.status(401).type('text/plain').send('Connection link is invalid or expired.');
+      }
+
+      return res.redirect(302, '/');
+    } catch (error) {
+      return res.status(500).type('text/plain').send('Failed to process connect request.');
+    }
+  });
 
   app.use('/api', async (req, res, next) => {
     try {
+      const requestScope = tunnelAuthController.classifyRequestScope(req);
+      if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+        return tunnelAuthController.requireTunnelSession(req, res, next);
+      }
       await uiAuthController.requireAuth(req, res, next);
     } catch (err) {
       next(err);
@@ -6741,68 +6824,124 @@ async function main(options = {}) {
     }
   });
 
-  app.get('/api/openchamber/tunnel/status', (_req, res) => {
-    const publicUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
-    const active = Boolean(publicUrl);
-    if (active && publicUrl && tunnelPassword) {
-      const passwordUrl = `${publicUrl}?token=${tunnelPassword}`;
-      res.json({ active, url: publicUrl, passwordUrl });
-    } else {
-      res.json({ active: false, url: null, passwordUrl: null });
+  app.get('/api/openchamber/tunnel/status', async (_req, res) => {
+    try {
+      const publicUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
+      if (!publicUrl) {
+        return res.json({
+          active: false,
+          url: null,
+          hasBootstrapToken: false,
+          bootstrapExpiresAt: null,
+          policy: 'tunnel-gated',
+        });
+      }
+
+      if (!tunnelAuthController.getActiveTunnelId() || !tunnelAuthController.getActiveTunnelHost()) {
+        tunnelAuthController.setActiveTunnel({ tunnelId: crypto.randomUUID(), publicUrl });
+      }
+
+      const settings = await readSettingsFromDiskMigrated();
+      const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
+        ? null
+        : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
+      const sessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
+      const bootstrapStatus = tunnelAuthController.getBootstrapStatus();
+
+      return res.json({
+        active: true,
+        url: publicUrl,
+        hasBootstrapToken: bootstrapStatus.hasBootstrapToken,
+        bootstrapExpiresAt: bootstrapStatus.bootstrapExpiresAt,
+        policy: 'tunnel-gated',
+        ttlConfig: {
+          bootstrapTtlMs,
+          sessionTtlMs,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to get tunnel status' });
     }
   });
 
   app.post('/api/openchamber/tunnel/start', async (_req, res) => {
-    const existingUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
-    if (existingUrl) {
-      const passwordUrl = tunnelPassword ? `${existingUrl}?token=${tunnelPassword}` : existingUrl;
-      return res.json({ ok: true, url: existingUrl, passwordUrl });
-    }
-
     try {
-      const cfCheck = await checkCloudflaredAvailable();
-      if (!cfCheck.available) {
-        return res.status(400).json({
-          ok: false,
-          error: 'cloudflared is not installed. Install it with: brew install cloudflared',
-        });
-      }
+      const settings = await readSettingsFromDiskMigrated();
+      const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
+        ? null
+        : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
+      const sessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
 
-      const originUrl = `http://127.0.0.1:${activePort}`;
-      cloudflareTunnelController = await startCloudflareTunnel({ originUrl, port: activePort });
-      const publicUrl = cloudflareTunnelController.getPublicUrl();
-
+      let publicUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
       if (!publicUrl) {
-        cloudflareTunnelController.stop();
-        cloudflareTunnelController = null;
-        return res.status(500).json({ ok: false, error: 'Tunnel started but no public URL was assigned' });
+        const cfCheck = await checkCloudflaredAvailable();
+        if (!cfCheck.available) {
+          return res.status(400).json({
+            ok: false,
+            error: 'cloudflared is not installed. Install it with: brew install cloudflared',
+          });
+        }
+
+        const originUrl = `http://127.0.0.1:${activePort}`;
+        cloudflareTunnelController = await startCloudflareTunnel({ originUrl, port: activePort });
+        publicUrl = cloudflareTunnelController.getPublicUrl();
+
+        if (!publicUrl) {
+          cloudflareTunnelController.stop();
+          cloudflareTunnelController = null;
+          tunnelAuthController.clearActiveTunnel();
+          return res.status(500).json({ ok: false, error: 'Tunnel started but no public URL was assigned' });
+        }
+
+        printTunnelWarning();
+        console.log(`Cloudflare tunnel active: ${publicUrl}`);
       }
 
-      tunnelPassword = crypto.randomUUID();
-      const passwordUrl = `${publicUrl}?token=${tunnelPassword}`;
+      if (!tunnelAuthController.getActiveTunnelId() || !tunnelAuthController.getActiveTunnelHost()) {
+        tunnelAuthController.setActiveTunnel({ tunnelId: crypto.randomUUID(), publicUrl });
+      }
 
-      printTunnelWarning();
-      console.log(`Cloudflare tunnel active: ${publicUrl}`);
+      const bootstrapToken = tunnelAuthController.issueBootstrapToken({ ttlMs: bootstrapTtlMs });
+      const connectUrl = `${publicUrl.replace(/\/$/, '')}/connect?t=${encodeURIComponent(bootstrapToken.token)}`;
 
-      res.json({ ok: true, url: publicUrl, passwordUrl });
+      return res.json({
+        ok: true,
+        url: publicUrl,
+        connectUrl,
+        bootstrapExpiresAt: bootstrapToken.expiresAt,
+        policy: 'tunnel-gated',
+        ttlConfig: {
+          bootstrapTtlMs,
+          sessionTtlMs,
+        },
+      });
     } catch (error) {
       console.error('Failed to start Cloudflare tunnel:', error);
       cloudflareTunnelController = null;
-      tunnelPassword = null;
-      res.status(500).json({ ok: false, error: error?.message || 'Failed to start tunnel' });
+      tunnelAuthController.clearActiveTunnel();
+      return res.status(500).json({ ok: false, error: error?.message || 'Failed to start tunnel' });
     }
   });
 
   app.post('/api/openchamber/tunnel/stop', (_req, res) => {
+    let revokedBootstrapCount = 0;
+    let invalidatedSessionCount = 0;
+    const activeTunnelId = tunnelAuthController.getActiveTunnelId();
+
+    if (activeTunnelId) {
+      const revoked = tunnelAuthController.revokeTunnelArtifacts(activeTunnelId);
+      revokedBootstrapCount = revoked.revokedBootstrapCount;
+      invalidatedSessionCount = revoked.invalidatedSessionCount;
+    }
+
     if (cloudflareTunnelController) {
       console.log('Stopping Cloudflare tunnel (user requested)...');
       cloudflareTunnelController.stop();
       cloudflareTunnelController = null;
-      tunnelPassword = null;
-      res.json({ ok: true });
-    } else {
-      res.json({ ok: true, message: 'No tunnel running' });
     }
+
+    tunnelAuthController.clearActiveTunnel();
+    res.json({ ok: true, revokedBootstrapCount, invalidatedSessionCount });
   });
 
   // ── End Cloudflare Tunnel API ─────────────────────────────────────
@@ -12259,8 +12398,16 @@ async function main(options = {}) {
             const originUrl = `http://localhost:${activePort}`;
             cloudflareTunnelController = await startCloudflareTunnel({ originUrl, port: activePort });
             printTunnelWarning();
+            const tunnelUrl = cloudflareTunnelController.getPublicUrl();
+            if (tunnelUrl) {
+              tunnelAuthController.setActiveTunnel({ tunnelId: crypto.randomUUID(), publicUrl: tunnelUrl });
+              const settings = await readSettingsFromDiskMigrated();
+              const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
+                ? null
+                : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
+              tunnelAuthController.issueBootstrapToken({ ttlMs: bootstrapTtlMs });
+            }
             if (onTunnelReady) {
-              const tunnelUrl = cloudflareTunnelController.getPublicUrl();
               if (tunnelUrl) {
                 onTunnelReady(tunnelUrl);
               }
