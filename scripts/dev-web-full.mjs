@@ -6,13 +6,14 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
+const useDetachedChildren = process.platform === 'darwin';
 
 function run(label, command, args, options = {}) {
   const child = spawn(command, args, {
     cwd: repoRoot,
     stdio: ['inherit', 'pipe', 'pipe'],
     env: { ...process.env },
-    detached: process.platform !== 'win32',
+    detached: useDetachedChildren,
     ...options,
   });
 
@@ -58,7 +59,7 @@ function signalChild(child, signal) {
   }
 
   try {
-    if (process.platform !== 'win32') {
+    if (useDetachedChildren && process.platform !== 'win32') {
       process.kill(-child.pid, signal);
       return;
     }

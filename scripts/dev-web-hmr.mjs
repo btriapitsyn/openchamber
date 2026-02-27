@@ -6,13 +6,14 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
+const useDetachedChildren = process.platform === 'darwin';
 
 function run(label, command, args, env = {}, options = {}) {
   return spawn(command, args, {
     cwd: options.cwd || repoRoot,
     stdio: 'inherit',
     env: { ...process.env, ...env },
-    detached: process.platform !== 'win32',
+    detached: useDetachedChildren,
   }).on('error', (error) => {
     console.error(`[dev:web:hmr] Failed to start ${label}:`, error);
   });
@@ -45,7 +46,7 @@ function signalChild(child, signal) {
   }
 
   try {
-    if (process.platform !== 'win32') {
+    if (useDetachedChildren && process.platform !== 'win32') {
       process.kill(-child.pid, signal);
       return;
     }
