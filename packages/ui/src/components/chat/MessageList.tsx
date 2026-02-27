@@ -1,7 +1,9 @@
 import React from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { flushSync } from 'react-dom';
+import { elementScroll, observeElementOffset, observeElementRect, Virtualizer } from '@tanstack/react-virtual';
 import { useShallow } from 'zustand/react/shallow';
+import type { ReactVirtualizerOptions, VirtualItem } from '@tanstack/react-virtual';
 
 import ChatMessage from './ChatMessage';
 import { PermissionCard } from './PermissionCard';
@@ -19,6 +21,49 @@ import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 const MESSAGE_VIRTUALIZE_THRESHOLD = 40;
 const MESSAGE_VIRTUAL_OVERSCAN_MOBILE = 2;
 const MESSAGE_VIRTUAL_OVERSCAN_DESKTOP = 4;
+
+type MessageListVirtualizerOptions<TItemElement extends Element> = Omit<
+    ReactVirtualizerOptions<HTMLElement, TItemElement>,
+    'scrollToFn' | 'observeElementRect' | 'observeElementOffset'
+>
+
+const useMessageListVirtualizer = <TItemElement extends Element>(
+    options: MessageListVirtualizerOptions<TItemElement>,
+): Virtualizer<HTMLElement, TItemElement> => {
+    const [, forceRender] = React.useReducer(() => ({}), {});
+    const { useFlushSync = true, onChange, ...baseOptions } = options;
+
+    const handleChange = React.useCallback((instance: Virtualizer<HTMLElement, TItemElement>, sync: boolean) => {
+        if (useFlushSync && sync) {
+            flushSync(forceRender);
+        } else {
+            forceRender();
+        }
+
+        onChange?.(instance, sync);
+    }, [onChange, useFlushSync]);
+
+    const [virtualizer] = React.useState(() => new Virtualizer<HTMLElement, TItemElement>({
+        ...baseOptions,
+        onChange: handleChange,
+        observeElementRect,
+        observeElementOffset,
+        scrollToFn: elementScroll,
+    }));
+
+    virtualizer.setOptions({
+        ...baseOptions,
+        onChange: handleChange,
+        observeElementRect,
+        observeElementOffset,
+        scrollToFn: elementScroll,
+    });
+
+    React.useLayoutEffect(() => virtualizer._didMount(), [virtualizer]);
+    React.useLayoutEffect(() => virtualizer._willUpdate(), [virtualizer]);
+
+    return virtualizer;
+};
 
 interface ChatMessageEntry {
     info: Message;
@@ -49,34 +94,6 @@ const getMessageId = (message: ChatMessageEntry | undefined): string | null => {
 const getMessageParentId = (message: ChatMessageEntry): string | null => {
     const parentID = (message.info as unknown as { parentID?: unknown }).parentID;
     return typeof parentID === 'string' && parentID.trim().length > 0 ? parentID : null;
-};
-
-const hasSameTurnStructure = (prev: ChatMessageEntry[], next: ChatMessageEntry[]): boolean => {
-    if (prev === next) {
-        return true;
-    }
-    if (prev.length !== next.length) {
-        return false;
-    }
-
-    for (let index = 0; index < prev.length; index += 1) {
-        const prevMessage = prev[index];
-        const nextMessage = next[index];
-
-        if (prevMessage.info.id !== nextMessage.info.id) {
-            return false;
-        }
-
-        if (resolveMessageRole(prevMessage) !== resolveMessageRole(nextMessage)) {
-            return false;
-        }
-
-        if (getMessageParentId(prevMessage) !== getMessageParentId(nextMessage)) {
-            return false;
-        }
-    }
-
-    return true;
 };
 
 const isUserShellMarkerMessage = (message: ChatMessageEntry | undefined): boolean => {
@@ -543,11 +560,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     scrollRef,
 }, ref) => {
     const { isMobile } = useDeviceInfo();
-    const turnStructureCacheRef = React.useRef<{
-        messages: ChatMessageEntry[];
-        turns: Turn[];
-    } | null>(null);
-    const normalizedMessageCacheRef = React.useRef<Map<string, { source: ChatMessageEntry; normalized: ChatMessageEntry }>>(new Map());
 
     React.useEffect(() => {
         if (permissions.length === 0 && questions.length === 0) {
@@ -558,7 +570,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
     const baseDisplayMessages = React.useMemo(() => {
         const seenIdsFromTail = new Set<string>();
-        const nextNormalizedCache = new Map<string, { source: ChatMessageEntry; normalized: ChatMessageEntry }>();
 
         const dedupedMessages: ChatMessageEntry[] = [];
         for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -575,17 +586,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         dedupedMessages.reverse();
 
         const normalizedMessages = dedupedMessages
-            .map((message, index) => {
-                const messageId = typeof message.info?.id === 'string' && message.info.id.length > 0
-                    ? message.info.id
-                    : `__idx_${index}`;
-                const cacheKey = `${messageId}:${resolveMessageRole(message) ?? 'unknown'}`;
-                const cached = normalizedMessageCacheRef.current.get(cacheKey);
-                if (cached && cached.source === message) {
-                    nextNormalizedCache.set(cacheKey, cached);
-                    return cached.normalized;
-                }
-
+            .map((message) => {
                 const filteredParts = filterSyntheticParts(message.parts);
                 const normalized = filteredParts === message.parts
                     ? message
@@ -593,11 +594,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                         ...message,
                         parts: filteredParts,
                     };
-                nextNormalizedCache.set(cacheKey, { source: message, normalized });
                 return normalized;
             });
-
-        normalizedMessageCacheRef.current = nextNormalizedCache;
 
         const output: ChatMessageEntry[] = [];
 
@@ -642,15 +640,41 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         })
     );
 
+    const activeRetrySessionId = activeRetryStatus?.sessionId ?? null;
+    const activeRetryMessage = activeRetryStatus?.message
+        ?? 'Quota limit reached. Retrying automatically.';
+    const activeRetryConfirmedAt = activeRetryStatus?.confirmedAt;
+
+    const [fallbackRetryTimestamp, setFallbackRetryTimestamp] = React.useState<number>(0);
+    const fallbackRetrySessionRef = React.useRef<string | null>(null);
+    const [scrollContainer, setScrollContainer] = React.useState<HTMLDivElement | null>(null);
+
+    React.useLayoutEffect(() => {
+        setScrollContainer(scrollRef?.current ?? null);
+    }, [scrollRef]);
+
+    React.useEffect(() => {
+        if (!activeRetryStatus || typeof activeRetryStatus.confirmedAt === 'number') {
+            fallbackRetrySessionRef.current = null;
+            setFallbackRetryTimestamp(0);
+            return;
+        }
+
+        if (fallbackRetrySessionRef.current !== activeRetryStatus.sessionId) {
+            fallbackRetrySessionRef.current = activeRetryStatus.sessionId;
+            setFallbackRetryTimestamp(Date.now());
+        }
+    }, [activeRetryStatus, activeRetryStatus?.sessionId, activeRetryStatus?.confirmedAt]);
+
     const displayMessages = React.useMemo(() => {
-        if (!activeRetryStatus) {
+        if (!activeRetrySessionId) {
             return baseDisplayMessages;
         }
 
         const retryError = {
             name: 'SessionRetry',
-            message: activeRetryStatus.message,
-            data: { message: activeRetryStatus.message },
+            message: activeRetryMessage,
+            data: { message: activeRetryMessage },
         };
 
         let lastUserIndex = -1;
@@ -696,12 +720,12 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             });
         }
 
-        const eventTime = typeof activeRetryStatus.confirmedAt === 'number' ? activeRetryStatus.confirmedAt : Date.now();
-        const syntheticId = `synthetic_retry_notice_${activeRetryStatus.sessionId}`;
+        const eventTime = typeof activeRetryConfirmedAt === 'number' ? activeRetryConfirmedAt : fallbackRetryTimestamp;
+        const syntheticId = `synthetic_retry_notice_${activeRetrySessionId}`;
         const synthetic: ChatMessageEntry = {
             info: {
                 id: syntheticId,
-                sessionID: activeRetryStatus.sessionId,
+                sessionID: activeRetrySessionId,
                 role: 'assistant',
                 time: { created: eventTime, completed: eventTime },
                 finish: 'stop',
@@ -713,23 +737,9 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         const next = baseDisplayMessages.slice();
         next.splice(lastUserIndex + 1, 0, synthetic);
         return next;
-    }, [activeRetryStatus, baseDisplayMessages]);
+    }, [activeRetryMessage, activeRetryConfirmedAt, activeRetrySessionId, baseDisplayMessages, fallbackRetryTimestamp]);
 
-    const turns = React.useMemo(() => {
-        const cached = turnStructureCacheRef.current;
-        if (cached && hasSameTurnStructure(cached.messages, displayMessages)) {
-            return cached.turns;
-        }
-
-        const groupedTurns = detectTurns(displayMessages);
-
-        turnStructureCacheRef.current = {
-            messages: displayMessages,
-            turns: groupedTurns,
-        };
-
-        return groupedTurns;
-    }, [displayMessages]);
+    const turns = React.useMemo(() => detectTurns(displayMessages), [displayMessages]);
 
     const renderEntries = React.useMemo<RenderEntry[]>(() => {
         const entries: RenderEntry[] = [];
@@ -740,19 +750,19 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         const lastTurnMessageIds = new Set<string>();
         if (lastTurn) {
             lastTurnMessageIds.add(lastTurn.userMessage.info.id);
-            lastTurn.assistantMessages.forEach((assistantMessage) => {
+            lastTurn.assistantMessages.forEach((assistantMessage: ChatMessageEntry) => {
                 lastTurnMessageIds.add(assistantMessage.info.id);
             });
         }
 
-        turns.forEach((turn) => {
+        turns.forEach((turn: Turn) => {
             turnByUserId.set(turn.userMessage.info.id, turn);
-            turn.assistantMessages.forEach((assistantMessage) => {
+            turn.assistantMessages.forEach((assistantMessage: ChatMessageEntry) => {
                 groupedAssistantIds.add(assistantMessage.info.id);
             });
         });
 
-        displayMessages.forEach((message) => {
+        displayMessages.forEach((message: ChatMessageEntry) => {
             const turn = turnByUserId.get(message.info.id);
             if (turn) {
                 entries.push({
@@ -779,7 +789,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return entries;
     }, [displayMessages, turns]);
 
-    const shouldVirtualize = Boolean(scrollRef) && renderEntries.length >= MESSAGE_VIRTUALIZE_THRESHOLD;
+    const shouldVirtualize = Boolean(scrollContainer) && renderEntries.length >= MESSAGE_VIRTUALIZE_THRESHOLD;
 
     const estimateEntrySize = React.useCallback(
         (index: number): number => {
@@ -797,17 +807,25 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         [renderEntries]
     );
 
-    const virtualizer = useVirtualizer({
+    const virtualizer = useMessageListVirtualizer<Element>({
         count: renderEntries.length,
-        getScrollElement: () => scrollRef?.current ?? null,
+        getScrollElement: () => scrollContainer,
         estimateSize: estimateEntrySize,
         overscan: isMobile ? MESSAGE_VIRTUAL_OVERSCAN_MOBILE : MESSAGE_VIRTUAL_OVERSCAN_DESKTOP,
-        getItemKey: (index) => renderEntries[index]?.key ?? index,
+        getItemKey: (index: number) => renderEntries[index]?.key ?? index,
         enabled: shouldVirtualize,
         useFlushSync: false,
     });
 
     const virtualRows = shouldVirtualize ? virtualizer.getVirtualItems() : [];
+
+    const scrollVirtualizerToIndex = React.useCallback((index: number, behavior: ScrollBehavior = 'auto') => {
+        if (!virtualizer) {
+            return;
+        }
+        const normalizedBehavior: 'auto' | 'smooth' = behavior === 'instant' ? 'auto' : behavior;
+        virtualizer.scrollToIndex(index, { align: 'start', behavior: normalizedBehavior });
+    }, [virtualizer]);
 
     const messageIndexMap = React.useMemo(() => {
         const indexMap = new Map<string, number>();
@@ -827,15 +845,15 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     }, [renderEntries]);
 
     const findMessageElement = React.useCallback((messageId: string): HTMLElement | null => {
-        const container = scrollRef?.current;
+        const container = scrollContainer;
         if (!container) {
             return null;
         }
         return container.querySelector(`[data-message-id="${messageId}"]`);
-    }, [scrollRef]);
+    }, [scrollContainer]);
 
     const scrollMessageElementIntoView = React.useCallback((messageId: string, behavior: ScrollBehavior = 'auto') => {
-        const container = scrollRef?.current;
+        const container = scrollContainer;
         if (!container) {
             return false;
         }
@@ -850,91 +868,109 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         const top = messageRect.top - containerRect.top + container.scrollTop - offset;
         container.scrollTo({ top, behavior });
         return true;
-    }, [findMessageElement, scrollRef]);
+    }, [findMessageElement, scrollContainer]);
 
-    React.useImperativeHandle(ref, () => ({
-        scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => {
-            const behavior = options?.behavior ?? 'auto';
+    React.useLayoutEffect(() => {
+        if (!ref) {
+            return;
+        }
 
-            const index = messageIndexMap.get(messageId);
-            if (index === undefined) {
-                return false;
-            }
+        const handle: MessageListHandle = {
+            scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => {
+                const behavior = options?.behavior ?? 'auto';
+                const index = messageIndexMap.get(messageId);
+                if (index === undefined) {
+                    return false;
+                }
 
-            if (shouldVirtualize) {
-                virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+                if (shouldVirtualize) {
+                    scrollVirtualizerToIndex(index, behavior === 'instant' ? 'auto' : behavior);
+                    if (typeof window !== 'undefined') {
+                        window.requestAnimationFrame(() => {
+                            window.requestAnimationFrame(() => {
+                                scrollMessageElementIntoView(messageId, behavior);
+                            });
+                        });
+                    }
+                    return true;
+                }
+
+                return scrollMessageElementIntoView(messageId, behavior);
+            },
+
+            captureViewportAnchor: () => {
+                const container = scrollContainer;
+                if (!container) {
+                    return null;
+                }
+
+                const containerRect = container.getBoundingClientRect();
+                const nodes = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'));
+                const firstVisible = nodes.find((node) => node.getBoundingClientRect().bottom > containerRect.top + 1);
+                if (!firstVisible) {
+                    return null;
+                }
+
+                const messageId = firstVisible.dataset.messageId;
+                if (!messageId) {
+                    return null;
+                }
+
+                return {
+                    messageId,
+                    offsetTop: firstVisible.getBoundingClientRect().top - containerRect.top,
+                };
+            },
+
+            restoreViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => {
+                const container = scrollContainer;
+                if (!container) {
+                    return false;
+                }
+
+                const index = messageIndexMap.get(anchor.messageId);
+                if (index === undefined) {
+                    return false;
+                }
+
+                if (shouldVirtualize) {
+                    scrollVirtualizerToIndex(index, 'auto');
+                }
+
                 if (typeof window !== 'undefined') {
                     window.requestAnimationFrame(() => {
                         window.requestAnimationFrame(() => {
-                            scrollMessageElementIntoView(messageId, behavior);
+                            const element = findMessageElement(anchor.messageId);
+                            if (!element) {
+                                return;
+                            }
+                            const containerRect = container.getBoundingClientRect();
+                            const targetTop = element.getBoundingClientRect().top - containerRect.top;
+                            const delta = targetTop - anchor.offsetTop;
+                            if (delta !== 0) {
+                                container.scrollTop += delta;
+                            }
                         });
                     });
                 }
+
                 return true;
-            }
+            },
+        };
 
-            return scrollMessageElementIntoView(messageId, behavior);
-        },
-
-        captureViewportAnchor: () => {
-            const container = scrollRef?.current;
-            if (!container) {
-                return null;
-            }
-
-            const containerRect = container.getBoundingClientRect();
-            const nodes = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'));
-            const firstVisible = nodes.find((node) => node.getBoundingClientRect().bottom > containerRect.top + 1);
-            if (!firstVisible) {
-                return null;
-            }
-
-            const messageId = firstVisible.dataset.messageId;
-            if (!messageId) {
-                return null;
-            }
-
-            return {
-                messageId,
-                offsetTop: firstVisible.getBoundingClientRect().top - containerRect.top,
+        if (typeof ref === 'function') {
+            ref(handle);
+            return () => {
+                ref(null);
             };
-        },
+        }
 
-        restoreViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => {
-            const container = scrollRef?.current;
-            if (!container) {
-                return false;
-            }
-
-            const index = messageIndexMap.get(anchor.messageId);
-            if (index === undefined) {
-                return false;
-            }
-
-            if (shouldVirtualize) {
-                virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
-            }
-
-            if (typeof window !== 'undefined') {
-                window.requestAnimationFrame(() => {
-                    window.requestAnimationFrame(() => {
-                        const element = findMessageElement(anchor.messageId);
-                        if (!element) {
-                            return;
-                        }
-                        const containerRect = container.getBoundingClientRect();
-                        const targetTop = element.getBoundingClientRect().top - containerRect.top;
-                        const delta = targetTop - anchor.offsetTop;
-                        if (delta !== 0) {
-                            container.scrollTop += delta;
-                        }
-                    });
-                });
-            }
-
-            return true;
-        },
-    }), [findMessageElement, messageIndexMap, scrollMessageElementIntoView, scrollRef, shouldVirtualize, virtualizer]);
+        const objectRef = ref;
+        objectRef.current = handle;
+        return () => {
+            objectRef.current = null;
+        };
+    }, [findMessageElement, messageIndexMap, scrollMessageElementIntoView, scrollContainer, scrollVirtualizerToIndex, shouldVirtualize, ref]);
 
     const disableFadeIn = shouldVirtualize && virtualizer.isScrolling;
 
@@ -977,7 +1013,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                             className="relative w-full"
                             style={{ height: `${virtualizer.getTotalSize()}px` }}
                         >
-                            {virtualRows.map((virtualRow) => {
+                            {virtualRows.map((virtualRow: VirtualItem) => {
                                 const entry = renderEntries[virtualRow.index];
                                 if (!entry) {
                                     return null;
