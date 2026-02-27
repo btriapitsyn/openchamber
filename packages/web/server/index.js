@@ -847,6 +847,11 @@ const maybeCacheSessionInfoFromEvent = (payload) => {
   const sessionId = info.id;
   const title = info.title;
   cacheSessionTitle(sessionId, title);
+  // Also cache parentID from session events to ensure subtask detection works correctly
+  const parentID = info.parentID;
+  if (sessionId && parentID !== undefined) {
+    setCachedSessionParentId(sessionId, parentID);
+  }
 };
 
 /**
@@ -4170,7 +4175,7 @@ const fetchSessionParentId = async (sessionId) => {
     }
 
     const match = data.find((s) => s && typeof s === 'object' && s.id === sessionId);
-    const parentID = match && typeof match.parentID === 'string' && match.parentID.length > 0 ? match.parentID : null;
+    const parentID = match?.parentID ? match.parentID : null;
     setCachedSessionParentId(sessionId, parentID);
     return parentID;
   } catch {
