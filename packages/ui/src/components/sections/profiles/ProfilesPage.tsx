@@ -2,7 +2,8 @@ import React from 'react';
 import { useModelProfilesStore } from '@/stores/useModelProfilesStore';
 import { useAgentsStore, isAgentHidden } from '@/stores/useAgentsStore';
 import { useConfigStore } from '@/stores/useConfigStore';
-import type { AgentModelMapping } from '@/types/profiles';
+import { useOhMyOpencodeStore } from '@/stores/useOhMyOpencodeStore';
+import type { AgentModelMapping, CategoryModelMapping } from '@/types/profiles';
 import { toast } from '@/components/ui';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -27,8 +28,32 @@ export const ProfilesPage: React.FC = () => {
   const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? null;
   const isCreateMode = selectedProfileId === null;
 
+  const omoState = useOhMyOpencodeStore();
+  const showCategories = omoState.installed;
+  const categoryNames = React.useMemo(() => {
+    if (!omoState.installed || !omoState.categories) return [];
+    return Object.keys(omoState.categories).sort();
+  }, [omoState.installed, omoState.categories]);
+
+  const omoAgentNames = React.useMemo(() => {
+    if (!omoState.installed || !omoState.agents) return [];
+    return Object.keys(omoState.agents).sort();
+  }, [omoState.installed, omoState.agents]);
+
+  // Split visible agents: regular agents vs oh-my-opencode agents
+  const omoAgentNamesSet = React.useMemo(() => new Set(omoAgentNames), [omoAgentNames]);
+  const regularAgents = React.useMemo(() => visibleAgents.filter(a => !omoAgentNamesSet.has(a.name)), [visibleAgents, omoAgentNamesSet]);
+
+  React.useEffect(() => {
+    if (!omoState.isLoaded && !omoState.isLoading) {
+      omoState.load();
+    }
+  }, [omoState]);
+
   const [localName, setLocalName] = React.useState('');
   const [agentModels, setAgentModels] = React.useState<AgentModelMapping>({});
+  const [categoryModels, setCategoryModels] = React.useState<CategoryModelMapping>({});
+  const [omoAgentModels, setOmoAgentModels] = React.useState<AgentModelMapping>({});
   const [isSaving, setIsSaving] = React.useState(false);
   const [isApplying, setIsApplying] = React.useState(false);
 
@@ -36,11 +61,47 @@ export const ProfilesPage: React.FC = () => {
     if (isCreateMode) {
       setLocalName('');
       setAgentModels({});
+      setCategoryModels({});
+      setOmoAgentModels({});
     } else if (selectedProfile) {
       setLocalName(selectedProfile.name);
       setAgentModels(selectedProfile.agentModels || {});
+      setCategoryModels(selectedProfile.categoryModels || {});
+      setOmoAgentModels(selectedProfile.omoAgentModels || {});
     }
   }, [selectedProfileId, selectedProfile, isCreateMode]);
+
+  const isCategoryModelsDirty = React.useMemo(() => {
+    if (!showCategories) return false;
+    if (isCreateMode) {
+      return Object.values(categoryModels).some(m => m !== '');
+    }
+    if (!selectedProfile) return false;
+    const currentModels = selectedProfile.categoryModels || {};
+    const allKeys = new Set([...Object.keys(categoryModels), ...Object.keys(currentModels)]);
+    for (const key of allKeys) {
+      const localVal = categoryModels[key] || '';
+      const currentVal = currentModels[key] || '';
+      if (localVal !== currentVal) return true;
+    }
+    return false;
+  }, [showCategories, isCreateMode, categoryModels, selectedProfile]);
+
+  const isOmoAgentModelsDirty = React.useMemo(() => {
+    if (!omoState.installed || omoAgentNames.length === 0) return false;
+    if (isCreateMode) {
+      return Object.values(omoAgentModels).some(m => m !== '');
+    }
+    if (!selectedProfile) return false;
+    const currentModels = selectedProfile.omoAgentModels || {};
+    const allKeys = new Set([...Object.keys(omoAgentModels), ...Object.keys(currentModels)]);
+    for (const key of allKeys) {
+      const localVal = omoAgentModels[key] || '';
+      const currentVal = currentModels[key] || '';
+      if (localVal !== currentVal) return true;
+    }
+    return false;
+  }, [omoState.installed, omoAgentNames, isCreateMode, omoAgentModels, selectedProfile]);
 
   const isModelsDirty = React.useMemo(() => {
     if (isCreateMode) {
@@ -63,12 +124,16 @@ export const ProfilesPage: React.FC = () => {
     return localName.trim() !== selectedProfile.name;
   }, [isCreateMode, localName, selectedProfile]);
 
-  const isDirty = isCreateMode ? (isNameDirty || isModelsDirty) : isModelsDirty;
+  const isDirty = isCreateMode ? (isNameDirty || isModelsDirty || isCategoryModelsDirty || isOmoAgentModelsDirty) : (isModelsDirty || isCategoryModelsDirty || isOmoAgentModelsDirty);
 
   const handleSave = async () => {
     const trimmedName = localName.trim();
     if (isCreateMode && !trimmedName) {
       toast.error('Profile name is required');
+      return;
+    }
+    if (isCreateMode && profiles.some(p => p.name.toLowerCase() === trimmedName.toLowerCase())) {
+      toast.error('A profile with this name already exists');
       return;
     }
 
@@ -79,10 +144,30 @@ export const ProfilesPage: React.FC = () => {
       }
     }
 
+    const filteredCategoryModels: CategoryModelMapping = {};
+    if (showCategories) {
+      for (const [cat, model] of Object.entries(categoryModels)) {
+        if (model) {
+          filteredCategoryModels[cat] = model;
+        }
+      }
+    }
+
+    const filteredOmoAgentModels: AgentModelMapping = {};
+    if (omoState.installed && omoAgentNames.length > 0) {
+      for (const [agent, model] of Object.entries(omoAgentModels)) {
+        if (model) {
+          filteredOmoAgentModels[agent] = model;
+        }
+      }
+    }
+
     setIsSaving(true);
     try {
       if (isCreateMode) {
-        const created = await createProfile(trimmedName, filteredModels);
+        const catModels = Object.keys(filteredCategoryModels).length > 0 ? filteredCategoryModels : undefined;
+        const omoAgents = Object.keys(filteredOmoAgentModels).length > 0 ? filteredOmoAgentModels : undefined;
+        const created = await createProfile(trimmedName, filteredModels, catModels, omoAgents);
         if (created) {
           toast.success('Profile created');
         } else {
@@ -90,7 +175,14 @@ export const ProfilesPage: React.FC = () => {
           if (stateError) toast.error(stateError);
         }
       } else if (selectedProfileId) {
-        await updateProfile(selectedProfileId, { agentModels: filteredModels });
+        const updates: { agentModels: AgentModelMapping; categoryModels?: CategoryModelMapping; omoAgentModels?: AgentModelMapping } = { agentModels: filteredModels };
+        if (showCategories) {
+          updates.categoryModels = Object.keys(filteredCategoryModels).length > 0 ? filteredCategoryModels : undefined;
+        }
+        if (omoState.installed && omoAgentNames.length > 0) {
+          updates.omoAgentModels = Object.keys(filteredOmoAgentModels).length > 0 ? filteredOmoAgentModels : undefined;
+        }
+        await updateProfile(selectedProfileId, updates);
         const stateError = useModelProfilesStore.getState().error;
         if (stateError) {
           toast.error(stateError);
@@ -136,6 +228,11 @@ export const ProfilesPage: React.FC = () => {
     if (!isCreateMode && selectedProfileId && localName.trim() !== selectedProfile?.name) {
       const trimmedName = localName.trim();
       if (!trimmedName) {
+        setLocalName(selectedProfile?.name || '');
+        return;
+      }
+      if (profiles.some(p => p.id !== selectedProfileId && p.name.toLowerCase() === trimmedName.toLowerCase())) {
+        toast.error('A profile with this name already exists');
         setLocalName(selectedProfile?.name || '');
         return;
       }
@@ -210,7 +307,7 @@ export const ProfilesPage: React.FC = () => {
             <p className="typography-meta text-muted-foreground">Override model per agent for this profile</p>
           </div>
           <section className="px-2 pb-2 pt-0 space-y-0">
-            {visibleAgents.map((agent, index) => {
+            {regularAgents.map((agent, index) => {
               const modelString = agentModels[agent.name] || '';
               const { providerId, modelId } = splitModel(modelString);
               const isModelUnavailable = !!(providerId && modelId &&
@@ -243,6 +340,92 @@ export const ProfilesPage: React.FC = () => {
             })}
           </section>
         </div>
+
+        {/* Agent Models (oh-my-opencode) */}
+        {omoState.installed && omoAgentNames.length > 0 && (
+          <div className="mb-8">
+            <div className="mb-1 px-1">
+              <h3 className="typography-ui-header font-medium text-foreground">Agent Models (oh-my-opencode)</h3>
+              <p className="typography-meta text-muted-foreground">Override model per oh-my-opencode agent for this profile</p>
+            </div>
+            <section className="px-2 pb-2 pt-0 space-y-0">
+              {omoAgentNames.map((agentName, index) => {
+                const modelString = omoAgentModels[agentName] || '';
+                const { providerId, modelId } = splitModel(modelString);
+                const isModelUnavailable = !!(providerId && modelId &&
+                  !providers.some(p => p.id === providerId && p.models.some(m => m.id === modelId)));
+
+                return (
+                  <div key={agentName} className={cn("flex flex-col gap-2 py-1.5 sm:flex-row sm:items-center sm:gap-8", index > 0 && "border-t border-[var(--surface-subtle)]")}>
+                    <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
+                      <span className="typography-ui-label text-foreground">{agentName}</span>
+                    </div>
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-fit sm:flex-initial">
+                      <ModelSelector
+                        providerId={providerId}
+                        modelId={modelId}
+                        onChange={(newProviderId: string, newModelId: string) => {
+                          setOmoAgentModels(prev => ({
+                            ...prev,
+                            [agentName]: newProviderId && newModelId ? `${newProviderId}/${newModelId}` : ''
+                          }));
+                        }}
+                      />
+                      {isModelUnavailable && (
+                        <span title="Model not available" className="flex shrink-0 items-center text-[var(--status-warning)]">
+                          <RiAlertLine size={14} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          </div>
+        )}
+
+        {/* Category Models (oh-my-opencode) */}
+        {showCategories && categoryNames.length > 0 && (
+          <div className="mb-8">
+            <div className="mb-1 px-1">
+              <h3 className="typography-ui-header font-medium text-foreground">Categories (oh-my-opencode)</h3>
+              <p className="typography-meta text-muted-foreground">Override model per category for this profile</p>
+            </div>
+            <section className="px-2 pb-2 pt-0 space-y-0">
+              {categoryNames.map((catName, index) => {
+                const modelString = categoryModels[catName] || '';
+                const { providerId, modelId } = splitModel(modelString);
+                const isModelUnavailable = !!(providerId && modelId &&
+                  !providers.some(p => p.id === providerId && p.models.some(m => m.id === modelId)));
+
+                return (
+                  <div key={catName} className={cn("flex flex-col gap-2 py-1.5 sm:flex-row sm:items-center sm:gap-8", index > 0 && "border-t border-[var(--surface-subtle)]")}>
+                    <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
+                      <span className="typography-ui-label text-foreground">{catName}</span>
+                    </div>
+                    <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-fit sm:flex-initial">
+                      <ModelSelector
+                        providerId={providerId}
+                        modelId={modelId}
+                        onChange={(newProviderId: string, newModelId: string) => {
+                          setCategoryModels(prev => ({
+                            ...prev,
+                            [catName]: newProviderId && newModelId ? `${newProviderId}/${newModelId}` : ''
+                          }));
+                        }}
+                      />
+                      {isModelUnavailable && (
+                        <span title="Model not available" className="flex shrink-0 items-center text-[var(--status-warning)]">
+                          <RiAlertLine size={14} />
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          </div>
+        )}
 
         {/* Save Action */}
         <div className="px-2 py-1">

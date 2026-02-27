@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import type { ModelProfile, ModelProfilesState, AgentModelMapping } from "@/types/profiles";
+import type { ModelProfile, ModelProfilesState, AgentModelMapping, CategoryModelMapping } from "@/types/profiles";
 import { useAgentsStore, reloadOpenCodeConfiguration } from "./useAgentsStore";
 import { useConfigStore } from "./useConfigStore";
+import { useOhMyOpencodeStore } from "./useOhMyOpencodeStore";
 
 export const useModelProfilesStore = create<ModelProfilesState>()(
   devtools(
@@ -29,13 +30,20 @@ export const useModelProfilesStore = create<ModelProfilesState>()(
         }
       },
 
-      createProfile: async (name: string, agentModels: AgentModelMapping) => {
+      createProfile: async (name: string, agentModels: AgentModelMapping, categoryModels?: CategoryModelMapping, omoAgentModels?: AgentModelMapping) => {
         set({ isLoading: true });
         try {
+          const body: Record<string, unknown> = { name, agentModels };
+          if (categoryModels && Object.keys(categoryModels).length > 0) {
+            body.categoryModels = categoryModels;
+          }
+          if (omoAgentModels && Object.keys(omoAgentModels).length > 0) {
+            body.omoAgentModels = omoAgentModels;
+          }
           const response = await fetch("/api/config/profiles", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name, agentModels }),
+            body: JSON.stringify(body),
           });
           const payload = await response.json().catch(() => null);
           if (!response.ok) {
@@ -66,10 +74,39 @@ export const useModelProfilesStore = create<ModelProfilesState>()(
           }
         }
 
-        return get().createProfile(name, agentModels);
+        // Capture oh-my-opencode category models if installed
+        let categoryModels: CategoryModelMapping | undefined;
+        const omoState = useOhMyOpencodeStore.getState();
+        if (omoState.installed && omoState.categories) {
+          categoryModels = {};
+          for (const [catName, catConfig] of Object.entries(omoState.categories)) {
+            if (catConfig?.model) {
+              categoryModels[catName] = catConfig.model;
+            }
+          }
+          if (Object.keys(categoryModels).length === 0) {
+            categoryModels = undefined;
+          }
+        }
+
+        // Capture oh-my-opencode agent models if installed
+        let omoAgentModels: AgentModelMapping | undefined;
+        if (omoState.installed && omoState.agents) {
+          omoAgentModels = {};
+          for (const [agentName, agentConfig] of Object.entries(omoState.agents)) {
+            if (agentConfig?.model) {
+              omoAgentModels[agentName] = agentConfig.model;
+            }
+          }
+          if (Object.keys(omoAgentModels).length === 0) {
+            omoAgentModels = undefined;
+          }
+        }
+
+        return get().createProfile(name, agentModels, categoryModels, omoAgentModels);
       },
 
-      updateProfile: async (id: string, updates: { name?: string; agentModels?: AgentModelMapping }) => {
+      updateProfile: async (id: string, updates: { name?: string; agentModels?: AgentModelMapping; categoryModels?: CategoryModelMapping; omoAgentModels?: AgentModelMapping }) => {
         set({ isLoading: true });
         try {
           const response = await fetch(`/api/config/profiles/${encodeURIComponent(id)}`, {
@@ -119,10 +156,24 @@ export const useModelProfilesStore = create<ModelProfilesState>()(
           if (!profile) {
             throw new Error(`Profile with id "${id}" not found`);
           }
-
-          const agentsPayload: Record<string, { model: string }> = {};
+          // Build a full payload for each agent so that built-in agents get a
+          // complete .md file (prompt, description, mode, etc.) instead of only
+          // the model field.  Permission is excluded because the SDK runtime
+          // type (PermissionRuleset) differs from the config type
+          // (PermissionConfig) and should only be changed via Agent Settings.
+          const currentAgents = useAgentsStore.getState().agents;
+          const agentsPayload: Record<string, Record<string, unknown>> = {};
           for (const [agentName, modelString] of Object.entries(profile.agentModels)) {
-            agentsPayload[agentName] = { model: modelString };
+            const agent = currentAgents.find((a) => a.name === agentName);
+            const updates: Record<string, unknown> = { model: modelString };
+            if (agent) {
+              if (agent.prompt) updates.prompt = agent.prompt;
+              if (agent.description) updates.description = agent.description;
+              if (agent.mode) updates.mode = agent.mode;
+              if (agent.temperature !== undefined) updates.temperature = agent.temperature;
+              if (agent.topP !== undefined) updates.top_p = agent.topP;
+            }
+            agentsPayload[agentName] = updates;
           }
 
           const response = await fetch("/api/config/agents/batch-update", {
@@ -139,6 +190,79 @@ export const useModelProfilesStore = create<ModelProfilesState>()(
             const names = payload.failed.map((f: { name: string }) => f.name).join(", ");
             throw new Error(`Some agents could not be updated: ${names}`);
           }
+
+          // Apply oh-my-opencode category models if present
+          if (profile.categoryModels && Object.keys(profile.categoryModels).length > 0) {
+            const omoState = useOhMyOpencodeStore.getState();
+            if (omoState.installed) {
+              // Merge profile category models with existing oh-my-opencode categories
+              const existingCategories = omoState.categories || {};
+              const updatedCategories: Record<string, Record<string, unknown>> = {};
+              // Preserve all existing category entries
+              for (const [catName, catConfig] of Object.entries(existingCategories)) {
+                updatedCategories[catName] = { ...catConfig };
+              }
+              // Override model for categories specified in the profile
+              for (const [catName, modelString] of Object.entries(profile.categoryModels)) {
+                if (!updatedCategories[catName]) {
+                  updatedCategories[catName] = {};
+                }
+                updatedCategories[catName].model = modelString;
+              }
+              try {
+                const catResponse = await fetch("/api/config/oh-my-opencode/categories", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ categories: updatedCategories }),
+                });
+                if (!catResponse.ok) {
+                  console.warn("Failed to apply oh-my-opencode categories");
+                } else {
+                  // Reload oh-my-opencode state
+                  await omoState.load();
+                }
+              } catch {
+                console.warn("Failed to apply oh-my-opencode categories");
+              }
+            }
+          }
+
+          // Apply oh-my-opencode agent models if present
+          if (profile.omoAgentModels && Object.keys(profile.omoAgentModels).length > 0) {
+            const omoStateForAgents = useOhMyOpencodeStore.getState();
+            if (omoStateForAgents.installed) {
+              // Merge profile agent models with existing oh-my-opencode agents
+              const existingAgents = omoStateForAgents.agents || {};
+              const updatedAgents: Record<string, Record<string, unknown>> = {};
+              // Preserve all existing agent entries
+              for (const [agentName, agentConfig] of Object.entries(existingAgents)) {
+                updatedAgents[agentName] = { ...agentConfig };
+              }
+              // Override model for agents specified in the profile
+              for (const [agentName, modelString] of Object.entries(profile.omoAgentModels)) {
+                if (!updatedAgents[agentName]) {
+                  updatedAgents[agentName] = {};
+                }
+                updatedAgents[agentName].model = modelString;
+              }
+              try {
+                const agentResponse = await fetch("/api/config/oh-my-opencode/agents", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ agents: updatedAgents }),
+                });
+                if (!agentResponse.ok) {
+                  console.warn("Failed to apply oh-my-opencode agents");
+                } else {
+                  // Reload oh-my-opencode state
+                  await omoStateForAgents.load();
+                }
+              } catch {
+                console.warn("Failed to apply oh-my-opencode agents");
+              }
+            }
+          }
+
           set({ isLoading: false, error: null });
           await reloadOpenCodeConfiguration();
         } catch (error) {

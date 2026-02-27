@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { useModelProfilesStore } from '@/stores/useModelProfilesStore';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
+import { toast } from '@/components/ui';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,7 +50,11 @@ export const ProfilesSidebar: React.FC<ProfilesSidebarProps> = ({ onItemSelect }
     if (name && name.trim()) {
       const success = await createFromCurrent(name.trim());
       if (success) {
+        toast.success('Profile created from current config');
         onItemSelect?.();
+      } else {
+        const stateError = useModelProfilesStore.getState().error;
+        if (stateError) toast.error(stateError);
       }
     }
   };
@@ -114,7 +119,6 @@ export const ProfilesSidebar: React.FC<ProfilesSidebarProps> = ({ onItemSelect }
           <>
             {profiles.map((profile) => {
               const isSelected = selectedProfileId === profile.id;
-              const agentCount = Object.keys(profile.agentModels).length;
               return (
                 <div
                   key={profile.id}
@@ -134,8 +138,7 @@ export const ProfilesSidebar: React.FC<ProfilesSidebarProps> = ({ onItemSelect }
                           {profile.name}
                         </span>
                       </div>
-                      <div className="typography-micro text-muted-foreground/60 truncate leading-tight flex justify-between w-full mt-0.5">
-                        <span>{agentCount} agent{agentCount !== 1 ? 's' : ''}</span>
+                      <div className="typography-micro text-muted-foreground/60 truncate leading-tight mt-0.5">
                         <span>{formatRelativeTime(profile.updatedAt)}</span>
                       </div>
                     </button>

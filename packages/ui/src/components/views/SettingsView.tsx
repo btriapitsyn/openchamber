@@ -329,6 +329,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
     if (settingsSlug === 'profiles') {
       setTimeout(() => void useModelProfilesStore.getState().loadProfiles(), 0);
+      setTimeout(() => void useAgentsStore.getState().loadAgents(), 0);
       return;
     }
 
