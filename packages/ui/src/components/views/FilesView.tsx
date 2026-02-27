@@ -40,7 +40,7 @@ import { Button } from '@/components/ui/button';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { PreviewToggleButton } from './PreviewToggleButton';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
-import { languageByExtension } from '@/lib/codemirror/languageByExtension';
+import { languageByExtension, loadLanguageByFilePath } from '@/lib/codemirror/languageByExtension';
 import { createFlexokiCodeMirrorTheme } from '@/lib/codemirror/flexokiTheme';
 import { generateSyntaxTheme } from '@/lib/theme/syntaxThemeGenerator';
 import {
@@ -58,6 +58,7 @@ import { cn, getModifierLabel, hasModifier } from '@/lib/utils';
 import { getLanguageFromExtension, getImageMimeType, isImageFile } from '@/lib/toolHelpers';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { EditorView } from '@codemirror/view';
+import type { Extension } from '@codemirror/state';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useUIStore } from '@/stores/useUIStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
@@ -1460,6 +1461,32 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const canCopy = Boolean(selectedFile && (!isSelectedImage || isSelectedSvg) && fileContent.length > 0);
   const canCopyPath = Boolean(selectedFile && displaySelectedPath.length > 0);
   const canEdit = Boolean(selectedFile && !isSelectedImage && files.writeFile && fileContent.length <= MAX_VIEW_CHARS);
+  const staticLanguageExtension = React.useMemo(
+    () => (selectedFile?.path ? languageByExtension(selectedFile.path) : null),
+    [selectedFile?.path],
+  );
+  const [loadedLanguageExtension, setLoadedLanguageExtension] = React.useState<Extension | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const filePath = selectedFile?.path;
+
+    if (!filePath || staticLanguageExtension) {
+      setLoadedLanguageExtension(null);
+      return;
+    }
+
+    setLoadedLanguageExtension(null);
+    void loadLanguageByFilePath(filePath).then((extension) => {
+      if (!cancelled) {
+        setLoadedLanguageExtension(extension);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFile?.path, staticLanguageExtension]);
 
   const nudgeEditorSelectionAboveKeyboard = React.useCallback((view: EditorView | null) => {
     if (!isMobile || !view || !view.hasFocus || typeof window === 'undefined') {
@@ -1524,7 +1551,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     }
 
     const extensions = [createFlexokiCodeMirrorTheme(currentTheme)];
-    const language = languageByExtension(selectedFile.path);
+    const language = staticLanguageExtension ?? loadedLanguageExtension;
     if (language) {
       extensions.push(language);
     }
@@ -1546,7 +1573,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       }));
     }
     return extensions;
-  }, [currentTheme, selectedFile?.path, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
+  }, [currentTheme, selectedFile?.path, staticLanguageExtension, loadedLanguageExtension, wrapLines, isMobile, nudgeEditorSelectionAboveKeyboard]);
 
   const imageSrc = selectedFile?.path && isSelectedImage
     ? (runtime.isDesktop
@@ -1738,6 +1765,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                     className="inline-flex min-w-0 max-w-full items-center gap-1 text-left typography-ui-label font-medium"
                     aria-label="Open files"
                   >
+                    <FileTypeIcon filePath={selectedFile.path} extension={selectedFile.extension} className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="min-w-0 flex-1 truncate">{selectedFile.name}</span>
                     <RiArrowDownSLine className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                   </button>
@@ -1763,8 +1791,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                           isActive && 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]'
                         )}
                       >
-                        <span className="min-w-0 flex-1 truncate">
-                          {file.name}
+                        <span className="flex min-w-0 flex-1 items-center gap-2 truncate">
+                          <FileTypeIcon filePath={file.path} extension={file.extension} className="h-3.5 w-3.5 flex-shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{file.name}</span>
                         </span>
                         <button
                           type="button"
@@ -1818,6 +1847,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                             : 'bg-transparent border-[var(--interactive-border)] text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]'
                         )}
                       >
+                        <FileTypeIcon filePath={file.path} extension={file.extension} className="h-3.5 w-3.5 flex-shrink-0" />
                         <button
                           type="button"
                           onClick={() => {
