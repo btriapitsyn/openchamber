@@ -8,7 +8,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
-import MessageList from './MessageList';
+import MessageList, { type MessageListHandle } from './MessageList';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useDeviceInfo } from '@/lib/device';
@@ -166,6 +166,7 @@ export const ChatContainer: React.FC = () => {
     const { isMobile } = useDeviceInfo();
     const draftOpen = Boolean(newSessionDraft?.open);
     const isDesktopExpandedInput = isExpandedInput && !isMobile;
+    const messageListRef = React.useRef<MessageListHandle | null>(null);
 
     React.useEffect(() => {
         if (!currentSessionId && !draftOpen) {
@@ -176,6 +177,7 @@ export const ChatContainer: React.FC = () => {
     const [turnStart, setTurnStart] = React.useState(0);
     const turnHandleRef = React.useRef<number | null>(null);
     const turnIdleRef = React.useRef(false);
+    const initializedTurnStartSessionRef = React.useRef<string | null>(null);
     const TURN_INIT = 5;
     const TURN_BATCH = 8;
 
@@ -286,6 +288,16 @@ export const ChatContainer: React.FC = () => {
     React.useEffect(() => {
         cancelTurnBackfill();
         if (!currentSessionId) {
+            initializedTurnStartSessionRef.current = null;
+            setTurnStart(0);
+            return;
+        }
+
+        if (initializedTurnStartSessionRef.current === currentSessionId) {
+            return;
+        }
+
+        if (sessionMessages.length === 0) {
             setTurnStart(0);
             return;
         }
@@ -293,14 +305,21 @@ export const ChatContainer: React.FC = () => {
         const turnCount = userTurnIndexes.length;
         const start = turnCount > TURN_INIT ? turnCount - TURN_INIT : 0;
         setTurnStart(start);
-    }, [cancelTurnBackfill, currentSessionId, userTurnIndexes.length]);
+        initializedTurnStartSessionRef.current = currentSessionId;
+    }, [cancelTurnBackfill, currentSessionId, sessionMessages.length, userTurnIndexes.length]);
+
+    const isSessionActive = sessionStatusForCurrent.type === 'busy' || sessionStatusForCurrent.type === 'retry';
 
     React.useEffect(() => {
+        if (isSessionActive) {
+            cancelTurnBackfill();
+            return;
+        }
         scheduleTurnBackfill();
         return () => {
             cancelTurnBackfill();
         };
-    }, [cancelTurnBackfill, scheduleTurnBackfill, turnStart]);
+    }, [cancelTurnBackfill, isSessionActive, scheduleTurnBackfill, turnStart]);
 
     const hasMoreAbove = React.useMemo(() => {
         if (!memoryState) {
@@ -344,13 +363,15 @@ export const ChatContainer: React.FC = () => {
         setTurnStart(0);
 
         const container = scrollRef.current;
+        const anchor = messageListRef.current?.captureViewportAnchor() ?? null;
         const prevHeight = container?.scrollHeight ?? null;
         const prevTop = container?.scrollTop ?? null;
 
         setIsLoadingOlder(true);
         try {
             await loadMoreMessages(currentSessionId, 'up');
-            if (container && prevHeight !== null && prevTop !== null) {
+            const restored = anchor ? (messageListRef.current?.restoreViewportAnchor(anchor) ?? false) : false;
+            if (!restored && container && prevHeight !== null && prevTop !== null) {
                 const heightDiff = container.scrollHeight - prevHeight;
                 scrollToPosition(prevTop + heightDiff, { instant: true });
             }
@@ -366,6 +387,10 @@ export const ChatContainer: React.FC = () => {
 
     // Scroll to a specific message by ID (for timeline dialog)
     const scrollToMessage = React.useCallback((messageId: string) => {
+        if (messageListRef.current?.scrollToMessageId(messageId, { behavior: 'smooth' })) {
+            return;
+        }
+
         const container = scrollRef.current;
         if (!container) return;
 
@@ -536,6 +561,7 @@ export const ChatContainer: React.FC = () => {
                     >
                         <div className="relative z-0 min-h-full">
                             <MessageList
+                                ref={messageListRef}
                                 messages={renderedSessionMessages}
                                 permissions={sessionPermissions}
                                 questions={sessionQuestions}
@@ -547,6 +573,7 @@ export const ChatContainer: React.FC = () => {
                                 hasRenderEarlier={turnStart > 0}
                                 onRenderEarlier={handleRenderEarlier}
                                 scrollToBottom={scrollToBottom}
+                                scrollRef={scrollRef}
                             />
                         </div>
                     </ScrollShadow>

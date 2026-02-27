@@ -519,9 +519,6 @@ const hasSameTurnStructure = (prev: ChatMessageEntry[], next: ChatMessageEntry[]
     }
 
     for (let index = 0; index < prev.length; index += 1) {
-        if (prev[index] !== next[index]) {
-            return false;
-        }
         if (prev[index]?.info?.id !== next[index]?.info?.id) {
             return false;
         }
@@ -546,9 +543,6 @@ const isAppendOnlyChange = (prev: ChatMessageEntry[], next: ChatMessageEntry[]):
     }
 
     for (let index = 0; index < prev.length; index += 1) {
-        if (prev[index] !== next[index]) {
-            return false;
-        }
         if (prev[index]?.info?.id !== next[index]?.info?.id) {
             return false;
         }

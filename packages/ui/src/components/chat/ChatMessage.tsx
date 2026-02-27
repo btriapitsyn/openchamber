@@ -30,6 +30,23 @@ import { copyTextToClipboard } from '@/lib/clipboard';
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
 const DETAILED_DEFAULT_TOOLS = new Set(['task', 'edit', 'multiedit', 'write', 'apply_patch', 'bash', 'todowrite']);
+const EXPANDED_TOOLS_CACHE_MAX = 4000;
+const expandedToolsStateCache = new Map<string, Set<string>>();
+
+const readExpandedToolsCache = (messageId: string): Set<string> => {
+    const cached = expandedToolsStateCache.get(messageId);
+    return cached ? new Set(cached) : new Set();
+};
+
+const writeExpandedToolsCache = (messageId: string, value: Set<string>): void => {
+    if (expandedToolsStateCache.size >= EXPANDED_TOOLS_CACHE_MAX && !expandedToolsStateCache.has(messageId)) {
+        const oldest = expandedToolsStateCache.keys().next().value;
+        if (typeof oldest === 'string') {
+            expandedToolsStateCache.delete(oldest);
+        }
+    }
+    expandedToolsStateCache.set(messageId, new Set(value));
+};
 
 const isDetailedDefaultTool = (toolName: unknown): boolean =>
     typeof toolName === 'string' && DETAILED_DEFAULT_TOOLS.has(toolName.toLowerCase());
@@ -129,7 +146,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const [copiedCode, setCopiedCode] = React.useState<string | null>(null);
     const [copiedMessage, setCopiedMessage] = React.useState(false);
-    const [expandedTools, setExpandedTools] = React.useState<Set<string>>(new Set());
+    const [expandedTools, setExpandedTools] = React.useState<Set<string>>(() => readExpandedToolsCache(message.info.id));
     const [popupContent, setPopupContent] = React.useState<ToolPopupContent>({
         open: false,
         title: '',
@@ -137,8 +154,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     });
 
     React.useEffect(() => {
+        setExpandedTools(readExpandedToolsCache(message.info.id));
+    }, [message.info.id]);
+
+    React.useEffect(() => {
+        expandedToolsStateCache.clear();
         setExpandedTools(new Set());
-    }, [message.info.id, toolCallExpansion]);
+    }, [toolCallExpansion]);
 
     const messageRole = React.useMemo(() => deriveMessageRole(message.info), [message.info]);
     const isUser = messageRole.isUser;
@@ -742,9 +764,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             } else {
                 next.add(toolId);
             }
+            writeExpandedToolsCache(message.info.id, next);
             return next;
         });
-    }, []);
+    }, [message.info.id]);
 
     const resolvedAnimationHandlers = animationHandlers ?? null;
     const hasAnnouncedAuxiliaryScrollRef = React.useRef(false);
