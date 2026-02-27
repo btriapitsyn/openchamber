@@ -98,7 +98,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     title: 'Model Profiles',
     group: 'opencode',
     kind: 'split',
-    keywords: ['profile', 'profiles', 'model', 'preset', '套装', 'switch'],
+    keywords: ['profile', 'profiles', 'model', 'preset', 'switch'],
   },
   {
     slug: 'commands',

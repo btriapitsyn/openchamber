@@ -136,7 +136,6 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
       return RiAiAgentLine;
     case 'profiles':
       return RiAppsLine;
-      return RiAiAgentLine;
     case 'commands':
       return RiSlashCommands2;
     case 'mcp':
@@ -398,7 +397,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <AgentsSidebar onItemSelect={opts.onItemSelect} />;
       case 'profiles':
         return <ProfilesSidebar onItemSelect={opts.onItemSelect} />;
-        return <AgentsSidebar onItemSelect={opts.onItemSelect} />;
       case 'commands':
         return <CommandsSidebar onItemSelect={opts.onItemSelect} />;
       case 'mcp':
@@ -429,7 +427,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <AgentsPage />;
       case 'profiles':
         return <ProfilesPage />;
-        return <AgentsPage />;
       case 'commands':
         return <CommandsPage />;
       case 'mcp':
