@@ -18,7 +18,7 @@ const buildMentionUrl = (name: string): string => {
     return `https://opencode.ai/docs/agents/#${encoded}`;
 };
 
-const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMention }) => {
+const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, isMobile, agentMention }) => {
     const CLAMP_LINES = 2;
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
