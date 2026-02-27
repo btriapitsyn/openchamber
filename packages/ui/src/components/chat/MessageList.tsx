@@ -11,7 +11,7 @@ import type { QuestionRequest } from '@/types/question';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
 import { detectTurns, type Turn } from './hooks/useTurnGrouping';
-import { TurnGroupingProvider, useMessageNeighbors, useTurnGroupingContextForMessage, useTurnGroupingContextStatic, useLastTurnMessageIds } from './contexts/TurnGroupingContext';
+import { TurnGroupingProvider, useMessageNeighbors, useTurnGroupingContextForMessage, useTurnGroupingContextStatic } from './contexts/TurnGroupingContext';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDeviceInfo } from '@/lib/device';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
@@ -290,8 +290,8 @@ export interface MessageListHandle {
 }
 
 type RenderEntry =
-    | { kind: 'ungrouped'; key: string; message: ChatMessageEntry }
-    | { kind: 'turn'; key: string; turn: Turn };
+    | { kind: 'ungrouped'; key: string; message: ChatMessageEntry; isInLastTurn: boolean }
+    | { kind: 'turn'; key: string; turn: Turn; isLastTurn: boolean };
 
 interface MessageRowProps {
     message: ChatMessageEntry;
@@ -354,6 +354,7 @@ DynamicMessageRow.displayName = 'DynamicMessageRow';
 
 interface TurnBlockProps {
     turn: Turn;
+    isLastTurn: boolean;
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
@@ -362,17 +363,16 @@ interface TurnBlockProps {
 
 const TurnBlock: React.FC<TurnBlockProps> = ({
     turn,
+    isLastTurn,
     onMessageContentChange,
     getAnimationHandlers,
     scrollToBottom,
     stickyUserHeader = true,
 }) => {
-    const lastTurnMessageIds = useLastTurnMessageIds();
-
     const renderMessage = React.useCallback(
         (message: ChatMessageEntry) => {
             const role = (message.info as { clientRole?: string | null | undefined }).clientRole ?? message.info.role;
-            const isInLastTurn = role !== 'user' && lastTurnMessageIds.has(message.info.id);
+            const isInLastTurn = role !== 'user' && isLastTurn;
             const RowComponent = isInLastTurn ? DynamicMessageRow : StaticMessageRow;
 
             return (
@@ -385,7 +385,7 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
                 />
             );
         },
-        [getAnimationHandlers, lastTurnMessageIds, onMessageContentChange, scrollToBottom]
+        [getAnimationHandlers, isLastTurn, onMessageContentChange, scrollToBottom]
     );
 
     return (
@@ -415,6 +415,7 @@ TurnBlock.displayName = 'TurnBlock';
 
 interface UngroupedMessageRowProps {
     message: ChatMessageEntry;
+    isInLastTurn: boolean;
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
@@ -422,13 +423,11 @@ interface UngroupedMessageRowProps {
 
 const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
     message,
+    isInLastTurn,
     onMessageContentChange,
     getAnimationHandlers,
     scrollToBottom,
 }) => {
-    const lastTurnMessageIds = useLastTurnMessageIds();
-    const role = (message.info as { clientRole?: string | null | undefined }).clientRole ?? message.info.role;
-    const isInLastTurn = role !== 'user' && lastTurnMessageIds.has(message.info.id);
     const RowComponent = isInLastTurn ? DynamicMessageRow : StaticMessageRow;
 
     return (
@@ -462,6 +461,7 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
         return (
             <UngroupedMessageRow
                 message={entry.message}
+                isInLastTurn={entry.isInLastTurn}
                 onMessageContentChange={onMessageContentChange}
                 getAnimationHandlers={getAnimationHandlers}
                 scrollToBottom={scrollToBottom}
@@ -472,15 +472,38 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
     return (
         <TurnBlock
             turn={entry.turn}
+            isLastTurn={entry.isLastTurn}
             onMessageContentChange={onMessageContentChange}
             getAnimationHandlers={getAnimationHandlers}
             scrollToBottom={scrollToBottom}
             stickyUserHeader={stickyUserHeader}
         />
     );
-});
+}, areMessageListEntryPropsEqual);
 
 MessageListEntry.displayName = 'MessageListEntry';
+
+function areMessageListEntryPropsEqual(prevProps: MessageListEntryProps, nextProps: MessageListEntryProps): boolean {
+    if (prevProps.stickyUserHeader !== nextProps.stickyUserHeader) return false;
+    if (prevProps.onMessageContentChange !== nextProps.onMessageContentChange) return false;
+    if (prevProps.getAnimationHandlers !== nextProps.getAnimationHandlers) return false;
+    if (prevProps.scrollToBottom !== nextProps.scrollToBottom) return false;
+
+    const prevEntry = prevProps.entry;
+    const nextEntry = nextProps.entry;
+    if (prevEntry.kind !== nextEntry.kind) return false;
+    if (prevEntry.key !== nextEntry.key) return false;
+
+    if (prevEntry.kind === 'turn' && nextEntry.kind === 'turn') {
+        return prevEntry.turn === nextEntry.turn && prevEntry.isLastTurn === nextEntry.isLastTurn;
+    }
+
+    if (prevEntry.kind === 'ungrouped' && nextEntry.kind === 'ungrouped') {
+        return prevEntry.message === nextEntry.message && prevEntry.isInLastTurn === nextEntry.isInLastTurn;
+    }
+
+    return false;
+}
 
 // Inner component that renders messages with access to context hooks
 const MessageListContent: React.FC<{
@@ -712,6 +735,15 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         const entries: RenderEntry[] = [];
         const turnByUserId = new Map<string, Turn>();
         const groupedAssistantIds = new Set<string>();
+        const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+        const lastTurnId = lastTurn?.turnId ?? null;
+        const lastTurnMessageIds = new Set<string>();
+        if (lastTurn) {
+            lastTurnMessageIds.add(lastTurn.userMessage.info.id);
+            lastTurn.assistantMessages.forEach((assistantMessage) => {
+                lastTurnMessageIds.add(assistantMessage.info.id);
+            });
+        }
 
         turns.forEach((turn) => {
             turnByUserId.set(turn.userMessage.info.id, turn);
@@ -727,6 +759,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     kind: 'turn',
                     key: `turn:${turn.turnId}`,
                     turn,
+                    isLastTurn: turn.turnId === lastTurnId,
                 });
                 return;
             }
@@ -739,6 +772,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                 kind: 'ungrouped',
                 key: `msg:${message.info.id}`,
                 message,
+                isInLastTurn: lastTurnMessageIds.has(message.info.id),
             });
         });
 

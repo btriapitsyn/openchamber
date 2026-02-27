@@ -88,7 +88,7 @@ export const useTurnGroupingContextForMessage = (messageId: string): TurnGroupin
         
         const isLastTurn = staticData.lastTurnId === turn.turnId;
         const lastTurnActivityVersion = isLastTurn
-            ? `${streamingData.lastTurnActivityInfo?.activityParts.length ?? 0}:${streamingData.lastTurnActivityInfo?.summaryBody ?? ''}`
+            ? `${streamingData.lastTurnActivityInfo?.activityParts.length ?? 0}:${streamingData.lastTurnActivityInfo?.activityGroupSegments.length ?? 0}:${streamingData.lastTurnActivityInfo?.hasTools ? 1 : 0}:${streamingData.lastTurnActivityInfo?.hasReasoning ? 1 : 0}`
             : '';
         
         // Get UI state early - needed for cache key to ensure expand/collapse updates propagate

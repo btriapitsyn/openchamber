@@ -34,6 +34,7 @@ import { VoiceProvider } from '@/components/voice';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const AboutDialogWrapper: React.FC = () => {
   const { isAboutDialogOpen, setAboutDialogOpen } = useUIStore();
@@ -280,26 +281,30 @@ function App({ apis }: AppProps) {
       : 'chat';
     
     if (panelType === 'agentManager') {
-      return (
-        <ErrorBoundary>
-          <RuntimeAPIProvider apis={apis}>
+    return (
+      <ErrorBoundary>
+        <RuntimeAPIProvider apis={apis}>
+          <TooltipProvider delayDuration={700} skipDelayDuration={150}>
             <div className="h-full text-foreground bg-background">
               <AgentManagerView />
               <Toaster />
             </div>
-          </RuntimeAPIProvider>
-        </ErrorBoundary>
-      );
+          </TooltipProvider>
+        </RuntimeAPIProvider>
+      </ErrorBoundary>
+    );
     }
     
     return (
       <ErrorBoundary>
         <RuntimeAPIProvider apis={apis}>
           <FireworksProvider>
-            <div className="h-full text-foreground bg-background">
-              <VSCodeLayout />
-              <Toaster />
-            </div>
+            <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+              <div className="h-full text-foreground bg-background">
+                <VSCodeLayout />
+                <Toaster />
+              </div>
+            </TooltipProvider>
           </FireworksProvider>
         </RuntimeAPIProvider>
       </ErrorBoundary>
@@ -312,15 +317,17 @@ function App({ apis }: AppProps) {
         <GitPollingProvider>
           <FireworksProvider>
             <VoiceProvider>
-              <div className="h-full text-foreground bg-background">
-                <MainLayout />
-                <Toaster />
-                <ConfigUpdateOverlay />
-                <AboutDialogWrapper />
-                {showMemoryDebug && (
-                  <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-                )}
-              </div>
+              <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+                <div className="h-full text-foreground bg-background">
+                  <MainLayout />
+                  <Toaster />
+                  <ConfigUpdateOverlay />
+                  <AboutDialogWrapper />
+                  {showMemoryDebug && (
+                    <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                  )}
+                </div>
+              </TooltipProvider>
             </VoiceProvider>
           </FireworksProvider>
         </GitPollingProvider>
