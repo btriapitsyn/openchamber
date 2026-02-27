@@ -2732,8 +2732,8 @@ fn main() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let local_url = if cfg!(debug_assertions) {
-                    let dev_url = "http://127.0.0.1:3001";
-                    if wait_for_health(dev_url).await {
+                    let dev_url = "http://127.0.0.1:3901".to_string();
+                    if wait_for_health(&dev_url).await {
                         dev_url.to_string()
                     } else {
                         match spawn_local_server(&handle).await {

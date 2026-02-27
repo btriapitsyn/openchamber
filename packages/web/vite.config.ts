@@ -8,6 +8,7 @@ import { themeStoragePlugin } from '../../vite-theme-plugin';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf-8'));
+const pwaDevEnabled = process.env.OPENCHAMBER_DISABLE_PWA_DEV !== '1';
 
 export default defineConfig({
   root: path.resolve(__dirname, '.'),
@@ -29,7 +30,7 @@ export default defineConfig({
         injectionPoint: undefined,
       },
       devOptions: {
-        enabled: true,
+        enabled: pwaDevEnabled,
         type: 'module',
       },
     }),

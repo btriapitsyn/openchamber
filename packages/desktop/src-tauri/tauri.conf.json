@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "node ./scripts/dev-web-server.mjs",
     "beforeBuildCommand": "bun run build:sidecar",
-    "devUrl": "http://127.0.0.1:3001",
+    "devUrl": "http://127.0.0.1:3901",
     "frontendDist": "../noop-dist"
   },
   "app": {
