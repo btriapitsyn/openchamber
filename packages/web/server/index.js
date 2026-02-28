@@ -9,7 +9,13 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import crypto from 'crypto';
 import { createUiAuth } from './lib/opencode/ui-auth.js';
-import { startCloudflareTunnel, printTunnelWarning, checkCloudflaredAvailable } from './lib/cloudflare-tunnel.js';
+import { createTunnelAuth } from './lib/opencode/tunnel-auth.js';
+import {
+  startCloudflareQuickTunnel,
+  startCloudflareNamedTunnel,
+  printTunnelWarning,
+  checkCloudflaredAvailable,
+} from './lib/cloudflare-tunnel.js';
 import { prepareNotificationLastMessage } from './lib/notifications/index.js';
 import {
   TERMINAL_INPUT_WS_MAX_PAYLOAD_BYTES,
@@ -36,6 +42,26 @@ const MODELS_METADATA_CACHE_TTL = 5 * 60 * 1000;
 const CLIENT_RELOAD_DELAY_MS = 800;
 const OPEN_CODE_READY_GRACE_MS = 12000;
 const LONG_REQUEST_TIMEOUT_MS = 4 * 60 * 1000;
+const TUNNEL_BOOTSTRAP_TTL_DEFAULT_MS = 30 * 60 * 1000;
+const TUNNEL_BOOTSTRAP_TTL_MIN_MS = 60 * 1000;
+const TUNNEL_BOOTSTRAP_TTL_MAX_MS = 24 * 60 * 60 * 1000;
+const TUNNEL_SESSION_TTL_DEFAULT_MS = 8 * 60 * 60 * 1000;
+const TUNNEL_SESSION_TTL_MIN_MS = 5 * 60 * 1000;
+const TUNNEL_SESSION_TTL_MAX_MS = 24 * 60 * 60 * 1000;
+const TUNNEL_MODE_QUICK = 'quick';
+const TUNNEL_MODE_NAMED = 'named';
+const OPENCHAMBER_VERSION = (() => {
+  try {
+    const packagePath = path.resolve(__dirname, '..', 'package.json');
+    const raw = fs.readFileSync(packagePath, 'utf8');
+    const pkg = JSON.parse(raw);
+    if (pkg && typeof pkg.version === 'string' && pkg.version.trim().length > 0) {
+      return pkg.version.trim();
+    }
+  } catch {
+  }
+  return 'unknown';
+})();
 const fsPromises = fs.promises;
 const DEFAULT_FILE_SEARCH_LIMIT = 60;
 const MAX_FILE_SEARCH_LIMIT = 400;
@@ -83,6 +109,106 @@ const OPENCHAMBER_USER_THEMES_DIR = path.join(OPENCHAMBER_USER_CONFIG_ROOT, 'the
 const MAX_THEME_JSON_BYTES = 512 * 1024;
 
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim().length > 0;
+
+const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const normalizeTunnelBootstrapTtlMs = (value) => {
+  if (value === null) {
+    return null;
+  }
+  if (!Number.isFinite(value)) {
+    return TUNNEL_BOOTSTRAP_TTL_DEFAULT_MS;
+  }
+  return clampNumber(Math.round(value), TUNNEL_BOOTSTRAP_TTL_MIN_MS, TUNNEL_BOOTSTRAP_TTL_MAX_MS);
+};
+
+const normalizeTunnelSessionTtlMs = (value) => {
+  if (!Number.isFinite(value)) {
+    return TUNNEL_SESSION_TTL_DEFAULT_MS;
+  }
+  return clampNumber(Math.round(value), TUNNEL_SESSION_TTL_MIN_MS, TUNNEL_SESSION_TTL_MAX_MS);
+};
+
+const normalizeTunnelMode = (value) => {
+  if (typeof value !== 'string') {
+    return TUNNEL_MODE_QUICK;
+  }
+  const mode = value.trim().toLowerCase();
+  if (mode === TUNNEL_MODE_NAMED) {
+    return TUNNEL_MODE_NAMED;
+  }
+  return TUNNEL_MODE_QUICK;
+};
+
+const normalizeNamedTunnelHostname = (value) => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const parsed = (() => {
+    try {
+      if (trimmed.includes('://')) {
+        return new URL(trimmed);
+      }
+      return new URL(`https://${trimmed}`);
+    } catch {
+      return null;
+    }
+  })();
+
+  const hostname = parsed?.hostname?.trim().toLowerCase() || '';
+  if (!hostname) {
+    return undefined;
+  }
+  return hostname;
+};
+
+const normalizeNamedTunnelPresets = (value) => {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const result = [];
+  const seenIds = new Set();
+  const seenHostnames = new Set();
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue;
+    const candidate = entry;
+    const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+    const name = typeof candidate.name === 'string' ? candidate.name.trim() : '';
+    const hostname = normalizeNamedTunnelHostname(candidate.hostname);
+    if (!id || !name || !hostname) continue;
+    if (seenIds.has(id) || seenHostnames.has(hostname)) continue;
+    seenIds.add(id);
+    seenHostnames.add(hostname);
+    result.push({ id, name, hostname });
+  }
+
+  return result;
+};
+
+const normalizeNamedTunnelPresetTokens = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const result = {};
+  for (const [rawId, rawToken] of Object.entries(value)) {
+    const id = typeof rawId === 'string' ? rawId.trim() : '';
+    const token = typeof rawToken === 'string' ? rawToken.trim() : '';
+    if (!id || !token) {
+      continue;
+    }
+    result[id] = token;
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+};
 
 const isValidThemeColor = (value) => isNonEmptyString(value);
 
@@ -835,6 +961,11 @@ const maybeCacheSessionInfoFromEvent = (payload) => {
   const sessionId = info.id;
   const title = info.title;
   cacheSessionTitle(sessionId, title);
+  // Also cache parentID from session events to ensure subtask detection works correctly
+  const parentID = info.parentID;
+  if (sessionId && parentID !== undefined) {
+    setCachedSessionParentId(sessionId, parentID);
+  }
 };
 
 /**
@@ -1004,6 +1135,111 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
+const CLOUDFLARE_NAMED_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-named-tunnels.json');
+const CLOUDFLARE_NAMED_TUNNELS_VERSION = 1;
+const PROJECT_ICONS_DIR_PATH = path.join(OPENCHAMBER_DATA_DIR, 'project-icons');
+const PROJECT_ICON_MIME_TO_EXTENSION = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/svg+xml': 'svg',
+  'image/webp': 'webp',
+  'image/x-icon': 'ico',
+};
+const PROJECT_ICON_EXTENSION_TO_MIME = Object.fromEntries(
+  Object.entries(PROJECT_ICON_MIME_TO_EXTENSION).map(([mime, ext]) => [ext, mime])
+);
+const PROJECT_ICON_SUPPORTED_MIMES = new Set(Object.keys(PROJECT_ICON_MIME_TO_EXTENSION));
+const PROJECT_ICON_MAX_BYTES = 5 * 1024 * 1024;
+
+const normalizeProjectIconMime = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'image/jpg') {
+    return 'image/jpeg';
+  }
+  if (PROJECT_ICON_SUPPORTED_MIMES.has(normalized)) {
+    return normalized;
+  }
+  return null;
+};
+
+const projectIconBaseName = (projectId) => {
+  const hash = crypto.createHash('sha1').update(projectId).digest('hex');
+  return `project-${hash}`;
+};
+
+const projectIconPathForMime = (projectId, mime) => {
+  const normalizedMime = normalizeProjectIconMime(mime);
+  if (!normalizedMime) {
+    return null;
+  }
+  const ext = PROJECT_ICON_MIME_TO_EXTENSION[normalizedMime];
+  return path.join(PROJECT_ICONS_DIR_PATH, `${projectIconBaseName(projectId)}.${ext}`);
+};
+
+const projectIconPathCandidates = (projectId) => {
+  const base = projectIconBaseName(projectId);
+  return Object.values(PROJECT_ICON_MIME_TO_EXTENSION).map((ext) => path.join(PROJECT_ICONS_DIR_PATH, `${base}.${ext}`));
+};
+
+const removeProjectIconFiles = async (projectId, keepPath) => {
+  const candidates = projectIconPathCandidates(projectId);
+  await Promise.all(candidates.map(async (candidatePath) => {
+    if (keepPath && candidatePath === keepPath) {
+      return;
+    }
+    try {
+      await fsPromises.unlink(candidatePath);
+    } catch (error) {
+      if (!error || typeof error !== 'object' || error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
+  }));
+};
+
+const parseProjectIconDataUrl = (value) => {
+  if (typeof value !== 'string') {
+    return { ok: false, error: 'dataUrl is required' };
+  }
+
+  const trimmed = value.trim();
+  const match = trimmed.match(/^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/i);
+  if (!match) {
+    return { ok: false, error: 'Invalid dataUrl format' };
+  }
+
+  const mime = normalizeProjectIconMime(match[1]);
+  if (!mime || !['image/png', 'image/jpeg', 'image/svg+xml'].includes(mime)) {
+    return { ok: false, error: 'Icon must be PNG, JPEG, or SVG' };
+  }
+
+  try {
+    const base64 = match[2].replace(/\s+/g, '');
+    const bytes = Buffer.from(base64, 'base64');
+    if (bytes.length === 0) {
+      return { ok: false, error: 'Icon content is empty' };
+    }
+    if (bytes.length > PROJECT_ICON_MAX_BYTES) {
+      return { ok: false, error: 'Icon exceeds size limit (5 MB)' };
+    }
+    return { ok: true, mime, bytes };
+  } catch {
+    return { ok: false, error: 'Failed to decode icon data' };
+  }
+};
+
+const findProjectById = (settings, projectId) => {
+  const projects = sanitizeProjects(settings?.projects) || [];
+  const index = projects.findIndex((project) => project.id === projectId);
+  if (index === -1) {
+    return { projects, index: -1, project: null };
+  }
+  return { projects, index, project: projects[index] };
+};
 
 const readSettingsFromDisk = async () => {
   try {
@@ -1034,6 +1270,7 @@ const writeSettingsToDisk = async (settings) => {
 
 const PUSH_SUBSCRIPTIONS_VERSION = 1;
 let persistPushSubscriptionsLock = Promise.resolve();
+let persistNamedTunnelConfigLock = Promise.resolve();
 
 const readPushSubscriptionsFromDisk = async () => {
   try {
@@ -1079,6 +1316,167 @@ const persistPushSubscriptionUpdate = async (mutate) => {
   });
 
   return persistPushSubscriptionsLock;
+};
+
+const sanitizeNamedTunnelConfigEntries = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const result = [];
+  const seenIds = new Set();
+  const seenHostnames = new Set();
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+
+    const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+    const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+    const hostname = normalizeNamedTunnelHostname(entry.hostname);
+    const token = typeof entry.token === 'string' ? entry.token.trim() : '';
+    const updatedAt = Number.isFinite(entry.updatedAt) ? entry.updatedAt : Date.now();
+
+    if (!id || !name || !hostname || !token) {
+      continue;
+    }
+    if (seenIds.has(id) || seenHostnames.has(hostname)) {
+      continue;
+    }
+
+    seenIds.add(id);
+    seenHostnames.add(hostname);
+    result.push({ id, name, hostname, token, updatedAt });
+  }
+
+  return result;
+};
+
+const readNamedTunnelConfigFromDisk = async () => {
+  try {
+    const raw = await fsPromises.readFile(CLOUDFLARE_NAMED_TUNNELS_FILE_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') {
+      return { version: CLOUDFLARE_NAMED_TUNNELS_VERSION, tunnels: [] };
+    }
+
+    const version = parsed.version === CLOUDFLARE_NAMED_TUNNELS_VERSION
+      ? CLOUDFLARE_NAMED_TUNNELS_VERSION
+      : CLOUDFLARE_NAMED_TUNNELS_VERSION;
+
+    return {
+      version,
+      tunnels: sanitizeNamedTunnelConfigEntries(parsed.tunnels),
+    };
+  } catch (error) {
+    if (error && typeof error === 'object' && error.code === 'ENOENT') {
+      return { version: CLOUDFLARE_NAMED_TUNNELS_VERSION, tunnels: [] };
+    }
+    console.warn('Failed to read named tunnel config file:', error);
+    return { version: CLOUDFLARE_NAMED_TUNNELS_VERSION, tunnels: [] };
+  }
+};
+
+const writeNamedTunnelConfigToDisk = async (data) => {
+  await fsPromises.mkdir(path.dirname(CLOUDFLARE_NAMED_TUNNELS_FILE_PATH), { recursive: true });
+  await fsPromises.writeFile(CLOUDFLARE_NAMED_TUNNELS_FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
+};
+
+const updateNamedTunnelConfig = async (mutate) => {
+  persistNamedTunnelConfigLock = persistNamedTunnelConfigLock.then(async () => {
+    const current = await readNamedTunnelConfigFromDisk();
+    const next = mutate({
+      version: CLOUDFLARE_NAMED_TUNNELS_VERSION,
+      tunnels: sanitizeNamedTunnelConfigEntries(current.tunnels),
+    });
+
+    await writeNamedTunnelConfigToDisk({
+      version: CLOUDFLARE_NAMED_TUNNELS_VERSION,
+      tunnels: sanitizeNamedTunnelConfigEntries(next?.tunnels),
+    });
+  });
+
+  return persistNamedTunnelConfigLock;
+};
+
+const syncNamedTunnelConfigWithPresets = async (presets) => {
+  const sanitizedPresets = normalizeNamedTunnelPresets(presets) || [];
+
+  await updateNamedTunnelConfig((current) => {
+    const byId = new Map(current.tunnels.map((entry) => [entry.id, entry]));
+    const byHostname = new Map(current.tunnels.map((entry) => [entry.hostname, entry]));
+
+    const nextTunnels = [];
+    for (const preset of sanitizedPresets) {
+      const existing = byId.get(preset.id) || byHostname.get(preset.hostname) || null;
+      if (!existing) {
+        continue;
+      }
+
+      nextTunnels.push({
+        ...existing,
+        id: preset.id,
+        name: preset.name,
+        hostname: preset.hostname,
+      });
+    }
+
+    return {
+      version: CLOUDFLARE_NAMED_TUNNELS_VERSION,
+      tunnels: nextTunnels,
+    };
+  });
+};
+
+const upsertNamedTunnelToken = async ({ id, name, hostname, token }) => {
+  if (typeof id !== 'string' || typeof name !== 'string' || typeof hostname !== 'string' || typeof token !== 'string') {
+    return;
+  }
+  const normalizedId = id.trim();
+  const normalizedName = name.trim();
+  const normalizedHostname = normalizeNamedTunnelHostname(hostname);
+  const normalizedToken = token.trim();
+  if (!normalizedId || !normalizedName || !normalizedHostname || !normalizedToken) {
+    return;
+  }
+
+  await updateNamedTunnelConfig((current) => {
+    const withoutConflicts = current.tunnels.filter((entry) => entry.id !== normalizedId && entry.hostname !== normalizedHostname);
+    withoutConflicts.push({
+      id: normalizedId,
+      name: normalizedName,
+      hostname: normalizedHostname,
+      token: normalizedToken,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      version: CLOUDFLARE_NAMED_TUNNELS_VERSION,
+      tunnels: withoutConflicts,
+    };
+  });
+};
+
+const resolveNamedTunnelToken = async ({ presetId, hostname }) => {
+  const normalizedPresetId = typeof presetId === 'string' ? presetId.trim() : '';
+  const normalizedHostname = normalizeNamedTunnelHostname(hostname);
+  const config = await readNamedTunnelConfigFromDisk();
+
+  if (normalizedPresetId) {
+    const byId = config.tunnels.find((entry) => entry.id === normalizedPresetId);
+    if (byId?.token) {
+      return byId.token;
+    }
+  }
+
+  if (normalizedHostname) {
+    const byHostname = config.tunnels.find((entry) => entry.hostname === normalizedHostname);
+    if (byHostname?.token) {
+      return byHostname.token;
+    }
+  }
+
+  return '';
 };
 
 const resolveDirectoryCandidate = (value) => {
@@ -1267,6 +1665,18 @@ const sanitizeProjects = (input) => {
     return undefined;
   }
 
+  const hexColorPattern = /^#(?:[\da-fA-F]{3}|[\da-fA-F]{6})$/;
+  const normalizeIconBackground = (value) => {
+    if (typeof value !== 'string') {
+      return null;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    return hexColorPattern.test(trimmed) ? trimmed.toLowerCase() : null;
+  };
+
   const result = [];
   const seenIds = new Set();
   const seenPaths = new Set();
@@ -1280,6 +1690,10 @@ const sanitizeProjects = (input) => {
     const normalizedPath = rawPath ? path.resolve(normalizeDirectoryPath(rawPath)) : '';
     const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
     const icon = typeof candidate.icon === 'string' ? candidate.icon.trim() : '';
+    const iconImage = candidate.iconImage && typeof candidate.iconImage === 'object'
+      ? candidate.iconImage
+      : null;
+    const iconBackground = normalizeIconBackground(candidate.iconBackground);
     const color = typeof candidate.color === 'string' ? candidate.color.trim() : '';
     const addedAt = Number.isFinite(candidate.addedAt) ? Number(candidate.addedAt) : null;
     const lastOpenedAt = Number.isFinite(candidate.lastOpenedAt)
@@ -1298,10 +1712,30 @@ const sanitizeProjects = (input) => {
       path: normalizedPath,
       ...(label ? { label } : {}),
       ...(icon ? { icon } : {}),
+      ...(iconBackground ? { iconBackground } : {}),
       ...(color ? { color } : {}),
       ...(Number.isFinite(addedAt) && addedAt >= 0 ? { addedAt } : {}),
       ...(Number.isFinite(lastOpenedAt) && lastOpenedAt >= 0 ? { lastOpenedAt } : {}),
     };
+
+    if (candidate.iconImage === null) {
+      project.iconImage = null;
+    } else if (iconImage) {
+      const mime = typeof iconImage.mime === 'string' ? iconImage.mime.trim() : '';
+      const updatedAt = typeof iconImage.updatedAt === 'number' && Number.isFinite(iconImage.updatedAt)
+        ? Math.max(0, Math.round(iconImage.updatedAt))
+        : 0;
+      const source = iconImage.source === 'custom' || iconImage.source === 'auto'
+        ? iconImage.source
+        : null;
+      if (mime && updatedAt > 0 && source) {
+        project.iconImage = { mime, updatedAt, source };
+      }
+    }
+
+    if (candidate.iconBackground === null) {
+      project.iconBackground = null;
+    }
 
     if (typeof candidate.sidebarCollapsed === 'boolean') {
       project.sidebarCollapsed = candidate.sidebarCollapsed;
@@ -1507,6 +1941,38 @@ const sanitizeSettingsUpdate = (payload) => {
   if (typeof candidate.autoDeleteAfterDays === 'number' && Number.isFinite(candidate.autoDeleteAfterDays)) {
     const normalizedDays = Math.max(1, Math.min(365, Math.round(candidate.autoDeleteAfterDays)));
     result.autoDeleteAfterDays = normalizedDays;
+  }
+  if (candidate.tunnelBootstrapTtlMs === null) {
+    result.tunnelBootstrapTtlMs = null;
+  } else if (typeof candidate.tunnelBootstrapTtlMs === 'number' && Number.isFinite(candidate.tunnelBootstrapTtlMs)) {
+    result.tunnelBootstrapTtlMs = normalizeTunnelBootstrapTtlMs(candidate.tunnelBootstrapTtlMs);
+  }
+  if (typeof candidate.tunnelSessionTtlMs === 'number' && Number.isFinite(candidate.tunnelSessionTtlMs)) {
+    result.tunnelSessionTtlMs = normalizeTunnelSessionTtlMs(candidate.tunnelSessionTtlMs);
+  }
+  if (typeof candidate.tunnelMode === 'string') {
+    result.tunnelMode = normalizeTunnelMode(candidate.tunnelMode);
+  }
+  if (typeof candidate.namedTunnelHostname === 'string') {
+    const hostname = normalizeNamedTunnelHostname(candidate.namedTunnelHostname);
+    result.namedTunnelHostname = hostname;
+  }
+  if (candidate.namedTunnelToken === null) {
+    result.namedTunnelToken = null;
+  } else if (typeof candidate.namedTunnelToken === 'string') {
+    result.namedTunnelToken = candidate.namedTunnelToken.trim();
+  }
+  const namedTunnelPresets = normalizeNamedTunnelPresets(candidate.namedTunnelPresets);
+  if (namedTunnelPresets) {
+    result.namedTunnelPresets = namedTunnelPresets;
+  }
+  const namedTunnelPresetTokens = normalizeNamedTunnelPresetTokens(candidate.namedTunnelPresetTokens);
+  if (namedTunnelPresetTokens) {
+    result.namedTunnelPresetTokens = namedTunnelPresetTokens;
+  }
+  if (typeof candidate.namedTunnelSelectedPresetId === 'string') {
+    const id = candidate.namedTunnelSelectedPresetId.trim();
+    result.namedTunnelSelectedPresetId = id || undefined;
   }
 
   const typography = sanitizeTypographySizesPartial(candidate.typographySizes);
@@ -1788,11 +2254,14 @@ const mergePersistedSettings = (current, changes) => {
 
 const formatSettingsResponse = (settings) => {
   const sanitized = sanitizeSettingsUpdate(settings);
+  delete sanitized.namedTunnelToken;
   const approved = normalizeStringArray(settings.approvedDirectories);
   const bookmarks = normalizeStringArray(settings.securityScopedBookmarks);
+  const hasNamedTunnelToken = typeof settings?.namedTunnelToken === 'string' && settings.namedTunnelToken.trim().length > 0;
 
   return {
     ...sanitized,
+    hasNamedTunnelToken,
     approvedDirectories: approved,
     securityScopedBookmarks: bookmarks,
     pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
@@ -2743,6 +3212,32 @@ const persistSettings = async (changes) => {
       next = { ...next, activeProjectId: undefined };
     }
 
+    if (Object.prototype.hasOwnProperty.call(sanitized, 'namedTunnelPresets')) {
+      await syncNamedTunnelConfigWithPresets(next.namedTunnelPresets);
+    }
+
+    if (Object.prototype.hasOwnProperty.call(sanitized, 'namedTunnelPresetTokens') && sanitized.namedTunnelPresetTokens) {
+      const presetsById = new Map((next.namedTunnelPresets || []).map((entry) => [entry.id, entry]));
+      const updates = Object.entries(sanitized.namedTunnelPresetTokens)
+        .map(([presetId, token]) => {
+          const preset = presetsById.get(presetId);
+          if (!preset || typeof token !== 'string' || token.trim().length === 0) {
+            return null;
+          }
+          return {
+            id: preset.id,
+            name: preset.name,
+            hostname: preset.hostname,
+            token: token.trim(),
+          };
+        })
+        .filter(Boolean);
+
+      for (const update of updates) {
+        await upsertNamedTunnelToken(update);
+      }
+    }
+
     await writeSettingsToDisk(next);
     console.log(`[persistSettings] Successfully saved ${next.projects?.length || 0} projects to disk`);
     return formatSettingsResponse(next);
@@ -2801,6 +3296,9 @@ let isExternalOpenCode = false;
 let exitOnShutdown = true;
 let uiAuthController = null;
 let cloudflareTunnelController = null;
+const tunnelAuthController = createTunnelAuth();
+let runtimeNamedTunnelToken = '';
+let runtimeNamedTunnelHostname = '';
 let terminalInputWsServer = null;
 const userProvidedOpenCodePassword =
   typeof hmrState.userProvidedOpenCodePassword === 'string' && hmrState.userProvidedOpenCodePassword.length > 0
@@ -4211,7 +4709,7 @@ const fetchSessionParentId = async (sessionId) => {
     }
 
     const match = data.find((s) => s && typeof s === 'object' && s.id === sessionId);
-    const parentID = match && typeof match.parentID === 'string' && match.parentID.length > 0 ? match.parentID : null;
+    const parentID = match?.parentID ? match.parentID : null;
     setCachedSessionParentId(sessionId, parentID);
     return parentID;
   } catch {
@@ -4725,8 +5223,40 @@ async function createManagedOpenCodeServerProcess({
   cwd,
   env,
 }) {
-  const binary = (process.env.OPENCODE_BINARY || 'opencode').trim() || 'opencode';
+  let binary = (process.env.OPENCODE_BINARY || 'opencode').trim() || 'opencode';
   const args = ['serve', '--hostname', hostname, '--port', String(port)];
+
+  // On Windows, Bun/Node cannot directly spawn shell wrapper scripts (#!/bin/sh).
+  // Detect if the resolved binary is a shim that wraps a Node/Bun script and
+  // resolve the actual target so we can spawn it with the correct interpreter.
+  if (process.platform === 'win32') {
+    const interpreter = opencodeShimInterpreter(binary);
+    if (interpreter) {
+      // Binary itself has a node/bun shebang – spawn via that interpreter.
+      args.unshift(binary);
+      binary = interpreter;
+    } else {
+      // The wrapper might be a shell shim generated by npm.  Try to find the
+      // real JS entry point next to it (e.g. node_modules/opencode-ai/bin/opencode).
+      try {
+        const shimContent = fs.readFileSync(binary, 'utf8');
+        const jsMatch = shimContent.match(/node_modules[\\/]opencode[^\s"']*/);
+        if (jsMatch) {
+          const candidate = path.resolve(path.dirname(binary), jsMatch[0]);
+          if (fs.existsSync(candidate)) {
+            const realInterp = opencodeShimInterpreter(candidate);
+            if (realInterp) {
+              args.unshift(candidate);
+              binary = realInterp;
+            }
+          }
+        }
+      } catch {
+        // ignore – fall through to default spawn
+      }
+    }
+  }
+
   const child = spawn(binary, args, {
     cwd,
     env,
@@ -5198,6 +5728,30 @@ function setupProxy(app) {
   }
   app.set('opencodeProxyConfigured', true);
 
+  // Windows path normalization: OpenCode CLI stores paths with backslashes in the DB,
+  // but the frontend sends forward slashes. Rewrite directory query params on Windows.
+  // Must run BEFORE all other /api middleware.
+  if (process.platform === 'win32') {
+    app.use('/api', (req, _res, next) => {
+      // Parse directory from the raw URL since Express query parsing may not be available
+      const rawUrl = req.originalUrl || req.url || '';
+      const dirMatch = rawUrl.match(/[?&]directory=([^&]*)/);
+      if (dirMatch) {
+        const decoded = decodeURIComponent(dirMatch[1]);
+        if (decoded.includes('/')) {
+          const fixed = decoded.replace(/\//g, '\\');
+          const fixedEncoded = encodeURIComponent(fixed);
+          const newUrl = rawUrl.replace(/([?&]directory=)[^&]*/, '$1' + fixedEncoded);
+          console.log(`[Win32PathFix] Rewrote directory: "${decoded}" → "${fixed}"`);
+          console.log(`[Win32PathFix] URL: "${rawUrl}" → "${newUrl}"`);
+          req.originalUrl = newUrl;
+          req.url = newUrl;
+        }
+      }
+      next();
+    });
+  }
+
   app.use('/api', (req, res, next) => {
     if (
       req.path.startsWith('/themes/custom') ||
@@ -5545,13 +6099,68 @@ function setupProxy(app) {
     }
   });
 
-  app.use('/api', (req, res, next) => {
+  app.use('/api', async (req, res, next) => {
     if (isSseApiPath(req.path)) {
       return next();
     }
 
     if (req.method === 'POST' && /\/session\/[^/]+\/message$/.test(req.path || '')) {
       return next();
+    }
+
+    // Windows: Merge sessions from all project directories on bare GET /session
+    if (process.platform === 'win32' && req.method === 'GET' && req.path === '/session') {
+      const rawUrl = req.originalUrl || req.url || '';
+      if (!rawUrl.includes('directory=')) {
+        try {
+          const authHeaders = getOpenCodeAuthHeaders();
+          const fetchOpts = {
+            method: 'GET',
+            headers: { Accept: 'application/json', ...authHeaders },
+            signal: AbortSignal.timeout(10000),
+          };
+          const globalRes = await fetch(buildOpenCodeUrl('/session', ''), fetchOpts);
+          const globalSessions = globalRes.ok ? (await globalRes.json()) : [];
+
+          const settingsPath = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+          let projectDirs = [];
+          try {
+            const settingsRaw = fs.readFileSync(settingsPath, 'utf8');
+            const settings = JSON.parse(settingsRaw);
+            projectDirs = (settings.projects || [])
+              .map(p => p.path)
+              .filter(p => typeof p === 'string' && p.length > 0);
+          } catch {}
+
+          const seen = new Set(globalSessions.map(s => s.id));
+          const extraSessions = [];
+          for (const dir of projectDirs) {
+            const backslashDir = dir.replace(/\//g, '\\');
+            const encoded = encodeURIComponent(backslashDir);
+            try {
+              const dirRes = await fetch(buildOpenCodeUrl(`/session?directory=${encoded}`, ''), fetchOpts);
+              if (dirRes.ok) {
+                const dirSessions = await dirRes.json();
+                if (Array.isArray(dirSessions)) {
+                  for (const s of dirSessions) {
+                    if (s && s.id && !seen.has(s.id)) {
+                      seen.add(s.id);
+                      extraSessions.push(s);
+                    }
+                  }
+                }
+              }
+            } catch {}
+          }
+
+          const merged = [...globalSessions, ...extraSessions];
+          merged.sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0));
+          console.log(`[SessionMerge] ${globalSessions.length} global + ${extraSessions.length} extra = ${merged.length} total`);
+          return res.json(merged);
+        } catch (error) {
+          console.log(`[SessionMerge] Error: ${error.message}, falling through`);
+        }
+      }
     }
 
     return forwardGenericApiRequest(req, res);
@@ -5655,6 +6264,7 @@ async function gracefulShutdown(options = {}) {
     console.log('Stopping Cloudflare tunnel...');
     cloudflareTunnelController.stop();
     cloudflareTunnelController = null;
+    tunnelAuthController.clearActiveTunnel();
   }
 
   console.log('Graceful shutdown complete');
@@ -5733,6 +6343,7 @@ async function main(options = {}) {
   }
 
   const app = express();
+  const serverStartedAt = new Date().toISOString();
   app.set('trust proxy', true);
   expressApp = app;
   server = http.createServer(app);
@@ -5764,6 +6375,15 @@ async function main(options = {}) {
     });
   });
 
+  app.get('/api/system/info', (req, res) => {
+    res.json({
+      openchamberVersion: OPENCHAMBER_VERSION,
+      runtime: process.env.OPENCHAMBER_RUNTIME || 'web',
+      pid: process.pid,
+      startedAt: serverStartedAt,
+    });
+  });
+
   app.use((req, res, next) => {
     if (
       req.path.startsWith('/api/config/agents') ||
@@ -5773,6 +6393,7 @@ async function main(options = {}) {
       req.path.startsWith('/api/config/profiles') ||
       req.path.startsWith('/api/config/oh-my-opencode') ||
       req.path.startsWith('/api/config/skills') ||
+      req.path.startsWith('/api/projects') ||
       req.path.startsWith('/api/fs') ||
       req.path.startsWith('/api/git') ||
       req.path.startsWith('/api/prompts') ||
@@ -5780,7 +6401,8 @@ async function main(options = {}) {
       req.path.startsWith('/api/opencode') ||
       req.path.startsWith('/api/push') ||
       req.path.startsWith('/api/voice') ||
-      req.path.startsWith('/api/tts')
+      req.path.startsWith('/api/tts') ||
+      req.path.startsWith('/api/openchamber/tunnel')
     ) {
 
       express.json({ limit: '50mb' })(req, res, next);
@@ -5806,16 +6428,65 @@ async function main(options = {}) {
   }
 
   app.get('/auth/session', async (req, res) => {
+    const requestScope = tunnelAuthController.classifyRequestScope(req);
+    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+      const tunnelSession = tunnelAuthController.getTunnelSessionFromRequest(req);
+      if (tunnelSession) {
+        return res.json({ authenticated: true, scope: 'tunnel' });
+      }
+      tunnelAuthController.clearTunnelSessionCookie(req, res);
+      return res.status(401).json({ authenticated: false, locked: true, tunnelLocked: true });
+    }
+
     try {
       await uiAuthController.handleSessionStatus(req, res);
     } catch (err) {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
-  app.post('/auth/session', (req, res) => uiAuthController.handleSessionCreate(req, res));
+  app.post('/auth/session', (req, res) => {
+    const requestScope = tunnelAuthController.classifyRequestScope(req);
+    if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+      return res.status(403).json({ error: 'Password login is disabled for tunnel scope', tunnelLocked: true });
+    }
+    return uiAuthController.handleSessionCreate(req, res);
+  });
+
+  app.get('/connect', async (req, res) => {
+    try {
+      const token = typeof req.query?.t === 'string' ? req.query.t : '';
+      const settings = await readSettingsFromDiskMigrated();
+      const tunnelSessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
+
+      const exchange = tunnelAuthController.exchangeBootstrapToken({
+        req,
+        res,
+        token,
+        sessionTtlMs: tunnelSessionTtlMs,
+      });
+
+      res.setHeader('Cache-Control', 'no-store');
+
+      if (!exchange.ok) {
+        if (exchange.reason === 'rate-limited') {
+          res.setHeader('Retry-After', String(exchange.retryAfter || 60));
+          return res.status(429).type('text/plain').send('Too many attempts. Please try again later.');
+        }
+        return res.status(401).type('text/plain').send('Connection link is invalid or expired.');
+      }
+
+      return res.redirect(302, '/');
+    } catch (error) {
+      return res.status(500).type('text/plain').send('Failed to process connect request.');
+    }
+  });
 
   app.use('/api', async (req, res, next) => {
     try {
+      const requestScope = tunnelAuthController.classifyRequestScope(req);
+      if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
+        return tunnelAuthController.requireTunnelSession(req, res, next);
+      }
       await uiAuthController.requireAuth(req, res, next);
     } catch (err) {
       next(err);
@@ -6503,6 +7174,250 @@ async function main(options = {}) {
     }
   });
 
+  // ── Cloudflare Tunnel API ──────────────────────────────────────────
+
+  app.get('/api/openchamber/tunnel/check', async (_req, res) => {
+    try {
+      const result = await checkCloudflaredAvailable();
+      res.json({ available: result.available, version: result.version || null });
+    } catch (error) {
+      console.warn('Cloudflare tunnel check failed:', error);
+      res.json({ available: false, version: null });
+    }
+  });
+
+  app.get('/api/openchamber/tunnel/status', async (_req, res) => {
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const mode = normalizeTunnelMode(settings?.tunnelMode);
+      const namedHostname = normalizeNamedTunnelHostname(settings?.namedTunnelHostname);
+      const namedTunnelConfig = await readNamedTunnelConfigFromDisk();
+      const hasLegacyNamedToken = typeof settings?.namedTunnelToken === 'string' && settings.namedTunnelToken.trim().length > 0;
+      const hasNamedTunnelToken = runtimeNamedTunnelToken.length > 0 || namedTunnelConfig.tunnels.length > 0 || hasLegacyNamedToken;
+      const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
+        ? null
+        : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
+      const sessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
+      const activeSessions = tunnelAuthController.listTunnelSessions();
+
+      const publicUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
+      if (!publicUrl) {
+        return res.json({
+          active: false,
+          url: null,
+          mode,
+          hasNamedTunnelToken,
+          namedTunnelHostname: namedHostname || null,
+          namedTunnelTokenPresetIds: namedTunnelConfig.tunnels.map((entry) => entry.id),
+          hasBootstrapToken: false,
+          bootstrapExpiresAt: null,
+          policy: 'tunnel-gated',
+          activeTunnelMode: tunnelAuthController.getActiveTunnelMode() || null,
+          activeSessions,
+          localPort: activePort,
+          ttlConfig: {
+            bootstrapTtlMs,
+            sessionTtlMs,
+          },
+        });
+      }
+
+      const activeMode = cloudflareTunnelController?.mode === TUNNEL_MODE_NAMED ? TUNNEL_MODE_NAMED : TUNNEL_MODE_QUICK;
+
+      if (!tunnelAuthController.getActiveTunnelId() || !tunnelAuthController.getActiveTunnelHost()) {
+        tunnelAuthController.setActiveTunnel({ tunnelId: crypto.randomUUID(), publicUrl, mode: activeMode });
+      }
+
+      const bootstrapStatus = tunnelAuthController.getBootstrapStatus();
+
+      return res.json({
+        active: true,
+        url: publicUrl,
+        mode: activeMode,
+        hasNamedTunnelToken,
+        namedTunnelHostname: namedHostname || null,
+        namedTunnelTokenPresetIds: namedTunnelConfig.tunnels.map((entry) => entry.id),
+        hasBootstrapToken: bootstrapStatus.hasBootstrapToken,
+        bootstrapExpiresAt: bootstrapStatus.bootstrapExpiresAt,
+        policy: 'tunnel-gated',
+        activeTunnelMode: activeMode,
+        activeSessions: tunnelAuthController.listTunnelSessions(),
+        localPort: activePort,
+        ttlConfig: {
+          bootstrapTtlMs,
+          sessionTtlMs,
+        },
+      });
+    } catch (error) {
+      return res.status(500).json({ error: 'Failed to get tunnel status' });
+    }
+  });
+
+  app.put('/api/openchamber/tunnel/named-token', async (req, res) => {
+    try {
+      const presetId = typeof req?.body?.presetId === 'string' ? req.body.presetId.trim() : '';
+      const presetName = typeof req?.body?.presetName === 'string' ? req.body.presetName.trim() : '';
+      const namedTunnelHostname = normalizeNamedTunnelHostname(req?.body?.namedTunnelHostname);
+      const namedTunnelToken = typeof req?.body?.namedTunnelToken === 'string' ? req.body.namedTunnelToken.trim() : '';
+
+      if (!presetId || !presetName || !namedTunnelHostname || !namedTunnelToken) {
+        return res.status(400).json({ ok: false, error: 'presetId, presetName, namedTunnelHostname and namedTunnelToken are required' });
+      }
+
+      await upsertNamedTunnelToken({
+        id: presetId,
+        name: presetName,
+        hostname: namedTunnelHostname,
+        token: namedTunnelToken,
+      });
+
+      const namedTunnelConfig = await readNamedTunnelConfigFromDisk();
+      return res.json({ ok: true, namedTunnelTokenPresetIds: namedTunnelConfig.tunnels.map((entry) => entry.id) });
+    } catch (error) {
+      return res.status(500).json({ ok: false, error: 'Failed to save named tunnel token' });
+    }
+  });
+
+  app.post('/api/openchamber/tunnel/start', async (_req, res) => {
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const mode = normalizeTunnelMode(_req?.body?.mode ?? settings?.tunnelMode);
+      const selectedPresetId = typeof _req?.body?.namedTunnelPresetId === 'string' ? _req.body.namedTunnelPresetId.trim() : '';
+      const selectedPresetName = typeof _req?.body?.namedTunnelPresetName === 'string' ? _req.body.namedTunnelPresetName.trim() : '';
+      const requestNamedHostname = normalizeNamedTunnelHostname(_req?.body?.namedTunnelHostname);
+      const namedHostname = requestNamedHostname || normalizeNamedTunnelHostname(settings?.namedTunnelHostname);
+      const requestNamedToken = typeof _req?.body?.namedTunnelToken === 'string' ? _req.body.namedTunnelToken.trim() : '';
+      const legacyNamedToken = typeof settings?.namedTunnelToken === 'string' ? settings.namedTunnelToken.trim() : '';
+      const configNamedToken = await resolveNamedTunnelToken({ presetId: selectedPresetId, hostname: namedHostname });
+      const namedToken = requestNamedToken
+        || ((runtimeNamedTunnelHostname && namedHostname && runtimeNamedTunnelHostname === namedHostname) ? runtimeNamedTunnelToken : '')
+        || configNamedToken
+        || legacyNamedToken
+        ;
+      const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
+        ? null
+        : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
+      const sessionTtlMs = normalizeTunnelSessionTtlMs(settings?.tunnelSessionTtlMs);
+
+      let publicUrl = cloudflareTunnelController?.getPublicUrl?.() ?? null;
+      const activeMode = cloudflareTunnelController?.mode === TUNNEL_MODE_NAMED ? TUNNEL_MODE_NAMED : TUNNEL_MODE_QUICK;
+
+      if (publicUrl && activeMode !== mode) {
+        cloudflareTunnelController.stop();
+        cloudflareTunnelController = null;
+        tunnelAuthController.clearActiveTunnel();
+        publicUrl = null;
+      }
+
+      if (!publicUrl) {
+        const cfCheck = await checkCloudflaredAvailable();
+        if (!cfCheck.available) {
+          return res.status(400).json({
+            ok: false,
+            error: 'cloudflared is not installed. Install it with: brew install cloudflared',
+          });
+        }
+
+        if (mode === TUNNEL_MODE_NAMED) {
+          if (!namedHostname) {
+            return res.status(400).json({ ok: false, error: 'Named tunnel hostname is required' });
+          }
+          if (!namedToken) {
+            return res.status(400).json({ ok: false, error: 'Named tunnel token is required' });
+          }
+
+          runtimeNamedTunnelHostname = namedHostname;
+          runtimeNamedTunnelToken = namedToken;
+
+          if (requestNamedToken && namedHostname) {
+            await upsertNamedTunnelToken({
+              id: selectedPresetId || namedHostname,
+              name: selectedPresetName || namedHostname,
+              hostname: namedHostname,
+              token: requestNamedToken,
+            });
+          }
+
+          cloudflareTunnelController = await startCloudflareNamedTunnel({
+            token: namedToken,
+            hostname: namedHostname,
+          });
+        } else {
+          const originUrl = `http://127.0.0.1:${activePort}`;
+          cloudflareTunnelController = await startCloudflareQuickTunnel({ originUrl, port: activePort });
+        }
+
+        publicUrl = cloudflareTunnelController.getPublicUrl();
+
+        if (!publicUrl) {
+          cloudflareTunnelController.stop();
+          cloudflareTunnelController = null;
+          tunnelAuthController.clearActiveTunnel();
+          return res.status(500).json({ ok: false, error: 'Tunnel started but no public URL was assigned' });
+        }
+
+        if (mode === TUNNEL_MODE_QUICK) {
+          printTunnelWarning();
+        }
+        console.log(`Cloudflare tunnel active: ${publicUrl}`);
+      }
+
+      if (!tunnelAuthController.getActiveTunnelId() || !tunnelAuthController.getActiveTunnelHost()) {
+        tunnelAuthController.setActiveTunnel({ tunnelId: crypto.randomUUID(), publicUrl, mode });
+      }
+
+      const bootstrapToken = tunnelAuthController.issueBootstrapToken({ ttlMs: bootstrapTtlMs });
+      const connectUrl = `${publicUrl.replace(/\/$/, '')}/connect?t=${encodeURIComponent(bootstrapToken.token)}`;
+      const namedTunnelConfig = await readNamedTunnelConfigFromDisk();
+
+      return res.json({
+        ok: true,
+        url: publicUrl,
+        mode,
+        namedTunnelHostname: namedHostname || null,
+        namedTunnelTokenPresetIds: namedTunnelConfig.tunnels.map((entry) => entry.id),
+        connectUrl,
+        bootstrapExpiresAt: bootstrapToken.expiresAt,
+        policy: 'tunnel-gated',
+        activeTunnelMode: mode,
+        activeSessions: tunnelAuthController.listTunnelSessions(),
+        localPort: activePort,
+        ttlConfig: {
+          bootstrapTtlMs,
+          sessionTtlMs,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to start Cloudflare tunnel:', error);
+      cloudflareTunnelController = null;
+      tunnelAuthController.clearActiveTunnel();
+      return res.status(500).json({ ok: false, error: error?.message || 'Failed to start tunnel' });
+    }
+  });
+
+  app.post('/api/openchamber/tunnel/stop', (_req, res) => {
+    let revokedBootstrapCount = 0;
+    let invalidatedSessionCount = 0;
+    const activeTunnelId = tunnelAuthController.getActiveTunnelId();
+
+    if (activeTunnelId) {
+      const revoked = tunnelAuthController.revokeTunnelArtifacts(activeTunnelId);
+      revokedBootstrapCount = revoked.revokedBootstrapCount;
+      invalidatedSessionCount = revoked.invalidatedSessionCount;
+    }
+
+    if (cloudflareTunnelController) {
+      console.log('Stopping Cloudflare tunnel (user requested)...');
+      cloudflareTunnelController.stop();
+      cloudflareTunnelController = null;
+    }
+
+    tunnelAuthController.clearActiveTunnel();
+    res.json({ ok: true, revokedBootstrapCount, invalidatedSessionCount });
+  });
+
+  // ── End Cloudflare Tunnel API ─────────────────────────────────────
+
   app.get('/api/global/event', async (req, res) => {
     let targetUrl;
     try {
@@ -6848,7 +7763,6 @@ async function main(options = {}) {
 
   app.put('/api/config/settings', async (req, res) => {
     console.log(`[API:PUT /api/config/settings] Received request`);
-    console.log(`[API:PUT /api/config/settings] Request body:`, JSON.stringify(req.body, null, 2));
     try {
       const updated = await persistSettings(req.body ?? {});
       console.log(`[API:PUT /api/config/settings] Success, returning ${updated.projects?.length || 0} projects`);
@@ -6857,6 +7771,202 @@ async function main(options = {}) {
       console.error(`[API:PUT /api/config/settings] Failed to save settings:`, error);
       console.error(`[API:PUT /api/config/settings] Error stack:`, error.stack);
       res.status(500).json({ error: error instanceof Error ? error.message : 'Failed to save settings' });
+    }
+  });
+
+  app.get('/api/projects/:projectId/icon', async (req, res) => {
+    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const { project } = findProjectById(settings, projectId);
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      const metadataMime = normalizeProjectIconMime(project.iconImage?.mime);
+      const preferredPath = metadataMime ? projectIconPathForMime(projectId, metadataMime) : null;
+      const candidates = preferredPath
+        ? [preferredPath, ...projectIconPathCandidates(projectId).filter((candidate) => candidate !== preferredPath)]
+        : projectIconPathCandidates(projectId);
+
+      for (const iconPath of candidates) {
+        try {
+          const data = await fsPromises.readFile(iconPath);
+          const ext = path.extname(iconPath).slice(1).toLowerCase();
+          const contentType = metadataMime || PROJECT_ICON_EXTENSION_TO_MIME[ext] || 'application/octet-stream';
+          res.setHeader('Content-Type', contentType);
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          return res.send(data);
+        } catch (error) {
+          if (!error || typeof error !== 'object' || error.code !== 'ENOENT') {
+            console.warn('Failed to read project icon:', error);
+            return res.status(500).json({ error: 'Failed to read project icon' });
+          }
+        }
+      }
+
+      return res.status(404).json({ error: 'Project icon not found' });
+    } catch (error) {
+      console.warn('Failed to load project icon:', error);
+      return res.status(500).json({ error: 'Failed to load project icon' });
+    }
+  });
+
+  app.put('/api/projects/:projectId/icon', async (req, res) => {
+    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    const parsed = parseProjectIconDataUrl(req.body?.dataUrl);
+    if (!parsed.ok) {
+      return res.status(400).json({ error: parsed.error });
+    }
+
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const { projects, project } = findProjectById(settings, projectId);
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      const iconPath = projectIconPathForMime(projectId, parsed.mime);
+      if (!iconPath) {
+        return res.status(400).json({ error: 'Unsupported icon format' });
+      }
+
+      await fsPromises.mkdir(PROJECT_ICONS_DIR_PATH, { recursive: true });
+      await fsPromises.writeFile(iconPath, parsed.bytes);
+      await removeProjectIconFiles(projectId, iconPath);
+
+      const updatedAt = Date.now();
+      const nextProjects = projects.map((entry) => (
+        entry.id === projectId
+          ? { ...entry, iconImage: { mime: parsed.mime, updatedAt, source: 'custom' } }
+          : entry
+      ));
+      const updatedSettings = await persistSettings({ projects: nextProjects });
+      const updatedProject = (updatedSettings.projects || []).find((entry) => entry.id === projectId) || null;
+
+      return res.json({ project: updatedProject, settings: updatedSettings });
+    } catch (error) {
+      console.warn('Failed to upload project icon:', error);
+      return res.status(500).json({ error: 'Failed to upload project icon' });
+    }
+  });
+
+  app.delete('/api/projects/:projectId/icon', async (req, res) => {
+    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const { projects, project } = findProjectById(settings, projectId);
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      await removeProjectIconFiles(projectId);
+
+      const nextProjects = projects.map((entry) => (
+        entry.id === projectId
+          ? { ...entry, iconImage: null }
+          : entry
+      ));
+      const updatedSettings = await persistSettings({ projects: nextProjects });
+      const updatedProject = (updatedSettings.projects || []).find((entry) => entry.id === projectId) || null;
+
+      return res.json({ project: updatedProject, settings: updatedSettings });
+    } catch (error) {
+      console.warn('Failed to remove project icon:', error);
+      return res.status(500).json({ error: 'Failed to remove project icon' });
+    }
+  });
+
+  app.post('/api/projects/:projectId/icon/discover', async (req, res) => {
+    const projectId = typeof req.params.projectId === 'string' ? req.params.projectId.trim() : '';
+    if (!projectId) {
+      return res.status(400).json({ error: 'projectId is required' });
+    }
+
+    try {
+      const settings = await readSettingsFromDiskMigrated();
+      const { projects, project } = findProjectById(settings, projectId);
+      if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+      }
+
+      const force = req.body?.force === true;
+      if (project.iconImage?.source === 'custom' && !force) {
+        return res.json({
+          project,
+          skipped: true,
+          reason: 'custom-icon-present',
+        });
+      }
+
+      const faviconCandidates = await searchFilesystemFiles(project.path, {
+        limit: 200,
+        query: 'favicon',
+        includeHidden: true,
+        respectGitignore: false,
+      });
+
+      const filtered = faviconCandidates
+        .filter((entry) => /(^|\/)favicon\.(ico|png|svg|jpg|jpeg|webp)$/i.test(entry.path))
+        .sort((a, b) => a.path.length - b.path.length);
+
+      const selected = filtered[0];
+      if (!selected) {
+        return res.status(404).json({ error: 'No favicon found in project' });
+      }
+
+      const ext = path.extname(selected.path).slice(1).toLowerCase();
+      const mime = PROJECT_ICON_EXTENSION_TO_MIME[ext] || null;
+      if (!mime) {
+        return res.status(415).json({ error: 'Unsupported favicon format' });
+      }
+
+      const bytes = await fsPromises.readFile(selected.path);
+      if (bytes.length === 0) {
+        return res.status(400).json({ error: 'Discovered icon is empty' });
+      }
+      if (bytes.length > PROJECT_ICON_MAX_BYTES) {
+        return res.status(400).json({ error: 'Discovered icon exceeds size limit (5 MB)' });
+      }
+
+      const iconPath = projectIconPathForMime(projectId, mime);
+      if (!iconPath) {
+        return res.status(415).json({ error: 'Unsupported favicon format' });
+      }
+
+      await fsPromises.mkdir(PROJECT_ICONS_DIR_PATH, { recursive: true });
+      await fsPromises.writeFile(iconPath, bytes);
+      await removeProjectIconFiles(projectId, iconPath);
+
+      const updatedAt = Date.now();
+      const nextProjects = projects.map((entry) => (
+        entry.id === projectId
+          ? { ...entry, iconImage: { mime, updatedAt, source: 'auto' } }
+          : entry
+      ));
+      const updatedSettings = await persistSettings({ projects: nextProjects });
+      const updatedProject = (updatedSettings.projects || []).find((entry) => entry.id === projectId) || null;
+
+      return res.json({
+        project: updatedProject,
+        settings: updatedSettings,
+        discoveredPath: selected.path,
+      });
+    } catch (error) {
+      console.warn('Failed to discover project icon:', error);
+      return res.status(500).json({ error: 'Failed to discover project icon' });
     }
   });
 
@@ -7684,12 +8794,18 @@ async function main(options = {}) {
 
   // ============== SKILLS CATALOG + INSTALL ENDPOINTS ==============
 
-  const { getCuratedSkillsSources } = await import('./lib/skills-catalog/curated-sources.js');
-  const { getCacheKey, getCachedScan, setCachedScan } = await import('./lib/skills-catalog/cache.js');
-  const { parseSkillRepoSource } = await import('./lib/skills-catalog/source.js');
-  const { scanSkillsRepository } = await import('./lib/skills-catalog/scan.js');
-  const { installSkillsFromRepository } = await import('./lib/skills-catalog/install.js');
-  const { scanClawdHubPage, installSkillsFromClawdHub, isClawdHubSource } = await import('./lib/skills-catalog/clawdhub/index.js');
+  const {
+    getCuratedSkillsSources,
+    getCacheKey,
+    getCachedScan,
+    setCachedScan,
+    parseSkillRepoSource,
+    scanSkillsRepository,
+    installSkillsFromRepository,
+    scanClawdHubPage,
+    installSkillsFromClawdHub,
+    isClawdHubSource,
+  } = await import('./lib/skills-catalog/index.js');
   const { getProfiles, getProfile } = await import('./lib/git/index.js');
 
   const listGitIdentitiesForResponse = () => {
@@ -9947,11 +11063,16 @@ async function main(options = {}) {
   });
 
   app.get('/api/git/status', async (req, res) => {
-    const { getStatus } = await getGitLibraries();
+    const { getStatus, isGitRepository } = await getGitLibraries();
     try {
       const directory = req.query.directory;
       if (!directory) {
         return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const isRepo = await isGitRepository(directory);
+      if (!isRepo) {
+        return res.json({ isGitRepository: false, files: [], branch: null, ahead: 0, behind: 0 });
       }
 
       const status = await getStatus(directory);
@@ -11295,9 +12416,104 @@ async function main(options = {}) {
     return ptyProviderPromise;
   };
 
+  const getTerminalShellCandidates = () => {
+    if (process.platform === 'win32') {
+      const windowsCandidates = [
+        process.env.OPENCHAMBER_TERMINAL_SHELL,
+        process.env.SHELL,
+        process.env.ComSpec,
+        path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+        'pwsh.exe',
+        'powershell.exe',
+        'cmd.exe',
+      ].filter(Boolean);
+
+      const resolved = [];
+      const seen = new Set();
+      for (const candidateRaw of windowsCandidates) {
+        const candidate = String(candidateRaw).trim();
+        if (!candidate) continue;
+
+        const lookedUp = candidate.includes('\\') || candidate.includes('/')
+          ? candidate
+          : searchPathFor(candidate);
+        const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : (isExecutable(candidate) ? candidate : null);
+        if (!executable || seen.has(executable)) continue;
+        seen.add(executable);
+        resolved.push(executable);
+      }
+      return resolved;
+    }
+
+    const unixCandidates = [
+      process.env.OPENCHAMBER_TERMINAL_SHELL,
+      process.env.SHELL,
+      '/bin/zsh',
+      '/bin/bash',
+      '/bin/sh',
+      'zsh',
+      'bash',
+      'sh',
+    ].filter(Boolean);
+
+    const resolved = [];
+    const seen = new Set();
+    for (const candidateRaw of unixCandidates) {
+      const candidate = String(candidateRaw).trim();
+      if (!candidate) continue;
+
+      const lookedUp = candidate.includes('/') ? candidate : searchPathFor(candidate);
+      const executable = lookedUp && isExecutable(lookedUp) ? lookedUp : (isExecutable(candidate) ? candidate : null);
+      if (!executable || seen.has(executable)) continue;
+      seen.add(executable);
+      resolved.push(executable);
+    }
+
+    return resolved;
+  };
+
+  const spawnTerminalPtyWithFallback = (pty, { cols, rows, cwd, env }) => {
+    const shellCandidates = getTerminalShellCandidates();
+    if (shellCandidates.length === 0) {
+      throw new Error('No executable shell found for terminal session');
+    }
+
+    let lastError = null;
+    for (const shell of shellCandidates) {
+      try {
+        const ptyProcess = pty.spawn(shell, [], {
+          name: 'xterm-256color',
+          cols: cols || 80,
+          rows: rows || 24,
+          cwd,
+          env: {
+            ...env,
+            TERM: 'xterm-256color',
+            COLORTERM: 'truecolor',
+          },
+        });
+
+        return { ptyProcess, shell };
+      } catch (error) {
+        lastError = error;
+        console.warn(`Failed to spawn PTY using shell ${shell}:`, error && error.message ? error.message : error);
+      }
+    }
+
+    const baseMessage = lastError && lastError.message ? lastError.message : 'PTY spawn failed';
+    throw new Error(`Failed to spawn terminal PTY with available shells (${shellCandidates.join(', ')}): ${baseMessage}`);
+  };
+
   const terminalSessions = new Map();
   const MAX_TERMINAL_SESSIONS = 20;
   const TERMINAL_IDLE_TIMEOUT = 30 * 60 * 1000;
+  const sanitizeTerminalEnv = (env) => {
+    const next = { ...env };
+    delete next.BASH_XTRACEFD;
+    delete next.BASH_ENV;
+    delete next.ENV;
+    return next;
+  };
   const terminalInputCapabilities = {
     input: {
       preferred: 'ws',
@@ -11517,25 +12733,18 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Invalid working directory' });
       }
 
-      const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
-
       const sessionId = Math.random().toString(36).substring(2, 15) +
                         Math.random().toString(36).substring(2, 15);
 
       const envPath = buildAugmentedPath();
-      const resolvedEnv = { ...process.env, PATH: envPath };
+      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath });
 
       const pty = await getPtyProvider();
-      const ptyProcess = pty.spawn(shell, [], {
-        name: 'xterm-256color',
-        cols: cols || 80,
-        rows: rows || 24,
-        cwd: cwd,
-        env: {
-          ...resolvedEnv,
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-        },
+      const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
+        cols,
+        rows,
+        cwd,
+        env: resolvedEnv,
       });
 
       const session = {
@@ -11553,7 +12762,7 @@ async function main(options = {}) {
         terminalSessions.delete(sessionId);
       });
 
-      console.log(`Created terminal session: ${sessionId} in ${cwd}`);
+      console.log(`Created terminal session: ${sessionId} in ${cwd} using shell ${shell}`);
       res.json({ sessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalInputCapabilities });
     } catch (error) {
       console.error('Failed to create terminal session:', error);
@@ -11738,25 +12947,18 @@ async function main(options = {}) {
         return res.status(400).json({ error: 'Invalid working directory: not accessible' });
       }
 
-      const shell = process.env.SHELL || (process.platform === 'win32' ? 'powershell.exe' : '/bin/zsh');
-
       const newSessionId = Math.random().toString(36).substring(2, 15) +
                           Math.random().toString(36).substring(2, 15);
 
       const envPath = buildAugmentedPath();
-      const resolvedEnv = { ...process.env, PATH: envPath };
+      const resolvedEnv = sanitizeTerminalEnv({ ...process.env, PATH: envPath });
 
       const pty = await getPtyProvider();
-      const ptyProcess = pty.spawn(shell, [], {
-        name: 'xterm-256color',
-        cols: cols || 80,
-        rows: rows || 24,
-        cwd: cwd,
-        env: {
-          ...resolvedEnv,
-          TERM: 'xterm-256color',
-          COLORTERM: 'truecolor',
-        },
+      const { ptyProcess, shell } = spawnTerminalPtyWithFallback(pty, {
+        cols,
+        rows,
+        cwd,
+        env: resolvedEnv,
       });
 
       const session = {
@@ -11774,7 +12976,7 @@ async function main(options = {}) {
         terminalSessions.delete(newSessionId);
       });
 
-      console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd}`);
+      console.log(`Restarted terminal session: ${sessionId} -> ${newSessionId} in ${cwd} using shell ${shell}`);
       res.json({ sessionId: newSessionId, cols: cols || 80, rows: rows || 24, capabilities: terminalInputCapabilities });
     } catch (error) {
       console.error('Failed to restart terminal session:', error);
@@ -11953,10 +13155,22 @@ async function main(options = {}) {
         if (cfCheck.available) {
           try {
             const originUrl = `http://localhost:${activePort}`;
-            cloudflareTunnelController = await startCloudflareTunnel({ originUrl, port: activePort });
+            cloudflareTunnelController = await startCloudflareQuickTunnel({ originUrl, port: activePort });
             printTunnelWarning();
+            const tunnelUrl = cloudflareTunnelController.getPublicUrl();
+            if (tunnelUrl) {
+              tunnelAuthController.setActiveTunnel({
+                tunnelId: crypto.randomUUID(),
+                publicUrl: tunnelUrl,
+                mode: TUNNEL_MODE_QUICK,
+              });
+              const settings = await readSettingsFromDiskMigrated();
+              const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
+                ? null
+                : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
+              tunnelAuthController.issueBootstrapToken({ ttlMs: bootstrapTtlMs });
+            }
             if (onTunnelReady) {
-              const tunnelUrl = cloudflareTunnelController.getPublicUrl();
               if (tunnelUrl) {
                 onTunnelReady(tunnelUrl);
               }

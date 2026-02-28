@@ -351,7 +351,11 @@ export const OpenInAppButton = ({ directory, className }: OpenInAppButtonProps) 
             <RiArrowDownSLine className="h-4 w-4" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64 max-h-[70vh] overflow-y-auto">
+        <DropdownMenuContent
+          align="center"
+          className="w-56 max-h-[70vh] overflow-y-auto"
+          style={{ translate: '-30px 0' }}
+        >
           <DropdownMenuItem className="flex items-center gap-2" onClick={() => void handleCopyPath()}>
             <RiFileCopyLine className="h-4 w-4" />
             <span className="typography-ui-label text-foreground">Copy Path</span>

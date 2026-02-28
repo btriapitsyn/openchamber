@@ -3,6 +3,7 @@ import type { SidebarSection } from '@/constants/sidebar';
 export type SettingsPageSlug =
   | 'home'
   | 'projects'
+  | 'remote-instances'
   | 'providers'
   | 'usage'
   | 'agents'
@@ -17,7 +18,8 @@ export type SettingsPageSlug =
   | 'shortcuts'
   | 'sessions'
   | 'notifications'
-  | 'voice';
+  | 'voice'
+  | 'tunnel';
 
 export type SettingsPageGroup =
   | 'appearance'
@@ -71,6 +73,14 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     group: 'projects',
     kind: 'split',
     keywords: ['project', 'projects', 'worktree', 'worktrees', 'repo', 'repository', 'directory'],
+  },
+  {
+    slug: 'remote-instances',
+    title: 'Remote Instances',
+    group: 'projects',
+    kind: 'split',
+    keywords: ['ssh', 'remote', 'instances', 'tunnels', 'forwarding', 'connection'],
+    isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb && !ctx.isVSCode,
   },
   {
     slug: 'providers',
@@ -167,6 +177,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
 
   { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
   { slug: 'voice', title: 'Voice', group: 'advanced', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
+  { slug: 'tunnel', title: 'Remote Tunnel', group: 'advanced', kind: 'single', keywords: ['tunnel', 'cloudflare', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.isVSCode },
 ] as const;
 
 export const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, SettingsPageSlug> = {

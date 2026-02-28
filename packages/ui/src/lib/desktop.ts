@@ -29,6 +29,12 @@ export type SkillCatalogConfig = {
   gitIdentityId?: string;
 };
 
+export type NamedTunnelPreset = {
+  id: string;
+  name: string;
+  hostname: string;
+};
+
 export type DesktopSettings = {
   themeId?: string;
   useSystemTheme?: boolean;
@@ -84,6 +90,15 @@ export type DesktopSettings = {
   }>;  // Per-provider custom model groups configuration
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
+  tunnelMode?: 'quick' | 'named';
+  tunnelBootstrapTtlMs?: number | null;
+  tunnelSessionTtlMs?: number;
+  namedTunnelHostname?: string;
+  namedTunnelToken?: string | null;
+  hasNamedTunnelToken?: boolean;
+  namedTunnelPresets?: NamedTunnelPreset[];
+  namedTunnelSelectedPresetId?: string;
+  namedTunnelPresetTokens?: Record<string, string>;
   defaultModel?: string; // format: "provider/model"
   defaultVariant?: string;
   defaultAgent?: string;

@@ -8,6 +8,7 @@ import type { ShortcutCombo } from '@/lib/shortcuts';
 export type MainTab = 'chat' | 'plan' | 'git' | 'diff' | 'terminal' | 'files';
 export type RightSidebarTab = 'git' | 'files';
 export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan';
+export type MermaidRenderingMode = 'svg' | 'ascii';
 
 type ContextPanelDirectoryState = {
   isOpen: boolean;
@@ -167,6 +168,7 @@ interface UIStore {
   settingsPage: string;
   settingsHasOpenedOnce: boolean;
   settingsProjectsSelectedId: string | null;
+  settingsRemoteInstancesSelectedId: string | null;
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
   showReasoningTraces: boolean;
@@ -221,6 +223,7 @@ interface UIStore {
 
   showTerminalQuickKeysOnDesktop: boolean;
   persistChatDraft: boolean;
+  mermaidRenderingMode: MermaidRenderingMode;
   showMobileSessionStatusBar: boolean;
   isMobileSessionStatusBarCollapsed: boolean;
   viewPagerPage: 'left' | 'center' | 'right';
@@ -271,6 +274,7 @@ interface UIStore {
   setSidebarSection: (section: SidebarSection) => void;
   setSettingsPage: (slug: string) => void;
   setSettingsProjectsSelectedId: (projectId: string | null) => void;
+  setSettingsRemoteInstancesSelectedId: (instanceId: string | null) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
   setShowTextJustificationActivity: (value: boolean) => void;
@@ -318,6 +322,7 @@ interface UIStore {
   setSummaryLength: (value: number) => void;
   setMaxLastMessageLength: (value: number) => void;
   setPersistChatDraft: (value: boolean) => void;
+  setMermaidRenderingMode: (value: MermaidRenderingMode) => void;
   setShowMobileSessionStatusBar: (value: boolean) => void;
   setIsMobileSessionStatusBarCollapsed: (value: boolean) => void;
   setViewPagerPage: (page: 'left' | 'center' | 'right') => void;
@@ -371,6 +376,7 @@ export const useUIStore = create<UIStore>()(
         settingsPage: 'home',
         settingsHasOpenedOnce: false,
         settingsProjectsSelectedId: null,
+        settingsRemoteInstancesSelectedId: null,
         eventStreamStatus: 'idle',
         eventStreamHint: null,
         showReasoningTraces: true,
@@ -420,6 +426,7 @@ export const useUIStore = create<UIStore>()(
 
         showTerminalQuickKeysOnDesktop: false,
         persistChatDraft: true,
+        mermaidRenderingMode: 'svg',
         showMobileSessionStatusBar: true,
         isMobileSessionStatusBarCollapsed: false,
         isExpandedInput: false,
@@ -847,6 +854,10 @@ export const useUIStore = create<UIStore>()(
           set({ settingsProjectsSelectedId: projectId });
         },
 
+        setSettingsRemoteInstancesSelectedId: (instanceId) => {
+          set({ settingsRemoteInstancesSelectedId: instanceId });
+        },
+
         setEventStreamStatus: (status, hint) => {
           set({
             eventStreamStatus: status,
@@ -1210,6 +1221,9 @@ export const useUIStore = create<UIStore>()(
         setPersistChatDraft: (value) => {
           set({ persistChatDraft: value });
         },
+        setMermaidRenderingMode: (value) => {
+          set({ mermaidRenderingMode: value });
+        },
         setShowMobileSessionStatusBar: (value) => {
           set({ showMobileSessionStatusBar: value });
         },
@@ -1343,6 +1357,7 @@ export const useUIStore = create<UIStore>()(
           settingsPage: state.settingsPage,
           settingsHasOpenedOnce: state.settingsHasOpenedOnce,
           settingsProjectsSelectedId: state.settingsProjectsSelectedId,
+          settingsRemoteInstancesSelectedId: state.settingsRemoteInstancesSelectedId,
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           // Note: isSettingsDialogOpen intentionally NOT persisted
           showReasoningTraces: state.showReasoningTraces,
@@ -1378,6 +1393,7 @@ export const useUIStore = create<UIStore>()(
           summaryLength: state.summaryLength,
           maxLastMessageLength: state.maxLastMessageLength,
           persistChatDraft: state.persistChatDraft,
+          mermaidRenderingMode: state.mermaidRenderingMode,
           showMobileSessionStatusBar: state.showMobileSessionStatusBar,
           isMobileSessionStatusBarCollapsed: state.isMobileSessionStatusBarCollapsed,
           shortcutOverrides: state.shortcutOverrides,

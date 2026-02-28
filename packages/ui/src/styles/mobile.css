@@ -126,6 +126,7 @@
     user-select: text;
   }
 
+
   /* Allow system context menu only when explicitly requested via the "More" button */
   :root.mobile-pointer:not(.desktop-runtime) .message-content-text.show-system-menu {
     -webkit-touch-callout: default;

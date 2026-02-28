@@ -55,6 +55,7 @@ import type { GitHubAuthStatus } from '@/lib/api/types';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
+import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
 
@@ -165,12 +166,13 @@ export const Header: React.FC<HeaderProps> = ({
     return state.messages.get(currentSessionId);
   });
   const sessions = useSessionStore((state) => state.sessions);
-  const activeProjectLabel = useProjectsStore((state) => {
+  const activeProject = useProjectsStore((state) => {
     if (!state.activeProjectId) {
       return null;
     }
-
-    const activeProject = state.projects.find((project) => project.id === state.activeProjectId);
+    return state.projects.find((project) => project.id === state.activeProjectId) ?? null;
+  });
+  const activeProjectLabel = React.useMemo(() => {
     if (!activeProject) {
       return null;
     }
@@ -182,7 +184,7 @@ export const Header: React.FC<HeaderProps> = ({
 
     const pathSegments = activeProject.path.split(/[\\/]/).filter(Boolean);
     return pathSegments[pathSegments.length - 1] ?? null;
-  });
+  }, [activeProject]);
   const quotaResults = useQuotaStore((state) => state.results);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isQuotaLoading = useQuotaStore((state) => state.isLoading);
@@ -490,6 +492,17 @@ export const Header: React.FC<HeaderProps> = ({
   const openDirectory = React.useMemo(() => {
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
+
+  const actionDirectory = React.useMemo(() => {
+    return normalize(openDirectory || activeProject?.path || '');
+  }, [activeProject?.path, openDirectory]);
+
+  const activeProjectRef = React.useMemo(() => {
+    if (!activeProject) {
+      return null;
+    }
+    return { id: activeProject.id, path: activeProject.path };
+  }, [activeProject]);
 
 
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
@@ -965,6 +978,14 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="mr-3 min-w-0 max-w-[16rem] truncate typography-ui-label font-medium text-foreground">
           {activeProjectLabel}
         </div>
+      )}
+
+      {activeProjectRef && actionDirectory && (
+        <ProjectActionsButton
+          projectRef={activeProjectRef}
+          directory={actionDirectory}
+          className="mr-1"
+        />
       )}
 
       {tabs.length > 0 && (
@@ -1505,6 +1526,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            {activeProjectRef && actionDirectory && (
+              <ProjectActionsButton
+                projectRef={activeProjectRef}
+                directory={actionDirectory}
+                compact
+                allowMobile
+                className="h-9"
+              />
+            )}
 
             {/* Mobile Services Menu (Usage + MCP) */}
             <DropdownMenu
@@ -1573,20 +1603,41 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))]">
                       <div className="bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
                         <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex flex-col min-w-0">
                             <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
                             <span className="truncate typography-ui-label text-muted-foreground">
                               Last updated {formatTime(quotaLastUpdated)}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <AnimatedTabs<'usage' | 'remaining'>
-                              value={quotaDisplayMode}
-                              onValueChange={handleDisplayModeChange}
-                              tabs={quotaDisplayTabs}
-                              size="sm"
-                              className="w-[10.5rem]"
-                            />
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Light-weight text toggle for Used/Remaining */}
+                            <div className="flex items-center h-6">
+                              <button
+                                type="button"
+                                onClick={() => handleDisplayModeChange('usage')}
+                                className={cn(
+                                  'typography-ui-label px-1 pb-0.5 transition-colors',
+                                  quotaDisplayMode === 'usage'
+                                    ? 'text-foreground border-b-2 border-[var(--primary-base)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                )}
+                              >
+                                Used
+                              </button>
+                              <span className="text-muted-foreground typography-ui-label px-0.5">·</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDisplayModeChange('remaining')}
+                                className={cn(
+                                  'typography-ui-label px-1 pb-0.5 transition-colors',
+                                  quotaDisplayMode === 'remaining'
+                                    ? 'text-foreground border-b-2 border-[var(--primary-base)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                )}
+                              >
+                                Remaining
+                              </button>
+                            </div>
                             <button
                               type="button"
                               className={cn(

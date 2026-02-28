@@ -1,3 +1,19 @@
+## [1.8.1] - 2026-02-28
+
+- No notable changes.
+
+## [1.8.0] - 2026-02-28
+
+- Chat: improved long-session performance with virtualized message rendering, smoother scrolling, and more stable behavior in large histories (thanks to @shekohex).
+- Chat: added drag-and-drop file attachments, so dropping files from Explorer into chat is now a first-class flow (thanks to @Asuta).
+- Chat: enabled markdown rendering in user messages for clearer formatted prompts and notes (thanks to @haofeng0705).
+- Chat: pasted absolute paths are now treated as normal messages, reducing accidental command-like sends.
+- Chat: fixed queued send behavior for inactive sessions to reduce accidental sends to the wrong conversation.
+- Chat: enabled bueatiful diffs for edit tools in chat (thanks to @shekohex).
+- UI: improved long filename handling in file-mention autocomplete so results stay readable while typing (thanks to @haofeng0705).
+- Usage: added MiniMax coding-plan quota provider support for broader usage tracking coverage (thanks to @nzlov).
+- Usage: added Ollama Cloud quota provider support for broader usage tracking coverage (thanks to @iamhenry).
+
 ## [1.7.5] - 2026-02-25
 
 - Sessions: improved switching performance so moving between chats feels more immediate.

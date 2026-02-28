@@ -2,12 +2,14 @@
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { RiAiAgentLine, RiArrowDownSLine, RiArrowRightSLine, RiBookLine, RiExternalLinkLine, RiFileEditLine, RiFileList2Line, RiFileSearchLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGlobalLine, RiListCheck2, RiListCheck3, RiMenuSearchLine, RiPencilLine, RiSurveyLine, RiTaskLine, RiTerminalBoxLine, RiToolsLine } from '@remixicon/react';
+import { File as PierreFile, PatchDiff } from '@pierre/diffs/react';
 import { cn } from '@/lib/utils';
 import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
 import { getToolMetadata, getLanguageFromExtension, isImageFile, getImageMimeType } from '@/lib/toolHelpers';
 import type { ToolPart as ToolPartType, ToolState as ToolStateUnion } from '@opencode-ai/sdk/v2';
 import { toolDisplayStyles } from '@/lib/typography';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
@@ -15,6 +17,8 @@ import { opencodeClient } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 import type { ToolPopupContent } from '../types';
+import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
+import { getDefaultTheme } from '@/lib/theme/themes';
 
 import {
     renderListOutput,
@@ -22,12 +26,12 @@ import {
     renderGlobOutput,
     renderTodoOutput,
     renderWebSearchOutput,
-    parseDiffToUnified,
     formatEditOutput,
     detectLanguageFromOutput,
     formatInputForDisplay,
     parseReadToolOutput,
 } from '../toolRenderers';
+import { DiffViewToggle, type DiffViewMode } from '../DiffViewToggle';
 import { VirtualizedCodeBlock, type CodeLine } from './VirtualizedCodeBlock';
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
@@ -165,6 +169,40 @@ const getRelativePath = (absolutePath: string, currentDirectory: string, isMobil
     }
 
     return absolutePath;
+};
+
+const usePierreThemeConfig = () => {
+    const themeSystem = useOptionalThemeSystem();
+    const fallbackLightTheme = React.useMemo(() => getDefaultTheme(false), []);
+    const fallbackDarkTheme = React.useMemo(() => getDefaultTheme(true), []);
+
+    const availableThemes = React.useMemo(
+        () => themeSystem?.availableThemes ?? [fallbackLightTheme, fallbackDarkTheme],
+        [fallbackDarkTheme, fallbackLightTheme, themeSystem?.availableThemes],
+    );
+    const lightThemeId = themeSystem?.lightThemeId ?? fallbackLightTheme.metadata.id;
+    const darkThemeId = themeSystem?.darkThemeId ?? fallbackDarkTheme.metadata.id;
+
+    const lightTheme = React.useMemo(
+        () => availableThemes.find((theme) => theme.metadata.id === lightThemeId) ?? fallbackLightTheme,
+        [availableThemes, fallbackLightTheme, lightThemeId],
+    );
+    const darkTheme = React.useMemo(
+        () => availableThemes.find((theme) => theme.metadata.id === darkThemeId) ?? fallbackDarkTheme,
+        [availableThemes, darkThemeId, fallbackDarkTheme],
+    );
+
+    React.useEffect(() => {
+        ensurePierreThemeRegistered(lightTheme);
+        ensurePierreThemeRegistered(darkTheme);
+    }, [darkTheme, lightTheme]);
+
+    const currentVariant = themeSystem?.currentTheme.metadata.variant ?? 'light';
+
+    return {
+        pierreTheme: { light: lightTheme.metadata.id, dark: darkTheme.metadata.id },
+        pierreThemeType: currentVariant === 'dark' ? ('dark' as const) : ('light' as const),
+    };
 };
 
 // Parse question tool output: "User has answered your questions: "Q1"="A1", "Q2"="A2". You can now..."
@@ -516,7 +554,8 @@ const TaskToolSummary: React.FC<{
     output?: string;
     sessionId?: string;
     onShowPopup?: (content: ToolPopupContent) => void;
-}> = ({ entries, isExpanded, hasPrevTool, hasNextTool, output, sessionId, onShowPopup }) => {
+    input?: Record<string, unknown>;
+}> = ({ entries, isExpanded, hasPrevTool, hasNextTool, output, sessionId, onShowPopup, input }) => {
     const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
     const displayEntries = React.useMemo(() => {
         const nonPending = entries.filter((entry) => entry.state?.status !== 'pending');
@@ -535,6 +574,10 @@ const TaskToolSummary: React.FC<{
             setCurrentSession(sessionId);
         }
     };
+
+    const agentType = typeof input?.subagent_type === 'string'
+        ? input.subagent_type
+        : 'subagent';
 
     if (displayEntries.length === 0 && !hasOutput && !sessionId) {
         return null;
@@ -589,7 +632,7 @@ const TaskToolSummary: React.FC<{
                     onClick={handleOpenSession}
                 >
                     <RiExternalLinkLine className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span className="typography-meta text-primary font-medium">Open subAgent session</span>
+                    <span className="typography-meta text-primary font-medium">Open {agentType.charAt(0).toUpperCase() + agentType.slice(1)} subtask</span>
                 </button>
             )}
 
@@ -627,49 +670,128 @@ const TaskToolSummary: React.FC<{
 
 interface DiffPreviewProps {
     diff: string;
-    syntaxTheme: { [key: string]: React.CSSProperties };
-    input?: ToolStateWithMetadata['input'];
+    pierreTheme: { light: string; dark: string };
+    pierreThemeType: 'light' | 'dark';
+    diffViewMode: DiffViewMode;
 }
 
-const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, syntaxTheme, input }) => {
-    const hunks = React.useMemo(() => parseDiffToUnified(diff), [diff]);
+const TOOL_DIFF_UNSAFE_CSS = `
+  [data-diff-header],
+  [data-diff] {
+    [data-separator] {
+      height: 24px !important;
+    }
+  }
+`;
+
+const TOOL_DIFF_METRICS = {
+    hunkLineCount: 50,
+    lineHeight: 24,
+    diffHeaderHeight: 44,
+    hunkSeparatorHeight: 24,
+    fileGap: 0,
+};
+
+type DiffPatchEntry = {
+    id: string;
+    title: string;
+    patch: string;
+};
+
+const renderPathLikeGitChanges = (path: string) => {
+    const lastSlash = path.lastIndexOf('/');
+    if (lastSlash === -1) {
+        return <span className="truncate text-foreground">{path}</span>;
+    }
+
+    const dir = path.slice(0, lastSlash);
+    const name = path.slice(lastSlash + 1);
 
     return (
-        <div className="typography-code px-1 pb-1 pt-0 space-y-0">
-            {hunks.map((hunk, hunkIdx) => {
-                const lang = getLanguageFromExtension(
-                    typeof input?.file_path === 'string' ? input.file_path
-                    : typeof input?.filePath === 'string' ? input.filePath
-                    : hunk.file
-                ) || 'text';
+        <span className="flex min-w-0 items-baseline overflow-hidden" title={path}>
+            <span className="min-w-0 truncate text-muted-foreground" style={{ direction: 'rtl', textAlign: 'left' }}>
+                {dir}
+            </span>
+            <span className="flex-shrink-0">
+                <span className="text-muted-foreground">/</span>
+                <span className="text-foreground">{name}</span>
+            </span>
+        </span>
+    );
+};
 
-                const codeLines: CodeLine[] = hunk.lines.map((line) => ({
-                    text: line.content,
-                    lineNumber: line.lineNumber || null,
-                    type: line.type as CodeLine['type'],
-                }));
+const getDiffPatchEntries = (
+    metadata: Record<string, unknown> | undefined,
+    fallbackDiff: string,
+    currentDirectory: string,
+    isMobile: boolean,
+): DiffPatchEntry[] => {
+    const files = Array.isArray(metadata?.files) ? metadata.files : [];
 
-                return (
-                    <div key={hunkIdx} className="-mx-1 px-1 last:border-b-0" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
-                        <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground break-words -mx-1" style={{ borderBottomWidth: '1px', borderBottomColor: 'var(--tools-border)' }}>
-                            {`${hunk.file} (line ${hunk.oldStart})`}
-                        </div>
-                        <VirtualizedCodeBlock
-                            lines={codeLines}
-                            language={lang}
-                            syntaxTheme={syntaxTheme}
-                            maxHeight="50vh"
-                            lineStyles={(line) =>
-                                line.type === 'removed'
-                                    ? { backgroundColor: 'var(--tools-edit-removed-bg)', color: 'var(--tools-edit-removed)' }
-                                    : line.type === 'added'
-                                        ? { backgroundColor: 'var(--tools-edit-added-bg)', color: 'var(--tools-edit-added)' }
-                                        : undefined
-                            }
-                        />
-                    </div>
-                );
-            })}
+    const entries = files
+        .map((file, index) => {
+            if (!file || typeof file !== 'object') {
+                return null;
+            }
+
+            const record = file as { relativePath?: unknown; filePath?: unknown; diff?: unknown };
+            const patch = typeof record.diff === 'string' ? record.diff.trim() : '';
+            if (!patch) {
+                return null;
+            }
+
+            const rawPath = typeof record.relativePath === 'string'
+                ? record.relativePath
+                : typeof record.filePath === 'string'
+                    ? record.filePath
+                    : `File ${index + 1}`;
+
+            const title = typeof rawPath === 'string'
+                ? getRelativePath(rawPath, currentDirectory, isMobile)
+                : `File ${index + 1}`;
+
+            return {
+                id: `${title}-${index}`,
+                title,
+                patch,
+            } satisfies DiffPatchEntry;
+        })
+        .filter((entry): entry is DiffPatchEntry => entry !== null);
+
+    if (entries.length > 0) {
+        return entries;
+    }
+
+    return [
+        {
+            id: 'diff-0',
+            title: 'Diff',
+            patch: fallbackDiff,
+        },
+    ];
+};
+
+const DiffPreview: React.FC<DiffPreviewProps> = React.memo(({ diff, pierreTheme, pierreThemeType, diffViewMode }) => {
+    return (
+        <div className="typography-code px-1 pb-1 pt-0">
+            <PatchDiff
+                patch={diff}
+                metrics={TOOL_DIFF_METRICS}
+                options={{
+                    diffStyle: diffViewMode === 'side-by-side' ? 'split' : 'unified',
+                    diffIndicators: 'none',
+                    hunkSeparators: 'line-info-basic',
+                    lineDiffType: 'none',
+                    disableFileHeader: true,
+                    maxLineDiffLength: 1000,
+                    expansionLineCount: 20,
+                    overflow: 'wrap',
+                    theme: pierreTheme,
+                    themeType: pierreThemeType,
+                    unsafeCSS: TOOL_DIFF_UNSAFE_CSS,
+                }}
+                className="block w-full"
+            />
         </div>
     );
 });
@@ -678,26 +800,25 @@ DiffPreview.displayName = 'DiffPreview';
 
 interface WriteInputPreviewProps {
     content: string;
-    syntaxTheme: { [key: string]: React.CSSProperties };
     filePath?: string;
     displayPath: string;
+    pierreTheme: { light: string; dark: string };
+    pierreThemeType: 'light' | 'dark';
 }
 
-const WriteInputPreview: React.FC<WriteInputPreviewProps> = React.memo(({ content, syntaxTheme, filePath, displayPath }) => {
+const WriteInputPreview: React.FC<WriteInputPreviewProps> = React.memo(({
+    content,
+    filePath,
+    displayPath,
+    pierreTheme,
+    pierreThemeType,
+}) => {
     const language = React.useMemo(
         () => getLanguageFromExtension(filePath ?? '') || detectLanguageFromOutput(content, 'write', filePath ? { filePath } : undefined),
         [content, filePath]
     );
 
-    const codeLines: CodeLine[] = React.useMemo(() => {
-        const rawLines = content.split('\n');
-        return rawLines.map((text, idx) => ({
-            text: text || ' ',
-            lineNumber: idx + 1,
-        }));
-    }, [content]);
-
-    const lineCount = Math.max(codeLines.length, 1);
+    const lineCount = Math.max(content.split('\n').length, 1);
     const headerLineLabel = lineCount === 1 ? 'line 1' : `lines 1-${lineCount}`;
 
     return (
@@ -705,11 +826,19 @@ const WriteInputPreview: React.FC<WriteInputPreviewProps> = React.memo(({ conten
             <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground rounded-lg mb-1" style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}>
                 {`${displayPath} (${headerLineLabel})`}
             </div>
-            <VirtualizedCodeBlock
-                lines={codeLines}
-                language={language || 'text'}
-                syntaxTheme={syntaxTheme}
-                maxHeight="50vh"
+            <PierreFile
+                file={{
+                    name: displayPath,
+                    contents: content,
+                    lang: language || undefined,
+                }}
+                options={{
+                    disableFileHeader: true,
+                    overflow: 'wrap',
+                    theme: pierreTheme,
+                    themeType: pierreThemeType,
+                }}
+                className="block w-full"
             />
         </div>
     );
@@ -723,6 +852,8 @@ interface ReadToolVirtualizedProps {
     input?: Record<string, unknown>;
     syntaxTheme: { [key: string]: React.CSSProperties };
     toolName: string;
+    pierreTheme: { light: string; dark: string };
+    pierreThemeType: 'light' | 'dark';
     renderScrollableBlock: (
         content: React.ReactNode,
         options?: { maxHeightClass?: string; className?: string; disableHorizontal?: boolean; outerClassName?: string }
@@ -734,40 +865,52 @@ const ReadToolVirtualized: React.FC<ReadToolVirtualizedProps> = React.memo(({
     input,
     syntaxTheme,
     toolName,
+    pierreTheme,
+    pierreThemeType,
     renderScrollableBlock,
 }) => {
     const parsedReadOutput = React.useMemo(() => parseReadToolOutput(outputString), [outputString]);
-    const offset = typeof input?.offset === 'number' ? input.offset : 0;
-
-    const codeLines: CodeLine[] = React.useMemo(() => {
-        const hasExplicitLineNumbers = parsedReadOutput.lines.some((line) => line.lineNumber !== null);
-        let fallbackLineCursor = offset;
-
-        return parsedReadOutput.lines.map((line) => {
-            if (line.lineNumber !== null) {
-                fallbackLineCursor = line.lineNumber;
-            }
-            const shouldAssignFallback =
-                parsedReadOutput.type === 'file'
-                && !hasExplicitLineNumbers
-                && line.lineNumber === null
-                && !line.isInfo;
-            const effectiveLineNumber = line.lineNumber ?? (shouldAssignFallback
-                ? (fallbackLineCursor += 1)
-                : null);
-
-            return {
-                text: line.text,
-                lineNumber: effectiveLineNumber,
-                isInfo: line.isInfo,
-            };
-        });
-    }, [parsedReadOutput, offset]);
 
     const language = React.useMemo(() => {
         const contentForLanguage = parsedReadOutput.lines.map((l) => l.text).join('\n');
         return detectLanguageFromOutput(contentForLanguage, toolName, input as Record<string, unknown>);
     }, [parsedReadOutput, toolName, input]);
+
+    const filePath =
+        typeof input?.filePath === 'string'
+            ? input.filePath
+            : typeof input?.file_path === 'string'
+                ? input.file_path
+                : typeof input?.path === 'string'
+                    ? input.path
+                    : 'read-output';
+
+    const codeLines: CodeLine[] = React.useMemo(() => parsedReadOutput.lines.map((line) => ({
+        text: line.text,
+        lineNumber: line.lineNumber,
+        isInfo: line.isInfo,
+    })), [parsedReadOutput]);
+
+    if (parsedReadOutput.type === 'file') {
+        const fileContent = parsedReadOutput.lines.map((line) => line.text).join('\n');
+        return renderScrollableBlock(
+            <PierreFile
+                file={{
+                    name: filePath,
+                    contents: fileContent,
+                    lang: language || undefined,
+                }}
+                options={{
+                    disableFileHeader: true,
+                    overflow: 'wrap',
+                    theme: pierreTheme,
+                    themeType: pierreThemeType,
+                }}
+                className="block w-full"
+            />,
+            { className: 'p-1' }
+        ) as React.ReactElement;
+    }
 
     return renderScrollableBlock(
         <VirtualizedCodeBlock
@@ -845,6 +988,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     hasPrevTool,
     hasNextTool,
 }) => {
+    const { pierreTheme, pierreThemeType } = usePierreThemeConfig();
+    const [diffViewMode, setDiffViewMode] = React.useState<DiffViewMode>('unified');
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
     const input = stateWithData.input;
@@ -853,6 +998,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     const outputString = typeof rawOutput === 'string' ? rawOutput : '';
 
     const diffContent = typeof metadata?.diff === 'string' ? (metadata.diff as string) : null;
+    const diffEntries = React.useMemo(
+        () => (diffContent ? getDiffPatchEntries(metadata, diffContent, currentDirectory, isMobile) : []),
+        [currentDirectory, diffContent, isMobile, metadata]
+    );
     const writeFilePath = part.tool === 'write'
         ? typeof input?.filePath === 'string'
             ? input.filePath
@@ -891,6 +1040,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
         return formatInputForDisplay(input, part.tool);
     }, [input, part.tool]);
     const hasInputText = part.tool !== 'apply_patch' && inputTextContent.trim().length > 0;
+
+    React.useEffect(() => {
+        setDiffViewMode('unified');
+    }, [part.id]);
 
     const renderScrollableBlock = (
         content: React.ReactNode,
@@ -1040,9 +1193,25 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
             );
         }
 
-        if ((part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') && diffContent) {
+        if ((part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') && diffEntries.length > 0) {
             return renderScrollableBlock(
-                <DiffPreview diff={diffContent} syntaxTheme={syntaxTheme} input={input} />,
+                <div className="space-y-3">
+                    {diffEntries.map((entry) => (
+                        <div key={entry.id} className="w-full min-w-0">
+                            {diffEntries.length > 1 ? (
+                                <div className="bg-muted/20 px-2 py-1 typography-meta font-medium text-muted-foreground rounded-lg mb-1" style={{ borderWidth: '1px', borderColor: 'var(--tools-border)' }}>
+                                    {renderPathLikeGitChanges(entry.title)}
+                                </div>
+                            ) : null}
+                            <DiffPreview
+                                diff={entry.patch}
+                                pierreTheme={pierreTheme}
+                                pierreThemeType={pierreThemeType}
+                                diffViewMode={diffViewMode}
+                            />
+                        </div>
+                    ))}
+                </div>,
                 { className: 'p-1' }
             );
         }
@@ -1054,6 +1223,8 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                     input={input}
                     syntaxTheme={syntaxTheme}
                     toolName={part.tool}
+                    pierreTheme={pierreTheme}
+                    pierreThemeType={pierreThemeType}
                     renderScrollableBlock={renderScrollableBlock}
                 />;
             }
@@ -1122,9 +1293,10 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                             {renderScrollableBlock(
                                 <WriteInputPreview
                                     content={writeInputContent as string}
-                                    syntaxTheme={syntaxTheme}
                                     filePath={writeFilePath}
                                     displayPath={writeDisplayPath ?? 'New file'}
+                                    pierreTheme={pierreTheme}
+                                    pierreThemeType={pierreThemeType}
                                 />
                             )}
                         </div>
@@ -1141,8 +1313,17 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
 
                     {part.tool !== 'write' && state.status === 'completed' && 'output' in state && (
                         <div>
-                            <div className="typography-meta font-medium text-muted-foreground/80 mb-1">
-                                Result:
+                            <div className="mb-1 flex items-center justify-between gap-2">
+                                <div className="typography-meta font-medium text-muted-foreground/80">
+                                    Result:
+                                </div>
+                                {(part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') && diffContent ? (
+                                    <DiffViewToggle
+                                        mode={diffViewMode}
+                                        onModeChange={setDiffViewMode}
+                                        className="h-5 w-5 p-0"
+                                    />
+                                ) : null}
                             </div>
                             {renderResultContent()}
                         </div>
@@ -1190,49 +1371,53 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
 
 
-    const previousExpandedRef = React.useRef<boolean | undefined>(isExpanded);
+    const shouldNotifyStructuralChange = isFinalized || isTaskTool;
 
     React.useEffect(() => {
-        if (!isFinalized && !isTaskTool) {
+        if (!shouldNotifyStructuralChange) {
             return;
         }
-        if (previousExpandedRef.current === isExpanded) {
-            return;
-        }
-        previousExpandedRef.current = isExpanded;
         if (typeof isExpanded === 'boolean') {
             onContentChange?.('structural');
         }
-    }, [isExpanded, isFinalized, isTaskTool, onContentChange]);
+    }, [isExpanded, onContentChange, shouldNotifyStructuralChange]);
 
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
     const input = stateWithData.input;
     const time = stateWithData.time;
 
-    // Pin start/end so a server-side time reset doesn't reset UI duration.
-    const pinnedTaskTimeRef = React.useRef<{ start?: number; end?: number }>({});
-    const lastPinnedTaskIdRef = React.useRef<string>(part.id);
+    const [pinnedTaskTime, setPinnedTaskTime] = React.useState<{ start?: number; end?: number }>({});
 
-    if (lastPinnedTaskIdRef.current !== part.id) {
-        lastPinnedTaskIdRef.current = part.id;
-        pinnedTaskTimeRef.current = {};
-    }
+    React.useEffect(() => {
+        setPinnedTaskTime({});
+    }, [part.id]);
 
-    if (isTaskTool) {
-        if (typeof time?.start === 'number') {
-            const pinnedStart = pinnedTaskTimeRef.current.start;
-            if (typeof pinnedStart !== 'number' || time.start < pinnedStart) {
-                pinnedTaskTimeRef.current.start = time.start;
+    React.useEffect(() => {
+        if (!isTaskTool) {
+            return;
+        }
+
+        setPinnedTaskTime((prev) => {
+            const next = { ...prev };
+            let changed = false;
+
+            if (typeof time?.start === 'number' && (typeof prev.start !== 'number' || time.start < prev.start)) {
+                next.start = time.start;
+                changed = true;
             }
-        }
-        if (typeof time?.end === 'number') {
-            pinnedTaskTimeRef.current.end = time.end;
-        }
-    }
 
-    const effectiveTimeStart = isTaskTool ? (pinnedTaskTimeRef.current.start ?? time?.start) : time?.start;
-    const effectiveTimeEnd = isTaskTool ? (pinnedTaskTimeRef.current.end ?? time?.end) : time?.end;
+            if (typeof time?.end === 'number' && prev.end !== time.end) {
+                next.end = time.end;
+                changed = true;
+            }
+
+            return changed ? next : prev;
+        });
+    }, [isTaskTool, time?.end, time?.start]);
+
+    const effectiveTimeStart = isTaskTool ? (pinnedTaskTime.start ?? time?.start) : time?.start;
+    const effectiveTimeEnd = isTaskTool ? (pinnedTaskTime.end ?? time?.end) : time?.end;
 
     const taskOutputString = React.useMemo(() => {
         return typeof stateWithData.output === 'string' ? stateWithData.output : undefined;
@@ -1371,7 +1556,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const runtime = React.useContext(RuntimeAPIContext);
 
-    const handleMainClick = (e: React.MouseEvent) => {
+    const handleMainClick = (e: { stopPropagation: () => void }) => {
         if (isTaskTool || !runtime?.editor) {
             onToggle(part.id);
             return;
@@ -1400,6 +1585,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
         }
     };
 
+    const handleMainKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+            return;
+        }
+        event.preventDefault();
+        handleMainClick(event);
+    };
+
     if (!isFinalized && !isTaskTool) {
         return null;
     }
@@ -1412,10 +1605,18 @@ const ToolPart: React.FC<ToolPartProps> = ({
                     'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer'
                 )}
                 onClick={handleMainClick}
+                onKeyDown={handleMainKeyDown}
+                role="button"
+                tabIndex={0}
             >
                 <div className="flex items-center gap-2 flex-shrink-0">
                     {}
-                    <div className="relative h-3.5 w-3.5 flex-shrink-0" onClick={(e) => { e.stopPropagation(); onToggle(part.id); }}>
+                    <button
+                        type="button"
+                        className="relative h-3.5 w-3.5 flex-shrink-0"
+                        onClick={(event) => { event.stopPropagation(); onToggle(part.id); }}
+                        aria-label={isExpanded ? 'Collapse tool details' : 'Expand tool details'}
+                    >
                         {}
                         <div
                             className={cn(
@@ -1438,7 +1639,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                         >
                             {isExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
                         </div>
-                    </div>
+                    </button>
                     <span
                         className="typography-meta font-medium"
                         style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
@@ -1487,6 +1688,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                     output={taskOutputString}
                     sessionId={taskSessionId}
                     onShowPopup={onShowPopup}
+                    input={input}
                 />
             ) : null}
 

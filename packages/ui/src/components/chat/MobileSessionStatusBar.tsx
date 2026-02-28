@@ -9,10 +9,10 @@ import { cn, formatDirectoryName } from '@/lib/utils';
 import { getAgentColor } from '@/lib/agentColors';
 import { RiLoader4Line, RiAddLine } from '@remixicon/react';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
-import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP } from '@/lib/projectMeta';
+import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP, getProjectIconImageUrl } from '@/lib/projectMeta';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { toast } from '@/components/ui';
-import { isTauriShell, isDesktopLocalOriginActive } from '@/lib/desktop';
+import { isTauriShell, isDesktopLocalOriginActive, requestDirectoryAccess } from '@/lib/desktop';
 import { sessionEvents } from '@/lib/sessionEvents';
 import {
   Dialog,
@@ -184,72 +184,61 @@ function useProjectStatus(
   const sessionsByDirectory = useSessionStore((state) => state.sessionsByDirectory);
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
 
-  const projectStatusMap = React.useMemo(() => {
-    const result = new Map<string, { hasRunning: boolean; hasUnread: boolean }>();
-
+  const projectStatusMap = React.useCallback((projectPath: string): { hasRunning: boolean; hasUnread: boolean } => {
     const getStatusType = (sessionId: string): 'busy' | 'retry' | 'idle' => {
       const status = sessionStatus?.get(sessionId);
       if (status?.type === 'busy' || status?.type === 'retry') return status.type;
       return 'idle';
     };
 
-    return (projectPath: string): { hasRunning: boolean; hasUnread: boolean } => {
-      const cached = result.get(projectPath);
-      if (cached) return cached;
+    const projectRoot = normalize(projectPath);
+    if (!projectRoot) {
+      return { hasRunning: false, hasUnread: false };
+    }
 
-      const projectRoot = normalize(projectPath);
-      if (!projectRoot) {
-        const empty = { hasRunning: false, hasUnread: false };
-        result.set(projectPath, empty);
-        return empty;
-      }
-
-      const dirs: string[] = [projectRoot];
-      const worktrees = availableWorktreesByProject.get(projectRoot) ?? [];
-      for (const meta of worktrees) {
-        const p = (meta && typeof meta === 'object' && 'path' in meta) ? (meta as { path?: unknown }).path : null;
-        if (typeof p === 'string' && p.trim()) {
-          const normalized = normalize(p);
-          if (normalized && normalized !== projectRoot) {
-            dirs.push(normalized);
-          }
+    const dirs: string[] = [projectRoot];
+    const worktrees = availableWorktreesByProject.get(projectRoot) ?? [];
+    for (const meta of worktrees) {
+      const p = (meta && typeof meta === 'object' && 'path' in meta) ? (meta as { path?: unknown }).path : null;
+      if (typeof p === 'string' && p.trim()) {
+        const normalized = normalize(p);
+        if (normalized && normalized !== projectRoot) {
+          dirs.push(normalized);
         }
       }
+    }
 
-      const seen = new Set<string>();
-      let hasRunning = false;
-      let hasUnread = false;
+    const seen = new Set<string>();
+    let hasRunning = false;
+    let hasUnread = false;
 
-      for (const dir of dirs) {
-        const list = sessionsByDirectory.get(dir) ?? getSessionsByDirectory(dir);
-        for (const session of list) {
-          if (!session?.id || seen.has(session.id)) {
-            continue;
-          }
-          seen.add(session.id);
-
-          const statusType = getStatusType(session.id);
-          if (statusType === 'busy' || statusType === 'retry') {
-            hasRunning = true;
-          }
-
-          if (session.id !== currentSessionId && sessionAttentionStates?.get(session.id)?.needsAttention === true) {
-            hasUnread = true;
-          }
-
-          if (hasRunning && hasUnread) {
-            break;
-          }
+    for (const dir of dirs) {
+      const list = sessionsByDirectory.get(dir) ?? getSessionsByDirectory(dir);
+      for (const session of list) {
+        if (!session?.id || seen.has(session.id)) {
+          continue;
         }
+        seen.add(session.id);
+
+        const statusType = getStatusType(session.id);
+        if (statusType === 'busy' || statusType === 'retry') {
+          hasRunning = true;
+        }
+
+        if (session.id !== currentSessionId && sessionAttentionStates?.get(session.id)?.needsAttention === true) {
+          hasUnread = true;
+        }
+
         if (hasRunning && hasUnread) {
           break;
         }
       }
+      if (hasRunning && hasUnread) {
+        break;
+      }
+    }
 
-      const status = { hasRunning, hasUnread };
-      result.set(projectPath, status);
-      return status;
-    };
+    return { hasRunning, hasUnread };
   }, [sessionsByDirectory, getSessionsByDirectory, availableWorktreesByProject, sessionStatus, sessionAttentionStates, currentSessionId]);
 
   return projectStatusMap;
@@ -390,21 +379,34 @@ interface SessionStatusHeaderProps {
   currentSessionTitle: string;
   currentProjectLabel?: string;
   currentProjectIcon?: string | null;
+  currentProjectIconImageUrl?: string | null;
+  currentProjectIconBackground?: string | null;
   currentProjectColor?: string | null;
   onToggle: () => void;
   isExpanded?: boolean;
+  childIndicators?: Array<{ session: Session; isRunning: boolean }>;
 }
 
 function SessionStatusHeader({
   currentSessionTitle,
   currentProjectLabel,
   currentProjectIcon,
+  currentProjectIconImageUrl,
+  currentProjectIconBackground,
   currentProjectColor,
   onToggle,
-  isExpanded = false
+  isExpanded = false,
+  childIndicators = []
 }: SessionStatusHeaderProps) {
+  const [imageFailed, setImageFailed] = React.useState(false);
   const ProjectIcon = currentProjectIcon ? PROJECT_ICON_MAP[currentProjectIcon] : null;
+  const imageUrl = !imageFailed ? currentProjectIconImageUrl : null;
   const projectColorVar = currentProjectColor ? (PROJECT_COLOR_MAP[currentProjectColor] ?? null) : null;
+  const extraCount = childIndicators.length > 3 ? childIndicators.length - 3 : 0;
+
+  React.useEffect(() => {
+    setImageFailed(false);
+  }, [currentProjectIconImageUrl]);
 
   return (
     <button
@@ -415,7 +417,20 @@ function SessionStatusHeader({
       {!isExpanded && currentProjectLabel && (
         <div className="flex flex-col items-start">
           <div className="flex items-center gap-1 leading-none">
-            {ProjectIcon && (
+            {imageUrl ? (
+              <span
+                className="inline-flex h-2.5 w-2.5 items-center justify-center overflow-hidden rounded-[1px]"
+                style={currentProjectIconBackground ? { backgroundColor: currentProjectIconBackground } : undefined}
+              >
+                <img
+                  src={imageUrl}
+                  alt=""
+                  className="h-full w-full object-contain"
+                  draggable={false}
+                  onError={() => setImageFailed(true)}
+                />
+              </span>
+            ) : ProjectIcon && (
               <ProjectIcon
                 className="h-2.5 w-2.5"
                 style={projectColorVar ? { color: projectColorVar } : undefined}
@@ -431,9 +446,40 @@ function SessionStatusHeader({
           <div className="w-full h-px bg-[var(--interactive-border)] my-1" />
         </div>
       )}
-      <span className="text-[13px] text-[var(--surface-foreground)] truncate leading-none">
-        {currentSessionTitle}
-      </span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[13px] text-[var(--surface-foreground)] truncate leading-none">
+          {currentSessionTitle}
+        </span>
+        {childIndicators.length > 0 && (
+          <div className="flex items-center gap-0.5 text-[var(--surface-mutedForeground)]">
+            <span className="text-[10px]">[</span>
+            <div className="flex items-center gap-0.5">
+              {childIndicators.slice(0, 3).map((child) => {
+                const childAgent = (child.session as { agent?: string }).agent || 'agent';
+                const childColor = getAgentColor(childAgent);
+                return (
+                  <div
+                    key={child.session.id}
+                    className="flex-shrink-0"
+                    title={`Sub-session: ${child.session.title || 'Untitled'}`}
+                  >
+                    <RiLoader4Line
+                      className="h-2.5 w-2.5 animate-spin"
+                      style={{ color: `var(${childColor.var})` }}
+                    />
+                  </div>
+                );
+              })}
+              {extraCount > 0 && (
+                <span className="text-[10px] text-[var(--surface-mutedForeground)]">
+                  +{extraCount}
+                </span>
+              )}
+            </div>
+            <span className="text-[10px]">]</span>
+          </div>
+        )}
+      </div>
     </button>
   );
 }
@@ -500,7 +546,13 @@ function ProjectButton({
   onRemoveProject,
   formatProjectLabel,
 }: ProjectButtonProps) {
+  const [imageFailed, setImageFailed] = React.useState(false);
   const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+  const projectIconImageUrl = !imageFailed ? getProjectIconImageUrl(project) : null;
+
+  React.useEffect(() => {
+    setImageFailed(false);
+  }, [project.id, project.iconImage?.updatedAt]);
 
   const longPressHandlers = useLongPress(
     () => {
@@ -535,7 +587,20 @@ function ProjectButton({
       </div>
 
       {/* Icon */}
-      {ProjectIcon && (
+      {projectIconImageUrl ? (
+        <span
+          className="inline-flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-[2px]"
+          style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+        >
+          <img
+            src={projectIconImageUrl}
+            alt=""
+            className="h-full w-full object-contain"
+            draggable={false}
+            onError={() => setImageFailed(true)}
+          />
+        </span>
+      ) : ProjectIcon && (
         <ProjectIcon
           className="h-3.5 w-3.5"
           style={projectColorVar ? { color: projectColorVar } : undefined}
@@ -718,22 +783,28 @@ function CollapsedView({
   currentSessionTitle,
   currentProjectLabel,
   currentProjectIcon,
+  currentProjectIconImageUrl,
+  currentProjectIconBackground,
   currentProjectColor,
   onToggle,
   onNewSession,
   cornerRadius,
   contextUsage,
+  childIndicators = [],
 }: {
   runningCount: number;
   unreadCount: number;
   currentSessionTitle: string;
   currentProjectLabel?: string;
   currentProjectIcon?: string | null;
+  currentProjectIconImageUrl?: string | null;
+  currentProjectIconBackground?: string | null;
   currentProjectColor?: string | null;
   onToggle: () => void;
   onNewSession: () => void;
   cornerRadius?: number;
   contextUsage: SessionContextUsage | null;
+  childIndicators?: Array<{ session: Session; isRunning: boolean }>;
 }) {
   const { handleTouchStart, handleTouchMove, handleTouchEnd } = useDrawerSwipe();
 
@@ -753,8 +824,11 @@ function CollapsedView({
           currentSessionTitle={currentSessionTitle}
           currentProjectLabel={currentProjectLabel}
           currentProjectIcon={currentProjectIcon}
+          currentProjectIconImageUrl={currentProjectIconImageUrl}
+          currentProjectIconBackground={currentProjectIconBackground}
           currentProjectColor={currentProjectColor}
           onToggle={onToggle}
+          childIndicators={childIndicators}
         />
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -790,6 +864,8 @@ function ExpandedView({
   currentSessionTitle,
   currentProjectLabel,
   currentProjectIcon,
+  currentProjectIconImageUrl,
+  currentProjectIconBackground,
   currentProjectColor,
   isExpanded,
   onToggleCollapse,
@@ -808,6 +884,7 @@ function ExpandedView({
   activeProjectId,
   getProjectStatus,
   homeDirectory,
+  childIndicators = [],
 }: {
   sessions: SessionWithStatus[];
   currentSessionId: string;
@@ -816,6 +893,8 @@ function ExpandedView({
   currentSessionTitle: string;
   currentProjectLabel?: string;
   currentProjectIcon?: string | null;
+  currentProjectIconImageUrl?: string | null;
+  currentProjectIconBackground?: string | null;
   currentProjectColor?: string | null;
   isExpanded: boolean;
   onToggleCollapse: () => void;
@@ -834,6 +913,7 @@ function ExpandedView({
   activeProjectId: string | null;
   getProjectStatus: (path: string) => { hasRunning: boolean; hasUnread: boolean };
   homeDirectory: string | null;
+  childIndicators?: Array<{ session: Session; isRunning: boolean }>;
 }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [collapsedHeight, setCollapsedHeight] = React.useState<number | null>(null);
@@ -897,9 +977,12 @@ function ExpandedView({
             currentSessionTitle={currentSessionTitle}
             currentProjectLabel={currentProjectLabel}
             currentProjectIcon={currentProjectIcon}
+            currentProjectIconImageUrl={currentProjectIconImageUrl}
+            currentProjectIconBackground={currentProjectIconBackground}
             currentProjectColor={currentProjectColor}
             onToggle={onToggleCollapse}
             isExpanded={true}
+            childIndicators={childIndicators}
           />
         </div>
         <div
@@ -1006,9 +1089,15 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
     ? getSessionTitle(currentSession)
     : '← Swipe here to open sidebars →';
 
+  // Calculate current session's child indicators
+  const currentSessionWithStatus = sortedSessions.find((s) => s.id === currentSessionId);
+  const currentSessionChildIndicators = currentSessionWithStatus?._childIndicators ?? [];
+
   const activeProject = getActiveProject();
   const currentProjectLabel = activeProject?.label || formatDirectoryName(activeProject?.path || '', homeDirectory);
   const currentProjectIcon = activeProject?.icon;
+  const currentProjectIconImageUrl = activeProject ? getProjectIconImageUrl(activeProject) : null;
+  const currentProjectIconBackground = activeProject?.iconBackground ?? null;
   const currentProjectColor = activeProject?.color;
 
   // Calculate token usage for current session
@@ -1053,8 +1142,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       sessionEvents.requestDirectoryDialog();
       return;
     }
-    import('@/lib/desktop')
-      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+    requestDirectoryAccess('')
       .then((result) => {
         if (result.success && result.path) {
           const added = addProject(result.path, { id: result.projectId });
@@ -1083,11 +1171,14 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
         currentSessionTitle={currentSessionTitle}
         currentProjectLabel={currentProjectLabel}
         currentProjectIcon={currentProjectIcon}
+        currentProjectIconImageUrl={currentProjectIconImageUrl}
+        currentProjectIconBackground={currentProjectIconBackground}
         currentProjectColor={currentProjectColor}
         onToggle={() => setIsMobileSessionStatusBarCollapsed(false)}
         onNewSession={handleCreateSession}
         cornerRadius={cornerRadius}
         contextUsage={contextUsage}
+        childIndicators={currentSessionChildIndicators}
       />
     );
   }
@@ -1101,6 +1192,8 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       currentSessionTitle={currentSessionTitle}
       currentProjectLabel={currentProjectLabel}
       currentProjectIcon={currentProjectIcon}
+      currentProjectIconImageUrl={currentProjectIconImageUrl}
+      currentProjectIconBackground={currentProjectIconBackground}
       currentProjectColor={currentProjectColor}
       isExpanded={isExpanded}
       onToggleCollapse={() => {
@@ -1122,6 +1215,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
       activeProjectId={activeProjectId}
       getProjectStatus={getProjectStatus}
       homeDirectory={homeDirectory}
+      childIndicators={currentSessionChildIndicators}
     />
   );
 };
