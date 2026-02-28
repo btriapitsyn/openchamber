@@ -123,6 +123,7 @@
     "zustand": "^5.0.8"
   },
   "overrides": {
+    "@codemirror/language": "6.12.2",
     "@codemirror/view": "6.39.13"
   },
   "devDependencies": {
