@@ -13096,12 +13096,16 @@ async function main(options = {}) {
               const bootstrapTtlMs = settings?.tunnelBootstrapTtlMs === null
                 ? null
                 : normalizeTunnelBootstrapTtlMs(settings?.tunnelBootstrapTtlMs);
-              tunnelAuthController.issueBootstrapToken({ ttlMs: bootstrapTtlMs });
-            }
-            if (onTunnelReady) {
-              if (tunnelUrl) {
-                onTunnelReady(tunnelUrl);
+              const bootstrapToken = tunnelAuthController.issueBootstrapToken({ ttlMs: bootstrapTtlMs });
+              const connectUrl = `${tunnelUrl.replace(/\/$/, '')}/connect?t=${encodeURIComponent(bootstrapToken.token)}`;
+              if (onTunnelReady) {
+                onTunnelReady(tunnelUrl, connectUrl);
+              } else {
+                console.log(`\n🌐 Tunnel URL: ${connectUrl}`);
+                console.log('🔑 One-time connect link (expires after first use)\n');
               }
+            } else if (onTunnelReady) {
+              onTunnelReady(tunnelUrl, null);
             }
           } catch (error) {
             console.error(`Failed to start Cloudflare tunnel: ${error.message}`);
