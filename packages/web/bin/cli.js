@@ -926,7 +926,7 @@ const commands = {
       executeUpdate,
       detectPackageManager,
       getCurrentVersion,
-    } = await import(packageManagerPath);
+    } = await import(pathToFileURL(packageManagerPath).href);
 
     // Check for running instances before update
     let runningInstances = [];
