@@ -98,7 +98,7 @@
     },
     "packages/desktop": {
       "name": "@openchamber/desktop",
-      "version": "1.8.0",
+      "version": "1.8.1",
       "devDependencies": {
         "@tauri-apps/cli": "^2",
         "@types/node": "^24.3.1",
@@ -107,7 +107,7 @@
     },
     "packages/ui": {
       "name": "@openchamber/ui",
-      "version": "1.8.0",
+      "version": "1.8.1",
       "dependencies": {
         "@codemirror/autocomplete": "^6.20.0",
         "@codemirror/commands": "^6.10.1",
@@ -211,7 +211,7 @@
     },
     "packages/vscode": {
       "name": "openchamber",
-      "version": "1.8.0",
+      "version": "1.8.1",
       "dependencies": {
         "@openchamber/ui": "workspace:*",
         "@opencode-ai/sdk": "^1.2.10",
@@ -234,7 +234,7 @@
     },
     "packages/web": {
       "name": "@openchamber/web",
-      "version": "1.8.0",
+      "version": "1.8.1",
       "bin": {
         "openchamber": "./bin/cli.js",
       },
