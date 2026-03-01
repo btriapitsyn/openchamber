@@ -2696,10 +2696,7 @@ const normalizeDeviceRecord = (entry) => {
   const expiresAt = Number.isFinite(entry.expiresAt) ? Number(entry.expiresAt) : createdAt + normalizedDeviceTokenTtlMs;
   const lastUsedAt = Number.isFinite(entry.lastUsedAt) ? Number(entry.lastUsedAt) : null;
   const userAgent = typeof entry.userAgent === 'string' ? entry.userAgent : '';
-  const platform = entry.platform && typeof entry.platform === 'object' ? {
-    ...(typeof entry.platform.os === 'string' && entry.platform.os.trim().length > 0 ? { os: entry.platform.os.trim() } : {}),
-    ...(typeof entry.platform.model === 'string' && entry.platform.model.trim().length > 0 ? { model: entry.platform.model.trim() } : {}),
-  } : {};
+  const platform = normalizeDevicePlatform(entry.platform);
 
   if (!id || !tokenHash) {
     return null;
@@ -2715,6 +2712,34 @@ const normalizeDeviceRecord = (entry) => {
     platform,
     tokenHash,
   };
+};
+
+const normalizeDevicePlatformField = (value, maxLength = 120) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.slice(0, maxLength);
+};
+
+const normalizeDevicePlatform = (value) => {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  const platform = {
+    ...(normalizeDevicePlatformField(value.os) ? { os: normalizeDevicePlatformField(value.os) } : {}),
+    ...(normalizeDevicePlatformField(value.model) ? { model: normalizeDevicePlatformField(value.model) } : {}),
+    ...(normalizeDevicePlatformField(value.version) ? { version: normalizeDevicePlatformField(value.version) } : {}),
+    ...(normalizeDevicePlatformField(value.arch) ? { arch: normalizeDevicePlatformField(value.arch) } : {}),
+    ...(normalizeDevicePlatformField(value.type) ? { type: normalizeDevicePlatformField(value.type) } : {}),
+    ...(normalizeDevicePlatformField(value.runtime) ? { runtime: normalizeDevicePlatformField(value.runtime, 32) } : {}),
+  };
+
+  return platform;
 };
 
 const readDeviceRecordsFromSettings = async () => {
@@ -2767,6 +2792,15 @@ const parseDevicePlatform = (userAgent) => {
     ...(os ? { os } : {}),
     ...(model ? { model } : {}),
   };
+};
+
+const resolveGrantPlatform = (requestedPlatform, userAgent) => {
+  const normalizedRequested = normalizeDevicePlatform(requestedPlatform);
+  const parsedFallback = parseDevicePlatform(userAgent);
+  return normalizeDevicePlatform({
+    ...parsedFallback,
+    ...normalizedRequested,
+  });
 };
 
 const toPublicDeviceRecord = (record) => {
@@ -2830,6 +2864,129 @@ const resolveRequestOrigin = async (req) => {
   }
 
   return null;
+};
+
+const parseHttpOrigin = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+};
+
+const parseHttpApiBase = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null;
+    }
+    return {
+      origin: parsed.origin,
+      pathname: parsed.pathname || '/',
+    };
+  } catch {
+    return null;
+  }
+};
+
+const resolveRequestHostOrigin = (req) => {
+  const forwardedProto = typeof req.headers['x-forwarded-proto'] === 'string'
+    ? req.headers['x-forwarded-proto'].split(',')[0].trim().toLowerCase()
+    : '';
+  const protocol = forwardedProto || (req.socket?.encrypted ? 'https' : 'http');
+  const forwardedHost = typeof req.headers['x-forwarded-host'] === 'string'
+    ? req.headers['x-forwarded-host'].split(',')[0].trim()
+    : '';
+  const host = forwardedHost || (typeof req.headers.host === 'string' ? req.headers.host.trim() : '');
+  if (!host) {
+    return null;
+  }
+  return `${protocol}://${host}`;
+};
+
+const resolveDirectServerOrigin = (req) => {
+  const localPort = Number.isFinite(req.socket?.localPort) ? Number(req.socket.localPort) : 0;
+  if (!localPort || localPort < 1) {
+    return null;
+  }
+  const protocol = req.socket?.encrypted ? 'https' : 'http';
+  return `${protocol}://localhost:${localPort}`;
+};
+
+const normalizeVerificationOriginCandidate = (origin, req) => {
+  if (typeof origin !== 'string' || !origin.trim()) {
+    return null;
+  }
+
+  const directServerOrigin = resolveDirectServerOrigin(req);
+  try {
+    const parsed = new URL(origin);
+    const hostName = parsed.hostname.toLowerCase();
+    const hostPort = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+    const isLikelyUiDevProxy =
+      (hostName === 'localhost' || hostName === '127.0.0.1' || hostName === '[::1]')
+      && (hostPort === '5173' || hostPort === '4173' || hostPort === '8080');
+
+    if (isLikelyUiDevProxy && directServerOrigin) {
+      return directServerOrigin;
+    }
+  } catch {
+    return null;
+  }
+
+  return origin;
+};
+
+const resolveDeviceVerificationOrigin = async (req, options = {}) => {
+  const explicitApiBase = parseHttpApiBase(options.verificationApiBaseUrl);
+  if (explicitApiBase) {
+    const normalized = normalizeVerificationOriginCandidate(explicitApiBase.origin, req);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  const explicitOrigin = parseHttpOrigin(options.verificationOrigin);
+  if (explicitOrigin) {
+    const normalized = normalizeVerificationOriginCandidate(explicitOrigin, req);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  const hostOrigin = resolveRequestHostOrigin(req);
+  const directServerOrigin = resolveDirectServerOrigin(req);
+
+  if (hostOrigin) {
+    const normalized = normalizeVerificationOriginCandidate(hostOrigin, req);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  if (directServerOrigin) {
+    return directServerOrigin;
+  }
+
+  return await resolveRequestOrigin(req);
 };
 
 const getBearerTokenFromRequest = (req) => {
@@ -9984,6 +10141,13 @@ async function main(options = {}) {
       prunePendingDeviceGrants();
 
       const requestedName = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
+      const requestedPlatform = normalizeDevicePlatform(req.body?.platform);
+      const requestedVerificationOrigin = typeof req.body?.verification_origin === 'string'
+        ? req.body.verification_origin.trim()
+        : '';
+      const requestedVerificationApiBaseUrl = typeof req.body?.verification_api_base_url === 'string'
+        ? req.body.verification_api_base_url.trim()
+        : '';
       const userAgent = typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : '';
       const now = Date.now();
       const deviceCode = crypto.randomBytes(DEVICE_CODE_BYTES).toString('base64url');
@@ -9992,8 +10156,11 @@ async function main(options = {}) {
       const intervalSeconds = DEVICE_GRANT_DEFAULT_INTERVAL_SECONDS;
       const expiresAt = now + DEVICE_GRANT_TTL_MS;
 
-      const origin = await resolveRequestOrigin(req);
-      const verificationPath = '/?settings=settings&section=openchamber&devices=1';
+      const origin = await resolveDeviceVerificationOrigin(req, {
+        verificationOrigin: requestedVerificationOrigin,
+        verificationApiBaseUrl: requestedVerificationApiBaseUrl,
+      });
+      const verificationPath = '/?settings=devices&devices=1';
       const verificationUri = origin ? `${origin}${verificationPath}` : verificationPath;
       const verificationUriComplete = `${verificationUri}${verificationUri.includes('?') ? '&' : '?'}user_code=${encodeURIComponent(userCode)}`;
 
@@ -10006,6 +10173,7 @@ async function main(options = {}) {
         intervalSeconds,
         status: 'pending',
         requestedName: requestedName || null,
+        requestedPlatform,
         requestedUa: userAgent,
         verificationUri,
         verificationUriComplete,
@@ -10092,6 +10260,23 @@ async function main(options = {}) {
     }
   });
 
+  app.get('/api/auth/device/pairing-base', requireUiCookieAuth, async (req, res) => {
+    try {
+      const origin = await resolveDeviceVerificationOrigin(req);
+      if (!origin) {
+        return res.status(500).json({ ok: false, error: 'origin_unavailable' });
+      }
+      return res.json({
+        ok: true,
+        origin,
+        api_base_url: `${origin}/api`,
+      });
+    } catch (error) {
+      console.error('Failed to resolve pairing base URL:', error);
+      return res.status(500).json({ ok: false, error: 'server_error' });
+    }
+  });
+
   app.get('/api/auth/devices', requireUiCookieAuth, async (_req, res) => {
     try {
       const devices = await readDeviceRecordsFromSettings();
@@ -10101,6 +10286,103 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to list devices:', error);
       return res.status(500).json({ error: 'Failed to list devices' });
+    }
+  });
+
+  app.get('/api/auth/devices/pending', requireUiCookieAuth, async (req, res) => {
+    try {
+      prunePendingDeviceGrants();
+
+      const rawUserCode = typeof req.query?.user_code === 'string' ? req.query.user_code : '';
+      const normalizedUserCode = normalizeUserCode(rawUserCode);
+      if (!normalizedUserCode) {
+        const pending = [];
+        for (const grant of pendingDeviceGrantsByCode.values()) {
+          if (!grant || typeof grant !== 'object') {
+            continue;
+          }
+          if (grant.status !== 'pending') {
+            continue;
+          }
+          pending.push({
+            userCode: grant.userCode,
+            requestedName: grant.requestedName || null,
+            userAgent: typeof grant.requestedUa === 'string' ? grant.requestedUa : '',
+            platform: resolveGrantPlatform(grant.requestedPlatform, grant.requestedUa),
+            createdAt: Number.isFinite(grant.createdAt) ? Number(grant.createdAt) : Date.now(),
+          });
+        }
+
+        pending.sort((a, b) => b.createdAt - a.createdAt);
+        return res.json({ ok: true, pending });
+      }
+
+      const deviceCode = pendingDeviceGrantCodeByUserCode.get(normalizedUserCode);
+      if (!deviceCode) {
+        return res.status(404).json({ ok: false, error: 'not_found' });
+      }
+
+      const grant = pendingDeviceGrantsByCode.get(deviceCode);
+      if (!grant) {
+        pendingDeviceGrantCodeByUserCode.delete(normalizedUserCode);
+        return res.status(404).json({ ok: false, error: 'not_found' });
+      }
+
+      const now = Date.now();
+      if (grant.expiresAt <= now) {
+        pendingDeviceGrantsByCode.delete(deviceCode);
+        pendingDeviceGrantCodeByUserCode.delete(normalizedUserCode);
+        return res.status(400).json({ ok: false, error: 'expired_token' });
+      }
+
+      return res.json({
+        ok: true,
+        pending: {
+          userCode: grant.userCode,
+          requestedName: grant.requestedName || null,
+          userAgent: typeof grant.requestedUa === 'string' ? grant.requestedUa : '',
+          platform: resolveGrantPlatform(grant.requestedPlatform, grant.requestedUa),
+        },
+      });
+    } catch (error) {
+      console.error('Failed to fetch pending device grant:', error);
+      return res.status(500).json({ ok: false, error: 'server_error' });
+    }
+  });
+
+  app.post('/api/auth/devices/deny', requireUiCookieAuth, async (req, res) => {
+    try {
+      prunePendingDeviceGrants();
+
+      const rawUserCode = typeof req.body?.user_code === 'string' ? req.body.user_code : '';
+      const normalizedUserCode = normalizeUserCode(rawUserCode);
+      if (!normalizedUserCode) {
+        return res.status(400).json({ ok: false, error: 'invalid_code' });
+      }
+
+      const deviceCode = pendingDeviceGrantCodeByUserCode.get(normalizedUserCode);
+      if (!deviceCode) {
+        return res.status(404).json({ ok: false, error: 'not_found' });
+      }
+
+      const grant = pendingDeviceGrantsByCode.get(deviceCode);
+      if (!grant) {
+        pendingDeviceGrantCodeByUserCode.delete(normalizedUserCode);
+        return res.status(404).json({ ok: false, error: 'not_found' });
+      }
+
+      if (grant.status === 'approved') {
+        return res.status(409).json({ ok: false, error: 'already_approved' });
+      }
+
+      grant.status = 'denied';
+      grant.nextPollAllowedAt = Date.now();
+      pendingDeviceGrantsByCode.set(deviceCode, grant);
+
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('Failed to deny device:', error);
+      return res.status(500).json({ ok: false, error: 'server_error' });
     }
   });
 
@@ -10145,6 +10427,7 @@ async function main(options = {}) {
       const nameFromBody = typeof req.body?.name === 'string' ? req.body.name.trim() : '';
       const deviceName = nameFromBody || grant.requestedName || 'Device';
       const userAgent = typeof grant.requestedUa === 'string' ? grant.requestedUa : '';
+      const platform = resolveGrantPlatform(grant.requestedPlatform, userAgent);
 
       const record = {
         id: crypto.randomUUID(),
@@ -10153,7 +10436,7 @@ async function main(options = {}) {
         lastUsedAt: null,
         expiresAt,
         userAgent,
-        platform: parseDevicePlatform(userAgent),
+        platform,
         tokenHash,
       };
 
@@ -13904,10 +14187,33 @@ const isCliExecution = process.argv[1] === __filename;
 if (isCliExecution) {
   const cliOptions = parseArgs();
   exitOnShutdown = true;
+
+  // Attach signal handlers immediately for CLI mode
+  const handleSignal = (signal) => {
+    console.log(`\nReceived ${signal}, shutting down gracefully...`);
+    gracefulShutdown().catch((error) => {
+      console.error('Graceful shutdown failed:', error);
+      process.exit(1);
+    });
+  };
+
+  process.on('SIGINT', () => handleSignal('SIGINT'));
+  process.on('SIGTERM', () => handleSignal('SIGTERM'));
+  process.on('SIGQUIT', () => handleSignal('SIGQUIT'));
+
+  // Handle stdin EOF (when piping input)
+  process.stdin.on('end', () => {
+    console.log('STDIN closed, initiating graceful shutdown...');
+    gracefulShutdown().catch((error) => {
+      console.error('Graceful shutdown failed:', error);
+      process.exit(1);
+    });
+  });
+
   main({
     port: cliOptions.port,
     tryCfTunnel: cliOptions.tryCfTunnel,
-    attachSignals: true,
+    attachSignals: false, // Already attached above
     exitOnShutdown: true,
     uiPassword: cliOptions.uiPassword
   }).catch(error => {
