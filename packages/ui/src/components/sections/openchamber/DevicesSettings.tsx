@@ -1,11 +1,13 @@
 import React from 'react';
+import QRCode from 'qrcode';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { resolveRuntimeApiBaseUrl } from '@/lib/instances/runtimeApiBaseUrl';
 import { useUIStore } from '@/stores/useUIStore';
-import { authenticateWithBiometrics, getBiometricStatus, isNativeMobileApp } from '@/lib/desktop';
+import { authenticateWithBiometrics, getBiometricStatus, isNativeMobileApp, writeTextToClipboard } from '@/lib/desktop';
 import { Switch } from '@/components/ui/switch';
+import { buildDevicePairingPayload } from '@/lib/auth/deviceFlow';
 
 type DeviceRecord = {
   id: string;
@@ -15,6 +17,20 @@ type DeviceRecord = {
   expiresAt: number;
   userAgent?: string;
   platform?: { os?: string; model?: string };
+};
+
+type PendingDeviceGrant = {
+  userCode: string;
+  requestedName?: string | null;
+  userAgent?: string;
+  platform?: {
+    os?: string;
+    model?: string;
+    version?: string;
+    arch?: string;
+    type?: string;
+    runtime?: string;
+  };
 };
 
 type DevicesSettingsProps = {
@@ -34,8 +50,53 @@ const formatTimestamp = (value: number | null): string => {
 
 const getApiBase = (): string => resolveRuntimeApiBaseUrl().replace(/\/+$/, '');
 
+const getFallbackPairingApiBase = (): string => {
+  const resolved = getApiBase();
+  if (/^https?:\/\//i.test(resolved)) {
+    return resolved;
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      return new URL(resolved, window.location.origin).toString().replace(/\/+$/, '');
+    } catch {
+      return resolved;
+    }
+  }
+  return resolved;
+};
+
+const formatDevicePlatform = (platform?: {
+  os?: string;
+  model?: string;
+  version?: string;
+  arch?: string;
+  type?: string;
+  runtime?: string;
+}): string => {
+  if (!platform) {
+    return 'Unknown';
+  }
+
+  const label = platform.model || platform.os || 'Unknown';
+  const details: string[] = [];
+  if (platform.version) {
+    details.push(platform.version);
+  }
+  if (platform.arch) {
+    details.push(platform.arch);
+  }
+  if (platform.runtime) {
+    details.push(platform.runtime);
+  }
+
+  if (details.length === 0) {
+    return label;
+  }
+
+  return `${label} (${details.join(', ')})`;
+};
+
 export const DevicesSettings: React.FC<DevicesSettingsProps> = ({ prefillUserCode }) => {
-  const setDeviceLoginOpen = useUIStore((state) => state.setDeviceLoginOpen);
   const biometricLockEnabled = useUIStore((state) => state.biometricLockEnabled);
   const setBiometricLockEnabled = useUIStore((state) => state.setBiometricLockEnabled);
   const isNativeMobile = React.useMemo(() => isNativeMobileApp(), []);
@@ -46,6 +107,12 @@ export const DevicesSettings: React.FC<DevicesSettingsProps> = ({ prefillUserCod
   const [approveName, setApproveName] = React.useState('');
   const [approveError, setApproveError] = React.useState<string | null>(null);
   const [biometricAvailable, setBiometricAvailable] = React.useState(false);
+  const [pendingGrant, setPendingGrant] = React.useState<PendingDeviceGrant | null>(null);
+  const [isPendingGrantLoading, setIsPendingGrantLoading] = React.useState(false);
+  const [isPairingQrVisible, setIsPairingQrVisible] = React.useState(false);
+  const [pairingQrDataUrl, setPairingQrDataUrl] = React.useState<string | null>(null);
+  const [pairingPayload, setPairingPayload] = React.useState<string>('');
+  const [pairingApiBase, setPairingApiBase] = React.useState<string>('');
 
   React.useEffect(() => {
     if (typeof prefillUserCode === 'string' && prefillUserCode.trim().length > 0) {
@@ -63,6 +130,120 @@ export const DevicesSettings: React.FC<DevicesSettingsProps> = ({ prefillUserCod
       setBiometricAvailable(status.isAvailable);
     });
   }, [isNativeMobile]);
+
+  React.useEffect(() => {
+    if (isNativeMobile || !isPairingQrVisible) {
+      setPairingQrDataUrl(null);
+      setPairingPayload('');
+      setPairingApiBase('');
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      let apiBaseUrl = getFallbackPairingApiBase();
+      try {
+        const response = await fetch(`${getApiBase()}/auth/device/pairing-base`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { Accept: 'application/json' },
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          api_base_url?: string;
+        } | null;
+        const serverBase = typeof payload?.api_base_url === 'string' ? payload.api_base_url.trim() : '';
+        if (response.ok && payload?.ok && serverBase) {
+          apiBaseUrl = serverBase.replace(/\/+$/, '');
+        }
+      } catch {
+        void 0;
+      }
+
+      const pairingValue = buildDevicePairingPayload(apiBaseUrl);
+      if (cancelled) {
+        return;
+      }
+
+      setPairingApiBase(apiBaseUrl);
+      setPairingPayload(pairingValue);
+
+      try {
+        const next = await QRCode.toDataURL(pairingValue, {
+          margin: 1,
+          width: 220,
+          errorCorrectionLevel: 'M',
+        });
+        if (!cancelled) {
+          setPairingQrDataUrl(next);
+        }
+      } catch {
+        if (!cancelled) {
+          setPairingQrDataUrl(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isNativeMobile, isPairingQrVisible]);
+
+  React.useEffect(() => {
+    const userCode = approveCode.trim();
+    if (!userCode) {
+      setPendingGrant(null);
+      setIsPendingGrantLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setIsPendingGrantLoading(true);
+      try {
+        const endpoint = `${getApiBase()}/auth/devices/pending?user_code=${encodeURIComponent(userCode)}`;
+        const response = await fetch(endpoint, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        });
+
+        const payload = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          pending?: PendingDeviceGrant;
+          error?: string;
+        } | null;
+
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        if (!response.ok || !payload?.ok || !payload.pending) {
+          setPendingGrant(null);
+          return;
+        }
+
+        setPendingGrant(payload.pending);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return;
+        }
+        setPendingGrant(null);
+        setApproveError('Unable to check pending request');
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsPendingGrantLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [approveCode]);
 
   const loadDevices = React.useCallback(async () => {
     setIsLoading(true);
@@ -122,6 +303,7 @@ export const DevicesSettings: React.FC<DevicesSettingsProps> = ({ prefillUserCod
 
       setApproveCode('');
       setApproveName('');
+      setPendingGrant(null);
       toast.success('Device approved');
       await loadDevices();
     } catch (error) {
@@ -131,6 +313,19 @@ export const DevicesSettings: React.FC<DevicesSettingsProps> = ({ prefillUserCod
       setBusyId(null);
     }
   }, [approveCode, approveName, loadDevices]);
+
+  const copyPairingPayload = React.useCallback(async () => {
+    if (!pairingPayload) {
+      toast.error('Pairing payload unavailable');
+      return;
+    }
+    const copied = await writeTextToClipboard(pairingPayload);
+    if (!copied) {
+      toast.error('Failed to copy pairing payload');
+      return;
+    }
+    toast.success('Pairing payload copied');
+  }, [pairingPayload]);
 
   const updateName = React.useCallback(async (id: string, name: string) => {
     const trimmed = name.trim();
@@ -245,6 +440,13 @@ export const DevicesSettings: React.FC<DevicesSettingsProps> = ({ prefillUserCod
 
       <div className="space-y-3 rounded-lg border border-border/50 bg-background/60 p-3">
         <div className="typography-ui-label text-foreground">Approve Device</div>
+        {isPendingGrantLoading ? (
+          <p className="typography-meta text-muted-foreground">Checking device request...</p>
+        ) : pendingGrant ? (
+          <div className="rounded-md border border-border/40 bg-background/40 px-2 py-1.5 typography-meta text-muted-foreground">
+            Pending request: {pendingGrant.requestedName || 'Unnamed device'} - {formatDevicePlatform(pendingGrant.platform)}
+          </div>
+        ) : null}
         <Input
           value={approveCode}
           onChange={(event) => {
@@ -270,10 +472,41 @@ export const DevicesSettings: React.FC<DevicesSettingsProps> = ({ prefillUserCod
         <div className="flex items-center justify-between">
           <div className="typography-ui-label text-foreground">Registered Devices</div>
           <div className="flex items-center gap-1">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setDeviceLoginOpen(true)}>Add Instance</Button>
+            {!isNativeMobile ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsPairingQrVisible((prev) => !prev);
+                }}
+              >
+                {isPairingQrVisible ? 'Hide Add Device' : 'Add Device'}
+              </Button>
+            ) : null}
             <Button type="button" variant="ghost" size="sm" onClick={() => void loadDevices()} disabled={isLoading}>Refresh</Button>
           </div>
         </div>
+
+        {!isNativeMobile && isPairingQrVisible ? (
+          <div className="rounded-lg border border-border/40 bg-background/50 p-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="space-y-1.5">
+                <div className="typography-ui-label text-foreground">Scan from mobile</div>
+                <p className="typography-meta text-muted-foreground">Open OpenChamber mobile app, tap Scan QR in Device Login, then scan this code.</p>
+                <p className="typography-micro break-all text-muted-foreground">{pairingApiBase || getFallbackPairingApiBase()}</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => void copyPairingPayload()}>Copy Pairing Payload</Button>
+              </div>
+              {pairingQrDataUrl ? (
+                <img src={pairingQrDataUrl} alt="Add device QR" className="h-[220px] w-[220px] rounded border border-border/60 bg-background" />
+              ) : (
+                <div className="flex h-[220px] w-[220px] items-center justify-center rounded border border-border/60 bg-background typography-meta text-muted-foreground">
+                  QR unavailable
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
 
         <div className="space-y-2">
           {devices.length === 0 && !isLoading ? (

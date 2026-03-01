@@ -29,6 +29,7 @@ import {
   RiRestartLine,
   RiServerLine,
   RiSlashCommands2,
+  RiSmartphoneLine,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -85,6 +86,7 @@ const pageOrder: SettingsPageSlug[] = [
   'chat',
   'notifications',
   'sessions',
+  'devices',
   'shortcuts',
   'git',
   'projects',
@@ -153,6 +155,8 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
       return RiMicLine;
     case 'tunnel':
       return RiGlobalLine;
+    case 'devices':
+      return RiSmartphoneLine;
     case 'home':
       return null;
     default:
@@ -363,6 +367,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     chat: 'chat',
     shortcuts: 'shortcuts',
     sessions: 'sessions',
+    devices: 'devices',
     notifications: 'notifications',
     voice: 'voice',
     tunnel: 'tunnel',
@@ -435,11 +440,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'chat':
       case 'shortcuts':
       case 'sessions':
+      case 'devices':
       case 'notifications':
       case 'voice':
       case 'tunnel': {
         const section = openChamberSectionBySlug[slug] ?? 'visual';
-        return <OpenChamberPage section={section} />;
+        const userCode = typeof window === 'undefined'
+          ? null
+          : (new URLSearchParams(window.location.search).get('user_code') || '').trim() || null;
+        return <OpenChamberPage section={section} userCode={userCode} />;
       }
       default:
         return <SettingsHome onOpen={openPage} />;

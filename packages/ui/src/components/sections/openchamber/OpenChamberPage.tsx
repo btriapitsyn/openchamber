@@ -73,6 +73,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section, userC
                 return <SessionsSectionContent />;
             case 'shortcuts':
                 return <ShortcutsSectionContent />;
+            case 'devices':
+                return <DevicesSettings prefillUserCode={userCode} />;
             case 'git':
                 return <GitSectionContent />;
             case 'github':
