@@ -1,11 +1,74 @@
 import { resolveSelectedInstance } from '@/stores/useInstancesStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { getAccessToken } from '@/lib/auth/tokenStorage';
+import { isMobileRuntime } from '@/lib/desktop';
 
 const DEFAULT_API_BASE_URL = import.meta.env.VITE_OPENCODE_URL || '/api';
 
 const trimTrailingSlashes = (value: string): string => value.replace(/\/+$/, '');
 const ensureLeadingSlash = (value: string): string => (value.startsWith('/') ? value : `/${value}`);
+const INSTANCES_STORE_KEY = 'instances-store';
+
+type PersistedInstancesShape = {
+  state?: {
+    instances?: Array<{ id?: unknown; apiBaseUrl?: unknown }>;
+    currentInstanceId?: unknown;
+    defaultInstanceId?: unknown;
+  };
+};
+
+const isHttpApiBaseUrl = (value: unknown): value is string => {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    return parsed.pathname.replace(/\/+$/, '').endsWith('/api');
+  } catch {
+    return false;
+  }
+};
+
+const resolvePersistedInstanceApiBaseUrl = (): string | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const raw = window.localStorage?.getItem(INSTANCES_STORE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as PersistedInstancesShape;
+    const state = parsed?.state;
+    const instances = Array.isArray(state?.instances) ? state.instances : [];
+    if (instances.length === 0) {
+      return null;
+    }
+    const currentId = typeof state?.currentInstanceId === 'string' ? state.currentInstanceId : null;
+    const defaultId = typeof state?.defaultInstanceId === 'string' ? state.defaultInstanceId : null;
+
+    const byCurrent = currentId
+      ? instances.find((entry) => typeof entry?.id === 'string' && entry.id === currentId)
+      : null;
+    const byDefault = defaultId
+      ? instances.find((entry) => typeof entry?.id === 'string' && entry.id === defaultId)
+      : null;
+    const candidate = byCurrent || byDefault || instances[0] || null;
+    if (!candidate || !isHttpApiBaseUrl(candidate.apiBaseUrl)) {
+      return null;
+    }
+    return candidate.apiBaseUrl.trim();
+  } catch {
+    return null;
+  }
+};
 
 const resolveDesktopApiBaseUrl = (): string | null => {
   if (typeof window === 'undefined') {
@@ -32,6 +95,13 @@ export const resolveRuntimeApiBaseUrl = (): string => {
   const selectedInstance = resolveSelectedInstance();
   if (selectedInstance && typeof selectedInstance.apiBaseUrl === 'string' && selectedInstance.apiBaseUrl.trim().length > 0) {
     return selectedInstance.apiBaseUrl.trim();
+  }
+
+  if (isMobileRuntime()) {
+    const persistedMobileApiBase = resolvePersistedInstanceApiBaseUrl();
+    if (persistedMobileApiBase) {
+      return persistedMobileApiBase;
+    }
   }
 
   return DEFAULT_API_BASE_URL;
