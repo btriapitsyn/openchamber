@@ -9151,6 +9151,10 @@ async function main(options = {}) {
 
       res.json({ path: filePath, content });
     } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && (err.code === 'EACCES' || err.code === 'EPERM')) {
+        return res.status(403).json({ error: 'Access to file denied' });
+      }
       console.error('Failed to read skill file:', error);
       res.status(500).json({ error: 'Failed to read skill file' });
     }
@@ -9237,6 +9241,10 @@ async function main(options = {}) {
         message: `File ${filePath} saved successfully`,
       });
     } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && (err.code === 'EACCES' || err.code === 'EPERM')) {
+        return res.status(403).json({ error: 'Access to file denied' });
+      }
       console.error('Failed to write skill file:', error);
       res.status(500).json({ error: error.message || 'Failed to write skill file' });
     }
@@ -9266,6 +9274,10 @@ async function main(options = {}) {
         message: `File ${filePath} deleted successfully`,
       });
     } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && (err.code === 'EACCES' || err.code === 'EPERM')) {
+        return res.status(403).json({ error: 'Access to file denied' });
+      }
       console.error('Failed to delete skill file:', error);
       res.status(500).json({ error: error.message || 'Failed to delete skill file' });
     }
