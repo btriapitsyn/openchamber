@@ -275,7 +275,12 @@ function toLoopInstance(raw: Record<string, unknown>): AgentLoopInstance {
       ? (raw.trackedSessionIds as string[])
       : undefined,
     workpackageFile: raw.filePath
-      ? { name: raw.name as string, workpackages: (raw.workpackages as AgentLoopInstance['workpackages']) ?? [], filePath: raw.filePath as string }
+      ? {
+          name: raw.name as string,
+          workpackages: (raw.workpackages as AgentLoopInstance['workpackages']) ?? [],
+          memoryPath: raw.memoryPath as string | undefined,
+          filePath: raw.filePath as string,
+        }
       : undefined,
   };
 }

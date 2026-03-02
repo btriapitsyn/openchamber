@@ -46,6 +46,8 @@ export interface WorkpackageFile {
   name: string;
   /** List of tasks to process sequentially */
   workpackages: Workpackage[];
+  /** Path to the loop memory markdown file, relative to the project when possible */
+  memoryPath?: string;
   /** Persisted model configuration — saved when a loop is started */
   modelConfig?: WorkpackageModelConfig;
   /**

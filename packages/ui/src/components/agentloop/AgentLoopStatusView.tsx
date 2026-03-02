@@ -3,6 +3,8 @@ import {
   RiAlertLine,
   RiCheckLine,
   RiCloseLine,
+  RiFileList3Line,
+  RiFileTextLine,
   RiHourglassLine,
   RiLoader4Line,
   RiPauseLine,
@@ -15,11 +17,13 @@ import {
 } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { useAgentLoopStore } from '@/stores/useAgentLoopStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/multirun/AgentSelector';
+import { opencodeClient } from '@/lib/opencode/client';
 import type { AgentLoopInstance, AgentLoopStatus, WorkpackageStatus } from '@/types/agentloop';
 
 function formatElapsed(ms: number): string {
@@ -96,6 +100,39 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
   const loop = useAgentLoopStore((s) => s.loops.get(loopId));
   const { pauseLoop, resumeLoop, skipCurrent, stopLoop, updateLoopConfig } = useAgentLoopStore();
   const setCurrentSession = useSessionStore((s) => s.setCurrentSession);
+  const [activeView, setActiveView] = useState<'tasks' | 'memory'>('tasks');
+  const [memoryContent, setMemoryContent] = useState<string>('');
+  const [memoryState, setMemoryState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const [memoryReloadToken, setMemoryReloadToken] = useState(0);
+  const memoryPath = loop?.workpackageFile?.memoryPath;
+
+  useEffect(() => {
+    if (!loop || activeView !== 'memory' || !memoryPath) return;
+
+    let cancelled = false;
+    setMemoryState('loading');
+
+    void opencodeClient.readLocalFile(memoryPath)
+      .then((content) => {
+        if (cancelled) return;
+        if (typeof content === 'string') {
+          setMemoryContent(content);
+          setMemoryState('loaded');
+          return;
+        }
+        setMemoryContent('');
+        setMemoryState('error');
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMemoryContent('');
+        setMemoryState('error');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, loop, memoryPath, memoryReloadToken]);
 
   if (!loop) {
     return (
@@ -126,7 +163,7 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
             </p>
             <div className="flex items-center gap-1 mt-1 typography-meta text-foreground-muted">
               <RiShieldLine className="h-3 w-3 shrink-0" />
-              <span>Sub-sessions run with all permissions allowed</span>
+              <span>Loop task sessions allow tools but deny spawning subagents</span>
             </div>
           </div>
           <LoopControls loop={loop} onPause={pauseLoop} onResume={resumeLoop} onSkip={skipCurrent} onStop={stopLoop} />
@@ -165,86 +202,149 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
         <LoopConfigSection loopId={loopId} loop={loop} updateLoopConfig={updateLoopConfig} />
       )}
 
-      {/* Task list */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="divide-y divide-border">
-          {loop.workpackages.map((wp, idx) => {
-            const config = statusConfig[wp.status];
-            const Icon = config.icon;
-            const isRunning = wp.status === 'running';
-            const hasSession = Boolean(wp.sessionId);
-            const retryCount = wp.retryCount ?? 0;
-
-            return (
-              <div
-                key={wp.id}
-                className={cn(
-                  'flex items-start gap-3 px-4 py-3',
-                  isRunning && 'bg-accent/5',
-                  hasSession && 'cursor-pointer hover:bg-interactive-hover',
-                )}
-                onClick={() => {
-                  if (wp.sessionId) {
-                    setCurrentSession(wp.sessionId);
-                  }
-                }}
-                role={hasSession ? 'button' : undefined}
-                tabIndex={hasSession ? 0 : undefined}
-                onKeyDown={(e) => {
-                  if (hasSession && wp.sessionId && (e.key === 'Enter' || e.key === ' ')) {
-                    e.preventDefault();
-                    setCurrentSession(wp.sessionId);
-                  }
-                }}
-              >
-                {/* Status icon */}
-                <div className={cn('mt-0.5 shrink-0', config.color)}>
-                  <Icon className={cn('h-4 w-4', isRunning && 'animate-spin')} />
-                </div>
-
-                {/* Content */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="typography-meta text-foreground-muted shrink-0">
-                      {idx + 1}.
-                    </span>
-                    <span
-                      className={cn(
-                        'typography-label truncate',
-                        wp.status === 'completed' ? 'text-foreground-muted line-through' : 'text-foreground',
-                      )}
-                      aria-label={wp.status === 'completed' ? `${wp.title} (completed)` : wp.title}
-                    >
-                      {wp.title}
-                    </span>
-                    <span className={cn('typography-meta shrink-0', config.color)}>
-                      {config.label}
-                    </span>
-                    {retryCount > 0 && (
-                      <span
-                        className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 typography-meta text-destructive shrink-0"
-                        title={`Restarted ${retryCount} time${retryCount > 1 ? 's' : ''} due to stalling`}
-                      >
-                        <RiRefreshLine className="h-3 w-3" />
-                        {retryCount}
-                      </span>
-                    )}
-                    <ElapsedTime
-                      startedAt={wp.startedAt}
-                      completedAt={wp.completedAt}
-                      isRunning={isRunning}
-                    />
-                  </div>
-                  {wp.error && (
-                    <p className="mt-1 typography-meta text-destructive truncate">
-                      {wp.error}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      <div className="border-b border-border px-4 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="inline-flex rounded-lg border border-border bg-surface-subtle p-0.5">
+            <button
+              type="button"
+              onClick={() => setActiveView('tasks')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 typography-meta transition-colors',
+                activeView === 'tasks' ? 'bg-background text-foreground' : 'text-foreground-muted hover:text-foreground'
+              )}
+            >
+              <RiFileList3Line className="h-3.5 w-3.5" />
+              Tasks
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveView('memory')}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 typography-meta transition-colors',
+                activeView === 'memory' ? 'bg-background text-foreground' : 'text-foreground-muted hover:text-foreground'
+              )}
+            >
+              <RiFileTextLine className="h-3.5 w-3.5" />
+              Loop memory
+            </button>
+          </div>
+          {activeView === 'memory' && memoryPath && (
+            <button
+              type="button"
+              onClick={() => setMemoryReloadToken((value) => value + 1)}
+              className="inline-flex items-center gap-1 typography-meta text-foreground-muted hover:text-foreground transition-colors"
+            >
+              <RiRefreshLine className="h-3.5 w-3.5" />
+              Refresh
+            </button>
+          )}
         </div>
+        {memoryPath && (
+          <p className="mt-2 typography-meta text-foreground-muted truncate" title={memoryPath}>
+            Memory file: {memoryPath}
+          </p>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {activeView === 'tasks' ? (
+          <div className="divide-y divide-border">
+            {loop.workpackages.map((wp, idx) => {
+              const config = statusConfig[wp.status];
+              const Icon = config.icon;
+              const isRunning = wp.status === 'running';
+              const hasSession = Boolean(wp.sessionId);
+              const retryCount = wp.retryCount ?? 0;
+
+              return (
+                <div
+                  key={wp.id}
+                  className={cn(
+                    'flex items-start gap-3 px-4 py-3',
+                    isRunning && 'bg-accent/5',
+                    hasSession && 'cursor-pointer hover:bg-interactive-hover',
+                  )}
+                  onClick={() => {
+                    if (wp.sessionId) {
+                      setCurrentSession(wp.sessionId);
+                    }
+                  }}
+                  role={hasSession ? 'button' : undefined}
+                  tabIndex={hasSession ? 0 : undefined}
+                  onKeyDown={(e) => {
+                    if (hasSession && wp.sessionId && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault();
+                      setCurrentSession(wp.sessionId);
+                    }
+                  }}
+                >
+                  <div className={cn('mt-0.5 shrink-0', config.color)}>
+                    <Icon className={cn('h-4 w-4', isRunning && 'animate-spin')} />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="typography-meta text-foreground-muted shrink-0">
+                        {idx + 1}.
+                      </span>
+                      <span
+                        className={cn(
+                          'typography-label truncate',
+                          wp.status === 'completed' ? 'text-foreground-muted line-through' : 'text-foreground',
+                        )}
+                        aria-label={wp.status === 'completed' ? `${wp.title} (completed)` : wp.title}
+                      >
+                        {wp.title}
+                      </span>
+                      <span className={cn('typography-meta shrink-0', config.color)}>
+                        {config.label}
+                      </span>
+                      {retryCount > 0 && (
+                        <span
+                          className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 typography-meta text-destructive shrink-0"
+                          title={`Restarted ${retryCount} time${retryCount > 1 ? 's' : ''} due to stalling`}
+                        >
+                          <RiRefreshLine className="h-3 w-3" />
+                          {retryCount}
+                        </span>
+                      )}
+                      <ElapsedTime
+                        startedAt={wp.startedAt}
+                        completedAt={wp.completedAt}
+                        isRunning={isRunning}
+                      />
+                    </div>
+                    {wp.error && (
+                      <p className="mt-1 typography-meta text-destructive truncate">
+                        {wp.error}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="px-4 py-4">
+            {!memoryPath ? (
+              <div className="rounded-lg border border-border bg-surface-subtle px-4 py-3 typography-body text-foreground-muted">
+                This loop does not have a memory file yet.
+              </div>
+            ) : memoryState === 'loading' || memoryState === 'idle' ? (
+              <div className="rounded-lg border border-border bg-surface-subtle px-4 py-6 typography-body text-foreground-muted">
+                Loading loop memory…
+              </div>
+            ) : memoryState === 'error' ? (
+              <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 typography-body text-destructive">
+                Failed to read the loop memory file.
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border bg-background px-4 py-4">
+                <SimpleMarkdownRenderer content={memoryContent} className="typography-markdown-body" />
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

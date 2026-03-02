@@ -10,8 +10,9 @@
  */
 
 /** Permission ruleset that allows all operations without prompting */
-const ALLOW_ALL_PERMISSIONS = [
+const LOOP_SESSION_PERMISSIONS = [
   { permission: '*', pattern: '*', action: 'allow' },
+  { permission: 'task', pattern: '*', action: 'deny' },
 ];
 
 /** Delay before advancing to the next workpackage (ms) */
@@ -33,6 +34,37 @@ let loopCounter = 0;
 function generateLoopId() {
   loopCounter += 1;
   return `loop_${Date.now()}_${loopCounter}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function buildDefaultMemoryPath(filePath, path) {
+  const parsed = path.parse(filePath);
+  const baseName = parsed.name || 'workpackage';
+  return path.join(parsed.dir, `${baseName}.memory.md`);
+}
+
+function buildInitialLoopMemory({ loopName, workpackageFilePath, memoryPath, workpackages }) {
+  const taskList = workpackages
+    .map((wp, index) => `${index + 1}. ${wp.title} (\`${wp.id}\`)`)
+    .join('\n');
+
+  return [
+    `# Loop Memory: ${loopName}`,
+    '',
+    '## Purpose',
+    `Shared context for the agent loop defined in \`${workpackageFilePath}\`.`,
+    '',
+    'Every implementation session must read this file before starting work and append a short update when it finishes.',
+    '',
+    '## Memory File',
+    `Path: \`${memoryPath}\``,
+    '',
+    '## Planned Tasks',
+    taskList,
+    '',
+    '## Session Notes',
+    '- Loop initialized. No task summaries yet.',
+    '',
+  ].join('\n');
 }
 
 /**
@@ -75,16 +107,26 @@ function normalizeWorkpackages(workpackages) {
 /**
  * Build the prompt for a single workpackage task.
  */
-function buildTaskPrompt(wp, filePath, systemPrompt) {
+function buildTaskPrompt(wp, filePath, memoryPath, systemPrompt) {
   const parts = [];
   if (systemPrompt && systemPrompt.trim()) {
     parts.push(systemPrompt.trim());
+  }
+  if (memoryPath) {
+    parts.push(
+      `## Required first step\n\nBefore doing any exploration, read \`${memoryPath}\` completely. Treat it as the handoff log from previous loop sessions and use it to avoid repeating discovery work.`
+    );
   }
   parts.push(`## Task: ${wp.title}\n\n${wp.description}`);
 
   if (filePath) {
     parts.push(
       `## Progress tracking\n\nOnce you have fully completed the task above, update \`${filePath}\` by changing the \`"status"\` field for workpackage id \`"${wp.id}"\` from \`"pending"\` (or \`"running"\`) to \`"completed"\`.`
+    );
+  }
+  if (memoryPath) {
+    parts.push(
+      `## Loop memory update\n\nBefore finishing, append a short entry to \`${memoryPath}\` covering: what you changed, the tech/files involved, anything useful for the next agent, and any follow-up risks or open questions. Keep it concise and factual.`
     );
   }
 
@@ -137,6 +179,17 @@ class AgentLoopService {
     }
 
     const workpackages = normalizeWorkpackages(fileData.workpackages);
+    const memoryPath = typeof fileData.memoryPath === 'string' && fileData.memoryPath.trim().length > 0
+      ? fileData.memoryPath.trim()
+      : buildDefaultMemoryPath(filePath, this._deps.path);
+
+    await this.#ensureLoopMemoryOnDisk({
+      filePath,
+      directory,
+      loopName: fileData.name,
+      workpackages,
+      memoryPath,
+    });
 
     // Persist model configuration to the workpackage file
     void this.#saveModelConfigToDisk(filePath, directory, { providerID, modelID, variant });
@@ -166,6 +219,7 @@ class AgentLoopService {
       agent: agent || undefined,
       variant: variant || undefined,
       systemPrompt: systemPrompt || undefined,
+      memoryPath,
       parentSessionId: rootSession.id,
       currentIndex: startIndex,
       startedAt: Date.now(),
@@ -315,7 +369,7 @@ class AgentLoopService {
       }
     }
 
-    // Clean up subagent session tracking
+    // Clean up any previously tracked descendant sessions
     if (loop.subagentSessionIds) {
       for (const sid of loop.subagentSessionIds) {
         this._sessionToLoop.delete(sid);
@@ -348,14 +402,14 @@ class AgentLoopService {
    * Called by the global SSE watcher for every SSE event.
    * Handles:
    *  - session.status  → heartbeat + task completion detection
-   *  - session.created → adopt subagent sessions whose parent is tracked
+   *  - session.created → ignore unexpected descendant sessions from loop tasks
    *  - permission.asked → auto-approve permissions for tracked sessions
    *  - message.updated / message.part.updated / message.part.delta → heartbeat
    */
   handleSseEvent(payload) {
     if (!payload) return;
 
-    // ── session.created: adopt subagent sessions ──────────────────────
+    // ── session.created: descendant sessions are unexpected here ──────
     if (payload.type === 'session.created') {
       this.#handleSessionCreated(payload);
       return;
@@ -399,7 +453,7 @@ class AgentLoopService {
       return;
     }
 
-    // Session went idle → task completed (only for task sessions, not subagents)
+    // Session went idle → task completed (only for task sessions)
     if (statusType === 'idle') {
       // Only trigger completion for actual workpackage task sessions
       const isTaskSession = loop.workpackages.some(
@@ -445,7 +499,7 @@ class AgentLoopService {
       const session = await this.#createSession({
         title: `Task ${wpIndex + 1}/${loop.workpackages.length}: ${wp.title}`,
         parentID: loop.parentSessionId,
-        permission: ALLOW_ALL_PERMISSIONS,
+        permission: LOOP_SESSION_PERMISSIONS,
         directory: loop.directory,
       });
 
@@ -458,7 +512,7 @@ class AgentLoopService {
       if (loop.status !== 'running') return;
 
       // Build and send prompt
-      const prompt = buildTaskPrompt(wp, loop.filePath, loop.systemPrompt);
+      const prompt = buildTaskPrompt(wp, loop.filePath, loop.memoryPath, loop.systemPrompt);
 
       await this.#sendMessage({
         sessionId: session.id,
@@ -483,11 +537,6 @@ class AgentLoopService {
     }
   }
 
-  /**
-   * Detect subagent sessions created by the OpenCode backend whose parent
-   * is a session we're already tracking.  Adopt them so we can auto-approve
-   * permissions and surface them in the UI.
-   */
   #handleSessionCreated(payload) {
     const info = payload.properties?.info;
     if (!info || typeof info !== 'object') return;
@@ -496,42 +545,12 @@ class AgentLoopService {
     const parentId = info.parentID;
     if (typeof childId !== 'string' || typeof parentId !== 'string') return;
 
-    // Already tracked — nothing to do
     if (this._sessionToLoop.has(childId)) return;
+    if (!this._sessionToLoop.has(parentId)) return;
 
-    // Parent must be a session we're tracking (task session or previously adopted subagent)
-    const loopId = this._sessionToLoop.get(parentId);
-    if (!loopId) return;
-
-    const loop = this._loops.get(loopId);
-    if (!loop) return;
-
-    // Adopt: track the child session under this loop
-    this._sessionToLoop.set(childId, loopId);
-
-    // Record in the loop's subagent set for serialization
-    if (!loop.subagentSessionIds) {
-      loop.subagentSessionIds = new Set();
-    }
-    loop.subagentSessionIds.add(childId);
-
-    // Update heartbeat
-    loop.lastActivityAt = Date.now();
-
-    console.log(
-      `[AgentLoopService] Adopted subagent session ${childId} (parent: ${parentId}) into loop "${loop.id}"`
+    console.warn(
+      `[AgentLoopService] Ignoring subagent session ${childId} (parent: ${parentId}) because loop sessions deny task spawning`
     );
-
-    // Update the subagent session's directory so the frontend groups it
-    // under the correct project.
-    if (loop.directory) {
-      this.#updateSessionDirectory(childId, loop.directory).catch((err) => {
-        console.warn(
-          `[AgentLoopService] Failed to set directory on subagent session ${childId}:`,
-          err?.message || err
-        );
-      });
-    }
   }
 
   /**
@@ -814,6 +833,64 @@ class AgentLoopService {
     }
   }
 
+  async #resolveWritablePath(filePath, directory) {
+    const { fsPromises, resolveWorkspacePath, isPathWithinRoot, path } = this._deps;
+    const resolved = resolveWorkspacePath(filePath, directory);
+    if (!resolved.ok) return null;
+
+    const targetDir = path.dirname(resolved.resolved);
+    const [canonicalBase, canonicalDir] = await Promise.all([
+      fsPromises.realpath(resolved.base).catch(() => path.resolve(resolved.base)),
+      fsPromises.realpath(targetDir).catch(() => path.resolve(targetDir)),
+    ]);
+
+    if (!isPathWithinRoot(canonicalDir, canonicalBase)) return null;
+
+    return { path: resolved.resolved };
+  }
+
+  async #ensureLoopMemoryOnDisk({ filePath, directory, loopName, workpackages, memoryPath }) {
+    const { fsPromises, path } = this._deps;
+    await this.#saveMemoryPathToDisk(filePath, directory, memoryPath);
+
+    const resolvedMemoryPath = await this.#resolveWritablePath(memoryPath, directory);
+    if (!resolvedMemoryPath) {
+      throw new Error(`Could not initialize loop memory file: ${memoryPath}`);
+    }
+
+    await fsPromises.mkdir(path.dirname(resolvedMemoryPath.path), { recursive: true });
+
+    try {
+      await fsPromises.access(resolvedMemoryPath.path);
+    } catch {
+      const initialContent = buildInitialLoopMemory({
+        loopName,
+        workpackageFilePath: filePath,
+        memoryPath,
+        workpackages,
+      });
+      await fsPromises.writeFile(resolvedMemoryPath.path, `${initialContent}\n`, 'utf8');
+    }
+  }
+
+  async #saveMemoryPathToDisk(filePath, directory, memoryPath) {
+    const { fsPromises } = this._deps;
+    try {
+      const resolved = await this.#resolveWritablePath(filePath, directory);
+      if (!resolved) return;
+
+      const content = await fsPromises.readFile(resolved.path, 'utf8');
+      const parsed = JSON.parse(content);
+      if (!validateWorkpackageFile(parsed)) return;
+
+      parsed.memoryPath = memoryPath;
+
+      await fsPromises.writeFile(resolved.path, JSON.stringify(parsed, null, 2) + '\n', 'utf8');
+    } catch (err) {
+      console.warn(`[AgentLoopService] Failed to save memory path to disk:`, err);
+    }
+  }
+
   async #saveModelConfigToDisk(filePath, directory, { providerID, modelID, variant }) {
     const { fsPromises, resolveWorkspacePath, isPathWithinRoot, path } = this._deps;
     try {
@@ -957,31 +1034,6 @@ class AgentLoopService {
   }
 
   /**
-   * Update a session's directory so it is correctly grouped under its project.
-   * Uses PATCH /session/:id?directory=:dir (same query-param convention as POST /session).
-   */
-  async #updateSessionDirectory(sessionId, directory) {
-    const { buildOpenCodeUrl, getOpenCodeAuthHeaders } = this._deps;
-    let url = buildOpenCodeUrl(`/session/${sessionId}`, '');
-    const sep = url.includes('?') ? '&' : '?';
-    url = `${url}${sep}directory=${encodeURIComponent(directory)}`;
-
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        ...getOpenCodeAuthHeaders(),
-      },
-      body: JSON.stringify({}),
-    });
-
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Failed to update session directory: ${response.status} ${text}`);
-    }
-  }
-
-  /**
    * Query the OpenCode API for the current status of a session.
    * Returns the status string ('busy', 'idle', 'retry', etc.) or null if unknown.
    */
@@ -1024,7 +1076,7 @@ class AgentLoopService {
    */
   #serializeLoop(loop) {
     // Build flat list of ALL session IDs this loop owns:
-    // root session + task sessions + adopted subagent sessions
+    // root session + task sessions + any previously tracked descendants
     const trackedSessionIds = [];
     if (loop.parentSessionId) {
       trackedSessionIds.push(loop.parentSessionId);
@@ -1056,6 +1108,7 @@ class AgentLoopService {
         completedAt: wp.completedAt,
       })),
       filePath: loop.filePath,
+      memoryPath: loop.memoryPath,
       directory: loop.directory,
       providerID: loop.providerID,
       modelID: loop.modelID,
