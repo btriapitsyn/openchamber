@@ -287,6 +287,14 @@ type SessionGroup = {
   sessions: SessionNode[];
 };
 
+type GroupSearchData = {
+  filteredNodes: SessionNode[];
+  matchedSessionCount: number;
+  folderNameMatchCount: number;
+  groupMatches: boolean;
+  hasMatch: boolean;
+};
+
 // --- Session Folder DnD helpers ---
 
 /**
@@ -974,32 +982,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       });
     },
     [buildSessionSearchText],
-  );
-
-  const groupHasSearchMatch = React.useCallback(
-    (group: SessionGroup, query: string): boolean => {
-      if (!query) {
-        return true;
-      }
-
-      const groupSearchText = buildGroupSearchText(group);
-      if (groupSearchText.includes(query)) {
-        return true;
-      }
-
-      const matchingNodes = filterSessionNodesForSearch(group.sessions, query);
-      if (matchingNodes.length > 0) {
-        return true;
-      }
-
-      const scopeKey = normalizePath(group.directory ?? null);
-      if (!scopeKey) {
-        return false;
-      }
-
-      return getFoldersForScope(scopeKey).some((folder) => folder.name.toLowerCase().includes(query));
-    },
-    [buildGroupSearchText, filterSessionNodesForSearch, getFoldersForScope],
   );
 
   React.useEffect(() => {
@@ -2041,6 +2023,46 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return active ? [active] : [projectSections[0]];
   }, [projectSections, activeProjectId]);
 
+  const groupSearchDataByGroup = React.useMemo(() => {
+    const result = new WeakMap<SessionGroup, GroupSearchData>();
+    if (!hasSessionSearchQuery) {
+      return result;
+    }
+
+    const countNodes = (nodes: SessionNode[]): number => {
+      return nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0);
+    };
+
+    visibleProjectSections.forEach((section) => {
+      section.groups.forEach((group) => {
+        const filteredNodes = filterSessionNodesForSearch(group.sessions, normalizedSessionSearchQuery);
+        const matchedSessionCount = countNodes(filteredNodes);
+        const groupMatches = buildGroupSearchText(group).includes(normalizedSessionSearchQuery);
+        const scopeKey = normalizePath(group.directory ?? null);
+        const folderNameMatchCount = scopeKey
+          ? getFoldersForScope(scopeKey).filter((folder) => folder.name.toLowerCase().includes(normalizedSessionSearchQuery)).length
+          : 0;
+
+        result.set(group, {
+          filteredNodes,
+          matchedSessionCount,
+          folderNameMatchCount,
+          groupMatches,
+          hasMatch: groupMatches || matchedSessionCount > 0 || folderNameMatchCount > 0,
+        });
+      });
+    });
+
+    return result;
+  }, [
+    hasSessionSearchQuery,
+    visibleProjectSections,
+    filterSessionNodesForSearch,
+    normalizedSessionSearchQuery,
+    buildGroupSearchText,
+    getFoldersForScope,
+  ]);
+
   const searchableProjectSections = React.useMemo(() => {
     if (!hasSessionSearchQuery) {
       return visibleProjectSections;
@@ -2049,14 +2071,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return visibleProjectSections
       .map((section) => ({
         ...section,
-        groups: section.groups.filter((group) => groupHasSearchMatch(group, normalizedSessionSearchQuery)),
+        groups: section.groups.filter((group) => groupSearchDataByGroup.get(group)?.hasMatch === true),
       }))
       .filter((section) => section.groups.length > 0);
   }, [
     hasSessionSearchQuery,
     visibleProjectSections,
-    groupHasSearchMatch,
-    normalizedSessionSearchQuery,
+    groupSearchDataByGroup,
   ]);
 
   const sectionsForRender = hasSessionSearchQuery ? searchableProjectSections : visibleProjectSections;
@@ -2066,21 +2087,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return 0;
     }
 
-    const countNodes = (nodes: SessionNode[]): number => {
-      return nodes.reduce((total, node) => total + 1 + countNodes(node.children), 0);
-    };
-
     return sectionsForRender.reduce((total, section) => {
       return total + section.groups.reduce((groupTotal, group) => {
-        const nodes = filterSessionNodesForSearch(group.sessions, normalizedSessionSearchQuery);
-        return groupTotal + countNodes(nodes);
+        const data = groupSearchDataByGroup.get(group);
+        if (!data) {
+          return groupTotal;
+        }
+        const metadataMatches = data.folderNameMatchCount + (data.groupMatches ? 1 : 0);
+        return groupTotal + data.matchedSessionCount + metadataMatches;
       }, 0);
     }, 0);
   }, [
     hasSessionSearchQuery,
     sectionsForRender,
-    normalizedSessionSearchQuery,
-    filterSessionNodesForSearch,
+    groupSearchDataByGroup,
   ]);
 
   const searchEmptyState = (
@@ -2824,17 +2844,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const renderGroupSessions = React.useCallback(
     (group: SessionGroup, groupKey: string, projectId?: string | null, hideGroupLabel?: boolean) => {
+      const searchData = hasSessionSearchQuery ? groupSearchDataByGroup.get(group) : null;
       const isExpanded = expandedSessionGroups.has(groupKey);
       const isCollapsed = hasSessionSearchQuery ? false : collapsedGroups.has(groupKey);
       const maxVisible = hideDirectoryControls ? 10 : 5;
-      const groupSearchText = buildGroupSearchText(group);
       const groupMatchesSearch = hasSessionSearchQuery
-        ? groupSearchText.includes(normalizedSessionSearchQuery)
+        ? searchData?.groupMatches === true
         : false;
       const shouldFilterGroupContents = hasSessionSearchQuery;
 
       const sourceGroupNodes = shouldFilterGroupContents
-        ? filterSessionNodesForSearch(group.sessions, normalizedSessionSearchQuery)
+        ? (searchData?.filteredNodes ?? [])
         : group.sessions;
 
       // --- Session Folders: split into foldered vs ungrouped ---
@@ -2901,7 +2921,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       }
 
       const totalSessions = ungroupedSessions.length;
-      const visibleSessions = isExpanded ? ungroupedSessions : ungroupedSessions.slice(0, maxVisible);
+      const visibleSessions = hasSessionSearchQuery
+        ? ungroupedSessions
+        : (isExpanded ? ungroupedSessions : ungroupedSessions.slice(0, maxVisible));
       const remainingCount = totalSessions - visibleSessions.length;
       const collectGroupSessions = (nodes: SessionNode[]): Session[] => {
         const collected: Session[] = [];
@@ -3231,8 +3253,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       hideDirectoryControls,
       hasSessionSearchQuery,
       normalizedSessionSearchQuery,
-      buildGroupSearchText,
-      filterSessionNodesForSearch,
+      groupSearchDataByGroup,
       currentSessionDirectory,
       projectRepoStatus,
       renderSessionNode,
@@ -3546,12 +3567,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
               </div>
               {isSessionSearchOpen ? (
                 <div className="px-1 pb-1">
-                  {hasSessionSearchQuery ? (
-                    <div className="mb-1 flex items-center justify-between px-0.5 typography-micro text-muted-foreground/80">
+                  <div className="mb-1 flex items-center justify-between px-0.5 typography-micro text-muted-foreground/80">
+                    {hasSessionSearchQuery ? (
                       <span>{searchMatchCount} {searchMatchCount === 1 ? 'match' : 'matches'}</span>
-                      <span>Esc to clear</span>
-                    </div>
-                  ) : null}
+                    ) : <span />}
+                    <span>Esc to clear</span>
+                  </div>
                   <div className="relative">
                     <RiSearchLine className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
