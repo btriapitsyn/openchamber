@@ -6852,7 +6852,15 @@ async function main(options = {}) {
 
   // Voice token endpoint - returns OpenAI TTS availability status
   app.post('/api/voice/token', async (req, res) => {
-    console.log('[Voice] Token request received:', { body: req.body, headers: req.headers['content-type'] });
+    const bodyType = Buffer.isBuffer(req.body) ? 'buffer' : Array.isArray(req.body) ? 'array' : typeof req.body;
+    const bodyFieldCount = req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+      ? Object.keys(req.body).length
+      : 0;
+    console.log('[Voice] Token request received:', {
+      contentType: req.headers['content-type'] || null,
+      bodyType,
+      bodyFieldCount,
+    });
     try {
       const openaiApiKey = process.env.OPENAI_API_KEY;
       console.log('[Voice] OpenAI API Key present:', !!openaiApiKey);
