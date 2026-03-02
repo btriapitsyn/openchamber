@@ -2570,7 +2570,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       className="[&>svg]:mr-1"
                     >
                       <RiChat4Line className="mr-1 h-4 w-4" />
-                      Open Chat in Context Panel
+                      <span className="truncate">Open in Side Panel</span>
+                      <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">
+                        beta
+                      </span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
