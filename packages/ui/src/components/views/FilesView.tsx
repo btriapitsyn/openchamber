@@ -23,6 +23,7 @@ import {
   RiDeleteBinLine,
   RiEditLine,
   RiFileCopyLine,
+  RiFileTransferFill,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
@@ -73,6 +74,8 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
+import { openDesktopPath, openDesktopProjectInApp } from '@/lib/desktop';
+import { getDefaultOpenInApp, getOpenInAppById, OPEN_DIRECTORY_APP_IDS, type OpenInApp } from '@/lib/openInApps';
 
 type FileNode = {
   name: string;
@@ -85,6 +88,37 @@ type FileNode = {
 type SelectedLineRange = {
   start: number;
   end: number;
+};
+
+const getSelectedOpenInApp = (): OpenInApp => {
+  const stored = typeof window !== 'undefined' ? window.localStorage.getItem('openInAppId') : null;
+  const selected = getOpenInAppById(stored);
+  if (selected) {
+    return selected;
+  }
+  return getDefaultOpenInApp();
+};
+
+const getParentDirectoryPath = (path: string): string => {
+  const normalized = normalizePath(path);
+  if (!normalized) return '';
+  if (normalized === '/' || /^[A-Za-z]:\/$/.test(normalized)) {
+    return normalized;
+  }
+
+  const lastSlash = normalized.lastIndexOf('/');
+  if (lastSlash < 0) {
+    return normalized;
+  }
+  if (lastSlash === 0) {
+    return '/';
+  }
+
+  const parent = normalized.slice(0, lastSlash);
+  if (/^[A-Za-z]:$/.test(parent)) {
+    return `${parent}/`;
+  }
+  return parent;
 };
 
 const sortNodes = (items: FileNode[]) =>
@@ -539,6 +573,38 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       toast.error('Failed to reveal path');
     });
   }, [files]);
+
+  const handleOpenInSelectedApp = React.useCallback(async () => {
+    if (!selectedFile?.path || !root) {
+      return;
+    }
+
+    const selectedApp = getSelectedOpenInApp();
+    const fileDirectory = getParentDirectoryPath(selectedFile.path) || root;
+
+    if (OPEN_DIRECTORY_APP_IDS.has(selectedApp.id)) {
+      const openedDirectory = await openDesktopPath(fileDirectory, selectedApp.appName);
+      if (!openedDirectory) {
+        toast.error(`Failed to open in ${selectedApp.appName}`);
+      }
+      return;
+    }
+
+    const openedInApp = await openDesktopProjectInApp(root, selectedApp.id, selectedApp.appName, selectedFile.path);
+    if (openedInApp) {
+      return;
+    }
+
+    const openedFile = await openDesktopPath(selectedFile.path, selectedApp.appName);
+    if (openedFile) {
+      return;
+    }
+
+    const openedDirectory = await openDesktopPath(fileDirectory, selectedApp.appName);
+    if (!openedDirectory) {
+      toast.error(`Failed to open in ${selectedApp.appName}`);
+    }
+  }, [root, selectedFile?.path]);
 
   const handleOpenDialog = React.useCallback((type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => {
     setActiveDialog(type);
@@ -2190,6 +2256,17 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               </Button>
             )}
 
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void handleOpenInSelectedApp()}
+              className="h-5 w-5 p-0 text-muted-foreground opacity-70 hover:opacity-100"
+              title="Open in selected app"
+              aria-label="Open in selected app"
+            >
+              <RiFileTransferFill className="h-4 w-4" />
+            </Button>
+
             {canEdit && !isSelectedImage && (
               <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
             )}
@@ -2615,6 +2692,17 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               )}
             </Button>
           )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleOpenInSelectedApp()}
+            className="h-6 w-6 p-0 text-muted-foreground opacity-70 hover:opacity-100"
+            title="Open in selected app"
+            aria-label="Open in selected app"
+          >
+            <RiFileTransferFill className="h-4 w-4" />
+          </Button>
 
           {canEdit && !isSelectedImage && (
             <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
