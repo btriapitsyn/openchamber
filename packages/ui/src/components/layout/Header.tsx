@@ -23,6 +23,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -505,6 +506,14 @@ export const Header: React.FC<HeaderProps> = ({
   const openDirectory = React.useMemo(() => {
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
+
+  const selectedFilePath = useFilesViewTabsStore((state) => {
+    const directory = normalize(openDirectory || '');
+    if (!directory) {
+      return null;
+    }
+    return state.byRoot[directory]?.selectedPath ?? null;
+  });
 
   const actionDirectory = React.useMemo(() => {
     return normalize(openDirectory || activeProject?.path || '');
@@ -1084,7 +1093,7 @@ export const Header: React.FC<HeaderProps> = ({
             </TooltipContent>
           </Tooltip>
         )}
-        <OpenInAppButton directory={openDirectory} className="mr-1" />
+        <OpenInAppButton directory={openDirectory} activeFilePath={selectedFilePath} className="mr-1" />
         <DropdownMenu
             open={isDesktopServicesOpen}
             onOpenChange={(open) => {
