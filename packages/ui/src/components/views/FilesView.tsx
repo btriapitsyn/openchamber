@@ -75,7 +75,8 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import { openDesktopPath, openDesktopProjectInApp } from '@/lib/desktop';
-import { getDefaultOpenInApp, getOpenInAppById, OPEN_DIRECTORY_APP_IDS, type OpenInApp } from '@/lib/openInApps';
+import { OPEN_DIRECTORY_APP_IDS } from '@/lib/openInApps';
+import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 
 type FileNode = {
   name: string;
@@ -88,15 +89,6 @@ type FileNode = {
 type SelectedLineRange = {
   start: number;
   end: number;
-};
-
-const getSelectedOpenInApp = (): OpenInApp => {
-  const stored = typeof window !== 'undefined' ? window.localStorage.getItem('openInAppId') : null;
-  const selected = getOpenInAppById(stored);
-  if (selected) {
-    return selected;
-  }
-  return getDefaultOpenInApp();
 };
 
 const getParentDirectoryPath = (path: string): string => {
@@ -119,6 +111,33 @@ const getParentDirectoryPath = (path: string): string => {
     return `${parent}/`;
   }
   return parent;
+};
+
+const OpenInAppListIcon = ({ label, iconDataUrl }: { label: string; iconDataUrl?: string }) => {
+  const [failed, setFailed] = React.useState(false);
+  const initial = label.trim().slice(0, 1).toUpperCase() || '?';
+
+  if (iconDataUrl && !failed) {
+    return (
+      <img
+        src={iconDataUrl}
+        alt=""
+        className="h-4 w-4 rounded-sm"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={cn(
+        'h-4 w-4 rounded-sm flex items-center justify-center',
+        'bg-[var(--surface-muted)] text-[9px] font-medium text-muted-foreground'
+      )}
+    >
+      {initial}
+    </span>
+  );
 };
 
 const sortNodes = (items: FileNode[]) =>
@@ -566,6 +585,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const canRename = Boolean(files.rename);
   const canDelete = Boolean(files.delete);
   const canReveal = Boolean(files.revealPath);
+  const openInApps = useOpenInAppsStore((state) => state.availableApps);
+  const openInCacheStale = useOpenInAppsStore((state) => state.isCacheStale);
+  const initializeOpenInApps = useOpenInAppsStore((state) => state.initialize);
+  const loadOpenInApps = useOpenInAppsStore((state) => state.loadInstalledApps);
+
+  React.useEffect(() => {
+    initializeOpenInApps();
+  }, [initializeOpenInApps]);
 
   const handleRevealPath = React.useCallback((targetPath: string) => {
     if (!files.revealPath) return;
@@ -574,35 +601,34 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     });
   }, [files]);
 
-  const handleOpenInSelectedApp = React.useCallback(async () => {
+  const handleOpenInApp = React.useCallback(async (app: { id: string; appName: string }) => {
     if (!selectedFile?.path || !root) {
       return;
     }
 
-    const selectedApp = getSelectedOpenInApp();
     const fileDirectory = getParentDirectoryPath(selectedFile.path) || root;
 
-    if (OPEN_DIRECTORY_APP_IDS.has(selectedApp.id)) {
-      const openedDirectory = await openDesktopPath(fileDirectory, selectedApp.appName);
+    if (OPEN_DIRECTORY_APP_IDS.has(app.id)) {
+      const openedDirectory = await openDesktopPath(fileDirectory, app.appName);
       if (!openedDirectory) {
-        toast.error(`Failed to open in ${selectedApp.appName}`);
+        toast.error(`Failed to open in ${app.appName}`);
       }
       return;
     }
 
-    const openedInApp = await openDesktopProjectInApp(root, selectedApp.id, selectedApp.appName, selectedFile.path);
+    const openedInApp = await openDesktopProjectInApp(root, app.id, app.appName, selectedFile.path);
     if (openedInApp) {
       return;
     }
 
-    const openedFile = await openDesktopPath(selectedFile.path, selectedApp.appName);
+    const openedFile = await openDesktopPath(selectedFile.path, app.appName);
     if (openedFile) {
       return;
     }
 
-    const openedDirectory = await openDesktopPath(fileDirectory, selectedApp.appName);
+    const openedDirectory = await openDesktopPath(fileDirectory, app.appName);
     if (!openedDirectory) {
-      toast.error(`Failed to open in ${selectedApp.appName}`);
+      toast.error(`Failed to open in ${app.appName}`);
     }
   }, [root, selectedFile?.path]);
 
@@ -2256,16 +2282,40 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               </Button>
             )}
 
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void handleOpenInSelectedApp()}
-              className="h-5 w-5 p-0 text-muted-foreground opacity-70 hover:opacity-100"
-              title="Open in selected app"
-              aria-label="Open in selected app"
-            >
-              <RiFileTransferLine className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 w-5 p-0 text-muted-foreground opacity-70 hover:opacity-100"
+                  title="Open in desktop app"
+                  aria-label="Open in desktop app"
+                >
+                  <RiFileTransferLine className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 max-h-[70vh] overflow-y-auto">
+                {openInApps.map((app) => (
+                  <DropdownMenuItem
+                    key={app.id}
+                    className="flex items-center gap-2"
+                    onClick={() => void handleOpenInApp(app)}
+                  >
+                    <OpenInAppListIcon label={app.label} iconDataUrl={app.iconDataUrl} />
+                    <span className="typography-ui-label text-foreground">{app.label}</span>
+                  </DropdownMenuItem>
+                ))}
+                {openInCacheStale ? (
+                  <DropdownMenuItem
+                    className="flex items-center gap-2"
+                    onClick={() => void loadOpenInApps(true)}
+                  >
+                    <RiRefreshLine className="h-4 w-4" />
+                    <span className="typography-ui-label text-foreground">Refresh Apps</span>
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {canEdit && !isSelectedImage && (
               <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
@@ -2693,16 +2743,40 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             </Button>
           )}
 
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => void handleOpenInSelectedApp()}
-            className="h-6 w-6 p-0 text-muted-foreground opacity-70 hover:opacity-100"
-            title="Open in selected app"
-            aria-label="Open in selected app"
-          >
-            <RiFileTransferLine className="h-4 w-4" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0 text-muted-foreground opacity-70 hover:opacity-100"
+                title="Open in desktop app"
+                aria-label="Open in desktop app"
+              >
+                <RiFileTransferLine className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 max-h-[70vh] overflow-y-auto">
+              {openInApps.map((app) => (
+                <DropdownMenuItem
+                  key={app.id}
+                  className="flex items-center gap-2"
+                  onClick={() => void handleOpenInApp(app)}
+                >
+                  <OpenInAppListIcon label={app.label} iconDataUrl={app.iconDataUrl} />
+                  <span className="typography-ui-label text-foreground">{app.label}</span>
+                </DropdownMenuItem>
+              ))}
+              {openInCacheStale ? (
+                <DropdownMenuItem
+                  className="flex items-center gap-2"
+                  onClick={() => void loadOpenInApps(true)}
+                >
+                  <RiRefreshLine className="h-4 w-4" />
+                  <span className="typography-ui-label text-foreground">Refresh Apps</span>
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {canEdit && !isSelectedImage && (
             <span aria-hidden="true" className="mx-1 h-4 w-px bg-border/60" />
