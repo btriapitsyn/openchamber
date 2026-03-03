@@ -61,8 +61,6 @@ import {
   RiFolderAddLine,
   RiFolderLine,
   RiGitBranchLine,
-  RiGitPullRequestLine,
-  RiGitRepositoryLine,
   RiLoopLeftLine,
   RiNodeTree,
   RiStickyNoteLine,

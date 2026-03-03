@@ -230,7 +230,7 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  }, [generatePrompt, selectedProviderId, selectedModelId, selectedAgent, startPlanningSession, setCurrentSession, onCreated]);
+  }, [generatePrompt, selectedProviderId, selectedModelId, selectedAgent, startPlanningSession, setCurrentSession, onCreated, currentDirectory]);
 
   const handleStartLoop = React.useCallback(async () => {
     if (!workpackageFile) return;
@@ -268,7 +268,7 @@ export const AgentLoopLauncher: React.FC<AgentLoopLauncherProps> = ({
     } finally {
       setIsSubmitting(false);
     }
-  }, [workpackageFile, selectedProviderId, selectedModelId, selectedVariant, selectedAgent, systemPrompt, startLoop, setCurrentSession, onCreated]);
+  }, [workpackageFile, selectedProviderId, selectedModelId, selectedVariant, selectedAgent, systemPrompt, startLoop, setCurrentSession, onCreated, currentDirectory]);
 
   const handleModelChange = React.useCallback((providerId: string, modelId: string) => {
     setSelectedProviderId(providerId);
