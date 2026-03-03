@@ -293,14 +293,14 @@ const SHORTCUT_ACTIONS: ReadonlyArray<ShortcutAction> = [
   },
   {
     id: 'cycle_favorite_model_forward',
-    defaultCombo: 'alt+f',
+    defaultCombo: 'ctrl+]',
     label: 'Cycle favorite model forward',
     description: 'Cycle forward through starred models without opening the picker',
     customizable: true,
   },
   {
     id: 'cycle_favorite_model_backward',
-    defaultCombo: 'alt+shift+f',
+    defaultCombo: 'ctrl+[',
     label: 'Cycle favorite model backward',
     description: 'Cycle backward through starred models without opening the picker',
     customizable: true,
