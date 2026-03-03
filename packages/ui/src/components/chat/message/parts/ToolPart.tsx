@@ -1689,7 +1689,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 <div className="flex items-center gap-2 flex-shrink-0">
                     {}
                     <div
-                        className="relative h-3.5 w-3.5 flex-shrink-0"
+                        className="relative h-3.5 w-3.5 flex-shrink-0 cursor-pointer"
                         onClick={(event) => { event.stopPropagation(); onToggle(part.id); }}
                     >
                         {}

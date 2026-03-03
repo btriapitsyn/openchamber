@@ -1874,7 +1874,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const stopIconSizeClass = isMobile ? 'h-6 w-6' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
     const iconSizeClass = isMobile ? 'h-[18px] w-[18px]' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
 
-    const iconButtonBaseClass = 'flex items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0';
+    const iconButtonBaseClass = 'flex cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed';
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
 
     // Send button - respects queue mode setting
