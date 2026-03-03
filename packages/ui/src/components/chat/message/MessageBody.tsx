@@ -14,7 +14,7 @@ import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiTimeLine, RiVolumeUpLine, RiStopLine, RiShare2Line, RiLoader4Line } from '@remixicon/react';
+import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiTimeLine, RiVolumeUpLine, RiStopLine, RiImageDownloadLine, RiLoader4Line } from '@remixicon/react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -28,6 +28,7 @@ import { useMessageTTS } from '@/hooks/useMessageTTS';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { TextSelectionMenu } from './TextSelectionMenu';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { isVSCodeRuntime } from '@/lib/desktop';
 import { toPng } from 'html-to-image';
 import { toast } from '@/components/ui';
 import { formatTimestampForDisplay } from './timeFormat';
@@ -856,12 +857,34 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                     backgroundColor: 'var(--surface-background)',
                 });
 
-                const link = document.createElement('a');
-                link.download = `message-${messageId}.png`;
-                link.href = dataUrl;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+                const fileName = `message-${messageId}.png`;
+
+                if (isVSCodeRuntime()) {
+                    const response = await fetch('/api/vscode/save-image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fileName, dataUrl }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to save image in VS Code');
+                    }
+
+                    const payload = await response.json() as { saved?: boolean; canceled?: boolean; error?: string };
+                    if (payload.saved !== true) {
+                        if (payload.canceled) {
+                            return;
+                        }
+                        throw new Error(payload.error || 'Failed to save image in VS Code');
+                    }
+                } else {
+                    const link = document.createElement('a');
+                    link.download = fileName;
+                    link.href = dataUrl;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
 
                 toast.success('Image saved');
             } catch (error) {
@@ -1291,7 +1314,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             {isSharing ? (
                                 <RiLoader4Line className="h-4 w-4 animate-spin" />
                             ) : (
-                                <RiShare2Line className="h-4 w-4" />
+                                <RiImageDownloadLine className="h-4 w-4" />
                             )}
                         </Button>
                     </TooltipTrigger>
