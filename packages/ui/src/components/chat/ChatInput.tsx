@@ -52,9 +52,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { GitHubIssuePickerDialog } from '@/components/session/GitHubIssuePickerDialog';
+import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
+import { opencodeClient } from '@/lib/opencode/client';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
+const FILE_MENTION_TOKEN = /^@[^\s]+$/;
 
 interface ChatInputProps {
     onOpenSettings?: () => void;
@@ -143,7 +146,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const clearAbortPrompt = useSessionStore((state) => state.clearAbortPrompt);
     const attachedFiles = useSessionStore((state) => state.attachedFiles);
     const addAttachedFile = useSessionStore((state) => state.addAttachedFile);
-    const addServerFile = useSessionStore((state) => state.addServerFile);
     const clearAttachedFiles = useSessionStore((state) => state.clearAttachedFiles);
     const saveSessionAgentSelection = useSessionStore((state) => state.saveSessionAgentSelection);
     const consumePendingInputText = useSessionStore((state) => state.consumePendingInputText);
@@ -156,8 +158,163 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const { isMobile, inputBarOffset, isKeyboardOpen, setTimelineDialogOpen, cornerRadius, persistChatDraft, isExpandedInput, setExpandedInput } = useUIStore();
     const { working } = useAssistantStatus();
     const { currentTheme } = useThemeSystem();
+    const chatSearchDirectory = useChatSearchDirectory();
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
+    const [textareaScrollTop, setTextareaScrollTop] = React.useState(0);
+
     const isDesktopExpanded = isExpandedInput && !isMobile;
+
+    const sendableAttachedFiles = React.useMemo(
+        () => attachedFiles.filter((file) => file.source !== 'server'),
+        [attachedFiles],
+    );
+
+    const hasInlineFileMention = React.useMemo(() => {
+        if (!message || !message.includes('@') || inputMode === 'shell') {
+            return false;
+        }
+        const knownAgentNames = new Set(agents.map((agent) => agent.name.toLowerCase()));
+        const mentionRegex = /@([^\s]+)/g;
+        let match: RegExpExecArray | null;
+        while ((match = mentionRegex.exec(message)) !== null) {
+            const offset = match.index;
+            const charBefore = offset > 0 ? message[offset - 1] : null;
+            if (charBefore && !/(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore)) {
+                continue;
+            }
+            const mentionPath = String(match[1] || '').trim().replace(/[),.;:!?`"'>]+$/g, '');
+            if (!mentionPath || knownAgentNames.has(mentionPath.toLowerCase())) {
+                continue;
+            }
+            if (mentionPath.includes('/') || mentionPath.includes('\\') || mentionPath.includes('.')) {
+                return true;
+            }
+        }
+        return false;
+    }, [agents, inputMode, message]);
+
+    const highlightedComposerContent = React.useMemo(() => {
+        if (!hasInlineFileMention) {
+            return null;
+        }
+
+        const parts: Array<{ text: string; fileMention: boolean }> = [];
+        const knownAgentNames = new Set(agents.map((agent) => agent.name.toLowerCase()));
+        const mentionRegex = /@([^\s]+)/g;
+        let lastIndex = 0;
+        let match: RegExpExecArray | null;
+
+        while ((match = mentionRegex.exec(message)) !== null) {
+            const full = match[0];
+            const mention = String(match[1] || '').trim().replace(/[),.;:!?`"'>]+$/g, '');
+            const start = match.index;
+            const end = start + full.length;
+            const charBefore = start > 0 ? message[start - 1] : null;
+            const isBoundary = !charBefore || /(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore);
+            const isFileMention = isBoundary
+                && mention.length > 0
+                && !knownAgentNames.has(mention.toLowerCase())
+                && (mention.includes('/') || mention.includes('\\') || mention.includes('.'));
+
+            if (start > lastIndex) {
+                parts.push({ text: message.slice(lastIndex, start), fileMention: false });
+            }
+            parts.push({ text: full, fileMention: isFileMention });
+            lastIndex = end;
+        }
+
+        if (lastIndex < message.length) {
+            parts.push({ text: message.slice(lastIndex), fileMention: false });
+        }
+
+        return parts;
+    }, [agents, hasInlineFileMention, message]);
+
+    const sanitizeAttachmentsForSend = React.useCallback(
+        (files: AttachedFile[] | undefined): AttachedFile[] => (files ?? [])
+            .filter((file) => file.source !== 'server')
+            .map((file) => ({ ...file })),
+        [],
+    );
+
+    const extractInlineFileMentions = React.useCallback((rawText: string): { sanitizedText: string; attachments: AttachedFile[] } => {
+        if (!rawText || !rawText.includes('@')) {
+            return { sanitizedText: rawText, attachments: [] };
+        }
+
+        const clientDirectory = opencodeClient.getDirectory() || '';
+        const root = (chatSearchDirectory || clientDirectory).replace(/\\/g, '/').replace(/\/+$/, '');
+        const knownAgentNames = new Set(agents.map((agent) => agent.name.toLowerCase()));
+        const seenPaths = new Set<string>();
+        const attachments: AttachedFile[] = [];
+
+        const mentionRegex = /@([^\s]+)/g;
+        let match: RegExpExecArray | null;
+        while ((match = mentionRegex.exec(rawText)) !== null) {
+            const rawMentionPath = match[1];
+            const offset = match.index;
+            const original = rawText;
+            const charBefore = offset > 0 ? original[offset - 1] : null;
+            if (charBefore && !/(\s|\(|\)|\[|\]|\{|\}|"|'|`|,|\.|;|:)/.test(charBefore)) {
+                continue;
+            }
+
+            const mentionPath = String(rawMentionPath || '')
+                .trim()
+                .replace(/^[`"'<(]+/, '')
+                .replace(/[),.;:!?`"'>]+$/g, '');
+            if (!mentionPath) {
+                continue;
+            }
+
+            if (knownAgentNames.has(mentionPath.toLowerCase())) {
+                continue;
+            }
+
+            const looksLikeFilePath = mentionPath.includes('/') || mentionPath.includes('\\') || mentionPath.includes('.');
+            if (!looksLikeFilePath) {
+                continue;
+            }
+
+            const normalizedMentionPath = mentionPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+            if (!normalizedMentionPath) {
+                continue;
+            }
+
+            const serverPath = mentionPath.startsWith('/')
+                ? mentionPath.replace(/\\/g, '/')
+                : root
+                    ? `${root}/${normalizedMentionPath}`
+                    : null;
+
+            if (!serverPath) {
+                continue;
+            }
+
+            const normalizedServerPath = serverPath.replace(/\/+/g, '/');
+            if (seenPaths.has(normalizedServerPath)) {
+                continue;
+            }
+            seenPaths.add(normalizedServerPath);
+
+            const filename = normalizedMentionPath.split('/').filter(Boolean).pop() || normalizedMentionPath;
+            attachments.push({
+                id: `inline-server-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+                file: new File([], filename, { type: 'text/plain' }),
+                filename,
+                mimeType: 'text/plain',
+                size: 0,
+                dataUrl: normalizedServerPath,
+                source: 'server',
+                serverPath: normalizedServerPath,
+            });
+        }
+
+        return {
+            sanitizedText: rawText,
+            attachments,
+        };
+    }, [agents, chatSearchDirectory]);
     const [autocompleteOverlayPosition, setAutocompleteOverlayPosition] = React.useState<AutocompleteOverlayPosition | null>(null);
     const abortTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
     const prevWasAbortedRef = React.useRef(false);
@@ -430,7 +587,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [pendingInputText, consumePendingInputText]);
 
-    const hasContent = message.trim() || attachedFiles.length > 0 || hasDrafts;
+    const hasContent = message.trim() || sendableAttachedFiles.length > 0 || hasDrafts;
     const hasQueuedMessages = queuedMessages.length > 0;
     const canSend = hasContent || hasQueuedMessages;
 
@@ -452,7 +609,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (drafts.length > 0) {
             messageToQueue = appendInlineComments(messageToQueue, drafts);
         }
-        const attachmentsToQueue = attachedFiles.map((file) => ({ ...file }));
+        const attachmentsToQueue = sanitizeAttachmentsForSend(sendableAttachedFiles);
 
         addToQueue(currentSessionId, {
             content: messageToQueue,
@@ -468,7 +625,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (!isMobile) {
             textareaRef.current?.focus();
         }
-    }, [hasContent, currentSessionId, message, attachedFiles, addToQueue, clearAttachedFiles, isMobile, consumeDrafts]);
+    }, [hasContent, currentSessionId, message, sendableAttachedFiles, sanitizeAttachmentsForSend, addToQueue, clearAttachedFiles, isMobile, consumeDrafts]);
 
     const handleSubmit = async (options?: SubmitOptions) => {
         const queuedOnly = options?.queuedOnly ?? false;
@@ -500,6 +657,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         for (let i = 0; i < queuedMessages.length; i++) {
             const queuedMsg = queuedMessages[i];
             const { sanitizedText, mention } = parseAgentMentions(queuedMsg.content, agents);
+            const { sanitizedText: queuedText, attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText);
 
             // Use agent mention from first message that has one
             if (!agentMentionName && mention?.name) {
@@ -508,13 +666,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
             if (i === 0) {
                 // First queued message becomes primary
-                primaryText = sanitizedText;
-                primaryAttachments = queuedMsg.attachments ?? [];
+                primaryText = queuedText;
+                primaryAttachments = [
+                    ...sanitizeAttachmentsForSend(queuedMsg.attachments),
+                    ...mentionAttachments,
+                ];
             } else {
                 // Subsequent queued messages become additional parts
+                const queuedAttachments = sanitizeAttachmentsForSend(queuedMsg.attachments);
                 additionalParts.push({
-                    text: sanitizedText,
-                    attachments: queuedMsg.attachments,
+                    text: queuedText,
+                    attachments: [...queuedAttachments, ...mentionAttachments],
                 });
             }
         }
@@ -523,7 +685,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         if (!queuedOnly && hasContent) {
             const messageToSend = message.replace(/^\n+|\n+$/g, '');
             const { sanitizedText, mention } = parseAgentMentions(messageToSend, agents);
-            const attachmentsToSend = attachedFiles.map((file) => ({ ...file }));
+            const { sanitizedText: messageText, attachments: mentionAttachments } = extractInlineFileMentions(sanitizedText);
+            const attachmentsToSend = sanitizeAttachmentsForSend(sendableAttachedFiles);
 
             if (!agentMentionName && mention?.name) {
                 agentMentionName = mention.name;
@@ -531,13 +694,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
             if (queuedMessages.length === 0) {
                 // No queue - current input is primary
-                primaryText = sanitizedText;
-                primaryAttachments = attachmentsToSend;
+                primaryText = messageText;
+                primaryAttachments = [...attachmentsToSend, ...mentionAttachments];
             } else {
                 // Has queue - current input is additional part
                 additionalParts.push({
-                    text: sanitizedText,
-                    attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
+                    text: messageText,
+                    attachments: [...attachmentsToSend, ...mentionAttachments],
                 });
             }
         }
@@ -731,6 +894,48 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             e.preventDefault();
             setInputMode('normal');
             return;
+        }
+
+        if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+            const textarea = textareaRef.current;
+            const selectionStart = textarea?.selectionStart ?? message.length;
+            const selectionEnd = textarea?.selectionEnd ?? message.length;
+            const hasCollapsedSelection = selectionStart === selectionEnd;
+
+            if (hasCollapsedSelection) {
+                const probeIndex = e.key === 'Backspace' ? selectionStart - 1 : selectionStart;
+                if (probeIndex >= 0 && probeIndex < message.length) {
+                    let tokenStart = probeIndex;
+                    while (tokenStart > 0 && !/\s/.test(message[tokenStart - 1])) {
+                        tokenStart -= 1;
+                    }
+
+                    let tokenEnd = probeIndex + 1;
+                    while (tokenEnd < message.length && !/\s/.test(message[tokenEnd])) {
+                        tokenEnd += 1;
+                    }
+
+                    const token = message.slice(tokenStart, tokenEnd);
+                    const looksLikeFileMention = FILE_MENTION_TOKEN.test(token)
+                        && (token.includes('/') || token.includes('\\') || token.includes('.'));
+
+                    if (looksLikeFileMention) {
+                        const removeUntil = message[tokenEnd] === ' ' ? tokenEnd + 1 : tokenEnd;
+                        const nextMessage = `${message.slice(0, tokenStart)}${message.slice(removeUntil)}`;
+                        e.preventDefault();
+                        setMessage(nextMessage);
+                        requestAnimationFrame(() => {
+                            if (textareaRef.current) {
+                                textareaRef.current.selectionStart = tokenStart;
+                                textareaRef.current.selectionEnd = tokenStart;
+                            }
+                            adjustTextareaHeight();
+                        });
+                        updateAutocompleteState(nextMessage, tokenStart);
+                        return;
+                    }
+                }
+            }
         }
 
         if (showCommandAutocomplete && commandRef.current) {
@@ -1304,25 +1509,38 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, [addAttachedFile, currentSessionId, newSessionDraftOpen, insertTextAtSelection]);
 
-    const handleFileSelect = (file: { name: string; path: string }) => {
+    const handleFileSelect = (file: { name: string; path: string; relativePath?: string }) => {
 
         const cursorPosition = textareaRef.current?.selectionStart || 0;
         const textBeforeCursor = message.substring(0, cursorPosition);
         const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
 
+        const mentionPath = (file.relativePath && file.relativePath.trim().length > 0)
+            ? file.relativePath.trim()
+            : (toProjectRelativeMentionPath(file.path) || file.name);
+
         if (lastAtSymbol !== -1) {
             const newMessage =
                 message.substring(0, lastAtSymbol) +
-                file.name +
+                `@${mentionPath} ` +
                 message.substring(cursorPosition);
             setMessage(newMessage);
+            const nextCursor = lastAtSymbol + mentionPath.length + 2;
+            requestAnimationFrame(() => {
+                if (textareaRef.current) {
+                    textareaRef.current.selectionStart = nextCursor;
+                    textareaRef.current.selectionEnd = nextCursor;
+                }
+                adjustTextareaHeight();
+                updateAutocompleteState(newMessage, nextCursor);
+            });
         } else if (textareaRef.current) {
             const newMessage =
                 message.substring(0, cursorPosition) +
-                `@${file.name} ` +
+                `@${mentionPath} ` +
                 message.substring(cursorPosition);
             setMessage(newMessage);
-            const nextCursor = cursorPosition + file.name.length + 2;
+            const nextCursor = cursorPosition + mentionPath.length + 2;
             requestAnimationFrame(() => {
                 if (textareaRef.current) {
                     textareaRef.current.selectionStart = nextCursor;
@@ -1601,6 +1819,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
     }, []);
 
+    const toProjectRelativeMentionPath = React.useCallback((absolutePath: string): string => {
+        const normalizedAbsolutePath = absolutePath.replace(/\\/g, '/').trim();
+        const normalizedRoot = (chatSearchDirectory || '').replace(/\\/g, '/').replace(/\/+$/, '');
+        if (!normalizedRoot) {
+            return normalizedAbsolutePath;
+        }
+        if (normalizedAbsolutePath === normalizedRoot) {
+            return normalizedAbsolutePath;
+        }
+        const rootWithSlash = `${normalizedRoot}/`;
+        if (normalizedAbsolutePath.startsWith(rootWithSlash)) {
+            return normalizedAbsolutePath.slice(rootWithSlash.length);
+        }
+        return normalizedAbsolutePath;
+    }, [chatSearchDirectory]);
+
     const handleDragEnter = (e: React.DragEvent) => {
         if (!hasDraggedFiles(e.dataTransfer)) {
             return;
@@ -1796,26 +2030,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     }, [addAttachedFile, normalizeDroppedPath]);
 
     const handleServerFilesSelected = React.useCallback(async (files: Array<{ path: string; name: string }>) => {
-        let attachedCount = 0;
+        const mentionParts = files
+            .map((file) => toProjectRelativeMentionPath(file.path))
+            .filter((path) => path.length > 0)
+            .map((path) => `@${path}`);
 
-        for (const file of files) {
-            const sizeBefore = useSessionStore.getState().attachedFiles.length;
-            try {
-                await addServerFile(file.path, file.name);
-                const sizeAfter = useSessionStore.getState().attachedFiles.length;
-                if (sizeAfter > sizeBefore) {
-                    attachedCount += 1;
-                }
-            } catch (error) {
-                console.error('Server file attach failed', error);
-                toast.error(error instanceof Error ? error.message : 'Failed to attach file');
-            }
+        if (mentionParts.length === 0) {
+            return;
         }
 
-        if (attachedCount > 0) {
-            toast.success(`Attached ${attachedCount} file${attachedCount > 1 ? 's' : ''}`);
-        }
-    }, [addServerFile]);
+        insertTextAtSelection(`${mentionParts.join(' ')} `);
+    }, [insertTextAtSelection, toProjectRelativeMentionPath]);
 
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const [projectFilePickerOpen, setProjectFilePickerOpen] = React.useState(false);
@@ -2337,49 +2562,79 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 : undefined}
                         />
                     )}
-                    <Textarea
-                        ref={textareaRef}
-                        data-chat-input="true"
-                        value={message}
-                        onChange={handleTextChange}
-                        onKeyDown={handleKeyDown}
-                        onPaste={handlePaste}
-                        onDragEnter={handleDragEnter}
-                        onDragOver={handleDragOver}
-                        onDrop={handleDrop}
-                        onPointerDownCapture={handleTextareaPointerDownCapture}
-                        onKeyUp={updateAutocompleteOverlayPosition}
-                        onClick={updateAutocompleteOverlayPosition}
-                        onScroll={updateAutocompleteOverlayPosition}
-                        onSelect={updateAutocompleteOverlayPosition}
-                        placeholder={currentSessionId || newSessionDraftOpen
-                            ? inputMode === 'shell'
-                                ? "Enter shell command..."
-                                : "@ for files/agents; / for commands; ! for shell"
-                            : "Select or create a session to start chatting"}
-                        disabled={!currentSessionId && !newSessionDraftOpen}
-                        autoCorrect={isMobile ? "on" : "off"}
-                        autoCapitalize={isMobile ? "sentences" : "off"}
-                        spellCheck={isMobile}
-                        outerClassName={cn('focus-within:ring-0', isDesktopExpanded && 'flex-1 min-h-0')}
-                        className={cn(
-                            'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent',
-                            isDesktopExpanded
-                                ? 'h-full min-h-0 py-4'
-                                : isMobile
-                                    ? 'py-2.5'
-                                    : 'pt-4 pb-2',
-                            inputMode === 'shell' && 'font-mono',
+                    <div className="relative">
+                        {highlightedComposerContent && (
+                            <div
+                                aria-hidden
+                                className={cn(
+                                    'pointer-events-none absolute inset-0 z-0 whitespace-pre-wrap break-words px-3 rounded-b-none',
+                                    isDesktopExpanded
+                                        ? 'h-full min-h-0 py-4'
+                                        : isMobile
+                                            ? 'py-2.5'
+                                            : 'pt-4 pb-2',
+                                    inputMode === 'shell' ? 'font-mono' : 'typography-markdown md:typography-ui-label',
+                                )}
+                                style={{ transform: `translateY(-${textareaScrollTop}px)` }}
+                            >
+                                {highlightedComposerContent.map((part, index) => (
+                                    <span
+                                        key={`${index}-${part.text.length}`}
+                                        className={part.fileMention ? 'text-[var(--status-info)]' : 'text-foreground'}
+                                    >
+                                        {part.text}
+                                    </span>
+                                ))}
+                            </div>
                         )}
-                        style={{
-                            flex: isDesktopExpanded ? '1 1 auto' : 'none',
-                            height: !isDesktopExpanded && textareaSize ? `${textareaSize.height}px` : undefined,
-                            maxHeight: !isDesktopExpanded && textareaSize ? `${textareaSize.maxHeight}px` : undefined,
-                            borderTopLeftRadius: cornerRadius,
-                            borderTopRightRadius: cornerRadius,
-                        }}
-                        rows={1}
-                    />
+                        <Textarea
+                            ref={textareaRef}
+                            data-chat-input="true"
+                            value={message}
+                            onChange={handleTextChange}
+                            onKeyDown={handleKeyDown}
+                            onPaste={handlePaste}
+                            onDragEnter={handleDragEnter}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                            onPointerDownCapture={handleTextareaPointerDownCapture}
+                            onKeyUp={updateAutocompleteOverlayPosition}
+                            onClick={updateAutocompleteOverlayPosition}
+                            onScroll={(event) => {
+                                updateAutocompleteOverlayPosition();
+                                setTextareaScrollTop(event.currentTarget.scrollTop);
+                            }}
+                            onSelect={updateAutocompleteOverlayPosition}
+                            placeholder={currentSessionId || newSessionDraftOpen
+                                ? inputMode === 'shell'
+                                    ? "Enter shell command..."
+                                    : "@ for files/agents; / for commands; ! for shell"
+                                : "Select or create a session to start chatting"}
+                            disabled={!currentSessionId && !newSessionDraftOpen}
+                            autoCorrect={isMobile ? "on" : "off"}
+                            autoCapitalize={isMobile ? "sentences" : "off"}
+                            spellCheck={isMobile}
+                            outerClassName={cn('focus-within:ring-0', isDesktopExpanded && 'flex-1 min-h-0')}
+                            className={cn(
+                                'min-h-[52px] resize-none border-0 px-3 rounded-b-none appearance-none hover:border-transparent bg-transparent relative z-10',
+                                isDesktopExpanded
+                                    ? 'h-full min-h-0 py-4'
+                                    : isMobile
+                                        ? 'py-2.5'
+                                        : 'pt-4 pb-2',
+                                inputMode === 'shell' && 'font-mono',
+                                highlightedComposerContent && 'text-transparent caret-[var(--surface-foreground)]',
+                            )}
+                            style={{
+                                flex: isDesktopExpanded ? '1 1 auto' : 'none',
+                                height: !isDesktopExpanded && textareaSize ? `${textareaSize.height}px` : undefined,
+                                maxHeight: !isDesktopExpanded && textareaSize ? `${textareaSize.maxHeight}px` : undefined,
+                                borderTopLeftRadius: cornerRadius,
+                                borderTopRightRadius: cornerRadius,
+                            }}
+                            rows={1}
+                        />
+                    </div>
                     <div
                         className={cn(
                             'bg-transparent',

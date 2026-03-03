@@ -265,10 +265,12 @@ FileChip.displayName = 'FileChip';
 export const AttachedFilesList = memo(() => {
   const { attachedFiles, removeAttachedFile } = useSessionStore();
 
-  if (attachedFiles.length === 0) return null;
+  const localFiles = attachedFiles.filter((file) => file.source !== 'server');
 
-  const images = attachedFiles.filter(f => f.mimeType.startsWith('image/'));
-  const otherFiles = attachedFiles.filter(f => !f.mimeType.startsWith('image/'));
+  if (localFiles.length === 0) return null;
+
+  const images = localFiles.filter((f) => f.mimeType.startsWith('image/'));
+  const otherFiles = localFiles.filter((f) => !f.mimeType.startsWith('image/'));
 
   return (
     <div className="pb-4 w-full px-1 space-y-3">

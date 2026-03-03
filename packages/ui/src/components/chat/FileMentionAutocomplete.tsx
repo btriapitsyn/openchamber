@@ -1,7 +1,6 @@
 import React from 'react';
 import { RiCodeLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiRefreshLine } from '@remixicon/react';
 import { cn, truncatePathMiddle } from '@/lib/utils';
-import { useSessionStore } from '@/stores/useSessionStore';
 import { useFileSearchStore } from '@/stores/useFileSearchStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -65,7 +64,6 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       [projectRoot],
     ),
   );
-  const { addServerFile } = useSessionStore();
   const { getVisibleAgents } = useConfigStore();
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
   const debouncedQuery = useDebouncedValue(searchQuery, 180);
@@ -292,11 +290,9 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     };
   }, [selectedIndex]);
 
-  const handleFileSelect = React.useCallback(async (file: FileInfo) => {
-
-    await addServerFile(file.path, file.name);
+  const handleFileSelect = React.useCallback((file: FileInfo) => {
     onFileSelect(file);
-  }, [addServerFile, onFileSelect]);
+  }, [onFileSelect]);
 
   const handleAgentPick = React.useCallback((agentName: string) => {
     onAgentSelect?.(agentName);
