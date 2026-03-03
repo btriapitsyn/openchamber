@@ -4,6 +4,64 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-03-02
+
+- Chat: added user-message display controls for plain-text rendering and sticky headers, so you can tune readability to match your preferences.
+- Chat/UI: overhauled the context panel with reusable tabs and embedded session chat (_beta_), making parallel context work easier without losing place.
+- Chat: improved code block presentation with cleaner action alignment, restored horizontal scrolling, and polished themed highlighting across chat messages and tool output (thanks to @nelsonPires5).
+- Diff: added quick open-in-editor actions from diff views that jump to the first changed line, so it is faster to move from review to edits.
+- Git: refined Git sidebar tab behavior and spacing, plus bulk-revert with confirmations for easier cleanup.
+- Git: fixed commit staging edge cases by filtering stale deleted paths before staging, reducing pathspec commit failures.
+- Git/Worktrees: restored branch rename/edit controls in draft sessions when working in a worktree directory, so branch actions stay available earlier.
+- Chat: model picker now supports collapsible provider groups and remembers expanded state between sessions.
+- Settings: reorganized chat display settings into a more compact two-column layout, so more new options are easier to navigate.
+- Mobile/UI: fixed session-title overflow in compact headers so running/unread indicators and actions remain visible (thanks to @iamhenry).
+
+
+## [1.8.2] - 2026-03-01
+
+- Updates: hardened the self-update flow with safer release handling and fallback behavior, reducing failed or stuck updates.
+- Chat: added a new "Share as image" action so you can quickly export and share important messages (thanks to @Jovines).
+- Chat: improved message readability with cleaner tool/reasoning rendering and less noisy activity timing in busy conversations (thanks to @nelsonPires5).
+- Desktop/Chat: permission toasts now include session context and a clearer permission preview, making approvals more accessible outside of a session (thanks to @nelsonPires5).
+- VSCode: fixed live streaming edge cases for event endpoints with query/trailing-slash variants, improving real-time updates in chat, session editor, and agent-manager views.
+- Reliability: improved event-stream/session visibility handling when the app is hidden or restored, reducing stale activity states and missed updates.
+- Windows: fixed CLI/runtime path and spawn edge cases to reduce startup and command failures on Windows (thanks to @plfavreau).
+- Notifications/Voice: consolidated TTS and summarization service wiring for steadier text-to-speech and summary flows (thanks to @nelsonPires5).
+- Deployment: fixed Docker build/runtime issues for more reliable containerized setups (thanks to @nzlov).
+
+
+## [1.8.1] - 2026-02-28
+
+- Web/Auth: fixed an issue where non-tunnel browser sessions could incorrectly show a tunnel-only lock screen; normal auth flow now appears unless a tunnel is actually active.
+
+
+## [1.8.0] - 2026-02-28
+
+- Desktop: added SSH remote instance support with dedicated lifecycle and UX flows, so you can work against remote machines more reliably (thanks to @shekohex).
+- Projects: added project icon customization with upload/remove and automatic favicon discovery from your repository (thanks to @shekohex).
+- Projects: added header project actions on Web and Mobile, so you can run and stop any configured project commands without leaving chat.
+- Projects/Desktop: project actions can also open SSH-forwarded URLs, making remote dev-server workflows quicker from inside the app.
+- Desktop: added dynamic window titles that reflect active project and remote context, so it is easier to track where you are working (thanks to @shekohex).
+- Remote Tunnel: added tunnel settings with quick/named modes, secure one-time connect links (with QR), and saved named-tunnel presets/tokens so enabling remote access is easier and safer (thanks to @yulia-ivashko).
+- UI: expanded sprite-based file and folder icons across Files, Diff, and Git views for faster visual scanning (thanks to @shekohex).
+- UI: added an expandable project rail with project names, a settings toggle, and saved expansion state for easier navigation in multi-project setups (thanks to @nguyenngothuong).
+- UI/Files: added file-type icons across file lists, tabs, and diffs, so you can identify files faster at a glance (thanks to @shekohex).
+- Files: added a read-only highlighted view with a quick toggle back to edit mode, so you can quickly review code with richer syntax rendering if you don't need to edit thing (thanks to @shekohex).
+- Files: markdown preview now handles frontmatter more cleanly, improving readability for docs-heavy repos (thanks to @shekohex).
+- Chat: improved long-session performance with virtualized message rendering, smoother scrolling, and more stable behavior in large histories (thanks to @shekohex).
+- Chat: enabled markdown rendering in user messages for clearer formatted prompts and notes (thanks to @haofeng0705).
+- Chat: enabled bueatiful diffs for edit tools in chat making this aligned with dedicated diffs view style (thanks to @shekohex).
+- Chat: pasted absolute paths are now treated as normal messages, reducing accidental command-like behavior when sharing paths.
+- Chat: fixed queued sends for inactive sessions, reducing stuck queues.
+- Chat: upgraded Mermaid rendering with a cleaner diagram view plus quick copy/download actions, making generated diagrams easier to read and share (thanks to @shekohex).
+- Notifications: improved child-session notification detection to reduce missed or misclassified subtask updates (thanks to @Jovines).
+- Deployment: added Docker deployment support with safer container defaults and terminal shell fallback, making self-hosted setups easier to run (thanks to @nzlov).
+- Reliability: improved Windows compatibility across git status checks, OpenCode startup, path normalization, and session merge behavior (thanks to @mmereu).
+- Usage: added MiniMax coding-plan quota provider support for broader usage tracking coverage (thanks to @nzlov).
+- Usage: added Ollama Cloud quota provider support for broader usage tracking coverage (thanks to @iamhenry).
+
+
 ## [1.7.5] - 2026-02-25
 
 - UI: moved projects into a dedicated sidebar rail and tightened the layout so switching projects and sessions feels faster.

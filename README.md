@@ -58,7 +58,7 @@ The whole project was built entirely with AI coding agents under my supervision.
 
 ### Web / PWA
 
-- Cloudflare Quick Tunnel for instant remote access (`--try-cf-tunnel`)
+- Cloudflare tunnel access with two modes: Quick Tunnel (CLI) and Named Tunnel (in-app settings)
 - One-scan onboarding with tunnel QR + password URL helpers
 - Mobile-first experience: optimized chat controls, keyboard-safe layouts, and attachment-friendly UI
 - Background notifications plus reliable cross-tab session activity tracking
@@ -116,9 +116,68 @@ openchamber stop                     # Stop server
 openchamber update                   # Update to latest version
 ```
 
+Named Tunnel mode is configured in-app (Settings -> OpenChamber -> Tunnel). The CLI currently supports Quick Tunnel flags only. `--tunnel <config.yml>` is not supported yet.
+
 ### Desktop App (macOS)
 
 Download from [Releases](https://github.com/btriapitsyn/openchamber/releases).
+
+### Docker Compose
+
+```bash
+docker compose up -d
+```
+
+The service will be available at `http://localhost:3000`.
+
+**UI Password (optional):** To enable password-protected access, uncomment and set the `UI_PASSWORD` environment variable in `docker-compose.yml`:
+
+```yaml
+environment:
+  UI_PASSWORD: your_secure_password
+```
+
+Or pass it via command line:
+
+```bash
+UI_PASSWORD=secret docker compose up -d
+```
+
+**Cloudflare Tunnel (optional):** To enable Cloudflare Quick Tunnel for remote access, set the `CF_TUNNEL` environment variable:
+
+```yaml
+environment:
+  CF_TUNNEL: "true" # Options: true, qr, password, full
+```
+
+| Value      | Description                     |
+| ---------- | ------------------------------- |
+| `true`     | Enable tunnel only              |
+| `qr`       | Enable tunnel + QR code         |
+| `password` | Enable tunnel + password in URL |
+
+### Named Cloudflare Tunnel (persistent hostname)
+
+OpenChamber also supports Named Tunnel mode for more reliable long-lived access with your Cloudflare account and custom hostname.
+
+- Configure it in-app at **Settings -> OpenChamber -> Tunnel** and switch mode to **Named**.
+- Named tunnels require a domain in your Cloudflare account.
+- Cloudflare setup guide: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/
+- CLI note: `--tunnel <config.yml>` is not supported yet.
+
+**Data Directory Permission Note:** The `data/` directory is mounted into the container for persistent storage (config, sessions, SSH keys, workspaces). Before running, ensure the directory exists and has proper permissions:
+
+```bash
+# Create data directories with correct ownership
+mkdir -p data/openchamber data/opencode/share data/opencode/config data/ssh
+
+# Fix permissions (replace $USER with your username)
+chown -R 1000:1000 data/
+```
+
+Without proper permissions, the container may fail to start or encounter permission denied errors when writing to these directories.
+
+**SSH/Git Authentication Note:** If git pull/push fails. Run `ssh -T git@github.com` in terminal.
 
 ## Prerequisites
 
@@ -131,16 +190,19 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 ## Tech Stack
 
 ### Frontend
+
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Vite](https://img.shields.io/badge/Vite-7-646CFF?style=flat&logo=vite&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
 
 ### State & UI
+
 ![Zustand](https://img.shields.io/badge/Zustand-State_Management-FF6B6B?style=flat)
 ![Radix UI](https://img.shields.io/badge/Radix_UI-Components-8B5CF6?style=flat&logo=radixui&logoColor=white)
 
 ### Backend & Desktop
+
 ![Express](https://img.shields.io/badge/Express.js-Server-000000?style=flat&logo=express&logoColor=white)
 ![Tauri](https://img.shields.io/badge/Tauri-Desktop-FFC131?style=flat&logo=tauri&logoColor=white)
 ![OpenCode SDK](https://img.shields.io/badge/OpenCode-SDK-4F46E5?style=flat)

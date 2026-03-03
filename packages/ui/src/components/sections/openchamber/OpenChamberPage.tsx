@@ -8,6 +8,7 @@ import { GitSettings } from './GitSettings';
 import { NotificationSettings } from './NotificationSettings';
 import { GitHubSettings } from './GitHubSettings';
 import { VoiceSettings } from './VoiceSettings';
+import { TunnelSettings } from './TunnelSettings';
 import { OpenCodeCliSettings } from './OpenCodeCliSettings';
 import { KeyboardShortcutsSettings } from './KeyboardShortcutsSettings';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
@@ -75,6 +76,8 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
                 return <NotificationSectionContent />;
             case 'voice':
                 return <VoiceSectionContent />;
+            case 'tunnel':
+                return <TunnelSectionContent />;
             default:
                 return null;
         }
@@ -99,12 +102,28 @@ const ShortcutsSectionContent: React.FC = () => {
 
 // Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile), Nav Rail
 const VisualSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['theme', 'fontSize', 'terminalFontSize', 'spacing', 'cornerRadius', 'inputBarOffset', 'terminalQuickKeys', 'navRail']} />;
+    const isVSCode = isVSCodeRuntime();
+    const visibleSettings: Array<'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'terminalQuickKeys' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader'> = [
+        'theme',
+        'fontSize',
+        'terminalFontSize',
+        'spacing',
+        'cornerRadius',
+        'inputBarOffset',
+        'terminalQuickKeys',
+        'navRail',
+    ];
+
+    if (isVSCode) {
+        visibleSettings.push('mermaidRendering', 'userMessageRendering', 'stickyUserHeader');
+    }
+
+    return <OpenChamberVisualSettings visibleSettings={visibleSettings} />;
 };
 
-// Chat section: Default Tool Output, Diff layout, Mobile status bar, Show reasoning traces, Queue mode, Persist draft
+// Chat section: Default Tool Output, User message rendering, Diff layout, Mobile status bar, Show reasoning traces, Queue mode, Persist draft
 const ChatSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'diffLayout', 'mobileStatusBar', 'dotfiles', 'reasoning', 'textJustificationActivity', 'queueMode', 'persistDraft']} />;
+    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'mermaidRendering', 'userMessageRendering', 'stickyUserHeader', 'diffLayout', 'mobileStatusBar', 'dotfiles', 'reasoning', 'textJustificationActivity', 'queueMode', 'persistDraft']} />;
 };
 
 // Sessions section: Default model & agent, Session retention, Memory limits
@@ -156,4 +175,11 @@ const VoiceSectionContent: React.FC = () => {
         return null;
     }
     return <VoiceSettings />;
+};
+
+const TunnelSectionContent: React.FC = () => {
+    if (isVSCodeRuntime()) {
+        return null;
+    }
+    return <TunnelSettings />;
 };

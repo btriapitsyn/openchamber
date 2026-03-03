@@ -689,9 +689,21 @@ export const useMessageStore = create<MessageStore>()(
                     await executeWithSessionDirectory(sessionId, async () => {
                         try {
                             const trimmedContent = content.trimStart();
+                            const firstTokenLooksLikeAbsolutePath = (() => {
+                                if (!trimmedContent.startsWith('/')) return false;
+                                const firstWhitespaceIndex = trimmedContent.search(/\s/);
+                                const firstToken = firstWhitespaceIndex === -1
+                                    ? trimmedContent
+                                    : trimmedContent.slice(0, firstWhitespaceIndex);
+                                if (firstToken.length <= 1) return false;
+                                const tokenWithoutLeadingSlash = firstToken.slice(1);
+                                if (!tokenWithoutLeadingSlash.includes('/')) return false;
+                                return true;
+                            })();
                             const commandPayload = (() => {
                                 if (inputMode === 'shell') return null;
                                 if (!trimmedContent.startsWith("/")) return null;
+                                if (firstTokenLooksLikeAbsolutePath) return null;
                                 const firstLineEnd = trimmedContent.indexOf("\n");
                                 const firstLine = firstLineEnd === -1 ? trimmedContent : trimmedContent.slice(0, firstLineEnd);
                                 const [commandToken, ...firstLineArgs] = firstLine.split(" ");
@@ -716,6 +728,7 @@ export const useMessageStore = create<MessageStore>()(
                             })();
                             const slashShellPayload = (() => {
                                 if (!trimmedContent.startsWith("/")) return null;
+                                if (firstTokenLooksLikeAbsolutePath) return null;
                                 const firstLineEnd = trimmedContent.indexOf("\n");
                                 const firstLine = firstLineEnd === -1 ? trimmedContent : trimmedContent.slice(0, firstLineEnd);
                                 const [commandToken, ...firstLineArgs] = firstLine.split(" ");

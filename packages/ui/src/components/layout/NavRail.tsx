@@ -43,7 +43,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { cn, formatDirectoryName, hasModifier } from '@/lib/utils';
-import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP } from '@/lib/projectMeta';
+import { PROJECT_ICON_MAP, PROJECT_COLOR_MAP, getProjectIconImageUrl } from '@/lib/projectMeta';
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, requestDirectoryAccess } from '@/lib/desktop';
 import { useLongPress } from '@/hooks/useLongPress';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
@@ -61,6 +61,121 @@ const NAV_RAIL_EXPANDED_WIDTH = 200;
 const NAV_RAIL_TEXT_FADE_MS = 180;
 const PROJECT_TEXT_FADE_IN_DELAY_MS = 24;
 const ACTION_TEXT_FADE_IN_DELAY_MS = 60;
+
+type NavRailActionButtonProps = {
+  onClick: () => void;
+  disabled?: boolean;
+  ariaLabel: string;
+  icon: React.ReactNode;
+  tooltipLabel: string;
+  shortcutHint?: string;
+  showExpandedShortcutHint?: boolean;
+  buttonClassName: string;
+  showExpandedContent: boolean;
+  actionTextVisible: boolean;
+};
+
+const NavRailActionButton: React.FC<NavRailActionButtonProps> = ({
+  onClick,
+  disabled = false,
+  ariaLabel,
+  icon,
+  tooltipLabel,
+  shortcutHint,
+  showExpandedShortcutHint = true,
+  buttonClassName,
+  showExpandedContent,
+  actionTextVisible,
+}) => {
+  const pointerTriggeredRef = React.useRef(false);
+  const pointerPressRef = React.useRef<{ active: boolean; pointerId: number | null }>({
+    active: false,
+    pointerId: null,
+  });
+
+  const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (disabled || event.button !== 0) {
+      pointerPressRef.current = { active: false, pointerId: null };
+      return;
+    }
+    pointerPressRef.current = { active: true, pointerId: event.pointerId };
+  }, [disabled]);
+
+  const clearPointerPress = React.useCallback(() => {
+    pointerPressRef.current = { active: false, pointerId: null };
+  }, []);
+
+  const handlePointerUp = React.useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (event.button !== 0) return;
+    const pointerPress = pointerPressRef.current;
+    if (!pointerPress.active || pointerPress.pointerId !== event.pointerId) {
+      return;
+    }
+    clearPointerPress();
+    pointerTriggeredRef.current = true;
+    onClick();
+  }, [clearPointerPress, disabled, onClick]);
+
+  const handleClick = React.useCallback(() => {
+    if (disabled) return;
+    if (pointerTriggeredRef.current) {
+      pointerTriggeredRef.current = false;
+      return;
+    }
+    onClick();
+  }, [disabled, onClick]);
+
+  const btn = (
+    <button
+      type="button"
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={clearPointerPress}
+      onPointerLeave={clearPointerPress}
+      onClick={handleClick}
+      className={buttonClassName}
+      aria-label={ariaLabel}
+      disabled={disabled}
+    >
+      {showExpandedContent && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 left-[6px] right-[5px] rounded-lg bg-transparent transition-colors group-hover:bg-[var(--interactive-hover)]/50"
+        />
+      )}
+      <span className="relative z-10 flex size-8 basis-8 shrink-0 grow-0 items-center justify-center">
+        {icon}
+      </span>
+      <span
+        aria-hidden={!actionTextVisible}
+        className={cn(
+          'relative z-10 min-w-0 flex items-center justify-between gap-1 overflow-hidden transition-opacity duration-[180ms] ease-in-out',
+          showExpandedContent ? 'flex-1' : 'w-0 flex-none',
+          actionTextVisible ? 'opacity-100' : 'opacity-0',
+        )}
+      >
+        <span className="truncate text-left text-[13px]">{tooltipLabel}</span>
+        {shortcutHint && showExpandedShortcutHint && (
+          <span className="shrink-0 text-[10px] text-[var(--surface-mutedForeground)] opacity-70">
+            {shortcutHint}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+
+  return (
+    <Tooltip delayDuration={400}>
+      <TooltipTrigger asChild>{btn}</TooltipTrigger>
+      {!showExpandedContent && (
+        <TooltipContent side="right" sideOffset={8}>
+          <p>{shortcutHint ? `${tooltipLabel} (${shortcutHint})` : tooltipLabel}</p>
+        </TooltipContent>
+      )}
+    </Tooltip>
+  );
+};
 
 /** Tinted background for project tiles — uses project color at low opacity, or neutral fallback */
 const TileBackground: React.FC<{ colorVar: string | null; children: React.ReactNode }> = ({
@@ -143,10 +258,16 @@ const ProjectTile: React.FC<{
   onClose: () => void;
 }> = ({ project, isActive, hasStreaming, hasUnread, label, expanded, projectTextVisible, onClick, onEdit, onClose }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [iconImageFailed, setIconImageFailed] = React.useState(false);
   const ProjectIcon = project.icon ? PROJECT_ICON_MAP[project.icon] : null;
+  const projectIconImageUrl = !iconImageFailed ? getProjectIconImageUrl(project) : null;
   const projectColorVar = project.color ? (PROJECT_COLOR_MAP[project.color] ?? null) : null;
   const showStreamingDots = hasStreaming;
   const showAttentionDots = !hasStreaming && hasUnread;
+
+  React.useEffect(() => {
+    setIconImageFailed(false);
+  }, [project.id, project.iconImage?.updatedAt]);
 
   const longPressHandlers = useLongPress({
     onLongPress: () => setMenuOpen(true),
@@ -157,7 +278,20 @@ const ProjectTile: React.FC<{
     <TileBackground colorVar={projectColorVar}>
       <span className="relative h-full w-full leading-none">
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          {ProjectIcon ? (
+          {projectIconImageUrl ? (
+            <span
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-[2px]"
+              style={project.iconBackground ? { backgroundColor: project.iconBackground } : undefined}
+            >
+              <img
+                src={projectIconImageUrl}
+                alt=""
+                className="h-full w-full object-contain"
+                draggable={false}
+                onError={() => setIconImageFailed(true)}
+              />
+            </span>
+          ) : ProjectIcon ? (
             <ProjectIcon
               className="h-4 w-4 shrink-0"
               style={projectColorVar ? { color: projectColorVar } : { color: 'var(--surface-foreground)' }}
@@ -335,6 +469,19 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
   const setSettingsDialogOpen = useUIStore((s) => s.setSettingsDialogOpen);
   const setAboutDialogOpen = useUIStore((s) => s.setAboutDialogOpen);
   const toggleHelpDialog = useUIStore((s) => s.toggleHelpDialog);
+  const isOverlayBlockingNavRailActions = useUIStore((s) => (
+    s.isSettingsDialogOpen
+    || s.isHelpDialogOpen
+    || s.isCommandPaletteOpen
+    || s.isSessionSwitcherOpen
+    || s.isAboutDialogOpen
+    || s.isOpenCodeStatusDialogOpen
+    || s.isSessionCreateDialogOpen
+    || s.isModelSelectorOpen
+    || s.isTimelineDialogOpen
+    || s.isMultiRunLauncherOpen
+    || s.isImagePreviewOpen
+  ));
   const isNavRailExpanded = useUIStore((s) => s.isNavRailExpanded);
   const toggleNavRail = useUIStore((s) => s.toggleNavRail);
   const shortcutOverrides = useUIStore((s) => s.shortcutOverrides);
@@ -385,6 +532,7 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
   const updateStore = useUpdateStore();
   const { available: updateAvailable, downloaded: updateDownloaded } = updateStore;
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
+  const navRailInteractionBlocked = isOverlayBlockingNavRailActions || updateDialogOpen;
 
   const [editingProject, setEditingProject] = React.useState<{
     id: string;
@@ -392,6 +540,7 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
     path: string;
     icon?: string | null;
     color?: string | null;
+    iconBackground?: string | null;
   } | null>(null);
 
   const isDesktopApp = React.useMemo(() => isDesktopShell(), []);
@@ -503,19 +652,20 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
     (projectId: string) => {
       const project = projects.find((p) => p.id === projectId);
       if (!project) return;
-      setEditingProject({
-        id: project.id,
-        name: formatLabel(project),
-        path: project.path,
-        icon: project.icon,
-        color: project.color,
-      });
+        setEditingProject({
+          id: project.id,
+          name: formatLabel(project),
+          path: project.path,
+          icon: project.icon,
+          color: project.color,
+          iconBackground: project.iconBackground,
+        });
     },
     [projects, formatLabel],
   );
 
   const handleSaveProjectEdit = React.useCallback(
-    (data: { label: string; icon: string | null; color: string | null }) => {
+    (data: { label: string; icon: string | null; color: string | null; iconBackground: string | null }) => {
       if (!editingProject) return;
       updateProjectMeta(editingProject.id, data);
       setEditingProject(null);
@@ -580,66 +730,13 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
 
   const navRailActionIconClass = 'h-4.5 w-4.5 shrink-0';
 
-  const ActionButton: React.FC<{
-    onClick: () => void;
-    ariaLabel: string;
-    icon: React.ReactNode;
-    tooltipLabel: string;
-    shortcutHint?: string;
-    showExpandedShortcutHint?: boolean;
-  }> = ({ onClick, ariaLabel, icon, tooltipLabel, shortcutHint, showExpandedShortcutHint = true }) => {
-    const btn = (
-      <button
-        type="button"
-        onClick={onClick}
-        className={navRailActionButtonClass}
-        aria-label={ariaLabel}
-      >
-        {showExpandedContent && (
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-[6px] right-[5px] rounded-lg bg-transparent transition-colors group-hover:bg-[var(--interactive-hover)]/50"
-          />
-        )}
-        <span className="relative z-10 flex size-8 basis-8 shrink-0 grow-0 items-center justify-center">
-          {icon}
-        </span>
-        <span
-          aria-hidden={!actionTextVisible}
-          className={cn(
-            'relative z-10 min-w-0 flex items-center justify-between gap-1 overflow-hidden transition-opacity duration-[180ms] ease-in-out',
-            showExpandedContent ? 'flex-1' : 'w-0 flex-none',
-            actionTextVisible ? 'opacity-100' : 'opacity-0',
-          )}
-        >
-          <span className="truncate text-left text-[13px]">{tooltipLabel}</span>
-          {shortcutHint && showExpandedShortcutHint && (
-              <span className="shrink-0 text-[10px] text-[var(--surface-mutedForeground)] opacity-70">
-                {shortcutHint}
-              </span>
-          )}
-        </span>
-      </button>
-    );
-
-    return (
-      <Tooltip delayDuration={400}>
-        <TooltipTrigger asChild>{btn}</TooltipTrigger>
-        {!showExpandedContent && (
-          <TooltipContent side="right" sideOffset={8}>
-            <p>{shortcutHint ? `${tooltipLabel} (${shortcutHint})` : tooltipLabel}</p>
-          </TooltipContent>
-        )}
-      </Tooltip>
-    );
-  };
-
   return (
     <>
       <nav
         className={cn(
           'flex h-full shrink-0 flex-col bg-[var(--surface-background)] overflow-hidden',
           showExpandedContent ? 'items-stretch' : 'items-center',
+          navRailInteractionBlocked && 'pointer-events-none',
           className,
         )}
         style={{ width: expanded ? NAV_RAIL_EXPANDED_WIDTH : NAV_RAIL_WIDTH }}
@@ -686,11 +783,15 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
 
             {/* Add project button */}
             <div className={cn('flex flex-col pb-3', showExpandedContent ? 'items-stretch px-1' : 'items-center px-1')}>
-              <ActionButton
+              <NavRailActionButton
                 onClick={handleAddProject}
+                disabled={navRailInteractionBlocked}
                 ariaLabel="Add project"
                 icon={<RiFolderAddLine className={navRailActionIconClass} />}
                 tooltipLabel="Add project"
+                buttonClassName={navRailActionButtonClass}
+                showExpandedContent={showExpandedContent}
+                actionTextVisible={actionTextVisible}
               />
             </div>
         </div>
@@ -701,47 +802,64 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
           showExpandedContent ? 'items-stretch px-1' : 'items-center',
         )}>
           {(updateAvailable || updateDownloaded) && (
-            <ActionButton
+            <NavRailActionButton
               onClick={() => setUpdateDialogOpen(true)}
+              disabled={navRailInteractionBlocked}
               ariaLabel="Update available"
               icon={<RiDownloadLine className={navRailActionIconClass} />}
               tooltipLabel="Update available"
+              buttonClassName={navRailActionButtonClass}
+              showExpandedContent={showExpandedContent}
+              actionTextVisible={actionTextVisible}
             />
           )}
 
           {!isDesktopApp && !(updateAvailable || updateDownloaded) && (
-            <ActionButton
+            <NavRailActionButton
               onClick={() => setAboutDialogOpen(true)}
+              disabled={navRailInteractionBlocked}
               ariaLabel="About"
               icon={<RiInformationLine className={navRailActionIconClass} />}
               tooltipLabel="About OpenChamber"
+              buttonClassName={navRailActionButtonClass}
+              showExpandedContent={showExpandedContent}
+              actionTextVisible={actionTextVisible}
             />
           )}
 
           {!mobile && (
-            <ActionButton
+            <NavRailActionButton
               onClick={toggleHelpDialog}
+              disabled={navRailInteractionBlocked}
               ariaLabel="Keyboard shortcuts"
               icon={<RiQuestionLine className={navRailActionIconClass} />}
               tooltipLabel="Shortcuts"
               shortcutHint={shortcutLabel('open_help')}
               showExpandedShortcutHint={false}
+              buttonClassName={navRailActionButtonClass}
+              showExpandedContent={showExpandedContent}
+              actionTextVisible={actionTextVisible}
             />
           )}
 
-          <ActionButton
+          <NavRailActionButton
             onClick={() => setSettingsDialogOpen(true)}
+            disabled={navRailInteractionBlocked}
             ariaLabel="Settings"
             icon={<RiSettings3Line className={navRailActionIconClass} />}
             tooltipLabel="Settings"
             shortcutHint={shortcutLabel('open_settings')}
             showExpandedShortcutHint={false}
+            buttonClassName={navRailActionButtonClass}
+            showExpandedContent={showExpandedContent}
+            actionTextVisible={actionTextVisible}
           />
 
           {/* Toggle expand/collapse (desktop only) */}
           {!mobile && (
-            <ActionButton
+            <NavRailActionButton
               onClick={toggleNavRail}
+              disabled={navRailInteractionBlocked}
               ariaLabel={expanded ? 'Collapse sidebar' : 'Expand sidebar'}
               icon={expanded
                 ? <RiMenuFoldLine className={navRailActionIconClass} />
@@ -750,6 +868,9 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
               tooltipLabel={expanded ? 'Collapse' : 'Expand'}
               shortcutHint={shortcutLabel('toggle_nav_rail')}
               showExpandedShortcutHint={false}
+              buttonClassName={navRailActionButtonClass}
+              showExpandedContent={showExpandedContent}
+              actionTextVisible={actionTextVisible}
             />
           )}
         </div>
@@ -762,10 +883,12 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
           onOpenChange={(open) => {
             if (!open) setEditingProject(null);
           }}
+          projectId={editingProject.id}
           projectName={editingProject.name}
           projectPath={editingProject.path}
           initialIcon={editingProject.icon}
           initialColor={editingProject.color}
+          initialIconBackground={editingProject.iconBackground}
           onSave={handleSaveProjectEdit}
         />
       )}

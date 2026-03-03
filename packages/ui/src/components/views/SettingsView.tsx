@@ -20,13 +20,14 @@ import {
   RiCloudLine,
   RiFoldersLine,
   RiGitBranchLine,
-
+  RiGlobalLine,
   RiMicLine,
   RiNotification3Line,
   RiPaletteLine,
   RiListUnordered,
   RiRobot2Line,
   RiRestartLine,
+  RiServerLine,
   RiSlashCommands2,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -41,6 +42,8 @@ import { SkillsSidebar } from '@/components/sections/skills/SkillsSidebar';
 import { SkillsPage } from '@/components/sections/skills/SkillsPage';
 import { ProjectsSidebar } from '@/components/sections/projects/ProjectsSidebar';
 import { ProjectsPage } from '@/components/sections/projects/ProjectsPage';
+import { RemoteInstancesSidebar } from '@/components/sections/remote-instances/RemoteInstancesSidebar';
+import { RemoteInstancesPage } from '@/components/sections/remote-instances/RemoteInstancesPage';
 import { ProvidersSidebar } from '@/components/sections/providers/ProvidersSidebar';
 import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
 import { UsageSidebar } from '@/components/sections/usage/UsageSidebar';
@@ -51,7 +54,7 @@ import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPa
 import { AboutSettings } from '@/components/sections/openchamber/AboutSettings';
 import { McpIcon } from '@/components/icons/McpIcon';
 import { useDeviceInfo } from '@/lib/device';
-import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
+import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import {
   SETTINGS_PAGE_METADATA,
@@ -85,6 +88,7 @@ const pageOrder: SettingsPageSlug[] = [
   'shortcuts',
   'git',
   'projects',
+  'remote-instances',
   'agents',
   'commands',
   'mcp',
@@ -93,11 +97,12 @@ const pageOrder: SettingsPageSlug[] = [
   'skills.installed',
   'skills.catalog',
   'voice',
+  'tunnel',
 ];
 
 function buildRuntimeContext(isDesktop: boolean): SettingsRuntimeContext {
   const isVSCode = isVSCodeRuntime();
-  const isWeb = isWebRuntime();
+  const isWeb = !isDesktop && isWebRuntime();
   return { isVSCode, isWeb, isDesktop };
 }
 
@@ -112,6 +117,8 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
   switch (slug) {
     case 'projects':
       return RiFoldersLine;
+    case 'remote-instances':
+      return RiServerLine;
     case 'appearance':
       return RiPaletteLine;
     case 'chat':
@@ -144,6 +151,8 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
       return RiBarChart2Line;
     case 'voice':
       return RiMicLine;
+    case 'tunnel':
+      return RiGlobalLine;
     case 'home':
       return null;
     default:
@@ -245,8 +254,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   const isDesktopApp = React.useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
+    return isDesktopShell();
   }, []);
 
   // keep platform check available for future window chrome tweaks
@@ -362,6 +370,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     sessions: 'sessions',
     notifications: 'notifications',
     voice: 'voice',
+    tunnel: 'tunnel',
   }), []);
 
   const renderUnavailable = React.useCallback(() => {
@@ -379,6 +388,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     switch (slug) {
       case 'projects':
         return <ProjectsSidebar onItemSelect={opts.onItemSelect} />;
+      case 'remote-instances':
+        return <RemoteInstancesSidebar onItemSelect={opts.onItemSelect} />;
       case 'agents':
         return <AgentsSidebar onItemSelect={opts.onItemSelect} />;
       case 'commands':
@@ -407,6 +418,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <SettingsHome onOpen={openPage} />;
       case 'projects':
         return <ProjectsPage />;
+      case 'remote-instances':
+        return <RemoteInstancesPage />;
       case 'agents':
         return <AgentsPage />;
       case 'commands':
@@ -428,7 +441,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'shortcuts':
       case 'sessions':
       case 'notifications':
-      case 'voice': {
+      case 'voice':
+      case 'tunnel': {
         const section = openChamberSectionBySlug[slug] ?? 'visual';
         return <OpenChamberPage section={section} />;
       }
@@ -502,7 +516,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                         )}
                       >
                         <span className="typography-ui-label font-normal truncate">{page.title}</span>
-                        {page.slug === 'voice' && (
+                        {(page.slug === 'voice' || page.slug === 'tunnel') && (
                           <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">
                             beta
                           </span>

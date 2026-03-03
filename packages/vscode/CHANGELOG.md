@@ -1,3 +1,32 @@
+## [1.8.3] - 2026-03-02
+
+- Chat: added user-message display options for plain-text rendering and sticky headers, with preferences persisted in settings.
+- Chat: improved code block readability with cleaner header actions, restored horizontal scrolling, and more polished themed highlighting in markdown and tool output (thanks to @nelsonPires5).
+- Chat: model picker provider groups are now collapsible, with expanded/collapsed state remembered.
+
+## [1.8.2] - 2026-03-01
+
+- Chat: improved message readability with cleaner tool/reasoning rendering and more polished markdown presentation in long responses.
+- Chat Activity: timing display is now less noisy, with detailed end timestamps shown on hover when you need them (thanks to @nelsonPires5).
+- Reliability: improved panel visibility/reconnect handling so session activity stays more consistent after hiding and reopening the extension.
+- Reliability: fixed live-streaming edge cases for event endpoints with query/trailing-slash variants, improving real-time updates across chat, session editor, and agent-manager views.
+
+## [1.8.1] - 2026-02-28
+
+- No notable changes.
+
+## [1.8.0] - 2026-02-28
+
+- Chat: improved long-session performance with virtualized message rendering, smoother scrolling, and more stable behavior in large histories (thanks to @shekohex).
+- Chat: added drag-and-drop file attachments, so dropping files from Explorer into chat is now a first-class flow (thanks to @Asuta).
+- Chat: enabled markdown rendering in user messages for clearer formatted prompts and notes (thanks to @haofeng0705).
+- Chat: pasted absolute paths are now treated as normal messages, reducing accidental command-like sends.
+- Chat: fixed queued send behavior for inactive sessions to reduce accidental sends to the wrong conversation.
+- Chat: enabled bueatiful diffs for edit tools in chat (thanks to @shekohex).
+- UI: improved long filename handling in file-mention autocomplete so results stay readable while typing (thanks to @haofeng0705).
+- Usage: added MiniMax coding-plan quota provider support for broader usage tracking coverage (thanks to @nzlov).
+- Usage: added Ollama Cloud quota provider support for broader usage tracking coverage (thanks to @iamhenry).
+
 ## [1.7.5] - 2026-02-25
 
 - Sessions: improved switching performance so moving between chats feels more immediate.

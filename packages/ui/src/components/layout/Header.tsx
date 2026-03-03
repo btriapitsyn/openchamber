@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { AnimatedTabs } from '@/components/ui/animated-tabs';
+import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 
 import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
@@ -23,6 +23,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -55,6 +56,7 @@ import type { GitHubAuthStatus } from '@/lib/api/types';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
+import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
 
@@ -120,6 +122,19 @@ const resolveTilde = (path: string, homeDir: string | null): string => {
   return trimmed;
 };
 
+const getActiveContextMode = (panelState: {
+  isOpen: boolean;
+  activeTabId: string | null;
+  tabs: Array<{ id: string; mode: 'diff' | 'file' | 'context' | 'plan' | 'chat' }>;
+} | undefined): 'diff' | 'file' | 'context' | 'plan' | 'chat' | null => {
+  if (!panelState?.isOpen || !Array.isArray(panelState.tabs) || panelState.tabs.length === 0) {
+    return null;
+  }
+
+  const activeTab = panelState.tabs.find((tab) => tab.id === panelState.activeTabId) ?? panelState.tabs[panelState.tabs.length - 1];
+  return activeTab?.mode ?? null;
+};
+
 interface TabConfig {
   id: MainTab;
   label: string;
@@ -165,12 +180,13 @@ export const Header: React.FC<HeaderProps> = ({
     return state.messages.get(currentSessionId);
   });
   const sessions = useSessionStore((state) => state.sessions);
-  const activeProjectLabel = useProjectsStore((state) => {
+  const activeProject = useProjectsStore((state) => {
     if (!state.activeProjectId) {
       return null;
     }
-
-    const activeProject = state.projects.find((project) => project.id === state.activeProjectId);
+    return state.projects.find((project) => project.id === state.activeProjectId) ?? null;
+  });
+  const activeProjectLabel = React.useMemo(() => {
     if (!activeProject) {
       return null;
     }
@@ -182,7 +198,7 @@ export const Header: React.FC<HeaderProps> = ({
 
     const pathSegments = activeProject.path.split(/[\\/]/).filter(Boolean);
     return pathSegments[pathSegments.length - 1] ?? null;
-  });
+  }, [activeProject]);
   const quotaResults = useQuotaStore((state) => state.results);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isQuotaLoading = useQuotaStore((state) => state.isLoading);
@@ -491,6 +507,47 @@ export const Header: React.FC<HeaderProps> = ({
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
 
+  const selectedFilePath = useFilesViewTabsStore((state) => {
+    const directory = normalize(openDirectory || '');
+    if (!directory) {
+      return null;
+    }
+    return state.byRoot[directory]?.selectedPath ?? null;
+  });
+
+  const actionDirectory = React.useMemo(() => {
+    return normalize(openDirectory || activeProject?.path || '');
+  }, [activeProject?.path, openDirectory]);
+
+  const activeProjectRef = React.useMemo(() => {
+    if (!activeProject) {
+      return null;
+    }
+    return { id: activeProject.id, path: activeProject.path };
+  }, [activeProject]);
+
+  const lastProjectActionsContextRef = React.useRef<{
+    projectRef: { id: string; path: string };
+    directory: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    if (!activeProjectRef || !actionDirectory) {
+      return;
+    }
+    lastProjectActionsContextRef.current = {
+      projectRef: activeProjectRef,
+      directory: actionDirectory,
+    };
+  }, [actionDirectory, activeProjectRef]);
+
+  const projectActionsContext = React.useMemo(() => {
+    if (activeProjectRef && actionDirectory) {
+      return { projectRef: activeProjectRef, directory: actionDirectory };
+    }
+    return lastProjectActionsContextRef.current;
+  }, [actionDirectory, activeProjectRef]);
+
 
   const [planTabAvailable, setPlanTabAvailable] = React.useState(false);
   const showPlanTab = planTabAvailable;
@@ -631,7 +688,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     const panelState = contextPanelByDirectory[directory];
-    if (panelState?.isOpen && panelState.mode === 'context') {
+    if (getActiveContextMode(panelState) === 'context') {
       closeContextPanel(directory);
       return;
     }
@@ -645,7 +702,7 @@ export const Header: React.FC<HeaderProps> = ({
       return false;
     }
     const panelState = contextPanelByDirectory[directory];
-    return Boolean(panelState?.isOpen && panelState.mode === 'context');
+    return getActiveContextMode(panelState) === 'context';
   }, [contextPanelByDirectory, openDirectory]);
 
   const handleOpenContextPlan = React.useCallback(() => {
@@ -655,7 +712,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
 
     const panelState = contextPanelByDirectory[directory];
-    if (panelState?.isOpen && panelState.mode === 'plan') {
+    if (getActiveContextMode(panelState) === 'plan') {
       closeContextPanel(directory);
       return;
     }
@@ -669,7 +726,7 @@ export const Header: React.FC<HeaderProps> = ({
       return false;
     }
     const panelState = contextPanelByDirectory[directory];
-    return Boolean(panelState?.isOpen && panelState.mode === 'plan');
+    return getActiveContextMode(panelState) === 'plan';
   }, [contextPanelByDirectory, openDirectory]);
 
   const desktopHeaderIconButtonClass = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center gap-2 rounded-md typography-ui-label font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:bg-interactive-hover transition-colors';
@@ -805,10 +862,29 @@ export const Header: React.FC<HeaderProps> = ({
     return base;
   }, [isDesktopApp]);
 
+  const servicesTabItems = React.useMemo(() => {
+    return servicesTabs.map((tab) => ({
+      id: tab.value,
+      label: tab.label,
+      icon: <tab.icon className="h-3.5 w-3.5" />,
+    }));
+  }, [servicesTabs]);
+
   const quotaDisplayTabs = React.useMemo(() => {
     return [
       { value: 'usage' as const, label: 'Used' },
       { value: 'remaining' as const, label: 'Remaining' },
+    ];
+  }, []);
+
+  const quotaDisplayTabItems = React.useMemo(() => {
+    return quotaDisplayTabs.map((tab) => ({ id: tab.value, label: tab.label }));
+  }, [quotaDisplayTabs]);
+
+  const mobileServicesTabItems = React.useMemo<SortableTabsStripItem[]>(() => {
+    return [
+      { id: 'usage', label: 'Usage', icon: <RiTimerLine className="h-3.5 w-3.5" /> },
+      { id: 'mcp', label: 'MCP', icon: <RiCommandLine className="h-3.5 w-3.5" /> },
     ];
   }, []);
 
@@ -962,9 +1038,17 @@ export const Header: React.FC<HeaderProps> = ({
       </Tooltip>
 
       {activeProjectLabel && (
-        <div className="mr-3 min-w-0 max-w-[16rem] truncate typography-ui-label font-medium text-foreground">
+        <div className="mr-3 min-w-0 max-w-[16rem] truncate pl-2 typography-ui-header text-[calc(var(--text-ui-header)+0.125rem)] font-medium text-foreground">
           {activeProjectLabel}
         </div>
+      )}
+
+      {projectActionsContext && (
+        <ProjectActionsButton
+          projectRef={projectActionsContext.projectRef}
+          directory={projectActionsContext.directory}
+          className="mr-1"
+        />
       )}
 
       {tabs.length > 0 && (
@@ -1009,7 +1093,7 @@ export const Header: React.FC<HeaderProps> = ({
             </TooltipContent>
           </Tooltip>
         )}
-        <OpenInAppButton directory={openDirectory} className="mr-1" />
+        <OpenInAppButton directory={openDirectory} activeFilePath={selectedFilePath} className="mr-1" />
         <DropdownMenu
             open={isDesktopServicesOpen}
             onOpenChange={(open) => {
@@ -1054,18 +1138,25 @@ export const Header: React.FC<HeaderProps> = ({
               align="end"
               className="w-[min(30rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto bg-[var(--surface-elevated)] p-0"
             >
-              <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-2">
-                <AnimatedTabs<'instance' | 'usage' | 'mcp'>
-                  value={desktopServicesTab}
-                  onValueChange={(value) => {
-                    setDesktopServicesTab(value);
-                    if (value === 'usage' && quotaResults.length === 0) {
-                      fetchAllQuotas();
-                    }
-                  }}
-                  tabs={servicesTabs}
-                  className="rounded-md"
-                />
+              <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-2 py-px">
+                <div className="h-9">
+                  <SortableTabsStrip
+                    items={servicesTabItems}
+                    activeId={desktopServicesTab}
+                    onSelect={(tabID) => {
+                      const value = tabID as 'instance' | 'usage' | 'mcp';
+                      setDesktopServicesTab(value);
+                      if (value === 'usage' && quotaResults.length === 0) {
+                        fetchAllQuotas();
+                      }
+                    }}
+                    layoutMode="fit"
+                    variant="active-pill"
+                    activePillInsetClassName="gap-0.5 px-px py-0"
+                    activePillButtonClassName="h-8"
+                    className="h-full"
+                  />
+                </div>
               </div>
 
               {isDesktopApp && desktopServicesTab === 'instance' && (
@@ -1092,13 +1183,17 @@ export const Header: React.FC<HeaderProps> = ({
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <AnimatedTabs<'usage' | 'remaining'>
-                          value={quotaDisplayMode}
-                          onValueChange={handleDisplayModeChange}
-                          tabs={quotaDisplayTabs}
-                          size="sm"
-                          className="w-[10.5rem]"
-                        />
+                        <div className="h-7 w-[10.5rem]">
+                          <SortableTabsStrip
+                            items={quotaDisplayTabItems}
+                            activeId={quotaDisplayMode}
+                            onSelect={(tabID) => handleDisplayModeChange(tabID as 'usage' | 'remaining')}
+                            layoutMode="fit"
+                            variant="active-pill"
+                            activePillInsetClassName="gap-0.5 px-px py-0"
+                            className="h-full"
+                          />
+                        </div>
                         <button
                           type="button"
                           className={cn(
@@ -1505,6 +1600,15 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           <div className="flex items-center gap-1 shrink-0">
+            {projectActionsContext && (
+              <ProjectActionsButton
+                projectRef={projectActionsContext.projectRef}
+                directory={projectActionsContext.directory}
+                compact
+                allowMobile
+                className="h-9"
+              />
+            )}
 
             {/* Mobile Services Menu (Usage + MCP) */}
             <DropdownMenu
@@ -1538,22 +1642,26 @@ export const Header: React.FC<HeaderProps> = ({
                 className="h-dvh w-[100vw] max-h-none rounded-none border-0 p-0 overflow-hidden"
               >
                 <div className="flex h-full flex-col bg-[var(--surface-elevated)]">
-                  <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-2">
-                    <div className="flex items-center justify-between gap-2 px-3 py-3">
-                      <AnimatedTabs<'usage' | 'mcp'>
-                        value={mobileServicesTab}
-                        onValueChange={(value) => {
-                          setMobileServicesTab(value);
-                          if (value === 'usage' && quotaResults.length === 0) {
-                            fetchAllQuotas();
-                          }
-                        }}
-                        tabs={[
-                          { value: 'usage', label: 'Usage', icon: RiTimerLine },
-                          { value: 'mcp', label: 'MCP', icon: RiCommandLine },
-                        ]}
-                        className="rounded-md"
-                      />
+                  <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-2 py-px">
+                    <div className="flex items-center justify-between gap-2 px-3 py-0">
+                      <div className="h-10 min-w-0 flex-1">
+                        <SortableTabsStrip
+                          items={mobileServicesTabItems}
+                          activeId={mobileServicesTab}
+                          onSelect={(tabID) => {
+                            const value = tabID as 'usage' | 'mcp';
+                            setMobileServicesTab(value);
+                            if (value === 'usage' && quotaResults.length === 0) {
+                              fetchAllQuotas();
+                            }
+                          }}
+                          layoutMode="fit"
+                          variant="active-pill"
+                          activePillInsetClassName="gap-0.5 px-px py-0"
+                          activePillButtonClassName="h-8"
+                          className="h-full"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={() => setIsMobileRateLimitsOpen(false)}
@@ -1573,20 +1681,41 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="flex-1 overflow-y-auto overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))]">
                       <div className="bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
                         <div className="flex items-center justify-between gap-3 px-3 py-2.5">
-                          <div className="flex min-w-0 items-center gap-2">
+                          <div className="flex flex-col min-w-0">
                             <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
                             <span className="truncate typography-ui-label text-muted-foreground">
                               Last updated {formatTime(quotaLastUpdated)}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <AnimatedTabs<'usage' | 'remaining'>
-                              value={quotaDisplayMode}
-                              onValueChange={handleDisplayModeChange}
-                              tabs={quotaDisplayTabs}
-                              size="sm"
-                              className="w-[10.5rem]"
-                            />
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Light-weight text toggle for Used/Remaining */}
+                            <div className="flex items-center h-6">
+                              <button
+                                type="button"
+                                onClick={() => handleDisplayModeChange('usage')}
+                                className={cn(
+                                  'typography-ui-label px-1 pb-0.5 transition-colors',
+                                  quotaDisplayMode === 'usage'
+                                    ? 'text-foreground border-b-2 border-[var(--primary-base)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                )}
+                              >
+                                Used
+                              </button>
+                              <span className="text-muted-foreground typography-ui-label px-0.5">·</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDisplayModeChange('remaining')}
+                                className={cn(
+                                  'typography-ui-label px-1 pb-0.5 transition-colors',
+                                  quotaDisplayMode === 'remaining'
+                                    ? 'text-foreground border-b-2 border-[var(--primary-base)]'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                )}
+                              >
+                                Remaining
+                              </button>
+                            </div>
                             <button
                               type="button"
                               className={cn(

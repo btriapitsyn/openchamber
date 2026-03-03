@@ -12,13 +12,12 @@ import {
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import { useConfigStore } from '@/stores/useConfigStore';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { useDeviceInfo } from '@/lib/device';
 import { RiAddLine, RiChatAi3Line, RiCheckLine, RiCodeLine, RiComputerLine, RiGitBranchLine, RiLayoutLeftLine, RiLayoutRightLine, RiMoonLine, RiQuestionLine, RiSettings3Line, RiSunLine, RiTerminalBoxLine, RiTimeLine } from '@remixicon/react';
 import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
-import { isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
+import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { SETTINGS_PAGE_METADATA, SETTINGS_GROUP_LABELS, type SettingsRuntimeContext } from '@/lib/settings/metadata';
 
 export const CommandPalette: React.FC = () => {
@@ -46,8 +45,6 @@ export const CommandPalette: React.FC = () => {
     setCurrentSession,
     getSessionsByDirectory,
   } = useSessionStore();
-
-  const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const { currentDirectory } = useDirectoryStore();
   const { themeMode, setThemeMode } = useThemeSystem();
@@ -122,8 +119,8 @@ export const CommandPalette: React.FC = () => {
   };
 
   const settingsRuntimeCtx = React.useMemo<SettingsRuntimeContext>(() => {
-    const isDesktop = typeof window !== 'undefined' && Boolean((window as unknown as { __TAURI__?: unknown }).__TAURI__);
-    return { isVSCode: isVSCodeRuntime(), isWeb: isWebRuntime(), isDesktop };
+    const isDesktop = isDesktopShell();
+    return { isVSCode: isVSCodeRuntime(), isWeb: !isDesktop && isWebRuntime(), isDesktop };
   }, []);
 
   const settingsPages = React.useMemo(() => {
@@ -200,14 +197,14 @@ export const CommandPalette: React.FC = () => {
             <RiAddLine className="mr-2 h-4 w-4" />
             <span>New Session</span>
             <CommandShortcut>
-              {settingsAutoCreateWorktree ? shortcut('new_chat_worktree') : shortcut('new_chat')}
+              {shortcut('new_chat')}
             </CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleCreateWorktreeSession}>
             <RiGitBranchLine className="mr-2 h-4 w-4" />
             <span>New Session with Worktree</span>
             <CommandShortcut>
-              {settingsAutoCreateWorktree ? shortcut('new_chat') : shortcut('new_chat_worktree')}
+              {shortcut('new_chat_worktree')}
             </CommandShortcut>
           </CommandItem>
           <CommandItem onSelect={handleToggleRightSidebar}>

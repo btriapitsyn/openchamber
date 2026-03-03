@@ -29,6 +29,12 @@ export type SkillCatalogConfig = {
   gitIdentityId?: string;
 };
 
+export type NamedTunnelPreset = {
+  id: string;
+  name: string;
+  hostname: string;
+};
+
 export type DesktopSettings = {
   themeId?: string;
   useSystemTheme?: boolean;
@@ -84,6 +90,15 @@ export type DesktopSettings = {
   }>;  // Per-provider custom model groups configuration
   autoDeleteEnabled?: boolean;
   autoDeleteAfterDays?: number;
+  tunnelMode?: 'quick' | 'named';
+  tunnelBootstrapTtlMs?: number | null;
+  tunnelSessionTtlMs?: number;
+  namedTunnelHostname?: string;
+  namedTunnelToken?: string | null;
+  hasNamedTunnelToken?: boolean;
+  namedTunnelPresets?: NamedTunnelPreset[];
+  namedTunnelSelectedPresetId?: string;
+  namedTunnelPresetTokens?: Record<string, string>;
   defaultModel?: string; // format: "provider/model"
   defaultVariant?: string;
   defaultAgent?: string;
@@ -96,6 +111,8 @@ export type DesktopSettings = {
   gitProviderId?: string;
   gitModelId?: string;
   toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
+  userMessageRenderingMode?: 'markdown' | 'plain';
+  stickyUserHeader?: boolean;
   fontSize?: number;
   terminalFontSize?: number;
   padding?: number;
@@ -151,9 +168,49 @@ const normalizeOrigin = (raw: string): string | null => {
   }
 };
 
+const parseUrl = (raw: string): URL | null => {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    return new URL(trimmed);
+  } catch {
+    try {
+      return new URL(trimmed.endsWith('/') ? trimmed : `${trimmed}/`);
+    } catch {
+      return null;
+    }
+  }
+};
+
+const normalizeHost = (rawHost: string): string => rawHost.replace(/^\[|\]$/g, '').toLowerCase();
+
+const isLoopbackHost = (host: string): boolean => {
+  const normalized = normalizeHost(host);
+  return normalized === 'localhost' || normalized === '127.0.0.1' || normalized === '::1';
+};
+
 export const isDesktopLocalOriginActive = (): boolean => {
   if (typeof window === 'undefined') return false;
   const local = typeof window.__OPENCHAMBER_LOCAL_ORIGIN__ === 'string' ? window.__OPENCHAMBER_LOCAL_ORIGIN__ : '';
+  const localUrl = parseUrl(local);
+  const currentUrl = parseUrl(window.location.origin);
+
+  if (localUrl && currentUrl) {
+    if (localUrl.origin === currentUrl.origin) {
+      return true;
+    }
+
+    const localPort = localUrl.port || (localUrl.protocol === 'https:' ? '443' : '80');
+    const currentPort = currentUrl.port || (currentUrl.protocol === 'https:' ? '443' : '80');
+
+    return (
+      localUrl.protocol === currentUrl.protocol &&
+      localPort === currentPort &&
+      isLoopbackHost(localUrl.hostname) &&
+      isLoopbackHost(currentUrl.hostname)
+    );
+  }
+
   const localOrigin = normalizeOrigin(local);
   const currentOrigin = normalizeOrigin(window.location.origin) || window.location.origin;
   return Boolean(localOrigin && currentOrigin && localOrigin === currentOrigin);
@@ -373,6 +430,40 @@ export const openDesktopPath = async (path: string, app?: string | null): Promis
     return true;
   } catch (error) {
     console.warn('Failed to open path (tauri)', error);
+    return false;
+  }
+};
+
+export const openDesktopProjectInApp = async (
+  projectPath: string,
+  appId: string,
+  appName: string,
+  filePath?: string | null,
+): Promise<boolean> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return false;
+  }
+
+  const trimmedProjectPath = projectPath?.trim();
+  const trimmedAppId = appId?.trim();
+  const trimmedAppName = appName?.trim();
+  const trimmedFilePath = typeof filePath === 'string' ? filePath.trim() : '';
+
+  if (!trimmedProjectPath || !trimmedAppId || !trimmedAppName) {
+    return false;
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    await tauri?.core?.invoke?.('desktop_open_in_app', {
+      projectPath: trimmedProjectPath,
+      appId: trimmedAppId,
+      appName: trimmedAppName,
+      filePath: trimmedFilePath.length > 0 ? trimmedFilePath : undefined,
+    });
+    return true;
+  } catch (error) {
+    console.warn('Failed to open project in app (tauri)', error);
     return false;
   }
 };
