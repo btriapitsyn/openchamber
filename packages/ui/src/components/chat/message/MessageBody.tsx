@@ -29,7 +29,6 @@ import { useConfigStore } from '@/stores/useConfigStore';
 import { TextSelectionMenu } from './TextSelectionMenu';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { toPng } from 'html-to-image';
 import { toast } from '@/components/ui';
 import { formatTimestampForDisplay } from './timeFormat';
@@ -493,15 +492,13 @@ const UserMessageBody: React.FC<{
             style={{ contain: 'layout', transform: 'translateZ(0)' }}
             onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
         >
-            <ScrollShadow
+            <div
                 className={cn(
                     'leading-relaxed text-foreground/90 text-base overflow-x-hidden',
                     useStickyScrollableUserContent
                         ? 'overflow-y-auto overscroll-contain scrollbar-none'
                         : 'overflow-y-hidden'
                 )}
-                isEnabled={useStickyScrollableUserContent}
-                size={24}
                 style={useStickyScrollableUserContent ? { maxHeight: 'calc(var(--chat-scroll-height, 100dvh) * 0.4)' } : undefined}
             >
                 {userContentParts.map((part, index) => {
@@ -540,7 +537,7 @@ const UserMessageBody: React.FC<{
                         </FadeInOnReveal>
                     );
                 })}
-            </ScrollShadow>
+            </div>
             <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} compact />
             {actionsBlock}
         </div>
