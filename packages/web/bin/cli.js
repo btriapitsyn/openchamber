@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import net from 'net';
 import { spawn, spawnSync } from 'child_process';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +23,10 @@ function getBunBinary() {
 }
 
 const BUN_BIN = getBunBinary();
+
+function importFromFilePath(filePath) {
+  return import(pathToFileURL(filePath).href);
+}
 
 function isBunRuntime() {
   return typeof globalThis.Bun !== 'undefined';
@@ -625,7 +629,7 @@ const commands = {
       return;
     }
 
-    const { startWebUiServer } = await import(serverPath);
+    const { startWebUiServer } = await importFromFilePath(serverPath);
     await startWebUiServer({
       port: options.port,
       attachSignals: true,
@@ -926,7 +930,7 @@ const commands = {
       executeUpdate,
       detectPackageManager,
       getCurrentVersion,
-    } = await import(packageManagerPath);
+    } = await importFromFilePath(packageManagerPath);
 
     // Check for running instances before update
     let runningInstances = [];

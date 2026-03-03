@@ -18,6 +18,7 @@ import { useContextStore } from '@/stores/contextStore';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { isDesktopLocalOriginActive } from '@/lib/desktop';
 import { triggerSessionStatusPoll } from '@/hooks/useServerSessionStatus';
+import { PermissionToastActions } from '@/components/chat/PermissionToastActions';
 
 interface EventData {
   type: string;
@@ -32,6 +33,139 @@ const readStringProp = (obj: unknown, keys: string[]): string | null => {
     if (typeof value === 'string' && value.length > 0) return value;
   }
   return null;
+};
+
+const readStringArrayProp = (value: unknown): string[] => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+};
+
+const normalizePermissionRequest = (value: unknown): PermissionRequest | null => {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const id = readStringProp(record, ['id']);
+  const sessionID = readStringProp(record, ['sessionID']);
+  if (!id || !sessionID) {
+    return null;
+  }
+
+  const permission = typeof record.permission === 'string' ? record.permission : '';
+  const patterns = readStringArrayProp(record.patterns);
+  const metadata = typeof record.metadata === 'object' && record.metadata !== null
+    ? record.metadata as Record<string, unknown>
+    : {};
+  const always = readStringArrayProp(record.always);
+
+  const toolValue = record.tool;
+  const tool = (toolValue && typeof toolValue === 'object')
+    ? {
+        messageID: readStringProp(toolValue, ['messageID']) ?? '',
+        callID: readStringProp(toolValue, ['callID']) ?? '',
+      }
+    : undefined;
+
+  return {
+    id,
+    sessionID,
+    permission,
+    patterns,
+    metadata,
+    always,
+    tool: tool && tool.messageID.length > 0 && tool.callID.length > 0 ? tool : undefined,
+  };
+};
+
+const readPermissionMetadataPreview = (metadata: Record<string, unknown>): string => {
+  const preferredKeys = [
+    'command',
+    'cmd',
+    'script',
+    'path',
+    'filePath',
+    'filepath',
+    'file_path',
+    'directory',
+    'working_directory',
+    'cwd',
+    'url',
+    'uri',
+    'endpoint',
+    'description',
+    'action',
+    'operation',
+  ];
+
+  for (let i = 0; i < preferredKeys.length; i++) {
+    const value = metadata[preferredKeys[i]];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+      continue;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+
+    if (Array.isArray(value)) {
+      const joined = value
+        .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+        .slice(0, 3)
+        .join(', ')
+        .trim();
+      if (joined.length > 0) {
+        return joined;
+      }
+    }
+  }
+
+  const metadataEntries = Object.entries(metadata);
+  if (metadataEntries.length === 0) {
+    return '';
+  }
+
+  try {
+    return JSON.stringify(metadata);
+  } catch {
+    return '';
+  }
+};
+
+const buildPermissionToastBody = (request: PermissionRequest): string => {
+  const patterns = Array.isArray(request.patterns) ? request.patterns : [];
+  const patternSummary = patterns
+    .filter((pattern): pattern is string => typeof pattern === 'string' && pattern.trim().length > 0)
+    .join(', ')
+    .trim();
+
+  const metadata = typeof request.metadata === 'object' && request.metadata !== null ? request.metadata : {};
+  const metadataSummary = readPermissionMetadataPreview(metadata);
+
+  if (patternSummary.length > 0 && metadataSummary.length > 0) {
+    return `${patternSummary} | ${metadataSummary}`;
+  }
+
+  if (patternSummary.length > 0) {
+    return patternSummary;
+  }
+
+  if (metadataSummary.length > 0) {
+    return metadataSummary;
+  }
+
+  const fallback = typeof request.permission === 'string' ? request.permission.trim() : '';
+  return fallback.length > 0 ? fallback : 'Permission details unavailable';
 };
 
 type MessageTracker = (messageId: string, event?: string, extraData?: Record<string, unknown>) => void;
@@ -113,7 +247,8 @@ const getMessageFromStore = (sessionId: string, messageId: string): { info: Mess
   return message;
 };
 
-export const useEventStream = () => {
+export const useEventStream = (options?: { enabled?: boolean }) => {
+  const enabled = options?.enabled ?? true;
   const {
     addStreamingPart,
     completeStreamingMessage,
@@ -212,7 +347,11 @@ export const useEventStream = () => {
       }
 
       for (const request of pending) {
-        addPermission(request as unknown as PermissionRequest);
+        const normalizedRequest = normalizePermissionRequest(request);
+        if (!normalizedRequest) {
+          continue;
+        }
+        addPermission(normalizedRequest);
       }
     } catch {
       // ignored
@@ -235,9 +374,13 @@ export const useEventStream = () => {
   }, [requestPendingPermissionsRefresh]);
 
   React.useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     requestPendingPermissionsRefresh(true);
     requestPendingQuestionsRefresh(true);
-  }, [requestPendingPermissionsRefresh, requestPendingQuestionsRefresh]);
+  }, [enabled, requestPendingPermissionsRefresh, requestPendingQuestionsRefresh]);
 
   const normalizeDirectory = React.useCallback((value: string | null | undefined): string | null => {
     if (typeof value !== 'string') return null;
@@ -1537,11 +1680,10 @@ export const useEventStream = () => {
       }
 
       case 'permission.asked': {
-        if (!('sessionID' in props) || typeof props.sessionID !== 'string') {
+        const request = normalizePermissionRequest(props);
+        if (!request) {
           break;
         }
-
-        const request = props as unknown as PermissionRequest;
 
         addPermission(request);
 
@@ -1593,20 +1735,58 @@ export const useEventStream = () => {
             const sessionTitle =
               useSessionStore.getState().sessions.find((s) => s.id === request.sessionID)?.title ||
               'Session';
+            const permissionBody = buildPermissionToastBody(request);
 
               import('sonner').then(({ toast }) => {
-                toast.warning('Permission required', {
-                  id: toastKey,
-                  description: sessionTitle,
-                  duration: 30000,
-                  action: {
-                    label: 'Open',
-                    onClick: () => {
-                      useUIStore.getState().setActiveMainTab('chat');
-                      void useSessionStore.getState().setCurrentSession(request.sessionID);
+                const isMobile = useUIStore.getState().isMobile;
+
+                if (isMobile) {
+                  toast.warning('Permission required', {
+                    id: toastKey,
+                    description: sessionTitle,
+                    duration: 30000,
+                    action: {
+                      label: 'Open',
+                      onClick: () => {
+                        useUIStore.getState().setActiveMainTab('chat');
+                        void useSessionStore.getState().setCurrentSession(request.sessionID);
+                      },
                     },
-                  },
-                });
+                  });
+                } else {
+                  toast.warning('Permission required', {
+                    id: toastKey,
+                    description: React.createElement(PermissionToastActions, {
+                      sessionTitle,
+                      permissionBody,
+                      onOnce: async () => {
+                        try {
+                          await useSessionStore.getState().respondToPermission(request.sessionID, request.id, 'once');
+                          toast.dismiss(toastKey);
+                        } catch (error) {
+                          console.error('Failed to respond to permission:', error);
+                        }
+                      },
+                      onAlways: async () => {
+                        try {
+                          await useSessionStore.getState().respondToPermission(request.sessionID, request.id, 'always');
+                          toast.dismiss(toastKey);
+                        } catch (error) {
+                          console.error('Failed to respond to permission:', error);
+                        }
+                      },
+                      onDeny: async () => {
+                        try {
+                          await useSessionStore.getState().respondToPermission(request.sessionID, request.id, 'reject');
+                          toast.dismiss(toastKey);
+                        } catch (error) {
+                          console.error('Failed to respond to permission:', error);
+                        }
+                      },
+                    }),
+                    duration: 30000,
+                  });
+                }
               });
 
           }, 0);
@@ -2019,6 +2199,12 @@ export const useEventStream = () => {
   }, [scheduleReconnect]);
 
   React.useEffect(() => {
+    if (!enabled) {
+      stopStream();
+      publishStatus('idle', null);
+      return;
+    }
+
     if (typeof window !== 'undefined') {
       window.__messageTracker = trackMessage;
     }
@@ -2255,6 +2441,7 @@ export const useEventStream = () => {
       publishStatus('idle', null);
     };
   }, [
+    enabled,
     effectiveDirectory,
     trackMessage,
     resolveVisibilityState,
