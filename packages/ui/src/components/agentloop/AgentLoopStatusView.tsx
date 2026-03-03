@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import {
   RiAlertLine,
   RiCheckLine,
@@ -40,7 +40,7 @@ function formatElapsed(ms: number): string {
   return `${seconds}s`;
 }
 
-const ElapsedTime: React.FC<{ startedAt?: number; completedAt?: number; isRunning: boolean }> = ({
+const ElapsedTime: React.FC<{ startedAt?: number; completedAt?: number; isRunning: boolean }> = memo(({
   startedAt,
   completedAt,
   isRunning,
@@ -68,7 +68,7 @@ const ElapsedTime: React.FC<{ startedAt?: number; completedAt?: number; isRunnin
       {formatElapsed(elapsed)}
     </span>
   );
-};
+});
 
 const statusConfig: Record<WorkpackageStatus, { icon: React.ElementType; label: string; color: string }> = {
   pending: { icon: RiHourglassLine, label: 'Pending', color: 'text-foreground-muted' },
@@ -77,6 +77,86 @@ const statusConfig: Record<WorkpackageStatus, { icon: React.ElementType; label: 
   failed: { icon: RiCloseLine, label: 'Failed', color: 'text-destructive' },
   skipped: { icon: RiSkipForwardLine, label: 'Skipped', color: 'text-foreground-muted' },
 };
+
+interface TaskItemProps {
+  wp: AgentLoopInstance['workpackages'][number];
+  idx: number;
+  onNavigate: (sessionId: string) => void;
+}
+
+const TaskItem: React.FC<TaskItemProps> = memo(({ wp, idx, onNavigate }) => {
+  const config = statusConfig[wp.status];
+  const Icon = config.icon;
+  const isRunning = wp.status === 'running';
+  const hasSession = Boolean(wp.sessionId);
+  const retryCount = wp.retryCount ?? 0;
+
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-3 px-4 py-3',
+        isRunning && 'bg-accent/5',
+        hasSession && 'cursor-pointer hover:bg-interactive-hover',
+      )}
+      onClick={() => {
+        if (wp.sessionId) {
+          onNavigate(wp.sessionId);
+        }
+      }}
+      role={hasSession ? 'button' : undefined}
+      tabIndex={hasSession ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (hasSession && wp.sessionId && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onNavigate(wp.sessionId);
+        }
+      }}
+    >
+      <div className={cn('mt-0.5 shrink-0', config.color)}>
+        <Icon className={cn('h-4 w-4', isRunning && 'animate-spin')} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="typography-meta text-foreground-muted shrink-0">
+            {idx + 1}.
+          </span>
+          <span
+            className={cn(
+              'typography-label truncate',
+              wp.status === 'completed' ? 'text-foreground-muted line-through' : 'text-foreground',
+            )}
+            aria-label={wp.status === 'completed' ? `${wp.title} (completed)` : wp.title}
+          >
+            {wp.title}
+          </span>
+          <span className={cn('typography-meta shrink-0', config.color)}>
+            {config.label}
+          </span>
+          {retryCount > 0 && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 typography-meta text-destructive shrink-0"
+              title={`Restarted ${retryCount} time${retryCount > 1 ? 's' : ''} due to stalling`}
+            >
+              <RiRefreshLine className="h-3 w-3" />
+              {retryCount}
+            </span>
+          )}
+          <ElapsedTime
+            startedAt={wp.startedAt}
+            completedAt={wp.completedAt}
+            isRunning={isRunning}
+          />
+        </div>
+        {wp.error && (
+          <p className="mt-1 typography-meta text-destructive truncate">
+            {wp.error}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+});
 
 /** Human-readable label + color for the overall loop status shown in the header */
 const loopStatusDisplay: Record<AgentLoopStatus, { label: string; color: string }> = {
@@ -107,7 +187,7 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
   const memoryPath = loop?.workpackageFile?.memoryPath;
 
   useEffect(() => {
-    if (!loop || activeView !== 'memory' || !memoryPath) return;
+    if (activeView !== 'memory' || !memoryPath) return;
 
     let cancelled = false;
     setMemoryState('loading');
@@ -132,7 +212,7 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
     return () => {
       cancelled = true;
     };
-  }, [activeView, loop, memoryPath, memoryReloadToken]);
+  }, [activeView, memoryPath, memoryReloadToken]);
 
   if (!loop) {
     return (
@@ -209,8 +289,10 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
               type="button"
               onClick={() => setActiveView('tasks')}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 typography-meta transition-colors',
-                activeView === 'tasks' ? 'bg-background text-foreground' : 'text-foreground-muted hover:text-foreground'
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 typography-meta font-medium transition-colors',
+                activeView === 'tasks'
+                  ? 'bg-interactive-selection text-interactive-selection-foreground shadow-sm'
+                  : 'text-foreground-muted hover:text-foreground'
               )}
             >
               <RiFileList3Line className="h-3.5 w-3.5" />
@@ -220,8 +302,10 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
               type="button"
               onClick={() => setActiveView('memory')}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 typography-meta transition-colors',
-                activeView === 'memory' ? 'bg-background text-foreground' : 'text-foreground-muted hover:text-foreground'
+                'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 typography-meta font-medium transition-colors',
+                activeView === 'memory'
+                  ? 'bg-interactive-selection text-interactive-selection-foreground shadow-sm'
+                  : 'text-foreground-muted hover:text-foreground'
               )}
             >
               <RiFileTextLine className="h-3.5 w-3.5" />
@@ -249,80 +333,9 @@ export const AgentLoopStatusView: React.FC<AgentLoopStatusViewProps> = ({ loopId
       <div className="flex-1 overflow-y-auto">
         {activeView === 'tasks' ? (
           <div className="divide-y divide-border">
-            {loop.workpackages.map((wp, idx) => {
-              const config = statusConfig[wp.status];
-              const Icon = config.icon;
-              const isRunning = wp.status === 'running';
-              const hasSession = Boolean(wp.sessionId);
-              const retryCount = wp.retryCount ?? 0;
-
-              return (
-                <div
-                  key={wp.id}
-                  className={cn(
-                    'flex items-start gap-3 px-4 py-3',
-                    isRunning && 'bg-accent/5',
-                    hasSession && 'cursor-pointer hover:bg-interactive-hover',
-                  )}
-                  onClick={() => {
-                    if (wp.sessionId) {
-                      setCurrentSession(wp.sessionId);
-                    }
-                  }}
-                  role={hasSession ? 'button' : undefined}
-                  tabIndex={hasSession ? 0 : undefined}
-                  onKeyDown={(e) => {
-                    if (hasSession && wp.sessionId && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault();
-                      setCurrentSession(wp.sessionId);
-                    }
-                  }}
-                >
-                  <div className={cn('mt-0.5 shrink-0', config.color)}>
-                    <Icon className={cn('h-4 w-4', isRunning && 'animate-spin')} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="typography-meta text-foreground-muted shrink-0">
-                        {idx + 1}.
-                      </span>
-                      <span
-                        className={cn(
-                          'typography-label truncate',
-                          wp.status === 'completed' ? 'text-foreground-muted line-through' : 'text-foreground',
-                        )}
-                        aria-label={wp.status === 'completed' ? `${wp.title} (completed)` : wp.title}
-                      >
-                        {wp.title}
-                      </span>
-                      <span className={cn('typography-meta shrink-0', config.color)}>
-                        {config.label}
-                      </span>
-                      {retryCount > 0 && (
-                        <span
-                          className="inline-flex items-center gap-0.5 rounded-full bg-destructive/10 px-1.5 py-0.5 typography-meta text-destructive shrink-0"
-                          title={`Restarted ${retryCount} time${retryCount > 1 ? 's' : ''} due to stalling`}
-                        >
-                          <RiRefreshLine className="h-3 w-3" />
-                          {retryCount}
-                        </span>
-                      )}
-                      <ElapsedTime
-                        startedAt={wp.startedAt}
-                        completedAt={wp.completedAt}
-                        isRunning={isRunning}
-                      />
-                    </div>
-                    {wp.error && (
-                      <p className="mt-1 typography-meta text-destructive truncate">
-                        {wp.error}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {loop.workpackages.map((wp, idx) => (
+              <TaskItem key={wp.id} wp={wp} idx={idx} onNavigate={setCurrentSession} />
+            ))}
           </div>
         ) : (
           <div className="px-4 py-4">

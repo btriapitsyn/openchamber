@@ -37,9 +37,9 @@
   },
 
   // OpenChamber web server default port
-  "forwardPorts": [4096],
+  "forwardPorts": [3001],
   "portsAttributes": {
-    "4096": {
+    "3001": {
       "label": "OpenChamber Web",
       "onAutoForward": "openPreview"
     }
