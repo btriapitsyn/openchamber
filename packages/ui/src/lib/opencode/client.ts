@@ -381,11 +381,13 @@ class OpencodeService {
     return Array.isArray(response.data) ? response.data : [];
   }
 
-  async createSession(params?: { parentID?: string; title?: string }): Promise<Session> {
+  async createSession(params?: { parentID?: string; title?: string; directory?: string; permission?: Array<{ permission: string; pattern: string; action: "allow" | "deny" | "ask" }> }): Promise<Session> {
+    const dir = params?.directory || this.currentDirectory;
     const response = await this.client.session.create({
-      ...(this.currentDirectory ? { directory: this.currentDirectory } : {}),
+      ...(dir ? { directory: dir } : {}),
       parentID: params?.parentID,
-      title: params?.title
+      title: params?.title,
+      ...(params?.permission ? { permission: params.permission } : {}),
     });
     if (!response.data) throw new Error('Failed to create session');
     return response.data;
@@ -2044,6 +2046,236 @@ class OpencodeService {
     } catch (error) {
       console.error('Failed to list directory contents:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Read the text content of a local file.
+   * Uses the /fs/read endpoint (mirroring the /fs/list endpoint pattern).
+   * Returns null if the file cannot be read.
+   */
+  async readLocalFile(filePath: string): Promise<string | null> {
+    const desktopFiles = getDesktopFilesApi();
+    const desktopFilesAny = desktopFiles as unknown as Record<string, unknown>;
+    if (desktopFiles && typeof desktopFilesAny.readFile === 'function') {
+      try {
+        const result = await (desktopFilesAny.readFile as (p: string) => Promise<string>)(filePath);
+        return typeof result === 'string' ? result : null;
+      } catch {
+        // fall through to HTTP
+      }
+    }
+
+    try {
+      const params = new URLSearchParams({ path: filePath });
+      if (this.currentDirectory) {
+        params.set('directory', this.currentDirectory);
+      }
+      const response = await fetch(`${this.baseUrl}/fs/read?${params.toString()}`);
+      if (!response.ok) {
+        console.warn('[readLocalFile] /fs/read failed:', response.status, response.statusText, '| path:', filePath, '| directory:', this.currentDirectory);
+        const errorBody = await response.text().catch(() => '');
+        if (errorBody) console.warn('[readLocalFile] server response:', errorBody);
+      }
+      if (!response.ok) return null;
+      return await response.text();
+    } catch (err) {
+      console.warn('[readLocalFile] /fs/read error:', err, '| path:', filePath, '| directory:', this.currentDirectory);
+      // try legacy endpoint
+    }
+
+    try {
+      const response = await fetch(`${this.baseUrl}/files/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: filePath, directory: this.currentDirectory }),
+      });
+      if (!response.ok) return null;
+      return await response.text();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Read and validate a workpackage file via the dedicated server endpoint.
+   * Returns the parsed WorkpackageFile or null if unavailable/invalid.
+   */
+  async getWorkpackages(filePath?: string): Promise<Record<string, unknown> | null> {
+    try {
+      const params = new URLSearchParams();
+      if (filePath) params.set('path', filePath);
+      if (this.currentDirectory) params.set('directory', this.currentDirectory);
+      const response = await fetch(`${this.baseUrl}/agent-loop/workpackages?${params.toString()}`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Atomically update a workpackage's status in the file on disk.
+   * Returns the updated WorkpackageFile or null on failure.
+   */
+  async updateWorkpackageStatus(params: {
+    path?: string;
+    id: string;
+    status: string;
+    sessionId?: string;
+    error?: string;
+  }): Promise<Record<string, unknown> | null> {
+    try {
+      const body: Record<string, string> = { id: params.id, status: params.status };
+      if (params.path) body.path = params.path;
+      if (params.sessionId) body.sessionId = params.sessionId;
+      if (params.error) body.error = params.error;
+      if (this.currentDirectory) body.directory = this.currentDirectory;
+
+      const response = await fetch(`${this.baseUrl}/agent-loop/workpackages/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  // ── Agent Loop backend API ────────────────────────────────────────────
+
+  async startAgentLoop(params: {
+    filePath: string;
+    providerID: string;
+    modelID: string;
+    agent?: string;
+    variant?: string;
+    systemPrompt?: string;
+    directory?: string;
+  }): Promise<Record<string, unknown> | null> {
+    try {
+      const body: Record<string, unknown> = {
+        filePath: params.filePath,
+        providerID: params.providerID,
+        modelID: params.modelID,
+      };
+      if (params.agent) body.agent = params.agent;
+      if (params.variant) body.variant = params.variant;
+      if (params.systemPrompt) body.systemPrompt = params.systemPrompt;
+      body.directory = params.directory || this.currentDirectory || undefined;
+
+      const response = await fetch(`${this.baseUrl}/agent-loop/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error((data as Record<string, string>).error || `HTTP ${response.status}`);
+      }
+      return await response.json();
+    } catch (error) {
+      if (error instanceof Error) throw error;
+      return null;
+    }
+  }
+
+  async getAgentLoops(): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/loops`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async getAgentLoop(id: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/${encodeURIComponent(id)}`);
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async pauseAgentLoop(id: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/${encodeURIComponent(id)}/pause`, {
+        method: 'POST',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async resumeAgentLoop(id: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/${encodeURIComponent(id)}/resume`, {
+        method: 'POST',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async skipAgentLoopTask(id: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/${encodeURIComponent(id)}/skip`, {
+        method: 'POST',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async retryAgentLoop(id: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/${encodeURIComponent(id)}/retry`, {
+        method: 'POST',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async stopAgentLoop(id: string): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/${encodeURIComponent(id)}/stop`, {
+        method: 'POST',
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
+    }
+  }
+
+  async updateAgentLoopConfig(
+    id: string,
+    patch: { providerID?: string; modelID?: string; agent?: string; variant?: string }
+  ): Promise<Record<string, unknown> | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/agent-loop/${encodeURIComponent(id)}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } catch {
+      return null;
     }
   }
 

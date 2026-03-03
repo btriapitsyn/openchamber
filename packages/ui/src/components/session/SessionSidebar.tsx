@@ -2,7 +2,7 @@ import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
+import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell, requestDirectoryAccess } from '@/lib/desktop';
 import {
   DndContext,
   DragOverlay,
@@ -61,6 +61,9 @@ import {
   RiFolderAddLine,
   RiFolderLine,
   RiGitBranchLine,
+  RiGitPullRequestLine,
+  RiGitRepositoryLine,
+  RiLoopLeftLine,
   RiNodeTree,
   RiStickyNoteLine,
   RiLinkUnlinkM,
@@ -79,6 +82,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
+import { useAgentLoopStore } from '@/stores/useAgentLoopStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import type { WorktreeMetadata } from '@/types/worktree';
 import { opencodeClient } from '@/lib/opencode/client';
@@ -448,6 +452,7 @@ interface SortableProjectItemProps {
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
   onOpenMultiRunLauncher: () => void;
+  onOpenAgentLoopLauncher: () => void;
   onRenameStart: () => void;
   onRenameSave: () => void;
   onRenameCancel: () => void;
@@ -479,6 +484,7 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onNewSession,
   onNewWorktreeSession,
   onOpenMultiRunLauncher,
+  onOpenAgentLoopLauncher,
   onRenameStart,
   onRenameSave,
   onRenameCancel,
@@ -645,6 +651,12 @@ const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                   <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
                     <ArrowsMerge className="mr-1.5 h-4 w-4" />
                     New Multi-Run
+                  </DropdownMenuItem>
+                )}
+                {showCreateButtons && !hideDirectoryControls && (
+                  <DropdownMenuItem onClick={onOpenAgentLoopLauncher}>
+                    <RiLoopLeftLine className="mr-1.5 h-4 w-4" />
+                    New Agent Loop
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem onClick={onRenameStart}>
@@ -893,6 +905,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
+  const openAgentLoopLauncher = useUIStore((state) => state.openAgentLoopLauncher);
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
@@ -1006,6 +1019,20 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const availableWorktreesByProject = useSessionStore((state) => state.availableWorktreesByProject);
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
+
+  // Agent loop: build a set of all session IDs owned by any loop for sidebar badge rendering
+  const agentLoopInstances = useAgentLoopStore((state) => state.loops);
+  const loopTrackedSessionIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    for (const loop of agentLoopInstances.values()) {
+      if (loop.trackedSessionIds) {
+        for (const sid of loop.trackedSessionIds) {
+          ids.add(sid);
+        }
+      }
+    }
+    return ids;
+  }, [agentLoopInstances]);
 
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
@@ -1572,8 +1599,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       return;
     }
 
-    import('@/lib/desktop')
-      .then(({ requestDirectoryAccess }) => requestDirectoryAccess(''))
+    requestDirectoryAccess('')
       .then((result) => {
         if (result.success && result.path) {
           const added = addProject(result.path, { id: result.projectId });
@@ -2539,6 +2565,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   {isPinnedSession ? (
                     <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" />
                   ) : null}
+                  {loopTrackedSessionIds.has(session.id) ? (
+                    <RiLoopLeftLine className="h-3 w-3 flex-shrink-0 text-muted-foreground" aria-label="Agent loop session" />
+                  ) : null}
                   <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">
                     {renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}
                   </div>
@@ -2827,6 +2856,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       createFolderAndStartRename,
       openContextPanelTab,
       notifyOnSubtasks,
+      loopTrackedSessionIds,
     ],
   );
 
@@ -3448,6 +3478,19 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={4}><p>New multi-run</p></TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={openAgentLoopLauncher}
+                    className={headerActionButtonClass}
+                    aria-label="New agent loop"
+                  >
+                    <RiLoopLeftLine className={headerActionIconClass} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New agent loop</p></TooltipContent>
+              </Tooltip>
                 </>
               ) : null}
               {useMobileNotesPanel ? (
@@ -3644,6 +3687,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                         setActiveProjectIdOnly(projectKey);
                       }
                       openMultiRunLauncher();
+                    }}
+                    onOpenAgentLoopLauncher={() => {
+                      if (projectKey !== activeProjectId) {
+                        setActiveProjectIdOnly(projectKey);
+                      }
+                      openAgentLoopLauncher();
                     }}
                     onRenameStart={() => {
                       setEditingProjectId(projectKey);

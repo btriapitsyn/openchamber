@@ -15,12 +15,16 @@ import { SessionSidebar } from '@/components/session/SessionSidebar';
 import { SessionDialogs } from '@/components/session/SessionDialogs';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
 import { MultiRunLauncher } from '@/components/multirun';
+import { AgentLoopLauncher } from '@/components/agentloop';
 import { DrawerProvider } from '@/contexts/DrawerContext';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useAgentLoopPolling } from '@/hooks/useAgentLoopPolling';
+import { usePlanningSessionWatcher } from '@/hooks/usePlanningSessionWatcher';
+import { usePlanningSessionDetector } from '@/hooks/usePlanningSessionDetector';
 import { cn } from '@/lib/utils';
 
 import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
@@ -66,7 +70,15 @@ export const MainLayout: React.FC = () => {
         isMultiRunLauncherOpen,
         setMultiRunLauncherOpen,
         multiRunLauncherPrefillPrompt,
+        isAgentLoopLauncherOpen,
+        setAgentLoopLauncherOpen,
+        agentLoopLauncherPrefill,
     } = useUIStore();
+
+    // Poll backend for agent loop state and watch planning session completions
+    useAgentLoopPolling();
+    usePlanningSessionWatcher();
+    usePlanningSessionDetector();
 
     const { isMobile } = useDeviceInfo();
     const effectiveDirectory = useEffectiveDirectory() ?? '';
@@ -589,7 +601,7 @@ export const MainLayout: React.FC = () => {
                     setRightSidebarOpen,
                 }}>
                     {/* Mobile: header + drawer mode */}
-                    {!(isSettingsDialogOpen || isMultiRunLauncherOpen) && <Header 
+                    {!(isSettingsDialogOpen || isMultiRunLauncherOpen || isAgentLoopLauncherOpen) && <Header 
                         onToggleLeftDrawer={() => {
                             if (isRightSidebarOpen) {
                                 setRightSidebarOpen(false);
@@ -723,7 +735,7 @@ export const MainLayout: React.FC = () => {
                     <div
                         className={cn(
                             'flex flex-1 overflow-hidden relative',
-                            (isSettingsDialogOpen || isMultiRunLauncherOpen) && 'hidden'
+                            (isSettingsDialogOpen || isMultiRunLauncherOpen || isAgentLoopLauncherOpen) && 'hidden'
                         )}
                         style={{ paddingTop: 'var(--oc-header-height, 56px)' }}
                     >
@@ -752,6 +764,19 @@ export const MainLayout: React.FC = () => {
                         </div>
                     )}
 
+                    {/* Mobile agent loop launcher: full screen */}
+                    {isAgentLoopLauncherOpen && (
+                        <div className="absolute inset-0 z-10 bg-background header-safe-area">
+                            <ErrorBoundary>
+                                <AgentLoopLauncher
+                                    onCreated={() => setAgentLoopLauncherOpen(false)}
+                                    onCancel={() => setAgentLoopLauncherOpen(false)}
+                                    prefill={agentLoopLauncherPrefill}
+                                />
+                            </ErrorBoundary>
+                        </div>
+                    )}
+
                     {/* Mobile settings: full screen */}
                     {isSettingsDialogOpen && (
                         <div className="absolute inset-0 z-10 bg-background header-safe-area">
@@ -764,7 +789,7 @@ export const MainLayout: React.FC = () => {
                     {/* Desktop: Header always on top, then Sidebar + Content below */}
                     <div className="flex flex-1 flex-col overflow-hidden relative">
                         {/* Normal view: Header above Sidebar + content (like SettingsView) */}
-                        <div className={cn('absolute inset-0 flex flex-col', isMultiRunLauncherOpen && 'invisible')}>
+                        <div className={cn('absolute inset-0 flex flex-col', (isMultiRunLauncherOpen || isAgentLoopLauncherOpen) && 'invisible')}>
                             <Header />
                             <div className="flex flex-1 overflow-hidden">
                                 <NavRail />
@@ -807,6 +832,19 @@ export const MainLayout: React.FC = () => {
                                         initialPrompt={multiRunLauncherPrefillPrompt}
                                         onCreated={() => setMultiRunLauncherOpen(false)}
                                         onCancel={() => setMultiRunLauncherOpen(false)}
+                                    />
+                                </ErrorBoundary>
+                            </div>
+                        )}
+
+                        {/* Agent Loop Launcher: replaces tabs content only */}
+                        {isAgentLoopLauncherOpen && (
+                            <div className={cn('absolute inset-0 z-10 bg-background')}>
+                                <ErrorBoundary>
+                                    <AgentLoopLauncher
+                                        onCreated={() => setAgentLoopLauncherOpen(false)}
+                                        onCancel={() => setAgentLoopLauncherOpen(false)}
+                                        prefill={agentLoopLauncherPrefill}
                                     />
                                 </ErrorBoundary>
                             </div>

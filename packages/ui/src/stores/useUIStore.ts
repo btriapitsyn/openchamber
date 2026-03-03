@@ -452,11 +452,21 @@ const clampContextPanelRoots = (
   return next;
 };
 
+/** Data used to pre-populate the AgentLoopLauncher when opening from a completed plan */
+export interface AgentLoopLauncherPrefill {
+  workpackageFile: import('@/types/agentloop').WorkpackageFile;
+  providerID?: string;
+  modelID?: string;
+  agent?: string;
+}
+
 interface UIStore {
 
   theme: 'light' | 'dark' | 'system';
   isMultiRunLauncherOpen: boolean;
   multiRunLauncherPrefillPrompt: string;
+  isAgentLoopLauncherOpen: boolean;
+  agentLoopLauncherPrefill: AgentLoopLauncherPrefill | null;
   isSidebarOpen: boolean;
   sidebarWidth: number;
   hasManuallyResizedLeftSidebar: boolean;
@@ -668,6 +678,9 @@ interface UIStore {
   setExpandedInput: (value: boolean) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
+  openAgentLoopLauncher: () => void;
+  openAgentLoopLauncherWithPrefill: (prefill: AgentLoopLauncherPrefill) => void;
+  setAgentLoopLauncherOpen: (open: boolean) => void;
   setShortcutOverride: (actionId: string, combo: ShortcutCombo) => void;
   clearShortcutOverride: (actionId: string) => void;
   resetAllShortcutOverrides: () => void;
@@ -682,6 +695,8 @@ export const useUIStore = create<UIStore>()(
         theme: 'system',
         isMultiRunLauncherOpen: false,
         multiRunLauncherPrefillPrompt: '',
+        isAgentLoopLauncherOpen: false,
+        agentLoopLauncherPrefill: null,
         isSidebarOpen: true,
         sidebarWidth: LEFT_SIDEBAR_MIN_WIDTH,
         hasManuallyResizedLeftSidebar: false,
@@ -1623,6 +1638,29 @@ export const useUIStore = create<UIStore>()(
             isMultiRunLauncherOpen: true,
             multiRunLauncherPrefillPrompt: prompt,
             isSessionSwitcherOpen: false,
+          });
+        },
+
+        openAgentLoopLauncher: () => {
+          set({
+            isAgentLoopLauncherOpen: true,
+            agentLoopLauncherPrefill: null,
+            isSessionSwitcherOpen: false,
+          });
+        },
+
+        openAgentLoopLauncherWithPrefill: (prefill) => {
+          set({
+            isAgentLoopLauncherOpen: true,
+            agentLoopLauncherPrefill: prefill,
+            isSessionSwitcherOpen: false,
+          });
+        },
+
+        setAgentLoopLauncherOpen: (open) => {
+          set({
+            isAgentLoopLauncherOpen: open,
+            ...(!open ? { agentLoopLauncherPrefill: null } : {}),
           });
         },
 
