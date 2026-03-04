@@ -153,7 +153,7 @@ export function OnboardingScreen({ onCliAvailable }: OnboardingScreenProps) {
 
     try {
       const selected = await tauri.dialog.open({
-        title: t('onboarding.selectOpencodeBinary'),
+        title: t('openCodeCliSettings.selectOpencodeBinary'),
         multiple: false,
         directory: false,
       });

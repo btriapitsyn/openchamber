@@ -386,7 +386,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           type="button"
         >
           <RiAddLine className="h-4 w-4" />
-          <span className="whitespace-nowrap">Add to chat</span>
+          <span className="whitespace-nowrap">{t('textSelectionMenu.addToChat')}</span>
         </button>
       
         <div className="w-px h-4 bg-[var(--interactive-border)]" />
@@ -404,7 +404,7 @@ export const TextSelectionMenu: React.FC<TextSelectionMenuProps> = ({ containerR
           type="button"
         >
           <RiChatNewLine className="h-4 w-4" />
-          <span className="whitespace-nowrap">New session</span>
+          <span className="whitespace-nowrap">{t('textSelectionMenu.newSession')}</span>
         </button>
       </div>
     </div>,

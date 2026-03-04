@@ -140,7 +140,7 @@ const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
               )}
               {!iconOnly && (
                 <span className="git-identity-label min-w-0 flex-1 truncate text-left">
-                  {activeProfile?.name || t('gitHeader.noIdentity')}
+                  {activeProfile?.name || t('gitView.noIdentity')}
                 </span>
               )}
               <RiArrowDownSLine className="size-4 opacity-60" />
@@ -153,7 +153,7 @@ const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
         {identities.length === 0 ? (
           <div className="px-2 py-1.5">
             <p className="typography-meta text-muted-foreground">
-              {t('gitHeader.noProfilesAvailableToApply')}
+              {t('gitView.noProfilesAvailableToApply')}
             </p>
           </div>
         ) : (

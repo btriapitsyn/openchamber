@@ -108,10 +108,10 @@ export const ProjectsPage: React.FC = () => {
       const uploadResult = await uploadProjectIcon(selectedProject.id, pendingUploadIconFile);
       setIsUploadingIcon(false);
       if (!uploadResult.ok) {
-        toast.error(uploadResult.error || 'Failed to upload project icon');
+        toast.error(uploadResult.error || t('projectEdit.failedToUploadIcon'));
         return;
       }
-      toast.success('Project icon updated');
+      toast.success(t('projectEdit.projectIconUpdated'));
       clearPendingUploadIcon();
       setPendingRemoveImageIcon(false);
     }
@@ -123,10 +123,10 @@ export const ProjectsPage: React.FC = () => {
       const removeResult = await removeProjectIcon(selectedProject.id);
       setIsRemovingCustomIcon(false);
       if (!removeResult.ok) {
-        toast.error(removeResult.error || 'Failed to remove project icon');
+        toast.error(removeResult.error || t('projectEdit.failedToRemoveIcon'));
         return;
       }
-      toast.success('Project icon removed');
+      toast.success(t('projectEdit.customIconRemoved'));
       setPendingRemoveImageIcon(false);
       setIconBackground(null);
     }

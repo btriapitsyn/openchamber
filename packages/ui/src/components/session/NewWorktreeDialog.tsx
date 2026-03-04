@@ -1065,7 +1065,7 @@ Nice-to-have:
                   <div className="space-y-4">
                     {isLoadingBranches ? (
                       <div className="px-2 py-8 text-center typography-small text-muted-foreground">
-                        Loading branches...
+                        {t('branchPickerDialog.loadingBranches')}
                       </div>
                     ) : localBranches.length === 0 && remoteBranches.length === 0 ? (
                       <div className="px-2 py-8 text-center typography-small text-muted-foreground">
@@ -1289,7 +1289,7 @@ Nice-to-have:
                   <div className="space-y-4">
                     {isLoadingBranches ? (
                       <div className="px-2 py-8 text-center typography-small text-muted-foreground">
-                        Loading branches...
+                        {t('branchPickerDialog.loadingBranches')}
                       </div>
                     ) : localBranches.length === 0 && remoteBranches.length === 0 ? (
                       <div className="px-2 py-8 text-center typography-small text-muted-foreground">
@@ -1464,7 +1464,7 @@ Nice-to-have:
                   <SelectContent className="max-h-[280px] max-w-[320px]">
                     {isLoadingBranches ? (
                       <div className="px-2 py-4 text-center typography-small text-muted-foreground">
-                        Loading branches...
+                        {t('branchPickerDialog.loadingBranches')}
                       </div>
                     ) : localBranches.length === 0 && remoteBranches.length === 0 ? (
                       <div className="px-2 py-4 text-center typography-small text-muted-foreground">
@@ -1633,7 +1633,7 @@ Nice-to-have:
                     <SelectContent className="max-h-[280px] max-w-[320px]">
                       {isLoadingBranches ? (
                         <div className="px-2 py-4 text-center typography-small text-muted-foreground">
-                          Loading branches...
+                          {t('branchPickerDialog.loadingBranches')}
                         </div>
                       ) : localBranches.length === 0 && remoteBranches.length === 0 ? (
                         <div className="px-2 py-4 text-center typography-small text-muted-foreground">

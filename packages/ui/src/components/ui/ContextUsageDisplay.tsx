@@ -145,7 +145,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                 <span className="typography-meta text-foreground font-medium">{formatTokens(safeOutputLimit)}</span>
               </div>
               <div className="flex justify-between items-center pt-1 border-t border-border/40">
-                <span className="typography-meta text-muted-foreground">Usage</span>
+                <span className="typography-meta text-muted-foreground">{t('contextUsageDisplay.usage')}</span>
                 <span className={cn('typography-meta font-semibold', getPercentageColor(colorPct))}>
                   {Math.min(percentage, 999).toFixed(1)}%
                 </span>

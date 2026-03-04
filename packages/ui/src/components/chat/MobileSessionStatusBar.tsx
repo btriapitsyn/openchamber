@@ -739,6 +739,7 @@ function ProjectEditPanel({
   onDelete,
   homeDirectory,
 }: ProjectEditPanelProps) {
+  const { t } = useLanguage();
   const [localProjects, setLocalProjects] = React.useState(projects);
 
   React.useEffect(() => {
@@ -791,10 +792,10 @@ function ProjectEditPanel({
     <MobileOverlayPanel
       open={isOpen}
       onClose={onClose}
-      title="Edit Projects"
+      title={t('mobileSessionStatusBar.editProjects')}
       footer={
         <p className="text-xs text-[var(--surface-mutedForeground)] text-center">
-          Drag items to reorder, or use arrows to move. Tap edit to change details.
+          {t('mobileSessionStatusBar.editProjectsHint')}
         </p>
       }
     >
@@ -826,7 +827,7 @@ function ProjectEditPanel({
 
         {localProjects.length === 0 && (
           <div className="text-center py-8 text-[var(--surface-mutedForeground)]">
-            No projects to edit
+            {t('mobileSessionStatusBar.noProjectsToEdit')}
           </div>
         )}
       </div>
@@ -1450,7 +1451,7 @@ export const MobileSessionStatusBar: React.FC<MobileSessionStatusBarProps> = ({
   const currentSession = sessions.find((s) => s.id === currentSessionId);
   const currentSessionTitle = currentSession
     ? getSessionTitle(currentSession)
-    : '← Swipe here to open sidebars →';
+    : t('mobileSessionStatusBar.swipeToOpenSidebars');
 
   // Calculate current session's child indicators
   const currentSessionWithStatus = sortedSessions.find((s) => s.id === currentSessionId);

@@ -105,10 +105,10 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
       const uploadResult = await uploadProjectIcon(projectId, pendingUploadIconFile);
       setIsUploadingIcon(false);
       if (!uploadResult.ok) {
-        toast.error(uploadResult.error || 'Failed to upload project icon');
+        toast.error(uploadResult.error || t('projectEdit.failedToUploadIcon'));
         return;
       }
-      toast.success('Project icon updated');
+      toast.success(t('projectEdit.projectIconUpdated'));
       clearPendingUploadIcon();
       setPendingRemoveImageIcon(false);
     }
@@ -120,10 +120,10 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
       const result = await removeProjectIcon(projectId);
       setIsRemovingCustomIcon(false);
       if (!result.ok) {
-        toast.error(result.error || 'Failed to remove project icon');
+        toast.error(result.error || t('projectEdit.failedToRemoveIcon'));
         return;
       }
-      toast.success('Project icon removed');
+      toast.success(t('projectEdit.customIconRemoved'));
       setPendingRemoveImageIcon(false);
       setIconBackground(null);
     }
@@ -418,7 +418,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
             {t('common.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={!name.trim() || isUploadingIcon || isRemovingCustomIcon}>
-            Save
+            {t('common.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

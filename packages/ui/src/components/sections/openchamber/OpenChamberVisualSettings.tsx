@@ -50,10 +50,10 @@ const THEME_MODE_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
 ];
 
 const TOOL_EXPANSION_OPTIONS: Array<{ value: 'collapsed' | 'activity' | 'detailed' | 'changes'; label: string; description: string }> = [
-    { value: 'collapsed', label: 'Collapsed', description: 'Activity and tool calls stay collapsed by default.' },
-    { value: 'activity', label: 'Summary', description: 'Activity opens by default; tool calls stay collapsed.' },
-    { value: 'detailed', label: 'Detailed', description: 'Activity opens; key tools auto-expand for richer detail.' },
-    { value: 'changes', label: 'Changes', description: 'Activity opens; only edit/write/patch tools auto-expand.' },
+    { value: 'collapsed', label: 'appearance.toolOutputCollapsed', description: 'appearance.toolOutputCollapsedDesc' },
+    { value: 'activity', label: 'appearance.toolOutputSummary', description: 'appearance.toolOutputSummaryDesc' },
+    { value: 'detailed', label: 'appearance.toolOutputDetailed', description: 'appearance.toolOutputDetailedDesc' },
+    { value: 'changes', label: 'appearance.toolOutputChanges', description: 'appearance.toolOutputChangesDesc' },
 ];
 
 const DIFF_LAYOUT_OPTIONS: Option<'dynamic' | 'inline' | 'side-by-side'>[] = [
@@ -474,7 +474,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             }}
                                             className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
                                             aria-label="Reset install app name"
-                                            title="Reset"
+                                            title={t('common.resetButton')}
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
                                         </ButtonSmall>
@@ -756,7 +756,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     </div>
                                     {selectedToolExpansionOption && (
                                         <p className="mt-2 typography-ui-label font-normal text-muted-foreground">
-                                            {selectedToolExpansionOption.description}
+                                            {t(selectedToolExpansionOption.description)}
                                         </p>
                                     )}
                                 </section>

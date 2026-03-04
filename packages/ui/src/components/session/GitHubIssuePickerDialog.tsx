@@ -528,17 +528,17 @@ Do not implement changes until I confirm; end with: “Next actions: <1 sentence
     t,
   ]);
 
-  const title = mode === 'select' ? 'Link GitHub Issue' : 'New Session From GitHub Issue';
+  const title = mode === 'select' ? t('githubIssuePickerDialog.linkTitle') : t('githubIssuePickerDialog.newSessionTitle');
   const description = mode === 'select'
-    ? 'Select an issue to link to this session.'
-    : 'Seeds a new session with hidden issue context (title/body/labels/comments).';
+    ? t('githubIssuePickerDialog.linkDescription')
+    : t('githubIssuePickerDialog.newSessionDescription');
 
   const content = (
     <>
       <div className="relative mt-2">
         <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="Search by title or #123, or paste issue URL"
+          placeholder={t('githubIssuePickerDialog.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-9 w-full"

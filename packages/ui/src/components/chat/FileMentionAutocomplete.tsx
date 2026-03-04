@@ -443,7 +443,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             })}
             {visibleAgents.length === 2 && normalizedSearchQuery.length === 0 && agents.length > 2 && (
               <div className="px-3 py-1 typography-meta text-muted-foreground">
-                Type to search more agents
+                {t('chatAutocomplete.typeToSearchMoreAgents')}
               </div>
             )}
             {visibleAgents.length > 0 && (recentFiles.length > 0 || files.length > 0) && (
