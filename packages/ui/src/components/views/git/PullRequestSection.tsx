@@ -418,6 +418,7 @@ export const PullRequestSection: React.FC<{
   const lastRefreshAtRef = React.useRef(0);
   const lastDiscoveryPollAtRef = React.useRef(0);
   const statusRef = React.useRef<GitHubPullRequestStatus | null>(null);
+  const selectedRemoteNameRef = React.useRef<string | null>(selectedRemote?.name ?? null);
   const attemptedBodyHydrationRef = React.useRef<Set<string>>(new Set());
   const lastSyncedPrNumberRef = React.useRef<number | null>(null);
 
@@ -928,6 +929,10 @@ export const PullRequestSection: React.FC<{
     statusRef.current = status;
   }, [status]);
 
+  React.useEffect(() => {
+    selectedRemoteNameRef.current = selectedRemote?.name ?? null;
+  }, [selectedRemote?.name]);
+
   const refresh = React.useCallback(async (options?: { force?: boolean; onlyExistingPr?: boolean; silent?: boolean; markInitialResolved?: boolean }) => {
     if (!canShow) return;
     if (options?.onlyExistingPr && !statusRef.current?.pr) {
@@ -969,7 +974,7 @@ export const PullRequestSection: React.FC<{
     }
     setError(null);
     try {
-      const next = await github.prStatus(directory, branch, selectedRemote?.name);
+      const next = await github.prStatus(directory, branch, selectedRemoteNameRef.current ?? undefined);
       setStatus((prev) => {
         const nextPr = next.pr;
         const prevPr = prev?.pr;
@@ -1016,11 +1021,11 @@ export const PullRequestSection: React.FC<{
       }
       isRefreshInFlightRef.current = false;
     }
-  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus, selectedRemote?.name, t]);
+  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus]);
 
   // Refetch PR status when selected remote changes
   const handleRemoteChange = React.useCallback((remote: GitRemote) => {
-    setSelectedRemote(remote);
+    setSelectedRemote((prev) => (prev?.name === remote.name ? prev : remote));
     // Clear current status and refetch
     setStatus(null);
     setError(null);
@@ -1034,24 +1039,26 @@ export const PullRequestSection: React.FC<{
     setBody(snapshot?.body ?? '');
     setDraft(snapshot?.draft ?? false);
     setTargetBaseBranch(snapshot?.targetBaseBranch ? normalizeBranchRef(snapshot.targetBaseBranch) : normalizeBranchRef(baseBranch));
-    setSelectedRemote(
-      pickInitialPrRemote(remotes, {
-        selectedRemoteName: snapshot?.selectedRemoteName,
-        trackingBranch,
-      })
-    );
+    const nextRemote = pickInitialPrRemote(remotes, {
+      selectedRemoteName: snapshot?.selectedRemoteName,
+      trackingBranch,
+    });
+    setSelectedRemote((prev) => (prev?.name === nextRemote?.name ? prev : nextRemote));
     setStatus(statusSnapshot);
     setError(null);
     setIsInitialStatusResolved(Boolean(statusSnapshot));
+  }, [baseBranch, branch, remotes, snapshotKey, trackingBranch]);
+
+  React.useEffect(() => {
     void refresh({ force: true, markInitialResolved: true });
-  }, [baseBranch, branch, refresh, remotes, snapshotKey, trackingBranch]);
+  }, [snapshotKey, refresh]);
 
   // Refetch when selected remote changes
   React.useEffect(() => {
-    if (selectedRemote) {
+    if (selectedRemote?.name) {
       void refresh({ force: true, markInitialResolved: true });
     }
-  }, [selectedRemote, refresh]);
+  }, [selectedRemote?.name, refresh]);
 
   React.useEffect(() => {
     const onFocus = () => {

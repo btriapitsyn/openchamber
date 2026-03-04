@@ -103,8 +103,9 @@ const ShortcutsSectionContent: React.FC = () => {
 // Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile), Nav Rail
 const VisualSectionContent: React.FC = () => {
     const isVSCode = isVSCodeRuntime();
-    const visibleSettings: Array<'theme' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'terminalQuickKeys' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader'> = [
+    const visibleSettings: Array<'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'terminalQuickKeys' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader'> = [
         'theme',
+        'pwaInstallName',
         'fontSize',
         'terminalFontSize',
         'spacing',

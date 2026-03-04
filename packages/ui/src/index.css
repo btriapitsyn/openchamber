@@ -30,6 +30,19 @@ textarea[data-chat-input="true"]:focus-visible {
   box-shadow: none;
 }
 
+/* Ensure interactive controls consistently show pointer cursor */
+:where(
+  button,
+  [role="button"],
+  a[href]
+):not(:disabled) {
+  cursor: pointer;
+}
+
+:where(button, [role="button"]):disabled {
+  cursor: not-allowed;
+}
+
 .oc-cm-selected-line {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
 }
@@ -820,6 +833,17 @@ html:not(.dark) .chat-scroll {
 }
 
 .streamdown-content a:hover {
+  color: var(--markdown-link-hover, var(--primary));
+}
+
+.streamdown-content [data-openchamber-file-link="true"] {
+  color: var(--markdown-link, var(--primary));
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.streamdown-content [data-openchamber-file-link="true"]:hover {
   color: var(--markdown-link-hover, var(--primary));
 }
 

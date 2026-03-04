@@ -1794,6 +1794,42 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
         return { id, type, success: true, data: { files, skipped } };
       }
 
+      case 'api:files/save-image': {
+        const rawFileName = (payload as { fileName?: unknown })?.fileName;
+        const rawDataUrl = (payload as { dataUrl?: unknown })?.dataUrl;
+        const dataUrl = typeof rawDataUrl === 'string' ? rawDataUrl.trim() : '';
+        if (!dataUrl.startsWith('data:image/')) {
+          return { id, type, success: false, error: 'Invalid image payload' };
+        }
+
+        const defaultFileName = typeof rawFileName === 'string' && rawFileName.trim().length > 0
+          ? rawFileName.trim()
+          : `message-${Date.now()}.png`;
+
+        const saveUri = await vscode.window.showSaveDialog({
+          saveLabel: 'Save image',
+          defaultUri: vscode.workspace.workspaceFolders?.[0]
+            ? vscode.Uri.joinPath(vscode.workspace.workspaceFolders[0].uri, defaultFileName)
+            : undefined,
+          filters: { Images: ['png'] },
+        });
+
+        if (!saveUri) {
+          return { id, type, success: true, data: { saved: false, canceled: true } };
+        }
+
+        const commaIndex = dataUrl.indexOf(',');
+        if (commaIndex === -1) {
+          return { id, type, success: false, error: 'Invalid image data URL' };
+        }
+
+        const base64 = dataUrl.slice(commaIndex + 1);
+        const bytes = Buffer.from(base64, 'base64');
+        await vscode.workspace.fs.writeFile(saveUri, bytes);
+
+        return { id, type, success: true, data: { saved: true, path: saveUri.fsPath || saveUri.toString() } };
+      }
+
       case 'api:config/settings:get': {
         const settings = readSettings(ctx);
         return { id, type, success: true, data: settings };

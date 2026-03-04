@@ -143,7 +143,7 @@ export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
     title: 'Appearance',
     group: 'appearance',
     kind: 'single',
-    keywords: ['theme', 'font', 'spacing', 'padding', 'corner radius', 'radius', 'input bar', 'terminal'],
+    keywords: ['theme', 'font', 'spacing', 'padding', 'corner radius', 'radius', 'input bar', 'terminal', 'pwa', 'install name', 'app shortcuts'],
   },
   {
     slug: 'chat',

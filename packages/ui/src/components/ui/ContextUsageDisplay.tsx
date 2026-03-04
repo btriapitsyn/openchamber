@@ -8,6 +8,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 interface ContextUsageDisplayProps {
   totalTokens: number;
   percentage: number;
+  colorPercentage?: number;
   contextLimit: number;
   outputLimit?: number;
   size?: 'default' | 'compact';
@@ -24,6 +25,7 @@ interface ContextUsageDisplayProps {
 export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
   totalTokens,
   percentage,
+  colorPercentage,
   contextLimit,
   outputLimit,
   size = 'default',
@@ -38,6 +40,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
 }) => {
   const { t } = useLanguage();
   const [mobileTooltipOpen, setMobileTooltipOpen] = React.useState(false);
+  const colorPct = typeof colorPercentage === 'number' ? colorPercentage : percentage;
 
   const formatTokens = (tokens: number) => {
     if (tokens >= 1_000_000) {
@@ -71,14 +74,14 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
         {showPercentIcon ? (
           <>
             <RiDonutChartFill
-              className={cn('h-3.5 w-3.5', percentIconClassName, getPercentageColor(percentage))}
+              className={cn('h-3.5 w-3.5', percentIconClassName, getPercentageColor(colorPct))}
               aria-hidden="true"
             />
             <span className="text-foreground">{Math.min(percentage, 999).toFixed(1)}%</span>
           </>
         ) : (
           <>
-            <span className={getPercentageColor(percentage)}>{Math.min(percentage, 999).toFixed(1)}</span>%
+            <span className={getPercentageColor(colorPct)}>{Math.min(percentage, 999).toFixed(1)}</span>%
           </>
         )}
       </span>
@@ -142,8 +145,8 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                 <span className="typography-meta text-foreground font-medium">{formatTokens(safeOutputLimit)}</span>
               </div>
               <div className="flex justify-between items-center pt-1 border-t border-border/40">
-                <span className="typography-meta text-muted-foreground">{t('contextUsageDisplay.usage')}</span>
-                <span className={cn('typography-meta font-semibold', getPercentageColor(percentage))}>
+                <span className="typography-meta text-muted-foreground">Usage</span>
+                <span className={cn('typography-meta font-semibold', getPercentageColor(colorPct))}>
                   {Math.min(percentage, 999).toFixed(1)}%
                 </span>
               </div>

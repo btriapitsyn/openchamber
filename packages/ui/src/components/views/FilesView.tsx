@@ -652,6 +652,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const setMainTabGuard = useUIStore((state) => state.setMainTabGuard);
   const pendingFileNavigation = useUIStore((state) => state.pendingFileNavigation);
   const setPendingFileNavigation = useUIStore((state) => state.setPendingFileNavigation);
+  const pendingFileFocusPath = useUIStore((state) => state.pendingFileFocusPath);
+  const setPendingFileFocusPath = useUIStore((state) => state.setPendingFileFocusPath);
 
   // Global mouseup to end drag selection
   React.useEffect(() => {
@@ -1020,56 +1022,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     done();
   }, [activeDialog, dialogData, dialogInputValue, files, refreshRoot, isMobile, removeOpenPathsByPrefix, root, selectedFile?.path, setSelectedPath]);
 
-  const fuzzyScore = React.useCallback((query: string, candidate: string): number | null => {
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      return 0;
-    }
-
-    const c = candidate.toLowerCase();
-    let score = 0;
-    let lastIndex = -1;
-    let consecutive = 0;
-
-    for (let i = 0; i < q.length; i += 1) {
-      const ch = q[i];
-      if (!ch || ch === ' ') {
-        continue;
-      }
-
-      const idx = c.indexOf(ch, lastIndex + 1);
-      if (idx === -1) {
-        return null;
-      }
-
-      const gap = idx - lastIndex - 1;
-      if (gap === 0) {
-        consecutive += 1;
-      } else {
-        consecutive = 0;
-      }
-
-      score += 10;
-      score += Math.max(0, 18 - idx);
-      score -= Math.max(0, gap);
-
-      if (idx === 0) {
-        score += 12;
-      } else {
-        const prev = c[idx - 1];
-        if (prev === '/' || prev === '_' || prev === '-' || prev === '.' || prev === ' ') {
-          score += 10;
-        }
-      }
-
-      score += consecutive > 0 ? 12 : 0;
-      lastIndex = idx;
-    }
-
-    score += Math.max(0, 24 - Math.round(c.length / 3));
-    return score;
-  }, []);
-
   React.useEffect(() => {
     if (!currentDirectory) {
       setSearchResults([]);
@@ -1084,13 +1036,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    const normalizedQueryLower = trimmedQuery.toLowerCase();
     let cancelled = false;
     setSearching(true);
 
     searchFiles(currentDirectory, trimmedQuery, 150, {
       includeHidden: showHidden,
       respectGitignore: !showGitignored,
+      type: 'file',
     })
       .then((hits) => {
         if (cancelled) {
@@ -1099,22 +1051,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
         const filtered = hits.filter((hit) => showGitignored || !shouldIgnorePath(hit.path));
 
-        // Apply fuzzy scoring and sort by score
-        const ranked = filtered
-          .map((hit) => {
-            const label = hit.relativePath || hit.name || hit.path;
-            const score = fuzzyScore(normalizedQueryLower, label);
-            return score === null ? null : { hit, score, labelLength: label.length };
-          })
-          .filter(Boolean) as Array<{ hit: typeof hits[0]; score: number; labelLength: number }>;
-
-        ranked.sort((a, b) => (
-          b.score - a.score
-          || a.labelLength - b.labelLength
-          || a.hit.path.localeCompare(b.hit.path)
-        ));
-
-        const mapped: FileNode[] = ranked.map(({ hit }) => ({
+        const mapped: FileNode[] = filtered.map((hit) => ({
           name: hit.name,
           path: normalizePath(hit.path),
           type: 'file',
@@ -1138,7 +1075,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return () => {
       cancelled = true;
     };
-  }, [currentDirectory, debouncedSearchQuery, fuzzyScore, searchFiles, showHidden, showGitignored]);
+  }, [currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored]);
 
   const readFile = React.useCallback(async (path: string): Promise<string> => {
     if (files.readFile) {
@@ -1841,6 +1778,57 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     selectedFile?.path,
     selectedPath,
     setPendingFileNavigation,
+    setSelectedPath,
+    textViewMode,
+  ]);
+
+  React.useEffect(() => {
+    if (!pendingFileFocusPath || !root) {
+      return;
+    }
+
+    const targetPath = normalizePath(pendingFileFocusPath);
+    if (!targetPath) {
+      setPendingFileFocusPath(null);
+      return;
+    }
+
+    if (selectedFile?.path !== targetPath) {
+      if (selectedPath !== targetPath) {
+        setSelectedPath(root, targetPath);
+      }
+      return;
+    }
+
+    if (fileLoading || loadedFilePath !== targetPath || fileError || isSelectedImage) {
+      return;
+    }
+
+    if (canEdit && textViewMode !== 'edit') {
+      setTextViewMode('edit');
+      return;
+    }
+
+    if (canEdit) {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      view.focus();
+    }
+
+    setPendingFileFocusPath(null);
+  }, [
+    canEdit,
+    fileError,
+    fileLoading,
+    isSelectedImage,
+    loadedFilePath,
+    pendingFileFocusPath,
+    root,
+    selectedFile?.path,
+    selectedPath,
+    setPendingFileFocusPath,
     setSelectedPath,
     textViewMode,
   ]);

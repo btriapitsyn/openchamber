@@ -524,7 +524,7 @@ export interface SettingsPayload {
   autoDeleteAfterDays?: number;
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
-  toolCallExpansion?: 'collapsed' | 'activity' | 'detailed';
+  toolCallExpansion?: 'collapsed' | 'activity' | 'detailed' | 'changes';
   fontSize?: number;
   terminalFontSize?: number;
   padding?: number;
@@ -537,6 +537,7 @@ export interface SettingsPayload {
   openInAppId?: string;
   gitProviderId?: string;
   gitModelId?: string;
+  pwaAppName?: string;
 
   [key: string]: unknown;
 }
