@@ -224,3 +224,46 @@ Independent project, not affiliated with OpenCode team.
 ## License
 
 MIT
+
+
+## 使用示例
+
+### 基本用法
+```python
+import package_name
+
+# 初始化
+client = package_name.Client()
+
+# 调用功能
+result = client.process()
+print(f"结果: {result}")
+```
+
+### 高级用法
+```python
+# 配置参数
+config = {
+    'setting': 'value',
+    'timeout': 30
+}
+
+client = package_name.Client(**config)
+```
+
+## 贡献指南
+
+欢迎贡献！请查看[CONTRIBUTING.md](CONTRIBUTING.md)了解详细指南。
+
+### 开发流程
+1. Fork本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 创建Pull Request
+
+### 代码规范
+- 遵循PEP 8 (Python)或相应语言规范
+- 添加适当的注释
+- 编写测试用例
+- 更新相关文档
