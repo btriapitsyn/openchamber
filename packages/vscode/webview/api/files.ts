@@ -1,6 +1,7 @@
 import type {
   CommandExecResult,
   DirectoryListResult,
+  FileStatResult,
   FileSearchQuery,
   FileSearchResult,
   FilesAPI,
@@ -16,7 +17,13 @@ export const createVSCodeFilesAPI = (): FilesAPI => ({
     const data = await sendBridgeMessage<{
       directory?: string;
       path?: string;
-      entries: Array<{ name: string; path: string; isDirectory: boolean }>;
+      entries: Array<{
+        name: string;
+        path: string;
+        isDirectory: boolean;
+        size?: number;
+        modifiedTime?: number;
+      }>;
     }>('api:fs:list', {
       path: target,
       respectGitignore: options?.respectGitignore,
@@ -30,7 +37,28 @@ export const createVSCodeFilesAPI = (): FilesAPI => ({
         name: entry.name,
         path: normalizePath(entry.path),
         isDirectory: Boolean(entry.isDirectory),
+        size: typeof entry.size === 'number' ? entry.size : undefined,
+        modifiedTime: typeof entry.modifiedTime === 'number' ? entry.modifiedTime : undefined,
       })),
+    };
+  },
+
+  async stat(path: string): Promise<FileStatResult> {
+    const target = normalizePath(path);
+    const data = await sendBridgeMessage<{
+      path?: string;
+      isDirectory?: boolean;
+      isFile?: boolean;
+      size?: number;
+      modifiedTime?: number;
+    }>('api:fs:stat', { path: target });
+
+    return {
+      path: typeof data?.path === 'string' ? normalizePath(data.path) : target,
+      isDirectory: Boolean(data?.isDirectory),
+      isFile: Boolean(data?.isFile),
+      size: typeof data?.size === 'number' ? data.size : undefined,
+      modifiedTime: typeof data?.modifiedTime === 'number' ? data.modifiedTime : undefined,
     };
   },
 

@@ -444,6 +444,14 @@ export interface DirectoryListResult {
   entries: FileListEntry[];
 }
 
+export interface FileStatResult {
+  path: string;
+  isDirectory: boolean;
+  isFile: boolean;
+  size?: number;
+  modifiedTime?: number;
+}
+
 export interface FileSearchQuery {
   directory: string;
   query: string;
@@ -473,6 +481,7 @@ export interface ListDirectoryOptions {
 
 export interface FilesAPI {
   listDirectory(path: string, options?: ListDirectoryOptions): Promise<DirectoryListResult>;
+  stat?(path: string): Promise<FileStatResult>;
   search(payload: FileSearchQuery): Promise<FileSearchResult[]>;
   createDirectory(path: string): Promise<{ success: boolean; path: string }>;
   readFile?(path: string): Promise<{ content: string; path: string }>;

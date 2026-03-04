@@ -2,6 +2,7 @@ import React from 'react';
 import {
   RiCloseLine,
   RiDeleteBinLine,
+  RiDownloadLine,
   RiEditLine,
   RiFileAddLine,
   RiFileCopyLine,
@@ -13,6 +14,7 @@ import {
   RiMore2Fill,
   RiRefreshLine,
   RiSearchLine,
+  RiUploadCloud2Line,
 } from '@remixicon/react';
 
 import { toast } from '@/components/ui';
@@ -44,10 +46,12 @@ import { useGitStatus } from '@/stores/useGitStore';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { triggerFileDownload } from '@/lib/fileDownload';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
+import { getFileCategory } from '@/lib/fileHelpers';
 
 type FileNode = {
   name: string;
@@ -131,12 +135,16 @@ interface FileRowProps {
     canCreateFolder: boolean;
     canDelete: boolean;
     canReveal: boolean;
+    canUpload: boolean;
+    canDownload: boolean;
   };
   contextMenuPath: string | null;
   setContextMenuPath: (path: string | null) => void;
   onSelect: (node: FileNode) => void;
   onToggle: (path: string) => void;
   onRevealPath: (path: string) => void;
+  onDownloadFile: (node: FileNode) => void;
+  onUploadToFolder: (targetPath: string) => void;
   onOpenDialog: (type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => void;
 }
 
@@ -152,16 +160,36 @@ const FileRow: React.FC<FileRowProps> = ({
   onSelect,
   onToggle,
   onRevealPath,
+  onDownloadFile,
+  onUploadToFolder,
   onOpenDialog,
 }) => {
   const isDir = node.type === 'directory';
-  const { canRename, canCreateFile, canCreateFolder, canDelete, canReveal } = permissions;
+  const {
+    canRename,
+    canCreateFile,
+    canCreateFolder,
+    canDelete,
+    canReveal,
+    canUpload,
+    canDownload,
+  } = permissions;
+
+  const canOpenContextMenu = canRename
+    || canCreateFile
+    || canCreateFolder
+    || canDelete
+    || canReveal
+    || (!isDir && canDownload)
+    || (isDir && canUpload);
 
   const handleContextMenu = React.useCallback((event?: React.MouseEvent) => {
-    if (!canRename && !canCreateFile && !canCreateFolder && !canDelete && !canReveal) return;
+    if (!canOpenContextMenu) {
+      return;
+    }
     event?.preventDefault();
     setContextMenuPath(node.path);
-  }, [canRename, canCreateFile, canCreateFolder, canDelete, canReveal, node.path, setContextMenuPath]);
+  }, [canOpenContextMenu, node.path, setContextMenuPath]);
 
   const handleInteraction = React.useCallback(() => {
     if (isDir) {
@@ -210,7 +238,7 @@ const FileRow: React.FC<FileRowProps> = ({
           </span>
         )}
       </button>
-      {(canRename || canCreateFile || canCreateFolder || canDelete || canReveal) && (
+      {canOpenContextMenu && (
         <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 focus-within:opacity-100 group-hover:opacity-100">
           <DropdownMenu
             open={contextMenuPath === node.path}
@@ -244,6 +272,22 @@ const FileRow: React.FC<FileRowProps> = ({
               }}>
                 <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
               </DropdownMenuItem>
+              {!isDir && canDownload && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onDownloadFile(node);
+                }}>
+                  <RiDownloadLine className="mr-2 h-4 w-4" /> Download File
+                </DropdownMenuItem>
+              )}
+              {isDir && canUpload && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  onUploadToFolder(node.path);
+                }}>
+                  <RiUploadCloud2Line className="mr-2 h-4 w-4" /> Upload Files
+                </DropdownMenuItem>
+              )}
               {canReveal && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRevealPath(node.path); }}>
                   <RiFolderReceivedLine className="mr-2 h-4 w-4" /> Reveal in Finder
@@ -298,6 +342,8 @@ export const SidebarFilesTree: React.FC = () => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const debouncedSearchQuery = useDebouncedValue(searchQuery, 200);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const fileUploadInputRef = React.useRef<HTMLInputElement>(null);
+  const contextUploadInputRef = React.useRef<HTMLInputElement>(null);
   const [searchResults, setSearchResults] = React.useState<FileNode[]>([]);
   const [searching, setSearching] = React.useState(false);
 
@@ -323,6 +369,7 @@ export const SidebarFilesTree: React.FC = () => {
 
   // Context menu state
   const [contextMenuPath, setContextMenuPath] = React.useState<string | null>(null);
+  const [contextUploadTargetPath, setContextUploadTargetPath] = React.useState<string | null>(null);
 
   // Dialog state for CRUD operations
   const [activeDialog, setActiveDialog] = React.useState<'createFile' | 'createFolder' | 'rename' | 'delete' | null>(null);
@@ -334,14 +381,16 @@ export const SidebarFilesTree: React.FC = () => {
   const canCreateFolder = Boolean(files.createDirectory);
   const canRename = Boolean(files.rename);
   const canDelete = Boolean(files.delete);
-  const canReveal = Boolean(files.revealPath);
+  const canReveal = runtime.isDesktop && Boolean(files.revealPath);
 
   const handleRevealPath = React.useCallback((targetPath: string) => {
-    if (!files.revealPath) return;
+    if (!runtime.isDesktop || !files.revealPath) {
+      return;
+    }
     void files.revealPath(targetPath).catch(() => {
       toast.error('Failed to reveal path');
     });
-  }, [files]);
+  }, [files, runtime.isDesktop]);
 
   const handleOpenDialog = React.useCallback((type: 'createFile' | 'createFolder' | 'rename' | 'delete', data: { path: string; name?: string; type?: 'file' | 'directory' }) => {
     setActiveDialog(type);
@@ -547,6 +596,13 @@ export const SidebarFilesTree: React.FC = () => {
     openContextFile(root, node.path);
   }, [addOpenPath, files, openContextFile, root, setSelectedPath]);
 
+  const handleContextMenuDownloadFile = React.useCallback((node: FileNode) => {
+    if (node.type !== 'file') {
+      return;
+    }
+    triggerFileDownload(node.path, node.name);
+  }, []);
+
   const toggleDirectory = React.useCallback(async (dirPath: string) => {
     const normalized = normalizePath(dirPath);
     if (!root) return;
@@ -556,6 +612,144 @@ export const SidebarFilesTree: React.FC = () => {
       await loadDirectory(normalized);
     }
   }, [loadDirectory, root, toggleExpandedPath]);
+
+  const uploadFile = React.useCallback(async (file: File, targetDir: string): Promise<boolean> => {
+    if (!files.writeFile) {
+      return false;
+    }
+
+    const filePath = normalizePath(`${targetDir}/${file.name}`);
+
+    try {
+      const category = getFileCategory(file.name);
+      const isTextFile = category === 'text';
+
+      const content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(reader.error);
+
+        if (isTextFile) {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsText(file);
+          return;
+        }
+
+        reader.onload = () => {
+          const dataUrl = reader.result as string;
+          const commaIndex = dataUrl.indexOf(',');
+          resolve(commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl);
+        };
+        reader.readAsDataURL(file);
+      });
+
+      const result = await files.writeFile(filePath, content);
+      return result.success;
+    } catch {
+      return false;
+    }
+  }, [files]);
+
+  const handleFileUploadFromDialog = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files;
+    if (!selectedFiles || selectedFiles.length === 0 || !dialogData || !files.writeFile) {
+      return;
+    }
+
+    const targetDir = dialogData.path;
+    const fileList = Array.from(selectedFiles);
+
+    setIsDialogSubmitting(true);
+    setActiveDialog(null);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const file of fileList) {
+      const success = await uploadFile(file, targetDir);
+      if (success) {
+        successCount += 1;
+      } else {
+        failCount += 1;
+      }
+    }
+
+    if (successCount > 0) {
+      await refreshRoot();
+      if (successCount === 1 && failCount === 0) {
+        toast.success('File uploaded successfully');
+      } else if (failCount === 0) {
+        toast.success(`${successCount} files uploaded successfully`);
+      } else {
+        toast.warning(`${successCount} uploaded, ${failCount} failed`);
+      }
+    } else {
+      toast.error(`Failed to upload ${failCount} file${failCount === 1 ? '' : 's'}`);
+    }
+
+    setIsDialogSubmitting(false);
+    if (fileUploadInputRef.current) {
+      fileUploadInputRef.current.value = '';
+    }
+  }, [dialogData, files.writeFile, refreshRoot, uploadFile]);
+
+  const handleUploadToFolder = React.useCallback((targetPath: string) => {
+    if (!files.writeFile) {
+      toast.error('File upload not supported');
+      return;
+    }
+
+    setContextUploadTargetPath(targetPath);
+
+    const uploadInput = contextUploadInputRef.current;
+    if (!uploadInput) {
+      setContextUploadTargetPath(null);
+      toast.error('Upload input unavailable');
+      return;
+    }
+
+    uploadInput.value = '';
+    uploadInput.click();
+  }, [files.writeFile]);
+
+  const handleContextUploadInputChange = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files;
+    const targetDir = contextUploadTargetPath;
+
+    if (!selectedFiles || selectedFiles.length === 0 || !targetDir || !files.writeFile) {
+      event.target.value = '';
+      setContextUploadTargetPath(null);
+      return;
+    }
+
+    const fileList = Array.from(selectedFiles);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const file of fileList) {
+      const success = await uploadFile(file, targetDir);
+      if (success) {
+        successCount += 1;
+      } else {
+        failCount += 1;
+      }
+    }
+
+    if (successCount > 0) {
+      await refreshRoot();
+      if (successCount === 1 && failCount === 0) {
+        toast.success('File uploaded successfully');
+      } else if (failCount === 0) {
+        toast.success(`${successCount} files uploaded successfully`);
+      } else {
+        toast.warning(`${successCount} uploaded, ${failCount} failed`);
+      }
+    } else {
+      toast.error(`Failed to upload ${failCount} file${failCount === 1 ? '' : 's'}`);
+    }
+
+    event.target.value = '';
+    setContextUploadTargetPath(null);
+  }, [contextUploadTargetPath, files.writeFile, refreshRoot, uploadFile]);
 
   // --- Dialog submit (matching FilesView) ---
 
@@ -712,12 +906,22 @@ export const SidebarFilesTree: React.FC = () => {
             isActive={isActive}
             status={!isDir ? getFileStatus(node.path) : undefined}
             badge={isDir ? getFolderBadge(node.path) : undefined}
-            permissions={{ canRename, canCreateFile, canCreateFolder, canDelete, canReveal }}
+            permissions={{
+              canRename,
+              canCreateFile,
+              canCreateFolder,
+              canDelete,
+              canReveal,
+              canUpload: Boolean(files.writeFile),
+              canDownload: true,
+            }}
             contextMenuPath={contextMenuPath}
             setContextMenuPath={setContextMenuPath}
             onSelect={handleOpenFile}
             onToggle={toggleDirectory}
             onRevealPath={handleRevealPath}
+            onDownloadFile={handleContextMenuDownloadFile}
+            onUploadToFolder={handleUploadToFolder}
             onOpenDialog={handleOpenDialog}
           />
           {isDir && isExpanded && (
@@ -734,6 +938,13 @@ export const SidebarFilesTree: React.FC = () => {
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+      <input
+        ref={contextUploadInputRef}
+        type="file"
+        multiple
+        onChange={handleContextUploadInputChange}
+        className="hidden"
+      />
       <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
         <div className="relative min-w-0 flex-1">
           <RiSearchLine className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-muted-foreground" />
@@ -844,7 +1055,7 @@ export const SidebarFilesTree: React.FC = () => {
           </DialogHeader>
 
           {activeDialog !== 'delete' && (
-            <div className="py-4">
+            <div className="py-4 space-y-4">
               <Input
                 value={dialogInputValue}
                 onChange={(e) => setDialogInputValue(e.target.value)}
@@ -856,6 +1067,35 @@ export const SidebarFilesTree: React.FC = () => {
                 }}
                 autoFocus
               />
+
+              {activeDialog === 'createFile' && files.writeFile && (
+                <>
+                  <div className="relative flex items-center gap-2">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-xs text-muted-foreground">or</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+
+                  <input
+                    ref={fileUploadInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleFileUploadFromDialog}
+                    className="hidden"
+                    id="sidebar-dialog-file-upload"
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => fileUploadInputRef.current?.click()}
+                  >
+                    <RiUploadCloud2Line className="mr-2 h-4 w-4" />
+                    Upload File
+                  </Button>
+                </>
+              )}
             </div>
           )}
 

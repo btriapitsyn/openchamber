@@ -93,6 +93,8 @@ interface FileEntry {
   name: string;
   path: string;
   isDirectory: boolean;
+  size?: number;
+  modifiedTime?: number;
 }
 
 interface FileSearchResult {
@@ -957,14 +959,68 @@ const resolveUserPath = (value: string, baseDirectory: string) => {
   return path.resolve(baseDirectory, expanded);
 };
 
+const DIRECTORY_STAT_CONCURRENCY_LIMIT = 32;
+
+const mapWithConcurrency = async <T, R>(
+  items: readonly T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>
+): Promise<R[]> => {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const workerCount = Math.max(1, Math.min(concurrency, items.length));
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+
+      if (currentIndex >= items.length) {
+        return;
+      }
+
+      results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+};
+
 const listDirectoryEntries = async (dirPath: string) => {
   const uri = vscode.Uri.file(dirPath);
   const entries = await vscode.workspace.fs.readDirectory(uri);
-  return entries.map(([name, fileType]) => ({
-    name,
-    path: normalizeFsPath(vscode.Uri.joinPath(uri, name).fsPath),
-    isDirectory: fileType === vscode.FileType.Directory,
-  }));
+
+  return mapWithConcurrency(entries, DIRECTORY_STAT_CONCURRENCY_LIMIT, async ([name, fileType]) => {
+    const entryUri = vscode.Uri.joinPath(uri, name);
+    const isDirectory = (fileType & vscode.FileType.Directory) === vscode.FileType.Directory;
+    const isFile = (fileType & vscode.FileType.File) === vscode.FileType.File;
+
+    let size;
+    let modifiedTime;
+
+    try {
+      const stat = await vscode.workspace.fs.stat(entryUri);
+      if (isFile) {
+        size = stat.size;
+      }
+      modifiedTime = Number.isFinite(stat.mtime) ? stat.mtime : undefined;
+    } catch {
+      // Best-effort metadata for stale-checking.
+    }
+
+    return {
+      name,
+      path: normalizeFsPath(entryUri.fsPath),
+      isDirectory,
+      size,
+      modifiedTime,
+    };
+  });
 };
 
 const FILE_SEARCH_EXCLUDED_DIRS = new Set([
@@ -1652,6 +1708,36 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
           return { id, type, success: true, data: { entries: filteredEntries, directory: normalized, path: normalized } };
         } catch {
           return { id, type, success: true, data: { entries, directory: normalized, path: normalized } };
+        }
+      }
+
+      case 'api:fs:stat': {
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || os.homedir();
+        const { path: targetPath } = (payload || {}) as { path?: string };
+        const target = typeof targetPath === 'string' && targetPath.trim().length > 0 ? targetPath : workspaceRoot;
+        const resolvedPath = resolveUserPath(target, workspaceRoot) || workspaceRoot;
+
+        try {
+          const uri = vscode.Uri.file(resolvedPath);
+          const stat = await vscode.workspace.fs.stat(uri);
+          const isDirectory = (stat.type & vscode.FileType.Directory) === vscode.FileType.Directory;
+          const isFile = (stat.type & vscode.FileType.File) === vscode.FileType.File;
+
+          return {
+            id,
+            type,
+            success: true,
+            data: {
+              path: normalizeFsPath(resolvedPath),
+              isDirectory,
+              isFile,
+              size: isFile ? stat.size : undefined,
+              modifiedTime: Number.isFinite(stat.mtime) ? stat.mtime : undefined,
+            },
+          };
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to stat path';
+          return { id, type, success: false, error: message };
         }
       }
 

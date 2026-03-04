@@ -1,5 +1,6 @@
 import type {
   DirectoryListResult,
+  FileStatResult,
   FileSearchQuery,
   FileSearchResult,
   FilesAPI,
@@ -13,6 +14,8 @@ type WebDirectoryEntry = {
   isDirectory?: boolean;
   isFile?: boolean;
   isSymbolicLink?: boolean;
+  size?: number;
+  modifiedTime?: number;
 };
 
 type WebDirectoryListResponse = {
@@ -28,15 +31,25 @@ const toDirectoryListResult = (fallbackDirectory: string, payload: WebDirectoryL
   return {
     directory,
     entries: entries
-      .filter((entry): entry is Required<Pick<WebDirectoryEntry, 'name' | 'path'>> & { isDirectory?: boolean } =>
+      .filter((entry): entry is WebDirectoryEntry & { name: string; path: string } =>
         Boolean(entry && typeof entry.name === 'string' && typeof entry.path === 'string')
       )
       .map((entry) => ({
         name: entry.name,
         path: normalizePath(entry.path),
         isDirectory: Boolean(entry.isDirectory),
+        size: typeof entry.size === 'number' ? entry.size : undefined,
+        modifiedTime: typeof entry.modifiedTime === 'number' ? entry.modifiedTime : undefined,
       })),
   };
+};
+
+type WebFileStatResponse = {
+  path?: string;
+  isDirectory?: boolean;
+  isFile?: boolean;
+  size?: number;
+  modifiedTime?: number;
 };
 
 export const createWebFilesAPI = (): FilesAPI => ({
@@ -56,6 +69,25 @@ export const createWebFilesAPI = (): FilesAPI => ({
 
     const result = (await response.json()) as WebDirectoryListResponse;
     return toDirectoryListResult(target, result);
+  },
+
+  async stat(path: string): Promise<FileStatResult> {
+    const target = normalizePath(path);
+    const response = await fetch(`/api/fs/stat?path=${encodeURIComponent(target)}`);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error((error as { error?: string }).error || 'Failed to stat file');
+    }
+
+    const result = (await response.json()) as WebFileStatResponse;
+    return {
+      path: typeof result.path === 'string' ? normalizePath(result.path) : target,
+      isDirectory: Boolean(result.isDirectory),
+      isFile: Boolean(result.isFile),
+      size: typeof result.size === 'number' ? result.size : undefined,
+      modifiedTime: typeof result.modifiedTime === 'number' ? result.modifiedTime : undefined,
+    };
   },
 
   async search(payload: FileSearchQuery): Promise<FileSearchResult[]> {

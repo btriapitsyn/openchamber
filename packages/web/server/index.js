@@ -11891,6 +11891,51 @@ async function main(options = {}) {
     }
   });
 
+  // Read file or directory metadata
+  app.get('/api/fs/stat', async (req, res) => {
+    const filePath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    if (!filePath) {
+      return res.status(400).json({ error: 'Path is required' });
+    }
+
+    try {
+      const resolved = await resolveWorkspacePathFromContext(req, filePath);
+      if (!resolved.ok) {
+        return res.status(400).json({ error: resolved.error });
+      }
+
+      const [canonicalPath, canonicalBase] = await Promise.all([
+        fsPromises.realpath(resolved.resolved),
+        fsPromises.realpath(resolved.base).catch(() => path.resolve(resolved.base)),
+      ]);
+
+      if (!isPathWithinRoot(canonicalPath, canonicalBase)) {
+        return res.status(403).json({ error: 'Access to path denied' });
+      }
+
+      const stats = await fsPromises.stat(canonicalPath);
+      const modifiedTime = Number.isFinite(stats.mtimeMs) ? stats.mtimeMs : undefined;
+
+      res.json({
+        path: canonicalPath,
+        isDirectory: stats.isDirectory(),
+        isFile: stats.isFile(),
+        size: stats.isFile() ? stats.size : undefined,
+        modifiedTime,
+      });
+    } catch (error) {
+      const err = error;
+      if (err && typeof err === 'object' && err.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Path not found' });
+      }
+      if (err && typeof err === 'object' && err.code === 'EACCES') {
+        return res.status(403).json({ error: 'Access to path denied' });
+      }
+      console.error('Failed to stat path:', error);
+      res.status(500).json({ error: (error && error.message) || 'Failed to stat path' });
+    }
+  });
+
   // Read file contents
   app.get('/api/fs/read', async (req, res) => {
     const filePath = typeof req.query.path === 'string' ? req.query.path.trim() : '';
@@ -11973,10 +12018,75 @@ async function main(options = {}) {
         '.avif': 'image/avif',
       };
       const mimeType = mimeMap[ext] || 'application/octet-stream';
+      const totalBytes = stats.size;
+      const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : '';
 
-      const content = await fsPromises.readFile(canonicalPath);
       res.setHeader('Cache-Control', 'no-store');
-      res.type(mimeType).send(content);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.type(mimeType);
+
+      if (rangeHeader) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+        if (!match) {
+          res.status(416);
+          res.setHeader('Content-Range', `bytes */${totalBytes}`);
+          return res.end();
+        }
+
+        const parsedStart = match[1] ? Number.parseInt(match[1], 10) : Number.NaN;
+        const parsedEnd = match[2] ? Number.parseInt(match[2], 10) : Number.NaN;
+
+        let start = parsedStart;
+        let end = parsedEnd;
+
+        if (Number.isNaN(start)) {
+          if (Number.isNaN(end) || end <= 0) {
+            res.status(416);
+            res.setHeader('Content-Range', `bytes */${totalBytes}`);
+            return res.end();
+          }
+
+          start = Math.max(totalBytes - end, 0);
+          end = totalBytes - 1;
+        } else {
+          if (Number.isNaN(end) || end >= totalBytes) {
+            end = totalBytes - 1;
+          }
+        }
+
+        if (start < 0 || start >= totalBytes || end < start) {
+          res.status(416);
+          res.setHeader('Content-Range', `bytes */${totalBytes}`);
+          return res.end();
+        }
+
+        const chunkLength = end - start + 1;
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${totalBytes}`);
+        res.setHeader('Content-Length', String(chunkLength));
+
+        const rangeStream = fs.createReadStream(canonicalPath, { start, end });
+        rangeStream.on('error', (streamError) => {
+          if (!res.headersSent) {
+            res.status(500).json({ error: streamError?.message || 'Failed to stream file' });
+          } else {
+            res.destroy(streamError);
+          }
+        });
+        rangeStream.pipe(res);
+        return;
+      }
+
+      res.setHeader('Content-Length', String(totalBytes));
+      const fullStream = fs.createReadStream(canonicalPath);
+      fullStream.on('error', (streamError) => {
+        if (!res.headersSent) {
+          res.status(500).json({ error: streamError?.message || 'Failed to stream file' });
+        } else {
+          res.destroy(streamError);
+        }
+      });
+      fullStream.pipe(res);
     } catch (error) {
       const err = error;
       if (err && typeof err === 'object' && err.code === 'ENOENT') {
@@ -12473,13 +12583,21 @@ async function main(options = {}) {
           }
 
           let isDirectory = dirent.isDirectory();
+          let isFile = dirent.isFile();
           const isSymbolicLink = dirent.isSymbolicLink();
+          let size;
+          let modifiedTime;
 
-          if (!isDirectory && isSymbolicLink) {
-            try {
-              const linkStats = await fsPromises.stat(entryPath);
-              isDirectory = linkStats.isDirectory();
-            } catch {
+          try {
+            const entryStats = await fsPromises.stat(entryPath);
+            isDirectory = entryStats.isDirectory();
+            isFile = entryStats.isFile();
+            if (entryStats.isFile()) {
+              size = entryStats.size;
+            }
+            modifiedTime = Number.isFinite(entryStats.mtimeMs) ? entryStats.mtimeMs : undefined;
+          } catch {
+            if (!isDirectory && isSymbolicLink) {
               isDirectory = false;
             }
           }
@@ -12488,8 +12606,10 @@ async function main(options = {}) {
             name: dirent.name,
             path: entryPath,
             isDirectory,
-            isFile: dirent.isFile(),
-            isSymbolicLink
+            isFile,
+            isSymbolicLink,
+            size,
+            modifiedTime,
           };
         })
       );
