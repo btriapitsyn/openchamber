@@ -63,6 +63,7 @@ import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { triggerFileDownload } from '@/lib/fileDownload';
+import { notifyFileContentInvalidated } from '@/lib/fileContentInvalidation';
 import { cn } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
@@ -184,17 +185,11 @@ const DraggableFileRow: React.FC<{
     data: { type: 'file-move', node },
   });
 
-  const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (listeners?.onPointerDown) {
-      (listeners.onPointerDown as (dragEvent: React.PointerEvent) => void)(event);
-    }
-  }, [listeners]);
-
   return (
     <div
       ref={setNodeRef}
       {...attributes}
-      onPointerDown={handlePointerDown}
+      {...listeners}
       className={isDragging ? 'opacity-30' : undefined}
     >
       {children}
@@ -423,6 +418,7 @@ export const SidebarFilesTree: React.FC = () => {
   const { isMobile } = useDeviceInfo();
   const currentDirectory = useEffectiveDirectory() ?? '';
   const root = normalizePath(currentDirectory.trim());
+  const normalizedCurrentDirectory = root || normalizePath(currentDirectory);
   const showHidden = useDirectoryShowHidden();
   const showGitignored = useFilesViewShowGitignored();
   const searchFiles = useFileSearchStore((state) => state.searchFiles);
@@ -784,11 +780,13 @@ export const SidebarFilesTree: React.FC = () => {
     setIsUploading(true);
     let successCount = 0;
     let failCount = 0;
+    const uploadedPaths: string[] = [];
 
     for (const file of droppedFiles) {
       const success = await uploadFile(file, targetDir);
       if (success) {
         successCount += 1;
+        uploadedPaths.push(normalizePath(`${targetDir}/${file.name}`));
       } else {
         failCount += 1;
       }
@@ -797,6 +795,7 @@ export const SidebarFilesTree: React.FC = () => {
     setIsUploading(false);
 
     if (successCount > 0) {
+      notifyFileContentInvalidated(uploadedPaths);
       await refreshRoot();
       if (successCount === 1 && failCount === 0) {
         toast.success('File uploaded successfully');
@@ -905,9 +904,9 @@ export const SidebarFilesTree: React.FC = () => {
 
     if (!isDraggingFiles) {
       setIsDraggingFiles(true);
-      setDropTargetPath(currentDirectory);
+      setDropTargetPath(normalizedCurrentDirectory);
     }
-  }, [currentDirectory, files.writeFile, hasDraggedFiles, isDraggingFiles]);
+  }, [files.writeFile, hasDraggedFiles, isDraggingFiles, normalizedCurrentDirectory]);
 
   const handleTreeDragOver = React.useCallback((event: React.DragEvent) => {
     if (!hasDraggedFiles(event.dataTransfer) || !files.writeFile) {
@@ -922,6 +921,13 @@ export const SidebarFilesTree: React.FC = () => {
   const handleTreeDragLeave = React.useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.stopPropagation();
+
+    const currentTarget = event.currentTarget as unknown as Node | null;
+    const nextTarget = event.relatedTarget as Node | null;
+    if (currentTarget && nextTarget && currentTarget.contains(nextTarget)) {
+      return;
+    }
+
     dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
 
     if (dragCounterRef.current === 0) {
@@ -936,7 +942,7 @@ export const SidebarFilesTree: React.FC = () => {
     dragCounterRef.current = 0;
     setIsDraggingFiles(false);
 
-    const targetDir = dropTargetPath || currentDirectory;
+    const targetDir = dropTargetPath || normalizedCurrentDirectory;
     setDropTargetPath(null);
 
     if (!hasDraggedFiles(event.dataTransfer) || !files.writeFile || !targetDir) {
@@ -945,7 +951,7 @@ export const SidebarFilesTree: React.FC = () => {
 
     const droppedFiles = collectDroppedFiles(event.dataTransfer);
     await handleFileDrop(droppedFiles, targetDir);
-  }, [collectDroppedFiles, currentDirectory, dropTargetPath, files.writeFile, handleFileDrop, hasDraggedFiles]);
+  }, [collectDroppedFiles, dropTargetPath, files.writeFile, handleFileDrop, hasDraggedFiles, normalizedCurrentDirectory]);
 
   const handleDirectoryDragEnter = React.useCallback((event: React.DragEvent, dirPath: string) => {
     if (!hasDraggedFiles(event.dataTransfer) || !files.writeFile) {
@@ -961,10 +967,16 @@ export const SidebarFilesTree: React.FC = () => {
     event.preventDefault();
     event.stopPropagation();
 
-    if (isDraggingFiles) {
-      setDropTargetPath(currentDirectory);
+    const currentTarget = event.currentTarget as unknown as Node | null;
+    const nextTarget = event.relatedTarget as Node | null;
+    if (currentTarget && nextTarget && currentTarget.contains(nextTarget)) {
+      return;
     }
-  }, [currentDirectory, isDraggingFiles]);
+
+    if (isDraggingFiles) {
+      setDropTargetPath(normalizedCurrentDirectory);
+    }
+  }, [isDraggingFiles, normalizedCurrentDirectory]);
 
   const handleDndDragStart = React.useCallback((event: DragStartEvent) => {
     const data = event.active.data.current as { type?: string; node?: FileNode } | undefined;
@@ -1330,7 +1342,7 @@ export const SidebarFilesTree: React.FC = () => {
           <div className="text-center">
             <RiUploadCloud2Line className="h-12 w-12 mx-auto mb-2 text-primary" />
             <div className="typography-ui font-medium text-foreground">
-              {dropTargetPath && dropTargetPath !== currentDirectory
+              {dropTargetPath && dropTargetPath !== normalizedCurrentDirectory
                 ? `Drop to upload to ${dropTargetPath.split('/').pop()}`
                 : 'Drop files to upload'}
             </div>

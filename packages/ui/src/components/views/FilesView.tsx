@@ -30,6 +30,7 @@ import {
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { triggerFileDownload } from '@/lib/fileDownload';
+import { subscribeToFileContentInvalidated } from '@/lib/fileContentInvalidation';
 
 import {
   DropdownMenu,
@@ -732,6 +733,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     fileStatCacheRef.current.delete(normalizedPath);
   }, []);
 
+  React.useEffect(() => {
+    return subscribeToFileContentInvalidated((paths) => {
+      for (const path of paths) {
+        invalidateCachedPath(path);
+      }
+    });
+  }, [invalidateCachedPath]);
+
   const invalidateCachedPathPrefix = React.useCallback((prefixPath: string) => {
     const normalizedPrefix = normalizePath(prefixPath);
     if (!normalizedPrefix) {
@@ -949,7 +958,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [isDragging, setIsDragging] = React.useState(false);
 
   const [contextUploadTargetPath, setContextUploadTargetPath] = React.useState<string | null>(null);
-  const [, setIsUploading] = React.useState(false);
 
   // Binary file warning dialog state
   const [binaryWarningDialog, setBinaryWarningDialog] = React.useState<{
@@ -2235,7 +2243,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const handleFileDrop = React.useCallback(async (droppedFiles: File[], targetDir: string) => {
     if (droppedFiles.length === 0 || !files.writeFile) return;
 
-    setIsUploading(true);
     let successCount = 0;
     let failCount = 0;
 
@@ -2247,8 +2254,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         failCount++;
       }
     }
-
-    setIsUploading(false);
 
     if (successCount > 0) {
       for (const uploadedFile of droppedFiles) {
