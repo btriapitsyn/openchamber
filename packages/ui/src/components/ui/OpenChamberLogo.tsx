@@ -1,6 +1,20 @@
 import React, { useMemo } from 'react';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 
+const LEFT_FACE_CELL_OPACITIES = [
+  0.2, 0.45, 0.15, 0.55,
+  0.35, 0.1, 0.5, 0.25,
+  0.4, 0.3, 0.45, 0.15,
+  0.55, 0.2, 0.35, 0.1,
+];
+
+const RIGHT_FACE_CELL_OPACITIES = [
+  0.3, 0.15, 0.45, 0.25,
+  0.5, 0.35, 0.1, 0.4,
+  0.2, 0.55, 0.3, 0.15,
+  0.45, 0.25, 0.4, 0.2,
+];
+
 interface OpenChamberLogoProps {
   className?: string;
   width?: number;
@@ -167,15 +181,6 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
   // Right face: center -> right -> bottomRight -> bottom  
   const rightFaceCells = generateFaceGrid(center, right, bottomRight, bottom);
 
-  // Generate random opacity values for cells (stable per component instance)
-  const cellOpacities = useMemo(() => {
-    const opacities: number[] = [];
-    for (let i = 0; i < 32; i++) { // 16 cells per face * 2 faces
-      opacities.push(0.1 + Math.random() * 0.5); // Random opacity 0.1-0.6
-    }
-    return opacities;
-  }, []);
-
   return (
     <svg
       width={width}
@@ -202,7 +207,7 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
           key={`left-${i}`}
           d={cell.path}
           fill={cellHighlightColor}
-          opacity={cellOpacities[i]}
+          opacity={LEFT_FACE_CELL_OPACITIES[cell.row * 4 + (3 - cell.col)] ?? 0.35}
         />
       ))}
       
@@ -221,7 +226,7 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
           key={`right-${i}`}
           d={cell.path}
           fill={cellHighlightColor}
-          opacity={cellOpacities[i + 16]}
+          opacity={RIGHT_FACE_CELL_OPACITIES[cell.row * 4 + cell.col] ?? 0.35}
         />
       ))}
       

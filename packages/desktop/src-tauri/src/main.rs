@@ -1172,6 +1172,10 @@ const SIDECAR_NAME: &str = "openchamber-server";
 const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(20);
 const HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(250);
+const LOCAL_SIDECAR_HEALTH_TIMEOUT: Duration = Duration::from_secs(8);
+const LOCAL_SIDECAR_HEALTH_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const STARTUP_REMOTE_PROBE_SOFT_TIMEOUT: Duration = Duration::from_secs(2);
+const STARTUP_REMOTE_PROBE_HARD_TIMEOUT: Duration = Duration::from_secs(10);
 
 const DEFAULT_DESKTOP_PORT: u16 = 57123;
 const WINDOW_STATE_DEBOUNCE_MS: u64 = 300;
@@ -1517,12 +1521,11 @@ struct HostProbeResult {
     latency_ms: u64,
 }
 
-#[tauri::command]
-async fn desktop_host_probe(url: String) -> Result<HostProbeResult, String> {
-    let health = build_health_url(&url).ok_or_else(|| "Invalid URL".to_string())?;
+async fn probe_host_with_timeout(url: &str, timeout: Duration) -> Result<HostProbeResult, String> {
+    let health = build_health_url(url).ok_or_else(|| "Invalid URL".to_string())?;
     let client = reqwest::Client::builder()
         .no_proxy()
-        .timeout(Duration::from_secs(2))
+        .timeout(timeout)
         .build()
         .map_err(|err| err.to_string())?;
     let started = std::time::Instant::now();
@@ -1553,6 +1556,11 @@ async fn desktop_host_probe(url: String) -> Result<HostProbeResult, String> {
             latency_ms: started.elapsed().as_millis() as u64,
         }),
     }
+}
+
+#[tauri::command]
+async fn desktop_host_probe(url: String) -> Result<HostProbeResult, String> {
+    probe_host_with_timeout(&url, STARTUP_REMOTE_PROBE_SOFT_TIMEOUT).await
 }
 
 #[derive(Clone, Serialize)]
@@ -1730,13 +1738,13 @@ fn maybe_show_sidecar_notification(app: &tauri::AppHandle, payload: SidecarNotif
     let _ = builder.show();
 }
 
-async fn wait_for_health(url: &str) -> bool {
+async fn wait_for_health_with(url: &str, timeout: Duration, poll_interval: Duration) -> bool {
     let client = match reqwest::Client::builder().no_proxy().build() {
         Ok(c) => c,
         Err(_) => return false,
     };
 
-    let deadline = std::time::Instant::now() + HEALTH_TIMEOUT;
+    let deadline = std::time::Instant::now() + timeout;
     let health_url = format!("{}/health", url.trim_end_matches('/'));
 
     while std::time::Instant::now() < deadline {
@@ -1745,10 +1753,14 @@ async fn wait_for_health(url: &str) -> bool {
                 return true;
             }
         }
-        tokio::time::sleep(HEALTH_POLL_INTERVAL).await;
+        tokio::time::sleep(poll_interval).await;
     }
 
     false
+}
+
+async fn wait_for_health(url: &str) -> bool {
+    wait_for_health_with(url, HEALTH_TIMEOUT, HEALTH_POLL_INTERVAL).await
 }
 
 fn kill_sidecar(app: tauri::AppHandle) {
@@ -1999,7 +2011,13 @@ async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
             *state.url.lock().expect("sidecar url mutex") = Some(url.clone());
         }
 
-        if !wait_for_health(&url).await {
+        if !wait_for_health_with(
+            &url,
+            LOCAL_SIDECAR_HEALTH_TIMEOUT,
+            LOCAL_SIDECAR_HEALTH_POLL_INTERVAL,
+        )
+        .await
+        {
             kill_sidecar(app.clone());
             continue;
         }
@@ -3091,31 +3109,42 @@ fn main() {
 
                 if initial_url != local_ui_url {
                     let failed_url = initial_url.clone();
-                    match desktop_host_probe(initial_url.clone()).await {
-                        Ok(probe) if probe.status != "unreachable" => {}
-                        Ok(_) => {
+                    let soft_probe =
+                        probe_host_with_timeout(&initial_url, STARTUP_REMOTE_PROBE_SOFT_TIMEOUT).await;
+
+                    let remote_reachable = match soft_probe {
+                        Ok(probe) if probe.status != "unreachable" => true,
+                        Ok(_) | Err(_) => {
                             log::warn!(
-                                "[desktop] startup host unreachable ({}), falling back to local ({})",
-                                initial_url,
-                                local_ui_url
+                                "[desktop] startup host slow/unreachable ({}), retrying with extended timeout",
+                                initial_url
                             );
-                            initial_url = local_ui_url.clone();
-                            // Cache the failure so open_new_window skips this host.
-                            if let Some(state) = handle.try_state::<DesktopUiInjectionState>() {
-                                state.unreachable_hosts.lock().expect("unreachable hosts mutex").insert(failed_url);
+
+                            match probe_host_with_timeout(
+                                &initial_url,
+                                STARTUP_REMOTE_PROBE_HARD_TIMEOUT,
+                            )
+                            .await
+                            {
+                                Ok(probe) if probe.status != "unreachable" => true,
+                                Ok(_) | Err(_) => false,
                             }
                         }
-                        Err(err) => {
-                            log::warn!(
-                                "[desktop] startup host probe failed ({}): {}, falling back to local ({})",
-                                initial_url,
-                                err,
-                                local_ui_url
-                            );
-                            initial_url = local_ui_url.clone();
-                            if let Some(state) = handle.try_state::<DesktopUiInjectionState>() {
-                                state.unreachable_hosts.lock().expect("unreachable hosts mutex").insert(failed_url);
-                            }
+                    };
+
+                    if !remote_reachable {
+                        log::warn!(
+                            "[desktop] startup host unreachable after retries ({}), falling back to local ({})",
+                            initial_url,
+                            local_ui_url
+                        );
+                        initial_url = local_ui_url.clone();
+                        if let Some(state) = handle.try_state::<DesktopUiInjectionState>() {
+                            state
+                                .unreachable_hosts
+                                .lock()
+                                .expect("unreachable hosts mutex")
+                                .insert(failed_url);
                         }
                     }
                 }

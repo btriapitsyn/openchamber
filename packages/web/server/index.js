@@ -784,6 +784,36 @@ const resolveZenModel = async (override) => {
   return validatedZenFallback || ZEN_DEFAULT_MODEL;
 };
 
+const validateZenModelAtStartup = async () => {
+  try {
+    const freeModels = await fetchFreeZenModels();
+    const freeModelIds = freeModels.map((m) => m.id);
+
+    if (freeModelIds.length > 0) {
+      validatedZenFallback = freeModelIds[0];
+
+      const settings = await readSettingsFromDisk();
+      const storedModel = typeof settings?.zenModel === 'string' ? settings.zenModel.trim() : '';
+
+      if (!storedModel || !freeModelIds.includes(storedModel)) {
+        const fallback = freeModelIds[0];
+        console.log(
+          storedModel
+            ? `[zen] Stored model "${storedModel}" not found in free models, falling back to "${fallback}"`
+            : `[zen] No model configured, setting default to "${fallback}"`
+        );
+        await persistSettings({ zenModel: fallback });
+      } else {
+        console.log(`[zen] Stored model "${storedModel}" verified as available`);
+      }
+    } else {
+      console.warn('[zen] No free models returned from API, skipping validation');
+    }
+  } catch (error) {
+    console.warn('[zen] Startup model validation failed (non-blocking):', error?.message || error);
+  }
+};
+
 
 const summarizeText = async (text, targetLength, zenModel) => {
   if (!text || typeof text !== 'string' || text.trim().length === 0) return text;
@@ -5994,6 +6024,72 @@ async function refreshOpenCodeAfterConfigChange(reason, options = {}) {
   }
 }
 
+async function bootstrapOpenCodeAtStartup() {
+  try {
+    syncFromHmrState();
+    if (await isOpenCodeProcessHealthy()) {
+      console.log(`[HMR] Reusing existing OpenCode process on port ${openCodePort}`);
+    } else if (ENV_SKIP_OPENCODE_START && ENV_EFFECTIVE_PORT) {
+      const label = ENV_CONFIGURED_OPENCODE_HOST ? ENV_CONFIGURED_OPENCODE_HOST.origin : `http://localhost:${ENV_EFFECTIVE_PORT}`;
+      console.log(`Using external OpenCode server at ${label} (skip-start mode)`);
+      openCodeBaseUrl = ENV_CONFIGURED_OPENCODE_HOST?.origin ?? null;
+      setOpenCodePort(ENV_EFFECTIVE_PORT);
+      isOpenCodeReady = true;
+      isExternalOpenCode = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
+      syncToHmrState();
+    } else if (ENV_EFFECTIVE_PORT && await probeExternalOpenCode(ENV_EFFECTIVE_PORT, ENV_CONFIGURED_OPENCODE_HOST?.origin)) {
+      const label = ENV_CONFIGURED_OPENCODE_HOST ? ENV_CONFIGURED_OPENCODE_HOST.origin : `http://localhost:${ENV_EFFECTIVE_PORT}`;
+      console.log(`Auto-detected existing OpenCode server at ${label}`);
+      openCodeBaseUrl = ENV_CONFIGURED_OPENCODE_HOST?.origin ?? null;
+      setOpenCodePort(ENV_EFFECTIVE_PORT);
+      isOpenCodeReady = true;
+      isExternalOpenCode = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
+      syncToHmrState();
+    } else if (!ENV_EFFECTIVE_PORT && await probeExternalOpenCode(4096)) {
+      console.log('Auto-detected existing OpenCode server on default port 4096');
+      setOpenCodePort(4096);
+      isOpenCodeReady = true;
+      isExternalOpenCode = true;
+      lastOpenCodeError = null;
+      openCodeNotReadySince = 0;
+      syncToHmrState();
+    } else {
+      if (ENV_EFFECTIVE_PORT) {
+        console.log(`Using OpenCode port from environment: ${ENV_EFFECTIVE_PORT}`);
+        setOpenCodePort(ENV_EFFECTIVE_PORT);
+      } else {
+        openCodePort = null;
+        syncToHmrState();
+      }
+
+      lastOpenCodeError = null;
+      openCodeProcess = await startOpenCode();
+      syncToHmrState();
+    }
+    await waitForOpenCodePort();
+    try {
+      await waitForOpenCodeReady();
+    } catch (error) {
+      console.error(`OpenCode readiness check failed: ${error.message}`);
+      scheduleOpenCodeApiDetection();
+    }
+    scheduleOpenCodeApiDetection();
+    startHealthMonitoring();
+    void startGlobalEventWatcher().catch((error) => {
+      console.warn(`Global event watcher startup failed: ${error?.message || error}`);
+    });
+  } catch (error) {
+    console.error(`Failed to start OpenCode: ${error.message}`);
+    console.log('Continuing without OpenCode integration...');
+    lastOpenCodeError = error.message;
+    scheduleOpenCodeApiDetection();
+  }
+}
+
 function setupProxy(app) {
   if (app.get('opencodeProxyConfigured')) {
     return;
@@ -6629,35 +6725,8 @@ async function main(options = {}) {
     sayTTSCapability = { available: false, voices: [], reason: 'Not macOS' };
   }
 
-  // Validate stored zen model at startup – best-effort, never blocks startup
-  try {
-    const freeModels = await fetchFreeZenModels();
-    const freeModelIds = freeModels.map((m) => m.id);
-
-    if (freeModelIds.length > 0) {
-      // Set the validated fallback to the first available free model
-      validatedZenFallback = freeModelIds[0];
-
-      const settings = await readSettingsFromDisk();
-      const storedModel = typeof settings?.zenModel === 'string' ? settings.zenModel.trim() : '';
-
-      if (!storedModel || !freeModelIds.includes(storedModel)) {
-        const fallback = freeModelIds[0];
-        console.log(
-          storedModel
-            ? `[zen] Stored model "${storedModel}" not found in free models, falling back to "${fallback}"`
-            : `[zen] No model configured, setting default to "${fallback}"`
-        );
-        await persistSettings({ zenModel: fallback });
-      } else {
-        console.log(`[zen] Stored model "${storedModel}" verified as available`);
-      }
-    } else {
-      console.warn('[zen] No free models returned from API, skipping validation');
-    }
-  } catch (error) {
-    console.warn('[zen] Startup model validation failed (non-blocking):', error?.message || error);
-  }
+  // Startup model validation is best-effort and runs in background.
+  void validateZenModelAtStartup();
 
   const app = express();
   const serverStartedAt = new Date().toISOString();
@@ -13094,69 +13163,9 @@ async function main(options = {}) {
     res.json({ success: true, killedCount });
   });
 
-  try {
-    syncFromHmrState();
-    if (await isOpenCodeProcessHealthy()) {
-      console.log(`[HMR] Reusing existing OpenCode process on port ${openCodePort}`);
-    } else if (ENV_SKIP_OPENCODE_START && ENV_EFFECTIVE_PORT) {
-      const label = ENV_CONFIGURED_OPENCODE_HOST ? ENV_CONFIGURED_OPENCODE_HOST.origin : `http://localhost:${ENV_EFFECTIVE_PORT}`;
-      console.log(`Using external OpenCode server at ${label} (skip-start mode)`);
-      openCodeBaseUrl = ENV_CONFIGURED_OPENCODE_HOST?.origin ?? null;
-      setOpenCodePort(ENV_EFFECTIVE_PORT);
-      isOpenCodeReady = true;
-      isExternalOpenCode = true;
-      lastOpenCodeError = null;
-      openCodeNotReadySince = 0;
-      syncToHmrState();
-    } else if (ENV_EFFECTIVE_PORT && await probeExternalOpenCode(ENV_EFFECTIVE_PORT, ENV_CONFIGURED_OPENCODE_HOST?.origin)) {
-      const label = ENV_CONFIGURED_OPENCODE_HOST ? ENV_CONFIGURED_OPENCODE_HOST.origin : `http://localhost:${ENV_EFFECTIVE_PORT}`;
-      console.log(`Auto-detected existing OpenCode server at ${label}`);
-      openCodeBaseUrl = ENV_CONFIGURED_OPENCODE_HOST?.origin ?? null;
-      setOpenCodePort(ENV_EFFECTIVE_PORT);
-      isOpenCodeReady = true;
-      isExternalOpenCode = true;
-      lastOpenCodeError = null;
-      openCodeNotReadySince = 0;
-      syncToHmrState();
-    } else if (!ENV_EFFECTIVE_PORT && await probeExternalOpenCode(4096)) {
-      console.log('Auto-detected existing OpenCode server on default port 4096');
-      setOpenCodePort(4096);
-      isOpenCodeReady = true;
-      isExternalOpenCode = true;
-      lastOpenCodeError = null;
-      openCodeNotReadySince = 0;
-      syncToHmrState();
-    } else {
-      if (ENV_EFFECTIVE_PORT) {
-        console.log(`Using OpenCode port from environment: ${ENV_EFFECTIVE_PORT}`);
-        setOpenCodePort(ENV_EFFECTIVE_PORT);
-      } else {
-        openCodePort = null;
-        syncToHmrState();
-      }
-
-      lastOpenCodeError = null;
-      openCodeProcess = await startOpenCode();
-      syncToHmrState();
-    }
-    await waitForOpenCodePort();
-    try {
-      await waitForOpenCodeReady();
-    } catch (error) {
-      console.error(`OpenCode readiness check failed: ${error.message}`);
-      scheduleOpenCodeApiDetection();
-    }
-    setupProxy(app);
-    scheduleOpenCodeApiDetection();
-    startHealthMonitoring();
-    void startGlobalEventWatcher();
-  } catch (error) {
-    console.error(`Failed to start OpenCode: ${error.message}`);
-    console.log('Continuing without OpenCode integration...');
-    lastOpenCodeError = error.message;
-    setupProxy(app);
-    scheduleOpenCodeApiDetection();
-  }
+  setupProxy(app);
+  scheduleOpenCodeApiDetection();
+  void bootstrapOpenCodeAtStartup();
 
   const distPath = (() => {
     const env = typeof process.env.OPENCHAMBER_DIST_DIR === 'string' ? process.env.OPENCHAMBER_DIST_DIR.trim() : '';
