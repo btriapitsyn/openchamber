@@ -6,6 +6,7 @@ import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { syncDesktopSettings, initializeAppearancePreferences } from '@/lib/persistence';
 import { applyPersistedDirectoryPreferences } from '@/lib/directoryPersistence';
 import { DesktopHostSwitcherInline } from '@/components/desktop/DesktopHostSwitcher';
+import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 
 const STATUS_CHECK_ENDPOINT = '/auth/session';
 
@@ -61,12 +62,10 @@ const AuthShell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   </div>
 );
 
-const LoadingScreen: React.FC<{ message?: string }> = ({ message = 'Preparing workspace…' }) => (
-  <AuthShell>
-    <div className="w-full max-w-sm rounded-3xl border border-border/40 bg-card/90 px-6 py-5 text-center shadow-none backdrop-blur">
-      <p className="typography-ui-label text-muted-foreground">{message}</p>
-    </div>
-  </AuthShell>
+const LoadingScreen: React.FC = () => (
+  <div className="flex min-h-screen items-center justify-center bg-background text-foreground">
+    <OpenChamberLogo width={120} height={120} isAnimated />
+  </div>
 );
 
 const ErrorScreen: React.FC<ErrorScreenProps> = ({ onRetry, errorType = 'network', retryAfter }) => {

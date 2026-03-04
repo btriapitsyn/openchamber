@@ -79,6 +79,9 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
   }
 
   const strokeColor = useMemo(() => {
+    if (themeContext) {
+      return themeContext.currentTheme.colors.surface.foreground;
+    }
     if (typeof window !== 'undefined') {
       const fromVars = getComputedStyle(document.documentElement).getPropertyValue('--splash-stroke').trim();
       if (fromVars) {
@@ -86,9 +89,22 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
       }
     }
     return isDark ? 'white' : 'black';
-  }, [isDark]);
+  }, [themeContext, isDark]);
+
+  const supportsColorMix = useMemo(() => {
+    if (typeof window === 'undefined' || typeof CSS === 'undefined' || typeof CSS.supports !== 'function') {
+      return false;
+    }
+    return CSS.supports('color', 'color-mix(in srgb, white 50%, transparent)');
+  }, []);
 
   const fillColor = useMemo(() => {
+    if (themeContext) {
+      if (supportsColorMix) {
+        return `color-mix(in srgb, ${strokeColor} 15%, transparent)`;
+      }
+      return isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
+    }
     if (typeof window !== 'undefined') {
       const fromVars = getComputedStyle(document.documentElement).getPropertyValue('--splash-face-fill').trim();
       if (fromVars) {
@@ -96,9 +112,15 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
       }
     }
     return isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
-  }, [isDark]);
+  }, [themeContext, supportsColorMix, strokeColor, isDark]);
 
   const cellHighlightColor = useMemo(() => {
+    if (themeContext) {
+      if (supportsColorMix) {
+        return `color-mix(in srgb, ${strokeColor} 35%, transparent)`;
+      }
+      return isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.4)';
+    }
     if (typeof window !== 'undefined') {
       const fromVars = getComputedStyle(document.documentElement).getPropertyValue('--splash-cell-fill').trim();
       if (fromVars) {
@@ -106,7 +128,7 @@ export const OpenChamberLogo: React.FC<OpenChamberLogoProps> = ({
       }
     }
     return isDark ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.4)';
-  }, [isDark]);
+  }, [themeContext, supportsColorMix, strokeColor, isDark]);
 
   const logoFillColor = strokeColor;
 
