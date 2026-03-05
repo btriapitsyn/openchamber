@@ -368,7 +368,7 @@ export async function startCloudflareQuickTunnel({ originUrl }) {
   };
 }
 
-export async function startCloudflareNamedTunnel({ token, hostname }) {
+export async function startCloudflareManagedRemoteTunnel({ token, hostname }) {
   const cfCheck = await checkCloudflaredAvailable();
 
   if (!cfCheck.available) {
@@ -380,10 +380,10 @@ export async function startCloudflareNamedTunnel({ token, hostname }) {
   const normalizedHost = typeof hostname === 'string' ? hostname.trim().toLowerCase() : '';
 
   if (!normalizedToken) {
-    throw new Error('Named tunnel token is required');
+    throw new Error('Managed remote tunnel token is required');
   }
   if (!normalizedHost) {
-    throw new Error('Named tunnel hostname is required');
+    throw new Error('Managed remote tunnel hostname is required');
   }
 
   const child = spawnCloudflared(['tunnel', 'run', '--token', normalizedToken]);
@@ -500,7 +500,7 @@ export function printTunnelWarning() {
    • URLs are temporary and will expire when the tunnel stops
    • Password protection is required for tunnel access
 
-   For production use, set up a named Cloudflare Tunnel:
+   For production use, set up a managed remote Cloudflare Tunnel:
    https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/
 `);
 }

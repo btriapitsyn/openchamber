@@ -34,10 +34,10 @@ type TunnelState =
   | 'error';
 
 type TtlOption = { value: string; label: string; ms: number | null };
-type TunnelMode = 'quick' | 'named';
-type ApiTunnelMode = TunnelMode | 'managed-remote' | 'managed-local';
+type TunnelMode = 'quick' | 'managed-remote' | 'managed-local';
+type ApiTunnelMode = TunnelMode;
 
-interface NamedTunnelPreset {
+interface ManagedRemoteTunnelPreset {
   id: string;
   name: string;
   hostname: string;
@@ -58,9 +58,11 @@ const SESSION_TTL_OPTIONS: TtlOption[] = [
   { value: '86400000', label: '24h', ms: 24 * 60 * 60 * 1000 },
 ];
 
-const QUICK_TUNNEL_TOOLTIP = 'Quick Tunnel is best effort and Cloudflare does not guarantee uptime. For more reliable long-lived access, switch to Named Tunnel mode.';
-const NAMED_TUNNEL_TOOLTIP = 'Named Tunnel mode uses your Cloudflare account and custom hostname for more reliable remote access.';
-const NAMED_TUNNEL_DOC_URL = 'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/';
+const QUICK_TUNNEL_TOOLTIP = 'Quick Tunnel is best effort and Cloudflare does not guarantee uptime. For more reliable long-lived access, switch to Managed Remote Tunnel mode.';
+const MANAGED_REMOTE_TUNNEL_TOOLTIP = 'Managed Remote Tunnel mode uses your Cloudflare account and custom hostname for more reliable remote access.';
+const MANAGED_REMOTE_TUNNEL_DOC_URL = 'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/';
+const MANAGED_LOCAL_TUNNEL_TOOLTIP = 'Managed Local Tunnel mode uses your local cloudflared config for persistent access.';
+const MANAGED_LOCAL_TUNNEL_DOC_URL = 'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/configuration-file/';
 
 interface TunnelInfo {
   url: string;
@@ -83,12 +85,11 @@ interface TunnelStatusResponse {
   active: boolean;
   url: string | null;
   mode?: ApiTunnelMode;
-  legacyMode?: TunnelMode;
-  hasNamedTunnelToken?: boolean;
-  namedTunnelHostname?: string | null;
+  hasManagedRemoteTunnelToken?: boolean;
+  managedRemoteTunnelHostname?: string | null;
   hasBootstrapToken?: boolean;
   bootstrapExpiresAt?: number | null;
-  namedTunnelTokenPresetIds?: string[];
+  managedRemoteTunnelTokenPresetIds?: string[];
   activeTunnelMode?: ApiTunnelMode | null;
   providerMetadata?: {
     configPath?: string | null;
@@ -107,8 +108,11 @@ const toUiTunnelMode = (mode: string | null | undefined): TunnelMode => {
   if (mode === 'quick') {
     return 'quick';
   }
-  if (mode === 'named' || mode === 'managed-remote' || mode === 'managed-local') {
-    return 'named';
+  if (mode === 'managed-remote') {
+    return 'managed-remote';
+  }
+  if (mode === 'managed-local') {
+    return 'managed-local';
   }
   return 'quick';
 };
@@ -152,14 +156,14 @@ const normalizePresetHostname = (value: string): string => {
   }
 };
 
-const sanitizePresets = (value: unknown): NamedTunnelPreset[] => {
+const sanitizePresets = (value: unknown): ManagedRemoteTunnelPreset[] => {
   if (!Array.isArray(value)) {
     return [];
   }
 
   const seenIds = new Set<string>();
   const seenHosts = new Set<string>();
-  const result: NamedTunnelPreset[] = [];
+  const result: ManagedRemoteTunnelPreset[] = [];
 
   for (const entry of value) {
     if (!entry || typeof entry !== 'object') {
@@ -196,13 +200,13 @@ export const TunnelSettings: React.FC = () => {
   const [activeTunnelMode, setActiveTunnelMode] = React.useState<TunnelMode | null>(null);
   const [qrDataUrl, setQrDataUrl] = React.useState<string | null>(null);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
-  const [namedValidationError, setNamedValidationError] = React.useState<string | null>(null);
+  const [managedRemoteValidationError, setManagedRemoteValidationError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [isSavingTtl, setIsSavingTtl] = React.useState(false);
   const [isSavingMode, setIsSavingMode] = React.useState(false);
   const [tunnelMode, setTunnelMode] = React.useState<TunnelMode>('quick');
-  const [namedTunnelPresets, setNamedTunnelPresets] = React.useState<NamedTunnelPreset[]>([]);
-  const [expandedNamedTunnels, setExpandedNamedTunnels] = React.useState<Record<string, boolean>>({});
+  const [managedRemoteTunnelPresets, setManagedRemoteTunnelPresets] = React.useState<ManagedRemoteTunnelPreset[]>([]);
+  const [expandedManagedRemoteTunnels, setExpandedManagedRemoteTunnels] = React.useState<Record<string, boolean>>({});
   const [selectedPresetId, setSelectedPresetId] = React.useState<string>('');
   const [sessionTokensByPresetId, setSessionTokensByPresetId] = React.useState<Record<string, string>>({});
   const [savedTokenPresetIds, setSavedTokenPresetIds] = React.useState<Set<string>>(new Set());
@@ -218,8 +222,8 @@ export const TunnelSettings: React.FC = () => {
   const [localPort, setLocalPort] = React.useState<number | null>(null);
 
   const selectedPreset = React.useMemo(
-    () => namedTunnelPresets.find((preset) => preset.id === selectedPresetId) || namedTunnelPresets[0] || null,
-    [namedTunnelPresets, selectedPresetId]
+    () => managedRemoteTunnelPresets.find((preset) => preset.id === selectedPresetId) || managedRemoteTunnelPresets[0] || null,
+    [managedRemoteTunnelPresets, selectedPresetId]
   );
   const renderedSessionRecords = React.useMemo(() => {
     return sessionRecords.map((record) => {
@@ -322,21 +326,21 @@ export const TunnelSettings: React.FC = () => {
 
       const loadedMode: TunnelMode = toUiTunnelMode(statusData.mode ?? settingsData?.tunnelMode);
 
-      const loadedHostname = typeof statusData.namedTunnelHostname === 'string'
-        ? statusData.namedTunnelHostname
-        : typeof settingsData?.namedTunnelHostname === 'string'
-          ? settingsData.namedTunnelHostname
+      const loadedHostname = typeof statusData.managedRemoteTunnelHostname === 'string'
+        ? statusData.managedRemoteTunnelHostname
+        : typeof settingsData?.managedRemoteTunnelHostname === 'string'
+          ? settingsData.managedRemoteTunnelHostname
           : '';
 
-      const loadedPresets = sanitizePresets(settingsData?.namedTunnelPresets);
+      const loadedPresets = sanitizePresets(settingsData?.managedRemoteTunnelPresets);
       const presets = loadedPresets.length > 0
         ? loadedPresets
         : (loadedHostname
           ? [{ id: 'legacy-default', name: 'Default', hostname: normalizePresetHostname(loadedHostname) }]
           : []);
 
-      const requestedPresetId = typeof settingsData?.namedTunnelSelectedPresetId === 'string'
-        ? settingsData.namedTunnelSelectedPresetId.trim()
+      const requestedPresetId = typeof settingsData?.managedRemoteTunnelSelectedPresetId === 'string'
+        ? settingsData.managedRemoteTunnelSelectedPresetId.trim()
         : '';
 
       const selectedId = (requestedPresetId && presets.some((preset) => preset.id === requestedPresetId))
@@ -346,7 +350,7 @@ export const TunnelSettings: React.FC = () => {
       setBootstrapTtlMs(loadedBootstrapTtl);
       setSessionTtlMs(loadedSessionTtl);
       setTunnelMode(loadedMode);
-      setNamedTunnelPresets(presets);
+      setManagedRemoteTunnelPresets(presets);
       setSelectedPresetId(selectedId);
       setSessionRecords(Array.isArray(statusData.activeSessions) ? statusData.activeSessions : []);
       setActiveTunnelMode(
@@ -354,7 +358,7 @@ export const TunnelSettings: React.FC = () => {
           ? toUiTunnelMode(statusData.activeTunnelMode)
           : (statusData.active && statusData.mode ? toUiTunnelMode(statusData.mode) : null)
       );
-      setSavedTokenPresetIds(new Set(Array.isArray(statusData.namedTunnelTokenPresetIds) ? statusData.namedTunnelTokenPresetIds : []));
+      setSavedTokenPresetIds(new Set(Array.isArray(statusData.managedRemoteTunnelTokenPresetIds) ? statusData.managedRemoteTunnelTokenPresetIds : []));
       setLocalPort(typeof statusData.localPort === 'number' ? statusData.localPort : null);
 
       if (statusData.active && statusData.url) {
@@ -450,7 +454,7 @@ export const TunnelSettings: React.FC = () => {
           return;
         }
         setSessionRecords(Array.isArray(statusData.activeSessions) ? statusData.activeSessions : []);
-        setSavedTokenPresetIds(new Set(Array.isArray(statusData.namedTunnelTokenPresetIds) ? statusData.namedTunnelTokenPresetIds : []));
+        setSavedTokenPresetIds(new Set(Array.isArray(statusData.managedRemoteTunnelTokenPresetIds) ? statusData.managedRemoteTunnelTokenPresetIds : []));
         setLocalPort(typeof statusData.localPort === 'number' ? statusData.localPort : null);
       } catch {
         // ignore transient refresh failures
@@ -469,10 +473,10 @@ export const TunnelSettings: React.FC = () => {
 
   const saveTunnelSettings = React.useCallback(async (payload: {
     tunnelMode?: TunnelMode;
-    namedTunnelHostname?: string;
-    namedTunnelPresets?: NamedTunnelPreset[];
-    namedTunnelSelectedPresetId?: string;
-    namedTunnelPresetTokens?: Record<string, string>;
+    managedRemoteTunnelHostname?: string;
+    managedRemoteTunnelPresets?: ManagedRemoteTunnelPreset[];
+    managedRemoteTunnelSelectedPresetId?: string;
+    managedRemoteTunnelPresetTokens?: Record<string, string>;
     tunnelBootstrapTtlMs?: number | null;
     tunnelSessionTtlMs?: number;
   }) => {
@@ -482,11 +486,11 @@ export const TunnelSettings: React.FC = () => {
       if (Object.prototype.hasOwnProperty.call(payload, 'tunnelMode') && payload.tunnelMode) {
         setTunnelMode(payload.tunnelMode);
       }
-      if (Object.prototype.hasOwnProperty.call(payload, 'namedTunnelPresets') && payload.namedTunnelPresets) {
-        setNamedTunnelPresets(payload.namedTunnelPresets);
+      if (Object.prototype.hasOwnProperty.call(payload, 'managedRemoteTunnelPresets') && payload.managedRemoteTunnelPresets) {
+        setManagedRemoteTunnelPresets(payload.managedRemoteTunnelPresets);
       }
-      if (Object.prototype.hasOwnProperty.call(payload, 'namedTunnelSelectedPresetId')) {
-        setSelectedPresetId(payload.namedTunnelSelectedPresetId || '');
+      if (Object.prototype.hasOwnProperty.call(payload, 'managedRemoteTunnelSelectedPresetId')) {
+        setSelectedPresetId(payload.managedRemoteTunnelSelectedPresetId || '');
       }
     } catch {
       toast.error('Failed to save tunnel settings');
@@ -509,7 +513,7 @@ export const TunnelSettings: React.FC = () => {
     }
   }, []);
 
-  const persistNamedTunnelToken = React.useCallback(async (payload: {
+  const persistManagedRemoteTunnelToken = React.useCallback(async (payload: {
     presetId: string;
     presetName: string;
     hostname: string;
@@ -526,7 +530,7 @@ export const TunnelSettings: React.FC = () => {
         [payload.presetId]: token,
       };
       await updateDesktopSettings({
-        namedTunnelPresetTokens: tokenMap,
+        managedRemoteTunnelPresetTokens: tokenMap,
       });
       setSavedTokenPresetIds((prev) => {
         const next = new Set(prev);
@@ -534,35 +538,35 @@ export const TunnelSettings: React.FC = () => {
         return next;
       });
     } catch {
-      toast.error('Failed to save named tunnel token');
+      toast.error('Failed to save managed remote tunnel token');
     }
   }, [sessionTokensByPresetId]);
 
   const handleStart = React.useCallback(async () => {
     setState('starting');
     setErrorMessage(null);
-    setNamedValidationError(null);
+    setManagedRemoteValidationError(null);
 
     try {
-      let namedTunnelHostname = '';
-      let namedTunnelToken = '';
+      let managedRemoteTunnelHostname = '';
+      let managedRemoteTunnelToken = '';
 
-      if (tunnelMode === 'named') {
+      if (tunnelMode === 'managed-remote') {
         if (!selectedPreset) {
           setState('idle');
-          setNamedValidationError('Select or add a named tunnel first');
-          toast.error('Select or add a named tunnel first');
+          setManagedRemoteValidationError('Select or add a managed remote tunnel first');
+          toast.error('Select or add a managed remote tunnel first');
           return;
         }
 
-        namedTunnelHostname = selectedPreset.hostname;
-        namedTunnelToken = (sessionTokensByPresetId[selectedPreset.id] || '').trim();
+        managedRemoteTunnelHostname = selectedPreset.hostname;
+        managedRemoteTunnelToken = (sessionTokensByPresetId[selectedPreset.id] || '').trim();
 
         await saveTunnelSettings({
-          tunnelMode: 'named',
-          namedTunnelHostname,
-          namedTunnelPresets,
-          namedTunnelSelectedPresetId: selectedPreset.id,
+          tunnelMode: 'managed-remote',
+          managedRemoteTunnelHostname,
+          managedRemoteTunnelPresets,
+          managedRemoteTunnelSelectedPresetId: selectedPreset.id,
         });
       }
 
@@ -571,21 +575,21 @@ export const TunnelSettings: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: tunnelMode,
-          ...(tunnelMode === 'named' && selectedPreset ? {
-            namedTunnelPresetId: selectedPreset.id,
-            namedTunnelPresetName: selectedPreset.name,
+          ...(tunnelMode === 'managed-remote' && selectedPreset ? {
+            managedRemoteTunnelPresetId: selectedPreset.id,
+            managedRemoteTunnelPresetName: selectedPreset.name,
           } : {}),
-          ...(tunnelMode === 'named' && namedTunnelHostname ? { namedTunnelHostname } : {}),
-          ...(tunnelMode === 'named' && namedTunnelToken ? { namedTunnelToken } : {}),
+          ...(tunnelMode === 'managed-remote' && managedRemoteTunnelHostname ? { managedRemoteTunnelHostname } : {}),
+          ...(tunnelMode === 'managed-remote' && managedRemoteTunnelToken ? { managedRemoteTunnelToken } : {}),
         }),
       });
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
-        if (tunnelMode === 'named' && typeof data.error === 'string' && data.error.includes('Named tunnel token is required')) {
+        if (tunnelMode === 'managed-remote' && typeof data.error === 'string' && data.error.includes('Managed remote tunnel token is required')) {
           setState('idle');
-          setNamedValidationError('Named tunnel token is required before starting');
-          toast.error('Add a named tunnel token before starting');
+          setManagedRemoteValidationError('Managed remote tunnel token is required before starting');
+          toast.error('Add a managed remote tunnel token before starting');
           return;
         }
         setState('error');
@@ -605,8 +609,8 @@ export const TunnelSettings: React.FC = () => {
           : (data.mode ? toUiTunnelMode(data.mode) : tunnelMode)
       );
       setSessionRecords(Array.isArray(data.activeSessions) ? data.activeSessions : []);
-      if (Array.isArray(data.namedTunnelTokenPresetIds)) {
-        setSavedTokenPresetIds(new Set(data.namedTunnelTokenPresetIds));
+      if (Array.isArray(data.managedRemoteTunnelTokenPresetIds)) {
+        setSavedTokenPresetIds(new Set(data.managedRemoteTunnelTokenPresetIds));
       }
       if (typeof data.localPort === 'number') {
         setLocalPort(data.localPort);
@@ -622,7 +626,7 @@ export const TunnelSettings: React.FC = () => {
       toast.error('Failed to start tunnel');
     }
   }, [
-    namedTunnelPresets,
+    managedRemoteTunnelPresets,
     saveTunnelSettings,
     selectedPreset,
     sessionTokensByPresetId,
@@ -638,7 +642,7 @@ export const TunnelSettings: React.FC = () => {
       if (statusRes.ok) {
         const statusData = (await statusRes.json()) as TunnelStatusResponse;
         setSessionRecords(Array.isArray(statusData.activeSessions) ? statusData.activeSessions : []);
-        setSavedTokenPresetIds(new Set(Array.isArray(statusData.namedTunnelTokenPresetIds) ? statusData.namedTunnelTokenPresetIds : []));
+        setSavedTokenPresetIds(new Set(Array.isArray(statusData.managedRemoteTunnelTokenPresetIds) ? statusData.managedRemoteTunnelTokenPresetIds : []));
         setLocalPort(typeof statusData.localPort === 'number' ? statusData.localPort : null);
       }
       setTunnelInfo(null);
@@ -687,43 +691,43 @@ export const TunnelSettings: React.FC = () => {
   }, [bootstrapTtlMs, saveTtlSettings]);
 
   const handleModeChange = React.useCallback(async (value: TunnelMode) => {
-    setNamedValidationError(null);
+    setManagedRemoteValidationError(null);
     setErrorMessage(null);
     if (state !== 'active' && state !== 'stopping' && state !== 'starting') {
       setState('idle');
     }
 
-    const nextHostname = value === 'named' && selectedPreset ? selectedPreset.hostname : undefined;
+    const nextHostname = value === 'managed-remote' && selectedPreset ? selectedPreset.hostname : undefined;
     await saveTunnelSettings({
       tunnelMode: value,
-      ...(nextHostname ? { namedTunnelHostname: nextHostname } : {}),
-      namedTunnelPresets,
-      namedTunnelSelectedPresetId: selectedPresetId || undefined,
+      ...(nextHostname ? { managedRemoteTunnelHostname: nextHostname } : {}),
+      managedRemoteTunnelPresets,
+      managedRemoteTunnelSelectedPresetId: selectedPresetId || undefined,
     });
-  }, [namedTunnelPresets, saveTunnelSettings, selectedPreset, selectedPresetId, state]);
+  }, [managedRemoteTunnelPresets, saveTunnelSettings, selectedPreset, selectedPresetId, state]);
 
-  const persistSelectedPreset = React.useCallback(async (preset: NamedTunnelPreset, presets: NamedTunnelPreset[]) => {
+  const persistSelectedPreset = React.useCallback(async (preset: ManagedRemoteTunnelPreset, presets: ManagedRemoteTunnelPreset[]) => {
     try {
       await updateDesktopSettings({
-        namedTunnelSelectedPresetId: preset.id,
-        namedTunnelHostname: preset.hostname,
-        namedTunnelPresets: presets,
+        managedRemoteTunnelSelectedPresetId: preset.id,
+        managedRemoteTunnelHostname: preset.hostname,
+        managedRemoteTunnelPresets: presets,
       });
     } catch {
-      toast.error('Failed to save selected named tunnel');
+      toast.error('Failed to save selected managed remote tunnel');
     }
   }, []);
 
   const handleSelectPreset = React.useCallback((presetId: string) => {
-    const preset = namedTunnelPresets.find((entry) => entry.id === presetId);
+    const preset = managedRemoteTunnelPresets.find((entry) => entry.id === presetId);
     if (!preset) {
       return;
     }
 
     setSelectedPresetId(preset.id);
-    setNamedValidationError(null);
-    void persistSelectedPreset(preset, namedTunnelPresets);
-  }, [namedTunnelPresets, persistSelectedPreset]);
+    setManagedRemoteValidationError(null);
+    void persistSelectedPreset(preset, managedRemoteTunnelPresets);
+  }, [managedRemoteTunnelPresets, persistSelectedPreset]);
 
   const handleSaveNewPreset = React.useCallback(async () => {
     const name = newPresetName.trim();
@@ -735,62 +739,62 @@ export const TunnelSettings: React.FC = () => {
       return;
     }
     if (!hostname) {
-      toast.error('Named tunnel hostname is required');
+      toast.error('Managed remote tunnel hostname is required');
       return;
     }
     if (!token) {
-      toast.error('Named tunnel token is required');
+      toast.error('Managed remote tunnel token is required');
       return;
     }
 
-    if (namedTunnelPresets.some((preset) => preset.hostname === hostname)) {
+    if (managedRemoteTunnelPresets.some((preset) => preset.hostname === hostname)) {
       toast.error('This hostname already exists');
       return;
     }
 
-    const nextPreset: NamedTunnelPreset = {
+    const nextPreset: ManagedRemoteTunnelPreset = {
       id: createPresetId(),
       name,
       hostname,
     };
-    const nextPresets = [...namedTunnelPresets, nextPreset];
+    const nextPresets = [...managedRemoteTunnelPresets, nextPreset];
 
-    setNamedTunnelPresets(nextPresets);
+    setManagedRemoteTunnelPresets(nextPresets);
     setSelectedPresetId(nextPreset.id);
-    setExpandedNamedTunnels((prev) => ({ ...prev, [nextPreset.id]: true }));
+    setExpandedManagedRemoteTunnels((prev) => ({ ...prev, [nextPreset.id]: true }));
     setSessionTokensByPresetId((prev) => ({ ...prev, [nextPreset.id]: token }));
-    setNamedValidationError(null);
+    setManagedRemoteValidationError(null);
     setIsAddingPreset(false);
     setNewPresetName('');
     setNewPresetHostname('');
     setNewPresetToken('');
 
     await saveTunnelSettings({
-      tunnelMode: 'named',
-      namedTunnelHostname: nextPreset.hostname,
-      namedTunnelPresets: nextPresets,
-      namedTunnelSelectedPresetId: nextPreset.id,
-      namedTunnelPresetTokens: {
+      tunnelMode: 'managed-remote',
+      managedRemoteTunnelHostname: nextPreset.hostname,
+      managedRemoteTunnelPresets: nextPresets,
+      managedRemoteTunnelSelectedPresetId: nextPreset.id,
+      managedRemoteTunnelPresetTokens: {
         ...sessionTokensByPresetId,
         [nextPreset.id]: token,
       },
     });
-    await persistNamedTunnelToken({
+    await persistManagedRemoteTunnelToken({
       presetId: nextPreset.id,
       presetName: nextPreset.name,
       hostname: nextPreset.hostname,
       token,
     });
-    toast.success('Named tunnel saved');
-  }, [namedTunnelPresets, newPresetHostname, newPresetName, newPresetToken, persistNamedTunnelToken, saveTunnelSettings, sessionTokensByPresetId]);
+    toast.success('Managed remote tunnel saved');
+  }, [managedRemoteTunnelPresets, newPresetHostname, newPresetName, newPresetToken, persistManagedRemoteTunnelToken, saveTunnelSettings, sessionTokensByPresetId]);
 
   const handleRemovePreset = React.useCallback(async (presetId: string) => {
-    const preset = namedTunnelPresets.find((entry) => entry.id === presetId);
+    const preset = managedRemoteTunnelPresets.find((entry) => entry.id === presetId);
     if (!preset) {
       return;
     }
 
-    const nextPresets = namedTunnelPresets.filter((entry) => entry.id !== preset.id);
+    const nextPresets = managedRemoteTunnelPresets.filter((entry) => entry.id !== preset.id);
     const fallbackSelectedId = nextPresets[0]?.id || '';
     const nextSelectedId = selectedPresetId === preset.id ? fallbackSelectedId : selectedPresetId;
     const nextSelectedPreset = nextPresets.find((entry) => entry.id === nextSelectedId) || null;
@@ -800,9 +804,9 @@ export const TunnelSettings: React.FC = () => {
         .filter(([id, tokenValue]) => id !== preset.id && tokenValue.trim().length > 0)
     );
 
-    setNamedTunnelPresets(nextPresets);
+    setManagedRemoteTunnelPresets(nextPresets);
     setSelectedPresetId(nextSelectedId);
-    setExpandedNamedTunnels((prev) => {
+    setExpandedManagedRemoteTunnels((prev) => {
       const next = { ...prev };
       delete next[preset.id];
       return next;
@@ -817,17 +821,17 @@ export const TunnelSettings: React.FC = () => {
       next.delete(preset.id);
       return next;
     });
-    setNamedValidationError(null);
+    setManagedRemoteValidationError(null);
 
     await saveTunnelSettings({
-      namedTunnelPresets: nextPresets,
-      namedTunnelSelectedPresetId: nextSelectedId || undefined,
-      namedTunnelHostname: nextHostname,
-      namedTunnelPresetTokens: nextTokenMap,
+      managedRemoteTunnelPresets: nextPresets,
+      managedRemoteTunnelSelectedPresetId: nextSelectedId || undefined,
+      managedRemoteTunnelHostname: nextHostname,
+      managedRemoteTunnelPresetTokens: nextTokenMap,
     });
 
-    toast.success('Named tunnel removed');
-  }, [namedTunnelPresets, saveTunnelSettings, selectedPresetId, sessionTokensByPresetId]);
+    toast.success('Managed remote tunnel removed');
+  }, [managedRemoteTunnelPresets, saveTunnelSettings, selectedPresetId, sessionTokensByPresetId]);
 
   const primaryCtaClass = 'gap-2 border-[var(--primary-base)] bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] hover:text-[var(--primary-foreground)]';
 
@@ -844,7 +848,7 @@ export const TunnelSettings: React.FC = () => {
       <div>
         <h3 className="typography-ui-header font-semibold text-foreground">Remote Tunnel</h3>
         <p className="typography-meta mt-0 text-muted-foreground/70">
-          Configure secure remote access with quick links or your own named Cloudflare tunnel.
+          Configure secure remote access with quick links or your own managed remote Cloudflare tunnel.
         </p>
         <p className="typography-meta mt-0 text-muted-foreground/60">
           Secure Tunnel access is enforced server-side.
@@ -947,20 +951,44 @@ export const TunnelSettings: React.FC = () => {
                     size="xs"
                     className={cn(
                       '!font-normal',
-                      tunnelMode === 'named'
+                      tunnelMode === 'managed-remote'
                         ? 'border-[var(--status-info-border)] bg-[var(--status-info-background)] text-[var(--status-info)] hover:text-[var(--status-info)]'
                         : 'text-foreground'
                     )}
                     onClick={() => {
-                      void handleModeChange('named');
+                      void handleModeChange('managed-remote');
                     }}
                     disabled={isSavingMode || state === 'starting' || state === 'stopping'}
                   >
-                    Named Tunnel
+                    Managed Remote Tunnel
                   </ButtonSmall>
                 </TooltipTrigger>
                 <TooltipContent sideOffset={8} className="max-w-xs">
-                  {NAMED_TUNNEL_TOOLTIP}
+                  {MANAGED_REMOTE_TUNNEL_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip delayDuration={700}>
+                <TooltipTrigger asChild>
+                  <ButtonSmall
+                    variant="outline"
+                    size="xs"
+                    className={cn(
+                      '!font-normal',
+                      tunnelMode === 'managed-local'
+                        ? 'border-[var(--status-info-border)] bg-[var(--status-info-background)] text-[var(--status-info)] hover:text-[var(--status-info)]'
+                        : 'text-foreground'
+                    )}
+                    onClick={() => {
+                      void handleModeChange('managed-local');
+                    }}
+                    disabled={isSavingMode || state === 'starting' || state === 'stopping'}
+                  >
+                    Managed Local Tunnel
+                  </ButtonSmall>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={8} className="max-w-xs">
+                  {MANAGED_LOCAL_TUNNEL_TOOLTIP}
                 </TooltipContent>
               </Tooltip>
             </div>
@@ -1017,14 +1045,14 @@ export const TunnelSettings: React.FC = () => {
                     Quick Tunnel is best effort and Cloudflare does not guarantee uptime.
                   </p>
                   <p className="typography-meta mt-1 text-[var(--status-warning)]">
-                    For more reliable long-lived access, switch to Named Tunnel mode.
+                    For more reliable long-lived access, switch to Managed Remote Tunnel mode.
                   </p>
                 </div>
               </div>
             </div>
           )}
 
-          {tunnelMode === 'named' && (
+          {tunnelMode === 'managed-remote' && (
             <div className="space-y-2 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-3">
               {typeof suggestedConnectorPort === 'number' && (
                 <div className="rounded-md border border-[var(--status-info-border)] bg-[var(--status-info-background)]/35 px-2 py-1.5">
@@ -1035,7 +1063,7 @@ export const TunnelSettings: React.FC = () => {
               )}
 
               <div className="mb-1 flex items-center justify-between gap-3">
-                <p className="typography-ui-label text-foreground">Saved named tunnels</p>
+                <p className="typography-ui-label text-foreground">Saved managed remote tunnels</p>
                 <ButtonSmall
                   variant="ghost"
                   size="xs"
@@ -1048,22 +1076,22 @@ export const TunnelSettings: React.FC = () => {
                 </ButtonSmall>
               </div>
 
-              {namedTunnelPresets.length > 0 ? (
+              {managedRemoteTunnelPresets.length > 0 ? (
                 <div className="overflow-hidden rounded-md border border-[var(--surface-subtle)]">
-                  {namedTunnelPresets.map((preset, index) => {
+                  {managedRemoteTunnelPresets.map((preset, index) => {
                     const rowToken = sessionTokensByPresetId[preset.id] || '';
                     const hasSavedToken = savedTokenPresetIds.has(preset.id);
-                    const isOpen = expandedNamedTunnels[preset.id] ?? false;
+                    const isOpen = expandedManagedRemoteTunnels[preset.id] ?? false;
 
                     return (
                       <div
                         key={preset.id}
-                        className={cn(index < namedTunnelPresets.length - 1 && 'border-b border-[var(--surface-subtle)]')}
+                        className={cn(index < managedRemoteTunnelPresets.length - 1 && 'border-b border-[var(--surface-subtle)]')}
                       >
                         <Collapsible
                           open={isOpen}
                           onOpenChange={(open) => {
-                            setExpandedNamedTunnels((prev) => ({ ...prev, [preset.id]: open }));
+                            setExpandedManagedRemoteTunnels((prev) => ({ ...prev, [preset.id]: open }));
                             if (open) {
                               void handleSelectPreset(preset.id);
                             }
@@ -1104,7 +1132,7 @@ export const TunnelSettings: React.FC = () => {
                                 value={rowToken}
                                 onChange={(event) => {
                                   const nextValue = event.target.value;
-                                  setNamedValidationError(null);
+                                  setManagedRemoteValidationError(null);
                                   setSessionTokensByPresetId((prev) => ({ ...prev, [preset.id]: nextValue }));
                                 }}
                                 onBlur={(event) => {
@@ -1112,7 +1140,7 @@ export const TunnelSettings: React.FC = () => {
                                   if (!tokenToSave) {
                                     return;
                                   }
-                                  void persistNamedTunnelToken({
+                                  void persistManagedRemoteTunnelToken({
                                     presetId: preset.id,
                                     presetName: preset.name,
                                     hostname: preset.hostname,
@@ -1130,7 +1158,7 @@ export const TunnelSettings: React.FC = () => {
                                   className="!font-normal"
                                   disabled={state === 'starting' || state === 'stopping' || rowToken.trim().length === 0}
                                   onClick={() => {
-                                    void persistNamedTunnelToken({
+                                    void persistManagedRemoteTunnelToken({
                                       presetId: preset.id,
                                       presetName: preset.name,
                                       hostname: preset.hostname,
@@ -1149,7 +1177,7 @@ export const TunnelSettings: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <p className="typography-meta text-muted-foreground/70">No named tunnels saved yet.</p>
+                <p className="typography-meta text-muted-foreground/70">No managed remote tunnels saved yet.</p>
               )}
 
               {isAddingPreset && (
@@ -1218,19 +1246,19 @@ export const TunnelSettings: React.FC = () => {
                     <button
                       type="button"
                       className="rounded p-0.5 text-muted-foreground/70 hover:text-foreground"
-                      aria-label="Named tunnel token info"
+                      aria-label="Managed remote tunnel token info"
                     >
                       <RiInformationLine className="h-3.5 w-3.5" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent sideOffset={8} className="max-w-xs">
-                    Tokens are saved in ~/.config/openchamber/cloudflare-named-tunnels.json.
+                    Tokens are saved in ~/.config/openchamber/cloudflare-managed-remote-tunnels.json.
                   </TooltipContent>
                 </Tooltip>
               </div>
 
-              {!selectedPreset && namedValidationError && (
-                <p className="typography-meta text-[var(--status-error)]">{namedValidationError}</p>
+              {!selectedPreset && managedRemoteValidationError && (
+                <p className="typography-meta text-[var(--status-error)]">{managedRemoteValidationError}</p>
               )}
             </div>
           )}
@@ -1241,35 +1269,52 @@ export const TunnelSettings: React.FC = () => {
                 <div className="flex items-start gap-2">
                   <RiInformationLine className="mt-0.5 size-4 shrink-0 text-[var(--status-info)]" />
                   <div className="space-y-1">
-                    {tunnelMode === 'named' && (
+                    {tunnelMode === 'managed-remote' && (
                       <>
                         <p className="typography-meta text-[var(--status-info)]">
-                          Named tunnels require a bought domain in your Cloudflare account.
+                          Managed remote tunnels require a bought domain in your Cloudflare account.
                         </p>
                         <button
                           type="button"
                           className="typography-meta inline-flex items-center gap-1 text-[var(--status-info)] underline underline-offset-2 hover:opacity-90"
                           onClick={() => {
-                            void openExternal(NAMED_TUNNEL_DOC_URL);
+                            void openExternal(MANAGED_REMOTE_TUNNEL_DOC_URL);
                           }}
                         >
-                          Check the documentation on how to configure a named tunnel
+                          Check the documentation on how to configure a managed remote tunnel
+                          <RiExternalLinkLine className="size-3.5" />
+                        </button>
+                      </>
+                    )}
+                    {tunnelMode === 'managed-local' && (
+                      <>
+                        <p className="typography-meta text-[var(--status-info)]">
+                          Managed local tunnels use your local cloudflared configuration file.
+                        </p>
+                        <button
+                          type="button"
+                          className="typography-meta inline-flex items-center gap-1 text-[var(--status-info)] underline underline-offset-2 hover:opacity-90"
+                          onClick={() => {
+                            void openExternal(MANAGED_LOCAL_TUNNEL_DOC_URL);
+                          }}
+                        >
+                          Check the documentation on managed local tunnel configuration
                           <RiExternalLinkLine className="size-3.5" />
                         </button>
                       </>
                     )}
                     <p className="typography-meta text-[var(--status-info)]">
-                      Start a {tunnelMode === 'named' ? 'named' : 'quick'} tunnel and generate a one-time connect link. Do not close the app while this tunnel is in use.
+                      Start a {tunnelMode} tunnel and generate a one-time connect link. Do not close the app while this tunnel is in use.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {tunnelMode === 'named' && (
+              {tunnelMode === 'managed-remote' && (
                 <div className="space-y-1.5">
-                  <p className="typography-ui-label text-foreground">Named tunnel to connect</p>
+                  <p className="typography-ui-label text-foreground">Managed remote tunnel to connect</p>
                   <Select
-                    value={selectedPresetId || (namedTunnelPresets[0]?.id ?? '')}
+                    value={selectedPresetId || (managedRemoteTunnelPresets[0]?.id ?? '')}
                     onValueChange={(presetId) => {
                       void handleSelectPreset(presetId);
                     }}
@@ -1277,14 +1322,14 @@ export const TunnelSettings: React.FC = () => {
                       isSavingMode
                       || state === 'starting'
                       || state === 'stopping'
-                      || namedTunnelPresets.length <= 1
+                      || managedRemoteTunnelPresets.length <= 1
                     }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select saved tunnel" />
                     </SelectTrigger>
                     <SelectContent fitContent>
-                      {namedTunnelPresets.map((preset) => (
+                      {managedRemoteTunnelPresets.map((preset) => (
                         <SelectItem key={preset.id} value={preset.id}>{preset.name}</SelectItem>
                       ))}
                     </SelectContent>
@@ -1295,7 +1340,7 @@ export const TunnelSettings: React.FC = () => {
               <ButtonSmall
                 variant="outline"
                 onClick={handleStart}
-                disabled={state === 'starting' || isSavingMode || (tunnelMode === 'named' && !selectedPreset)}
+                disabled={state === 'starting' || isSavingMode || (tunnelMode === 'managed-remote' && !selectedPreset)}
                 className={cn(primaryCtaClass, state === 'starting' && 'opacity-70')}
               >
                 {state === 'starting'

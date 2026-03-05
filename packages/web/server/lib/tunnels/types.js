@@ -6,7 +6,16 @@ export const TUNNEL_PROVIDER_CLOUDFLARE = 'cloudflare';
 export const TUNNEL_MODE_QUICK = 'quick';
 export const TUNNEL_MODE_MANAGED_REMOTE = 'managed-remote';
 export const TUNNEL_MODE_MANAGED_LOCAL = 'managed-local';
-export const TUNNEL_MODE_NAMED_LEGACY = 'named';
+
+export const TUNNEL_INTENT_EPHEMERAL_PUBLIC = 'ephemeral-public';
+export const TUNNEL_INTENT_PERSISTENT_PUBLIC = 'persistent-public';
+export const TUNNEL_INTENT_PRIVATE_NETWORK = 'private-network';
+
+const SUPPORTED_TUNNEL_INTENTS = new Set([
+  TUNNEL_INTENT_EPHEMERAL_PUBLIC,
+  TUNNEL_INTENT_PERSISTENT_PUBLIC,
+  TUNNEL_INTENT_PRIVATE_NETWORK,
+]);
 
 const SUPPORTED_TUNNEL_MODES = new Set([
   TUNNEL_MODE_QUICK,
@@ -36,7 +45,13 @@ export function normalizeTunnelMode(value) {
     return TUNNEL_MODE_QUICK;
   }
   const mode = value.trim().toLowerCase();
-  if (mode === TUNNEL_MODE_NAMED_LEGACY || mode === TUNNEL_MODE_MANAGED_REMOTE) {
+  if (!mode) {
+    return TUNNEL_MODE_QUICK;
+  }
+  if (mode === TUNNEL_MODE_QUICK) {
+    return TUNNEL_MODE_QUICK;
+  }
+  if (mode === TUNNEL_MODE_MANAGED_REMOTE) {
     return TUNNEL_MODE_MANAGED_REMOTE;
   }
   if (mode === TUNNEL_MODE_MANAGED_LOCAL) {
@@ -45,24 +60,38 @@ export function normalizeTunnelMode(value) {
   return TUNNEL_MODE_QUICK;
 }
 
-function normalizeTunnelModeForRequest(value) {
+export function normalizeTunnelIntent(value) {
   if (typeof value !== 'string') {
-    return TUNNEL_MODE_QUICK;
+    return undefined;
   }
-  const mode = value.trim().toLowerCase();
-  if (!mode) {
-    return TUNNEL_MODE_QUICK;
+  const intent = value.trim().toLowerCase();
+  if (!intent) {
+    return undefined;
   }
-  if (mode === TUNNEL_MODE_NAMED_LEGACY || mode === TUNNEL_MODE_MANAGED_REMOTE) {
-    return TUNNEL_MODE_MANAGED_REMOTE;
-  }
-  if (mode === TUNNEL_MODE_MANAGED_LOCAL) {
-    return TUNNEL_MODE_MANAGED_LOCAL;
-  }
+  return intent;
+}
+
+function modeIntentFallback(mode) {
   if (mode === TUNNEL_MODE_QUICK) {
-    return TUNNEL_MODE_QUICK;
+    return TUNNEL_INTENT_EPHEMERAL_PUBLIC;
   }
-  return mode;
+  if (mode === TUNNEL_MODE_MANAGED_REMOTE || mode === TUNNEL_MODE_MANAGED_LOCAL) {
+    return TUNNEL_INTENT_PERSISTENT_PUBLIC;
+  }
+  return undefined;
+}
+
+function normalizeTunnelModeForRequest(value) {
+  if (typeof value === 'string') {
+    const mode = value.trim().toLowerCase();
+    if (mode.length > 0) {
+      if (mode === TUNNEL_MODE_QUICK || mode === TUNNEL_MODE_MANAGED_REMOTE || mode === TUNNEL_MODE_MANAGED_LOCAL) {
+        return mode;
+      }
+      return mode;
+    }
+  }
+  return TUNNEL_MODE_QUICK;
 }
 
 export function normalizeOptionalPath(value) {
@@ -85,10 +114,6 @@ export function normalizeOptionalPath(value) {
   return path.resolve(trimmed);
 }
 
-export function toLegacyTunnelMode(mode) {
-  return mode === TUNNEL_MODE_QUICK ? TUNNEL_MODE_QUICK : TUNNEL_MODE_NAMED_LEGACY;
-}
-
 export function isSupportedTunnelMode(mode) {
   return SUPPORTED_TUNNEL_MODES.has(mode);
 }
@@ -96,6 +121,8 @@ export function isSupportedTunnelMode(mode) {
 export function normalizeTunnelStartRequest(input = {}, defaults = {}) {
   const provider = normalizeTunnelProvider(input.provider ?? defaults.provider);
   const mode = normalizeTunnelModeForRequest(input.mode ?? defaults.mode);
+  const explicitIntent = normalizeTunnelIntent(input.intent ?? defaults.intent);
+  const intent = explicitIntent ?? modeIntentFallback(mode);
   const configPathValue = Object.prototype.hasOwnProperty.call(input, 'configPath')
     ? input.configPath
     : defaults.configPath;
@@ -112,6 +139,7 @@ export function normalizeTunnelStartRequest(input = {}, defaults = {}) {
   return {
     provider,
     mode,
+    intent,
     configPath,
     token,
     hostname,
@@ -135,28 +163,44 @@ export function validateTunnelStartRequest(request, capabilities) {
     throw new TunnelServiceError('provider_unsupported', `Unsupported tunnel provider: ${request.provider}`);
   }
 
-  if (!Array.isArray(capabilities.modes) || !capabilities.modes.includes(request.mode)) {
+  if (!Array.isArray(capabilities.modes)) {
+    throw new TunnelServiceError('mode_unsupported', `Provider '${request.provider}' does not declare tunnel modes`);
+  }
+
+  const modeDescriptor = capabilities.modes.find((entry) => entry?.key === request.mode);
+  if (!modeDescriptor) {
     throw new TunnelServiceError('mode_unsupported', `Provider '${request.provider}' does not support mode '${request.mode}'`);
   }
 
-  if (request.mode === TUNNEL_MODE_MANAGED_REMOTE) {
-    if (!capabilities.supportsToken) {
-      throw new TunnelServiceError('validation_error', `Provider '${request.provider}' does not support token-based tunnels`);
+  if (typeof request.intent === 'string' && request.intent.length > 0) {
+    if (!SUPPORTED_TUNNEL_INTENTS.has(request.intent)) {
+      throw new TunnelServiceError('validation_error', `Unsupported tunnel intent: ${request.intent}`);
     }
-    if (!capabilities.supportsHostname) {
-      throw new TunnelServiceError('validation_error', `Provider '${request.provider}' does not support hostname-based tunnels`);
+    if (modeDescriptor.intent !== request.intent) {
+      throw new TunnelServiceError(
+        'validation_error',
+        `Tunnel intent '${request.intent}' does not match mode '${request.mode}' (expected '${modeDescriptor.intent}')`
+      );
     }
+  }
+
+  const requiredFields = Array.isArray(modeDescriptor.requires) ? modeDescriptor.requires : [];
+
+  if (requiredFields.includes('token')) {
     if (!request.token) {
       throw new TunnelServiceError('validation_error', 'Managed remote tunnel token is required');
     }
+  }
+
+  if (requiredFields.includes('hostname')) {
     if (!request.hostname) {
       throw new TunnelServiceError('validation_error', 'Managed remote tunnel hostname is required');
     }
   }
 
-  if (request.mode === TUNNEL_MODE_MANAGED_LOCAL && request.configPath !== undefined && request.configPath !== null) {
-    if (!capabilities.supportsConfigPath) {
-      throw new TunnelServiceError('validation_error', `Provider '${request.provider}' does not support local config paths`);
+  if (requiredFields.includes('configPath')) {
+    if (request.configPath === undefined || request.configPath === null || request.configPath === '') {
+      throw new TunnelServiceError('validation_error', `Mode '${request.mode}' requires a configPath`);
     }
   }
 }

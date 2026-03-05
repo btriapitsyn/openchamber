@@ -216,12 +216,12 @@ const sanitizeProjects = (value: unknown): DesktopSettings['projects'] | undefin
   return result.length > 0 ? result : undefined;
 };
 
-const sanitizeNamedTunnelPresets = (value: unknown): DesktopSettings['namedTunnelPresets'] | undefined => {
+const sanitizeManagedRemoteTunnelPresets = (value: unknown): DesktopSettings['managedRemoteTunnelPresets'] | undefined => {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
-  const result: NonNullable<DesktopSettings['namedTunnelPresets']> = [];
+  const result: NonNullable<DesktopSettings['managedRemoteTunnelPresets']> = [];
   const seenIds = new Set<string>();
   const seenHostnames = new Set<string>();
 
@@ -244,7 +244,7 @@ const sanitizeNamedTunnelPresets = (value: unknown): DesktopSettings['namedTunne
   return result;
 };
 
-const sanitizeNamedTunnelPresetTokens = (value: unknown): DesktopSettings['namedTunnelPresetTokens'] | undefined => {
+const sanitizeManagedRemoteTunnelPresetTokens = (value: unknown): DesktopSettings['managedRemoteTunnelPresetTokens'] | undefined => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined;
   }
@@ -511,7 +511,7 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.tunnelMode === 'string') {
     const mode = candidate.tunnelMode.trim().toLowerCase();
-    if (mode === 'quick' || mode === 'named') {
+    if (mode === 'quick' || mode === 'managed-remote' || mode === 'managed-local') {
       result.tunnelMode = mode;
     }
   }
@@ -523,25 +523,25 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.tunnelSessionTtlMs === 'number' && Number.isFinite(candidate.tunnelSessionTtlMs)) {
     result.tunnelSessionTtlMs = candidate.tunnelSessionTtlMs;
   }
-  if (typeof candidate.namedTunnelHostname === 'string') {
-    result.namedTunnelHostname = candidate.namedTunnelHostname.trim();
+  if (typeof candidate.managedRemoteTunnelHostname === 'string') {
+    result.managedRemoteTunnelHostname = candidate.managedRemoteTunnelHostname.trim();
   }
-  if (candidate.namedTunnelToken === null) {
-    result.namedTunnelToken = null;
-  } else if (typeof candidate.namedTunnelToken === 'string') {
-    result.namedTunnelToken = candidate.namedTunnelToken.trim();
+  if (candidate.managedRemoteTunnelToken === null) {
+    result.managedRemoteTunnelToken = null;
+  } else if (typeof candidate.managedRemoteTunnelToken === 'string') {
+    result.managedRemoteTunnelToken = candidate.managedRemoteTunnelToken.trim();
   }
-  const namedTunnelPresets = sanitizeNamedTunnelPresets(candidate.namedTunnelPresets);
-  if (namedTunnelPresets) {
-    result.namedTunnelPresets = namedTunnelPresets;
+  const managedRemoteTunnelPresets = sanitizeManagedRemoteTunnelPresets(candidate.managedRemoteTunnelPresets);
+  if (managedRemoteTunnelPresets) {
+    result.managedRemoteTunnelPresets = managedRemoteTunnelPresets;
   }
-  if (typeof candidate.namedTunnelSelectedPresetId === 'string') {
-    const trimmed = candidate.namedTunnelSelectedPresetId.trim();
-    result.namedTunnelSelectedPresetId = trimmed.length > 0 ? trimmed : undefined;
+  if (typeof candidate.managedRemoteTunnelSelectedPresetId === 'string') {
+    const trimmed = candidate.managedRemoteTunnelSelectedPresetId.trim();
+    result.managedRemoteTunnelSelectedPresetId = trimmed.length > 0 ? trimmed : undefined;
   }
-  const namedTunnelPresetTokens = sanitizeNamedTunnelPresetTokens(candidate.namedTunnelPresetTokens);
-  if (namedTunnelPresetTokens) {
-    result.namedTunnelPresetTokens = namedTunnelPresetTokens;
+  const managedRemoteTunnelPresetTokens = sanitizeManagedRemoteTunnelPresetTokens(candidate.managedRemoteTunnelPresetTokens);
+  if (managedRemoteTunnelPresetTokens) {
+    result.managedRemoteTunnelPresetTokens = managedRemoteTunnelPresetTokens;
   }
   if (typeof candidate.defaultModel === 'string' && candidate.defaultModel.length > 0) {
     result.defaultModel = candidate.defaultModel;

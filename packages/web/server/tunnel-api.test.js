@@ -33,7 +33,26 @@ describe('tunnel api contract', () => {
     expect(body.provider).toBe('cloudflare');
     expect(typeof body.mode).toBe('string');
     expect(body.mode === 'quick' || body.mode === 'managed-remote' || body.mode === 'managed-local').toBe(true);
-    expect(body.legacyMode === 'quick' || body.legacyMode === 'named').toBe(true);
+  });
+
+  it('returns provider capability descriptors', async () => {
+    process.env.OPENCODE_SKIP_START = 'true';
+    process.env.OPENCODE_HOST = 'http://127.0.0.1:9';
+
+    activeServer = await startWebUiServer({
+      port: 0,
+      attachSignals: false,
+      exitOnShutdown: false,
+    });
+
+    const port = activeServer.getPort();
+    const response = await fetch(`http://127.0.0.1:${port}/api/openchamber/tunnel/providers`);
+    const body = await response.json();
+
+    expect(response.ok).toBe(true);
+    expect(Array.isArray(body.providers)).toBe(true);
+    expect(body.providers[0]?.provider).toBe('cloudflare');
+    expect(Array.isArray(body.providers[0]?.modes)).toBe(true);
   });
 
   it('returns structured validation for unsupported provider', async () => {
@@ -82,7 +101,7 @@ describe('tunnel api contract', () => {
     expect(body.code).toBe('mode_unsupported');
   });
 
-  it('accepts legacy mode payload shape without starting provider', async () => {
+  it('rejects removed mode value named', async () => {
     process.env.OPENCODE_SKIP_START = 'true';
     process.env.OPENCODE_HOST = 'http://127.0.0.1:9';
 
@@ -96,16 +115,13 @@ describe('tunnel api contract', () => {
     const response = await fetch(`http://127.0.0.1:${port}/api/openchamber/tunnel/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: 'unknown-provider',
-        mode: 'named',
-      }),
+      body: JSON.stringify({ provider: 'cloudflare', mode: 'named' }),
     });
     const body = await response.json();
 
     expect(response.status).toBe(422);
     expect(body.ok).toBe(false);
-    expect(body.code).toBe('provider_unsupported');
+    expect(body.code).toBe('mode_unsupported');
   });
 
   it('supports stop endpoint contract', async () => {
@@ -144,13 +160,12 @@ describe('tunnel api contract', () => {
     const response = await fetch(`http://127.0.0.1:${port}/api/openchamber/tunnel/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'named' }),
+      body: JSON.stringify({ mode: 'managed-remote' }),
     });
     const body = await response.json();
 
     expect(response.ok).toBe(true);
     expect(body.ok).toBe(true);
     expect(body.mode).toBe('managed-remote');
-    expect(body.legacyMode).toBe('named');
   });
 });

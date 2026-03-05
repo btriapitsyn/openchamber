@@ -3,6 +3,8 @@ import { describe, expect, it } from 'bun:test';
 import { createTunnelProviderRegistry } from './registry.js';
 import { createTunnelService } from './index.js';
 import {
+  TUNNEL_INTENT_EPHEMERAL_PUBLIC,
+  TUNNEL_INTENT_PERSISTENT_PUBLIC,
   TUNNEL_MODE_MANAGED_LOCAL,
   TUNNEL_MODE_MANAGED_REMOTE,
   TUNNEL_MODE_QUICK,
@@ -15,10 +17,11 @@ function createFakeProvider() {
     id: TUNNEL_PROVIDER_CLOUDFLARE,
     capabilities: {
       provider: TUNNEL_PROVIDER_CLOUDFLARE,
-      modes: [TUNNEL_MODE_QUICK, TUNNEL_MODE_MANAGED_REMOTE, TUNNEL_MODE_MANAGED_LOCAL],
-      supportsConfigPath: true,
-      supportsToken: true,
-      supportsHostname: true,
+      modes: [
+        { key: TUNNEL_MODE_QUICK, intent: TUNNEL_INTENT_EPHEMERAL_PUBLIC, requires: [] },
+        { key: TUNNEL_MODE_MANAGED_REMOTE, intent: TUNNEL_INTENT_PERSISTENT_PUBLIC, requires: ['token', 'hostname'] },
+        { key: TUNNEL_MODE_MANAGED_LOCAL, intent: TUNNEL_INTENT_PERSISTENT_PUBLIC, requires: [] },
+      ],
     },
     async checkAvailability() {
       return { available: true, version: 'test' };
