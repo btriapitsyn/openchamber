@@ -830,8 +830,76 @@ const commands = {
         },
       });
 
-      child.on('exit', (code) => {
-        process.exit(typeof code === 'number' ? code : 1);
+      const signalHandlers = new Map();
+      const resolveExitCode = (code, signal) => {
+        if (typeof code === 'number') {
+          return code;
+        }
+        if (signal === 'SIGINT') {
+          return 130;
+        }
+        if (signal === 'SIGTERM') {
+          return 143;
+        }
+        if (signal === 'SIGQUIT') {
+          return 131;
+        }
+        return 1;
+      };
+      const cleanupSignalHandlers = () => {
+        for (const [signal, handler] of signalHandlers) {
+          process.off(signal, handler);
+        }
+        signalHandlers.clear();
+      };
+
+      let forwardedSignal = false;
+      const forwardSignal = (signal) => {
+        if (forwardedSignal) {
+          return;
+        }
+        forwardedSignal = true;
+
+        try {
+          if (child.exitCode === null && child.signalCode === null) {
+            child.kill(signal);
+          }
+        } catch {
+        }
+
+        const forceKillTimer = setTimeout(() => {
+          try {
+            if (child.exitCode === null && child.signalCode === null) {
+              child.kill('SIGKILL');
+            }
+          } catch {
+          }
+        }, 5000);
+        if (typeof forceKillTimer.unref === 'function') {
+          forceKillTimer.unref();
+        }
+        child.once('exit', () => {
+          clearTimeout(forceKillTimer);
+        });
+      };
+
+      for (const signal of ['SIGINT', 'SIGTERM', 'SIGQUIT']) {
+        const handler = () => {
+          forwardSignal(signal);
+        };
+        signalHandlers.set(signal, handler);
+        process.on(signal, handler);
+      }
+
+      child.on('error', (error) => {
+        cleanupSignalHandlers();
+        console.error(`Failed to start server process: ${error.message}`);
+        process.exit(1);
+      });
+
+      child.on('exit', (code, signal) => {
+        cleanupSignalHandlers();
+        process.exit(resolveExitCode(code, signal));
       });
 
       return;
