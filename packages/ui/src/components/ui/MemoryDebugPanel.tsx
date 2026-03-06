@@ -101,7 +101,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             <span>{MEMORY_LIMITS.ZOMBIE_TIMEOUT / 1000 / 60} minutes</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">GitHub Total Requests:</span>
+            <span className="text-muted-foreground">{t('memoryDebugPanel.githubTotalRequests')}</span>
             <span>{totalGitHubRequests}</span>
           </div>
         </div>

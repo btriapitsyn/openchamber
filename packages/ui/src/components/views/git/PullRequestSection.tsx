@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/collapsible';
 import { generatePullRequestDescription } from '@/lib/gitApi';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
+import { useLanguage } from '@/hooks/useLanguage';
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
@@ -1180,7 +1181,7 @@ export const PullRequestSection: React.FC<{
         draft,
         ...(selectedRemote ? { remote: selectedRemote.name } : {}),
       });
-      toast.success('PR created');
+      toast.success(t('pullRequest.prCreated'));
       updatePrStatus(prStatusKey, (prev) => (prev ? { ...prev, pr } : prev));
       await refresh({ force: true });
     } catch (e) {
@@ -1189,7 +1190,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsCreating(false);
     }
-  }, [body, branch, directory, draft, github, prStatusKey, refresh, selectedRemote, targetBaseBranch, title, updatePrStatus]);
+  }, [body, branch, directory, draft, github, prStatusKey, refresh, selectedRemote, targetBaseBranch, t, title, updatePrStatus]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
@@ -1275,7 +1276,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsUpdating(false);
     }
-  }, [directory, editBody, editTitle, github, prStatusKey, refresh, updatePrStatus]);
+  }, [directory, editBody, editTitle, github, prStatusKey, refresh, t, updatePrStatus]);
 
   if (!canShow) {
     return null;
