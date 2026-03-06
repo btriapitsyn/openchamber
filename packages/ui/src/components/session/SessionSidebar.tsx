@@ -35,6 +35,7 @@ import { useProjectSessionLists } from './sidebar/hooks/useProjectSessionLists';
 import { useSessionFolderCleanup } from './sidebar/hooks/useSessionFolderCleanup';
 import { useStickyProjectHeaders } from './sidebar/hooks/useStickyProjectHeaders';
 import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
+import { useLanguage } from '@/hooks/useLanguage';
 import { SessionGroupSection } from './sidebar/SessionGroupSection';
 import { SidebarHeader } from './sidebar/SidebarHeader';
 import { SidebarProjectsList } from './sidebar/SidebarProjectsList';
@@ -141,7 +142,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   hideProjectSelector = true,
   showOnlyMainWorkspace = false,
 }) => {
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [isSessionSearchOpen, setIsSessionSearchOpen] = React.useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = React.useState('');
   const sessionSearchContainerRef = React.useRef<HTMLDivElement | null>(null);
@@ -797,7 +798,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ),
     [
       directoryStatus,
-      language,
       sessionMemoryState,
       currentSessionId,
       pinnedSessionIds,
