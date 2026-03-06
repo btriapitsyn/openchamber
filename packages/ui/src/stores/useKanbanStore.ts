@@ -1,333 +1,283 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { ProjectBoard, BoardColumn, BoardCard } from '@/types/kanban';
 
-const createBoardId = (): string => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
+import {
+  createCard as apiCreateCard,
+  createColumn as apiCreateColumn,
+  deleteCard as apiDeleteCard,
+  deleteColumn as apiDeleteColumn,
+  getBoard,
+  moveCard as apiMoveCard,
+  renameColumn as apiRenameColumn,
+  updateCard as apiUpdateCard,
+} from '@/lib/kanbanApi';
+import type { BoardCard, ProjectBoard } from '@/types/kanban';
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
   }
-  return `card_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return fallback;
 };
 
-const createDefaultBoard = (projectId: string): ProjectBoard => {
-  const now = Date.now();
+const withProjectId = (board: ProjectBoard, projectId: string): ProjectBoard => {
+  if (board.projectId === projectId) {
+    return board;
+  }
   return {
+    ...board,
     projectId,
-    columns: [
-      { id: 'col_backlog', name: 'Backlog', order: 0 },
-      { id: 'col_in_progress', name: 'In Progress', order: 1 },
-      { id: 'col_done', name: 'Done', order: 2 },
-    ],
-    cards: [],
-    updatedAt: now,
   };
-};
-
-const recalculateColumnOrders = (columns: BoardColumn[]): BoardColumn[] => {
-  return columns.map((col, index) => ({ ...col, order: index }));
-};
-
-const recalculateCardOrders = (cards: BoardCard[]): BoardCard[] => {
-  const cardsByColumn = new Map<string, BoardCard[]>();
-  for (const card of cards) {
-    if (!cardsByColumn.has(card.columnId)) {
-      cardsByColumn.set(card.columnId, []);
-    }
-    cardsByColumn.get(card.columnId)!.push(card);
-  }
-
-  const result: BoardCard[] = [];
-  const columnCardsArray = Array.from(cardsByColumn.values());
-  for (const columnCards of columnCardsArray) {
-    columnCards.sort((a, b) => a.order - b.order);
-    columnCards.forEach((card, index) => {
-      result.push({ ...card, order: index });
-    });
-  }
-  return result;
 };
 
 interface KanbanStore {
   boards: Map<string, ProjectBoard>;
+  isLoadingByProject: Map<string, boolean>;
+  isMutatingByProject: Map<string, boolean>;
+  errorByProject: Map<string, string | null>;
+  hydratedProjects: Set<string>;
 
-  ensureProjectBoard: (projectId: string) => ProjectBoard;
+  hydrateProjectBoard: (projectId: string, directory: string) => Promise<void>;
   resetProjectBoard: (projectId: string) => void;
   getProjectBoard: (projectId: string) => ProjectBoard | null;
-  createColumn: (projectId: string, name: string, afterColumnId?: string) => void;
-  renameColumn: (projectId: string, columnId: string, name: string) => void;
-  deleteColumn: (projectId: string, columnId: string) => void;
-  createCard: (projectId: string, columnId: string, title: string, description: string, worktreeId: string) => void;
-  updateCard: (projectId: string, cardId: string, updates: Partial<BoardCard>) => void;
-  deleteCard: (projectId: string, cardId: string) => void;
-  moveCard: (projectId: string, cardId: string, toColumnId: string, toOrder?: number) => void;
-  reorderCardsInColumn: (projectId: string, columnId: string, fromOrder: number, toOrder: number) => void;
+
+  createColumn: (projectId: string, directory: string, name: string, afterColumnId?: string) => Promise<void>;
+  renameColumn: (projectId: string, directory: string, columnId: string, name: string) => Promise<void>;
+  deleteColumn: (projectId: string, directory: string, columnId: string) => Promise<void>;
+  createCard: (
+    projectId: string,
+    directory: string,
+    columnId: string,
+    title: string,
+    description: string,
+    worktreeId: string,
+  ) => Promise<void>;
+  updateCard: (projectId: string, directory: string, cardId: string, updates: Partial<BoardCard>) => Promise<void>;
+  deleteCard: (projectId: string, directory: string, cardId: string) => Promise<void>;
+  moveCard: (projectId: string, directory: string, cardId: string, toColumnId: string, toOrder?: number) => Promise<void>;
 }
 
 export const useKanbanStore = create<KanbanStore>()(
   devtools(
-    (set, get) => ({
-      boards: new Map(),
+    (set, get) => {
+      const setProjectLoading = (projectId: string, isLoading: boolean) => {
+        set((state) => {
+          const next = new Map(state.isLoadingByProject);
+          next.set(projectId, isLoading);
+          return { isLoadingByProject: next };
+        });
+      };
 
-      ensureProjectBoard: (projectId: string) => {
-        const { boards } = get();
-        if (!boards.has(projectId)) {
-          set((state) => {
-            const newBoards = new Map(state.boards);
-            newBoards.set(projectId, createDefaultBoard(projectId));
-            return { boards: newBoards };
-          });
-          return createDefaultBoard(projectId);
+      const setProjectMutating = (projectId: string, isMutating: boolean) => {
+        set((state) => {
+          const next = new Map(state.isMutatingByProject);
+          next.set(projectId, isMutating);
+          return { isMutatingByProject: next };
+        });
+      };
+
+      const setProjectError = (projectId: string, error: string | null) => {
+        set((state) => {
+          const next = new Map(state.errorByProject);
+          next.set(projectId, error);
+          return { errorByProject: next };
+        });
+      };
+
+      const applyBoard = (projectId: string, board: ProjectBoard) => {
+        set((state) => {
+          const nextBoards = new Map(state.boards);
+          nextBoards.set(projectId, withProjectId(board, projectId));
+          return { boards: nextBoards };
+        });
+      };
+
+      const runProjectMutation = async (
+        projectId: string,
+        directory: string,
+        request: () => Promise<{ board: ProjectBoard }>,
+        fallbackError: string,
+      ) => {
+        if (!projectId || !directory.trim()) {
+          return;
         }
-        return boards.get(projectId)!;
-      },
 
-      resetProjectBoard: (projectId: string) => {
-        set((state) => {
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, createDefaultBoard(projectId));
-          return { boards: newBoards };
-        });
-      },
+        setProjectMutating(projectId, true);
+        setProjectError(projectId, null);
 
-      getProjectBoard: (projectId: string) => {
-        return get().boards.get(projectId) ?? null;
-      },
+        try {
+          const response = await request();
+          applyBoard(projectId, response.board);
+          setProjectMutating(projectId, false);
+        } catch (error) {
+          setProjectMutating(projectId, false);
+          setProjectError(projectId, getErrorMessage(error, fallbackError));
+          throw error;
+        }
+      };
 
-      createColumn: (projectId: string, name: string, afterColumnId?: string) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
+      return {
+        boards: new Map(),
+        isLoadingByProject: new Map(),
+        isMutatingByProject: new Map(),
+        errorByProject: new Map(),
+        hydratedProjects: new Set(),
 
-          const columns = [...board.columns];
-          let newOrder = columns.length;
-
-          if (afterColumnId) {
-            const afterIndex = columns.findIndex((c) => c.id === afterColumnId);
-            if (afterIndex !== -1) {
-              newOrder = columns[afterIndex].order + 1;
-            }
+        hydrateProjectBoard: async (projectId: string, directory: string) => {
+          if (!projectId || !directory.trim()) {
+            return;
           }
 
-          const newColumn: BoardColumn = {
-            id: createBoardId(),
-            name: name.trim(),
-            order: newOrder,
-          };
+          const { hydratedProjects, isLoadingByProject } = get();
+          if (hydratedProjects.has(projectId) || isLoadingByProject.get(projectId)) {
+            return;
+          }
 
-          const updatedColumns = [...columns, newColumn];
-          const recalculatedColumns = recalculateColumnOrders(updatedColumns);
+          setProjectLoading(projectId, true);
+          setProjectError(projectId, null);
 
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            columns: recalculatedColumns,
-            updatedAt: Date.now(),
+          try {
+            const response = await getBoard(directory);
+
+            set((state) => {
+              const nextBoards = new Map(state.boards);
+              nextBoards.set(projectId, withProjectId(response.board, projectId));
+
+              const nextLoading = new Map(state.isLoadingByProject);
+              nextLoading.set(projectId, false);
+
+              const nextHydrated = new Set(state.hydratedProjects);
+              nextHydrated.add(projectId);
+
+              const nextErrors = new Map(state.errorByProject);
+              nextErrors.set(projectId, null);
+
+              return {
+                boards: nextBoards,
+                isLoadingByProject: nextLoading,
+                hydratedProjects: nextHydrated,
+                errorByProject: nextErrors,
+              };
+            });
+          } catch (error) {
+            setProjectLoading(projectId, false);
+            setProjectError(projectId, getErrorMessage(error, 'Failed to load board'));
+            throw error;
+          }
+        },
+
+        resetProjectBoard: (projectId: string) => {
+          set((state) => {
+            const nextBoards = new Map(state.boards);
+            nextBoards.delete(projectId);
+
+            const nextLoading = new Map(state.isLoadingByProject);
+            nextLoading.delete(projectId);
+
+            const nextMutating = new Map(state.isMutatingByProject);
+            nextMutating.delete(projectId);
+
+            const nextErrors = new Map(state.errorByProject);
+            nextErrors.delete(projectId);
+
+            const nextHydrated = new Set(state.hydratedProjects);
+            nextHydrated.delete(projectId);
+
+            return {
+              boards: nextBoards,
+              isLoadingByProject: nextLoading,
+              isMutatingByProject: nextMutating,
+              errorByProject: nextErrors,
+              hydratedProjects: nextHydrated,
+            };
           });
+        },
 
-          return { boards: newBoards };
-        });
-      },
+        getProjectBoard: (projectId: string) => {
+          if (!projectId) {
+            return null;
+          }
+          return get().boards.get(projectId) ?? null;
+        },
 
-      renameColumn: (projectId: string, columnId: string, name: string) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
-
-          const trimmedName = name.trim();
-          if (!trimmedName) return state;
-
-          const updatedColumns = board.columns.map((col) =>
-            col.id === columnId ? { ...col, name: trimmedName } : col
+        createColumn: async (projectId: string, directory: string, name: string, afterColumnId?: string) => {
+          await runProjectMutation(
+            projectId,
+            directory,
+            () => apiCreateColumn(directory, name, afterColumnId),
+            'Failed to create column',
           );
+        },
 
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            columns: updatedColumns,
-            updatedAt: Date.now(),
-          });
-
-          return { boards: newBoards };
-        });
-      },
-
-      deleteColumn: (projectId: string, columnId: string) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
-
-          const updatedColumns = board.columns.filter((col) => col.id !== columnId);
-          const recalculatedColumns = recalculateColumnOrders(updatedColumns);
-
-          const updatedCards = board.cards.filter((card) => card.columnId !== columnId);
-          const recalculatedCards = recalculateCardOrders(updatedCards);
-
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            columns: recalculatedColumns,
-            cards: recalculatedCards,
-            updatedAt: Date.now(),
-          });
-
-          return { boards: newBoards };
-        });
-      },
-
-      createCard: (projectId: string, columnId: string, title: string, description: string, worktreeId: string) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
-
-          const columnCards = board.cards.filter((c) => c.columnId === columnId);
-          const newOrder = columnCards.length;
-
-          const newCard: BoardCard = {
-            id: createBoardId(),
-            title: title.trim(),
-            description: description.trim(),
-            worktreeId,
-            columnId,
-            order: newOrder,
-          };
-
-          const updatedCards = [...board.cards, newCard];
-          const recalculatedCards = recalculateCardOrders(updatedCards);
-
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            cards: recalculatedCards,
-            updatedAt: Date.now(),
-          });
-
-          return { boards: newBoards };
-        });
-      },
-
-      updateCard: (projectId: string, cardId: string, updates: Partial<BoardCard>) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
-
-          const card = board.cards.find((c) => c.id === cardId);
-          if (!card) return state;
-
-          const updatedCards = board.cards.map((c) =>
-            c.id === cardId ? { ...c, ...updates } : c
+        renameColumn: async (projectId: string, directory: string, columnId: string, name: string) => {
+          await runProjectMutation(
+            projectId,
+            directory,
+            () => apiRenameColumn(directory, columnId, name),
+            'Failed to rename column',
           );
+        },
 
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            cards: updatedCards,
-            updatedAt: Date.now(),
-          });
+        deleteColumn: async (projectId: string, directory: string, columnId: string) => {
+          await runProjectMutation(
+            projectId,
+            directory,
+            () => apiDeleteColumn(directory, columnId),
+            'Failed to delete column',
+          );
+        },
 
-          return { boards: newBoards };
-        });
-      },
+        createCard: async (
+          projectId: string,
+          directory: string,
+          columnId: string,
+          title: string,
+          description: string,
+          worktreeId: string,
+        ) => {
+          await runProjectMutation(
+            projectId,
+            directory,
+            () => apiCreateCard(directory, columnId, title, description, worktreeId),
+            'Failed to create card',
+          );
+        },
 
-      deleteCard: (projectId: string, cardId: string) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
+        updateCard: async (projectId: string, directory: string, cardId: string, updates: Partial<BoardCard>) => {
+          await runProjectMutation(
+            projectId,
+            directory,
+            () => apiUpdateCard(directory, cardId, updates),
+            'Failed to update card',
+          );
+        },
 
-          const card = board.cards.find((c) => c.id === cardId);
-          if (!card) return state;
+        deleteCard: async (projectId: string, directory: string, cardId: string) => {
+          await runProjectMutation(
+            projectId,
+            directory,
+            () => apiDeleteCard(directory, cardId),
+            'Failed to delete card',
+          );
+        },
 
-          const updatedCards = board.cards.filter((c) => c.id !== cardId);
-          const recalculatedCards = recalculateCardOrders(updatedCards);
-
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            cards: recalculatedCards,
-            updatedAt: Date.now(),
-          });
-
-          return { boards: newBoards };
-        });
-      },
-
-      moveCard: (projectId: string, cardId: string, toColumnId: string, toOrder?: number) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
-
-          const card = board.cards.find((c) => c.id === cardId);
-          if (!card) return state;
-
-          const targetColumnExists = board.columns.some((c) => c.id === toColumnId);
-          if (!targetColumnExists) return state;
-
-          let updatedCards = board.cards.map((c) => {
-            if (c.id === cardId) {
-              return { ...c, columnId: toColumnId };
-            }
-            return c;
-          });
-
-          if (toOrder !== undefined) {
-            const cardsInTargetColumn = updatedCards.filter((c) => c.columnId === toColumnId && c.id !== cardId);
-            const cardsInOtherColumns = updatedCards.filter((c) => c.columnId !== toColumnId);
-            
-            cardsInTargetColumn.sort((a, b) => a.order - b.order);
-            cardsInTargetColumn.splice(toOrder, 0, { ...card, columnId: toColumnId, order: toOrder });
-            
-            const reorderedTargetColumn = cardsInTargetColumn.map((c, idx) => ({ ...c, order: idx }));
-            updatedCards = [...cardsInOtherColumns, ...reorderedTargetColumn];
-          }
-
-          const recalculatedCards = recalculateCardOrders(updatedCards);
-
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            cards: recalculatedCards,
-            updatedAt: Date.now(),
-          });
-
-          return { boards: newBoards };
-        });
-      },
-
-      reorderCardsInColumn: (projectId: string, columnId: string, fromOrder: number, toOrder: number) => {
-        set((state) => {
-          const board = state.boards.get(projectId);
-          if (!board) return state;
-
-          const cardsInColumn = board.cards.filter((c) => c.columnId === columnId);
-          if (fromOrder < 0 || fromOrder >= cardsInColumn.length || toOrder < 0 || toOrder >= cardsInColumn.length) {
-            return state;
-          }
-
-          const cardsInOtherColumns = board.cards.filter((c) => c.columnId !== columnId);
-
-          const sortedColumnCards = [...cardsInColumn].sort((a, b) => a.order - b.order);
-          const [moved] = sortedColumnCards.splice(fromOrder, 1);
-          sortedColumnCards.splice(toOrder, 0, moved);
-
-          const reorderedColumnCards = sortedColumnCards.map((card, idx) => ({ ...card, order: idx }));
-
-          const updatedCards = [...cardsInOtherColumns, ...reorderedColumnCards];
-
-          const newBoards = new Map(state.boards);
-          newBoards.set(projectId, {
-            ...board,
-            cards: updatedCards,
-            updatedAt: Date.now(),
-          });
-
-          return { boards: newBoards };
-        });
-      },
-    }),
-    { name: 'kanban-store' }
-  )
+        moveCard: async (projectId: string, directory: string, cardId: string, toColumnId: string, toOrder?: number) => {
+          await runProjectMutation(
+            projectId,
+            directory,
+            () => apiMoveCard(directory, cardId, toColumnId, toOrder),
+            'Failed to move card',
+          );
+        },
+      };
+    },
+    { name: 'kanban-store' },
+  ),
 );
 
 export const getActiveProjectBoard = (projectId: string | null): ProjectBoard | null => {
-  if (!projectId) return null;
+  if (!projectId) {
+    return null;
+  }
   return useKanbanStore.getState().getProjectBoard(projectId);
 };
