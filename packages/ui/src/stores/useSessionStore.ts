@@ -83,6 +83,7 @@ export const useSessionStore = create<SessionStore>()(
         (set, get) => ({
 
             sessions: [],
+            archivedSessions: [],
             sessionsByDirectory: new Map(),
             currentSessionId: null,
             lastLoadedDirectory: null,
@@ -280,6 +281,8 @@ export const useSessionStore = create<SessionStore>()(
                 },
                 deleteSession: (id: string, options) => useSessionManagementStore.getState().deleteSession(id, options),
                 deleteSessions: (ids: string[], options) => useSessionManagementStore.getState().deleteSessions(ids, options),
+                archiveSession: (id: string) => useSessionManagementStore.getState().archiveSession(id),
+                archiveSessions: (ids: string[], options) => useSessionManagementStore.getState().archiveSessions(ids, options),
                 updateSessionTitle: (id: string, title: string) => useSessionManagementStore.getState().updateSessionTitle(id, title),
                 shareSession: (id: string) => useSessionManagementStore.getState().shareSession(id),
                 unshareSession: (id: string) => useSessionManagementStore.getState().unshareSession(id),
@@ -876,6 +879,7 @@ useSessionManagementStore.subscribe((state, prevState) => {
 
     if (
         state.sessions === prevState.sessions &&
+        state.archivedSessions === prevState.archivedSessions &&
         state.sessionsByDirectory === prevState.sessionsByDirectory &&
         state.currentSessionId === prevState.currentSessionId &&
         state.lastLoadedDirectory === prevState.lastLoadedDirectory &&
@@ -893,6 +897,7 @@ useSessionManagementStore.subscribe((state, prevState) => {
 
     useSessionStore.setState({
         sessions: state.sessions,
+        archivedSessions: state.archivedSessions,
         sessionsByDirectory: state.sessionsByDirectory,
         currentSessionId: draftOpen ? null : state.currentSessionId,
         lastLoadedDirectory: state.lastLoadedDirectory,

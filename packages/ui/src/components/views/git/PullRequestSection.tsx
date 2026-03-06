@@ -54,7 +54,7 @@ import { useMessageStore } from '@/stores/messageStore';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
-import { useLanguage } from '@/hooks/useLanguage';
+import { getGitHubPrStatusKey, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 import type {
   GitHubPullRequest,
   GitHubCheckRun,
@@ -64,10 +64,6 @@ import type {
 } from '@/lib/api/types';
 
 type MergeMethod = 'merge' | 'squash' | 'rebase';
-
-const PR_REVALIDATE_TTL_MS = 90_000;
-const PR_REVALIDATE_INTERVAL_MS = 30_000;
-const PR_DISCOVERY_INTERVAL_MS = 5 * 60_000;
 
 const statusColor = (state: string | undefined | null): string => {
   switch (state) {
@@ -216,6 +212,35 @@ const pickInitialPrRemote = (
   return remotes[0] ?? null;
 };
 
+const isEphemeralPrRemote = (name: string): boolean => name.startsWith('pr-');
+
+const rankRemotesForAutoSelect = (
+  remotes: GitRemote[],
+  trackingBranch?: string,
+): GitRemote[] => {
+  const trackingRemote = getTrackingRemoteName(trackingBranch);
+  const byName = new Map(remotes.map((remote) => [remote.name, remote]));
+  const ordered: GitRemote[] = [];
+  const pushUnique = (remote: GitRemote | null | undefined) => {
+    if (!remote) return;
+    if (ordered.some((item) => item.name === remote.name)) return;
+    ordered.push(remote);
+  };
+
+  if (trackingRemote) {
+    pushUnique(byName.get(trackingRemote));
+  }
+  pushUnique(byName.get('upstream'));
+  pushUnique(byName.get('origin'));
+
+  remotes
+    .filter((remote) => !isEphemeralPrRemote(remote.name))
+    .forEach((remote) => pushUnique(remote));
+  remotes.forEach((remote) => pushUnique(remote));
+
+  return ordered;
+};
+
 type TimelineCommentItem = {
   id: string;
   body: string;
@@ -237,7 +262,6 @@ type ChatDispatchTarget = {
 };
 
 const pullRequestDraftSnapshots = new Map<string, PullRequestDraftSnapshot>();
-const pullRequestStatusSnapshots = new Map<string, GitHubPullRequestStatus>();
 
 type TauriShell = {
   shell?: {
@@ -295,15 +319,12 @@ export const PullRequestSection: React.FC<{
     () => pullRequestDraftSnapshots.get(snapshotKey) ?? null,
     [snapshotKey]
   );
-  const initialStatusSnapshot = React.useMemo(
-    () => pullRequestStatusSnapshots.get(snapshotKey) ?? null,
-    [snapshotKey]
-  );
-
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [status, setStatus] = React.useState<GitHubPullRequestStatus | null>(() => initialStatusSnapshot);
-  const [error, setError] = React.useState<string | null>(null);
-  const [isInitialStatusResolved, setIsInitialStatusResolved] = React.useState(() => Boolean(initialStatusSnapshot));
+  const ensurePrStatusEntry = useGitHubPrStatusStore((state) => state.ensureEntry);
+  const setPrStatusParams = useGitHubPrStatusStore((state) => state.setParams);
+  const startPrStatusWatching = useGitHubPrStatusStore((state) => state.startWatching);
+  const stopPrStatusWatching = useGitHubPrStatusStore((state) => state.stopWatching);
+  const refreshPrStatus = useGitHubPrStatusStore((state) => state.refresh);
+  const updatePrStatus = useGitHubPrStatusStore((state) => state.updateStatus);
 
   const [title, setTitle] = React.useState(() => initialSnapshot?.title ?? branchToTitle(branch));
   const [body, setBody] = React.useState(() => initialSnapshot?.body ?? '');
@@ -338,6 +359,17 @@ export const PullRequestSection: React.FC<{
       trackingBranch,
     })
   );
+
+  const prStatusKey = React.useMemo(
+    () => getGitHubPrStatusKey(directory, branch),
+    [directory, branch],
+  );
+  const statusEntry = useGitHubPrStatusStore((state) => state.entries[prStatusKey]);
+
+  const isLoading = statusEntry?.isLoading ?? false;
+  const status = statusEntry?.status ?? null;
+  const error = statusEntry?.error ?? null;
+  const isInitialStatusResolved = statusEntry?.isInitialStatusResolved ?? false;
 
   const availableBaseBranches = React.useMemo(() => {
     const selectedRemoteName = selectedRemote?.name?.trim() || null;
@@ -414,13 +446,10 @@ export const PullRequestSection: React.FC<{
   const [commentsDetails, setCommentsDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
   const [isLoadingCommentsDetails, setIsLoadingCommentsDetails] = React.useState(false);
 
-  const isRefreshInFlightRef = React.useRef(false);
-  const lastRefreshAtRef = React.useRef(0);
-  const lastDiscoveryPollAtRef = React.useRef(0);
-  const statusRef = React.useRef<GitHubPullRequestStatus | null>(null);
-  const selectedRemoteNameRef = React.useRef<string | null>(selectedRemote?.name ?? null);
   const attemptedBodyHydrationRef = React.useRef<Set<string>>(new Set());
   const lastSyncedPrNumberRef = React.useRef<number | null>(null);
+  const didUserOverrideRemoteRef = React.useRef(false);
+  const autoRemoteProbeDoneRef = React.useRef<Set<string>>(new Set());
 
   const canShow = Boolean(directory && branch && baseBranch && branch !== baseBranch);
 
@@ -456,7 +485,7 @@ export const PullRequestSection: React.FC<{
         if (!ctxPr) {
           return;
         }
-        setStatus((prev) => {
+        updatePrStatus(prStatusKey, (prev) => {
           if (!prev?.pr || prev.pr.number !== pr.number) {
             return prev;
           }
@@ -480,7 +509,7 @@ export const PullRequestSection: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [directory, github, pr]);
+  }, [directory, github, pr, prStatusKey, updatePrStatus]);
 
   React.useEffect(() => {
     if (!pr) {
@@ -925,116 +954,100 @@ export const PullRequestSection: React.FC<{
     dispatchSyntheticPrompt(target, visibleText, instructionsText, payloadText);
   }, [commentsDetails, dispatchSyntheticPrompt, pr, resolveChatDispatchTarget, setActiveMainTab]);
 
-  React.useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-
-  React.useEffect(() => {
-    selectedRemoteNameRef.current = selectedRemote?.name ?? null;
-  }, [selectedRemote?.name]);
-
   const refresh = React.useCallback(async (options?: { force?: boolean; onlyExistingPr?: boolean; silent?: boolean; markInitialResolved?: boolean }) => {
-    if (!canShow) return;
-    if (options?.onlyExistingPr && !statusRef.current?.pr) {
-      return;
-    }
-    if (!options?.force && Date.now() - lastRefreshAtRef.current < PR_REVALIDATE_TTL_MS) {
-      return;
-    }
-    if (isRefreshInFlightRef.current) {
-      return;
-    }
-
-    isRefreshInFlightRef.current = true;
-    lastRefreshAtRef.current = Date.now();
-
-    if (githubAuthChecked && githubAuthStatus?.connected === false) {
-      setStatus({ connected: false });
-      setError(null);
-      if (!options?.silent) {
-        setIsLoading(false);
-      }
-      if (options?.markInitialResolved !== false) {
-        setIsInitialStatusResolved(true);
-      }
-      isRefreshInFlightRef.current = false;
-      return;
-    }
-    if (!github?.prStatus) {
-      setStatus(null);
-      setError(t('pullRequest.githubRuntimeApiUnavailable'));
-      if (options?.markInitialResolved !== false) {
-        setIsInitialStatusResolved(true);
-      }
-      isRefreshInFlightRef.current = false;
-      return;
-    }
-    if (!options?.silent) {
-      setIsLoading(true);
-    }
-    setError(null);
-    try {
-      const next = await github.prStatus(directory, branch, selectedRemoteNameRef.current ?? undefined);
-      setStatus((prev) => {
-        const nextPr = next.pr;
-        const prevPr = prev?.pr;
-        // Some runtimes occasionally return PR status without body.
-        // Keep already hydrated description for the same PR number.
-        const shouldCarryBody = Boolean(
-          nextPr
-          && prevPr
-          && nextPr.number === prevPr.number
-          && (!nextPr.body || !nextPr.body.trim())
-          && typeof prevPr.body === 'string'
-          && prevPr.body.trim().length > 0,
-        );
-
-        if (!shouldCarryBody || !nextPr) {
-          return next;
-        }
-
-        const carriedBody = prevPr?.body;
-        if (!carriedBody) {
-          return next;
-        }
-
-        return {
-          ...next,
-          pr: {
-            ...nextPr,
-            body: carriedBody,
-          },
-        };
-      });
-      if (next.connected === false) {
-        setError(null);
-      }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      setError(message || t('pullRequest.failedToLoadPrStatus'));
-    } finally {
-      if (!options?.silent) {
-        setIsLoading(false);
-      }
-      if (options?.markInitialResolved !== false) {
-        setIsInitialStatusResolved(true);
-      }
-      isRefreshInFlightRef.current = false;
-    }
-  }, [branch, canShow, directory, github, githubAuthChecked, githubAuthStatus, t]);
+    await refreshPrStatus(prStatusKey, options);
+  }, [prStatusKey, refreshPrStatus]);
 
   // Refetch PR status when selected remote changes
   const handleRemoteChange = React.useCallback((remote: GitRemote) => {
+    didUserOverrideRemoteRef.current = true;
     setSelectedRemote((prev) => (prev?.name === remote.name ? prev : remote));
-    // Clear current status and refetch
-    setStatus(null);
-    setError(null);
-    lastRefreshAtRef.current = 0; // Force refresh
   }, []);
 
   React.useEffect(() => {
+    if (!github?.prStatus || !canShow || remotes.length <= 1) {
+      return;
+    }
+    if (didUserOverrideRemoteRef.current) {
+      return;
+    }
+    if (status?.pr) {
+      return;
+    }
+
+    const probeKey = `${snapshotKey}::${selectedRemote?.name ?? ''}`;
+    if (autoRemoteProbeDoneRef.current.has(probeKey)) {
+      return;
+    }
+    autoRemoteProbeDoneRef.current.add(probeKey);
+
+    const candidates = rankRemotesForAutoSelect(remotes, trackingBranch)
+      .filter((remote) => remote.name !== selectedRemote?.name);
+    if (candidates.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      for (const candidate of candidates) {
+        if (cancelled) {
+          return;
+        }
+        try {
+          const next = await github.prStatus(directory, branch, candidate.name);
+          if (!next?.pr) {
+            continue;
+          }
+          if (cancelled) {
+            return;
+          }
+          setSelectedRemote((prev) => (prev?.name === candidate.name ? prev : candidate));
+          return;
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [branch, canShow, directory, github, remotes, selectedRemote?.name, snapshotKey, status?.pr, trackingBranch]);
+
+  React.useEffect(() => {
+    ensurePrStatusEntry(prStatusKey);
+    setPrStatusParams(prStatusKey, {
+      directory,
+      branch,
+      remoteName: selectedRemote?.name ?? null,
+      canShow,
+      github,
+      githubAuthChecked,
+      githubConnected: githubAuthStatus?.connected ?? null,
+    });
+  }, [
+    branch,
+    canShow,
+    directory,
+    ensurePrStatusEntry,
+    github,
+    githubAuthChecked,
+    githubAuthStatus?.connected,
+    prStatusKey,
+    selectedRemote?.name,
+    setPrStatusParams,
+  ]);
+
+  React.useEffect(() => {
+    startPrStatusWatching(prStatusKey);
+    return () => {
+      stopPrStatusWatching(prStatusKey);
+    };
+  }, [prStatusKey, startPrStatusWatching, stopPrStatusWatching]);
+
+  React.useEffect(() => {
     const snapshot = pullRequestDraftSnapshots.get(snapshotKey) ?? null;
-    const statusSnapshot = pullRequestStatusSnapshots.get(snapshotKey) ?? null;
     setTitle(snapshot?.title ?? branchToTitle(branch));
     setBody(snapshot?.body ?? '');
     setDraft(snapshot?.draft ?? false);
@@ -1044,29 +1057,35 @@ export const PullRequestSection: React.FC<{
       trackingBranch,
     });
     setSelectedRemote((prev) => (prev?.name === nextRemote?.name ? prev : nextRemote));
-    setStatus(statusSnapshot);
-    setError(null);
-    setIsInitialStatusResolved(Boolean(statusSnapshot));
   }, [baseBranch, branch, remotes, snapshotKey, trackingBranch]);
 
   React.useEffect(() => {
-    void refresh({ force: true, markInitialResolved: true });
-  }, [snapshotKey, refresh]);
+    void refresh({ markInitialResolved: true });
+  }, [prStatusKey, refresh]);
 
-  // Refetch when selected remote changes
   React.useEffect(() => {
-    if (selectedRemote?.name) {
-      void refresh({ force: true, markInitialResolved: true });
+    if (!canShow || !selectedRemote?.name) {
+      return;
     }
-  }, [selectedRemote?.name, refresh]);
+    void refresh({ force: true, silent: true, markInitialResolved: true });
+  }, [canShow, refresh, selectedRemote?.name]);
 
   React.useEffect(() => {
+    const isTerminal = status?.pr?.state === 'closed' || status?.pr?.state === 'merged';
+    const lastRefreshAt = statusEntry?.lastRefreshAt ?? 0;
+    const isStale = Date.now() - lastRefreshAt > 60_000;
+    const shouldRefresh = !isTerminal && isStale;
+
     const onFocus = () => {
-      void refresh({ force: true, silent: true });
+      if (shouldRefresh) {
+        void refresh({ force: true, silent: true });
+      }
     };
     const onVisibility = () => {
       if (document.visibilityState === 'visible') {
-        void refresh({ force: true, silent: true });
+        if (shouldRefresh) {
+          void refresh({ force: true, silent: true });
+        }
       }
     };
 
@@ -1076,40 +1095,13 @@ export const PullRequestSection: React.FC<{
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [refresh]);
-
-  React.useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') {
-        return;
-      }
-
-      const hasPr = Boolean(statusRef.current?.pr);
-      if (!hasPr) {
-        const now = Date.now();
-        const shouldRunDiscovery = now - lastDiscoveryPollAtRef.current >= PR_DISCOVERY_INTERVAL_MS;
-        if (!shouldRunDiscovery) {
-          return;
-        }
-        lastDiscoveryPollAtRef.current = now;
-        void refresh({ force: true, silent: true });
-        return;
-      }
-
-      void refresh({ onlyExistingPr: true, force: true, silent: true });
-    }, PR_REVALIDATE_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(interval);
-    };
-  }, [refresh]);
+  }, [refresh, status?.pr?.state, statusEntry?.lastRefreshAt]);
 
   React.useEffect(() => {
     if (githubAuthChecked && githubAuthStatus?.connected === false) {
-      setStatus({ connected: false });
-      setError(null);
+      void refresh({ force: true, silent: true, markInitialResolved: true });
     }
-  }, [githubAuthChecked, githubAuthStatus]);
+  }, [githubAuthChecked, githubAuthStatus, refresh]);
 
   React.useEffect(() => {
     if (!directory || !branch) {
@@ -1124,13 +1116,6 @@ export const PullRequestSection: React.FC<{
       selectedRemoteName: selectedRemote?.name,
     });
   }, [snapshotKey, title, body, draft, additionalContext, targetBaseBranch, selectedRemote?.name, directory, branch]);
-
-  React.useEffect(() => {
-    if (!status) {
-      return;
-    }
-    pullRequestStatusSnapshots.set(snapshotKey, status);
-  }, [snapshotKey, status]);
 
   const generateDescription = React.useCallback(async () => {
     if (isGenerating) return;
@@ -1195,8 +1180,8 @@ export const PullRequestSection: React.FC<{
         draft,
         ...(selectedRemote ? { remote: selectedRemote.name } : {}),
       });
-      toast.success(t('pullRequest.prCreated'));
-      setStatus((prev) => (prev ? { ...prev, pr } : prev));
+      toast.success('PR created');
+      updatePrStatus(prStatusKey, (prev) => (prev ? { ...prev, pr } : prev));
       await refresh({ force: true });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -1204,7 +1189,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsCreating(false);
     }
-  }, [body, branch, directory, draft, github, refresh, selectedRemote, targetBaseBranch, title, t]);
+  }, [body, branch, directory, draft, github, prStatusKey, refresh, selectedRemote, targetBaseBranch, title, updatePrStatus]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
@@ -1272,7 +1257,7 @@ export const PullRequestSection: React.FC<{
         title: trimmedTitle,
         body: editBody,
       });
-      setStatus((prev) => (prev
+      updatePrStatus(prStatusKey, (prev) => (prev
         ? {
             ...prev,
             pr: {
@@ -1290,7 +1275,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsUpdating(false);
     }
-  }, [directory, editBody, editTitle, github, refresh, t]);
+  }, [directory, editBody, editTitle, github, prStatusKey, refresh, updatePrStatus]);
 
   if (!canShow) {
     return null;
