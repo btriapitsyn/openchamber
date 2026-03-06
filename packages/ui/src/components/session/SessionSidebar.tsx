@@ -100,7 +100,8 @@ const getPrVisualState = (status: GitHubPullRequestStatus | null): PrVisualState
     return 'draft';
   }
   const checksFailed = status?.checks?.state === 'failure';
-  const notMergeable = status?.canMerge === false || pr.mergeable === false;
+  const mergeableState = typeof pr.mergeableState === 'string' ? pr.mergeableState : '';
+  const notMergeable = pr.mergeable === false || mergeableState === 'blocked' || mergeableState === 'dirty';
   if (checksFailed || notMergeable) {
     return 'blocked';
   }
