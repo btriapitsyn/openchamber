@@ -69,7 +69,12 @@ const flattenBlockingRequests = <T extends { id: string }>(
     return result;
 };
 
-export const ChatContainer: React.FC = () => {
+interface ChatContainerProps {
+  /** Optional content rendered between the message list and the input box */
+  aboveInput?: React.ReactNode;
+}
+
+export const ChatContainer: React.FC<ChatContainerProps> = ({ aboveInput }) => {
     const {
         currentSessionId,
         isLoading,
@@ -541,6 +546,7 @@ export const ChatContainer: React.FC = () => {
                             : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
                     )}
                 >
+                    {aboveInput}
                     <ChatInput scrollToBottom={scrollToBottom} />
                 </div>
             </div>
@@ -573,6 +579,7 @@ export const ChatContainer: React.FC = () => {
                             ))}
                         </div>
                     </div>
+                    {aboveInput}
                     <ChatInput scrollToBottom={scrollToBottom} />
                 </div>
             );
@@ -599,6 +606,7 @@ export const ChatContainer: React.FC = () => {
                             : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
                     )}
                 >
+                    {aboveInput}
                     <ChatInput scrollToBottom={scrollToBottom} />
                 </div>
             </div>
@@ -673,6 +681,7 @@ export const ChatContainer: React.FC = () => {
                         </Button>
                     </div>
                 )}
+                {aboveInput}
                 <ChatInput scrollToBottom={scrollToBottom} />
             </div>
 
