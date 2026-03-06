@@ -12,9 +12,11 @@ import { triggerSessionStatusPoll } from "@/hooks/useServerSessionStatus";
 import type { ProjectEntry } from "@/lib/api/types";
 import { checkIsGitRepository } from "@/lib/gitApi";
 import { streamDebugEnabled } from "@/stores/utils/streamDebug";
+import { isMissingGlobalSessionsEndpointError, readNextCursor, type GlobalSessionRecord } from "./globalSessions";
 
 interface SessionState {
     sessions: Session[];
+    archivedSessions: Session[];
     sessionsByDirectory: Map<string, Session[]>;
     currentSessionId: string | null;
     lastLoadedDirectory: string | null;
@@ -31,6 +33,8 @@ interface SessionActions {
     createSession: (title?: string, directoryOverride?: string | null, parentID?: string | null) => Promise<Session | null>;
     deleteSession: (id: string, options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; deleteLocalBranch?: boolean; remoteName?: string }) => Promise<boolean>;
     deleteSessions: (ids: string[], options?: { archiveWorktree?: boolean; deleteRemoteBranch?: boolean; deleteLocalBranch?: boolean; remoteName?: string; silent?: boolean }) => Promise<{ deletedIds: string[]; failedIds: string[] }>;
+    archiveSession: (id: string) => Promise<boolean>;
+    archiveSessions: (ids: string[], options?: { silent?: boolean }) => Promise<{ archivedIds: string[]; failedIds: string[] }>;
     updateSessionTitle: (id: string, title: string) => Promise<void>;
     shareSession: (id: string) => Promise<Session | null>;
     unshareSession: (id: string) => Promise<Session | null>;
@@ -97,23 +101,9 @@ type ProjectRepoCacheEntry = {
     isGitRepo: boolean;
 };
 
-const PROJECT_SESSION_CACHE_TTL_MS = 30_000;
 const PROJECT_REPO_STATUS_CACHE_TTL_MS = 120_000;
 const projectSessionCache = new Map<string, ProjectSessionCacheEntry>();
 const projectRepoStatusCache = new Map<string, ProjectRepoCacheEntry>();
-
-const getFreshProjectSessionCache = (projectPath: string): ProjectSessionResult | null => {
-    const key = normalizePath(projectPath) ?? projectPath;
-    const cached = projectSessionCache.get(key);
-    if (!cached) {
-        return null;
-    }
-    if (Date.now() - cached.cachedAt > PROJECT_SESSION_CACHE_TTL_MS) {
-        projectSessionCache.delete(key);
-        return null;
-    }
-    return cached.result;
-};
 
 const setProjectSessionCache = (projectPath: string, result: ProjectSessionResult) => {
     const key = normalizePath(projectPath) ?? projectPath;
@@ -239,6 +229,21 @@ const deleteSessionOnServer = async (sessionId: string, directory?: string | nul
         ...(normalizedDirectory ? { directory: normalizedDirectory } : {}),
     });
     return Boolean(response.data);
+};
+
+const setSessionArchivedOnServer = async (
+    sessionId: string,
+    archivedAt: number,
+    directory?: string | null,
+): Promise<Session | null> => {
+    const apiClient = opencodeClient.getApiClient();
+    const normalizedDirectory = normalizePath(directory ?? null);
+    const response = await apiClient.session.update({
+        sessionID: sessionId,
+        ...(normalizedDirectory ? { directory: normalizedDirectory } : {}),
+        time: { archived: archivedAt },
+    });
+    return response.data ?? null;
 };
 
 const normalizePath = (value?: string | null): string | null => {
@@ -446,6 +451,7 @@ export const useSessionStore = create<SessionStore>()(
             (set, get) => ({
 
                 sessions: [],
+                archivedSessions: [],
                 sessionsByDirectory: new Map(),
                 currentSessionId: null,
                 lastLoadedDirectory: null,
@@ -475,151 +481,6 @@ export const useSessionStore = create<SessionStore>()(
                             activeProjectId: projectsStore.activeProjectId,
                         });
 
-                        const canonicalDirectoryCache = new Map<string, string>();
-
-                        const resolveCanonicalDirectory = async (directory: string): Promise<string> => {
-                            const normalizedRequested = normalizePath(directory) ?? directory;
-                            const cacheKey = normalizedRequested;
-                            const cached = canonicalDirectoryCache.get(cacheKey);
-                            if (cached) {
-                                return cached;
-                            }
-
-                            try {
-                                const info = await apiClient.path.get({ directory });
-                                const canonical = normalizePath((info.data as { directory?: string | null } | null)?.directory ?? null);
-                                const resolved = canonical ?? normalizedRequested;
-                                canonicalDirectoryCache.set(cacheKey, resolved);
-                                return resolved;
-                            } catch {
-                                canonicalDirectoryCache.set(cacheKey, normalizedRequested);
-                                return normalizedRequested;
-                            }
-                        };
-
-                        const filterSessionsToDirectory = (
-                            sessions: Session[],
-                            directory: string,
-                            options?: { includeDescendants?: boolean; includeMissingDirectory?: boolean }
-                        ): Session[] => {
-                            const normalized = normalizePath(directory);
-                            if (!normalized) {
-                                return sessions;
-                            }
-                            const includeDescendants = options?.includeDescendants === true;
-                            const prefix = includeDescendants ? `${normalized}/` : null;
-                            const includeMissingDirectory = options?.includeMissingDirectory === true;
-                            return sessions.filter((session) => {
-                                const sessionDir = normalizePath((session as { directory?: string | null }).directory ?? null);
-                                if (!sessionDir) return includeMissingDirectory;
-                                if (sessionDir === normalized) return true;
-                                if (prefix && sessionDir.startsWith(prefix)) return true;
-                                return false;
-                            });
-                        };
-
-                        const assignRequestedDirectory = (
-                            sessions: Session[],
-                            requestedDirectory: string,
-                            canonicalDirectory?: string | null
-                        ): Session[] => {
-                            const normalizedRequested = normalizePath(requestedDirectory);
-                            if (!normalizedRequested) {
-                                return sessions;
-                            }
-                            const normalizedCanonical = normalizePath(canonicalDirectory ?? null);
-                            if (!normalizedCanonical || normalizedCanonical === normalizedRequested) {
-                                return sessions.map((session) => {
-                                    const sessionDir = normalizePath((session as { directory?: string | null }).directory ?? null);
-                                    if (sessionDir) {
-                                        return session;
-                                    }
-                                    return ({ ...session, directory: normalizedRequested } as Session);
-                                });
-                            }
-
-                            const canonicalPrefix = normalizedCanonical === "/" ? "/" : `${normalizedCanonical}/`;
-                            const requestedPrefix = normalizedRequested === "/" ? "/" : `${normalizedRequested}/`;
-
-                            return sessions.map((session) => {
-                                const sessionDir = normalizePath((session as { directory?: string | null }).directory ?? null);
-                                if (!sessionDir) {
-                                    return ({ ...session, directory: normalizedRequested } as Session);
-                                }
-                                if (sessionDir === normalizedCanonical) {
-                                    return ({ ...session, directory: normalizedRequested } as Session);
-                                }
-                                if (canonicalPrefix !== "/" && sessionDir.startsWith(canonicalPrefix)) {
-                                    const suffix = sessionDir.slice(canonicalPrefix.length);
-                                    return ({ ...session, directory: `${requestedPrefix}${suffix}` } as Session);
-                                }
-                                return session;
-                            });
-                        };
-
-                        const fetchSessionsForDirectory = async (directoryParam?: string | null): Promise<Session[]> => {
-                            const requestedDirectory = normalizePath(directoryParam);
-                            if (!requestedDirectory) {
-                                try {
-                                    const response = await apiClient.session.list(undefined);
-                                    return Array.isArray(response.data) ? response.data : [];
-                                } catch (error) {
-                                    console.debug("Failed to list sessions (global):", error);
-                                    throw error;
-                                }
-                            }
-
-                            const canonicalDirectory = await resolveCanonicalDirectory(requestedDirectory);
-
-                            const listFromDirectoryScopedCall = async (): Promise<Session[]> => {
-                                const response = await apiClient.session.list({ directory: requestedDirectory });
-                                return Array.isArray(response.data) ? response.data : [];
-                            };
-
-                            let sessions: Session[] = [];
-                            let listError: unknown = null;
-                            let usedGlobalFallback = false;
-                            try {
-                                sessions = await listFromDirectoryScopedCall();
-                            } catch (error) {
-                                console.debug("Failed to list sessions for directory:", requestedDirectory, error);
-                                listError = error;
-                                sessions = [];
-                            }
-
-                            // Some runtimes canonicalize directory paths (e.g. realpath). If the scoped call returns no results,
-                            // fall back to the global list and map canonical paths back to the requested directory.
-                            if (sessions.length === 0) {
-                                usedGlobalFallback = true;
-                                try {
-                                    const globalResponse = await apiClient.session.list(undefined);
-                                    const globalList = Array.isArray(globalResponse.data) ? globalResponse.data : [];
-                                    sessions = filterSessionsToDirectory(globalList, canonicalDirectory, {
-                                        includeDescendants,
-                                        includeMissingDirectory: false,
-                                    });
-                                } catch (error) {
-                                    console.debug("Failed to list sessions (global fallback):", error);
-                                    if (listError) {
-                                        throw listError;
-                                    }
-                                    throw error;
-                                }
-                            }
-
-                            const filtered = filterSessionsToDirectory(sessions, canonicalDirectory, {
-                                includeDescendants,
-                                includeMissingDirectory: !usedGlobalFallback,
-                            });
-                            vscodeDebugLog("fetchSessionsForDirectory", {
-                                requestedDirectory,
-                                canonicalDirectory,
-                                fetched: sessions.length,
-                                filtered: filtered.length,
-                            });
-                            return assignRequestedDirectory(filtered, requestedDirectory, canonicalDirectory);
-                        };
-
                         const normalizedFallback = normalizePath(directoryStore.currentDirectory ?? opencodeClient.getDirectory() ?? null);
                         const activeProject = projectsStore.projects.find((project) => project.id === projectsStore.activeProjectId) ?? null;
                         const activeProjectRoot = normalizePath(activeProject?.path ?? null);
@@ -630,7 +491,26 @@ export const useSessionStore = create<SessionStore>()(
                             ? projectsStore.projects
                             : (legacyRoot ? [{ id: 'legacy', path: legacyRoot }] : []);
 
-                        const applyProjectResults = async (projectResults: ProjectSessionResult[]) => {
+                        const resolveSessionDirectory = (session: Session): string | null => {
+                            const direct = normalizePath((session as { directory?: string | null }).directory ?? null);
+                            if (direct) {
+                                return direct;
+                            }
+                            const projectWorktree = normalizePath((session as GlobalSessionRecord).project?.worktree ?? null);
+                            return projectWorktree;
+                        };
+
+                        const matchesProjectDirectory = (sessionDirectory: string | null, projectDirectory: string): boolean => {
+                            if (!sessionDirectory) {
+                                return false;
+                            }
+                            if (sessionDirectory === projectDirectory) {
+                                return true;
+                            }
+                            return includeDescendants && sessionDirectory.startsWith(`${projectDirectory}/`);
+                        };
+
+                        const applyProjectResults = async (projectResults: ProjectSessionResult[], archivedSessions: Session[]) => {
                             const sessionsByDirectory = new Map<string, Session[]>();
                             projectResults.forEach((result) => {
                                 if (!result.projectPath) {
@@ -751,6 +631,7 @@ export const useSessionStore = create<SessionStore>()(
 
                             set({
                                 sessions: mergedSessions,
+                                archivedSessions,
                                 sessionsByDirectory,
                                 currentSessionId: nextCurrentId,
                                 lastLoadedDirectory: activeDirectory ?? null,
@@ -774,6 +655,7 @@ export const useSessionStore = create<SessionStore>()(
                             }
                             set({
                                 sessions: [],
+                                archivedSessions: [],
                                 sessionsByDirectory: new Map(),
                                 currentSessionId: null,
                                 lastLoadedDirectory: null,
@@ -787,110 +669,134 @@ export const useSessionStore = create<SessionStore>()(
 
                         pruneProjectCaches(projectEntries.map((entry) => entry.path));
 
-                        const activeProjectId = projectsStore.activeProjectId;
-                        const cachedProjectResults: ProjectSessionResult[] = [];
-                        projectEntries.forEach((project) => {
-                            const normalizedProject = normalizePath(project.path);
-                            if (!normalizedProject) {
-                                return;
-                            }
-                            const cached = getFreshProjectSessionCache(normalizedProject);
-                            if (cached) {
-                                cachedProjectResults.push(cached);
-                            }
-                        });
+                        const buildProjectResults = async (sourceSessions: Session[]): Promise<ProjectSessionResult[]> => {
+                            return Promise.all(
+                                projectEntries.map(async (project: Pick<ProjectEntry, 'id' | 'path'>) => {
+                                    const normalizedProject = normalizePath(project.path);
+                                    if (!normalizedProject) {
+                                        return {
+                                            projectId: project.id,
+                                            projectPath: null,
+                                            sessions: [],
+                                            discoveredWorktrees: [],
+                                            validPaths: new Set<string>(),
+                                        };
+                                    }
 
-                        const hasCachedActiveProject = cachedProjectResults.some(
-                            (result) => result.projectId === activeProjectId
-                        );
-
-                        if (hasCachedActiveProject && isLatestRequest()) {
-                            await applyProjectResults(cachedProjectResults);
-                        }
-
-                        const projectResults: ProjectSessionResult[] = await Promise.all(
-                            projectEntries.map(async (project: Pick<ProjectEntry, 'id' | 'path'>) => {
-                                const normalizedProject = normalizePath(project.path);
-                                if (!normalizedProject) {
-                                    return {
-                                        projectId: project.id,
-                                        projectPath: null,
-                                        sessions: [],
-                                        discoveredWorktrees: [],
-                                        validPaths: new Set<string>(),
-                                    };
-                                }
-
-                                const cached = getFreshProjectSessionCache(normalizedProject);
-                                const isActiveProject = project.id === activeProjectId;
-                                if (cached && !isActiveProject) {
-                                    return cached;
-                                }
-
-                                const isGitRepo = await getProjectRepoStatus(normalizedProject);
-                                const parentSessions = await fetchSessionsForDirectory(normalizedProject || null);
-                                vscodeDebugLog("projectSessions", {
-                                    projectId: project.id,
-                                    projectPath: normalizedProject,
-                                    isGitRepo,
-                                    parentSessions: parentSessions.length,
-                                });
-
-                                const subdirectorySessions: Session[] = [];
-                                let discoveredWorktrees: WorktreeMetadata[] = [];
-                                const validPaths = new Set<string>();
-                                validPaths.add(normalizedProject);
-
-                                if (isGitRepo) {
-                                    try {
-                                        const candidates = new Set<string>();
-
-                                        const managedWorktrees = await listProjectWorktrees({
+                                    const isGitRepo = await getProjectRepoStatus(normalizedProject);
+                                    let discoveredWorktrees: WorktreeMetadata[] = [];
+                                    const validPaths = new Set<string>([normalizedProject]);
+                                    if (isGitRepo) {
+                                        discoveredWorktrees = await listProjectWorktrees({
                                             id: project.id,
                                             path: normalizedProject,
                                         }).catch(() => []);
-                                        discoveredWorktrees = managedWorktrees;
-                                        managedWorktrees.forEach((meta) => {
+                                        discoveredWorktrees.forEach((meta) => {
                                             if (meta?.path) {
-                                                candidates.add(normalizePath(meta.path) ?? meta.path);
+                                                validPaths.add(normalizePath(meta.path) ?? meta.path);
                                             }
                                         });
-
-                                        candidates.forEach((candidate) => {
-                                            const normalizedCandidate = normalizePath(candidate) ?? candidate;
-                                            validPaths.add(normalizedCandidate);
-                                        });
-
-                                        if (candidates.size > 0) {
-                                            const results = await Promise.allSettled(
-                                                Array.from(candidates).map((path) => fetchSessionsForDirectory(path))
-                                            );
-                                            results.forEach((result) => {
-                                                if (result.status === "fulfilled" && Array.isArray(result.value)) {
-                                                    subdirectorySessions.push(...result.value);
-                                                }
-                                            });
-                                        }
-                                    } catch {
-                                        discoveredWorktrees = [];
                                     }
+
+                                    const mergedSessions = dedupeSessionsById(
+                                        sourceSessions.filter((session) => {
+                                            const sessionDirectory = resolveSessionDirectory(session);
+                                            if (!sessionDirectory) {
+                                                return false;
+                                            }
+                                            for (const projectPath of validPaths) {
+                                                if (matchesProjectDirectory(sessionDirectory, projectPath)) {
+                                                    return true;
+                                                }
+                                            }
+                                            return false;
+                                        }),
+                                    );
+
+                                    const result: ProjectSessionResult = {
+                                        projectId: project.id,
+                                        projectPath: normalizedProject,
+                                        sessions: mergedSessions,
+                                        discoveredWorktrees,
+                                        validPaths,
+                                    };
+                                    setProjectSessionCache(normalizedProject, result);
+                                    return result;
+                                }),
+                            );
+                        };
+
+                        try {
+                            const pageSize = 500;
+                            const firstPage = await apiClient.experimental.session.list({ limit: pageSize, archived: false });
+                            let liveSessions = dedupeSessionsById(Array.isArray(firstPage.data) ? firstPage.data as Session[] : []);
+                            let archivedSessions: Session[] = [];
+
+                            const apply = async () => {
+                                if (!isLatestRequest()) {
+                                    return;
+                                }
+                                const projectResults = await buildProjectResults(liveSessions);
+                                await applyProjectResults(projectResults, dedupeSessionsById(archivedSessions));
+                            };
+
+                            await apply();
+
+                            const backgroundLoad = async () => {
+                                let cursor = readNextCursor(firstPage) ?? undefined;
+                                while (cursor && isLatestRequest()) {
+                                    const response = await apiClient.experimental.session.list({
+                                        limit: pageSize,
+                                        cursor,
+                                        archived: false,
+                                    });
+                                    const page = Array.isArray(response.data) ? response.data as Session[] : [];
+                                    if (page.length === 0) {
+                                        break;
+                                    }
+                                    liveSessions = dedupeSessionsById([...liveSessions, ...page]);
+                                    await apply();
+                                    cursor = readNextCursor(response) ?? undefined;
                                 }
 
-                                const mergedSessions = dedupeSessionsById([...parentSessions, ...subdirectorySessions]);
+                                let archivedCursor: number | undefined;
+                                while (isLatestRequest()) {
+                                    const response = await apiClient.experimental.session.list({
+                                        limit: pageSize,
+                                        archived: true,
+                                        ...(archivedCursor ? { cursor: archivedCursor } : {}),
+                                    });
+                                    const page = Array.isArray(response.data)
+                                        ? (response.data as Session[]).filter((session) => Boolean(session.time?.archived))
+                                        : [];
+                                    if (page.length > 0) {
+                                        archivedSessions = dedupeSessionsById([...archivedSessions, ...page]);
+                                        await apply();
+                                    }
+                                    const next = readNextCursor(response);
+                                    if (!next) {
+                                        break;
+                                    }
+                                    archivedCursor = next;
+                                }
+                            };
 
-                                const result: ProjectSessionResult = {
-                                    projectId: project.id,
-                                    projectPath: normalizedProject,
-                                    sessions: mergedSessions,
-                                    discoveredWorktrees,
-                                    validPaths,
-                                };
+                            void backgroundLoad().catch((error) => {
+                                console.debug("Failed to load additional global sessions:", error);
+                            });
 
-                                setProjectSessionCache(normalizedProject, result);
-                                return result;
-                            })
-                        );
-                        await applyProjectResults(projectResults);
+                            return;
+                        } catch (error) {
+                            if (!isMissingGlobalSessionsEndpointError(error)) {
+                                throw error;
+                            }
+                            console.debug("Global session endpoint unavailable, using legacy loader");
+                        }
+
+                        const fallbackResponse = await apiClient.session.list(undefined);
+                        const fallbackSessions = dedupeSessionsById(Array.isArray(fallbackResponse.data) ? fallbackResponse.data : []);
+                        const fallbackProjectResults = await buildProjectResults(fallbackSessions);
+                        await applyProjectResults(fallbackProjectResults, []);
                     } catch (error) {
                         if (!isLatestRequest()) {
                             return;
@@ -1057,7 +963,8 @@ export const useSessionStore = create<SessionStore>()(
                     const metadata = get().worktreeMetadata.get(id);
                     const metadataPath = typeof metadata?.path === 'string' ? metadata.path : null;
                     const metadataProjectDirectory = typeof metadata?.projectDirectory === 'string' ? metadata.projectDirectory : null;
-                    const sessionDirectory = getSessionDirectory(get().sessions, id);
+                    const snapshot = get();
+                    const sessionDirectory = getSessionDirectory([...snapshot.sessions, ...snapshot.archivedSessions], id);
                     const requestDirectory = normalizePath(metadataProjectDirectory)
                         ?? normalizePath(sessionDirectory)
                         ?? normalizePath(opencodeClient.getDirectory() ?? null)
@@ -1091,6 +998,7 @@ export const useSessionStore = create<SessionStore>()(
                         let nextCurrentId: string | null = null;
                         set((state) => {
                             const filteredSessions = state.sessions.filter((s) => s.id !== id);
+                            const filteredArchivedSessions = state.archivedSessions.filter((s) => s.id !== id);
                             nextCurrentId = state.currentSessionId === id ? null : state.currentSessionId;
                             const nextMetadata = new Map(state.worktreeMetadata);
                             nextMetadata.delete(id);
@@ -1109,6 +1017,7 @@ export const useSessionStore = create<SessionStore>()(
                             }
                             return {
                                 sessions: filteredSessions,
+                                archivedSessions: filteredArchivedSessions,
                                 sessionsByDirectory: buildSessionsByDirectory(filteredSessions),
                                 currentSessionId: nextCurrentId,
                                 isLoading: false,
@@ -1155,7 +1064,7 @@ export const useSessionStore = create<SessionStore>()(
                     for (const id of uniqueIds) {
                         try {
                             const metadata = get().worktreeMetadata.get(id);
-                            const sessionDirectory = getSessionDirectory(get().sessions, id);
+                            const sessionDirectory = getSessionDirectory([...get().sessions, ...get().archivedSessions], id);
                             const requestDirectory = normalizePath(metadata?.projectDirectory ?? null)
                                 ?? normalizePath(sessionDirectory)
                                 ?? normalizePath(opencodeClient.getDirectory() ?? null)
@@ -1218,6 +1127,7 @@ export const useSessionStore = create<SessionStore>()(
 
                     set((state) => {
                         const filteredSessions = state.sessions.filter((session) => !deletedSet.has(session.id));
+                        const filteredArchivedSessions = state.archivedSessions.filter((session) => !deletedSet.has(session.id));
                         if (state.currentSessionId && deletedSet.has(state.currentSessionId)) {
                             nextCurrentId = null;
                         } else {
@@ -1261,6 +1171,7 @@ export const useSessionStore = create<SessionStore>()(
 
                         return {
                             sessions: filteredSessions,
+                            archivedSessions: filteredArchivedSessions,
                             sessionsByDirectory: buildSessionsByDirectory(filteredSessions),
                             currentSessionId: nextCurrentId,
                             ...(silent ? {} : { isLoading: false, error: errorMessage }),
@@ -1274,6 +1185,88 @@ export const useSessionStore = create<SessionStore>()(
                     storeSessionForDirectory(directory, nextCurrentId);
 
                     return { deletedIds, failedIds };
+                },
+
+                archiveSession: async (id: string) => {
+                    const { archivedIds, failedIds } = await get().archiveSessions([id]);
+                    return archivedIds.length === 1 && failedIds.length === 0;
+                },
+
+                archiveSessions: async (ids: string[], options?: { silent?: boolean }) => {
+                    const uniqueIds = Array.from(new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0)));
+                    if (uniqueIds.length === 0) {
+                        return { archivedIds: [], failedIds: [] };
+                    }
+
+                    const silent = options?.silent === true;
+                    if (!silent) {
+                        set({ isLoading: true, error: null });
+                    }
+
+                    const archivedIds: string[] = [];
+                    const failedIds: string[] = [];
+
+                    for (const id of uniqueIds) {
+                        try {
+                            const metadata = get().worktreeMetadata.get(id);
+                            const sessionDirectory = getSessionDirectory([...get().sessions, ...get().archivedSessions], id);
+                            const requestDirectory = normalizePath(metadata?.projectDirectory ?? null)
+                                ?? normalizePath(sessionDirectory)
+                                ?? normalizePath(opencodeClient.getDirectory() ?? null)
+                                ?? null;
+                            const archived = await setSessionArchivedOnServer(id, Date.now(), requestDirectory);
+                            if (!archived) {
+                                failedIds.push(id);
+                                continue;
+                            }
+                            archivedIds.push(id);
+                        } catch {
+                            failedIds.push(id);
+                        }
+                    }
+
+                    const archivedSet = new Set(archivedIds);
+                    let nextCurrentId: string | null = null;
+                    const errorMessage = failedIds.length > 0
+                        ? (failedIds.length === uniqueIds.length ? "Failed to archive sessions" : "Failed to archive some sessions")
+                        : null;
+
+                    set((state) => {
+                        if (archivedSet.size === 0) {
+                            return silent ? state : { ...state, isLoading: false, error: errorMessage };
+                        }
+
+                        const archivedRows = state.sessions.filter((session) => archivedSet.has(session.id)).map((session) => ({
+                            ...session,
+                            time: {
+                                ...session.time,
+                                archived: Date.now(),
+                            },
+                        } as Session));
+
+                        const remaining = state.sessions.filter((session) => !archivedSet.has(session.id));
+                        const nextArchivedSessions = dedupeSessionsById([...archivedRows, ...state.archivedSessions]);
+
+                        if (state.currentSessionId && archivedSet.has(state.currentSessionId)) {
+                            nextCurrentId = remaining[0]?.id ?? null;
+                        } else {
+                            nextCurrentId = state.currentSessionId;
+                        }
+
+                        return {
+                            sessions: remaining,
+                            archivedSessions: nextArchivedSessions,
+                            sessionsByDirectory: buildSessionsByDirectory(remaining),
+                            currentSessionId: nextCurrentId,
+                            ...(silent ? {} : { isLoading: false, error: errorMessage }),
+                        };
+                    });
+
+                    if (!silent && archivedSet.size === 0) {
+                        set({ isLoading: false, error: errorMessage });
+                    }
+
+                    return { archivedIds, failedIds };
                 },
 
                 updateSessionTitle: async (id: string, title: string) => {
@@ -1560,14 +1553,23 @@ export const useSessionStore = create<SessionStore>()(
                 updateSession: (session: Session) => {
                     set((state) => {
                         const index = state.sessions.findIndex((s) => s.id === session.id);
+                        const archivedIndex = state.archivedSessions.findIndex((s) => s.id === session.id);
+                        const isArchived = Boolean(session.time?.archived);
+
                         const nextSessions = index === -1
-                            ? [session, ...state.sessions]
+                            ? (isArchived ? state.sessions : [session, ...state.sessions])
                             : state.sessions.map((s) => (s.id === session.id ? session : s));
 
-                        const deduped = dedupeSessionsById(nextSessions);
+                        const nextArchivedSessions = archivedIndex === -1
+                            ? (isArchived ? [session, ...state.archivedSessions] : state.archivedSessions)
+                            : state.archivedSessions.map((s) => (s.id === session.id ? session : s));
+
+                        const deduped = dedupeSessionsById(nextSessions.filter((item) => !item.time?.archived));
+                        const dedupedArchived = dedupeSessionsById(nextArchivedSessions.filter((item) => Boolean(item.time?.archived)));
 
                         return {
                             sessions: deduped,
+                            archivedSessions: dedupedArchived,
                             sessionsByDirectory: buildSessionsByDirectory(deduped),
                         };
                     });
@@ -1579,11 +1581,13 @@ export const useSessionStore = create<SessionStore>()(
                     }
 
                     set((state) => {
-                        const target = state.sessions.find((session) => session.id === sessionId) as { directory?: string | null } | undefined;
+                        const target = [...state.sessions, ...state.archivedSessions]
+                            .find((session) => session.id === sessionId) as { directory?: string | null } | undefined;
                         const directory = normalizePath(target?.directory ?? null);
 
                         const filteredSessions = state.sessions.filter((session) => session.id !== sessionId);
-                        if (filteredSessions.length === state.sessions.length) {
+                        const filteredArchivedSessions = state.archivedSessions.filter((session) => session.id !== sessionId);
+                        if (filteredSessions.length === state.sessions.length && filteredArchivedSessions.length === state.archivedSessions.length) {
                             return state;
                         }
 
@@ -1598,6 +1602,7 @@ export const useSessionStore = create<SessionStore>()(
 
                         return {
                             sessions: filteredSessions,
+                            archivedSessions: filteredArchivedSessions,
                             sessionsByDirectory: buildSessionsByDirectory(filteredSessions),
                             currentSessionId: nextCurrentId,
                             worktreeMetadata: nextMetadata,
@@ -1611,6 +1616,7 @@ export const useSessionStore = create<SessionStore>()(
     partialize: (state) => ({
         currentSessionId: state.currentSessionId,
         sessions: state.sessions,
+        archivedSessions: state.archivedSessions,
         lastLoadedDirectory: state.lastLoadedDirectory,
         webUICreatedSessions: Array.from(state.webUICreatedSessions),
         worktreeMetadata: Array.from(state.worktreeMetadata.entries()),
@@ -1628,6 +1634,9 @@ export const useSessionStore = create<SessionStore>()(
         const persistedSessions = Array.isArray(persistedState.sessions)
             ? (persistedState.sessions as Session[])
             : currentState.sessions;
+        const persistedArchivedSessions = Array.isArray(persistedState.archivedSessions)
+            ? (persistedState.archivedSessions as Session[])
+            : currentState.archivedSessions;
 
         const persistedCurrentSessionId =
             typeof persistedState.currentSessionId === "string" || persistedState.currentSessionId === null
@@ -1657,11 +1666,13 @@ export const useSessionStore = create<SessionStore>()(
                 : currentState.lastLoadedDirectory ?? null;
 
         const mergedSessions = dedupeSessionsById(persistedSessions);
+        const mergedArchivedSessions = dedupeSessionsById(persistedArchivedSessions);
 
         const mergedResult = {
             ...currentState,
             ...persistedState,
             sessions: mergedSessions,
+            archivedSessions: mergedArchivedSessions,
             sessionsByDirectory: buildSessionsByDirectory(mergedSessions),
             currentSessionId: persistedCurrentSessionId,
             webUICreatedSessions: new Set(webUiSessionsArray),

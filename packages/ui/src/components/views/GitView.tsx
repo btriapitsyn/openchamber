@@ -1190,13 +1190,14 @@ export const GitView: React.FC = () => {
 
   const selectedCount = selectedPaths.size;
   const isBusy = isLoading || syncAction !== null || commitAction !== null;
+  const currentBranch = status?.current ?? null;
   const canShowIntegrateCommitsSection = Boolean(
     worktreeMetadata && repoRootForIntegrate && sourceBranchForIntegrate && shouldShowIntegrateCommits
   );
   const canShowPullRequestSection = Boolean(
-    currentDirectory && status?.current && status?.tracking && status.current !== baseBranch
+    currentDirectory && currentBranch && status?.tracking && currentBranch !== baseBranch
   );
-  const canShowBranchWorkflows = Boolean(status?.current);
+  const canShowBranchWorkflows = Boolean(currentBranch);
   const integrateCommitsProps =
     canShowIntegrateCommitsSection && repoRootForIntegrate && sourceBranchForIntegrate && worktreeMetadata
       ? {
@@ -1205,13 +1206,15 @@ export const GitView: React.FC = () => {
           worktreeMetadata,
         }
       : null;
-  const pullRequestProps =
-    canShowPullRequestSection && currentDirectory && status?.current
-      ? {
-          directory: currentDirectory,
-          branch: status.current,
-        }
-      : null;
+  const pullRequestProps = React.useMemo(() => {
+    if (!canShowPullRequestSection || !currentDirectory || !currentBranch) {
+      return null;
+    }
+    return {
+      directory: currentDirectory,
+      branch: currentBranch,
+    };
+  }, [canShowPullRequestSection, currentBranch, currentDirectory]);
   // Keep these sections stable in layout; individual cards render placeholders when unavailable.
 
   const toggleFileSelection = (path: string) => {

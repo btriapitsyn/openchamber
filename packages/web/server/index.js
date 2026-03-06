@@ -9806,36 +9806,40 @@ async function main(options = {}) {
         return res.json({ connected: true, repo: null, branch, pr: null, checks: null, canMerge: false });
       }
 
-       // Determine the head owner for PR search
-       // Priority: 1) tracking branch remote, 2) origin (if different from target), 3) target repo owner
-       let headOwnerForSearch = null;
-       
-       // First, check the branch's tracking info to see which remote it's on
+       let originRepo = null;
+       if (remote !== 'origin') {
+         const originResolved = await resolveGitHubRepoFromDirectory(directory, 'origin').catch(() => ({ repo: null }));
+         originRepo = originResolved?.repo || null;
+       }
+
+       const candidateHeadOwners = [];
+       const pushHeadOwner = (owner) => {
+         if (typeof owner !== 'string') return;
+         const normalized = owner.trim();
+         if (!normalized) return;
+         if (candidateHeadOwners.includes(normalized)) return;
+         candidateHeadOwners.push(normalized);
+       };
+
+       // First, use branch tracking remote owner (where branch is usually pushed).
        const { getStatus } = await import('./lib/git/index.js');
        const status = await getStatus(directory).catch(() => null);
        if (status?.tracking) {
          const trackingRemote = status.tracking.split('/')[0];
-         if (trackingRemote && trackingRemote !== remote) {
-           // Branch is tracked on a different remote - get that remote's owner
-           const { repo: trackingRepo } = await resolveGitHubRepoFromDirectory(directory, trackingRemote);
-           if (trackingRepo && trackingRepo.owner !== repo.owner) {
-             headOwnerForSearch = trackingRepo.owner;
-           }
-         }
-       }
-       
-       // Fallback: if targeting non-origin, check if origin has a different owner (fork scenario)
-       if (!headOwnerForSearch && remote !== 'origin') {
-         const { repo: originRepo } = await resolveGitHubRepoFromDirectory(directory, 'origin');
-         if (originRepo && originRepo.owner !== repo.owner) {
-           headOwnerForSearch = originRepo.owner;
+         if (trackingRemote) {
+           const trackingResolved = await resolveGitHubRepoFromDirectory(directory, trackingRemote).catch(() => ({ repo: null }));
+           pushHeadOwner(trackingResolved?.repo?.owner);
          }
        }
 
-       const listByHead = async (state, headOwner = repo.owner) => {
+       // Then same-repo and origin fallback owners.
+       pushHeadOwner(repo.owner);
+       pushHeadOwner(originRepo?.owner);
+
+       const listByHead = async (targetRepo, state, headOwner) => {
          const resp = await octokit.rest.pulls.list({
-           owner: repo.owner,
-           repo: repo.repo,
+           owner: targetRepo.owner,
+           repo: targetRepo.repo,
            state,
            head: `${headOwner}:${branch}`,
            per_page: 10,
@@ -9843,10 +9847,10 @@ async function main(options = {}) {
          return Array.isArray(resp?.data) ? resp.data[0] : null;
        };
 
-       const listByHeadRef = async (state) => {
+       const listByHeadRef = async (targetRepo, state) => {
          const resp = await octokit.rest.pulls.list({
-           owner: repo.owner,
-           repo: repo.repo,
+           owner: targetRepo.owner,
+           repo: targetRepo.repo,
            state,
            per_page: 100,
          });
@@ -9856,34 +9860,41 @@ async function main(options = {}) {
          return matches[0] ?? null;
        };
 
-       // PR status by branch:
-       // - Prefer open PRs.
-       // - If none, also surface closed/merged PRs.
-       // - For cross-repo PRs: first try with head owner, then fall back to target owner, then ref match.
-       let first = null;
-       
-       // For cross-repo workflows, try head owner first
-       if (headOwnerForSearch) {
-         first = await listByHead('open', headOwnerForSearch);
-         if (!first) first = await listByHead('closed', headOwnerForSearch);
+       const tryFindPr = async (targetRepo) => {
+         let found = null;
+         for (const owner of candidateHeadOwners) {
+           found = await listByHead(targetRepo, 'open', owner);
+           if (found) return found;
+           found = await listByHead(targetRepo, 'closed', owner);
+           if (found) return found;
+         }
+         found = await listByHeadRef(targetRepo, 'open');
+         if (found) return found;
+         return listByHeadRef(targetRepo, 'closed');
+       };
+
+       // Try requested remote target repo first, then origin target repo fallback for fork flows.
+       let searchRepo = repo;
+       let first = await tryFindPr(searchRepo);
+       if (!first && originRepo) {
+         const isDifferentRepo = originRepo.owner !== repo.owner || originRepo.repo !== repo.repo;
+         if (isDifferentRepo) {
+           const originMatch = await tryFindPr(originRepo);
+           if (originMatch) {
+             first = originMatch;
+             searchRepo = originRepo;
+           }
+         }
        }
-       
-       // Try with target repo owner (same-repo PRs)
-       if (!first) first = await listByHead('open');
-       if (!first) first = await listByHead('closed');
-       
-       // Fall back to matching head.ref directly (handles edge cases)
-       if (!first) first = await listByHeadRef('open');
-       if (!first) first = await listByHeadRef('closed');
       if (!first) {
-        return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
+        return res.json({ connected: true, repo: searchRepo, branch, pr: null, checks: null, canMerge: false });
       }
 
       // Enrich with mergeability fields
-      const prFull = await octokit.rest.pulls.get({ owner: repo.owner, repo: repo.repo, pull_number: first.number });
+      const prFull = await octokit.rest.pulls.get({ owner: searchRepo.owner, repo: searchRepo.repo, pull_number: first.number });
       const prData = prFull?.data;
       if (!prData) {
-        return res.json({ connected: true, repo, branch, pr: null, checks: null, canMerge: false });
+        return res.json({ connected: true, repo: searchRepo, branch, pr: null, checks: null, canMerge: false });
       }
 
       // Checks summary: prefer check-runs (Actions), fallback to classic statuses.
@@ -9892,8 +9903,8 @@ async function main(options = {}) {
       if (sha) {
         try {
           const runs = await octokit.rest.checks.listForRef({
-            owner: repo.owner,
-            repo: repo.repo,
+            owner: searchRepo.owner,
+            repo: searchRepo.repo,
             ref: sha,
             per_page: 100,
           });
@@ -9930,8 +9941,8 @@ async function main(options = {}) {
         if (!checks) {
           try {
             const combined = await octokit.rest.repos.getCombinedStatusForRef({
-              owner: repo.owner,
-              repo: repo.repo,
+              owner: searchRepo.owner,
+              repo: searchRepo.repo,
               ref: sha,
             });
             const statuses = Array.isArray(combined?.data?.statuses) ? combined.data.statuses : [];
@@ -9959,8 +9970,8 @@ async function main(options = {}) {
         const username = auth?.user?.login;
         if (username) {
           const perm = await octokit.rest.repos.getCollaboratorPermissionLevel({
-            owner: repo.owner,
-            repo: repo.repo,
+            owner: searchRepo.owner,
+            repo: searchRepo.repo,
             username,
           });
           const level = perm?.data?.permission;
@@ -9975,7 +9986,7 @@ async function main(options = {}) {
 
       return res.json({
         connected: true,
-        repo,
+        repo: searchRepo,
         branch,
         pr: {
           number: prData.number,

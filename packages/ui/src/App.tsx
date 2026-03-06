@@ -19,6 +19,7 @@ import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
+import { useGitHubPrBackgroundTracking } from '@/hooks/useGitHubPrBackgroundTracking';
 import { GitPollingProvider } from '@/hooks/useGitPolling';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
@@ -132,6 +133,8 @@ function App({ apis }: AppProps) {
 
     void refreshGitHubAuthStatus(apis.github, { force: true });
   }, [apis.github, embeddedSessionChat, refreshGitHubAuthStatus]);
+
+  useGitHubPrBackgroundTracking(embeddedBackgroundWorkEnabled ? apis.github : undefined, apis.git);
 
   React.useEffect(() => {
     if (typeof document === 'undefined') {
