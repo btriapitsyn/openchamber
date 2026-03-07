@@ -2195,7 +2195,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             }}
             className={cn(
                 footerIconButtonClass,
-                'absolute bottom-full left-1/2 -translate-x-1/2 mb-1',
+                'absolute z-20 bottom-full left-1/2 -translate-x-1/2 mb-1',
                 hasContent && currentSessionId
                     ? 'text-primary hover:text-primary'
                     : 'opacity-30'
@@ -2223,7 +2223,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     // Action buttons area: either send button, or stop (+ optional queue button floating above)
     const actionButtons = canAbort ? (
-        <div className="relative">
+        <div className="relative z-20">
             {hasContent && queueButton}
             {stopButton}
         </div>
