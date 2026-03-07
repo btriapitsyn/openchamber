@@ -28,3 +28,19 @@ export const normalizeMessageRecordsForProjection = (messages: ChatMessageRecord
         parts: Array.isArray(message.parts) ? message.parts : [],
     }));
 };
+
+export const filterMessagesByRevertPoint = <T extends { info: { id: string } }>(
+    messages: T[],
+    revertMessageId: string | null,
+): T[] => {
+    if (!revertMessageId) {
+        return messages;
+    }
+
+    const revertIndex = messages.findIndex((message) => message.info.id === revertMessageId);
+    if (revertIndex < 0) {
+        return messages;
+    }
+
+    return messages.slice(0, revertIndex);
+};

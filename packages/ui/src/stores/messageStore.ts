@@ -14,7 +14,7 @@ import {
     clearLifecycleCompletionTimer
 } from "./utils/streamingUtils";
 import { extractTextFromPart, normalizeStreamingPart } from "./utils/messageUtils";
-import { normalizeMessageInfoForProjection } from "./utils/messageProjectors";
+import { filterMessagesByRevertPoint, normalizeMessageInfoForProjection } from "./utils/messageProjectors";
 import { getSafeStorage } from "./utils/safeStorage";
 import { useFileStore } from "./fileStore";
 import { useSessionStore } from "./sessionStore";
@@ -412,19 +412,6 @@ const getSessionRevertMessageId = (sessionId: string | null | undefined): string
     }
 };
 
-const filterRevertedMessages = (
-    messages: { info: Message; parts: Part[] }[],
-    revertMessageId: string | null
-): { info: Message; parts: Part[] }[] => {
-    if (!revertMessageId) return messages;
-
-    const revertIndex = messages.findIndex((m) => m.info.id === revertMessageId);
-    if (revertIndex === -1) return messages;
-
-    // Keep only messages before the revert point (exclusive)
-    return messages.slice(0, revertIndex);
-};
-
 const executeWithSessionDirectory = async <T>(sessionId: string | null | undefined, operation: () => Promise<T>): Promise<T> => {
     const directoryOverride = await resolveSessionDirectory(sessionId);
     if (directoryOverride) {
@@ -516,7 +503,10 @@ export const useMessageStore = create<MessageStore>()(
 
                         // Filter out reverted messages first
                         const revertMessageId = getSessionRevertMessageId(sessionId);
-                        const messagesWithoutReverted = filterRevertedMessages(allMessages, revertMessageId);
+                        const messagesWithoutReverted = filterMessagesByRevertPoint<{ info: Message; parts: Part[] }>(
+                            allMessages as { info: Message; parts: Part[] }[],
+                            revertMessageId,
+                        );
 
                         // If server fills the requested window, assume there may be more above.
                         // This is intentionally optimistic and corrected on subsequent load-more calls.
@@ -2181,7 +2171,7 @@ export const useMessageStore = create<MessageStore>()(
                 syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => {
                     // Filter out reverted messages first
                     const revertMessageId = getSessionRevertMessageId(sessionId);
-                    const messagesWithoutReverted = filterRevertedMessages(messages, revertMessageId);
+                    const messagesWithoutReverted = filterMessagesByRevertPoint(messages, revertMessageId);
 
                     const watermark = get().sessionMemoryState.get(sessionId)?.trimmedHeadMaxId;
                     const messagesFiltered = watermark

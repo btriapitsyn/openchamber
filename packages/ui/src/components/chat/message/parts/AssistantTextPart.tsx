@@ -5,6 +5,7 @@ import type { StreamPhase } from '../types';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { ReasoningTimelineBlock, formatReasoningText } from './ReasoningPart';
 import { useStreamingTextThrottle } from '../../hooks/useStreamingTextThrottle';
+import { resolveAssistantDisplayText, shouldRenderAssistantText } from './assistantTextVisibility';
 
 type PartWithText = Part & { text?: string; content?: string; value?: string; time?: { start?: number; end?: number } };
 
@@ -44,16 +45,19 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         identityKey: `${messageId}:${part.id ?? 'text'}`,
     });
 
-    const displayTextContent = isStreaming ? throttledTextContent : textContent;
+    const displayTextContent = resolveAssistantDisplayText({
+        textContent,
+        throttledTextContent,
+        isStreaming,
+    });
 
     const time = partWithText.time;
-    const isFinalized = time && typeof time.end !== 'undefined';
+    const isFinalized = Boolean(time && typeof time.end !== 'undefined');
 
-    if (!isFinalized && (!displayTextContent || displayTextContent.trim().length === 0)) {
-        return null;
-    }
-
-    if (!displayTextContent || displayTextContent.trim().length === 0) {
+    if (!shouldRenderAssistantText({
+        displayTextContent,
+        isFinalized,
+    })) {
         return null;
     }
 

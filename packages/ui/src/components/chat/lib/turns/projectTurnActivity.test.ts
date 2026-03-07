@@ -1,12 +1,9 @@
+import { strict as assert } from 'node:assert';
+import test from 'node:test';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
+
 import { projectTurnActivity } from './projectTurnActivity';
 import type { ChatMessageEntry } from './types';
-
-const assert = (condition: unknown, message: string): void => {
-    if (!condition) {
-        throw new Error(message);
-    }
-};
 
 const makeAssistant = (id: string, parts: Part[]): ChatMessageEntry => ({
     info: {
@@ -18,7 +15,7 @@ const makeAssistant = (id: string, parts: Part[]): ChatMessageEntry => ({
     parts,
 });
 
-export const runProjectTurnActivityTests = (): void => {
+test('projectTurnActivity keeps segmented task + reasoning flow', () => {
     const firstAssistant = makeAssistant('a1', [
         { id: 'task', type: 'tool', tool: 'task', state: { status: 'completed' } } as unknown as Part,
         { id: 'r1', type: 'reasoning', text: 'thinking' } as unknown as Part,
@@ -34,12 +31,13 @@ export const runProjectTurnActivityTests = (): void => {
         summarySourceMessageId: undefined,
     });
 
-    assert(result.hasTools, 'tool activity should be detected');
-    assert(result.hasReasoning, 'reasoning activity should be detected');
-    assert(result.activityParts.length === 3, 'all tool/reasoning parts should be captured');
-    assert(result.activitySegments.length >= 1, 'activity should be segmented');
-    assert(
+    assert.equal(result.hasTools, true, 'tool activity should be detected');
+    assert.equal(result.hasReasoning, true, 'reasoning activity should be detected');
+    assert.equal(result.activityParts.length, 3, 'all tool/reasoning parts should be captured');
+    assert.equal(result.activitySegments.length >= 1, true, 'activity should be segmented');
+    assert.equal(
         result.activitySegments.some((segment) => segment.afterToolPartId !== null),
+        true,
         'task standalone tool should start a post-tool segment',
     );
-};
+});

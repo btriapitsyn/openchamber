@@ -994,7 +994,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         if (!turnGroupingContext) return [];
 
         // Filter out reasoning if showReasoningTraces is off.
-        // Justification parts are already filtered at the source (useTurnGrouping)
+        // Justification parts are already filtered at canonical turn projection source
         // based on showTextJustificationActivity, so we keep them here.
         const base = !showReasoningTraces
             ? activityPartsForTurn.filter((activity) => activity.kind !== 'reasoning')
@@ -1060,7 +1060,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                 .filter((segment) => (segment.afterToolPartId ?? null) === afterToolPartId)
                 .forEach((segment) => {
                     // Filter out reasoning if showReasoningTraces is off.
-                    // Justification parts are already filtered at the source (useTurnGrouping)
+                    // Justification parts are already filtered at canonical turn projection source
                     // based on showTextJustificationActivity, so we keep them here.
                     const visibleSegmentParts = !showReasoningTraces
                         ? segment.parts.filter((activity) => activity.kind !== 'reasoning')

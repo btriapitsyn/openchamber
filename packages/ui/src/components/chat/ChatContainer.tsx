@@ -21,54 +21,15 @@ import { TimelineDialog } from './TimelineDialog';
 import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 import { cn } from '@/lib/utils';
+import {
+    collectVisibleSessionIdsForBlockingRequests,
+    flattenBlockingRequests,
+} from './lib/blockingRequests';
 
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = [];
 const EMPTY_PERMISSIONS: PermissionRequest[] = [];
 const EMPTY_QUESTIONS: QuestionRequest[] = [];
 const IDLE_SESSION_STATUS = { type: 'idle' as const };
-
-const collectVisibleSessionIdsForBlockingRequests = (
-    sessions: Array<{ id: string; parentID?: string }> | undefined,
-    currentSessionId: string | null
-): string[] => {
-    if (!currentSessionId) return [];
-    if (!Array.isArray(sessions) || sessions.length === 0) return [currentSessionId];
-
-    const current = sessions.find((session) => session.id === currentSessionId);
-    if (!current) return [currentSessionId];
-
-    // Opencode parity: when viewing a child session, permission/question prompts are handled in parent thread.
-    if (current.parentID) {
-        return [];
-    }
-
-    const childIds = sessions
-        .filter((session) => session.parentID === currentSessionId)
-        .map((session) => session.id);
-
-    return [currentSessionId, ...childIds];
-};
-
-const flattenBlockingRequests = <T extends { id: string }>(
-    source: Map<string, T[]>,
-    sessionIds: string[]
-): T[] => {
-    if (sessionIds.length === 0) return [];
-    const seen = new Set<string>();
-    const result: T[] = [];
-
-    for (const sessionId of sessionIds) {
-        const entries = source.get(sessionId);
-        if (!entries || entries.length === 0) continue;
-        for (const entry of entries) {
-            if (seen.has(entry.id)) continue;
-            seen.add(entry.id);
-            result.push(entry);
-        }
-    }
-
-    return result;
-};
 
 export const ChatContainer: React.FC = () => {
     const {

@@ -1,12 +1,9 @@
+import { strict as assert } from 'node:assert';
+import test from 'node:test';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
+
 import { projectTurnRecords } from './projectTurnRecords';
 import type { ChatMessageEntry } from './types';
-
-const assert = (condition: unknown, message: string): void => {
-    if (!condition) {
-        throw new Error(message);
-    }
-};
 
 const makeMessage = (
     id: string,
@@ -26,7 +23,7 @@ const makeMessage = (
     };
 };
 
-export const runProjectTurnRecordsTests = (): void => {
+test('projectTurnRecords keeps retries and malformed-parent assistants in the same turn', () => {
     const user1 = makeMessage('u1', 'user', [{ type: 'text', text: 'hi' } as unknown as Part]);
     const assistant1 = makeMessage(
         'a1',
@@ -59,19 +56,19 @@ export const runProjectTurnRecordsTests = (): void => {
         { showTextJustificationActivity: true },
     );
 
-    assert(projection.turns.length === 2, 'two user anchors should produce two turns');
+    assert.equal(projection.turns.length, 2, 'two user anchors should produce two turns');
 
     const firstTurn = projection.turns[0];
-    assert(firstTurn.assistantMessageIds.length === 3, 'turn should include retry and malformed-parent fallback assistant');
-    assert(firstTurn.stream.isRetrying, 'multiple assistants in a turn should set retry stream state');
-    assert(firstTurn.summaryText === 'retry', 'summary should come from final assistant stop text');
-    assert(firstTurn.startedAt === 1, 'turn startedAt should use user created time');
-    assert(firstTurn.completedAt === 5, 'turn completedAt should track max assistant completed time');
+    assert.equal(firstTurn.assistantMessageIds.length, 3, 'turn should include retry and malformed-parent fallback assistant');
+    assert.equal(firstTurn.stream.isRetrying, true, 'multiple assistants in a turn should set retry stream state');
+    assert.equal(firstTurn.summaryText, 'retry', 'summary should come from final assistant stop text');
+    assert.equal(firstTurn.startedAt, 1, 'turn startedAt should use user created time');
+    assert.equal(firstTurn.completedAt, 5, 'turn completedAt should track max assistant completed time');
 
     const secondTurn = projection.turns[1];
-    assert(secondTurn.assistantMessageIds.includes('a4'), 'task bridge assistant should remain in second turn');
+    assert.equal(secondTurn.assistantMessageIds.includes('a4'), true, 'task bridge assistant should remain in second turn');
 
-    assert(projection.indexes.messageToTurnId.get('a2') === 'u1', 'message-to-turn index should include retries');
-    assert(projection.lastTurnId === 'u2', 'last turn id should match latest user message');
-    assert(!projection.ungroupedMessageIds.has('a1'), 'grouped assistant should not be marked ungrouped');
-};
+    assert.equal(projection.indexes.messageToTurnId.get('a2'), 'u1', 'message-to-turn index should include retries');
+    assert.equal(projection.lastTurnId, 'u2', 'last turn id should match latest user message');
+    assert.equal(projection.ungroupedMessageIds.has('a1'), false, 'grouped assistant should not be marked ungrouped');
+});

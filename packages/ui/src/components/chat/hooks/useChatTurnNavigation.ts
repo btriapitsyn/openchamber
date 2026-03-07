@@ -23,6 +23,41 @@ export const parseChatHashTarget = (hashValue: string): ChatHashTarget | null =>
     return null;
 };
 
+type TurnOffsetTarget =
+    | { kind: 'noop' }
+    | { kind: 'resume' }
+    | { kind: 'turn'; turnId: string };
+
+export const resolveTurnOffsetTarget = (
+    turnIds: string[],
+    activeTurnId: string | null,
+    offset: number,
+): TurnOffsetTarget => {
+    if (offset === 0) {
+        return { kind: 'noop' };
+    }
+
+    if (turnIds.length === 0) {
+        return { kind: 'noop' };
+    }
+
+    const baseIndex = activeTurnId ? turnIds.indexOf(activeTurnId) : turnIds.length - 1;
+    const normalizedBase = baseIndex >= 0 ? baseIndex : turnIds.length - 1;
+    const targetIndex = normalizedBase + offset;
+
+    if (targetIndex >= turnIds.length) {
+        return { kind: 'resume' };
+    }
+
+    const clampedTarget = Math.max(0, targetIndex);
+    const targetTurnId = turnIds[clampedTarget];
+    if (!targetTurnId) {
+        return { kind: 'noop' };
+    }
+
+    return { kind: 'turn', turnId: targetTurnId };
+};
+
 const setHash = (hash: string | null): void => {
     if (typeof window === 'undefined') {
         return;
@@ -99,33 +134,19 @@ export const useChatTurnNavigation = ({
     }, [scrollToMessage]);
 
     const scrollByTurnOffset = React.useCallback(async (offset: number): Promise<boolean> => {
-        if (offset === 0) {
-            return true;
+        const target = resolveTurnOffsetTarget(turnIdsRef.current, activeTurnIdRef.current, offset);
+
+        if (target.kind === 'noop') {
+            return offset === 0;
         }
 
-        const turns = turnIdsRef.current;
-        if (turns.length === 0) {
-            return false;
-        }
-
-        const active = activeTurnIdRef.current;
-        const baseIndex = active ? turns.indexOf(active) : turns.length - 1;
-        const normalizedBase = baseIndex >= 0 ? baseIndex : turns.length - 1;
-        const targetIndex = normalizedBase + offset;
-
-        if (targetIndex >= turns.length) {
+        if (target.kind === 'resume') {
             setHash(null);
             resumeToBottom();
             return true;
         }
 
-        const clampedTarget = Math.max(0, targetIndex);
-        const targetTurnId = turns[clampedTarget];
-        if (!targetTurnId) {
-            return false;
-        }
-
-        return scrollToTurnId(targetTurnId, { behavior: 'auto' });
+        return scrollToTurnId(target.turnId, { behavior: 'auto' });
     }, [resumeToBottom, scrollToTurnId]);
 
     const resumeToLatest = React.useCallback(() => {

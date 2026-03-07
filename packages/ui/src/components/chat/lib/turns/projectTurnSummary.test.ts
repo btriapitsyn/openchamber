@@ -1,12 +1,9 @@
+import { strict as assert } from 'node:assert';
+import test from 'node:test';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
+
 import { projectTurnDiffStats, projectTurnSummary } from './projectTurnSummary';
 import type { ChatMessageEntry } from './types';
-
-const assert = (condition: unknown, message: string): void => {
-    if (!condition) {
-        throw new Error(message);
-    }
-};
 
 const makeMessage = (overrides: Partial<Message>, parts: Part[]): ChatMessageEntry => ({
     info: {
@@ -19,22 +16,24 @@ const makeMessage = (overrides: Partial<Message>, parts: Part[]): ChatMessageEnt
     parts,
 });
 
-export const runProjectTurnSummaryTests = (): void => {
+test('projectTurnSummary extracts summary and falls back to latest text', () => {
     const summary = projectTurnSummary([
         makeMessage({ id: 'a1', finish: 'stop' } as Partial<Message>, [
             { id: 'p1', type: 'text', text: 'final answer' } as unknown as Part,
         ]),
     ]);
-    assert(summary.text === 'final answer', 'summary text should be extracted from last stop text part');
-    assert(summary.sourceMessageId === 'a1', 'summary source message should be tracked');
+    assert.equal(summary.text, 'final answer', 'summary text should be extracted from last stop text part');
+    assert.equal(summary.sourceMessageId, 'a1', 'summary source message should be tracked');
 
     const fallbackSummary = projectTurnSummary([
         makeMessage({ id: 'a2', finish: 'length' } as Partial<Message>, [
             { id: 'p2', type: 'text', text: 'partial text' } as unknown as Part,
         ]),
     ]);
-    assert(fallbackSummary.text === 'partial text', 'summary should fallback to last text when finish=stop missing');
+    assert.equal(fallbackSummary.text, 'partial text', 'summary should fallback to last text when finish=stop missing');
+});
 
+test('projectTurnDiffStats only counts non-empty file diffs', () => {
     const diffStats = projectTurnDiffStats(makeMessage({
         role: 'user',
         summary: {
@@ -44,8 +43,9 @@ export const runProjectTurnSummaryTests = (): void => {
             ],
         },
     } as Partial<Message>, []));
-    assert(Boolean(diffStats), 'diff stats should exist for non-empty diffs');
-    assert(diffStats?.additions === 5, 'diff additions should aggregate');
-    assert(diffStats?.deletions === 2, 'diff deletions should aggregate');
-    assert(diffStats?.files === 1, 'diff files should count non-zero diff entries');
-};
+
+    assert.equal(Boolean(diffStats), true, 'diff stats should exist for non-empty diffs');
+    assert.equal(diffStats?.additions, 5, 'diff additions should aggregate');
+    assert.equal(diffStats?.deletions, 2, 'diff deletions should aggregate');
+    assert.equal(diffStats?.files, 1, 'diff files should count non-zero diff entries');
+});

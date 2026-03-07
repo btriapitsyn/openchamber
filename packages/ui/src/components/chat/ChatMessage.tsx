@@ -21,6 +21,7 @@ import type { AgentMentionInfo } from './message/types';
 import type { StreamPhase, ToolPopupContent } from './message/types';
 import { deriveMessageRole } from './message/messageRole';
 import { filterVisibleParts } from './message/partUtils';
+import { normalizeUserDisplayParts } from './message/normalizeUserDisplayParts';
 import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from '@/lib/messages/providerAuthError';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
@@ -188,35 +189,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             return message.parts;
         }
 
-        const keepSyntheticUserText = (text: string): boolean => {
-            const trimmed = text.trim();
-            if (trimmed.startsWith('User has requested to enter plan mode')) return true;
-            if (trimmed.startsWith('The plan at ')) return true;
-            if (trimmed.startsWith('The following tool was executed by the user')) return true;
-            return false;
-        };
-
-        return message.parts
-            .filter((part) => {
-                const synthetic = (part as unknown as { synthetic?: boolean })?.synthetic === true;
-                if (!synthetic) return true;
-                if (part.type !== 'text') return false;
-                const text = (part as unknown as { text?: unknown })?.text;
-                return typeof text === 'string' ? keepSyntheticUserText(text) : false;
-            })
-            .map((part) => {
-            const rawPart = part as Record<string, unknown>;
-            if (rawPart.type === 'compaction') {
-                return { type: 'text', text: '/compact' } as Part;
-            }
-            if (rawPart.type === 'text') {
-                const text = typeof rawPart.text === 'string' ? rawPart.text.trim() : '';
-                if (text.startsWith('The following tool was executed by the user')) {
-                    return { type: 'text', text: '/shell' } as Part;
-                }
-            }
-            return part;
-        });
+        return normalizeUserDisplayParts(message.parts);
     }, [isUser, message.parts]);
 
     const previousUserMetadata = React.useMemo(() => {
