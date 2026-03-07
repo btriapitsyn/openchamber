@@ -20,6 +20,7 @@ import { useProjectsStore } from "./useProjectsStore";
 import { useSessionFoldersStore } from "./useSessionFoldersStore";
 import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta";
 import { flattenAssistantTextParts } from "@/lib/messages/messageText";
+import { normalizeMessageRecordsForProjection } from "./utils/messageProjectors";
 
 export type { AttachedFile, EditPermissionMode };
 export { MEMORY_LIMITS, ACTIVE_SESSION_WINDOW } from "./types/sessionTypes";
@@ -639,7 +640,9 @@ export const useSessionStore = create<SessionStore>()(
                     return useContextStore.getState().initializeSessionContextUsage(sessionId, contextLimit, outputLimit, messages);
                 },
                 debugSessionMessages: async (sessionId: string) => {
-                    const messages = useMessageStore.getState().messages.get(sessionId) || [];
+                    const messages = normalizeMessageRecordsForProjection(
+                        useMessageStore.getState().messages.get(sessionId) || []
+                    );
                     const session = useSessionManagementStore.getState().sessions.find(s => s.id === sessionId);
                     console.log(`Debug session ${sessionId}:`, {
                         session,

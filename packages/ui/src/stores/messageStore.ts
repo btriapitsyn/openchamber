@@ -14,6 +14,7 @@ import {
     clearLifecycleCompletionTimer
 } from "./utils/streamingUtils";
 import { extractTextFromPart, normalizeStreamingPart } from "./utils/messageUtils";
+import { normalizeMessageInfoForProjection } from "./utils/messageProjectors";
 import { getSafeStorage } from "./utils/safeStorage";
 import { useFileStore } from "./fileStore";
 import { useSessionStore } from "./sessionStore";
@@ -438,7 +439,6 @@ interface MessageState {
     pendingAssistantParts: Map<string, { sessionId: string; parts: Part[] }>;
     sessionCompactionUntil: Map<string, number>;
     sessionAbortFlags: Map<string, SessionAbortRecord>;
-    pendingAssistantHeaderSessions: Set<string>;
     pendingUserMessageMetaBySession: Map<string, { mode?: string; providerID?: string; modelID?: string; variant?: string }>;
 
 }
@@ -481,7 +481,6 @@ export const useMessageStore = create<MessageStore>()(
                 pendingAssistantParts: new Map(),
                 sessionCompactionUntil: new Map(),
                 sessionAbortFlags: new Map(),
-                pendingAssistantHeaderSessions: new Set(),
                 pendingUserMessageMetaBySession: new Map(),
 
                 loadMessages: async (sessionId: string, limit?: number) => {
@@ -535,11 +534,7 @@ export const useMessageStore = create<MessageStore>()(
                             );
 
                             const normalizedMessages = messagesToKeep.map((message) => {
-                                const infoWithMarker = {
-                                    ...message.info,
-                                    clientRole: (message.info as any)?.clientRole ?? message.info.role,
-                                    userMessageMarker: message.info.role === "user" ? true : (message.info as any)?.userMessageMarker,
-                                } as any;
+                                const infoWithMarker = normalizeMessageInfoForProjection(message.info as Message) as any;
 
                                 const serverParts = (Array.isArray(message.parts) ? message.parts : []).map((part) => {
                                     if (part?.type === 'text') {
@@ -792,8 +787,6 @@ export const useMessageStore = create<MessageStore>()(
                                 }));
 
                                 set((state) => {
-                                    const next = new Set(state.pendingAssistantHeaderSessions);
-                                    next.add(sessionId);
                                     const nextUserMeta = new Map(state.pendingUserMessageMetaBySession);
                                     nextUserMeta.set(sessionId, {
                                         mode: typeof agent === 'string' && agent.trim().length > 0 ? agent.trim() : undefined,
@@ -801,7 +794,7 @@ export const useMessageStore = create<MessageStore>()(
                                         modelID,
                                         variant: typeof variant === 'string' && variant.trim().length > 0 ? variant : undefined,
                                     });
-                                    return { pendingAssistantHeaderSessions: next, pendingUserMessageMetaBySession: nextUserMeta };
+                                    return { pendingUserMessageMetaBySession: nextUserMeta };
                                 });
 
                                 // Convert additional parts to SDK format
@@ -913,11 +906,9 @@ export const useMessageStore = create<MessageStore>()(
                                 set((state) => {
                                     const nextControllers = new Map(state.abortControllers);
                                     nextControllers.delete(sessionId);
-                                    const nextHeaders = new Set(state.pendingAssistantHeaderSessions);
-                                    nextHeaders.delete(sessionId);
                                     const nextUserMeta = new Map(state.pendingUserMessageMetaBySession);
                                     nextUserMeta.delete(sessionId);
-                                    return { abortControllers: nextControllers, pendingAssistantHeaderSessions: nextHeaders, pendingUserMessageMetaBySession: nextUserMeta };
+                                    return { abortControllers: nextControllers, pendingUserMessageMetaBySession: nextUserMeta };
                                 });
 
                                 throw new Error(errorMessage);
@@ -942,11 +933,9 @@ export const useMessageStore = create<MessageStore>()(
                             set((state) => {
                                 const nextControllers = new Map(state.abortControllers);
                                 nextControllers.delete(sessionId);
-                                const nextHeaders = new Set(state.pendingAssistantHeaderSessions);
-                                nextHeaders.delete(sessionId);
                                 const nextUserMeta = new Map(state.pendingUserMessageMetaBySession);
                                 nextUserMeta.delete(sessionId);
-                                return { abortControllers: nextControllers, pendingAssistantHeaderSessions: nextHeaders, pendingUserMessageMetaBySession: nextUserMeta };
+                                return { abortControllers: nextControllers, pendingUserMessageMetaBySession: nextUserMeta };
                             });
 
                             throw new Error(errorMessage);
@@ -1490,13 +1479,6 @@ export const useMessageStore = create<MessageStore>()(
                                 ? sessionAgent.trim()
                                 : undefined;
 
-                            const shouldAnchorHeader = state.pendingAssistantHeaderSessions.has(sessionId);
-                            if (shouldAnchorHeader) {
-                                const nextPendingHeaders = new Set(state.pendingAssistantHeaderSessions);
-                                nextPendingHeaders.delete(sessionId);
-                                updates.pendingAssistantHeaderSessions = nextPendingHeaders;
-                            }
-
                             const placeholderInfo = (actualRole === "user"
                                 ? {
                                     id: messageId,
@@ -1518,7 +1500,6 @@ export const useMessageStore = create<MessageStore>()(
                                     modelID,
                                     providerID,
                                     mode: agentMode || "default",
-                                    ...(shouldAnchorHeader ? { openchamberHeaderAnchor: true } : {}),
                                     path: { cwd, root: cwd },
                                     cost: 0,
                                     tokens: {
@@ -1842,17 +1823,10 @@ export const useMessageStore = create<MessageStore>()(
                         };
 
                         const ensureClientRole = (info: any) => {
-
                             if (!info) {
                                 return info;
                             }
-                            const clientRole = info.clientRole ?? info.role;
-                            const userMarker = clientRole === 'user' ? true : info.userMessageMarker;
-                            return {
-                                ...info,
-                                clientRole,
-                                ...(userMarker ? { userMessageMarker: true } : {}),
-                            };
+                            return normalizeMessageInfoForProjection(info as Message) as any;
                         };
 
                         if (messageIndex === -1) {
@@ -1952,12 +1926,10 @@ export const useMessageStore = create<MessageStore>()(
 
                             const pendingParts = pendingEntry?.parts ?? [];
 
-                            const shouldAnchorHeader = state.pendingAssistantHeaderSessions.has(sessionId);
                             const newMessage = {
                                 info: {
                                     ...incomingInfo,
                                     animationSettled: (incomingInfo as any)?.animationSettled ?? false,
-                                    ...(shouldAnchorHeader ? { openchamberHeaderAnchor: true } : {}),
                                 } as Message,
                                 parts: pendingParts.length > 0 ? [...pendingParts] : [],
                             };
@@ -1969,15 +1941,6 @@ export const useMessageStore = create<MessageStore>()(
 
                             const updates: Partial<MessageState> = {
                                 messages: newMessages,
-                                ...(shouldAnchorHeader
-                                    ? {
-                                        pendingAssistantHeaderSessions: (() => {
-                                            const nextPendingHeaders = new Set(state.pendingAssistantHeaderSessions);
-                                            nextPendingHeaders.delete(sessionId);
-                                            return nextPendingHeaders;
-                                        })(),
-                                    }
-                                    : {}),
                             };
 
                             const nextIndex = upsertMessageSessionIndex(
@@ -2227,9 +2190,7 @@ export const useMessageStore = create<MessageStore>()(
 
                         const normalizedMessages = messagesFiltered.map((message) => {
                             const infoWithMarker = {
-                                ...message.info,
-                                clientRole: (message.info as any)?.clientRole ?? message.info.role,
-                                userMessageMarker: message.info.role === "user" ? true : (message.info as any)?.userMessageMarker,
+                                ...normalizeMessageInfoForProjection(message.info as Message),
                                 animationSettled:
                                     message.info.role === "assistant"
                                         ? (message.info as any)?.animationSettled ?? true

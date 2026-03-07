@@ -24,7 +24,7 @@ import { filterVisibleParts } from './message/partUtils';
 import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from '@/lib/messages/providerAuthError';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
-import type { TurnGroupingContext } from './hooks/useTurnGrouping';
+import type { TurnGroupingContext } from './lib/turns/types';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));

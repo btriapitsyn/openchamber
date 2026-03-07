@@ -8,7 +8,7 @@ import ReasoningPart from './parts/ReasoningPart';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
-import type { TurnGroupingContext } from '../hooks/useTurnGrouping';
+import type { TurnGroupingContext } from '../lib/turns/types';
 import { cn } from '@/lib/utils';
 import { isEmptyTextPart, extractTextContent } from './partUtils';
 import { FadeInOnReveal } from './FadeInOnReveal';

@@ -12,8 +12,9 @@ import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
-import { detectTurns, type Turn } from './hooks/useTurnGrouping';
+import type { Turn } from './lib/turns/types';
 import { TurnGroupingProvider, useMessageNeighbors, useTurnGroupingContextForMessage, useTurnGroupingContextStatic } from './contexts/TurnGroupingContext';
+import { useTurnRecords } from './hooks/useTurnRecords';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -563,6 +564,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 }, ref) => {
     const { isMobile } = useDeviceInfo();
     const stickyUserHeader = useUIStore(state => state.stickyUserHeader);
+    const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
 
     React.useEffect(() => {
         if (permissions.length === 0 && questions.length === 0) {
@@ -742,7 +744,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return next;
     }, [activeRetryMessage, activeRetryConfirmedAt, activeRetrySessionId, baseDisplayMessages, fallbackRetryTimestamp]);
 
-    const turns = React.useMemo(() => detectTurns(displayMessages), [displayMessages]);
+    const { projection } = useTurnRecords(displayMessages, { showTextJustificationActivity });
+    const turns = projection.turns;
 
     const renderEntries = React.useMemo<RenderEntry[]>(() => {
         const entries: RenderEntry[] = [];
