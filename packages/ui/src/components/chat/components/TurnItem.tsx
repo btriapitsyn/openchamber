@@ -11,7 +11,12 @@ interface TurnItemProps {
 
 const TurnItem: React.FC<TurnItemProps> = ({ turn, stickyUserHeader = true, renderMessage }) => {
     return (
-        <section className="relative w-full" data-turn-id={turn.turnId}>
+        <section
+            className="relative w-full"
+            id={`turn-${turn.turnId}`}
+            data-turn-id={turn.turnId}
+            data-scroll-spy-id={turn.turnId}
+        >
             {stickyUserHeader ? (
                 <div className="sticky top-0 z-20 relative bg-[var(--surface-background)] [overflow-anchor:none]">
                     <div className="relative z-10">

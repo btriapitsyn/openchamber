@@ -32,7 +32,9 @@ export interface SessionMemoryState {
     backgroundMessageCount: number;
     isZombie?: boolean;
     totalAvailableMessages?: number;
+    loadedTurnCount?: number;
     hasMoreAbove?: boolean;
+    hasMoreTurnsAbove?: boolean;
     historyLoading?: boolean;
     historyComplete?: boolean;
     historyLimit?: number;

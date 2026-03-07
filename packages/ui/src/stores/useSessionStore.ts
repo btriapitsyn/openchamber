@@ -329,7 +329,8 @@ export const useSessionStore = create<SessionStore>()(
                         const memoryState = get().sessionMemoryState.get(id);
                         const needsHistoryBootstrap =
                             !memoryState ||
-                            memoryState.historyComplete === undefined;
+                            memoryState.historyComplete === undefined ||
+                            memoryState.loadedTurnCount === undefined;
 
                         if (!existingMessages || needsHistoryBootstrap) {
 

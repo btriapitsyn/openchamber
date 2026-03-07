@@ -169,6 +169,17 @@ const isIdNewer = (id: string, referenceId: string): boolean => {
     return currentSortable > referenceSortable;
 };
 
+const countLoadedTurns = (messages: Array<{ info: { role?: string; clientRole?: string | null } }>): number => {
+    let count = 0;
+    for (const message of messages) {
+        const role = message.info.clientRole ?? message.info.role;
+        if (role === 'user') {
+            count += 1;
+        }
+    }
+    return count;
+};
+
 const streamDebugEnabled = (): boolean => {
     if (typeof window === "undefined") return false;
     try {
@@ -576,6 +587,7 @@ export const useMessageStore = create<MessageStore>()(
                             });
 
                             const mergedMessages = dedupeMessagesById(normalizedMessages);
+                            const loadedTurnCount = countLoadedTurns(mergedMessages);
 
                             const previousIds = new Set(previousMessages.map((msg) => msg.info.id));
                             const nextIds = new Set(mergedMessages.map((msg) => msg.info.id));
@@ -596,7 +608,9 @@ export const useMessageStore = create<MessageStore>()(
                                 lastAccessedAt: Date.now(),
                                 backgroundMessageCount: 0,
                                 totalAvailableMessages: previousMemoryState?.totalAvailableMessages,
+                                loadedTurnCount,
                                 hasMoreAbove,
+                                hasMoreTurnsAbove: hasMoreAbove,
                                 historyLoading: false,
                                 historyComplete: !hasMoreAbove,
                                 historyLimit: targetLimit,
@@ -2404,12 +2418,15 @@ export const useMessageStore = create<MessageStore>()(
                         newMessages.set(sessionId, trimmedMessages);
 
                         const newMemoryState = new Map(state.sessionMemoryState);
+                        const hasMoreAbove = Boolean(memoryState.hasMoreAbove) || start > 0;
                         const updatedMemoryState = {
                             ...memoryState,
                             viewportAnchor: anchor - start,
                             // If we trimmed older messages out of the in-memory window,
                             // keep "Load older" available even if the last fetch didn't exceed its limit.
-                            hasMoreAbove: Boolean(memoryState.hasMoreAbove) || start > 0,
+                            hasMoreAbove,
+                            hasMoreTurnsAbove: hasMoreAbove,
+                            loadedTurnCount: countLoadedTurns(trimmedMessages),
                             trimmedHeadMaxId: computeMaxTrimmedHeadId(removedOlder, memoryState.trimmedHeadMaxId),
                         };
                         newMemoryState.set(sessionId, updatedMemoryState);
@@ -2623,6 +2640,7 @@ export const useMessageStore = create<MessageStore>()(
                                     const updatedMessages = [...newMessages, ...latestCurrent];
                                     const mergedMessages = dedupeMessagesById(updatedMessages);
                                     const addedCount = Math.max(0, mergedMessages.length - latestCurrent.length);
+                                    const hasMoreAbove = indexInAll - loadCount > 0 || hasPotentialMore;
 
                                     const newMessagesMap = new Map(snapshot.messages);
                                     newMessagesMap.set(sessionId, mergedMessages);
@@ -2631,14 +2649,16 @@ export const useMessageStore = create<MessageStore>()(
                                     newMemoryState.set(sessionId, {
                                         ...latestMemory,
                                         viewportAnchor: latestMemory.viewportAnchor + addedCount,
-                                        hasMoreAbove: indexInAll - loadCount > 0 || hasPotentialMore,
+                                        hasMoreAbove,
+                                        hasMoreTurnsAbove: hasMoreAbove,
                                         historyLoading: false,
                                         historyLimit: desiredLimit,
-                                        historyComplete: !(indexInAll - loadCount > 0 || hasPotentialMore),
+                                        historyComplete: !hasMoreAbove,
                                         totalAvailableMessages: Math.max(
                                             latestMemory.totalAvailableMessages ?? 0,
                                             dedupedMessages.length,
                                         ),
+                                        loadedTurnCount: countLoadedTurns(mergedMessages),
                                     });
 
                                     return {
@@ -2651,11 +2671,13 @@ export const useMessageStore = create<MessageStore>()(
 
                             if (indexInAll === 0) {
                                 set((snapshot) => {
+                                    const latestCurrent = snapshot.messages.get(sessionId) ?? currentMessages;
                                     const latestMemory = snapshot.sessionMemoryState.get(sessionId) ?? memoryState;
                                     const newMemoryState = new Map(snapshot.sessionMemoryState);
                                     newMemoryState.set(sessionId, {
                                         ...latestMemory,
                                         hasMoreAbove: hasPotentialMore,
+                                        hasMoreTurnsAbove: hasPotentialMore,
                                         historyLoading: false,
                                         historyLimit: desiredLimit,
                                         historyComplete: !hasPotentialMore,
@@ -2663,6 +2685,7 @@ export const useMessageStore = create<MessageStore>()(
                                             latestMemory.totalAvailableMessages ?? 0,
                                             dedupedMessages.length,
                                         ),
+                                        loadedTurnCount: countLoadedTurns(latestCurrent),
                                     });
                                     return { sessionMemoryState: newMemoryState };
                                 });
@@ -2692,6 +2715,7 @@ export const useMessageStore = create<MessageStore>()(
                                         ...latestMemory,
                                         viewportAnchor: latestMemory.viewportAnchor + addedCount,
                                         hasMoreAbove,
+                                        hasMoreTurnsAbove: hasMoreAbove,
                                         historyLoading: false,
                                         historyLimit: desiredLimit,
                                         historyComplete: !hasMoreAbove,
@@ -2699,6 +2723,7 @@ export const useMessageStore = create<MessageStore>()(
                                             latestMemory.totalAvailableMessages ?? 0,
                                             dedupedMessages.length,
                                         ),
+                                        loadedTurnCount: countLoadedTurns(mergedMessages),
                                     });
 
                                     return {
@@ -2759,7 +2784,9 @@ export const useMessageStore = create<MessageStore>()(
                             lastAccessedAt: memory.lastAccessedAt,
                             backgroundMessageCount: memory.backgroundMessageCount,
                             totalAvailableMessages: memory.totalAvailableMessages,
+                            loadedTurnCount: memory.loadedTurnCount,
                             hasMoreAbove: memory.hasMoreAbove,
+                            hasMoreTurnsAbove: memory.hasMoreTurnsAbove,
                             historyLoading: memory.historyLoading,
                             historyComplete: memory.historyComplete,
                             historyLimit: memory.historyLimit,
@@ -2786,6 +2813,7 @@ export const useMessageStore = create<MessageStore>()(
                                 return [id, {
                                     ...memory,
                                     hasMoreAbove: undefined,
+                                    hasMoreTurnsAbove: undefined,
                                     historyComplete: undefined,
                                     historyLimit: undefined,
                                     historyLoading: false,

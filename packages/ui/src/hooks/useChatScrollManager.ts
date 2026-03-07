@@ -2,6 +2,12 @@ import React from 'react';
 import type { Part } from '@opencode-ai/sdk/v2';
 
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
+import { createScrollSpy } from '@/components/chat/lib/scroll/scrollSpy';
+import {
+    isNearBottom,
+    normalizeWheelDelta,
+    shouldPauseAutoScrollOnWheel,
+} from '@/components/chat/lib/scroll/scrollIntent';
 
 import { useScrollEngine } from './useScrollEngine';
 
@@ -36,6 +42,7 @@ interface UseChatScrollManagerOptions {
     isMobile: boolean;
     messageStreamStates: Map<string, unknown>;
     trimToViewportWindow: (sessionId: string, targetSize?: number) => void;
+    onActiveTurnChange?: (turnId: string | null) => void;
 }
 
 export interface AnimationHandlers {
@@ -56,6 +63,7 @@ interface UseChatScrollManagerResult {
     scrollToBottom: (options?: { instant?: boolean; force?: boolean }) => void;
     scrollToPosition: (position: number, options?: { instant?: boolean }) => void;
     isPinned: boolean;
+    isOverflowing: boolean;
 }
 
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 200;
@@ -70,6 +78,7 @@ export const useChatScrollManager = ({
     updateViewportAnchor,
     isSyncing,
     isMobile,
+    onActiveTurnChange,
 }: UseChatScrollManagerOptions): UseChatScrollManagerResult => {
     const scrollRef = React.useRef<HTMLDivElement | null>(null);
     const scrollEngine = useScrollEngine({ containerRef: scrollRef, isMobile });
@@ -85,6 +94,7 @@ export const useChatScrollManager = ({
 
     const [showScrollButton, setShowScrollButton] = React.useState(false);
     const [isPinned, setIsPinned] = React.useState(true);
+    const [isOverflowing, setIsOverflowing] = React.useState(false);
 
     const lastSessionIdRef = React.useRef<string | null>(null);
     const suppressUserScrollUntilRef = React.useRef<number>(0);
@@ -131,10 +141,12 @@ export const useChatScrollManager = ({
         const container = scrollRef.current;
         if (!container) {
             setShowScrollButton(false);
+            setIsOverflowing(false);
             return;
         }
 
         const hasScrollableContent = container.scrollHeight > container.clientHeight;
+        setIsOverflowing(hasScrollableContent);
         if (!hasScrollableContent) {
             setShowScrollButton(false);
             return;
@@ -142,7 +154,7 @@ export const useChatScrollManager = ({
 
         // Show scroll button when scrolled above the 10vh threshold
         const distanceFromBottom = getDistanceFromBottom();
-        setShowScrollButton(distanceFromBottom > getPinThreshold());
+        setShowScrollButton(!isNearBottom(distanceFromBottom, getPinThreshold()));
     }, [getDistanceFromBottom, getPinThreshold]);
 
     const scrollToPosition = React.useCallback((position: number, options?: { instant?: boolean }) => {
@@ -191,7 +203,7 @@ export const useChatScrollManager = ({
         // Re-pin at bottom should always work (even momentum scroll)
         if (!isPinnedRef.current) {
             const distanceFromBottom = getDistanceFromBottom();
-            if (distanceFromBottom <= getPinThreshold()) {
+            if (isNearBottom(distanceFromBottom, getPinThreshold())) {
                 updatePinnedState(true);
             }
         }
@@ -213,6 +225,28 @@ export const useChatScrollManager = ({
         updateViewportAnchor,
     ]);
 
+    const handleWheelIntent = React.useCallback((event: WheelEvent) => {
+        lastDirectScrollIntentAtRef.current = Date.now();
+
+        if (!isPinnedRef.current) {
+            return;
+        }
+
+        const container = scrollRef.current;
+        if (!container) {
+            return;
+        }
+
+        const delta = normalizeWheelDelta(event);
+        if (shouldPauseAutoScrollOnWheel({
+            root: container,
+            target: event.target,
+            delta,
+        })) {
+            updatePinnedState(false);
+        }
+    }, [updatePinnedState]);
+
     React.useEffect(() => {
         const container = scrollRef.current;
         if (!container) return;
@@ -222,15 +256,17 @@ export const useChatScrollManager = ({
         };
 
         container.addEventListener('scroll', handleScrollEvent as EventListener, { passive: true });
-        container.addEventListener('wheel', markDirectIntent as EventListener, { passive: true });
+        container.addEventListener('wheel', handleWheelIntent as EventListener, { passive: true });
+        container.addEventListener('touchstart', markDirectIntent as EventListener, { passive: true });
         container.addEventListener('touchmove', markDirectIntent as EventListener, { passive: true });
 
         return () => {
             container.removeEventListener('scroll', handleScrollEvent as EventListener);
-            container.removeEventListener('wheel', markDirectIntent as EventListener);
+            container.removeEventListener('wheel', handleWheelIntent as EventListener);
+            container.removeEventListener('touchstart', markDirectIntent as EventListener);
             container.removeEventListener('touchmove', markDirectIntent as EventListener);
         };
-    }, [handleScrollEvent]);
+    }, [handleScrollEvent, handleWheelIntent]);
 
     // Session switch - always start pinned at bottom
     useIsomorphicLayoutEffect(() => {
@@ -371,6 +407,58 @@ export const useChatScrollManager = ({
         return handlers;
     }, [getDistanceFromBottom, getPinThreshold, scrollPinnedToBottom, updateScrollButtonVisibility]);
 
+    React.useEffect(() => {
+        if (!onActiveTurnChange) {
+            return;
+        }
+
+        const container = scrollRef.current;
+        if (!container) {
+            onActiveTurnChange(null);
+            return;
+        }
+
+        const spy = createScrollSpy({
+            onActive: (turnId) => {
+                onActiveTurnChange(turnId);
+            },
+        });
+
+        spy.setContainer(container);
+
+        const registerTurns = () => {
+            spy.clear();
+            const turnNodes = container.querySelectorAll<HTMLElement>('[data-turn-id]');
+            turnNodes.forEach((node) => {
+                const turnId = node.dataset.turnId;
+                if (!turnId) {
+                    return;
+                }
+                spy.register(node, turnId);
+            });
+            spy.markDirty();
+        };
+
+        registerTurns();
+
+        const mutationObserver = new MutationObserver(() => {
+            registerTurns();
+        });
+        mutationObserver.observe(container, { subtree: true, childList: true });
+
+        const handleScroll = () => {
+            spy.onScroll();
+        };
+        container.addEventListener('scroll', handleScroll, { passive: true });
+
+        return () => {
+            container.removeEventListener('scroll', handleScroll);
+            mutationObserver.disconnect();
+            spy.destroy();
+            onActiveTurnChange(null);
+        };
+    }, [currentSessionId, onActiveTurnChange, scrollRef, sessionMessages.length]);
+
     return {
         scrollRef,
         handleMessageContentChange,
@@ -379,5 +467,6 @@ export const useChatScrollManager = ({
         scrollToBottom,
         scrollToPosition,
         isPinned,
+        isOverflowing,
     };
 };

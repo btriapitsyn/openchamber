@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiArrowDownLine, RiArrowLeftLine } from '@remixicon/react';
+import { RiArrowLeftLine } from '@remixicon/react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Message, Part } from '@opencode-ai/sdk/v2';
 
@@ -9,11 +9,12 @@ import { useUIStore } from '@/stores/useUIStore';
 import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
 import MessageList, { type MessageListHandle } from './MessageList';
+import ScrollToBottomButton from './components/ScrollToBottomButton';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { useChatScrollManager } from '@/hooks/useChatScrollManager';
+import { useChatTimelineController } from './hooks/useChatTimelineController';
+import { useChatTurnNavigation } from './hooks/useChatTurnNavigation';
 import { useDeviceInfo } from '@/lib/device';
-import { getMemoryLimits } from '@/stores/types/sessionTypes';
-import { Button } from '@/components/ui/button';
 import { ButtonSmall } from '@/components/ui/button-small';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 import { TimelineDialog } from './TimelineDialog';
@@ -216,107 +217,22 @@ export const ChatContainer: React.FC = () => {
         }
     }, [currentSessionId, draftOpen, openNewSessionDraft]);
 
-    const [turnStart, setTurnStart] = React.useState(0);
-    const turnHandleRef = React.useRef<number | null>(null);
-    const turnIdleRef = React.useRef(false);
-    const initializedTurnStartSessionRef = React.useRef<string | null>(null);
-    const TURN_INIT = 5;
-    const TURN_BATCH = 8;
-
-    const userTurnIndexes = React.useMemo(() => {
-        const indexes: number[] = [];
-        for (let i = 0; i < sessionMessages.length; i += 1) {
-            const message = sessionMessages[i];
-            const role = (message.info as { clientRole?: string | null | undefined }).clientRole ?? message.info.role;
-            if (role === 'user') {
-                indexes.push(i);
-            }
-        }
-        return indexes;
-    }, [sessionMessages]);
-
-    const cancelTurnBackfill = React.useCallback(() => {
-        const handle = turnHandleRef.current;
-        if (handle === null) {
-            return;
-        }
-        turnHandleRef.current = null;
-        if (turnIdleRef.current && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
-            window.cancelIdleCallback(handle);
-            return;
-        }
-        if (typeof window !== 'undefined') {
-            window.clearTimeout(handle);
-        }
-    }, []);
-
-    const renderedSessionMessages = React.useMemo(() => {
-        if (turnStart <= 0 || userTurnIndexes.length === 0) {
-            return sessionMessages;
-        }
-        const startIndex = userTurnIndexes[turnStart] ?? 0;
-        return sessionMessages.slice(startIndex);
-    }, [sessionMessages, turnStart, userTurnIndexes]);
-
-    const backfillTurns = React.useCallback(() => {
-        if (turnStart <= 0) {
-            return;
-        }
-
-        const container = typeof document !== 'undefined'
-            ? (document.querySelector('[data-scrollbar="chat"]') as HTMLDivElement | null)
-            : null;
-        const beforeTop = container?.scrollTop ?? null;
-        const beforeHeight = container?.scrollHeight ?? null;
-
-        setTurnStart((prev) => (prev - TURN_BATCH > 0 ? prev - TURN_BATCH : 0));
-
-        if (container && beforeTop !== null && beforeHeight !== null) {
-            window.requestAnimationFrame(() => {
-                const delta = container.scrollHeight - beforeHeight;
-                if (delta !== 0) {
-                    container.scrollTop = beforeTop + delta;
-                }
-            });
-        }
-    }, [turnStart]);
-
-    const scheduleTurnBackfill = React.useCallback(() => {
-        if (turnHandleRef.current !== null || turnStart <= 0) {
-            return;
-        }
-
-        if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-            turnIdleRef.current = true;
-            turnHandleRef.current = window.requestIdleCallback(() => {
-                turnHandleRef.current = null;
-                backfillTurns();
-            });
-            return;
-        }
-
-        turnIdleRef.current = false;
-        turnHandleRef.current = window.setTimeout(() => {
-            turnHandleRef.current = null;
-            backfillTurns();
-        }, 0);
-    }, [backfillTurns, turnStart]);
-
     const sessionBlockingCards = React.useMemo(() => {
         return [...sessionPermissions, ...sessionQuestions];
     }, [sessionPermissions, sessionQuestions]);
+
+    const activeTurnChangeRef = React.useRef<(turnId: string | null) => void>(() => {});
 
     const {
         scrollRef,
         handleMessageContentChange,
         getAnimationHandlers,
-        showScrollButton,
         scrollToBottom,
-        scrollToPosition,
         isPinned,
+        isOverflowing,
     } = useChatScrollManager({
         currentSessionId,
-        sessionMessages: renderedSessionMessages,
+        sessionMessages,
         streamingMessageId,
         sessionMemoryState: sessionMemoryStateMap,
         updateViewportAnchor,
@@ -325,6 +241,34 @@ export const ChatContainer: React.FC = () => {
         messageStreamStates,
         sessionPermissions: sessionBlockingCards,
         trimToViewportWindow,
+        onActiveTurnChange: (turnId) => {
+            activeTurnChangeRef.current(turnId);
+        },
+    });
+
+    const timelineController = useChatTimelineController({
+        sessionId: currentSessionId,
+        messages: sessionMessages,
+        memoryState,
+        scrollRef,
+        messageListRef,
+        loadMoreMessages,
+        scrollToBottom,
+        isPinned,
+        isOverflowing,
+    });
+
+    React.useEffect(() => {
+        activeTurnChangeRef.current = timelineController.handleActiveTurnChange;
+    }, [timelineController.handleActiveTurnChange]);
+
+    const navigation = useChatTurnNavigation({
+        sessionId: currentSessionId,
+        turnIds: timelineController.turnIds,
+        activeTurnId: timelineController.activeTurnId,
+        scrollToTurn: timelineController.scrollToTurn,
+        scrollToMessage: timelineController.scrollToMessage,
+        resumeToBottom: timelineController.resumeToBottom,
     });
 
     React.useLayoutEffect(() => {
@@ -354,131 +298,16 @@ export const ChatContainer: React.FC = () => {
         };
     }, [currentSessionId, isDesktopExpandedInput, scrollRef]);
 
-    React.useEffect(() => {
-        cancelTurnBackfill();
-        if (!currentSessionId) {
-            initializedTurnStartSessionRef.current = null;
-            setTurnStart(0);
-            return;
-        }
-
-        if (initializedTurnStartSessionRef.current === currentSessionId) {
-            return;
-        }
-
-        if (sessionMessages.length === 0) {
-            setTurnStart(0);
-            return;
-        }
-
-        const turnCount = userTurnIndexes.length;
-        const start = turnCount > TURN_INIT ? turnCount - TURN_INIT : 0;
-        setTurnStart(start);
-        initializedTurnStartSessionRef.current = currentSessionId;
-    }, [cancelTurnBackfill, currentSessionId, sessionMessages.length, userTurnIndexes.length]);
-
-    const isSessionActive = sessionStatusForCurrent.type === 'busy' || sessionStatusForCurrent.type === 'retry';
-
-    React.useEffect(() => {
-        if (isSessionActive) {
-            cancelTurnBackfill();
-            return;
-        }
-        scheduleTurnBackfill();
-        return () => {
-            cancelTurnBackfill();
-        };
-    }, [cancelTurnBackfill, isSessionActive, scheduleTurnBackfill, turnStart]);
-
-    const hasMoreAbove = React.useMemo(() => {
-        if (!memoryState) {
-            return sessionMessages.length >= getMemoryLimits().HISTORICAL_MESSAGES;
-        }
-        if (memoryState.historyComplete === true) {
-            return false;
-        }
-        if (memoryState.hasMoreAbove) {
-            return true;
-        }
-        if (memoryState.historyComplete === false) {
-            return true;
-        }
-
-        // Backward compatibility: older persisted sessions may miss history flags.
-        if (memoryState.hasMoreAbove === undefined && memoryState.historyComplete === undefined) {
-            return sessionMessages.length >= getMemoryLimits().HISTORICAL_MESSAGES;
-        }
-
-        return false;
-    }, [memoryState, sessionMessages.length]);
-
     const hasHistoryMetadata = React.useMemo(() => {
         if (!memoryState) {
             return false;
         }
-        return memoryState.hasMoreAbove !== undefined || memoryState.historyComplete !== undefined;
+        return (
+            memoryState.hasMoreAbove !== undefined
+            || memoryState.hasMoreTurnsAbove !== undefined
+            || memoryState.historyComplete !== undefined
+        );
     }, [memoryState]);
-    const [isLoadingOlder, setIsLoadingOlder] = React.useState(false);
-    React.useEffect(() => {
-        setIsLoadingOlder(false);
-    }, [currentSessionId]);
-
-    const handleLoadOlder = React.useCallback(async () => {
-        if (!currentSessionId || isLoadingOlder) {
-            return;
-        }
-
-        cancelTurnBackfill();
-        setTurnStart(0);
-
-        const container = scrollRef.current;
-        const anchor = messageListRef.current?.captureViewportAnchor() ?? null;
-        const prevHeight = container?.scrollHeight ?? null;
-        const prevTop = container?.scrollTop ?? null;
-
-        setIsLoadingOlder(true);
-        void loadMoreMessages(currentSessionId, 'up')
-            .then(() => {
-                const restored = anchor ? (messageListRef.current?.restoreViewportAnchor(anchor) ?? false) : false;
-                if (!restored && container && prevHeight !== null && prevTop !== null) {
-                    const heightDiff = container.scrollHeight - prevHeight;
-                    scrollToPosition(prevTop + heightDiff, { instant: true });
-                }
-            })
-            .finally(() => {
-                setIsLoadingOlder(false);
-            });
-    }, [cancelTurnBackfill, currentSessionId, isLoadingOlder, loadMoreMessages, scrollRef, scrollToPosition]);
-
-    const handleRenderEarlier = React.useCallback(() => {
-        cancelTurnBackfill();
-        setTurnStart(0);
-    }, [cancelTurnBackfill]);
-
-    // Scroll to a specific message by ID (for timeline dialog)
-    const scrollToMessage = React.useCallback((messageId: string) => {
-        if (messageListRef.current?.scrollToMessageId(messageId, { behavior: 'smooth' })) {
-            return;
-        }
-
-        const container = scrollRef.current;
-        if (!container) return;
-
-        // Find the message element by looking for data-message-id attribute
-        const messageElement = container.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement;
-        if (messageElement) {
-            // Scroll to the message with some padding (50px from top)
-            const containerRect = container.getBoundingClientRect();
-            const messageRect = messageElement.getBoundingClientRect();
-            const offset = 50;
-
-            const scrollTop = messageRect.top - containerRect.top + container.scrollTop - offset;
-            container.scrollTo({
-                top: scrollTop,
-                behavior: 'smooth'
-            });
-        }
-    }, [scrollRef]);
 
     React.useEffect(() => {
         if (!currentSessionId) {
@@ -494,7 +323,8 @@ export const ChatContainer: React.FC = () => {
             await loadMessages(currentSessionId).finally(() => {
                 const statusType = sessionStatusForCurrent.type ?? 'idle';
                 const isActivePhase = statusType === 'busy' || statusType === 'retry';
-                const shouldSkipScroll = isActivePhase && isPinned;
+                const hasHashTarget = typeof window !== 'undefined' && window.location.hash.length > 0;
+                const shouldSkipScroll = (isActivePhase && isPinned) || hasHashTarget;
 
                 if (!shouldSkipScroll) {
                     if (typeof window === 'undefined') {
@@ -632,16 +462,19 @@ export const ChatContainer: React.FC = () => {
                         <div className="relative z-0 min-h-full">
                             <MessageList
                                 ref={messageListRef}
-                                messages={renderedSessionMessages}
+                                sessionKey={currentSessionId}
+                                turnStart={timelineController.turnStart}
+                                disableStaging={timelineController.pendingRevealWork}
+                                messages={timelineController.renderedMessages}
                                 permissions={sessionPermissions}
                                 questions={sessionQuestions}
                                 onMessageContentChange={handleMessageContentChange}
                                 getAnimationHandlers={getAnimationHandlers}
-                                hasMoreAbove={hasMoreAbove}
-                                isLoadingOlder={isLoadingOlder}
-                                onLoadOlder={handleLoadOlder}
-                                hasRenderEarlier={turnStart > 0}
-                                onRenderEarlier={handleRenderEarlier}
+                                hasMoreAbove={timelineController.historySignals.hasMoreAboveTurns}
+                                isLoadingOlder={timelineController.isLoadingOlder}
+                                onLoadOlder={() => {
+                                    void timelineController.loadEarlier();
+                                }}
                                 scrollToBottom={scrollToBottom}
                                 scrollRef={scrollRef}
                             />
@@ -659,19 +492,11 @@ export const ChatContainer: React.FC = () => {
                         : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
                 )}
             >
-                {!isDesktopExpandedInput && showScrollButton && sessionMessages.length > 0 && (
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => scrollToBottom({ force: true })}
-                                  className="rounded-full h-8 w-8 p-0 shadow-none bg-background/95 hover:bg-interactive-hover"
-                                  aria-label="Scroll to bottom"
-                                >
-
-                            <RiArrowDownLine className="h-4 w-4" />
-                        </Button>
-                    </div>
+                {!isDesktopExpandedInput && sessionMessages.length > 0 && (
+                    <ScrollToBottomButton
+                        visible={timelineController.showScrollToBottom}
+                        onClick={navigation.resumeToLatest}
+                    />
                 )}
                 <ChatInput scrollToBottom={scrollToBottom} />
             </div>
@@ -679,7 +504,13 @@ export const ChatContainer: React.FC = () => {
             <TimelineDialog
                 open={isTimelineDialogOpen}
                 onOpenChange={setTimelineDialogOpen}
-                onScrollToMessage={scrollToMessage}
+                onScrollToMessage={(messageId) => {
+                    void navigation.scrollToMessageId(messageId, { behavior: 'smooth' });
+                }}
+                onScrollByTurnOffset={(offset) => {
+                    void navigation.scrollByTurnOffset(offset);
+                }}
+                onResumeToLatest={navigation.resumeToLatest}
             />
         </div>
     );

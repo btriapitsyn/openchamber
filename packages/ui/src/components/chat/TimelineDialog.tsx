@@ -17,6 +17,8 @@ interface TimelineDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onScrollToMessage?: (messageId: string) => void;
+    onScrollByTurnOffset?: (offset: number) => void;
+    onResumeToLatest?: () => void;
 }
 
 // Helper: format relative time (e.g., "2 hours ago")
@@ -35,7 +37,13 @@ function formatRelativeTime(timestamp: number): string {
     return new Date(timestamp).toLocaleDateString();
 }
 
-export const TimelineDialog: React.FC<TimelineDialogProps> = ({ open, onOpenChange, onScrollToMessage }) => {
+export const TimelineDialog: React.FC<TimelineDialogProps> = ({
+    open,
+    onOpenChange,
+    onScrollToMessage,
+    onScrollByTurnOffset,
+    onResumeToLatest,
+}) => {
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
     const messages = useMessageStore((state) =>
         currentSessionId ? state.messages.get(currentSessionId) || [] : []
@@ -184,6 +192,29 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({ open, onOpenChan
 
                 <div className="mt-4 p-3 bg-muted/30 rounded-lg">
                     <p className="typography-meta text-muted-foreground font-medium mb-2">Actions</p>
+                    <div className="mb-2 flex items-center gap-2">
+                        <button
+                            type="button"
+                            className="text-[11px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
+                            onClick={() => {
+                                void onScrollByTurnOffset?.(-1);
+                                onOpenChange(false);
+                            }}
+                        >
+                            Previous turn
+                        </button>
+                        <span className="text-muted-foreground/50">/</span>
+                        <button
+                            type="button"
+                            className="text-[11px] uppercase tracking-wide text-muted-foreground/90 hover:text-foreground"
+                            onClick={() => {
+                                onResumeToLatest?.();
+                                onOpenChange(false);
+                            }}
+                        >
+                            Latest
+                        </button>
+                    </div>
                     <div className="flex flex-col gap-1.5 typography-meta text-muted-foreground">
                         <div className="flex items-center gap-2">
                             <span>Click on a message to scroll to it in the conversation</span>

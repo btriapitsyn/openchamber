@@ -970,6 +970,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                     isUser ? (isMobile ? 'pt-2' : 'pt-6') : assistantTopPaddingClass,
                     isUser ? 'pb-0' : isFollowedByAssistant ? 'pb-0' : 'pb-8'
                 )}
+                id={`message-${message.info.id}`}
                 data-message-id={message.info.id}
                 ref={messageContainerRef}
             >

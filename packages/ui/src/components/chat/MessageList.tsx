@@ -17,6 +17,7 @@ import { filterSyntheticParts } from '@/lib/messages/synthetic';
 import type { ChatMessageEntry, Turn } from './lib/turns/types';
 import { TurnGroupingProvider, useMessageNeighbors, useTurnGroupingContextForMessage, useTurnGroupingContextStatic } from './contexts/TurnGroupingContext';
 import { useTurnRecords } from './hooks/useTurnRecords';
+import { useStageTurns } from './lib/turns/stageTurns';
 import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
@@ -285,6 +286,9 @@ const withShellBridgeDetails = (message: ChatMessageEntry, details: ShellBridgeD
 };
 
 interface MessageListProps {
+    sessionKey: string;
+    turnStart: number;
+    disableStaging?: boolean;
     messages: ChatMessageEntry[];
     permissions: PermissionRequest[];
     questions: QuestionRequest[];
@@ -293,13 +297,12 @@ interface MessageListProps {
     hasMoreAbove: boolean;
     isLoadingOlder: boolean;
     onLoadOlder: () => void;
-    hasRenderEarlier?: boolean;
-    onRenderEarlier?: () => void;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     scrollRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 export interface MessageListHandle {
+    scrollToTurnId: (turnId: string, options?: { behavior?: ScrollBehavior }) => boolean;
     scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => boolean;
     captureViewportAnchor: () => { messageId: string; offsetTop: number } | null;
     restoreViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => boolean;
@@ -530,6 +533,9 @@ const MessageListContent: React.FC<{
 };
 
 const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({ 
+    sessionKey,
+    turnStart,
+    disableStaging,
     messages,
     permissions,
     questions,
@@ -538,8 +544,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     hasMoreAbove,
     isLoadingOlder,
     onLoadOlder,
-    hasRenderEarlier,
-    onRenderEarlier,
     scrollToBottom,
     scrollRef,
 }, ref) => {
@@ -781,11 +785,25 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return entries;
     }, [displayMessages, turns]);
 
-    const shouldVirtualize = Boolean(scrollContainer) && renderEntries.length >= MESSAGE_VIRTUALIZE_THRESHOLD;
+    const staging = useStageTurns({
+        sessionKey,
+        turnStart,
+        totalTurns: renderEntries.length,
+        disabled: disableStaging,
+    });
+
+    const stagedEntries = React.useMemo(() => {
+        if (staging.stageStartIndex <= 0) {
+            return renderEntries;
+        }
+        return renderEntries.slice(staging.stageStartIndex);
+    }, [renderEntries, staging.stageStartIndex]);
+
+    const shouldVirtualize = Boolean(scrollContainer) && stagedEntries.length >= MESSAGE_VIRTUALIZE_THRESHOLD;
 
     const estimateEntrySize = React.useCallback(
         (index: number): number => {
-            const entry = renderEntries[index];
+            const entry = stagedEntries[index];
             if (!entry) {
                 return 300;
             }
@@ -796,15 +814,15 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             const role = resolveMessageRole(entry.message);
             return role === 'user' ? 120 : 280;
         },
-        [renderEntries]
+        [stagedEntries]
     );
 
     const virtualizer = useMessageListVirtualizer<Element>({
-        count: renderEntries.length,
+        count: stagedEntries.length,
         getScrollElement: () => scrollContainer,
         estimateSize: estimateEntrySize,
         overscan: isMobile ? MESSAGE_VIRTUAL_OVERSCAN_MOBILE : MESSAGE_VIRTUAL_OVERSCAN_DESKTOP,
-        getItemKey: (index: number) => renderEntries[index]?.key ?? index,
+        getItemKey: (index: number) => stagedEntries[index]?.key ?? index,
         enabled: shouldVirtualize,
         useFlushSync: false,
     });
@@ -822,7 +840,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     const messageIndexMap = React.useMemo(() => {
         const indexMap = new Map<string, number>();
 
-        renderEntries.forEach((entry, index) => {
+        stagedEntries.forEach((entry, index) => {
             if (entry.kind === 'ungrouped') {
                 indexMap.set(entry.message.info.id, index);
                 return;
@@ -834,7 +852,17 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         });
 
         return indexMap;
-    }, [renderEntries]);
+    }, [stagedEntries]);
+
+    const turnIndexMap = React.useMemo(() => {
+        const indexMap = new Map<string, number>();
+        stagedEntries.forEach((entry, index) => {
+            if (entry.kind === 'turn') {
+                indexMap.set(entry.turn.turnId, index);
+            }
+        });
+        return indexMap;
+    }, [stagedEntries]);
 
     const findMessageElement = React.useCallback((messageId: string): HTMLElement | null => {
         const container = scrollContainer;
@@ -868,6 +896,42 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         }
 
         const handle: MessageListHandle = {
+            scrollToTurnId: (turnId: string, options?: { behavior?: ScrollBehavior }) => {
+                const behavior = options?.behavior ?? 'auto';
+                const index = turnIndexMap.get(turnId);
+                if (index === undefined) {
+                    return false;
+                }
+
+                if (shouldVirtualize) {
+                    scrollVirtualizerToIndex(index, behavior === 'instant' ? 'auto' : behavior);
+                    if (typeof window !== 'undefined') {
+                        window.requestAnimationFrame(() => {
+                            const container = scrollContainer;
+                            if (!container) {
+                                return;
+                            }
+                            const turnElement = container.querySelector<HTMLElement>(`[data-turn-id="${turnId}"]`);
+                            if (turnElement) {
+                                turnElement.scrollIntoView({ behavior, block: 'start' });
+                            }
+                        });
+                    }
+                    return true;
+                }
+
+                const container = scrollContainer;
+                if (!container) {
+                    return false;
+                }
+                const turnElement = container.querySelector<HTMLElement>(`[data-turn-id="${turnId}"]`);
+                if (!turnElement) {
+                    return false;
+                }
+                turnElement.scrollIntoView({ behavior, block: 'start' });
+                return true;
+            },
+
             scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => {
                 const behavior = options?.behavior ?? 'auto';
                 const index = messageIndexMap.get(messageId);
@@ -962,26 +1026,14 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return () => {
             objectRef.current = null;
         };
-    }, [findMessageElement, messageIndexMap, scrollMessageElementIntoView, scrollContainer, scrollVirtualizerToIndex, shouldVirtualize, ref]);
+    }, [findMessageElement, messageIndexMap, scrollMessageElementIntoView, scrollContainer, scrollVirtualizerToIndex, shouldVirtualize, turnIndexMap, ref]);
 
     const disableFadeIn = shouldVirtualize && virtualizer.isScrolling;
 
     return (
         <TurnGroupingProvider messages={displayMessages} projection={projection}>
             <div>
-                {hasRenderEarlier && (
-                    <div className="flex justify-center py-3">
-                        <button
-                            type="button"
-                            onClick={onRenderEarlier}
-                            className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground"
-                        >
-                            Render earlier messages
-                        </button>
-                    </div>
-                )}
-
-                {hasMoreAbove && (
+                {(turnStart > 0 || hasMoreAbove) && (
                     <div className="flex justify-center py-3">
                         {isLoadingOlder ? (
                             <span className="text-xs uppercase tracking-wide text-muted-foreground/80">
@@ -993,11 +1045,19 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                                 onClick={onLoadOlder}
                                 className="text-xs uppercase tracking-wide text-muted-foreground/80 hover:text-foreground"
                             >
-                                Load older messages
+                                {turnStart > 0 ? 'Reveal earlier turns' : 'Load older messages'}
                             </button>
                         )}
                     </div>
                 )}
+
+                {staging.isStaging ? (
+                    <div className="flex justify-center py-1">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                            Revealing history…
+                        </span>
+                    </div>
+                ) : null}
 
                 <FadeInDisabledProvider disabled={disableFadeIn}>
                     {shouldVirtualize ? (
@@ -1006,7 +1066,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                             style={{ height: `${virtualizer.getTotalSize()}px` }}
                         >
                             {virtualRows.map((virtualRow: VirtualItem) => {
-                                const entry = renderEntries[virtualRow.index];
+                                const entry = stagedEntries[virtualRow.index];
                                 if (!entry) {
                                     return null;
                                 }
@@ -1032,7 +1092,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                         </div>
                     ) : (
                         <MessageListContent
-                            entries={renderEntries}
+                            entries={stagedEntries}
                             onMessageContentChange={onMessageContentChange}
                             getAnimationHandlers={getAnimationHandlers}
                             scrollToBottom={scrollToBottom}
