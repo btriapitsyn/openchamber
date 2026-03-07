@@ -25,6 +25,11 @@ export const KanbanCard: React.FC<KanbanCardProps> = ({ card, onCardClick, onCli
           bg: 'bg-[rgb(var(--status-success)/0.1)]',
           text: 'text-[var(--status-success)]',
         };
+      case 'failed':
+        return {
+          bg: 'bg-[rgb(var(--status-error)/0.1)]',
+          text: 'text-[var(--status-error)]',
+        };
       default:
         return {
           bg: 'bg-[rgb(var(--status-info)/0.1)]',
