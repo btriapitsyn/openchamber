@@ -444,7 +444,11 @@ interface MessageActions {
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: any) => void;
-    syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
+    syncMessages: (
+        sessionId: string,
+        messages: { info: Message; parts: Part[] }[],
+        options?: { replace?: boolean }
+    ) => void;
     updateViewportAnchor: (sessionId: string, anchor: number) => void;
     loadMoreMessages: (sessionId: string, direction: "up" | "down") => Promise<void>;
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
@@ -2176,12 +2180,17 @@ export const useMessageStore = create<MessageStore>()(
                     }
                 },
 
-                syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => {
+                syncMessages: (
+                    sessionId: string,
+                    messages: { info: Message; parts: Part[] }[],
+                    options?: { replace?: boolean }
+                ) => {
                     // Filter out reverted messages first
                     const revertMessageId = getSessionRevertMessageId(sessionId);
                     const messagesWithoutReverted = filterMessagesByRevertPoint(messages, revertMessageId);
 
                     const messagesFiltered = messagesWithoutReverted;
+                    const shouldReplace = options?.replace === true;
 
                     set((state) => {
                         const newMessages = new Map(state.messages);
@@ -2242,10 +2251,12 @@ export const useMessageStore = create<MessageStore>()(
                                 .filter((id): id is string => typeof id === 'string' && id.length > 0)
                         );
 
-                        const existingOnlyMessages = previousMessages.filter((message) => {
-                            const id = (message?.info as { id?: unknown })?.id;
-                            return typeof id === 'string' && id.length > 0 ? !incomingIds.has(id) : true;
-                        });
+                        const existingOnlyMessages = shouldReplace
+                            ? []
+                            : previousMessages.filter((message) => {
+                                const id = (message?.info as { id?: unknown })?.id;
+                                return typeof id === 'string' && id.length > 0 ? !incomingIds.has(id) : true;
+                            });
 
                         const mergedMessages = dedupeMessagesById([
                             ...existingOnlyMessages,

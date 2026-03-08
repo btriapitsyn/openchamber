@@ -570,7 +570,11 @@ export const useSessionStore = create<SessionStore>()(
                 getDirectoryForSession: (sessionId: string) => useSessionManagementStore.getState().getDirectoryForSession(sessionId),
                 getLastMessageModel: (sessionId: string) => useMessageStore.getState().getLastMessageModel(sessionId),
                 getCurrentAgent: (sessionId: string) => useContextStore.getState().getCurrentAgent(sessionId),
-                syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => useMessageStore.getState().syncMessages(sessionId, messages),
+                syncMessages: (
+                    sessionId: string,
+                    messages: { info: Message; parts: Part[] }[],
+                    options?: { replace?: boolean }
+                ) => useMessageStore.getState().syncMessages(sessionId, messages, options),
                 applySessionMetadata: (sessionId: string, metadata: Partial<Session>) => useSessionManagementStore.getState().applySessionMetadata(sessionId, metadata),
 
                 addAttachedFile: (file: File) => useFileStore.getState().addAttachedFile(file),
@@ -670,12 +674,17 @@ export const useSessionStore = create<SessionStore>()(
                     const revertMessageId = updatedSession.revert?.messageID;
 
                     if (revertMessageId) {
-                        // Find the index of the revert message
-                        const revertIndex = currentMessages.findIndex((m) => m.info.id === revertMessageId);
+                        // Keep only messages before the revert point.
+                        // Fallback to the originally clicked message if SDK returns an id
+                        // that is not loaded in the current in-memory window.
+                        let revertIndex = currentMessages.findIndex((m) => m.info.id === revertMessageId);
+                        if (revertIndex === -1) {
+                            revertIndex = currentMessages.findIndex((m) => m.info.id === messageId);
+                        }
+
                         if (revertIndex !== -1) {
-                            // Keep only messages before the revert point
                             const filteredMessages = currentMessages.slice(0, revertIndex);
-                            useMessageStore.getState().syncMessages(sessionId, filteredMessages);
+                            useMessageStore.getState().syncMessages(sessionId, filteredMessages, { replace: true });
                         }
                     }
 

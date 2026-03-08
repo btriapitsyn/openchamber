@@ -256,7 +256,11 @@ export interface SessionStore {
     getDirectoryForSession: (sessionId: string) => string | null;
     getLastMessageModel: (sessionId: string) => { providerID?: string; modelID?: string } | null;
     getCurrentAgent: (sessionId: string) => string | undefined;
-    syncMessages: (sessionId: string, messages: { info: Message; parts: Part[] }[]) => void;
+    syncMessages: (
+      sessionId: string,
+      messages: { info: Message; parts: Part[] }[],
+      options?: { replace?: boolean }
+    ) => void;
     applySessionMetadata: (sessionId: string, metadata: Partial<Session>) => void;
     setSessionDirectory: (sessionId: string, directory: string | null) => void;
 

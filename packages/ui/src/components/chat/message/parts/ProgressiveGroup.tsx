@@ -571,21 +571,32 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     showHeader,
     animateRows = true,
 }) => {
-    const displayParts = React.useMemo(() => {
+    const shouldRenderRows = !showHeader || isExpanded;
+
+    const sortedParts = React.useMemo(() => {
+        if (!shouldRenderRows) {
+            return [] as TurnActivityPart[];
+        }
         return sortPartsByTime(parts);
-    }, [parts]);
+    }, [parts, shouldRenderRows]);
 
     const rows = React.useMemo(() => {
-        return aggregateRows(displayParts);
-    }, [displayParts]);
+        if (!shouldRenderRows) {
+            return [] as AggregatedRow[];
+        }
+        return aggregateRows(sortedParts);
+    }, [shouldRenderRows, sortedParts]);
 
-    const toolCount = displayParts.filter((activity) => activity.kind === 'tool').length;
+    const toolCount = React.useMemo(
+        () => parts.filter((activity) => activity.kind === 'tool').length,
+        [parts]
+    );
 
-    const aggregatedFileDiffs = aggregateFileDiffs(displayParts);
+    const aggregatedFileDiffs = React.useMemo(() => aggregateFileDiffs(parts), [parts]);
 
     const hasToolMetric = toolCount > 0;
 
-    if (rows.length === 0) {
+    if (shouldRenderRows && rows.length === 0) {
         return null;
     }
 
@@ -596,7 +607,8 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         return <FadeInOnReveal key={key}>{content}</FadeInOnReveal>;
     };
 
-    const renderedRows = rows.map((row, index) => {
+    const renderedRows = shouldRenderRows
+        ? rows.map((row, index) => {
         switch (row.type) {
             case 'reasoning':
                 return wrapRow(
@@ -672,7 +684,8 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
             default:
                 return null;
         }
-    });
+    })
+        : null;
 
     if (!showHeader) {
         return (
