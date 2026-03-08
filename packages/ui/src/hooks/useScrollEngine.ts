@@ -15,6 +15,7 @@ type ScrollEngineResult = {
     handleScroll: () => void;
     scrollToPosition: (position: number, options?: ScrollOptions) => void;
     forceManualMode: () => void;
+    cancelFollow: () => void;
     isAtTop: boolean;
     isManualOverrideActive: () => boolean;
     getScrollTop: () => number;
@@ -225,6 +226,7 @@ export const useScrollEngine = ({
             handleScroll,
             scrollToPosition,
             forceManualMode,
+            cancelFollow,
             isAtTop,
             isManualOverrideActive,
             getScrollTop,
@@ -235,6 +237,7 @@ export const useScrollEngine = ({
             handleScroll,
             scrollToPosition,
             forceManualMode,
+            cancelFollow,
             isAtTop,
             isManualOverrideActive,
             getScrollTop,

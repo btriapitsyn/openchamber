@@ -223,10 +223,6 @@ export const useChatScrollManager = ({
     ]);
 
     const handleWheelIntent = React.useCallback((event: WheelEvent) => {
-        if (!isPinnedRef.current) {
-            return;
-        }
-
         const container = scrollRef.current;
         if (!container) {
             return;
@@ -237,14 +233,26 @@ export const useChatScrollManager = ({
             deltaMode: event.deltaMode,
             rootHeight: container.clientHeight,
         });
-        if (shouldPauseAutoScrollOnWheel({
+
+        // Scrolling up while pinned → unpin and kill follow loop immediately
+        if (isPinnedRef.current && shouldPauseAutoScrollOnWheel({
             root: container,
             target: event.target,
             delta,
         })) {
+            scrollEngine.cancelFollow();
             updatePinnedState(false);
+            return;
         }
-    }, [updatePinnedState]);
+
+        // Scrolling down near bottom → re-pin
+        if (!isPinnedRef.current && delta > 0) {
+            const distanceFromBottom = getDistanceFromBottom();
+            if (isNearBottom(distanceFromBottom, getPinThreshold())) {
+                updatePinnedState(true);
+            }
+        }
+    }, [getDistanceFromBottom, getPinThreshold, scrollEngine, updatePinnedState]);
 
     React.useEffect(() => {
         const container = scrollRef.current;
