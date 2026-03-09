@@ -16,7 +16,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 interface TimelineDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onScrollToMessage?: (messageId: string) => void;
+    onScrollToMessage?: (messageId: string) => void | Promise<boolean>;
     onScrollByTurnOffset?: (offset: number) => void;
     onResumeToLatest?: () => void;
 }
@@ -126,8 +126,11 @@ export const TimelineDialog: React.FC<TimelineDialogProps> = ({
                                 <div
                                     key={message.info.id}
                                     className="group flex items-center gap-2 py-1.5 hover:bg-interactive-hover/30 rounded transition-colors cursor-pointer"
-                                    onClick={() => {
-                                        onScrollToMessage?.(message.info.id);
+                                    onClick={async () => {
+                                        const didNavigate = await onScrollToMessage?.(message.info.id);
+                                        if (didNavigate === false) {
+                                            return;
+                                        }
                                         onOpenChange(false);
                                     }}
                                 >

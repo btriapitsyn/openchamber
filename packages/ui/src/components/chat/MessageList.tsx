@@ -763,10 +763,14 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
     const [fallbackRetryTimestamp, setFallbackRetryTimestamp] = React.useState<number>(0);
     const fallbackRetrySessionRef = React.useRef<string | null>(null);
-    const [scrollContainer, setScrollContainer] = React.useState<HTMLDivElement | null>(null);
-
-    React.useLayoutEffect(() => {
-        setScrollContainer(scrollRef?.current ?? null);
+    const resolveScrollContainer = React.useCallback((): HTMLDivElement | null => {
+        if (scrollRef?.current) {
+            return scrollRef.current;
+        }
+        if (typeof document === 'undefined') {
+            return null;
+        }
+        return document.querySelector<HTMLDivElement>('[data-scrollbar="chat"]');
     }, [scrollRef]);
 
     React.useEffect(() => {
@@ -902,7 +906,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         // The ref-based animatedIds set is reset on session switch.
     }, []);
 
-    const shouldVirtualize = Boolean(scrollContainer) && stagedEntries.length >= MESSAGE_VIRTUALIZE_THRESHOLD;
+    const shouldVirtualize = Boolean(resolveScrollContainer()) && stagedEntries.length >= MESSAGE_VIRTUALIZE_THRESHOLD;
 
     const estimateEntrySize = React.useCallback(
         (index: number): number => {
@@ -922,7 +926,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
     const virtualizer = useMessageListVirtualizer<Element>({
         count: stagedEntries.length,
-        getScrollElement: () => scrollContainer,
+        getScrollElement: resolveScrollContainer,
         estimateSize: estimateEntrySize,
         overscan: isMobile ? MESSAGE_VIRTUAL_OVERSCAN_MOBILE : MESSAGE_VIRTUAL_OVERSCAN_DESKTOP,
         getItemKey: (index: number) => stagedEntries[index]?.key ?? index,
@@ -968,15 +972,15 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     }, [stagedEntries]);
 
     const findMessageElement = React.useCallback((messageId: string): HTMLElement | null => {
-        const container = scrollContainer;
+        const container = resolveScrollContainer();
         if (!container) {
             return null;
         }
         return container.querySelector(`[data-message-id="${messageId}"]`);
-    }, [scrollContainer]);
+    }, [resolveScrollContainer]);
 
     const scrollMessageElementIntoView = React.useCallback((messageId: string, behavior: ScrollBehavior = 'auto') => {
-        const container = scrollContainer;
+        const container = resolveScrollContainer();
         if (!container) {
             return false;
         }
@@ -991,7 +995,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         const top = messageRect.top - containerRect.top + container.scrollTop - offset;
         container.scrollTo({ top, behavior });
         return true;
-    }, [findMessageElement, scrollContainer]);
+    }, [findMessageElement, resolveScrollContainer]);
 
     React.useLayoutEffect(() => {
         if (!ref) {
@@ -1010,7 +1014,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     scrollVirtualizerToIndex(index, behavior === 'instant' ? 'auto' : behavior);
                     if (typeof window !== 'undefined') {
                         window.requestAnimationFrame(() => {
-                            const container = scrollContainer;
+                            const container = resolveScrollContainer();
                             if (!container) {
                                 return;
                             }
@@ -1023,7 +1027,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return true;
                 }
 
-                const container = scrollContainer;
+                const container = resolveScrollContainer();
                 if (!container) {
                     return false;
                 }
@@ -1058,13 +1062,13 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             },
 
             captureViewportAnchor: () => {
-                const container = scrollContainer;
+                const container = resolveScrollContainer();
                 if (!container) {
                     return null;
                 }
 
                 const containerRect = container.getBoundingClientRect();
-                const nodes = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'));
+                const nodes: HTMLElement[] = Array.from(container.querySelectorAll<HTMLElement>('[data-message-id]'));
                 const firstVisible = nodes.find((node) => node.getBoundingClientRect().bottom > containerRect.top + 1);
                 if (!firstVisible) {
                     return null;
@@ -1082,7 +1086,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
             },
 
             restoreViewportAnchor: (anchor: { messageId: string; offsetTop: number }) => {
-                const container = scrollContainer;
+                const container = resolveScrollContainer();
                 if (!container) {
                     return false;
                 }
@@ -1129,7 +1133,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return () => {
             objectRef.current = null;
         };
-    }, [findMessageElement, messageIndexMap, scrollMessageElementIntoView, scrollContainer, scrollVirtualizerToIndex, shouldVirtualize, turnIndexMap, ref]);
+    }, [findMessageElement, messageIndexMap, scrollMessageElementIntoView, resolveScrollContainer, scrollVirtualizerToIndex, shouldVirtualize, turnIndexMap, ref]);
 
     const disableFadeIn = shouldVirtualize && virtualizer.isScrolling;
 
@@ -1196,6 +1200,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                             })}
                         </div>
                     ) : (
+                        <div className="relative w-full">
                         <MessageListContent
                             entries={stagedEntries}
                             onMessageContentChange={stableOnMessageContentChange}
@@ -1206,6 +1211,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                             shouldAnimateUserMessage={shouldAnimateUserMessage}
                             onUserAnimationConsumed={onUserAnimationConsumed}
                         />
+                        </div>
                     )}
                 </FadeInDisabledProvider>
 

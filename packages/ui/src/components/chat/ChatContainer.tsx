@@ -455,9 +455,7 @@ export const ChatContainer: React.FC = () => {
             <TimelineDialog
                 open={isTimelineDialogOpen}
                 onOpenChange={setTimelineDialogOpen}
-                onScrollToMessage={(messageId) => {
-                    void navigation.scrollToMessageId(messageId, { behavior: 'smooth' });
-                }}
+                onScrollToMessage={(messageId) => navigation.scrollToMessageId(messageId, { behavior: 'smooth' })}
                 onScrollByTurnOffset={(offset) => {
                     void navigation.scrollByTurnOffset(offset);
                 }}
