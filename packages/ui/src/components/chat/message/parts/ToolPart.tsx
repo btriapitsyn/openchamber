@@ -119,6 +119,83 @@ export const getToolIcon = (toolName: string) => {
     return <RiToolsLine className={iconClass} />;
 };
 
+const getMultiFileDescription = (
+    metadata: Record<string, unknown> | undefined,
+    animate = true,
+): React.ReactNode => {
+    const files = Array.isArray(metadata?.files) ? metadata?.files : [];
+    if (files.length <= 1) return null;
+
+    const parseCount = (value: unknown): number | null => {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return Math.max(0, Math.trunc(value));
+        }
+        if (typeof value === 'string') {
+            const parsed = Number.parseInt(value, 10);
+            if (Number.isFinite(parsed)) {
+                return Math.max(0, parsed);
+            }
+        }
+        return null;
+    };
+
+    const combineCounts = (base: number | null, incoming: number | null): number | null => {
+        if (base === null) return incoming;
+        if (incoming === null) return base;
+        return base + incoming;
+    };
+
+    const entriesByPath = new Map<string, { path: string; name: string; added: number | null; removed: number | null }>();
+
+    for (const file of files) {
+        const fileObj = file as { relativePath?: string; filePath?: string; additions?: unknown; deletions?: unknown };
+        const filePath = fileObj.relativePath || fileObj.filePath || '';
+        if (!filePath) continue;
+        const fileName = filePath.split('/').pop() || filePath;
+        const added = parseCount(fileObj.additions);
+        const removed = parseCount(fileObj.deletions);
+
+        const existing = entriesByPath.get(filePath);
+        if (existing) {
+            existing.added = combineCounts(existing.added, added);
+            existing.removed = combineCounts(existing.removed, removed);
+            continue;
+        }
+
+        entriesByPath.set(filePath, { path: filePath, name: fileName, added, removed });
+    }
+
+    const entries = Array.from(entriesByPath.values());
+
+    return (
+        <>
+            {entries.map((entry) => {
+                const hasPerFileDiff = entry.added !== null || entry.removed !== null;
+                return (
+                    <span key={entry.path} className="inline-flex min-w-0 max-w-full items-center gap-1 typography-meta leading-5" style={{ color: 'var(--tools-description)' }}>
+                        <FileTypeIcon filePath={entry.path} className="h-3.5 w-3.5" />
+                        <Text
+                            variant={animate ? 'generate-effect' : undefined}
+                            className="min-w-0 max-w-full truncate typography-meta leading-5"
+                            style={{ color: 'var(--tools-description)' }}
+                            title={entry.path}
+                        >
+                            {entry.name}
+                        </Text>
+                        {hasPerFileDiff ? (
+                            <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
+                                <span style={{ color: 'var(--status-success)' }}>+{entry.added ?? 0}</span>
+                                <span style={{ color: 'var(--tools-description)' }}>/</span>
+                                <span style={{ color: 'var(--status-error)' }}>-{entry.removed ?? 0}</span>
+                            </span>
+                        ) : null}
+                    </span>
+                );
+            })}
+        </>
+    );
+};
+
 const normalizeToolName = (toolName: string | undefined | null): string => {
     if (typeof toolName !== 'string') {
         return '';
@@ -1959,6 +2036,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const diffStats = (normalizedPartTool === 'edit' || normalizedPartTool === 'multiedit' || normalizedPartTool === 'apply_patch') ? parseDiffStats(metadata) : null;
     const writeLineCount = normalizedPartTool === 'write' ? parseWriteLineCount(input) : null;
+    const isMultiFileApplyPatch = normalizedPartTool === 'apply_patch' && Array.isArray(metadata?.files) && (metadata?.files as []).length > 1;
     const normalizedPart = normalizedPartTool !== part.tool ? ({ ...part, tool: normalizedPartTool } as ToolPartType) : part;
     const descriptionPath = getToolDescriptionPath(normalizedPart, state, currentDirectory);
     const description = getToolDescription(normalizedPart, state, currentDirectory);
@@ -1967,6 +2045,9 @@ const ToolPart: React.FC<ToolPartProps> = ({
     
     // Tool title/description — shown inline as context
     const justificationText = React.useMemo(() => {
+        if (normalizedPartTool === 'apply_patch') {
+            return null;
+        }
         if (
             descriptionPath
             && (normalizedPartTool === 'apply_patch' || normalizedPartTool === 'edit' || normalizedPartTool === 'multiedit' || normalizedPartTool === 'write')
@@ -2048,14 +2129,15 @@ const ToolPart: React.FC<ToolPartProps> = ({
             {}
             <div
                 className={cn(
-                    'group/tool flex items-center gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer'
+                    'group/tool flex gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer',
+                    isMultiFileApplyPatch ? 'flex-wrap items-start' : 'items-center'
                 )}
                 onClick={handleMainClick}
                 onKeyDown={handleMainKeyDown}
                 role="button"
                 tabIndex={0}
             >
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className={cn('flex gap-2', isMultiFileApplyPatch ? 'w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5' : 'items-center flex-shrink-0')}>
                     {}
                     <div
                         className="relative h-3.5 w-3.5 flex-shrink-0 cursor-pointer"
@@ -2083,81 +2165,109 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             {isExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <MinDurationShineText
-                            active={Boolean(isActive && !isError)}
-                            minDurationMs={300}
-                            className="typography-meta font-medium flex-shrink-0"
-                            style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
-                            title={displayName}
-                        >
-                            {displayName}
-                        </MinDurationShineText>
-                        {!justificationText && fetchedUrl && (
-                            <a
-                                href={fetchedUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="min-w-0 truncate underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90 typography-meta font-medium"
-                                style={{ color: 'var(--status-info)' }}
-                                onClick={(event) => event.stopPropagation()}
-                                onKeyDown={(event) => event.stopPropagation()}
-                                title={fetchedUrl}
+                    {isMultiFileApplyPatch ? (
+                        <>
+                            <MinDurationShineText
+                                active={Boolean(isActive && !isError)}
+                                minDurationMs={300}
+                                className="typography-meta font-medium flex-shrink-0"
+                                style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
+                                title={displayName}
                             >
-                                {fetchedUrl}
-                            </a>
-                        )}
-                    </div>
-                    {typeof effectiveTimeStart === 'number' ? (
-                        <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
-                            <LiveDuration
-                                start={effectiveTimeStart}
-                                end={typeof effectiveTimeEnd === 'number' ? effectiveTimeEnd : undefined}
-                                active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
-                            />
-                        </span>
-                    ) : null}
+                                {displayName}
+                            </MinDurationShineText>
+                            {typeof effectiveTimeStart === 'number' ? (
+                                <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
+                                    <LiveDuration
+                                        start={effectiveTimeStart}
+                                        end={typeof effectiveTimeEnd === 'number' ? effectiveTimeEnd : undefined}
+                                        active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
+                                    />
+                                </span>
+                            ) : null}
+                            {getMultiFileDescription(metadata, animateTailText)}
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <MinDurationShineText
+                                    active={Boolean(isActive && !isError)}
+                                    minDurationMs={300}
+                                    className="typography-meta font-medium flex-shrink-0"
+                                    style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
+                                    title={displayName}
+                                >
+                                    {displayName}
+                                </MinDurationShineText>
+                                {!justificationText && fetchedUrl && (
+                                    <a
+                                        href={fetchedUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="min-w-0 truncate underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90 typography-meta font-medium"
+                                        style={{ color: 'var(--status-info)' }}
+                                        onClick={(event) => event.stopPropagation()}
+                                        onKeyDown={(event) => event.stopPropagation()}
+                                        title={fetchedUrl}
+                                    >
+                                        {fetchedUrl}
+                                    </a>
+                                )}
+                            </div>
+                            {typeof effectiveTimeStart === 'number' ? (
+                                <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
+                                    <LiveDuration
+                                        start={effectiveTimeStart}
+                                        end={typeof effectiveTimeEnd === 'number' ? effectiveTimeEnd : undefined}
+                                        active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
+                                    />
+                                </span>
+                            ) : null}
+                        </>
+                    )}
                 </div>
 
-                <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                        {justificationText && (
-                            <span
-                                className="min-w-0 truncate typography-meta"
-                                style={{ color: 'var(--tools-description)', opacity: 0.8 }}
-                                title={justificationText}
-                            >
-                                {justificationText}
-                            </span>
-                        )}
-                        {!justificationText && description && (
-                            descriptionPath && description === descriptionPath ? (
-                                renderAnimatedPathWithIcon(descriptionPath, animateTailText, false)
-                            ) : (
-                                <Text
-                                    variant={animateTailText ? 'generate-effect' : undefined}
+                {!isMultiFileApplyPatch && (
+                    <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
+                        <div className="flex items-center gap-1 flex-1 min-w-0">
+                            {justificationText && (
+                                <span
                                     className="min-w-0 truncate typography-meta"
-                                    style={{ color: 'var(--tools-description)' }}
-                                    title={description}
+                                    style={{ color: 'var(--tools-description)', opacity: 0.8 }}
+                                    title={justificationText}
                                 >
-                                    {description}
-                                </Text>
-                            )
-                        )}
-                        {diffStats && (
-                            <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
-                                <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
-                                <span style={{ color: 'var(--tools-description)' }}>/</span>
-                                <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
-                            </span>
-                        )}
-                        {writeLineCount && (
-                            <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
-                                <span style={{ color: 'var(--status-success)' }}>+{writeLineCount}</span>
-                            </span>
-                        )}
+                                    {justificationText}
+                                </span>
+                            )}
+                            {!justificationText && description && (
+                                descriptionPath && description === descriptionPath ? (
+                                    renderAnimatedPathWithIcon(descriptionPath, animateTailText, false)
+                                ) : (
+                                    <Text
+                                        variant={animateTailText ? 'generate-effect' : undefined}
+                                        className="min-w-0 truncate typography-meta"
+                                        style={{ color: 'var(--tools-description)' }}
+                                        title={description}
+                                    >
+                                        {description}
+                                    </Text>
+                                )
+                            )}
+                            {diffStats && (
+                                <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
+                                    <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
+                                    <span style={{ color: 'var(--tools-description)' }}>/</span>
+                                    <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
+                                </span>
+                            )}
+                            {writeLineCount && (
+                                <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
+                                    <span style={{ color: 'var(--status-success)' }}>+{writeLineCount}</span>
+                                </span>
+                            )}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {}
