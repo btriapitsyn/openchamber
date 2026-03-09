@@ -30,7 +30,9 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { toPng } from 'html-to-image';
 import { toast } from '@/components/ui';
 import { formatTimestampForDisplay } from './timeFormat';
-import TurnActivity from '../components/TurnActivity';
+import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
+import { StaticToolRow } from './parts/ProgressiveGroup';
+import { getStaticGroupToolName, isExpandableTool } from './parts/toolRenderUtils';
 
 type SubtaskPartLike = Part & {
     type: 'subtask';
@@ -247,11 +249,7 @@ const formatTurnDuration = (durationMs: number): string => {
     return `${minutes}m ${seconds}s`;
 };
 
-const ACTIVITY_STANDALONE_TOOL_NAMES = new Set<string>(['task']);
 
-const isActivityStandaloneTool = (toolName: unknown): boolean => {
-    return typeof toolName === 'string' && ACTIVITY_STANDALONE_TOOL_NAMES.has(toolName.toLowerCase());
-};
 
 interface MessageBodyProps {
     messageId: string;
@@ -573,12 +571,18 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     const [copyHintVisible, setCopyHintVisible] = React.useState(false);
     const copyHintTimeoutRef = React.useRef<number | null>(null);
     const messageContentRef = React.useRef<HTMLDivElement>(null);
+    const toolRevealReadyRef = React.useRef(false);
+
+    React.useEffect(() => {
+        toolRevealReadyRef.current = true;
+    }, []);
 
     const canCopyMessage = Boolean(onCopyMessage);
     const isMessageCopied = Boolean(copiedMessage);
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
     const awaitingMessageCompletion = !isMessageCompleted;
     const animateActivityRows = awaitingMessageCompletion || Boolean(turnGroupingContext?.isWorking);
+    const shouldAnimateNewToolMount = Boolean(turnGroupingContext?.isWorking && toolRevealReadyRef.current);
 
     const visibleParts = React.useMemo(() => {
         return parts
@@ -948,329 +952,138 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
     }, [clearCopyHintTimeout]);
 
 
-
-    const activityPartsForTurn = React.useMemo(() => {
-        return turnGroupingContext?.activityParts ?? [];
-    }, [turnGroupingContext]);
-
-    const activityPartsForMessage = React.useMemo(() => {
-        if (!turnGroupingContext) return [];
-        return activityPartsForTurn.filter((activity) => activity.messageId === messageId);
-    }, [activityPartsForTurn, messageId, turnGroupingContext]);
-
-    const activityGroupSegmentsForMessage = React.useMemo(() => {
-        if (!turnGroupingContext) return [];
-        return turnGroupingContext.activityGroupSegments.filter((segment) => segment.anchorMessageId === messageId);
-    }, [messageId, turnGroupingContext]);
-
-    const activityPartsByPart = React.useMemo(() => {
-        const map = new Map<Part, (typeof activityPartsForMessage)[number]>();
-        activityPartsForMessage.forEach((activity) => {
-            map.set(activity.part, activity);
-        });
-        return map;
-    }, [activityPartsForMessage]);
-
-    const activityPartsByPartId = React.useMemo(() => {
-        const map = new Map<string, (typeof activityPartsForMessage)[number]>();
-        activityPartsForMessage.forEach((activity) => {
-            const partId = (activity.part as { id?: unknown }).id;
-            if (typeof partId === 'string' && partId.length > 0) {
-                map.set(partId, activity);
-            }
-        });
-        return map;
-    }, [activityPartsForMessage]);
-
-
-    const visibleActivityPartsForTurn = React.useMemo(() => {
-        if (!turnGroupingContext) return [];
-
-        // Filter out reasoning if traces are disabled.
-        // Justification parts are already filtered at canonical projection source.
-        const base = !showReasoningTraces
-            ? activityPartsForTurn.filter((activity) => activity.kind !== 'reasoning')
-            : activityPartsForTurn;
-
-        // Tools rendered standalone are excluded from Activity group.
-        return base.filter((activity) => {
-            if (activity.kind !== 'tool') {
-                return true;
-            }
-            const toolName = (activity.part as ToolPartType).tool;
-            return !isActivityStandaloneTool(toolName);
-        });
-    }, [activityPartsForTurn, showReasoningTraces, turnGroupingContext]);
-
-    const [hasEverHadMultipleVisibleActivities, setHasEverHadMultipleVisibleActivities] = React.useState(false);
-
-    React.useEffect(() => {
-        if (!turnGroupingContext) {
-            return;
-        }
-
-        const hasTaskSplitSegments = turnGroupingContext.activityGroupSegments.some(
-            (segment) => segment.afterToolPartId !== null
-        );
-
-        const hasReasoningActivity = visibleActivityPartsForTurn.some((activity) => activity.kind === 'reasoning');
-
-        if (
-            visibleActivityPartsForTurn.length > 1 ||
-            (hasTaskSplitSegments && visibleActivityPartsForTurn.length > 0) ||
-            (turnGroupingContext.isWorking && visibleActivityPartsForTurn.length > 0) ||
-            hasReasoningActivity
-        ) {
-            setHasEverHadMultipleVisibleActivities(true);
-        }
-    }, [turnGroupingContext, visibleActivityPartsForTurn]);
-
-    const shouldShowActivityGroup = Boolean(turnGroupingContext && hasEverHadMultipleVisibleActivities);
-
-    const shouldRenderActivityGroup = Boolean(
-        turnGroupingContext &&
-            shouldShowActivityGroup &&
-            visibleActivityPartsForTurn.length > 0 &&
-            activityGroupSegmentsForMessage.length > 0
-    );
-
-    const standaloneToolParts = React.useMemo(() => {
-        return toolParts.filter((toolPart) => isActivityStandaloneTool(toolPart.tool));
-    }, [toolParts]);
-
-
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
 
-        const renderActivitySegments = (afterToolPartId: string | null) => {
-            if (!turnGroupingContext || !shouldRenderActivityGroup) {
-                return;
+        // Flat rendering: iterate parts in natural order.
+        // Group consecutive static tools (read, grep, glob, etc.) into compact rows.
+        // Expandable tools (bash, edit, task) get individual rows.
+        // Text and reasoning render inline at their natural position.
+        let i = 0;
+        while (i < visibleParts.length) {
+            const part = visibleParts[i];
+
+            if (part.type === 'text') {
+                rendered.push(
+                    <AssistantTextPart
+                        key={`assistant-text-${messageId}-${i}`}
+                        part={part}
+                        messageId={messageId}
+                        streamPhase={streamPhase}
+                        onContentChange={onContentChange}
+                    />
+                );
+                i++;
+                continue;
             }
 
-            activityGroupSegmentsForMessage
-                .filter((segment) => (segment.afterToolPartId ?? null) === afterToolPartId)
-                .forEach((segment) => {
-                    // Filter out reasoning if traces are disabled.
-                    // Justification parts are already filtered at canonical source.
-                    const visibleSegmentParts = !showReasoningTraces
-                        ? segment.parts.filter((activity) => activity.kind !== 'reasoning')
-                        : segment.parts;
-
-                    if (visibleSegmentParts.length === 0) {
-                        return;
+            if (part.type === 'reasoning') {
+                if (showReasoningTraces) {
+                    const partText = (part as { text?: string }).text;
+                    if (partText && partText.trim().length > 0) {
+                        rendered.push(
+                            <FadeInOnReveal key={`reasoning-${messageId}-${i}`}>
+                                <div className="text-sm text-muted-foreground/60 italic leading-relaxed whitespace-pre-wrap">
+                                    {partText}
+                                </div>
+                            </FadeInOnReveal>
+                        );
                     }
+                }
+                i++;
+                continue;
+            }
 
-                    rendered.push(
-                        <TurnActivity
-                            key={`progressive-group-${segment.id}`}
-                            parts={visibleSegmentParts}
-                            isExpanded={turnGroupingContext.isGroupExpanded}
-                            onToggle={turnGroupingContext.toggleGroup}
-                            syntaxTheme={syntaxTheme}
-                            isMobile={isMobile}
-                            expandedTools={expandedTools}
-                            onToggleTool={onToggleTool}
-                            onShowPopup={onShowPopup}
-                            onContentChange={onContentChange}
-                            streamPhase={streamPhase}
-                            showHeader={!turnGroupingContext.isWorking}
-                            animateRows={animateActivityRows}
-                            diffStats={turnGroupingContext.diffStats}
-                        />
-                    );
-                });
-        };
+            if (part.type === 'tool') {
+                const toolPart = part as ToolPartType;
+                const toolName = toolPart.tool?.toLowerCase() ?? '';
 
-        // Activity groups and standalone tasks are interleaved in message order.
-        // Note: Reasoning parts are rendered in the visibleParts.forEach loop below
-        // when Activity group isn't showing, to maintain proper ordering with tools.
-        renderActivitySegments(null);
-
-        standaloneToolParts.forEach((standaloneToolPart) => {
-            rendered.push(
-                <FadeInOnReveal key={`standalone-tool-${standaloneToolPart.id}`}>
-                    <ToolPart
-                        part={standaloneToolPart}
-                        isExpanded={expandedTools.has(standaloneToolPart.id)}
-                        onToggle={onToggleTool}
-                        syntaxTheme={syntaxTheme}
-                        isMobile={isMobile}
-                        onContentChange={onContentChange}
-                        onShowPopup={onShowPopup}
-                        animateTailText={animateActivityRows}
-
-                    />
-                </FadeInOnReveal>
-            );
-
-            renderActivitySegments(standaloneToolPart.id);
-        });
-
-        const partsWithTime: Array<{
-            part: Part;
-            index: number;
-            endTime: number | null;
-            element: React.ReactNode;
-        }> = [];
-
-        visibleParts.forEach((part, index) => {
-            if (part.type === 'text') {
-
-                // Skip justification text parts — they render inline in ProgressiveGroup
-                const activity =
-                    activityPartsByPart.get(part)
-                    || (typeof (part as { id?: unknown }).id === 'string'
-                        ? activityPartsByPartId.get((part as { id: string }).id)
-                        : undefined);
-                if (activity?.kind === 'justification' && shouldRenderActivityGroup) {
-                    return;
+                if (!shouldShowTool(toolPart)) {
+                    i++;
+                    continue;
                 }
 
-                const textTime = (part as { time?: { end?: number | null | undefined } | null | undefined }).time;
-                const partEndTime = typeof textTime?.end === 'number' ? textTime.end : null;
-
-                partsWithTime.push({
-                    part,
-                    index,
-                    endTime: partEndTime,
-                    element: (
-                        <AssistantTextPart
-                            key={`assistant-text-${messageId}-${index}`}
-                            part={part}
-                            messageId={messageId}
-                            streamPhase={streamPhase}
-                            onContentChange={onContentChange}
-                        />
-                    ),
-                });
-                return;
-            }
-
-            const activity =
-                activityPartsByPart.get(part)
-                || (typeof (part as { id?: unknown }).id === 'string'
-                    ? activityPartsByPartId.get((part as { id: string }).id)
-                    : undefined);
-            if (!activity) {
-                return;
-            }
-
-            if (!turnGroupingContext) {
-                return;
-            }
-
-            let endTime: number | null = null;
-            let element: React.ReactNode | null = null;
-
-                if (!shouldShowActivityGroup) {
-                    if (activity.kind === 'tool') {
-                        const toolPart = part as ToolPartType;
-
-                        if (isActivityStandaloneTool(toolPart.tool)) {
-                            return;
-                        }
-
-                        const toolState = (toolPart as { state?: { time?: { end?: number | null | undefined } | null | undefined } | null | undefined }).state;
-                        const time = toolState?.time;
-                        const isFinalized = isToolFinalized(toolPart);
-
-                        if (!shouldShowTool(toolPart)) {
-                            return;
-                        }
-
-                    const toolElement = (
+                // Expandable tools: bash, edit, write, task, question — individual rows
+                if (isExpandableTool(toolName)) {
+                    rendered.push(
                         <FadeInOnReveal key={`tool-${toolPart.id}`}>
-                            <ToolPart
-                                part={toolPart}
-                                isExpanded={expandedTools.has(toolPart.id)}
-                                onToggle={onToggleTool}
-                                syntaxTheme={syntaxTheme}
-                                isMobile={isMobile}
-                                onContentChange={onContentChange}
-                                onShowPopup={onShowPopup}
-                                animateTailText={animateActivityRows}
-                            />
+                            <ToolRevealOnMount animate={shouldAnimateNewToolMount} wipe>
+                                <ToolPart
+                                    part={toolPart}
+                                    isExpanded={expandedTools.has(toolPart.id)}
+                                    onToggle={onToggleTool}
+                                    syntaxTheme={syntaxTheme}
+                                    isMobile={isMobile}
+                                    onContentChange={onContentChange}
+                                    onShowPopup={onShowPopup}
+                                    animateTailText={animateActivityRows}
+                                />
+                            </ToolRevealOnMount>
                         </FadeInOnReveal>
                     );
-
-                    element = toolElement;
-                    endTime = isFinalized && typeof time?.end === 'number' ? time.end : null;
+                    i++;
+                    continue;
                 }
 
-                if (element) {
-                    partsWithTime.push({
-                        part,
-                        index,
-                        endTime,
-                        element,
-                    });
+                // Static tools: group consecutive tools of the same kind into compact rows
+                const groupToolName = getStaticGroupToolName(toolName);
+                const group: ToolPartType[] = [toolPart];
+                let j = i + 1;
+                while (j < visibleParts.length) {
+                    const next = visibleParts[j];
+                    if (next.type !== 'tool') break;
+                    const nextTool = next as ToolPartType;
+                    if (!shouldShowTool(nextTool)) { j++; continue; }
+                    const nextName = nextTool.tool?.toLowerCase() ?? '';
+                    if (getStaticGroupToolName(nextName) !== groupToolName) break;
+                    group.push(nextTool);
+                    j++;
                 }
-            }
-        });
 
-        partsWithTime.sort((a, b) => {
-            if (a.endTime === null && b.endTime === null) {
-                return a.index - b.index;
+                rendered.push(
+                    <FadeInOnReveal key={`static-tools-${toolPart.id}`}>
+                        <ToolRevealOnMount animate={shouldAnimateNewToolMount} wipe>
+                            <StaticToolRow
+                                toolName={groupToolName}
+                                activities={group.map(tp => ({
+                                    id: tp.id,
+                                    turnId: '',
+                                    messageId: messageId,
+                                    partIndex: 0,
+                                    part: tp,
+                                    kind: 'tool' as const,
+                                }))}
+                                animateTailText={animateActivityRows}
+                            />
+                        </ToolRevealOnMount>
+                    </FadeInOnReveal>
+                );
+                i = j;
+                continue;
             }
-            if (a.endTime === null) {
-                return 1;
-            }
-            if (b.endTime === null) {
-                return -1;
-            }
-            return a.endTime - b.endTime;
-        });
 
-        partsWithTime.forEach(({ element }) => {
-            rendered.push(element);
-        });
+            // Unknown part type — skip
+            i++;
+        }
 
         return rendered;
     }, [
-        activityPartsByPart,
-        activityPartsByPartId,
-        activityGroupSegmentsForMessage,
         expandedTools,
         isMobile,
-        isToolFinalized,
         messageId,
         onContentChange,
         onShowPopup,
         onToggleTool,
         shouldShowTool,
-        shouldShowActivityGroup,
         streamPhase,
         showReasoningTraces,
         syntaxTheme,
         animateActivityRows,
-
-        turnGroupingContext,
+        shouldAnimateNewToolMount,
         visibleParts,
-        standaloneToolParts,
-        shouldRenderActivityGroup,
     ]);
 
-    const summaryCandidate =
-        typeof turnGroupingContext?.summaryBody === 'string' && turnGroupingContext.summaryBody.trim().length > 0
-            ? turnGroupingContext.summaryBody
-            : undefined;
-
-    const summaryBodyRef = React.useRef<string | undefined>(undefined);
-    if (summaryCandidate && summaryCandidate.trim().length > 0) {
-        summaryBodyRef.current = summaryCandidate;
-    }
-    const prevUserMessageId = React.useRef(turnGroupingContext?.turnId);
-    if (prevUserMessageId.current !== turnGroupingContext?.turnId) {
-        prevUserMessageId.current = turnGroupingContext?.turnId;
-        summaryBodyRef.current = undefined;
-    }
-    const summaryBody = summaryBodyRef.current;
-
-    const showSummaryBody =
-        turnGroupingContext?.isLastAssistantInTurn &&
-        assistantTextParts.length === 0 &&
-        summaryBody &&
-        summaryBody.trim().length > 0;
+    // With flat rendering, no collapsed summary is needed — text renders inline.
 
     const showErrorMessage = Boolean(errorMessage);
 
@@ -1444,42 +1257,9 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             </div>
                         </FadeInOnReveal>
                     )}
-                    {showSummaryBody && (
-                        <FadeInOnReveal key="summary-body">
-                            <div
-                                className="group/assistant-text relative break-words"
-                            >
-                                <SimpleMarkdownRenderer content={summaryBody} onShowPopup={onShowPopup} />
-                                {shouldShowFooter && (
-                                    <div className="mt-2 mb-1 flex items-center justify-start gap-1.5">
-                                        <div className="flex items-center gap-1.5">
-                                            {footerButtons}
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            {turnDurationText ? (
-                                                <span className="text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
-                                                    <RiHourglassLine className="h-3.5 w-3.5" />
-                                                    {turnDurationText}
-                                                </span>
-                                            ) : null}
-                                            {footerTimestamp ? (
-                                                <span
-                                                    className={footerTimestampClassName}
-                                                    aria-label={`Message time: ${footerTimestamp}`}
-                                                >
-                                                    <RiTimeLine className="h-3.5 w-3.5" />
-                                                    {footerTimestamp}
-                                                </span>
-                                            ) : null}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </FadeInOnReveal>
-                    )}
                 </div>
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
-                {!showSummaryBody && shouldShowFooter && (
+                {shouldShowFooter && (
                     <div className="mt-2 mb-1 flex items-center justify-start gap-1.5">
                         <div className="flex items-center gap-1.5">
                             {footerButtons}

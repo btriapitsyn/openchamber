@@ -25,30 +25,10 @@ import { flattenAssistantTextParts } from '@/lib/messages/messageText';
 import { isLikelyProviderAuthFailure, PROVIDER_AUTH_FAILURE_MESSAGE } from '@/lib/messages/providerAuthError';
 import type { TurnGroupingContext } from './lib/turns/types';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { ToolRevealOnMount } from './message/parts/ToolRevealOnMount';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
-const TOOL_DEFAULT_EXPANSION_BY_MODE = {
-    detailed: new Set([
-        'task',
-        'question',
-        'edit',
-        'multiedit',
-        'apply_patch',
-        'str_replace',
-        'str_replace_based_edit_tool',
-        'bash',
-        'shell',
-        'cmd',
-        'terminal',
-        'write',
-        'create',
-        'file_write',
-    ]),
-    changes: new Set(['edit', 'multiedit', 'apply_patch', 'str_replace', 'str_replace_based_edit_tool']),
-} as const;
-
-type DefaultExpandedToolMode = keyof typeof TOOL_DEFAULT_EXPANSION_BY_MODE;
 const EXPANDED_TOOLS_CACHE_MAX = 4000;
 const expandedToolsStateCache = new Map<string, Set<string>>();
 
@@ -66,9 +46,6 @@ const writeExpandedToolsCache = (messageId: string, value: Set<string>): void =>
     }
     expandedToolsStateCache.set(messageId, new Set(value));
 };
-
-const isDefaultExpandedTool = (toolName: unknown, mode: DefaultExpandedToolMode): boolean =>
-    typeof toolName === 'string' && TOOL_DEFAULT_EXPANSION_BY_MODE[mode].has(toolName.toLowerCase());
 
 function useStickyDisplayValue<T>(value: T | null | undefined): T | null | undefined {
     const [stickyValue, setStickyValue] = React.useState<T | null | undefined>(value);
@@ -106,6 +83,8 @@ interface ChatMessageProps {
     animationHandlers?: AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     turnGroupingContext?: TurnGroupingContext;
+    animateUserOnMount?: boolean;
+    onUserAnimationConsumed?: (messageId: string) => void;
 }
 
 const ChatMessage: React.FC<ChatMessageProps> = ({
@@ -115,6 +94,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     onContentChange,
     animationHandlers,
     turnGroupingContext,
+    animateUserOnMount = false,
+    onUserAnimationConsumed,
 }) => {
     const { isMobile, hasTouchInput } = useDeviceInfo();
     const { currentTheme } = useThemeSystem();
@@ -150,10 +131,9 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     } = sessionState;
 
     const providers = useConfigStore((state) => state.providers);
-    const { showReasoningTraces, toolCallExpansion, stickyUserHeader } = useUIStore(
+    const { showReasoningTraces, stickyUserHeader } = useUIStore(
         useShallow((state) => ({
             showReasoningTraces: state.showReasoningTraces,
-            toolCallExpansion: state.toolCallExpansion,
             stickyUserHeader: state.stickyUserHeader,
         }))
     );
@@ -177,10 +157,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         setExpandedTools(readExpandedToolsCache(message.info.id));
     }, [message.info.id]);
 
-    React.useEffect(() => {
-        expandedToolsStateCache.clear();
-        setExpandedTools(new Set());
-    }, [toolCallExpansion]);
+
 
     const messageRole = React.useMemo(() => deriveMessageRole(message.info), [message.info]);
     const isUser = messageRole.isUser;
@@ -430,65 +407,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         return filtered;
     }, [isUser, visibleParts]);
 
-    const effectiveExpandedTools = React.useMemo(() => {
-        // 'collapsed': Activity and tools start collapsed
-        // 'activity': Activity expanded, tools collapsed (Summary mode)
-        // 'detailed': Activity expanded, all clickable tools expanded by default
-        // 'changes': Activity expanded, edit-like tools expanded by default
-
-        if (toolCallExpansion === 'collapsed' || toolCallExpansion === 'activity') {
-            // Tools default collapsed: expandedTools contains IDs of tools that ARE expanded
-            return expandedTools;
-        }
-
-        const defaultExpansionMode =
-            toolCallExpansion === 'detailed' || toolCallExpansion === 'changes'
-                ? toolCallExpansion
-                : null;
-
-        if (!defaultExpansionMode) {
-            return expandedTools;
-        }
-
-        // 'detailed'/'changes': expand only allowlisted tools by default.
-        // expandedTools acts as a "toggled" set (XOR with defaults).
-        const defaultExpandedToolIds = new Set<string>();
-
-        for (const part of toolParts) {
-            const toolName = (part as { tool?: unknown }).tool;
-            if (part.id && isDefaultExpandedTool(toolName, defaultExpansionMode)) {
-                defaultExpandedToolIds.add(part.id);
-            }
-        }
-
-        if (turnGroupingContext?.isFirstAssistantInTurn) {
-            for (const activity of turnGroupingContext.activityParts) {
-                if (activity.kind !== 'tool') {
-                    continue;
-                }
-
-                const toolPart = activity.part as unknown as { id?: string; tool?: unknown };
-                if (isDefaultExpandedTool(toolPart.tool, defaultExpansionMode)) {
-                    if (toolPart.id) {
-                        defaultExpandedToolIds.add(toolPart.id);
-                    }
-                    if (activity.id) {
-                        defaultExpandedToolIds.add(activity.id);
-                    }
-                }
-            }
-        }
-
-        const effective = new Set(defaultExpandedToolIds);
-        for (const id of expandedTools) {
-            if (effective.has(id)) {
-                effective.delete(id);
-            } else {
-                effective.add(id);
-            }
-        }
-        return effective;
-    }, [expandedTools, toolCallExpansion, toolParts, turnGroupingContext]);
+    // Tools default collapsed; expandedTools contains IDs of tools the user toggled open.
+    const effectiveExpandedTools = expandedTools;
 
     const agentMention = React.useMemo(() => {
         if (!isUser) {
@@ -578,6 +498,13 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [isMessageCompleted, lifecyclePhase, isStreamingMessage]);
 
     React.useEffect(() => {
+        if (!isUser || !animateUserOnMount) {
+            return;
+        }
+        onUserAnimationConsumed?.(message.info.id);
+    }, [animateUserOnMount, isUser, message.info.id, onUserAnimationConsumed]);
+
+    React.useEffect(() => {
         setHasStartedStreamingHeader(false);
     }, [message.info.id]);
 
@@ -635,22 +562,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 
     const headerVariant = !isUser && modelHasVariants ? (headerVariantRaw ?? 'Default') : undefined;
 
-    const assistantSummaryCandidate =
-        typeof turnGroupingContext?.summaryBody === 'string' && turnGroupingContext.summaryBody.trim().length > 0
-            ? turnGroupingContext.summaryBody
-            : undefined;
-
-    const [assistantSummaryForCopy, setAssistantSummaryForCopy] = React.useState<string | undefined>(undefined);
-
-    React.useEffect(() => {
-        setAssistantSummaryForCopy(undefined);
-    }, [turnGroupingContext?.turnId]);
-
-    React.useEffect(() => {
-        if (assistantSummaryCandidate && assistantSummaryCandidate.trim().length > 0) {
-            setAssistantSummaryForCopy(assistantSummaryCandidate);
-        }
-    }, [assistantSummaryCandidate]);
+    // Summary body removed — flat rendering means text is always inline.
 
     const assistantErrorText = React.useMemo(() => {
         if (isUser) {
@@ -720,12 +632,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             return assistantErrorText;
         }
 
-        if (assistantSummaryForCopy && assistantSummaryForCopy.trim().length > 0) {
-            return assistantSummaryForCopy;
-        }
-
         return flattenAssistantTextParts(displayParts);
-    }, [assistantErrorText, assistantSummaryForCopy, displayParts, isUser]);
+    }, [assistantErrorText, displayParts, isUser]);
 
     const hasTextContent = messageTextContent.length > 0;
 
@@ -945,87 +853,91 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 <div className="chat-message-column relative">
                     {isUser ? (
                         displayParts.length === 0 ? null : (
-                            <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
-                                <div className="max-w-[85%]">
-                                    <div style={{ backgroundColor: 'var(--chat-user-message-bg)' }} className="rounded-[var(--radius-xl)] rounded-br-[var(--radius-sm)] px-5 py-3 shadow-none border border-primary/5">
-                                        <MessageBody
-                                            messageId={message.info.id}
-                                            parts={displayParts}
-                                            isUser={isUser}
-                                            isMessageCompleted={isMessageCompleted}
-                                            messageFinish={messageFinish}
-                                            syntaxTheme={syntaxTheme}
-                                            isMobile={isMobile}
-                                            hasTouchInput={hasTouchInput}
-                                            copiedCode={copiedCode}
-                                            onCopyCode={handleCopyCode}
-                                            expandedTools={expandedTools}
-                                            onToggleTool={handleToggleTool}
-                                            onShowPopup={handleShowPopup}
-                                            streamPhase={streamPhase}
-                                            allowAnimation={allowAnimation}
-                                            onContentChange={onContentChange}
-                                            shouldShowHeader={false}
-                                            hasTextContent={hasTextContent}
-                                            onCopyMessage={handleCopyMessage}
-                                            copiedMessage={copiedMessage}
-                                            showReasoningTraces={showReasoningTraces}
-                                            onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
-                                            agentMention={agentMention}
-                                            onRevert={handleRevert}
-                                            onFork={isUser ? handleFork : undefined}
-                                            errorMessage={assistantErrorText}
-                                            userActionsMode={useExternalUserActionsRow ? 'external-content' : 'inline'}
-                                            stickyUserHeaderEnabled={stickyUserHeader}
-                                        />
+                            <ToolRevealOnMount animate={animateUserOnMount} wipe={false}>
+                                <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
+                                    <div className="max-w-[85%]">
+                                        <div style={{ backgroundColor: 'var(--chat-user-message-bg)' }} className="rounded-[var(--radius-xl)] rounded-br-[var(--radius-sm)] px-5 py-3 shadow-none border border-primary/5">
+                                            <MessageBody
+                                                messageId={message.info.id}
+                                                parts={displayParts}
+                                                isUser={isUser}
+                                                isMessageCompleted={isMessageCompleted}
+                                                messageFinish={messageFinish}
+                                                syntaxTheme={syntaxTheme}
+                                                isMobile={isMobile}
+                                                hasTouchInput={hasTouchInput}
+                                                copiedCode={copiedCode}
+                                                onCopyCode={handleCopyCode}
+                                                expandedTools={expandedTools}
+                                                onToggleTool={handleToggleTool}
+                                                onShowPopup={handleShowPopup}
+                                                streamPhase={streamPhase}
+                                                allowAnimation={allowAnimation}
+                                                onContentChange={onContentChange}
+                                                shouldShowHeader={false}
+                                                hasTextContent={hasTextContent}
+                                                onCopyMessage={handleCopyMessage}
+                                                copiedMessage={copiedMessage}
+                                                showReasoningTraces={showReasoningTraces}
+                                                onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
+                                                agentMention={agentMention}
+                                                onRevert={handleRevert}
+                                                onFork={isUser ? handleFork : undefined}
+                                                errorMessage={assistantErrorText}
+                                                userActionsMode={useExternalUserActionsRow ? 'external-content' : 'inline'}
+                                                stickyUserHeaderEnabled={stickyUserHeader}
+                                            />
+                                        </div>
+                                        {useExternalUserActionsRow ? (
+                                            <MessageBody
+                                                messageId={message.info.id}
+                                                parts={displayParts}
+                                                isUser={isUser}
+                                                isMessageCompleted={isMessageCompleted}
+                                                messageFinish={messageFinish}
+                                                syntaxTheme={syntaxTheme}
+                                                isMobile={isMobile}
+                                                hasTouchInput={hasTouchInput}
+                                                copiedCode={copiedCode}
+                                                onCopyCode={handleCopyCode}
+                                                expandedTools={expandedTools}
+                                                onToggleTool={handleToggleTool}
+                                                onShowPopup={handleShowPopup}
+                                                streamPhase={streamPhase}
+                                                allowAnimation={allowAnimation}
+                                                onContentChange={onContentChange}
+                                                shouldShowHeader={false}
+                                                hasTextContent={hasTextContent}
+                                                onCopyMessage={handleCopyMessage}
+                                                copiedMessage={copiedMessage}
+                                                showReasoningTraces={showReasoningTraces}
+                                                onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
+                                                agentMention={agentMention}
+                                                onRevert={handleRevert}
+                                                onFork={isUser ? handleFork : undefined}
+                                                errorMessage={assistantErrorText}
+                                                userActionsMode="external-actions"
+                                                stickyUserHeaderEnabled={stickyUserHeader}
+                                            />
+                                        ) : null}
                                     </div>
-                                    {useExternalUserActionsRow ? (
-                                        <MessageBody
-                                            messageId={message.info.id}
-                                            parts={displayParts}
-                                            isUser={isUser}
-                                            isMessageCompleted={isMessageCompleted}
-                                            messageFinish={messageFinish}
-                                            syntaxTheme={syntaxTheme}
-                                            isMobile={isMobile}
-                                            hasTouchInput={hasTouchInput}
-                                            copiedCode={copiedCode}
-                                            onCopyCode={handleCopyCode}
-                                            expandedTools={expandedTools}
-                                            onToggleTool={handleToggleTool}
-                                            onShowPopup={handleShowPopup}
-                                            streamPhase={streamPhase}
-                                            allowAnimation={allowAnimation}
-                                            onContentChange={onContentChange}
-                                            shouldShowHeader={false}
-                                            hasTextContent={hasTextContent}
-                                            onCopyMessage={handleCopyMessage}
-                                            copiedMessage={copiedMessage}
-                                            showReasoningTraces={showReasoningTraces}
-                                            onAuxiliaryContentComplete={handleAuxiliaryContentComplete}
-                                            agentMention={agentMention}
-                                            onRevert={handleRevert}
-                                            onFork={isUser ? handleFork : undefined}
-                                            errorMessage={assistantErrorText}
-                                            userActionsMode="external-actions"
-                                            stickyUserHeaderEnabled={stickyUserHeader}
-                                        />
-                                    ) : null}
+                                    {showStickyInlineHoverRow ? <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 top-full h-11" /> : null}
                                 </div>
-                                {showStickyInlineHoverRow ? <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 top-full h-11" /> : null}
-                            </div>
+                            </ToolRevealOnMount>
                         )
                     ) : (
                         <div className="relative">
-                            {shouldShowHeader && (
-                                <MessageHeader
-                                    isUser={isUser}
-                                    providerID={headerProviderID}
-                                    agentName={headerAgentName}
-                                    modelName={headerModelName}
-                                    variant={headerVariant}
-                                    isDarkTheme={isDarkTheme}
-                                />
+                             {shouldShowHeader && (
+                                <ToolRevealOnMount animate={Boolean(turnGroupingContext?.isWorking)} wipe={false}>
+                                    <MessageHeader
+                                        isUser={isUser}
+                                        providerID={headerProviderID}
+                                        agentName={headerAgentName}
+                                        modelName={headerModelName}
+                                        variant={headerVariant}
+                                        isDarkTheme={isDarkTheme}
+                                    />
+                                </ToolRevealOnMount>
                             )}
 
                             <MessageBody

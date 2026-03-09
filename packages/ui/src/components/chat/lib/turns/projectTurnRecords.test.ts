@@ -53,7 +53,7 @@ test('projectTurnRecords keeps retries and malformed-parent assistants in the sa
 
     const projection = projectTurnRecords(
         [user1, assistant1, retryAssistant, malformedAssistant, userSubtask, syntheticTaskBridge],
-        { showTextJustificationActivity: true },
+
     );
 
     assert.equal(projection.turns.length, 2, 'two user anchors should produce two turns');

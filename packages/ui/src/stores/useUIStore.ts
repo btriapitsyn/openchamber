@@ -497,14 +497,11 @@ interface UIStore {
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
   showReasoningTraces: boolean;
-  showTextJustificationActivity: boolean;
   showDeletionDialog: boolean;
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
   autoDeleteLastRunAt: number | null;
   messageLimit: number;
-
-  toolCallExpansion: 'collapsed' | 'activity' | 'detailed' | 'changes';
   fontSize: number;
   terminalFontSize: number;
   padding: number;
@@ -612,13 +609,11 @@ interface UIStore {
   setSettingsRemoteInstancesSelectedId: (instanceId: string | null) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
-  setShowTextJustificationActivity: (value: boolean) => void;
   setShowDeletionDialog: (value: boolean) => void;
   setAutoDeleteEnabled: (value: boolean) => void;
   setAutoDeleteAfterDays: (days: number) => void;
   setAutoDeleteLastRunAt: (timestamp: number | null) => void;
   setMessageLimit: (value: number) => void;
-  setToolCallExpansion: (value: 'collapsed' | 'activity' | 'detailed' | 'changes') => void;
   setFontSize: (size: number) => void;
   setTerminalFontSize: (size: number) => void;
   setPadding: (size: number) => void;
@@ -720,13 +715,11 @@ export const useUIStore = create<UIStore>()(
         eventStreamStatus: 'idle',
         eventStreamHint: null,
         showReasoningTraces: true,
-        showTextJustificationActivity: false,
         showDeletionDialog: true,
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
         autoDeleteLastRunAt: null,
         messageLimit: 200,
-        toolCallExpansion: 'collapsed',
         fontSize: 100,
         terminalFontSize: 13,
         padding: 100,
@@ -1289,10 +1282,6 @@ export const useUIStore = create<UIStore>()(
           set({ showReasoningTraces: value });
         },
 
-        setShowTextJustificationActivity: (value) => {
-          set({ showTextJustificationActivity: value });
-        },
-
         setShowDeletionDialog: (value) => {
           set({ showDeletionDialog: value });
         },
@@ -1313,10 +1302,6 @@ export const useUIStore = create<UIStore>()(
         setMessageLimit: (value) => {
           const clamped = Math.max(10, Math.min(500, Math.round(value)));
           set({ messageLimit: clamped });
-        },
-
-        setToolCallExpansion: (value) => {
-          set({ toolCallExpansion: value });
         },
 
         setFontSize: (size) => {
@@ -1813,13 +1798,11 @@ export const useUIStore = create<UIStore>()(
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           // Note: isSettingsDialogOpen intentionally NOT persisted
           showReasoningTraces: state.showReasoningTraces,
-          showTextJustificationActivity: state.showTextJustificationActivity,
           showDeletionDialog: state.showDeletionDialog,
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoDeleteAfterDays: state.autoDeleteAfterDays,
           autoDeleteLastRunAt: state.autoDeleteLastRunAt,
           messageLimit: state.messageLimit,
-          toolCallExpansion: state.toolCallExpansion,
           fontSize: state.fontSize,
           terminalFontSize: state.terminalFontSize,
           padding: state.padding,

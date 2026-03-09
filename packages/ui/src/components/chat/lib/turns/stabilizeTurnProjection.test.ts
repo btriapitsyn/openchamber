@@ -28,14 +28,14 @@ test('stabilizeTurnProjection keeps historical turns referentially stable', () =
         makeMessage('a1', 'assistant', 'A1', { parentID: 'u1', finish: 'stop', time: { created: 2, completed: 3 } }),
         makeMessage('u2', 'user', 'Q2', { time: { created: 4 } }),
         makeMessage('a2', 'assistant', 'stream part 1', { parentID: 'u2', time: { created: 5 } }),
-    ], { showTextJustificationActivity: false });
+    ]);
 
     const nextProjection = projectTurnRecords([
         makeMessage('u1', 'user', 'Q1', { time: { created: 1 } }),
         makeMessage('a1', 'assistant', 'A1', { parentID: 'u1', finish: 'stop', time: { created: 2, completed: 3 } }),
         makeMessage('u2', 'user', 'Q2', { time: { created: 4 } }),
         makeMessage('a2', 'assistant', 'stream part 1 + part 2', { parentID: 'u2', time: { created: 5 } }),
-    ], { showTextJustificationActivity: false });
+    ]);
 
     const stabilized = stabilizeTurnProjection(nextProjection, previousProjection);
 

@@ -12,7 +12,6 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionStore } from '@/stores/useSessionStore';
-import { useUIStore } from '@/stores/useUIStore';
 import { opencodeClient } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Text } from '@/components/ui/text';
@@ -925,7 +924,7 @@ const renderPathLikeGitChanges = (path: string, grow = true) => {
     );
 };
 
-const renderAnimatedPathWithIcon = (path: string, isMobile: boolean, animate = true, grow = true) => {
+const renderAnimatedPathWithIcon = (path: string, animate = true, grow = true) => {
     const lastSlash = path.lastIndexOf('/');
 
     if (lastSlash === -1) {
@@ -935,7 +934,7 @@ const renderAnimatedPathWithIcon = (path: string, isMobile: boolean, animate = t
                 <Text
                     key={animate ? `path-full-${path}` : undefined}
                     variant={animate ? 'generate-effect' : undefined}
-                    className={cn('min-w-0 typography-meta', isMobile ? 'break-words' : 'truncate')}
+                    className="min-w-0 truncate typography-meta"
                     style={{ color: 'var(--tools-title)' }}
                 >
                     {path}
@@ -1835,13 +1834,15 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const fetchedUrl = getFetchedUrl(part, state);
     const displayName = getToolMetadata(part.tool).displayName;
     
-    // Get justification text (tool title/description) when setting is enabled
-    const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
+    // Tool title/description — shown inline as context
     const justificationText = React.useMemo(() => {
-        if (!showTextJustificationActivity) return null;
-        if (part.tool === 'apply_patch') return null;
+        if (
+            descriptionPath
+            && (part.tool === 'apply_patch' || part.tool === 'edit' || part.tool === 'multiedit')
+        ) {
+            return null;
+        }
         if (part.tool.toLowerCase() === 'structuredoutput' || part.tool.toLowerCase() === 'structured_output') return null;
-        // Get title or description from state - this is the "yapping" text like "Shows system information"
         const title = (stateWithData as { title?: string }).title;
         if (typeof title === 'string' && title.trim().length > 0) {
             return title;
@@ -1851,7 +1852,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
             return inputDesc;
         }
         return null;
-    }, [showTextJustificationActivity, part.tool, stateWithData, input]);
+    }, [descriptionPath, part.tool, stateWithData, input]);
 
     const runtime = React.useContext(RuntimeAPIContext);
 
@@ -1912,7 +1913,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
     }
 
     return (
-        <div className="my-1">
+        <div>
             {}
             <div
                 className={cn(
@@ -2004,7 +2005,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                         )}
                         {!justificationText && !fetchedUrl && description && (
                             descriptionPath && description === descriptionPath ? (
-                                renderAnimatedPathWithIcon(descriptionPath, isMobile, animateTailText, false)
+                                renderAnimatedPathWithIcon(descriptionPath, animateTailText, false)
                             ) : (
                                 <Text
                                     variant={animateTailText ? 'generate-effect' : undefined}

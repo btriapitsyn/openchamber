@@ -20,9 +20,24 @@ export const MinDurationShineText: React.FC<MinDurationShineTextProps> = ({
 }) => {
     const [isShining, setIsShining] = React.useState(active);
     const shineStartedAtRef = React.useRef<number | null>(active ? Date.now() : null);
+    const deactivateTimerRef = React.useRef<number | null>(null);
+
+    const clearDeactivateTimer = React.useCallback(() => {
+        if (deactivateTimerRef.current !== null) {
+            window.clearTimeout(deactivateTimerRef.current);
+            deactivateTimerRef.current = null;
+        }
+    }, []);
+
+    React.useEffect(() => {
+        return () => {
+            clearDeactivateTimer();
+        };
+    }, [clearDeactivateTimer]);
 
     React.useEffect(() => {
         if (active) {
+            clearDeactivateTimer();
             if (shineStartedAtRef.current === null) {
                 shineStartedAtRef.current = Date.now();
             }
@@ -37,25 +52,31 @@ export const MinDurationShineText: React.FC<MinDurationShineTextProps> = ({
             return;
         }
 
-        const startedAt = shineStartedAtRef.current ?? Date.now();
-        const elapsed = Date.now() - startedAt;
-        const remaining = Math.max(0, minDurationMs - elapsed);
+        // Debounce brief inactive blips during rapid status transitions.
+        const DEACTIVATE_GRACE_MS = 160;
+        deactivateTimerRef.current = window.setTimeout(() => {
+            const startedAt = shineStartedAtRef.current ?? Date.now();
+            const elapsed = Date.now() - startedAt;
+            const remaining = Math.max(0, minDurationMs - elapsed);
 
-        if (remaining === 0) {
-            setIsShining(false);
-            shineStartedAtRef.current = null;
-            return;
-        }
+            if (remaining === 0) {
+                setIsShining(false);
+                shineStartedAtRef.current = null;
+                clearDeactivateTimer();
+                return;
+            }
 
-        const timer = window.setTimeout(() => {
-            setIsShining(false);
-            shineStartedAtRef.current = null;
-        }, remaining);
+            deactivateTimerRef.current = window.setTimeout(() => {
+                setIsShining(false);
+                shineStartedAtRef.current = null;
+                clearDeactivateTimer();
+            }, remaining);
+        }, DEACTIVATE_GRACE_MS);
 
         return () => {
-            window.clearTimeout(timer);
+            clearDeactivateTimer();
         };
-    }, [active, isShining, minDurationMs]);
+    }, [active, clearDeactivateTimer, isShining, minDurationMs]);
 
     if (isShining) {
         return (

@@ -23,6 +23,7 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
+import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
 
 const MESSAGE_VIRTUALIZE_THRESHOLD = 40;
 const MESSAGE_VIRTUAL_OVERSCAN_MOBILE = 2;
@@ -328,13 +329,15 @@ type RenderEntry =
     }
     | { kind: 'turn'; key: string; turn: TurnRecord; isLastTurn: boolean };
 
-type TurnUiState = { isExpanded: boolean };
+
 
 interface MessageRowProps {
     message: ChatMessageEntry;
     previousMessage?: ChatMessageEntry;
     nextMessage?: ChatMessageEntry;
     turnGroupingContext?: TurnGroupingContext;
+    animateUserOnMount?: boolean;
+    onUserAnimationConsumed?: (messageId: string) => void;
     onContentChange: (reason?: ContentChangeReason) => void;
     animationHandlers: AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
@@ -345,6 +348,8 @@ const MessageRow = React.memo<MessageRowProps>(({
     previousMessage,
     nextMessage,
     turnGroupingContext,
+    animateUserOnMount,
+    onUserAnimationConsumed,
     onContentChange,
     animationHandlers,
     scrollToBottom,
@@ -354,6 +359,8 @@ const MessageRow = React.memo<MessageRowProps>(({
             message={message}
             previousMessage={previousMessage}
             nextMessage={nextMessage}
+            animateUserOnMount={animateUserOnMount}
+            onUserAnimationConsumed={onUserAnimationConsumed}
             onContentChange={onContentChange}
             animationHandlers={animationHandlers}
             scrollToBottom={scrollToBottom}
@@ -368,28 +375,25 @@ interface TurnBlockProps {
     turn: TurnRecord;
     isLastTurn: boolean;
     sessionIsWorking: boolean;
-    defaultActivityExpanded: boolean;
-    turnUiStates: Map<string, TurnUiState>;
-    onToggleTurnGroup: (turnId: string) => void;
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     stickyUserHeader?: boolean;
+    shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
+    onUserAnimationConsumed: (messageId: string) => void;
 }
 
 const TurnBlock: React.FC<TurnBlockProps> = ({
     turn,
     isLastTurn,
     sessionIsWorking,
-    defaultActivityExpanded,
-    turnUiStates,
-    onToggleTurnGroup,
     onMessageContentChange,
     getAnimationHandlers,
     scrollToBottom,
     stickyUserHeader = true,
+    shouldAnimateUserMessage,
+    onUserAnimationConsumed,
 }) => {
-    const turnUiState = turnUiStates.get(turn.turnId) ?? { isExpanded: defaultActivityExpanded };
 
     const messageOrder = React.useMemo(() => {
         const ordered = [turn.userMessage, ...turn.assistantMessages];
@@ -416,9 +420,6 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
             : undefined;
         return {
             turnId: turn.turnId,
-            summaryBody: turn.summaryText,
-            activityParts: turn.activityParts,
-            activityGroupSegments: turn.activitySegments,
             headerMessageId: turn.headerMessageId,
             hasTools: turn.hasTools,
             hasReasoning: turn.hasReasoning,
@@ -426,7 +427,7 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
             userMessageCreatedAt: typeof userCreatedAt === 'number' ? userCreatedAt : undefined,
             userMessageVariant,
         };
-    }, [turn.activityParts, turn.activitySegments, turn.diffStats, turn.hasReasoning, turn.hasTools, turn.headerMessageId, turn.summaryText, turn.turnId, turn.userMessage.info]);
+    }, [turn.diffStats, turn.hasReasoning, turn.hasTools, turn.headerMessageId, turn.turnId, turn.userMessage.info]);
 
     const renderMessage = React.useCallback(
         (message: ChatMessageEntry) => {
@@ -446,8 +447,6 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
                     isFirstAssistantInTurn: assistantIndex === 0,
                     isLastAssistantInTurn: assistantIndex === turn.assistantMessages.length - 1,
                     isWorking: isLastTurn && sessionIsWorking,
-                    isGroupExpanded: turnUiState.isExpanded,
-                    toggleGroup: () => onToggleTurnGroup(turn.turnId),
                 } satisfies TurnGroupingContext
                 : undefined;
 
@@ -458,6 +457,8 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
                     previousMessage={previousMessage}
                     nextMessage={nextMessage}
                     turnGroupingContext={turnGroupingContext}
+                    animateUserOnMount={shouldAnimateUserMessage(message)}
+                    onUserAnimationConsumed={onUserAnimationConsumed}
                     onContentChange={onMessageContentChange}
                     animationHandlers={getAnimationHandlers(message.info.id)}
                     scrollToBottom={scrollToBottom}
@@ -470,14 +471,13 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
             messageOrder.lookup,
             messageOrder.ordered,
             onMessageContentChange,
-            onToggleTurnGroup,
             scrollToBottom,
             sessionIsWorking,
             assistantIndexById,
             turn.assistantMessages,
-            turn.turnId,
             turnGroupingContextBase,
-            turnUiState.isExpanded,
+            shouldAnimateUserMessage,
+            onUserAnimationConsumed,
         ]
     );
 
@@ -495,6 +495,8 @@ interface UngroupedMessageRowProps {
     onMessageContentChange: (reason?: ContentChangeReason) => void;
     getAnimationHandlers: (messageId: string) => AnimationHandlers;
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
+    shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
+    onUserAnimationConsumed: (messageId: string) => void;
 }
 
 const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
@@ -504,12 +506,16 @@ const UngroupedMessageRow: React.FC<UngroupedMessageRowProps> = React.memo(({
     onMessageContentChange,
     getAnimationHandlers,
     scrollToBottom,
+    shouldAnimateUserMessage,
+    onUserAnimationConsumed,
 }) => {
     return (
         <MessageRow
             message={message}
             previousMessage={previousMessage}
             nextMessage={nextMessage}
+            animateUserOnMount={shouldAnimateUserMessage(message)}
+            onUserAnimationConsumed={onUserAnimationConsumed}
             onContentChange={onMessageContentChange}
             animationHandlers={getAnimationHandlers(message.info.id)}
             scrollToBottom={scrollToBottom}
@@ -526,9 +532,8 @@ interface MessageListEntryProps {
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     stickyUserHeader?: boolean;
     sessionIsWorking: boolean;
-    defaultActivityExpanded: boolean;
-    turnUiStates: Map<string, TurnUiState>;
-    onToggleTurnGroup: (turnId: string) => void;
+    shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
+    onUserAnimationConsumed: (messageId: string) => void;
 }
 
 const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
@@ -538,9 +543,8 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
     scrollToBottom,
     stickyUserHeader,
     sessionIsWorking,
-    defaultActivityExpanded,
-    turnUiStates,
-    onToggleTurnGroup,
+    shouldAnimateUserMessage,
+    onUserAnimationConsumed,
 }) => {
     if (entry.kind === 'ungrouped') {
         return (
@@ -551,6 +555,8 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
                 onMessageContentChange={onMessageContentChange}
                 getAnimationHandlers={getAnimationHandlers}
                 scrollToBottom={scrollToBottom}
+                shouldAnimateUserMessage={shouldAnimateUserMessage}
+                onUserAnimationConsumed={onUserAnimationConsumed}
             />
         );
     }
@@ -560,9 +566,8 @@ const MessageListEntry: React.FC<MessageListEntryProps> = React.memo(({
             turn={entry.turn}
             isLastTurn={entry.isLastTurn}
             sessionIsWorking={sessionIsWorking}
-            defaultActivityExpanded={defaultActivityExpanded}
-            turnUiStates={turnUiStates}
-            onToggleTurnGroup={onToggleTurnGroup}
+            shouldAnimateUserMessage={shouldAnimateUserMessage}
+            onUserAnimationConsumed={onUserAnimationConsumed}
             onMessageContentChange={onMessageContentChange}
             getAnimationHandlers={getAnimationHandlers}
             scrollToBottom={scrollToBottom}
@@ -575,7 +580,7 @@ MessageListEntry.displayName = 'MessageListEntry';
 
 function areMessageListEntryPropsEqual(prevProps: MessageListEntryProps, nextProps: MessageListEntryProps): boolean {
     if (prevProps.stickyUserHeader !== nextProps.stickyUserHeader) return false;
-    if (prevProps.defaultActivityExpanded !== nextProps.defaultActivityExpanded) return false;
+    if (prevProps.shouldAnimateUserMessage !== nextProps.shouldAnimateUserMessage) return false;
 
     const prevEntry = prevProps.entry;
     const nextEntry = nextProps.entry;
@@ -584,12 +589,6 @@ function areMessageListEntryPropsEqual(prevProps: MessageListEntryProps, nextPro
 
     if (prevEntry.kind === 'turn' && nextEntry.kind === 'turn') {
         if (prevEntry.turn !== nextEntry.turn || prevEntry.isLastTurn !== nextEntry.isLastTurn) {
-            return false;
-        }
-
-        const prevExpanded = (prevProps.turnUiStates.get(prevEntry.turn.turnId) ?? { isExpanded: prevProps.defaultActivityExpanded }).isExpanded;
-        const nextExpanded = (nextProps.turnUiStates.get(nextEntry.turn.turnId) ?? { isExpanded: nextProps.defaultActivityExpanded }).isExpanded;
-        if (prevExpanded !== nextExpanded) {
             return false;
         }
 
@@ -619,10 +618,9 @@ const MessageListContent: React.FC<{
     scrollToBottom?: (options?: { instant?: boolean; force?: boolean }) => void;
     stickyUserHeader: boolean;
     sessionIsWorking: boolean;
-    defaultActivityExpanded: boolean;
-    turnUiStates: Map<string, TurnUiState>;
-    onToggleTurnGroup: (turnId: string) => void;
-}> = ({ entries, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, sessionIsWorking, defaultActivityExpanded, turnUiStates, onToggleTurnGroup }) => {
+    shouldAnimateUserMessage: (message: ChatMessageEntry) => boolean;
+    onUserAnimationConsumed: (messageId: string) => void;
+}> = ({ entries, onMessageContentChange, getAnimationHandlers, scrollToBottom, stickyUserHeader, sessionIsWorking, shouldAnimateUserMessage, onUserAnimationConsumed }) => {
     const renderEntry = React.useCallback((entry: RenderEntry) => {
         return (
             <MessageListEntry
@@ -633,12 +631,11 @@ const MessageListContent: React.FC<{
                 scrollToBottom={scrollToBottom}
                 stickyUserHeader={stickyUserHeader}
                 sessionIsWorking={sessionIsWorking}
-                defaultActivityExpanded={defaultActivityExpanded}
-                turnUiStates={turnUiStates}
-                onToggleTurnGroup={onToggleTurnGroup}
+                shouldAnimateUserMessage={shouldAnimateUserMessage}
+                onUserAnimationConsumed={onUserAnimationConsumed}
             />
         );
-    }, [defaultActivityExpanded, getAnimationHandlers, onMessageContentChange, onToggleTurnGroup, scrollToBottom, sessionIsWorking, stickyUserHeader, turnUiStates]);
+    }, [getAnimationHandlers, onMessageContentChange, onUserAnimationConsumed, scrollToBottom, sessionIsWorking, shouldAnimateUserMessage, stickyUserHeader]);
 
     return (
         <TurnList entries={entries} renderEntry={renderEntry} />
@@ -663,10 +660,11 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     const { isMobile } = useDeviceInfo();
     const { isWorking: sessionIsWorking } = useCurrentSessionActivity();
     const stickyUserHeader = useUIStore(state => state.stickyUserHeader);
-    const toolCallExpansion = useUIStore((state) => state.toolCallExpansion);
-    const showTextJustificationActivity = useUIStore((state) => state.showTextJustificationActivity);
-    const defaultActivityExpanded = toolCallExpansion !== 'collapsed';
-    const [turnUiStates, setTurnUiStates] = React.useState<Map<string, TurnUiState>>(() => new Map());
+    const userAnimationRef = React.useRef<{
+        sessionKey: string | undefined;
+        previousOrder: string[];
+        animatedIds: Set<string>;
+    }>({ sessionKey: undefined, previousOrder: [], animatedIds: new Set() });
 
     const stableOnMessageContentChange = useStableEvent(onMessageContentChange);
     const stableGetAnimationHandlers = useStableEvent(getAnimationHandlers);
@@ -674,19 +672,6 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     const stableScrollToBottom = useStableEvent((options?: { instant?: boolean; force?: boolean }) => {
         scrollToBottom?.(options);
     });
-
-    React.useEffect(() => {
-        setTurnUiStates(new Map());
-    }, [toolCallExpansion]);
-
-    const toggleTurnGroup = React.useCallback((turnId: string) => {
-        setTurnUiStates((previous) => {
-            const next = new Map(previous);
-            const current = next.get(turnId) ?? { isExpanded: defaultActivityExpanded };
-            next.set(turnId, { isExpanded: !current.isExpanded });
-            return next;
-        });
-    }, [defaultActivityExpanded]);
 
     React.useEffect(() => {
         if (permissions.length === 0 && questions.length === 0) {
@@ -803,7 +788,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         });
     }, [activeRetryMessage, activeRetryConfirmedAt, activeRetrySessionId, baseDisplayMessages, fallbackRetryTimestamp]);
 
-    const { projection, staticTurns, streamingTurn } = useTurnRecords(displayMessages, { showTextJustificationActivity });
+    const { projection, staticTurns, streamingTurn } = useTurnRecords(displayMessages);
     const turns = React.useMemo(() => {
         if (!streamingTurn) {
             return staticTurns;
@@ -865,6 +850,54 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         }
         return renderEntries.slice(staging.stageStartIndex);
     }, [renderEntries, staging.stageStartIndex]);
+
+    const currentUserOrder = React.useMemo(() => {
+        return messages
+            .filter((message) => resolveMessageRole(message) === 'user')
+            .map((message) => message.info.id);
+    }, [messages]);
+
+    // Detect new user messages SYNCHRONOUSLY during render.
+    // Must happen during render (not in useEffect) so that ToolRevealOnMount
+    // receives animate=true on the FIRST render of the new message,
+    // starting it hidden (opacity 0). An effect-based approach causes
+    // the message to flash visible before the animation starts.
+    {
+        const anim = userAnimationRef.current;
+
+        // Reset on session switch
+        if (anim.sessionKey !== sessionKey) {
+            anim.sessionKey = sessionKey;
+            anim.previousOrder = currentUserOrder;
+            anim.animatedIds = new Set();
+        }
+
+        // Detect appended user messages
+        const prev = anim.previousOrder;
+        if (currentUserOrder.length > prev.length) {
+            const isAppendOnly = prev.every((id, i) => currentUserOrder[i] === id);
+            if (isAppendOnly && hasPendingUserSendAnimation(sessionKey)) {
+                for (let i = prev.length; i < currentUserOrder.length; i += 1) {
+                    const id = currentUserOrder[i];
+                    if (id && !anim.animatedIds.has(id)) {
+                        if (!consumePendingUserSendAnimation(sessionKey)) break;
+                        anim.animatedIds.add(id);
+                    }
+                }
+            }
+        }
+        anim.previousOrder = currentUserOrder;
+    }
+
+    const shouldAnimateUserMessage = React.useCallback((message: ChatMessageEntry): boolean => {
+        if (resolveMessageRole(message) !== 'user') return false;
+        return userAnimationRef.current.animatedIds.has(message.info.id);
+    }, []);
+
+    const onUserAnimationConsumed = React.useCallback(() => {
+        // Animation plays once via ToolRevealOnMount; no cleanup needed.
+        // The ref-based animatedIds set is reset on session switch.
+    }, []);
 
     const shouldVirtualize = Boolean(scrollContainer) && stagedEntries.length >= MESSAGE_VIRTUALIZE_THRESHOLD;
 
@@ -1152,9 +1185,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                                             scrollToBottom={stableScrollToBottom}
                                             stickyUserHeader={false}
                                             sessionIsWorking={sessionIsWorking}
-                                            defaultActivityExpanded={defaultActivityExpanded}
-                                            turnUiStates={turnUiStates}
-                                            onToggleTurnGroup={toggleTurnGroup}
+                                            shouldAnimateUserMessage={shouldAnimateUserMessage}
+                                            onUserAnimationConsumed={onUserAnimationConsumed}
                                         />
                                     </div>
                                 );
@@ -1168,9 +1200,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                             scrollToBottom={stableScrollToBottom}
                             stickyUserHeader={stickyUserHeader}
                             sessionIsWorking={sessionIsWorking}
-                            defaultActivityExpanded={defaultActivityExpanded}
-                            turnUiStates={turnUiStates}
-                            onToggleTurnGroup={toggleTurnGroup}
+                            shouldAnimateUserMessage={shouldAnimateUserMessage}
+                            onUserAnimationConsumed={onUserAnimationConsumed}
                         />
                     )}
                 </FadeInDisabledProvider>

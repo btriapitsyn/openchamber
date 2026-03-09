@@ -9,11 +9,13 @@ import type { ToolPopupContent } from '../types';
 import ToolPart from './ToolPart';
 import AssistantTextPart from './AssistantTextPart';
 import { MinDurationShineText } from './MinDurationShineText';
+import { ToolRevealOnMount } from './ToolRevealOnMount';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Text } from '@/components/ui/text';
 import { FadeInOnReveal } from '../FadeInOnReveal';
 import { getToolIcon } from './ToolPart';
 import { getToolMetadata } from '@/lib/toolHelpers';
+import { getStaticGroupToolName, isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
 
 interface DiffStats {
     additions: number;
@@ -34,42 +36,9 @@ interface ProgressiveGroupProps {
     streamPhase: StreamPhase;
     showHeader: boolean;
     animateRows?: boolean;
+    animateNewTools?: boolean;
     diffStats?: DiffStats;
 }
-
-// Tools that remain fully expandable (edit, bash, task-like)
-const EXPANDABLE_TOOL_NAMES = new Set<string>([
-    'edit', 'multiedit', 'apply_patch', 'str_replace', 'str_replace_based_edit_tool',
-    'bash', 'shell', 'cmd', 'terminal',
-    'write', 'create', 'file_write',
-    'question',
-]);
-
-// Tools that are standalone and rendered separately (not in progressive group flow)
-const STANDALONE_TOOL_NAMES = new Set<string>(['task']);
-
-const isExpandableTool = (toolName: unknown): boolean => {
-    return typeof toolName === 'string' && EXPANDABLE_TOOL_NAMES.has(toolName.toLowerCase());
-};
-
-const isStandaloneTool = (toolName: unknown): boolean => {
-    return typeof toolName === 'string' && STANDALONE_TOOL_NAMES.has(toolName.toLowerCase());
-};
-
-const isStaticTool = (toolName: unknown): boolean => {
-    if (typeof toolName !== 'string') return false;
-    return !isExpandableTool(toolName) && !isStandaloneTool(toolName);
-};
-
-const SEARCH_TOOL_NAMES = new Set<string>(['grep', 'search', 'find', 'ripgrep', 'glob']);
-
-const getStaticGroupToolName = (toolName: string): string => {
-    const normalized = toolName.toLowerCase();
-    if (SEARCH_TOOL_NAMES.has(normalized)) {
-        return 'grep';
-    }
-    return normalized;
-};
 
 const EDIT_LIKE_TOOL_NAMES = new Set<string>([
     'edit',
@@ -221,18 +190,14 @@ const isActivityRunning = (activity: TurnActivityPart): boolean => {
     return typeof activity.endedAt !== 'number';
 };
 
-const sortPartsByTime = (parts: TurnActivityPart[]): TurnActivityPart[] => {
-    return [...parts].sort((a, b) => {
-        const aTime = typeof a.endedAt === 'number' ? a.endedAt : undefined;
-        const bTime = typeof b.endedAt === 'number' ? b.endedAt : undefined;
-
-        if (aTime === undefined && bTime === undefined) return 0;
-        if (aTime === undefined) return 1;
-        if (bTime === undefined) return -1;
-
-        return aTime - bTime;
-    });
-};
+/**
+ * Parts arrive in correct chronological order:
+ * messages in sequence, parts within each message in their natural LLM
+ * production order. No re-sorting needed — time-based sorting breaks this
+ * because text parts get time.end = message completion time (later than
+ * tools), pushing text after tools within the same message.
+ */
+const sortPartsByTime = (parts: TurnActivityPart[]): TurnActivityPart[] => parts;
 
 /**
  * Extract a short filename from a tool part's input (for aggregation display).
@@ -420,12 +385,11 @@ const aggregateRows = (parts: TurnActivityPart[]): AggregatedRow[] => {
  * Render a static aggregated tool row.
  * Shows: [icon] DisplayName file1.tsx file2.tsx ...
  */
-const StaticToolRow: React.FC<{
+export const StaticToolRow: React.FC<{
     toolName: string;
     activities: TurnActivityPart[];
-    isMobile: boolean;
     animateTailText: boolean;
-}> = ({ toolName, activities, isMobile, animateTailText }) => {
+}> = ({ toolName, activities, animateTailText }) => {
     const displayName = getToolMetadata(toolName).displayName;
     const icon = getToolIcon(toolName);
     const isReadGroup = toolName.toLowerCase() === 'read';
@@ -462,7 +426,7 @@ const StaticToolRow: React.FC<{
     return (
         <div
             className={cn(
-                'flex w-full flex-wrap items-center gap-x-2 gap-y-1 pr-2 pl-px py-1 rounded-xl'
+                'flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 pr-2 pl-px py-1.5 rounded-xl'
             )}
         >
             <div className="inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-icon)' }}>
@@ -471,7 +435,7 @@ const StaticToolRow: React.FC<{
             <MinDurationShineText
                 active={hasRunningActivity}
                 minDurationMs={1000}
-                className="typography-meta font-medium inline-flex h-5 items-center flex-shrink-0 opacity-85"
+                className="typography-meta leading-5 font-medium inline-flex h-5 items-center flex-shrink-0 opacity-85"
                 style={{ color: 'var(--tools-title)' }}
                 title={displayName}
             >
@@ -479,11 +443,11 @@ const StaticToolRow: React.FC<{
             </MinDurationShineText>
             {isReadGroup && readFileEntries.length > 0
                 ? readFileEntries.map((entry) => (
-                    <span key={entry.path} className="inline-flex items-center gap-1 min-w-0 typography-meta" style={{ color: 'var(--tools-description)' }}>
+                    <span key={entry.path} className="inline-flex items-center gap-1 min-w-0 max-w-full typography-meta leading-5" style={{ color: 'var(--tools-description)' }}>
                         <FileTypeIcon filePath={entry.path} className="h-3.5 w-3.5" />
                         <Text
                             variant={animateTailText ? 'generate-effect' : undefined}
-                            className={cn('min-w-0 typography-meta', isMobile ? 'break-words' : 'truncate')}
+                            className="min-w-0 max-w-full truncate typography-meta leading-5"
                             style={{ color: 'var(--tools-description)' }}
                             title={entry.path}
                         >
@@ -494,10 +458,10 @@ const StaticToolRow: React.FC<{
                 : null}
             {isSearchGroup && descriptions.length > 0
                 ? descriptions.map((desc, index) => (
-                    <span key={`${desc}-${index}`} className="inline-flex min-w-0">
+                    <span key={`${desc}-${index}`} className="inline-flex min-w-0 max-w-full">
                         <Text
                             variant={animateTailText ? 'generate-effect' : undefined}
-                            className={cn('min-w-0 typography-meta', isMobile ? 'break-words' : 'truncate')}
+                            className="min-w-0 max-w-full truncate typography-meta leading-5"
                             style={{ color: 'var(--tools-description)' }}
                             title={desc}
                         >
@@ -514,15 +478,15 @@ const StaticToolRow: React.FC<{
                         target="_blank"
                         rel="noopener noreferrer"
                         className={cn(
-                            'min-w-0 underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
-                            isMobile ? 'break-words' : 'truncate max-w-[20rem]'
+                            'min-w-0 max-w-full underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
+                            'truncate max-w-[20rem]'
                         )}
                         style={{ color: 'var(--status-info)' }}
                         title={url}
                     >
                         <Text
                             variant={animateTailText ? 'generate-effect' : undefined}
-                            className={cn('min-w-0 typography-meta', isMobile ? 'break-words' : 'truncate max-w-[20rem]')}
+                            className="min-w-0 max-w-full truncate max-w-[20rem] typography-meta leading-5"
                             style={{ color: 'var(--status-info)' }}
                         >
                             {url}
@@ -533,7 +497,7 @@ const StaticToolRow: React.FC<{
             {!isReadGroup && !isSearchGroup && !isFetchGroup && descriptions.length > 0 ? (
                 <Text
                     variant={animateTailText ? 'generate-effect' : undefined}
-                    className={cn('min-w-0 typography-meta', isMobile ? 'break-words' : 'truncate')}
+                    className="min-w-0 max-w-full truncate typography-meta leading-5"
                     style={{ color: 'var(--tools-description)' }}
                 >
                     {descriptions.join(' ')}
@@ -592,6 +556,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     streamPhase,
     showHeader,
     animateRows = true,
+    animateNewTools = false,
 }) => {
     const shouldRenderRows = !showHeader || isExpanded;
 
@@ -629,6 +594,18 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         return <FadeInOnReveal key={key}>{content}</FadeInOnReveal>;
     };
 
+    const renderToolRow = (key: string, content: React.ReactNode) => {
+        if (!animateNewTools) {
+            return wrapRow(key, content);
+        }
+        return wrapRow(
+            key,
+            <ToolRevealOnMount animate={true} wipe>
+                {content}
+            </ToolRevealOnMount>
+        );
+    };
+
     const renderedRows = shouldRenderRows
         ? rows.map((row, index) => {
         switch (row.type) {
@@ -657,7 +634,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                 );
 
             case 'tool-expandable':
-                return wrapRow(
+                return renderToolRow(
                     row.activity.id,
                     <>
                         <ToolPart
@@ -674,20 +651,19 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                 );
 
             case 'tool-static-group':
-                return wrapRow(
-                    `static-${row.toolName}-${index}`,
+                return renderToolRow(
+                    `static-${row.toolName}-${row.activities[0]?.id ?? index}`,
                     <>
                         <StaticToolRow
                             toolName={row.toolName}
                             activities={row.activities}
-                            isMobile={isMobile}
                             animateTailText={animateRows}
                         />
                     </>
                 );
 
             case 'tool-fallback':
-                return wrapRow(
+                return renderToolRow(
                     row.activity.id,
                     <>
                         <ToolPart
@@ -722,30 +698,30 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
             <div className="my-1">
                 <button
                     type="button"
-                    className="group/tool flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 pr-2 pl-px pt-0 pb-1.5 rounded-xl text-left"
+                    className="group/tool flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 pr-2 pl-px py-1.5 rounded-xl text-left"
                     onClick={onToggle}
                 >
                     <span className="inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-icon)' }}>
                         <RiStackLine className="h-3.5 w-3.5" />
                     </span>
-                    <span className="typography-meta font-medium inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-title)' }}>
+                    <span className="typography-meta leading-5 font-medium inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-title)' }}>
                         Activity
                     </span>
                     {hasToolMetric ? (
-                        <span className="typography-meta text-muted-foreground/70 flex-shrink-0">
+                        <span className="typography-meta leading-5 text-muted-foreground/80 flex-shrink-0">
                             {toolCount} {toolCount === 1 ? 'tool' : 'tools'}
                         </span>
                     ) : null}
                     {aggregatedFileDiffs.map((entry, index) => (
                         <span
                             key={`${entry.filePath}-${index}`}
-                            className="inline-flex min-w-0 items-center gap-1 typography-meta text-muted-foreground/70"
+                            className="inline-flex min-w-0 max-w-full items-center gap-1 typography-meta leading-5 text-muted-foreground/80"
                         >
                             <FileTypeIcon filePath={entry.filePath} className="h-3.5 w-3.5" />
-                            <span className="truncate max-w-[12rem]" style={{ color: 'var(--tools-title)' }} title={entry.filePath}>
+                            <span className={cn('truncate', isMobile ? 'max-w-[9rem]' : 'max-w-[12rem]')} style={{ color: 'var(--tools-title)' }} title={entry.filePath}>
                                 {toDisplayFileName(entry.filePath)}
                             </span>
-                            <span className="flex-shrink-0 inline-flex items-center gap-0">
+                            <span className="flex-shrink-0 inline-flex items-center gap-0 tabular-nums">
                                 <span style={{ color: 'var(--status-success)' }}>+{entry.added}</span>
                                 <span style={{ color: 'var(--tools-description)' }}>/</span>
                                 <span style={{ color: 'var(--status-error)' }}>-{entry.removed}</span>
@@ -753,7 +729,16 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                         </span>
                     ))}
                 </button>
-                {isExpanded ? renderedRows : null}
+                {isExpanded ? (
+                    <div className="relative ml-2 pl-3">
+                        <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute left-0 top-px bottom-0 w-px"
+                            style={{ backgroundColor: 'var(--tools-border)' }}
+                        />
+                        <div>{renderedRows}</div>
+                    </div>
+                ) : null}
             </div>
         </FadeInOnReveal>
     );

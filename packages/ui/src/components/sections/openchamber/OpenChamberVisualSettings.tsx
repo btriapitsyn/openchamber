@@ -49,13 +49,6 @@ const THEME_MODE_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
     },
 ];
 
-const TOOL_EXPANSION_OPTIONS: Array<{ value: 'collapsed' | 'activity' | 'detailed' | 'changes'; label: string; description: string }> = [
-    { value: 'collapsed', label: 'Collapsed', description: 'Activity and tool calls stay collapsed by default.' },
-    { value: 'activity', label: 'Summary', description: 'Activity opens by default; tool calls stay collapsed.' },
-    { value: 'detailed', label: 'Detailed', description: 'Activity opens; key tools auto-expand for richer detail.' },
-    { value: 'changes', label: 'Changes', description: 'Activity opens; only edit/write/patch tools auto-expand.' },
-];
-
 const DIFF_LAYOUT_OPTIONS: Option<'dynamic' | 'inline' | 'side-by-side'>[] = [
     {
         id: 'dynamic',
@@ -124,7 +117,7 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'toolOutput' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'terminalQuickKeys' | 'persistDraft';
+export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -137,10 +130,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const directoryShowHidden = useDirectoryShowHidden();
     const showReasoningTraces = useUIStore(state => state.showReasoningTraces);
     const setShowReasoningTraces = useUIStore(state => state.setShowReasoningTraces);
-    const showTextJustificationActivity = useUIStore(state => state.showTextJustificationActivity);
-    const setShowTextJustificationActivity = useUIStore(state => state.setShowTextJustificationActivity);
-    const toolCallExpansion = useUIStore(state => state.toolCallExpansion);
-    const setToolCallExpansion = useUIStore(state => state.setToolCallExpansion);
+
     const mermaidRenderingMode = useUIStore(state => state.mermaidRenderingMode);
     const setMermaidRenderingMode = useUIStore(state => state.setMermaidRenderingMode);
     const userMessageRenderingMode = useUIStore(state => state.userMessageRenderingMode);
@@ -232,8 +222,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const hasAppearanceSettings = (shouldShow('theme') || shouldShow('pwaInstallName')) && !isVSCode;
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('cornerRadius') || shouldShow('inputBarOffset');
     const hasNavigationSettings = (!isMobile && shouldShow('navRail')) || (shouldShow('terminalQuickKeys') && !isMobile);
-    const hasBehaviorSettings = shouldShow('toolOutput')
-        || shouldShow('mermaidRendering')
+    const hasBehaviorSettings = shouldShow('mermaidRendering')
         || shouldShow('userMessageRendering')
         || shouldShow('stickyUserHeader')
         || shouldShow('diffLayout')
@@ -241,9 +230,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         || shouldShow('dotfiles')
         || shouldShow('reasoning')
         || shouldShow('queueMode')
-        || shouldShow('textJustificationActivity')
         || shouldShow('persistDraft');
-    const selectedToolExpansionOption = TOOL_EXPANSION_OPTIONS.find((option) => option.value === toolCallExpansion);
 
     const showPwaInstallNameSetting = shouldShow('pwaInstallName') && isWebRuntime() && browserTab;
     const [pwaInstallName, setPwaInstallName] = React.useState('');
@@ -704,37 +691,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                 {hasBehaviorSettings && (
                     <div className="space-y-3">
 
-                            {shouldShow('toolOutput') && (
-                                <section className="px-2 pb-2 pt-0">
-                                    <h4 className="typography-ui-header font-medium text-foreground">Default Tool Output</h4>
-                                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                                        {TOOL_EXPANSION_OPTIONS.map((option) => {
-                                            return (
-                                                <ButtonSmall
-                                                    key={option.value}
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="xs"
-                                                    className={cn(
-                                                        '!font-normal',
-                                                        toolCallExpansion === option.value
-                                                            ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
-                                                            : 'text-foreground'
-                                                    )}
-                                                    onClick={() => setToolCallExpansion(option.value)}
-                                                >
-                                                    {option.label}
-                                                </ButtonSmall>
-                                            );
-                                        })}
-                                    </div>
-                                    {selectedToolExpansionOption && (
-                                        <p className="mt-2 typography-ui-label font-normal text-muted-foreground">
-                                            {selectedToolExpansionOption.description}
-                                        </p>
-                                    )}
-                                </section>
-                            )}
+
 
                             {(shouldShow('userMessageRendering') || shouldShow('mermaidRendering') || (shouldShow('diffLayout') && !isVSCode)) && (
                                 <div className="grid grid-cols-1 gap-y-2 md:grid-cols-[minmax(0,16rem)_minmax(0,16rem)] md:justify-start md:gap-x-2">
@@ -884,7 +841,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </div>
                             )}
 
-                            {(shouldShow('stickyUserHeader') || (shouldShow('mobileStatusBar') && isMobile) || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('reasoning') || shouldShow('textJustificationActivity')) && (
+                            {(shouldShow('stickyUserHeader') || (shouldShow('mobileStatusBar') && isMobile) || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || shouldShow('reasoning')) && (
                                 <section className="p-2 space-y-0.5">
                                     {shouldShow('stickyUserHeader') && (
                                         <div
@@ -1034,28 +991,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         </div>
                                     )}
 
-                                    {shouldShow('textJustificationActivity') && (
-                                        <div
-                                            className="group flex cursor-pointer items-center gap-2 py-1.5"
-                                            role="button"
-                                            tabIndex={0}
-                                            aria-pressed={showTextJustificationActivity}
-                                            onClick={() => setShowTextJustificationActivity(!showTextJustificationActivity)}
-                                            onKeyDown={(event) => {
-                                                if (event.key === ' ' || event.key === 'Enter') {
-                                                    event.preventDefault();
-                                                    setShowTextJustificationActivity(!showTextJustificationActivity);
-                                                }
-                                            }}
-                                        >
-                                            <Checkbox
-                                                checked={showTextJustificationActivity}
-                                                onChange={setShowTextJustificationActivity}
-                                                ariaLabel="Show justification activity"
-                                            />
-                                            <span className="typography-ui-label text-foreground">Show Justification Activity</span>
-                                        </div>
-                                    )}
+
 
                                 </section>
                             )}

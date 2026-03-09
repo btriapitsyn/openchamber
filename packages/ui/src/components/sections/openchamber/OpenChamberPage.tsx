@@ -114,9 +114,9 @@ const VisualSectionContent: React.FC = () => {
     ]} />;
 };
 
-// Chat section: Default Tool Output, User message rendering, Diff layout, Mobile status bar, Show reasoning traces, Justification activity, Queue mode, Persist draft
+// Chat section: User message rendering, Diff layout, Mobile status bar, Show reasoning traces, Queue mode, Persist draft
 const ChatSectionContent: React.FC = () => {
-    return <OpenChamberVisualSettings visibleSettings={['toolOutput', 'mermaidRendering', 'userMessageRendering', 'stickyUserHeader', 'diffLayout', 'mobileStatusBar', 'dotfiles', 'reasoning', 'textJustificationActivity', 'queueMode', 'persistDraft']} />;
+    return <OpenChamberVisualSettings visibleSettings={['mermaidRendering', 'userMessageRendering', 'stickyUserHeader', 'diffLayout', 'mobileStatusBar', 'dotfiles', 'reasoning', 'queueMode', 'persistDraft']} />;
 };
 
 // Sessions section: Default model & agent, Session retention

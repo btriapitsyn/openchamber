@@ -18,6 +18,7 @@ import { useConfigStore } from "./useConfigStore";
 import { useProjectsStore } from "./useProjectsStore";
 import { useSessionFoldersStore } from "./useSessionFoldersStore";
 import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta";
+import { markPendingUserSendAnimation } from "@/lib/userSendAnimation";
 import { flattenAssistantTextParts } from "@/lib/messages/messageText";
 import { normalizeMessageRecordsForProjection } from "./utils/messageProjectors";
 
@@ -452,6 +453,7 @@ export const useSessionStore = create<SessionStore>()(
                             : additionalParts;
 
                         try {
+                            markPendingUserSendAnimation(created.id);
                             return await useMessageStore
                                 .getState()
                                 .sendMessage(content, providerID, modelID, effectiveDraftAgent, created.id, attachments, agentMentionName, mergedAdditionalParts, variant, inputMode);
@@ -509,6 +511,9 @@ export const useSessionStore = create<SessionStore>()(
                     }
 
                     try {
+                        if (currentSessionId) {
+                            markPendingUserSendAnimation(currentSessionId);
+                        }
                         return await useMessageStore.getState().sendMessage(content, providerID, modelID, effectiveAgent, currentSessionId || undefined, attachments, agentMentionName, additionalParts, variant, inputMode);
                     } catch (error) {
                         if (currentSessionId) {

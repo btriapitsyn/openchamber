@@ -316,9 +316,6 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     queueStore.setQueueMode(settings.queueModeEnabled);
   }
 
-  if (typeof settings.showTextJustificationActivity === 'boolean' && settings.showTextJustificationActivity !== store.showTextJustificationActivity) {
-    store.setShowTextJustificationActivity(settings.showTextJustificationActivity);
-  }
   if (typeof settings.showDeletionDialog === 'boolean' && settings.showDeletionDialog !== store.showDeletionDialog) {
     store.setShowDeletionDialog(settings.showDeletionDialog);
   }
@@ -356,15 +353,6 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (typeof settings.maxLastMessageLength === 'number' && Number.isFinite(settings.maxLastMessageLength)) {
     store.setMaxLastMessageLength(settings.maxLastMessageLength);
-  }
-  if (typeof settings.toolCallExpansion === 'string'
-    && (settings.toolCallExpansion === 'collapsed'
-      || settings.toolCallExpansion === 'activity'
-      || settings.toolCallExpansion === 'detailed'
-      || settings.toolCallExpansion === 'changes')) {
-    if (settings.toolCallExpansion !== store.toolCallExpansion) {
-      store.setToolCallExpansion(settings.toolCallExpansion);
-    }
   }
   if (typeof settings.userMessageRenderingMode === 'string'
     && (settings.userMessageRenderingMode === 'markdown' || settings.userMessageRenderingMode === 'plain')) {
@@ -553,9 +541,6 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.queueModeEnabled === 'boolean') {
     result.queueModeEnabled = candidate.queueModeEnabled;
   }
-  if (typeof candidate.showTextJustificationActivity === 'boolean') {
-    result.showTextJustificationActivity = candidate.showTextJustificationActivity;
-  }
   if (typeof candidate.showDeletionDialog === 'boolean') {
     result.showDeletionDialog = candidate.showDeletionDialog;
   }
@@ -724,15 +709,6 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     }
   }
 
-  if (
-    typeof candidate.toolCallExpansion === 'string'
-    && (candidate.toolCallExpansion === 'collapsed'
-      || candidate.toolCallExpansion === 'activity'
-      || candidate.toolCallExpansion === 'detailed'
-      || candidate.toolCallExpansion === 'changes')
-  ) {
-    result.toolCallExpansion = candidate.toolCallExpansion;
-  }
   if (typeof candidate.userMessageRenderingMode === 'string'
     && (candidate.userMessageRenderingMode === 'markdown' || candidate.userMessageRenderingMode === 'plain')) {
     result.userMessageRenderingMode = candidate.userMessageRenderingMode;

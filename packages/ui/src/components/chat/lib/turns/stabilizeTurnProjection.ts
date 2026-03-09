@@ -3,14 +3,10 @@ import type { TurnProjectionResult, TurnRecord } from './types';
 
 const buildTurnSignature = (turn: TurnRecord): string => {
     const assistantIds = turn.assistantMessageIds.join(',');
-    const activityIds = turn.activityParts.map((part) => part.id).join(',');
-    const segmentIds = turn.activitySegments.map((segment) => `${segment.id}:${segment.parts.length}`).join(',');
     return [
         turn.turnId,
         turn.headerMessageId ?? '',
         assistantIds,
-        activityIds,
-        segmentIds,
         turn.summaryText ?? '',
         turn.stream.isStreaming ? '1' : '0',
         turn.stream.isRetrying ? '1' : '0',

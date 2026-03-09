@@ -3,10 +3,6 @@ import { projectTurnRecords } from '../lib/turns/projectTurnRecords';
 import { stabilizeTurnProjection } from '../lib/turns/stabilizeTurnProjection';
 import type { ChatMessageEntry, TurnProjectionResult } from '../lib/turns/types';
 
-interface UseTurnRecordsOptions {
-    showTextJustificationActivity: boolean;
-}
-
 export interface TurnRecordsResult {
     projection: TurnProjectionResult;
     staticTurns: TurnProjectionResult['turns'];
@@ -15,19 +11,17 @@ export interface TurnRecordsResult {
 
 export const useTurnRecords = (
     messages: ChatMessageEntry[],
-    options: UseTurnRecordsOptions,
 ): TurnRecordsResult => {
     const previousProjectionRef = React.useRef<TurnProjectionResult | null>(null);
 
     const projection = React.useMemo(() => {
         const rawProjection = projectTurnRecords(messages, {
-            showTextJustificationActivity: options.showTextJustificationActivity,
             previousProjection: previousProjectionRef.current,
         });
         const stabilizedProjection = stabilizeTurnProjection(rawProjection, previousProjectionRef.current);
         previousProjectionRef.current = stabilizedProjection;
         return stabilizedProjection;
-    }, [messages, options.showTextJustificationActivity]);
+    }, [messages]);
 
     const staticTurns = React.useMemo(() => {
         if (projection.turns.length <= 1) {

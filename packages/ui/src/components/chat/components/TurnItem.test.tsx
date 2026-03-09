@@ -29,8 +29,6 @@ test('TurnItem keeps turn anchor and assistant block order', () => {
         messages: [],
         assistantMessageIds: ['a1'],
         assistantMessages: [assistant],
-        activityParts: [],
-        activitySegments: [],
         summary: {},
         summaryText: undefined,
         hasTools: false,
