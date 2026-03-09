@@ -20,6 +20,7 @@ import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 import type { ToolPopupContent } from '../types';
 import { ensurePierreThemeRegistered } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
+import type { MessageRecord } from '@/lib/messageCompletion';
 
 import {
     renderListOutput,
@@ -35,30 +36,9 @@ import {
 import { DiffViewToggle, type DiffViewMode } from '../DiffViewToggle';
 import { VirtualizedCodeBlock, type CodeLine } from './VirtualizedCodeBlock';
 import { MinDurationShineText } from './MinDurationShineText';
+import { ToolRevealOnMount } from './ToolRevealOnMount';
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
-
-const ACTIVE_TOOL_STATUSES = new Set([
-    'pending',
-    'running',
-    'started',
-    'inprogress',
-    'processing',
-    'executing',
-]);
-
-const FINAL_TOOL_STATUSES = new Set([
-    'completed',
-    'complete',
-    'error',
-    'failed',
-    'aborted',
-    'timeout',
-    'timedout',
-    'done',
-    'cancelled',
-    'canceled',
-]);
 
 interface ToolPartProps {
     part: ToolPartType;
@@ -139,8 +119,27 @@ export const getToolIcon = (toolName: string) => {
     return <RiToolsLine className={iconClass} />;
 };
 
+const normalizeToolName = (toolName: string | undefined | null): string => {
+    if (typeof toolName !== 'string') {
+        return '';
+    }
+
+    const trimmed = toolName.trim().toLowerCase();
+    if (!trimmed) {
+        return '';
+    }
+
+    if (trimmed.includes('.')) {
+        const dotParts = trimmed.split('.').filter(Boolean);
+        const last = dotParts[dotParts.length - 1];
+        if (last) return last;
+    }
+
+    return trimmed;
+};
+
 const formatDuration = (start: number, end?: number, now: number = Date.now()) => {
-    const duration = end ? end - start : now - start;
+    const duration = Math.max(0, (end ?? now) - start);
     const seconds = duration / 1000;
 
     const displaySeconds = seconds < 0.05 && end !== undefined ? 0.1 : seconds;
@@ -177,6 +176,12 @@ const parseDiffStats = (metadata?: Record<string, unknown>): { added: number; re
 
     if (added === 0 && removed === 0) return null;
     return { added, removed };
+};
+
+const parseWriteLineCount = (input?: Record<string, unknown>): number | null => {
+    if (!input?.content || typeof input.content !== 'string') return null;
+    const lines = input.content.split('\n');
+    return lines.length;
 };
 
 const extractFirstChangedLineFromDiff = (diffText: string): number | undefined => {
@@ -545,25 +550,33 @@ type TaskToolSummaryEntry = {
     state?: {
         status?: string;
         title?: string;
+        input?: Record<string, unknown>;
     };
 };
 
-type SessionMessageWithParts = {
-    info?: {
-        role?: string;
-    };
-    parts?: Array<{
-        id?: string;
-        type?: string;
-        tool?: string;
-        state?: {
-            status?: string;
-            title?: string;
-        };
-    }>;
-};
+type SessionMessageWithParts = MessageRecord;
 
 const EMPTY_SESSION_MESSAGES: SessionMessageWithParts[] = [];
+
+const normalizeSessionIdCandidate = (value: unknown): string | undefined => {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const readTaskSessionIdFromRecord = (value: unknown): string | undefined => {
+    if (!value || typeof value !== 'object') {
+        return undefined;
+    }
+
+    const record = value as Record<string, unknown>;
+    return (
+        normalizeSessionIdCandidate(record.sessionID)
+        ?? normalizeSessionIdCandidate(record.sessionId)
+    );
+};
 
 const readTaskSessionIdFromOutput = (output: string | undefined): string | undefined => {
     if (typeof output !== 'string' || output.trim().length === 0) {
@@ -573,9 +586,10 @@ const readTaskSessionIdFromOutput = (output: string | undefined): string | undef
     if (parsedMetadata.sessionId) {
         return parsedMetadata.sessionId;
     }
-    const match = output.match(/task_id:\s*([a-zA-Z0-9_]+)/);
-    const candidate = match?.[1];
-    return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate : undefined;
+    const taskMatch = output.match(/task_id\s*:\s*([^\s<"']+)/i);
+    const sessionMatch = output.match(/session[_\s-]?id\s*:\s*([^\s<"']+)/i);
+    const candidate = taskMatch?.[1] ?? sessionMatch?.[1];
+    return normalizeSessionIdCandidate(candidate);
 };
 
 const buildTaskSummaryEntriesFromSession = (messages: SessionMessageWithParts[]): TaskToolSummaryEntry[] => {
@@ -590,16 +604,20 @@ const buildTaskSummaryEntriesFromSession = (messages: SessionMessageWithParts[])
             if (part?.type !== 'tool') {
                 continue;
             }
-            const toolName = typeof part.tool === 'string' ? part.tool.toLowerCase() : '';
+            const toolName = normalizeToolName(part.tool);
             if (!toolName || toolName === 'task' || toolName === 'todowrite' || toolName === 'todoread') {
                 continue;
             }
+            const partState = part.state as { status?: string; title?: string; input?: unknown } | undefined;
             entries.push({
                 id: part.id,
                 tool: part.tool,
                 state: {
-                    status: part.state?.status,
-                    title: part.state?.title,
+                    status: partState?.status,
+                    title: partState?.title,
+                    input: partState?.input && typeof partState.input === 'object'
+                        ? (partState.input as Record<string, unknown>)
+                        : undefined,
                 },
             });
         }
@@ -613,10 +631,21 @@ const getTaskSummaryLabel = (entry: TaskToolSummaryEntry): string => {
     if (typeof title === 'string' && title.trim().length > 0) {
         return title;
     }
-    if (typeof entry.tool === 'string' && entry.tool.trim().length > 0) {
-        return entry.tool;
+
+    const input = entry.state?.input;
+    if (input && typeof input === 'object') {
+        const pathCandidate = input.filePath ?? input.file_path ?? input.path;
+        if (typeof pathCandidate === 'string' && pathCandidate.trim().length > 0) {
+            return pathCandidate.trim();
+        }
+
+        const urlCandidate = input.url;
+        if (typeof urlCandidate === 'string' && urlCandidate.trim().length > 0) {
+            return urlCandidate.trim();
+        }
     }
-    return 'tool';
+
+    return '';
 };
 
 const FILE_PATH_LABEL_TOOLS = new Set([
@@ -674,7 +703,7 @@ const normalizeTaskSummaryEntries = (value: unknown): TaskToolSummaryEntry[] => 
             tool?: unknown;
             title?: unknown;
             status?: unknown;
-            state?: { status?: unknown; title?: unknown };
+            state?: { status?: unknown; title?: unknown; input?: unknown };
         };
 
         const stateStatus = typeof record.state?.status === 'string' ? record.state.status : undefined;
@@ -688,6 +717,9 @@ const normalizeTaskSummaryEntries = (value: unknown): TaskToolSummaryEntry[] => 
             state: {
                 status,
                 title,
+                input: record.state?.input && typeof record.state.input === 'object'
+                    ? (record.state.input as Record<string, unknown>)
+                    : undefined,
             },
         });
     }
@@ -749,12 +781,11 @@ const TaskToolSummary: React.FC<{
     sessionId?: string;
     onShowPopup?: (content: ToolPopupContent) => void;
     input?: Record<string, unknown>;
-}> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input }) => {
+    animateTailText?: boolean;
+    isActive?: boolean;
+}> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false }) => {
     const setCurrentSession = useSessionStore((state) => state.setCurrentSession);
-    const displayEntries = React.useMemo(() => {
-        const nonPending = entries.filter((entry) => entry.state?.status !== 'pending');
-        return nonPending.length > 0 ? nonPending : entries;
-    }, [entries]);
+    const displayEntries = entries;
 
     const trimmedOutput = typeof output === 'string'
         ? stripTaskMetadataFromOutput(output)
@@ -774,7 +805,13 @@ const TaskToolSummary: React.FC<{
         : 'subagent';
 
     if (displayEntries.length === 0 && !hasOutput && !sessionId) {
-        return null;
+        return (
+            <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]">
+                <div className="typography-meta text-muted-foreground/70">
+                    {isActive ? 'Waiting for subagent activity...' : 'No subagent session id on task metadata.'}
+                </div>
+            </div>
+        );
     }
 
     const visibleEntries = isExpanded ? displayEntries : displayEntries.slice(-6);
@@ -783,7 +820,9 @@ const TaskToolSummary: React.FC<{
     return (
         <div
             className={cn(
-                'relative pr-2 pb-2 pt-2 space-y-2 pl-4'
+                'relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]',
+                'before:absolute before:left-[0.4375rem] before:w-px before:bg-border/80 before:content-[""]',
+                'before:top-[-0.25rem] before:bottom-0'
             )}
         >
             {displayEntries.length > 0 ? (
@@ -794,26 +833,53 @@ const TaskToolSummary: React.FC<{
                         ) : null}
 
                         {visibleEntries.map((entry, idx) => {
-                            const toolName = typeof entry.tool === 'string' && entry.tool.trim().length > 0 ? entry.tool : 'tool';
+                            const normalizedToolName = normalizeToolName(entry.tool);
+                            const toolName = normalizedToolName.length > 0 ? normalizedToolName : 'tool';
                             const label = getTaskSummaryLabel(entry);
+                            const hasLabel = label.trim().length > 0;
                             const status = entry.state?.status;
 
                             const displayName = getToolMetadata(toolName).displayName;
 
                             return (
-                                <div key={entry.id ?? `${toolName}-${idx}`} className={cn("flex gap-2 min-w-0 w-full", isMobile ? 'items-start' : 'items-center')}>
-                                    <span className="flex-shrink-0 text-foreground/80">{getToolIcon(toolName)}</span>
-                                    <span className="typography-meta text-foreground/80 flex-shrink-0">{displayName}</span>
-                                    {status !== 'error' && shouldRenderGitPathLabel(toolName, label) ? (
-                                        renderPathLikeGitChanges(label)
-                                    ) : (
-                                        <span className={cn(
-                                            'typography-meta flex-1 min-w-0',
-                                            isMobile ? 'whitespace-normal break-words' : 'truncate',
-                                            status === 'error' ? 'text-[var(--status-error)]' : 'text-muted-foreground/70'
-                                        )}>{label}</span>
-                                    )}
-                                </div>
+                                <ToolRevealOnMount key={entry.id ?? `${toolName}-${idx}`} animate={animateTailText} wipe>
+                                    <div className={cn("flex gap-2 min-w-0 w-full", isMobile ? 'items-start' : 'items-center')}>
+                                        <span className="flex-shrink-0 text-foreground/80">{getToolIcon(toolName)}</span>
+                                        <span
+                                            className="typography-meta text-foreground/80 flex-shrink-0"
+                                            style={{ color: 'var(--tools-title)' }}
+                                            title={displayName}
+                                        >
+                                            {displayName}
+                                        </span>
+                                        {hasLabel ? (
+                                            status !== 'error' && shouldRenderGitPathLabel(toolName, label) ? (
+                                                renderAnimatedPathWithIcon(label, animateTailText, true)
+                                            ) : (
+                                                status === 'error' ? (
+                                                    <span className={cn(
+                                                        'typography-meta flex-1 min-w-0 text-[var(--status-error)]',
+                                                        isMobile ? 'whitespace-normal break-words' : 'truncate'
+                                                    )}>
+                                                        {label}
+                                                    </span>
+                                                ) : (
+                                                    <Text
+                                                        variant={animateTailText ? 'generate-effect' : undefined}
+                                                        className={cn(
+                                                            'typography-meta flex-1 min-w-0 text-muted-foreground/70',
+                                                            isMobile ? 'whitespace-normal break-words' : 'truncate'
+                                                        )}
+                                                        style={{ color: 'var(--tools-description)' }}
+                                                        title={label}
+                                                    >
+                                                        {label}
+                                                    </Text>
+                                                )
+                                            )
+                                        ) : null}
+                                    </div>
+                                </ToolRevealOnMount>
                             );
                         })}
                     </div>
@@ -1617,16 +1683,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const state = part.state;
     const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
 
-    const isTaskTool = part.tool.toLowerCase() === 'task';
+    const normalizedPartTool = normalizeToolName(part.tool);
+    const isTaskTool = normalizedPartTool === 'task';
 
-    const statusRaw = typeof state.status === 'string' ? state.status.toLowerCase().trim() : undefined;
-    const status = statusRaw ? statusRaw.replace(/[\s_-]+/g, '') : undefined;
-    const isFinalized = status ? FINAL_TOOL_STATUSES.has(status) : false;
-    const isStatusActive = status ? ACTIVE_TOOL_STATUSES.has(status) : false;
-    const isUnknownNonFinal = status ? !isFinalized && !isStatusActive : true;
+    const status = state?.status as string | undefined;
+    const isFinalized = status === 'completed' || status === 'error' || status === 'aborted' || status === 'failed' || status === 'timeout' || status === 'cancelled';
     const isError = status === 'error' || status === 'failed';
 
-    const [activeLatched, setActiveLatched] = React.useState<boolean>(isStatusActive || isUnknownNonFinal);
+    const [activeLatched, setActiveLatched] = React.useState<boolean>(!isFinalized);
     const previousPartIdRef = React.useRef<string | undefined>(part.id);
 
     React.useEffect(() => {
@@ -1635,19 +1699,14 @@ const ToolPart: React.FC<ToolPartProps> = ({
         }
         previousPartIdRef.current = part.id;
         // Reset latch only when tool identity changes.
-        setActiveLatched(isStatusActive || isUnknownNonFinal);
-    }, [part.id, isStatusActive, isUnknownNonFinal]);
+        setActiveLatched(!isFinalized);
+    }, [isFinalized, part.id]);
 
     React.useEffect(() => {
-        if (isFinalized) {
-            return;
-        }
-        if (isStatusActive || isUnknownNonFinal) {
+        if (!isFinalized) {
             setActiveLatched(true);
         }
-    }, [isFinalized, isStatusActive, isUnknownNonFinal]);
-
-    const isActive = !isFinalized && (isStatusActive || isUnknownNonFinal || activeLatched);
+    }, [isFinalized]);
 
 
 
@@ -1664,26 +1723,29 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
     const stateWithData = state as ToolStateWithMetadata;
     const metadata = stateWithData.metadata;
+    const partMetadata = (part as unknown as { metadata?: unknown }).metadata;
     const input = stateWithData.input;
     const time = stateWithData.time;
 
     const [pinnedTime, setPinnedTime] = React.useState<{ start?: number; end?: number }>({});
     const [localStartAt, setLocalStartAt] = React.useState<number | undefined>(undefined);
+    const [localFinalizedAt, setLocalFinalizedAt] = React.useState<number | undefined>(undefined);
 
     React.useEffect(() => {
         setPinnedTime({});
         setLocalStartAt(undefined);
+        setLocalFinalizedAt(undefined);
     }, [part.id]);
 
     React.useEffect(() => {
-        if (!isActive) {
+        if (isFinalized) {
             return;
         }
         if (typeof time?.start === 'number') {
             return;
         }
         setLocalStartAt((prev) => prev ?? Date.now());
-    }, [isActive, time?.start]);
+    }, [isFinalized, time?.start]);
 
     React.useEffect(() => {
         setPinnedTime((prev) => {
@@ -1695,7 +1757,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 changed = true;
             }
 
-            if (typeof time?.end === 'number' && prev.end !== time.end) {
+            if (typeof time?.end === 'number' && (typeof prev.end !== 'number' || time.end > prev.end)) {
                 next.end = time.end;
                 changed = true;
             }
@@ -1705,7 +1767,12 @@ const ToolPart: React.FC<ToolPartProps> = ({
     }, [time?.end, time?.start]);
 
     const effectiveTimeStart = React.useMemo(() => {
-        const candidates = [pinnedTime.start, time?.start, localStartAt].filter(
+        // Once we captured a local start (during pending, before server sends time.start),
+        // always prefer it so the timer never jumps when server start arrives later.
+        if (typeof localStartAt === 'number') {
+            return localStartAt;
+        }
+        const candidates = [pinnedTime.start, time?.start].filter(
             (value): value is number => typeof value === 'number'
         );
         if (candidates.length === 0) {
@@ -1713,7 +1780,6 @@ const ToolPart: React.FC<ToolPartProps> = ({
         }
         return Math.min(...candidates);
     }, [localStartAt, pinnedTime.start, time?.start]);
-    const effectiveTimeEnd = pinnedTime.end ?? time?.end;
 
     const taskOutputString = React.useMemo(() => {
         return typeof stateWithData.output === 'string' ? stateWithData.output : undefined;
@@ -1727,15 +1793,22 @@ const ToolPart: React.FC<ToolPartProps> = ({
         if (!isTaskTool) {
             return undefined;
         }
-        const candidate = metadata as { sessionId?: string } | undefined;
-        if (typeof candidate?.sessionId === 'string' && candidate.sessionId.trim().length > 0) {
-            return candidate.sessionId;
+
+        const metadataSessionId = readTaskSessionIdFromRecord(metadata);
+        if (metadataSessionId) {
+            return metadataSessionId;
         }
+
+        const partLevelSessionId = readTaskSessionIdFromRecord(partMetadata);
+        if (partLevelSessionId) {
+            return partLevelSessionId;
+        }
+
         if (parsedTaskMetadata.sessionId) {
             return parsedTaskMetadata.sessionId;
         }
         return readTaskSessionIdFromOutput(taskOutputString);
-    }, [isTaskTool, metadata, parsedTaskMetadata.sessionId, taskOutputString]);
+    }, [isTaskTool, metadata, parsedTaskMetadata.sessionId, partMetadata, taskOutputString]);
 
     const childSessionMessages = useSessionStore(
         React.useCallback((store) => {
@@ -1772,6 +1845,56 @@ const ToolPart: React.FC<ToolPartProps> = ({
         return buildTaskSummaryEntriesFromSession(childSessionMessages);
     }, [childSessionMessages, isTaskTool, taskSessionId]);
 
+    const childSessionHasInFlightTools = React.useMemo(() => {
+        if (!isTaskTool || !taskSessionId || !Array.isArray(childSessionMessages) || childSessionMessages.length === 0) {
+            return false;
+        }
+
+        for (const message of childSessionMessages) {
+            if (message?.info?.role !== 'assistant') {
+                continue;
+            }
+            const parts = Array.isArray(message.parts) ? message.parts : [];
+            for (const childPart of parts) {
+                if (childPart?.type !== 'tool') {
+                    continue;
+                }
+                const childStatus = (childPart as any)?.state?.status;
+                if (childStatus === 'running' || childStatus === 'pending' || childStatus === 'started') {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }, [childSessionMessages, isTaskTool, taskSessionId]);
+
+    React.useEffect(() => {
+        if (typeof time?.end === 'number' || typeof pinnedTime.end === 'number') {
+            setLocalFinalizedAt(undefined);
+            return;
+        }
+
+        if (typeof effectiveTimeStart !== 'number') {
+            return;
+        }
+
+        if (!isFinalized) {
+            return;
+        }
+
+        setLocalFinalizedAt((prev) => prev ?? Date.now());
+    }, [
+        effectiveTimeStart,
+        isFinalized,
+        pinnedTime.end,
+        time?.end,
+    ]);
+
+    const effectiveTimeEnd = isFinalized ? (pinnedTime.end ?? time?.end ?? localFinalizedAt) : undefined;
+    const isActive = !isFinalized && activeLatched;
+    const shouldTreatAsFinalized = isFinalized;
+
     const taskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
         if (childSessionTaskSummaryEntries.length > 0) {
             return childSessionTaskSummaryEntries;
@@ -1779,41 +1902,47 @@ const ToolPart: React.FC<ToolPartProps> = ({
         return metadataTaskSummaryEntries;
     }, [childSessionTaskSummaryEntries, metadataTaskSummaryEntries]);
 
-    const fetchedTaskSessionsRef = React.useRef<Set<string>>(new Set());
     React.useEffect(() => {
         if (!isTaskTool || !taskSessionId) {
             return;
         }
-        if (childSessionTaskSummaryEntries.length > 0) {
-            return;
-        }
-        if (fetchedTaskSessionsRef.current.has(taskSessionId)) {
+
+        const shouldPoll = isActive || childSessionHasInFlightTools || childSessionTaskSummaryEntries.length === 0;
+        const shouldFetchSnapshot = childSessionTaskSummaryEntries.length === 0 || shouldPoll;
+        if (!shouldFetchSnapshot) {
             return;
         }
 
-        fetchedTaskSessionsRef.current.add(taskSessionId);
         let cancelled = false;
+        let pollTimer: number | undefined;
 
-        void opencodeClient
-            .getSessionMessages(taskSessionId, 500)
-            .then((messages) => {
-                if (cancelled || !Array.isArray(messages)) {
-                    return;
-                }
-                if (messages.length === 0) {
-                    fetchedTaskSessionsRef.current.delete(taskSessionId);
+        const fetchSessionMessages = async () => {
+            try {
+                const messages = await opencodeClient.getSessionMessages(taskSessionId, 500);
+                if (cancelled || !Array.isArray(messages) || messages.length === 0) {
                     return;
                 }
                 useSessionStore.getState().syncMessages(taskSessionId, messages);
-            })
-            .catch(() => {
-                fetchedTaskSessionsRef.current.delete(taskSessionId);
-            });
+            } catch {
+                // Ignore transient subagent fetch errors.
+            }
+        };
+
+        void fetchSessionMessages();
+
+        if (shouldPoll && typeof window !== 'undefined') {
+            pollTimer = window.setInterval(() => {
+                void fetchSessionMessages();
+            }, 1200);
+        }
 
         return () => {
             cancelled = true;
+            if (typeof pollTimer === 'number') {
+                window.clearInterval(pollTimer);
+            }
         };
-    }, [childSessionTaskSummaryEntries.length, isTaskTool, taskSessionId]);
+    }, [childSessionHasInFlightTools, childSessionTaskSummaryEntries.length, isActive, isTaskTool, taskSessionId]);
 
 
     const taskSummaryLenRef = React.useRef<number>(taskSummaryEntries.length);
@@ -1828,21 +1957,23 @@ const ToolPart: React.FC<ToolPartProps> = ({
         onContentChange?.('structural');
     }, [isTaskTool, onContentChange, taskSummaryEntries.length]);
 
-    const diffStats = (part.tool === 'edit' || part.tool === 'multiedit' || part.tool === 'apply_patch') ? parseDiffStats(metadata) : null;
-    const descriptionPath = getToolDescriptionPath(part, state, currentDirectory);
-    const description = getToolDescription(part, state, currentDirectory);
-    const fetchedUrl = getFetchedUrl(part, state);
-    const displayName = getToolMetadata(part.tool).displayName;
+    const diffStats = (normalizedPartTool === 'edit' || normalizedPartTool === 'multiedit' || normalizedPartTool === 'apply_patch') ? parseDiffStats(metadata) : null;
+    const writeLineCount = normalizedPartTool === 'write' ? parseWriteLineCount(input) : null;
+    const normalizedPart = normalizedPartTool !== part.tool ? ({ ...part, tool: normalizedPartTool } as ToolPartType) : part;
+    const descriptionPath = getToolDescriptionPath(normalizedPart, state, currentDirectory);
+    const description = getToolDescription(normalizedPart, state, currentDirectory);
+    const fetchedUrl = getFetchedUrl(normalizedPart, state);
+    const displayName = getToolMetadata(normalizedPartTool || part.tool).displayName;
     
     // Tool title/description — shown inline as context
     const justificationText = React.useMemo(() => {
         if (
             descriptionPath
-            && (part.tool === 'apply_patch' || part.tool === 'edit' || part.tool === 'multiedit')
+            && (normalizedPartTool === 'apply_patch' || normalizedPartTool === 'edit' || normalizedPartTool === 'multiedit' || normalizedPartTool === 'write')
         ) {
             return null;
         }
-        if (part.tool.toLowerCase() === 'structuredoutput' || part.tool.toLowerCase() === 'structured_output') return null;
+        if (normalizedPartTool === 'structuredoutput' || normalizedPartTool === 'structured_output') return null;
         const title = (stateWithData as { title?: string }).title;
         if (typeof title === 'string' && title.trim().length > 0) {
             return title;
@@ -1852,7 +1983,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
             return inputDesc;
         }
         return null;
-    }, [descriptionPath, part.tool, stateWithData, input]);
+    }, [descriptionPath, normalizedPartTool, stateWithData, input]);
 
     const runtime = React.useContext(RuntimeAPIContext);
 
@@ -1908,7 +2039,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         handleMainClick(event);
     };
 
-    if (!isFinalized && !isActive && !isTaskTool) {
+    if (!shouldTreatAsFinalized && !isActive && !isTaskTool) {
         return null;
     }
 
@@ -1939,7 +2070,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             )}
                             style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-icon)' }}
                         >
-                            {getToolIcon(part.tool)}
+                            {getToolIcon(normalizedPartTool || part.tool)}
                         </div>
                         {}
                         <div
@@ -1952,15 +2083,31 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             {isExpanded ? <RiArrowDownSLine className="h-3.5 w-3.5" /> : <RiArrowRightSLine className="h-3.5 w-3.5" />}
                         </div>
                     </div>
-                    <MinDurationShineText
-                        active={Boolean(isActive && !isError)}
-                        minDurationMs={300}
-                        className="typography-meta font-medium"
-                        style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
-                        title={displayName}
-                    >
-                        {displayName}
-                    </MinDurationShineText>
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <MinDurationShineText
+                            active={Boolean(isActive && !isError)}
+                            minDurationMs={300}
+                            className="typography-meta font-medium flex-shrink-0"
+                            style={!isTaskTool && isError ? { color: 'var(--status-error)' } : { color: 'var(--tools-title)' }}
+                            title={displayName}
+                        >
+                            {displayName}
+                        </MinDurationShineText>
+                        {!justificationText && fetchedUrl && (
+                            <a
+                                href={fetchedUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="min-w-0 truncate underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90 typography-meta font-medium"
+                                style={{ color: 'var(--status-info)' }}
+                                onClick={(event) => event.stopPropagation()}
+                                onKeyDown={(event) => event.stopPropagation()}
+                                title={fetchedUrl}
+                            >
+                                {fetchedUrl}
+                            </a>
+                        )}
+                    </div>
                     {typeof effectiveTimeStart === 'number' ? (
                         <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
                             <LiveDuration
@@ -1983,27 +2130,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                 {justificationText}
                             </span>
                         )}
-                        {!justificationText && fetchedUrl && (
-                            <a
-                                href={fetchedUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="min-w-0 truncate underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90"
-                                style={{ color: 'var(--status-info)' }}
-                                onClick={(event) => event.stopPropagation()}
-                                onKeyDown={(event) => event.stopPropagation()}
-                                title={fetchedUrl}
-                            >
-                                <Text
-                                    variant={animateTailText ? 'generate-effect' : undefined}
-                                    className="min-w-0 truncate typography-meta"
-                                    style={{ color: 'var(--status-info)' }}
-                                >
-                                    {fetchedUrl}
-                                </Text>
-                            </a>
-                        )}
-                        {!justificationText && !fetchedUrl && description && (
+                        {!justificationText && description && (
                             descriptionPath && description === descriptionPath ? (
                                 renderAnimatedPathWithIcon(descriptionPath, animateTailText, false)
                             ) : (
@@ -2018,26 +2145,15 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             )
                         )}
                         {diffStats && (
-                            <span className="flex-shrink-0 inline-flex items-center gap-0">
-                                <Text
-                                    key={animateTailText ? `diff-added-${diffStats.added}` : undefined}
-                                    variant={animateTailText ? 'generate-effect' : undefined}
-                                    className="typography-meta"
-                                    style={{ color: 'var(--status-success)' }}
-                                >
-                                    +{diffStats.added}
-                                </Text>
-                                <Text variant={animateTailText ? 'generate-effect' : undefined} className="typography-meta" style={{ color: 'var(--tools-description)' }}>
-                                    /
-                                </Text>
-                                <Text
-                                    key={animateTailText ? `diff-removed-${diffStats.removed}` : undefined}
-                                    variant={animateTailText ? 'generate-effect' : undefined}
-                                    className="typography-meta"
-                                    style={{ color: 'var(--status-error)' }}
-                                >
-                                    -{diffStats.removed}
-                                </Text>
+                            <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
+                                <span style={{ color: 'var(--status-success)' }}>+{diffStats.added}</span>
+                                <span style={{ color: 'var(--tools-description)' }}>/</span>
+                                <span style={{ color: 'var(--status-error)' }}>-{diffStats.removed}</span>
+                            </span>
+                        )}
+                        {writeLineCount && (
+                            <span className="flex-shrink-0 inline-flex items-center gap-0 typography-meta" style={{ fontSize: '0.8rem', lineHeight: '1' }}>
+                                <span style={{ color: 'var(--status-success)' }}>+{writeLineCount}</span>
                             </span>
                         )}
                     </div>
@@ -2045,7 +2161,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
             </div>
 
             {}
-            {isTaskTool && (taskSummaryEntries.length > 0 || isActive || isFinalized || taskSessionId) ? (
+            {isTaskTool && (taskSummaryEntries.length > 0 || isActive || shouldTreatAsFinalized || taskSessionId) ? (
                 <TaskToolSummary
                     entries={taskSummaryEntries}
                     isExpanded={isExpanded}
@@ -2054,6 +2170,8 @@ const ToolPart: React.FC<ToolPartProps> = ({
                     sessionId={taskSessionId}
                     onShowPopup={onShowPopup}
                     input={input}
+                    animateTailText={animateTailText}
+                    isActive={isActive}
                 />
             ) : null}
 

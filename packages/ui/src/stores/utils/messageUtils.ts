@@ -1,4 +1,87 @@
 import type { Part } from "@opencode-ai/sdk/v2";
+import { isFinalToolStatus } from "@/lib/toolStatus";
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+};
+
+const readTimestamp = (value: unknown): number | undefined => {
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+};
+
+const mergeTimeRange = (existing: unknown, incoming: unknown): Record<string, number> | undefined => {
+    const existingTime = isRecord(existing) ? existing : undefined;
+    const incomingTime = isRecord(incoming) ? incoming : undefined;
+
+    const startCandidates = [
+        readTimestamp(existingTime?.start),
+        readTimestamp(incomingTime?.start),
+    ].filter((value): value is number => typeof value === 'number');
+    const endCandidates = [
+        readTimestamp(existingTime?.end),
+        readTimestamp(incomingTime?.end),
+    ].filter((value): value is number => typeof value === 'number');
+
+    if (startCandidates.length === 0 && endCandidates.length === 0) {
+        return undefined;
+    }
+
+    const merged: Record<string, number> = {};
+    if (startCandidates.length > 0) {
+        merged.start = Math.min(...startCandidates);
+    }
+    if (endCandidates.length > 0) {
+        merged.end = Math.max(...endCandidates);
+    }
+    return merged;
+};
+
+const mergeToolState = (existing: unknown, incoming: unknown): Record<string, unknown> | undefined => {
+    const existingState = isRecord(existing) ? existing : undefined;
+    const incomingState = isRecord(incoming) ? incoming : undefined;
+
+    if (!existingState && !incomingState) {
+        return undefined;
+    }
+
+    // Never downgrade a terminal status. Once a tool reaches completed/error/etc,
+    // a late-arriving "running" SSE must not overwrite it.
+    const existingStatus = existingState?.status;
+    const incomingStatus = incomingState?.status;
+    const existingIsTerminal = typeof existingStatus === 'string' && isFinalToolStatus(existingStatus);
+    const incomingIsTerminal = typeof incomingStatus === 'string' && isFinalToolStatus(incomingStatus);
+
+    const merged: Record<string, unknown> = {
+        ...(existingState ?? {}),
+        ...(incomingState ?? {}),
+    };
+
+    // If existing was terminal but incoming is not, keep the terminal status.
+    if (existingIsTerminal && !incomingIsTerminal && typeof incomingStatus === 'string') {
+        merged.status = existingStatus;
+    }
+
+    const mergedTime = mergeTimeRange(existingState?.time, incomingState?.time);
+    if (mergedTime) {
+        merged.time = mergedTime;
+    }
+
+    if (isRecord(existingState?.metadata) || isRecord(incomingState?.metadata)) {
+        merged.metadata = {
+            ...(isRecord(existingState?.metadata) ? existingState.metadata : {}),
+            ...(isRecord(incomingState?.metadata) ? incomingState.metadata : {}),
+        };
+    }
+
+    if (isRecord(existingState?.input) || isRecord(incomingState?.input)) {
+        merged.input = {
+            ...(isRecord(existingState?.input) ? existingState.input : {}),
+            ...(isRecord(incomingState?.input) ? incomingState.input : {}),
+        };
+    }
+
+    return merged;
+};
 
 const extractTextFromDelta = (delta: unknown): string => {
     if (!delta) return '';
@@ -44,6 +127,7 @@ export const extractTextFromPart = (part: unknown): string => {
 
 export const normalizeStreamingPart = (incoming: Part, existing?: Part): Part => {
     const normalized: { type?: string; text?: string; content?: string; value?: string; delta?: unknown; [key: string]: unknown } = {
+        ...(existing as Record<string, unknown> | undefined),
         ...incoming,
     } as { type?: string; text?: string; content?: string; value?: string; delta?: unknown; [key: string]: unknown };
     const existingType = typeof (existing as { type?: unknown } | undefined)?.type === 'string'
@@ -103,6 +187,24 @@ export const normalizeStreamingPart = (incoming: Part, existing?: Part): Part =>
         }
 
         delete normalized.delta;
+    }
+
+    const mergedTime = mergeTimeRange(
+        (existing as { time?: unknown } | undefined)?.time,
+        (incoming as { time?: unknown } | undefined)?.time,
+    );
+    if (mergedTime) {
+        normalized.time = mergedTime;
+    }
+
+    if (normalized.type === 'tool') {
+        const mergedState = mergeToolState(
+            (existing as { state?: unknown } | undefined)?.state,
+            (incoming as { state?: unknown } | undefined)?.state,
+        );
+        if (mergedState) {
+            normalized.state = mergedState;
+        }
     }
 
     return normalized as Part;

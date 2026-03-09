@@ -1172,11 +1172,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
           const partType = (messagePart as { type?: unknown }).type;
           const partTime = (messagePart as { time?: { end?: unknown } }).time;
           const partHasEnded = typeof partTime?.end === 'number';
-          const rawToolState = (messagePart as { state?: { status?: unknown } }).state?.status;
-          const toolState =
-            typeof rawToolState === 'string'
-              ? rawToolState.toLowerCase().trim().replace(/[\s_-]+/g, '')
-              : undefined;
+          const toolState = (messagePart as { state?: { status?: unknown } }).state?.status;
           const toolName = typeof (messagePart as { tool?: unknown }).tool === 'string'
             ? (messagePart as { tool: string }).tool.toLowerCase()
             : null;
@@ -1188,14 +1184,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
 
           const isStreamingPart = (() => {
             if (partType === 'tool') {
-              return (
-                toolState === 'running' ||
-                toolState === 'pending' ||
-                toolState === 'started' ||
-                toolState === 'inprogress' ||
-                toolState === 'processing' ||
-                toolState === 'executing'
-              );
+              return toolState === 'running' || toolState === 'pending';
             }
             if (partType === 'reasoning') {
               return !partHasEnded;

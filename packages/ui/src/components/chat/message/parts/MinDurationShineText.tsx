@@ -18,65 +18,61 @@ export const MinDurationShineText: React.FC<MinDurationShineTextProps> = ({
     style,
     title,
 }) => {
+    // Once active, we latch shine on and only turn it off after active becomes
+    // false AND minDurationMs has elapsed since we first started shining.
+    // All bookkeeping lives in refs so intermediate re-renders (children
+    // changing, props updating) can never cause a flicker.
+    const shineStartRef = React.useRef<number | null>(active ? Date.now() : null);
     const [isShining, setIsShining] = React.useState(active);
-    const shineStartedAtRef = React.useRef<number | null>(active ? Date.now() : null);
-    const deactivateTimerRef = React.useRef<number | null>(null);
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const clearDeactivateTimer = React.useCallback(() => {
-        if (deactivateTimerRef.current !== null) {
-            window.clearTimeout(deactivateTimerRef.current);
-            deactivateTimerRef.current = null;
-        }
-    }, []);
-
-    React.useEffect(() => {
-        return () => {
-            clearDeactivateTimer();
-        };
-    }, [clearDeactivateTimer]);
+    // Latch on: if active becomes true, start shining immediately.
+    if (active && shineStartRef.current === null) {
+        shineStartRef.current = Date.now();
+    }
+    if (active && !isShining) {
+        // Synchronous state set during render is fine for a latch-on — React
+        // will coalesce it with the current render pass.
+        // But we can't call setState during render, so we use an effect below.
+    }
 
     React.useEffect(() => {
         if (active) {
-            clearDeactivateTimer();
-            if (shineStartedAtRef.current === null) {
-                shineStartedAtRef.current = Date.now();
+            // Cancel any pending off-timer.
+            if (timerRef.current !== null) {
+                clearTimeout(timerRef.current);
+                timerRef.current = null;
             }
-            if (!isShining) {
-                setIsShining(true);
+            if (shineStartRef.current === null) {
+                shineStartRef.current = Date.now();
             }
+            setIsShining(true);
             return;
         }
 
         if (!isShining) {
-            shineStartedAtRef.current = null;
+            shineStartRef.current = null;
             return;
         }
 
-        // Debounce brief inactive blips during rapid status transitions.
-        const DEACTIVATE_GRACE_MS = 160;
-        deactivateTimerRef.current = window.setTimeout(() => {
-            const startedAt = shineStartedAtRef.current ?? Date.now();
-            const elapsed = Date.now() - startedAt;
-            const remaining = Math.max(0, minDurationMs - elapsed);
+        // active went false — schedule turn-off respecting minDurationMs.
+        const startedAt = shineStartRef.current ?? Date.now();
+        const elapsed = Date.now() - startedAt;
+        const remaining = Math.max(0, minDurationMs - elapsed);
 
-            if (remaining === 0) {
-                setIsShining(false);
-                shineStartedAtRef.current = null;
-                clearDeactivateTimer();
-                return;
-            }
-
-            deactivateTimerRef.current = window.setTimeout(() => {
-                setIsShining(false);
-                shineStartedAtRef.current = null;
-                clearDeactivateTimer();
-            }, remaining);
-        }, DEACTIVATE_GRACE_MS);
+        timerRef.current = setTimeout(() => {
+            setIsShining(false);
+            shineStartRef.current = null;
+            timerRef.current = null;
+        }, remaining);
 
         return () => {
-            clearDeactivateTimer();
+            if (timerRef.current !== null) {
+                clearTimeout(timerRef.current);
+                timerRef.current = null;
+            }
         };
-    }, [active, clearDeactivateTimer, isShining, minDurationMs]);
+    }, [active, minDurationMs, isShining]);
 
     if (isShining) {
         return (

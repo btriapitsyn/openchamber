@@ -155,38 +155,14 @@ const toDisplayFileName = (filePath: string): string => {
 const isActivityRunning = (activity: TurnActivityPart): boolean => {
     if (activity.kind !== 'tool') return false;
     const part = activity.part as ToolPartType;
-    const rawStatus = (part.state as { status?: unknown } | undefined)?.status;
-    const status =
-        typeof rawStatus === 'string'
-            ? rawStatus.toLowerCase().trim().replace(/[\s_-]+/g, '')
-            : undefined;
-
-    if (
-        status === 'running' ||
-        status === 'pending' ||
-        status === 'started' ||
-        status === 'inprogress' ||
-        status === 'processing' ||
-        status === 'executing'
-    ) {
-        return true;
-    }
-
-    if (
-        status === 'completed' ||
-        status === 'complete' ||
-        status === 'error' ||
-        status === 'failed' ||
-        status === 'aborted' ||
-        status === 'timeout' ||
-        status === 'timedout' ||
-        status === 'done' ||
-        status === 'cancelled' ||
-        status === 'canceled'
-    ) {
+    const status = (part.state?.status as string) || undefined;
+    const isFinalized = status === 'completed' || status === 'error' || status === 'aborted' || status === 'failed' || status === 'timeout' || status === 'cancelled';
+    if (isFinalized) {
         return false;
     }
-
+    if (status === 'running' || status === 'pending' || status === 'started') {
+        return true;
+    }
     return typeof activity.endedAt !== 'number';
 };
 
@@ -473,24 +449,17 @@ export const StaticToolRow: React.FC<{
             {isFetchGroup && descriptions.length > 0
                 ? descriptions.map((url, index) => (
                     <a
-                        key={`${url}-${index}`}
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className={cn(
                             'min-w-0 max-w-full underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
-                            'truncate max-w-[20rem]'
+                            'truncate max-w-[20rem] typography-meta'
                         )}
                         style={{ color: 'var(--status-info)' }}
                         title={url}
                     >
-                        <Text
-                            variant={animateTailText ? 'generate-effect' : undefined}
-                            className="min-w-0 max-w-full truncate max-w-[20rem] typography-meta leading-5"
-                            style={{ color: 'var(--status-info)' }}
-                        >
-                            {url}
-                        </Text>
+                        {url}
                     </a>
                 ))
                 : null}

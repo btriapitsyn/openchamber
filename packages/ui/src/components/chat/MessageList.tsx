@@ -177,23 +177,26 @@ const getShellBridgeAssistantDetails = (message: ChatMessageEntry, expectedParen
 const readTaskSessionId = (toolPart: Part): string | null => {
     const partRecord = toolPart as unknown as {
         state?: {
-            metadata?: { sessionId?: unknown; sessionID?: unknown };
+            metadata?: {
+                sessionId?: unknown;
+                sessionID?: unknown;
+            };
             output?: unknown;
         };
     };
     const metadata = partRecord.state?.metadata;
     const fromMetadata =
-        (typeof metadata?.sessionId === 'string' && metadata.sessionId.trim().length > 0
-            ? metadata.sessionId.trim()
-            : null)
-        ?? (typeof metadata?.sessionID === 'string' && metadata.sessionID.trim().length > 0
+        (typeof metadata?.sessionID === 'string' && metadata.sessionID.trim().length > 0
             ? metadata.sessionID.trim()
+            : null)
+        ?? (typeof metadata?.sessionId === 'string' && metadata.sessionId.trim().length > 0
+            ? metadata.sessionId.trim()
             : null);
     if (fromMetadata) return fromMetadata;
 
     const output = partRecord.state?.output;
     if (typeof output === 'string') {
-        const match = output.match(/task_id:\s*([a-zA-Z0-9_]+)/);
+        const match = output.match(/task_id\s*:\s*([^\s<"']+)/i);
         if (match?.[1]) {
             return match[1];
         }

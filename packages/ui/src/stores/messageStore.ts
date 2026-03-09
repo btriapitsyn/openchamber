@@ -19,6 +19,7 @@ import { getSafeStorage } from "./utils/safeStorage";
 import { useFileStore } from "./fileStore";
 import { useSessionStore } from "./sessionStore";
 import { useContextStore } from "./contextStore";
+import { getToolLifecycleState } from "@/lib/toolStatus";
 
 // Helper function to clean up pending user message metadata
 const cleanupPendingUserMessageMeta = (
@@ -280,20 +281,17 @@ const mergePreferExistingParts = (existing: Part[] = [], incoming: Part[] = []):
         return [...existing];
     }
     const merged = [...existing];
-    const existingKeys = new Set(existing.map(getPartKey).filter((key): key is string => Boolean(key)));
 
     incoming.forEach((part) => {
         if (!part) {
             return;
         }
-        const key = getPartKey(part);
-        if (key && existingKeys.has(key)) {
+        const existingIndex = findMatchingPartIndex(merged, part);
+        if (existingIndex !== -1) {
+            merged[existingIndex] = normalizeStreamingPart(part, merged[existingIndex]);
             return;
         }
         merged.push(part);
-        if (key) {
-            existingKeys.add(key);
-        }
     });
 
     return merged;
@@ -1086,18 +1084,7 @@ export const useMessageStore = create<MessageStore>()(
                                     if (part.type === 'tool') {
                                         const toolPart = part as any;
                                         const stateData = { ...(toolPart.state ?? {}) };
-                                        const status =
-                                            typeof stateData.status === 'string'
-                                                ? stateData.status.toLowerCase().trim().replace(/[\s_-]+/g, '')
-                                                : undefined;
-                                        if (
-                                            status === 'running' ||
-                                            status === 'pending' ||
-                                            status === 'started' ||
-                                            status === 'inprogress' ||
-                                            status === 'processing' ||
-                                            status === 'executing'
-                                        ) {
+                                        if (stateData.status === 'running' || stateData.status === 'pending') {
                                             stateData.status = 'aborted';
                                         }
                                         return {
@@ -1745,17 +1732,8 @@ export const useMessageStore = create<MessageStore>()(
                                     return part;
                                 }
 
-                                const status =
-                                    typeof existingState.status === 'string'
-                                        ? existingState.status.toLowerCase().trim().replace(/[\s_-]+/g, '')
-                                        : undefined;
-                                const needsStatusUpdate =
-                                    status === "running" ||
-                                    status === "pending" ||
-                                    status === "started" ||
-                                    status === "inprogress" ||
-                                    status === "processing" ||
-                                    status === "executing";
+                                const status = existingState.status;
+                                const needsStatusUpdate = status === "running" || status === "pending" || status === "started";
                                 const needsEndTimestamp = !existingState.time || typeof existingState.time?.end !== "number";
 
                                 if (needsStatusUpdate || needsEndTimestamp) {
