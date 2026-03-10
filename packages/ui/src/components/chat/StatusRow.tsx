@@ -86,8 +86,8 @@ const EMPTY_TODOS: TodoItem[] = [];
 
 interface StatusRowProps {
   // Working state
-  isWorking: boolean;
-  statusText: string | null;
+  isWorking?: boolean;
+  statusText?: string | null;
   isGenericStatus?: boolean;
   isWaitingForPermission?: boolean;
   wasAborted?: boolean;
@@ -98,11 +98,14 @@ interface StatusRowProps {
   onAbort?: () => void;
   // Abort status display
   showAbortStatus?: boolean;
+  showAssistantStatus?: boolean;
+  showTodos?: boolean;
+  agentName?: string;
 }
 
 export const StatusRow: React.FC<StatusRowProps> = ({
-  isWorking,
-  statusText,
+  isWorking = false,
+  statusText = null,
   isGenericStatus,
   isWaitingForPermission,
   wasAborted,
@@ -111,6 +114,9 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   showAbort,
   onAbort,
   showAbortStatus,
+  showAssistantStatus = true,
+  showTodos = true,
+  agentName,
 }) => {
   const [isExpanded, setIsExpanded] = React.useState(false);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -157,18 +163,16 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   }, [visibleTodos]);
 
   const hasActiveTodos = visibleTodos.some((t) => t.status === "in_progress" || t.status === "pending");
+  const hasTodoContent = showTodos && hasActiveTodos;
+  const hasAssistantContent = showAssistantStatus && (
+    isWorking ||
+    Boolean(wasAborted) ||
+    Boolean(showAbortStatus)
+  );
   // Original logic from ChatInput
   const shouldRenderPlaceholder = !showAbortStatus && (wasAborted || !abortActive);
 
-  // Keep StatusRow rendered while:
-  // - isWorking (active session)
-  // - wasAborted / showAbortStatus
-  // - hasActiveTodos
-  const hasContent =
-    isWorking ||
-    Boolean(wasAborted) ||
-    Boolean(showAbortStatus) ||
-    hasActiveTodos;
+  const hasContent = hasAssistantContent || hasTodoContent;
 
   // Close popover when clicking outside
   const popoverRef = React.useRef<HTMLDivElement>(null);
@@ -200,7 +204,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
   ) : null;
 
   // Todo trigger button
-  const todoTrigger = hasActiveTodos ? (
+  const todoTrigger = hasTodoContent ? (
     <button
       type="button"
       onClick={toggleExpanded}
@@ -235,14 +239,14 @@ export const StatusRow: React.FC<StatusRowProps> = ({
       <div className="flex items-center justify-between pr-[2ch] py-0.5 gap-2 h-[1.2rem]">
         {/* Left: Abort status or Working placeholder */}
         <div className="flex-1 flex items-center overflow-hidden min-w-0">
-          {showAbortStatus ? (
-            <div className="flex h-full items-center text-[var(--status-error)] pl-[2ch]">
+          {showAssistantStatus && showAbortStatus ? (
+            <div className="flex h-full items-center text-[var(--status-error)] pl-0.5">
               <span className="flex items-center gap-1.5 typography-ui-label">
                 <RiCloseCircleLine size={16} aria-hidden="true" />
                 Aborted
               </span>
             </div>
-          ) : shouldRenderPlaceholder ? (
+          ) : showAssistantStatus && shouldRenderPlaceholder ? (
             <WorkingPlaceholder
               key={currentSessionId ?? "no-session"}
               isWorking={isWorking}
@@ -250,6 +254,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
               isGenericStatus={isGenericStatus}
               isWaitingForPermission={isWaitingForPermission}
               retryInfo={retryInfo}
+              agentName={agentName}
             />
           ) : null}
         </div>

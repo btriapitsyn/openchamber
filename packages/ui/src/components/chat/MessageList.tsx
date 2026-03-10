@@ -24,6 +24,9 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useDeviceInfo } from '@/lib/device';
 import { FadeInDisabledProvider } from './message/FadeInOnReveal';
 import { hasPendingUserSendAnimation, consumePendingUserSendAnimation } from '@/lib/userSendAnimation';
+import { useAssistantStatus } from '@/hooks/useAssistantStatus';
+import { useConfigStore } from '@/stores/useConfigStore';
+import { StatusRow } from './StatusRow';
 
 const MESSAGE_VIRTUALIZE_THRESHOLD = 40;
 const MESSAGE_VIRTUAL_OVERSCAN_MOBILE = 2;
@@ -662,6 +665,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 }, ref) => {
     const { isMobile } = useDeviceInfo();
     const { isWorking: sessionIsWorking } = useCurrentSessionActivity();
+    const { working } = useAssistantStatus();
+    const currentAgentName = useConfigStore((state) => state.currentAgentName);
     const stickyUserHeader = useUIStore(state => state.stickyUserHeader);
     const userAnimationRef = React.useRef<{
         sessionKey: string | undefined;
@@ -1225,6 +1230,21 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                         ))}
                     </div>
                 )}
+
+                <div className="mb-3">
+                    <StatusRow
+                        isWorking={working.isWorking}
+                        statusText={working.statusText}
+                        isGenericStatus={working.isGenericStatus}
+                        isWaitingForPermission={working.isWaitingForPermission}
+                        wasAborted={working.wasAborted}
+                        abortActive={working.abortActive}
+                        retryInfo={working.retryInfo}
+                        showAssistantStatus
+                        showTodos={false}
+                        agentName={currentAgentName}
+                    />
+                </div>
 
                 {/* Bottom spacer */}
                 <div className="flex-shrink-0" style={{ height: isMobile ? '8px' : '10vh' }} aria-hidden="true" />

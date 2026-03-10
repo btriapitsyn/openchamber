@@ -1224,8 +1224,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         clearAbortPrompt();
         startAbortIndicator();
 
-        void abortCurrentOperation();
-    }, [abortCurrentOperation, clearAbortPrompt, startAbortIndicator]);
+        void abortCurrentOperation(currentSessionId || undefined);
+    }, [abortCurrentOperation, clearAbortPrompt, currentSessionId, startAbortIndicator]);
 
     const handleCycleAgent = React.useCallback(() => {
         if (primaryAgents.length <= 1) return;
@@ -2517,6 +2517,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                     abortActive={working.abortActive}
                     retryInfo={working.retryInfo}
                     showAbortStatus={showAbortStatus}
+                    showAssistantStatus={false}
+                    showTodos
                 />
                 <div
                     className={cn(

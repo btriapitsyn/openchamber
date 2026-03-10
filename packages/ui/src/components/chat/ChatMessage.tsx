@@ -927,17 +927,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                         )
                     ) : (
                         <div className="relative">
-                             {shouldShowHeader && (
-                                <ToolRevealOnMount animate={Boolean(turnGroupingContext?.isWorking)} wipe={false}>
-                                    <MessageHeader
-                                        isUser={isUser}
-                                        providerID={headerProviderID}
-                                        agentName={headerAgentName}
-                                        modelName={headerModelName}
-                                        variant={headerVariant}
-                                        isDarkTheme={isDarkTheme}
-                                    />
-                                </ToolRevealOnMount>
+                            {shouldShowHeader && (
+                                <MessageHeader
+                                    isUser={isUser}
+                                    providerID={headerProviderID}
+                                    agentName={headerAgentName}
+                                    modelName={headerModelName}
+                                    variant={headerVariant}
+                                    isDarkTheme={isDarkTheme}
+                                />
                             )}
 
                             <MessageBody

@@ -522,9 +522,9 @@ export const useSessionStore = create<SessionStore>()(
                         throw error;
                     }
                 },
-                abortCurrentOperation: () => {
-                    const currentSessionId = useSessionManagementStore.getState().currentSessionId;
-                    return useMessageStore.getState().abortCurrentOperation(currentSessionId || undefined);
+                abortCurrentOperation: (sessionIdOverride?: string) => {
+                    const sessionId = sessionIdOverride || useSessionManagementStore.getState().currentSessionId;
+                    return useMessageStore.getState().abortCurrentOperation(sessionId || undefined);
                 },
                 armAbortPrompt: (durationMs = 3000) => {
                     const sessionId = useSessionManagementStore.getState().currentSessionId;

@@ -394,7 +394,7 @@ export const useKeyboardShortcuts = () => {
         if (primedUntil && now < primedUntil) {
           e.preventDefault();
           resetAbortPriming();
-          void abortCurrentOperation();
+          void abortCurrentOperation(sessionId || undefined);
           return;
         }
 
