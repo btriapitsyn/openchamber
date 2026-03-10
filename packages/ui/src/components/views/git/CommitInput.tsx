@@ -9,6 +9,7 @@ interface CommitInputProps {
   placeholder?: string;
   disabled?: boolean;
   hasTouchInput?: boolean;
+  isMobile?: boolean;
 }
 
 const MIN_HEIGHT = 38; // Single line height
@@ -20,9 +21,10 @@ export const CommitInput: React.FC<CommitInputProps> = ({
   placeholder = 'Commit message',
   disabled = false,
   hasTouchInput = false,
+  isMobile = false,
 }) => {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
-  const chatInputSpellcheckEnabled = useUIStore((state) => state.chatInputSpellcheckEnabled);
+  const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
 
   // Auto-resize based on content (layout phase to avoid mount flicker)
   React.useLayoutEffect(() => {
@@ -47,7 +49,7 @@ export const CommitInput: React.FC<CommitInputProps> = ({
       disabled={disabled}
       autoCorrect={hasTouchInput ? 'on' : 'off'}
       autoCapitalize={hasTouchInput ? 'sentences' : 'off'}
-      spellCheck={hasTouchInput || chatInputSpellcheckEnabled}
+      spellCheck={isMobile || inputSpellcheckEnabled}
       scrollbarClassName="hidden"
       className={cn(
         'rounded-lg bg-transparent resize-none overflow-y-hidden',

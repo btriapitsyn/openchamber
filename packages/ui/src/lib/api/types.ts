@@ -525,7 +525,7 @@ export interface SettingsPayload {
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
   toolCallExpansion?: 'collapsed' | 'activity' | 'detailed' | 'changes';
-  chatInputSpellcheckEnabled?: boolean;
+  inputSpellcheckEnabled?: boolean;
   fontSize?: number;
   terminalFontSize?: number;
   padding?: number;

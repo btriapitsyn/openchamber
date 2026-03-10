@@ -2094,8 +2094,8 @@ const sanitizeSettingsUpdate = (payload) => {
       result.toolCallExpansion = mode;
     }
   }
-  if (typeof candidate.chatInputSpellcheckEnabled === 'boolean') {
-    result.chatInputSpellcheckEnabled = candidate.chatInputSpellcheckEnabled;
+  if (typeof candidate.inputSpellcheckEnabled === 'boolean') {
+    result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled;
   }
   if (typeof candidate.userMessageRenderingMode === 'string') {
     const mode = candidate.userMessageRenderingMode.trim();

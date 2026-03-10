@@ -124,7 +124,7 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'toolOutput' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'activityHeaderTimestamps' | 'terminalQuickKeys' | 'persistDraft' | 'chatInputSpellcheck';
+export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'toolOutput' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'textJustificationActivity' | 'activityHeaderTimestamps' | 'terminalQuickKeys' | 'persistDraft' | 'inputSpellcheck';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -169,8 +169,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setQueueMode = useMessageQueueStore(state => state.setQueueMode);
     const persistChatDraft = useUIStore(state => state.persistChatDraft);
     const setPersistChatDraft = useUIStore(state => state.setPersistChatDraft);
-    const chatInputSpellcheckEnabled = useUIStore(state => state.chatInputSpellcheckEnabled);
-    const setChatInputSpellcheckEnabled = useUIStore(state => state.setChatInputSpellcheckEnabled);
+    const inputSpellcheckEnabled = useUIStore(state => state.inputSpellcheckEnabled);
+    const setInputSpellcheckEnabled = useUIStore(state => state.setInputSpellcheckEnabled);
     const isNavRailExpanded = useUIStore(state => state.isNavRailExpanded);
     const setNavRailExpanded = useUIStore(state => state.setNavRailExpanded);
     const showMobileSessionStatusBar = useUIStore(state => state.showMobileSessionStatusBar);
@@ -198,10 +198,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         void updateDesktopSettings({ stickyUserHeader: enabled });
     }, [setStickyUserHeader]);
 
-    const handleChatInputSpellcheckChange = React.useCallback((enabled: boolean) => {
-        setChatInputSpellcheckEnabled(enabled);
-        void updateDesktopSettings({ chatInputSpellcheckEnabled: enabled });
-    }, [setChatInputSpellcheckEnabled]);
+    const handleInputSpellcheckChange = React.useCallback((enabled: boolean) => {
+        setInputSpellcheckEnabled(enabled);
+        void updateDesktopSettings({ inputSpellcheckEnabled: enabled });
+    }, [setInputSpellcheckEnabled]);
 
     const lightThemes = React.useMemo(
         () => availableThemes
@@ -253,7 +253,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         || shouldShow('textJustificationActivity')
         || shouldShow('activityHeaderTimestamps')
         || shouldShow('persistDraft')
-        || (!isMobile && shouldShow('chatInputSpellcheck'));
+        || (!isMobile && shouldShow('inputSpellcheck'));
     const selectedToolExpansionOption = TOOL_EXPANSION_OPTIONS.find((option) => option.value === toolCallExpansion);
 
     const showPwaInstallNameSetting = shouldShow('pwaInstallName') && isWebRuntime() && browserTab;
@@ -895,7 +895,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                 </div>
                             )}
 
-                            {(shouldShow('stickyUserHeader') || (shouldShow('mobileStatusBar') && isMobile) || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || (!isMobile && shouldShow('chatInputSpellcheck')) || shouldShow('reasoning') || shouldShow('textJustificationActivity')) && (
+                            {(shouldShow('stickyUserHeader') || (shouldShow('mobileStatusBar') && isMobile) || shouldShow('dotfiles') || shouldShow('queueMode') || shouldShow('persistDraft') || (!isMobile && shouldShow('inputSpellcheck')) || shouldShow('reasoning') || shouldShow('textJustificationActivity')) && (
                                 <section className="p-2 space-y-0.5">
                                     {shouldShow('stickyUserHeader') && (
                                         <div
@@ -1022,23 +1022,23 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         </div>
                                     )}
 
-                                    {!isMobile && shouldShow('chatInputSpellcheck') && (
+                                    {!isMobile && shouldShow('inputSpellcheck') && (
                                         <div
                                             className="group flex cursor-pointer items-center gap-2 py-1.5"
                                             role="button"
                                             tabIndex={0}
-                                            aria-pressed={chatInputSpellcheckEnabled}
-                                            onClick={() => handleChatInputSpellcheckChange(!chatInputSpellcheckEnabled)}
+                                            aria-pressed={inputSpellcheckEnabled}
+                                            onClick={() => handleInputSpellcheckChange(!inputSpellcheckEnabled)}
                                             onKeyDown={(event) => {
                                                 if (event.key === ' ' || event.key === 'Enter') {
                                                     event.preventDefault();
-                                                    handleChatInputSpellcheckChange(!chatInputSpellcheckEnabled);
+                                                    handleInputSpellcheckChange(!inputSpellcheckEnabled);
                                                 }
                                             }}
                                         >
                                             <Checkbox
-                                                checked={chatInputSpellcheckEnabled}
-                                                onChange={handleChatInputSpellcheckChange}
+                                                checked={inputSpellcheckEnabled}
+                                                onChange={handleInputSpellcheckChange}
                                                 ariaLabel="Enable spellcheck in text inputs"
                                             />
                                             <span className="typography-ui-label text-foreground">Enable Spellcheck in Text Inputs</span>
