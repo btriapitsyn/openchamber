@@ -185,6 +185,7 @@ export const ChatContainer: React.FC = () => {
         handleMessageContentChange,
         getAnimationHandlers,
         scrollToBottom,
+        releasePinnedScroll,
         isPinned,
         isOverflowing,
     } = useChatScrollManager({
@@ -454,8 +455,12 @@ export const ChatContainer: React.FC = () => {
             <TimelineDialog
                 open={isTimelineDialogOpen}
                 onOpenChange={setTimelineDialogOpen}
-                onScrollToMessage={(messageId) => navigation.scrollToMessageId(messageId, { behavior: 'smooth' })}
+                onScrollToMessage={(messageId) => {
+                    releasePinnedScroll();
+                    return navigation.scrollToMessageId(messageId, { behavior: 'smooth', updateHash: false });
+                }}
                 onScrollByTurnOffset={(offset) => {
+                    releasePinnedScroll();
                     void navigation.scrollByTurnOffset(offset);
                 }}
                 onResumeToLatest={navigation.resumeToLatest}

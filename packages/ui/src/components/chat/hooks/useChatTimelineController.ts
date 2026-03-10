@@ -262,7 +262,6 @@ export const useChatTimelineController = ({
             }
 
             await loadMoreMessages(targetSessionId, 'up');
-            await waitForFrames(1);
 
             const afterMessages = messagesRef.current;
             const afterMessageCount = afterMessages.length;
@@ -308,42 +307,37 @@ export const useChatTimelineController = ({
         setPendingRevealWork(true);
 
         try {
-            for (let attempt = 0; attempt < 10; attempt += 1) {
-                if (sessionIdRef.current !== sessionId) {
-                    return false;
-                }
-
-                const turnIndex = turnModelRef.current.turnIndexById.get(turnId);
-                if (typeof turnIndex === 'number') {
-                    if (turnIndex < turnStartRef.current) {
-                        setTurnStart(turnIndex);
-                        await waitForFrames(2);
-                    }
-
-                    const didScroll = messageListRef.current?.scrollToTurnId(turnId, {
-                        behavior: options?.behavior,
-                    }) ?? false;
-
-                    if (didScroll) {
-                        setActiveTurnId(turnId);
-                        return true;
-                    }
-
-                    await waitForFrames(2);
-                    continue;
-                }
-
-                const fetched = await fetchOlderHistory({ preserveViewport: false });
-                if (!fetched) {
-                    return false;
-                }
+            if (sessionIdRef.current !== sessionId) {
+                return false;
             }
 
-            return false;
+            const turnIndex = turnModelRef.current.turnIndexById.get(turnId);
+            if (typeof turnIndex !== 'number') {
+                return false;
+            }
+
+            if (turnIndex < turnStartRef.current) {
+                setTurnStart(turnIndex);
+                await waitForFrames(2);
+            }
+
+            const didScroll = messageListRef.current?.scrollToTurnId(turnId, {
+                behavior: options?.behavior,
+            }) ?? false;
+
+            if (didScroll) {
+                setActiveTurnId(turnId);
+                return true;
+            }
+
+            await waitForFrames(2);
+            return messageListRef.current?.scrollToTurnId(turnId, {
+                behavior: options?.behavior,
+            }) ?? false;
         } finally {
             setPendingRevealWork(false);
         }
-    }, [fetchOlderHistory, messageListRef, sessionId]);
+    }, [messageListRef, sessionId]);
 
     const scrollToMessage = React.useCallback(async (
         messageId: string,
@@ -356,45 +350,41 @@ export const useChatTimelineController = ({
         setPendingRevealWork(true);
 
         try {
-            for (let attempt = 0; attempt < 10; attempt += 1) {
-                if (sessionIdRef.current !== sessionId) {
-                    return false;
-                }
-
-                const turnId = turnModelRef.current.messageToTurnId.get(messageId);
-                const turnIndex = turnModelRef.current.messageToTurnIndex.get(messageId);
-
-                if (typeof turnIndex === 'number') {
-                    if (turnIndex < turnStartRef.current) {
-                        setTurnStart(turnIndex);
-                        await waitForFrames(2);
-                    }
-
-                    const didScroll = messageListRef.current?.scrollToMessageId(messageId, {
-                        behavior: options?.behavior,
-                    }) ?? false;
-                    if (didScroll) {
-                        if (turnId) {
-                            setActiveTurnId(turnId);
-                        }
-                        return true;
-                    }
-
-                    await waitForFrames(2);
-                    continue;
-                }
-
-                const fetched = await fetchOlderHistory({ preserveViewport: false });
-                if (!fetched) {
-                    return false;
-                }
+            if (sessionIdRef.current !== sessionId) {
+                return false;
             }
 
-            return false;
+            const turnId = turnModelRef.current.messageToTurnId.get(messageId);
+            const turnIndex = turnModelRef.current.messageToTurnIndex.get(messageId);
+
+            if (typeof turnIndex !== 'number') {
+                return false;
+            }
+
+            if (turnIndex < turnStartRef.current) {
+                setTurnStart(turnIndex);
+                await waitForFrames(2);
+            }
+
+            const didScroll = messageListRef.current?.scrollToMessageId(messageId, {
+                behavior: options?.behavior,
+            }) ?? false;
+
+            if (didScroll) {
+                if (turnId) {
+                    setActiveTurnId(turnId);
+                }
+                return true;
+            }
+
+            await waitForFrames(2);
+            return messageListRef.current?.scrollToMessageId(messageId, {
+                behavior: options?.behavior,
+            }) ?? false;
         } finally {
             setPendingRevealWork(false);
         }
-    }, [fetchOlderHistory, messageListRef, sessionId]);
+    }, [messageListRef, sessionId]);
 
     const resumeToBottom = React.useCallback(() => {
         const nextStart = getInitialTurnStart(turnModelRef.current.turnCount);

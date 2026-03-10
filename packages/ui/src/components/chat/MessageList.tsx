@@ -31,6 +31,9 @@ import { StatusRow } from './StatusRow';
 const MESSAGE_VIRTUALIZE_THRESHOLD = 40;
 const MESSAGE_VIRTUAL_OVERSCAN_MOBILE = 2;
 const MESSAGE_VIRTUAL_OVERSCAN_DESKTOP = 4;
+const TURN_ESTIMATE_BASE_PX = 120;
+const TURN_ESTIMATE_PER_ASSISTANT_PX = 120;
+const TURN_ESTIMATE_MAX_PX = 1400;
 
 const useStableEvent = <TArgs extends unknown[], TResult>(handler: (...args: TArgs) => TResult) => {
     const handlerRef = React.useRef(handler);
@@ -438,7 +441,11 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
         if (chatRenderMode === 'live') {
             return turn.assistantMessages;
         }
-        return turn.assistantMessages.filter(isAssistantMessageCompleted);
+        const filtered = turn.assistantMessages.filter(isAssistantMessageCompleted);
+        if (filtered.length === turn.assistantMessages.length) {
+            return turn.assistantMessages;
+        }
+        return filtered;
     }, [chatRenderMode, turn.assistantMessages]);
 
     const visibleAssistantIds = React.useMemo(() => {
@@ -457,11 +464,17 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
         if (chatRenderMode !== 'sorted') {
             return turn.activityParts;
         }
+        if (visibleAssistantMessages === turn.assistantMessages) {
+            return turn.activityParts;
+        }
         return turn.activityParts.filter((activity) => visibleAssistantIdSet.has(activity.messageId));
-    }, [chatRenderMode, turn.activityParts, visibleAssistantIdSet]);
+    }, [chatRenderMode, turn.activityParts, turn.assistantMessages, visibleAssistantIdSet, visibleAssistantMessages]);
 
     const visibleActivitySegments = React.useMemo(() => {
         if (chatRenderMode !== 'sorted') {
+            return turn.activitySegments;
+        }
+        if (visibleAssistantMessages === turn.assistantMessages) {
             return turn.activitySegments;
         }
         return turn.activitySegments
@@ -483,7 +496,7 @@ const TurnBlock: React.FC<TurnBlockProps> = ({
                 };
             })
             .filter((segment): segment is NonNullable<typeof segment> => segment !== null);
-    }, [chatRenderMode, turn.activitySegments, visibleAssistantIdSet]);
+    }, [chatRenderMode, turn.activitySegments, turn.assistantMessages, visibleAssistantIdSet, visibleAssistantMessages]);
 
     const turnGroupingContextBase = React.useMemo(() => {
         const userCreatedAt = (turn.userMessage.info.time as { created?: number } | undefined)?.created;
@@ -1048,14 +1061,17 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         (index: number): number => {
             const entry = stagedEntries[index];
             if (!entry) {
-                return 300;
+                return 220;
             }
             if (entry.kind === 'turn') {
                 const assistantCount = entry.turn.assistantMessages.length;
-                return Math.min(3600, 140 + assistantCount * 260);
+                return Math.min(
+                    TURN_ESTIMATE_MAX_PX,
+                    TURN_ESTIMATE_BASE_PX + assistantCount * TURN_ESTIMATE_PER_ASSISTANT_PX,
+                );
             }
             const role = resolveMessageRole(entry.message);
-            return role === 'user' ? 120 : 280;
+            return role === 'user' ? 100 : 220;
         },
         [stagedEntries]
     );
@@ -1071,6 +1087,16 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
     });
 
     const virtualRows = shouldVirtualize ? virtualizer.getVirtualItems() : [];
+    const lastNonEmptyVirtualRowsRef = React.useRef<VirtualItem[]>([]);
+    if (shouldVirtualize && virtualRows.length > 0) {
+        lastNonEmptyVirtualRowsRef.current = virtualRows;
+    }
+
+    const effectiveVirtualRows = shouldVirtualize
+        ? (virtualRows.length > 0 ? virtualRows : lastNonEmptyVirtualRowsRef.current)
+        : [];
+
+    const renderVirtualized = shouldVirtualize && effectiveVirtualRows.length > 0;
 
     const scrollVirtualizerToIndex = React.useCallback((index: number, behavior: ScrollBehavior = 'auto') => {
         if (!virtualizer) {
@@ -1184,12 +1210,21 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
 
                 if (shouldVirtualize) {
                     scrollVirtualizerToIndex(index, behavior === 'instant' ? 'auto' : behavior);
+                    if (scrollMessageElementIntoView(messageId, behavior)) {
+                        return true;
+                    }
                     if (typeof window !== 'undefined') {
-                        window.requestAnimationFrame(() => {
-                            window.requestAnimationFrame(() => {
-                                scrollMessageElementIntoView(messageId, behavior);
-                            });
-                        });
+                        let attempts = 0;
+                        const retry = () => {
+                            attempts += 1;
+                            if (scrollMessageElementIntoView(messageId, behavior)) {
+                                return;
+                            }
+                            if (attempts < 3) {
+                                window.requestAnimationFrame(retry);
+                            }
+                        };
+                        window.requestAnimationFrame(retry);
                     }
                     return true;
                 }
@@ -1236,21 +1271,36 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     scrollVirtualizerToIndex(index, 'auto');
                 }
 
+                const applyAnchor = (): boolean => {
+                    const element = findMessageElement(anchor.messageId);
+                    if (!element) {
+                        return false;
+                    }
+                    const containerRect = container.getBoundingClientRect();
+                    const targetTop = element.getBoundingClientRect().top - containerRect.top;
+                    const delta = targetTop - anchor.offsetTop;
+                    if (delta !== 0) {
+                        container.scrollTop += delta;
+                    }
+                    return true;
+                };
+
+                if (applyAnchor()) {
+                    return true;
+                }
+
                 if (typeof window !== 'undefined') {
-                    window.requestAnimationFrame(() => {
-                        window.requestAnimationFrame(() => {
-                            const element = findMessageElement(anchor.messageId);
-                            if (!element) {
-                                return;
-                            }
-                            const containerRect = container.getBoundingClientRect();
-                            const targetTop = element.getBoundingClientRect().top - containerRect.top;
-                            const delta = targetTop - anchor.offsetTop;
-                            if (delta !== 0) {
-                                container.scrollTop += delta;
-                            }
-                        });
-                    });
+                    let attempts = 0;
+                    const retry = () => {
+                        attempts += 1;
+                        if (applyAnchor()) {
+                            return;
+                        }
+                        if (attempts < 3) {
+                            window.requestAnimationFrame(retry);
+                        }
+                    };
+                    window.requestAnimationFrame(retry);
                 }
 
                 return true;
@@ -1271,7 +1321,7 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         };
     }, [findMessageElement, messageIndexMap, scrollMessageElementIntoView, resolveScrollContainer, scrollVirtualizerToIndex, shouldVirtualize, turnIndexMap, ref]);
 
-    const disableFadeIn = shouldVirtualize && virtualizer.isScrolling;
+    const disableFadeIn = isLoadingOlder || (renderVirtualized && virtualizer.isScrolling);
 
     return (
         <div>
@@ -1302,12 +1352,12 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                 ) : null}
 
                 <FadeInDisabledProvider disabled={disableFadeIn}>
-                    {shouldVirtualize ? (
+                    {renderVirtualized ? (
                         <div
                             className="relative w-full"
                             style={{ height: `${virtualizer.getTotalSize()}px` }}
                         >
-                            {virtualRows.map((virtualRow: VirtualItem) => {
+                            {effectiveVirtualRows.map((virtualRow: VirtualItem) => {
                                 const entry = stagedEntries[virtualRow.index];
                                 if (!entry) {
                                     return null;
