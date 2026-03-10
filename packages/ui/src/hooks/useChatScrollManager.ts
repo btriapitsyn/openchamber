@@ -66,6 +66,7 @@ interface UseChatScrollManagerResult {
 }
 
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 200;
+const DIRECT_SCROLL_INTENT_WINDOW_MS = 250;
 // Threshold for re-pinning: 10% of container height (matches bottom spacer)
 const PIN_THRESHOLD_RATIO = 0.10;
 
@@ -96,8 +97,10 @@ export const useChatScrollManager = ({
 
     const lastSessionIdRef = React.useRef<string | null>(null);
     const suppressUserScrollUntilRef = React.useRef<number>(0);
+    const lastDirectScrollIntentAtRef = React.useRef<number>(0);
     const isPinnedRef = React.useRef(true);
     const lastScrollTopRef = React.useRef<number>(0);
+    const touchLastYRef = React.useRef<number | null>(null);
 
     const markProgrammaticScroll = React.useCallback(() => {
         suppressUserScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_SUPPRESS_MS;
@@ -181,6 +184,7 @@ export const useChatScrollManager = ({
 
         const now = Date.now();
         const isProgrammatic = now < suppressUserScrollUntilRef.current;
+        const hasDirectIntent = now - lastDirectScrollIntentAtRef.current <= DIRECT_SCROLL_INTENT_WINDOW_MS;
 
         scrollEngine.handleScroll();
         updateScrollButtonVisibility();
@@ -191,8 +195,9 @@ export const useChatScrollManager = ({
 
         // Unpin whenever trusted user scroll moves away from bottom.
         // This keeps drag-scroll/keyboard/trackpad behavior consistent.
-        if (event?.isTrusted && !isProgrammatic && isPinnedRef.current) {
-            if (!isNearBottom(distanceFromBottom, getPinThreshold())) {
+        if (event?.isTrusted && !isProgrammatic && hasDirectIntent && isPinnedRef.current) {
+            const scrollingUp = currentScrollTop < lastScrollTopRef.current;
+            if (scrollingUp) {
                 updatePinnedState(false);
             }
         }
@@ -257,14 +262,73 @@ export const useChatScrollManager = ({
         const container = scrollRef.current;
         if (!container) return;
 
+        const markDirectIntent = () => {
+            lastDirectScrollIntentAtRef.current = Date.now();
+        };
+
+        const handleTouchStartIntent = (event: TouchEvent) => {
+            markDirectIntent();
+            const touch = event.touches.item(0);
+            touchLastYRef.current = touch ? touch.clientY : null;
+        };
+
+        const handleTouchMoveIntent = (event: TouchEvent) => {
+            markDirectIntent();
+
+            const touch = event.touches.item(0);
+            if (!touch) {
+                touchLastYRef.current = null;
+                return;
+            }
+
+            const previousY = touchLastYRef.current;
+            touchLastYRef.current = touch.clientY;
+            if (previousY === null || !isPinnedRef.current) {
+                return;
+            }
+
+            const fingerDelta = touch.clientY - previousY;
+            if (Math.abs(fingerDelta) < 2) {
+                return;
+            }
+
+            const syntheticWheelDelta = -fingerDelta;
+            if (syntheticWheelDelta >= 0) {
+                return;
+            }
+
+            if (shouldPauseAutoScrollOnWheel({
+                root: container,
+                target: event.target,
+                delta: syntheticWheelDelta,
+            })) {
+                scrollEngine.cancelFollow();
+                updatePinnedState(false);
+            }
+        };
+
+        const handleTouchEndIntent = () => {
+            touchLastYRef.current = null;
+        };
+
         container.addEventListener('scroll', handleScrollEvent as EventListener, { passive: true });
+        container.addEventListener('touchstart', handleTouchStartIntent as EventListener, { passive: true });
+        container.addEventListener('touchmove', handleTouchMoveIntent as EventListener, { passive: true });
+        container.addEventListener('touchend', handleTouchEndIntent as EventListener, { passive: true });
+        container.addEventListener('touchcancel', handleTouchEndIntent as EventListener, { passive: true });
         container.addEventListener('wheel', handleWheelIntent as EventListener, { passive: true });
+        container.addEventListener('wheel', markDirectIntent as EventListener, { passive: true });
 
         return () => {
             container.removeEventListener('scroll', handleScrollEvent as EventListener);
+            container.removeEventListener('touchstart', handleTouchStartIntent as EventListener);
+            container.removeEventListener('touchmove', handleTouchMoveIntent as EventListener);
+            container.removeEventListener('touchend', handleTouchEndIntent as EventListener);
+            container.removeEventListener('touchcancel', handleTouchEndIntent as EventListener);
             container.removeEventListener('wheel', handleWheelIntent as EventListener);
+            container.removeEventListener('wheel', markDirectIntent as EventListener);
         };
-    }, [handleScrollEvent, handleWheelIntent]);
+    }, [handleScrollEvent, handleWheelIntent, scrollEngine, updatePinnedState]);
 
     // Session switch - always start pinned at bottom
     useIsomorphicLayoutEffect(() => {

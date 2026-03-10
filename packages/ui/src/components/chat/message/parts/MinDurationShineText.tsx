@@ -1,6 +1,8 @@
 import React from 'react';
 import { Text } from '@/components/ui/text';
 
+const MAX_SHINE_DURATION_MS = 5 * 60 * 1000; // 5 minutes cap
+
 interface MinDurationShineTextProps {
     active: boolean;
     minDurationMs?: number;
@@ -46,6 +48,15 @@ export const MinDurationShineText: React.FC<MinDurationShineTextProps> = ({
             if (shineStartRef.current === null) {
                 shineStartRef.current = Date.now();
             }
+            
+            // Cap shine duration at 5 minutes max to prevent infinite shine on stuck tools
+            const elapsed = Date.now() - shineStartRef.current;
+            if (elapsed >= MAX_SHINE_DURATION_MS) {
+                setIsShining(false);
+                shineStartRef.current = null;
+                return;
+            }
+            
             setIsShining(true);
             return;
         }
@@ -58,6 +69,14 @@ export const MinDurationShineText: React.FC<MinDurationShineTextProps> = ({
         // active went false — schedule turn-off respecting minDurationMs.
         const startedAt = shineStartRef.current ?? Date.now();
         const elapsed = Date.now() - startedAt;
+        
+        // Cap shine duration at 5 minutes max to prevent infinite shine on stuck tools
+        if (elapsed >= MAX_SHINE_DURATION_MS) {
+            setIsShining(false);
+            shineStartRef.current = null;
+            return;
+        }
+        
         const remaining = Math.max(0, minDurationMs - elapsed);
 
         timerRef.current = setTimeout(() => {
