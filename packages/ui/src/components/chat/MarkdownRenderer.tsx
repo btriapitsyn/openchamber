@@ -681,6 +681,7 @@ interface MarkdownRendererProps {
   skipFadeIn?: boolean;
   className?: string;
   isStreaming?: boolean;
+  disableStreamAnimation?: boolean;
   variant?: MarkdownVariant;
   onShowPopup?: (content: ToolPopupContent) => void;
 }
@@ -1329,6 +1330,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   skipFadeIn = false,
   className,
   isStreaming = false,
+  disableStreamAnimation = false,
   variant = 'assistant',
   onShowPopup,
 }) => {
@@ -1363,16 +1365,16 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
   const markdownContent = (
     <div className={cn('break-words w-full min-w-0', className)} ref={streamdownContainerRef}>
-      <Streamdown
+        <Streamdown
          key={`streamdown-${componentKey}-${currentMermaidTheme.metadata.id}:${currentMermaidTheme.metadata.variant}`}
-         mode={isStreaming ? 'streaming' : 'static'}
+         mode={isStreaming && !disableStreamAnimation ? 'streaming' : 'static'}
          shikiTheme={shikiThemes}
          className={streamdownClassName}
          controls={streamdownControls}
          plugins={streamdownPlugins}
          components={streamdownComponents}
-         animated={streamdownAnimated}
-         isAnimating={isStreaming}
+         animated={disableStreamAnimation ? undefined : streamdownAnimated}
+         isAnimating={disableStreamAnimation ? false : isStreaming}
         >
         {content}
       </Streamdown>

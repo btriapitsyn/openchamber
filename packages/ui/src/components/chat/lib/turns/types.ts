@@ -63,6 +63,8 @@ export interface TurnRecord {
     messages: TurnMessageRecord[];
     assistantMessageIds: string[];
     assistantMessages: ChatMessageEntry[];
+    activityParts: TurnActivityRecord[];
+    activitySegments: TurnActivityGroup[];
     summary: TurnSummaryRecord;
     summaryText?: string;
     hasTools: boolean;
@@ -105,6 +107,9 @@ export interface TurnGroupingContext {
     turnId: string;
     isFirstAssistantInTurn: boolean;
     isLastAssistantInTurn: boolean;
+    summaryBody?: string;
+    activityParts?: TurnActivityRecord[];
+    activityGroupSegments?: TurnActivityGroup[];
     headerMessageId?: string;
     hasTools: boolean;
     hasReasoning: boolean;
@@ -112,4 +117,6 @@ export interface TurnGroupingContext {
     userMessageCreatedAt?: number;
     userMessageVariant?: string;
     isWorking: boolean;
+    isGroupExpanded?: boolean;
+    toggleGroup?: () => void;
 }

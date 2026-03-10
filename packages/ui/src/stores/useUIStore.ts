@@ -10,6 +10,8 @@ export type RightSidebarTab = 'git' | 'files';
 export type ContextPanelMode = 'diff' | 'file' | 'context' | 'plan' | 'chat';
 export type MermaidRenderingMode = 'svg' | 'ascii';
 export type UserMessageRenderingMode = 'markdown' | 'plain';
+export type ChatRenderMode = 'sorted' | 'live';
+export type ActivityRenderMode = 'collapsed' | 'summary';
 
 type ContextPanelTab = {
   id: string;
@@ -497,6 +499,8 @@ interface UIStore {
   eventStreamStatus: EventStreamStatus;
   eventStreamHint: string | null;
   showReasoningTraces: boolean;
+  chatRenderMode: ChatRenderMode;
+  activityRenderMode: ActivityRenderMode;
   showDeletionDialog: boolean;
   autoDeleteEnabled: boolean;
   autoDeleteAfterDays: number;
@@ -609,6 +613,8 @@ interface UIStore {
   setSettingsRemoteInstancesSelectedId: (instanceId: string | null) => void;
   setEventStreamStatus: (status: EventStreamStatus, hint?: string | null) => void;
   setShowReasoningTraces: (value: boolean) => void;
+  setChatRenderMode: (value: ChatRenderMode) => void;
+  setActivityRenderMode: (value: ActivityRenderMode) => void;
   setShowDeletionDialog: (value: boolean) => void;
   setAutoDeleteEnabled: (value: boolean) => void;
   setAutoDeleteAfterDays: (days: number) => void;
@@ -715,6 +721,8 @@ export const useUIStore = create<UIStore>()(
         eventStreamStatus: 'idle',
         eventStreamHint: null,
         showReasoningTraces: true,
+        chatRenderMode: 'sorted',
+        activityRenderMode: 'summary',
         showDeletionDialog: true,
         autoDeleteEnabled: false,
         autoDeleteAfterDays: 30,
@@ -1282,6 +1290,14 @@ export const useUIStore = create<UIStore>()(
           set({ showReasoningTraces: value });
         },
 
+        setChatRenderMode: (value) => {
+          set({ chatRenderMode: value });
+        },
+
+        setActivityRenderMode: (value) => {
+          set({ activityRenderMode: value });
+        },
+
         setShowDeletionDialog: (value) => {
           set({ showDeletionDialog: value });
         },
@@ -1798,6 +1814,8 @@ export const useUIStore = create<UIStore>()(
           isSessionCreateDialogOpen: state.isSessionCreateDialogOpen,
           // Note: isSettingsDialogOpen intentionally NOT persisted
           showReasoningTraces: state.showReasoningTraces,
+          chatRenderMode: state.chatRenderMode,
+          activityRenderMode: state.activityRenderMode,
           showDeletionDialog: state.showDeletionDialog,
           autoDeleteEnabled: state.autoDeleteEnabled,
           autoDeleteAfterDays: state.autoDeleteAfterDays,

@@ -1,3 +1,4 @@
+import { projectTurnActivity } from './projectTurnActivity';
 import { projectTurnIndexes } from './projectTurnIndexes';
 import { projectTurnDiffStats, projectTurnSummary } from './projectTurnSummary';
 import type {
@@ -81,10 +82,12 @@ const buildTurnStreamState = (userMessage: ChatMessageEntry, assistantMessages: 
 
 interface ProjectTurnRecordsOptions {
     previousProjection?: TurnProjectionResult | null;
+    showTextJustificationActivity: boolean;
 }
 
 const DEFAULT_OPTIONS: ProjectTurnRecordsOptions = {
     previousProjection: null,
+    showTextJustificationActivity: false,
 };
 
 export const projectTurnRecords = (
@@ -114,6 +117,8 @@ export const projectTurnRecords = (
                 messages: [createTurnMessageRecord(message, index)],
                 assistantMessageIds: [],
                 assistantMessages: [],
+                activityParts: [],
+                activitySegments: [],
                 summary: {},
                 summaryText: undefined,
                 hasTools: false,
@@ -182,6 +187,8 @@ export const projectTurnRecords = (
             turn.summary = previousTurn.summary;
             turn.summaryText = previousTurn.summaryText;
             turn.diffStats = previousTurn.diffStats;
+            turn.activityParts = previousTurn.activityParts;
+            turn.activitySegments = previousTurn.activitySegments;
             turn.hasTools = previousTurn.hasTools;
             turn.hasReasoning = previousTurn.hasReasoning;
             turn.stream = previousTurn.stream;
@@ -195,11 +202,16 @@ export const projectTurnRecords = (
         turn.summaryText = turn.summary.text ?? getUserSummaryBody(turn.userMessage);
         turn.diffStats = projectTurnDiffStats(turn.userMessage);
 
-        // Simple detection of tools/reasoning — no activity projection needed with flat rendering.
-        turn.hasTools = turn.assistantMessages.some((msg) => msg.parts.some((p) => p.type === 'tool'));
-        turn.hasReasoning = turn.assistantMessages.some((msg) =>
-            msg.parts.some((p) => p.type === 'reasoning' && Boolean((p as { text?: string }).text?.trim()))
-        );
+        const activity = projectTurnActivity({
+            turnId: turn.turnId,
+            assistantMessages: turn.assistantMessages,
+            summarySourceMessageId: turn.summary.sourceMessageId,
+            showTextJustificationActivity: effectiveOptions.showTextJustificationActivity,
+        });
+        turn.activityParts = activity.activityParts;
+        turn.activitySegments = activity.activitySegments;
+        turn.hasTools = activity.hasTools;
+        turn.hasReasoning = activity.hasReasoning;
 
         turn.stream = buildTurnStreamState(turn.userMessage, turn.assistantMessages);
         turn.startedAt = turn.stream.startedAt;

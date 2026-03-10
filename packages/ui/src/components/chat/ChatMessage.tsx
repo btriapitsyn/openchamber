@@ -131,10 +131,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     } = sessionState;
 
     const providers = useConfigStore((state) => state.providers);
-    const { showReasoningTraces, stickyUserHeader } = useUIStore(
+    const { showReasoningTraces, stickyUserHeader, chatRenderMode } = useUIStore(
         useShallow((state) => ({
             showReasoningTraces: state.showReasoningTraces,
             stickyUserHeader: state.stickyUserHeader,
+            chatRenderMode: state.chatRenderMode,
         }))
     );
 
@@ -388,8 +389,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             return visibleParts;
         }
 
+        if (!isMessageCompleted && chatRenderMode === 'sorted') {
+            return [];
+        }
+
         return visibleParts;
-    }, [isUser, visibleParts]);
+    }, [chatRenderMode, isMessageCompleted, isUser, visibleParts]);
 
 
     const assistantTextParts = React.useMemo(() => {

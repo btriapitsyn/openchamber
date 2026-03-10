@@ -12,6 +12,7 @@ interface AssistantTextPartProps {
     part: Part;
     messageId: string;
     streamPhase: StreamPhase;
+    chatRenderMode?: 'sorted' | 'live';
     onContentChange?: (reason?: ContentChangeReason, messageId?: string) => void;
 }
 
@@ -19,13 +20,14 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     part,
     messageId,
     streamPhase,
+    chatRenderMode = 'live',
 }) => {
     const partWithText = part as PartWithText;
     const rawText = partWithText.text;
     const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
     const isStreamingPhase = streamPhase === 'streaming';
     const isCooldownPhase = streamPhase === 'cooldown';
-    const isStreaming = isStreamingPhase || isCooldownPhase;
+    const isStreaming = chatRenderMode === 'live' && (isStreamingPhase || isCooldownPhase);
 
     const throttledTextContent = useStreamingTextThrottle({
         text: textContent,
@@ -62,6 +64,7 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
                 messageId={messageId}
                 isAnimated={false}
                 isStreaming={isStreaming}
+                disableStreamAnimation={chatRenderMode === 'sorted'}
                 variant={part.type === 'reasoning' ? 'reasoning' : 'assistant'}
             />
         </div>

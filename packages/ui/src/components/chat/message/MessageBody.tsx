@@ -4,6 +4,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import UserTextPart from './parts/UserTextPart';
 import ToolPart from './parts/ToolPart';
 import AssistantTextPart from './parts/AssistantTextPart';
+import ReasoningPart from './parts/ReasoningPart';
 import { MessageFilesDisplay } from '../FileAttachment';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
@@ -32,7 +33,8 @@ import { toast } from '@/components/ui';
 import { formatTimestampForDisplay } from './timeFormat';
 import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
 import { StaticToolRow } from './parts/ProgressiveGroup';
-import { getStaticGroupToolName, isExpandableTool } from './parts/toolRenderUtils';
+import { getStaticGroupToolName, isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
+import TurnActivity from '../components/TurnActivity';
 
 type SubtaskPartLike = Part & {
     type: 'subtask';
@@ -603,6 +605,8 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
     const createSessionFromAssistantMessage = useSessionStore((state) => state.createSessionFromAssistantMessage);
     const openMultiRunLauncherWithPrompt = useUIStore((state) => state.openMultiRunLauncherWithPrompt);
+    const chatRenderMode = useUIStore((state) => state.chatRenderMode);
+    const isSortedRenderMode = chatRenderMode === 'sorted';
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
     const hasStopFinish = messageFinish === 'stop';
 
@@ -951,9 +955,86 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         };
     }, [clearCopyHintTimeout]);
 
+    const activityPartsForTurn = React.useMemo(() => {
+        const all = turnGroupingContext?.activityParts;
+        if (!isSortedRenderMode || !all) {
+            return [];
+        }
+        return all;
+    }, [isSortedRenderMode, turnGroupingContext?.activityParts]);
+
+    const activityGroupSegmentsForMessage = React.useMemo(() => {
+        const all = turnGroupingContext?.activityGroupSegments;
+        if (!isSortedRenderMode || !all) {
+            return [];
+        }
+        return all.filter((segment) => segment.anchorMessageId === messageId);
+    }, [isSortedRenderMode, messageId, turnGroupingContext?.activityGroupSegments]);
+
+    const activityByPart = React.useMemo(() => {
+        const byRef = new Map<Part, (typeof activityPartsForTurn)[number]>();
+        const byId = new Map<string, (typeof activityPartsForTurn)[number]>();
+        activityPartsForTurn.forEach((activity) => {
+            byRef.set(activity.part, activity);
+            const partId = (activity.part as { id?: unknown }).id;
+            if (typeof partId === 'string' && partId.length > 0) {
+                byId.set(partId, activity);
+            }
+        });
+
+        return {
+            get: (part: Part) => {
+                const direct = byRef.get(part);
+                if (direct) {
+                    return direct;
+                }
+                const partId = (part as { id?: unknown }).id;
+                if (typeof partId === 'string' && partId.length > 0) {
+                    return byId.get(partId);
+                }
+                return undefined;
+            },
+        };
+    }, [activityPartsForTurn]);
+
+    const toggleActivityGroup = turnGroupingContext?.toggleGroup;
+
+    const shouldRenderActivityGroup = isSortedRenderMode
+        && activityGroupSegmentsForMessage.length > 0
+        && Boolean(toggleActivityGroup);
+
 
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
+
+        if (shouldRenderActivityGroup && toggleActivityGroup) {
+            activityGroupSegmentsForMessage.forEach((segment) => {
+                const visibleSegmentParts = showReasoningTraces
+                    ? segment.parts
+                    : segment.parts.filter((activity) => activity.kind !== 'reasoning');
+                if (visibleSegmentParts.length === 0) {
+                    return;
+                }
+                rendered.push(
+                    <TurnActivity
+                        key={`progressive-group-${segment.id}`}
+                        parts={visibleSegmentParts}
+                        isExpanded={turnGroupingContext.isGroupExpanded === true}
+                        onToggle={toggleActivityGroup}
+                        syntaxTheme={syntaxTheme}
+                        isMobile={isMobile}
+                        expandedTools={expandedTools}
+                        onToggleTool={onToggleTool}
+                        onShowPopup={onShowPopup}
+                        onContentChange={onContentChange}
+                        streamPhase={streamPhase}
+                        showHeader={true}
+                        animateRows={animateActivityRows}
+                        diffStats={turnGroupingContext.diffStats}
+                    />
+                );
+            });
+        }
 
         // Flat rendering: iterate parts in natural order.
         // Group consecutive static tools (read, grep, glob, etc.) into compact rows.
@@ -964,12 +1045,22 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             const part = visibleParts[i];
 
             if (part.type === 'text') {
+                const activity = activityByPart.get(part);
+                if (isSortedRenderMode && !hasStopFinish) {
+                    i += 1;
+                    continue;
+                }
+                if (activity?.kind === 'justification') {
+                    i += 1;
+                    continue;
+                }
                 rendered.push(
                     <AssistantTextPart
                         key={`assistant-text-${messageId}-${i}`}
                         part={part}
                         messageId={messageId}
                         streamPhase={streamPhase}
+                        chatRenderMode={chatRenderMode}
                         onContentChange={onContentChange}
                     />
                 );
@@ -978,16 +1069,36 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             }
 
             if (part.type === 'reasoning') {
+                const activity = activityByPart.get(part);
+                if (isSortedRenderMode && !hasStopFinish) {
+                    i += 1;
+                    continue;
+                }
+                if (activity?.kind === 'reasoning') {
+                    i += 1;
+                    continue;
+                }
                 if (showReasoningTraces) {
-                    const partText = (part as { text?: string }).text;
-                    if (partText && partText.trim().length > 0) {
+                    if (isSortedRenderMode) {
                         rendered.push(
-                            <FadeInOnReveal key={`reasoning-${messageId}-${i}`}>
-                                <div className="text-sm text-muted-foreground/60 italic leading-relaxed whitespace-pre-wrap">
-                                    {partText}
-                                </div>
-                            </FadeInOnReveal>
+                            <ReasoningPart
+                                key={`reasoning-${messageId}-${i}`}
+                                part={part}
+                                messageId={messageId}
+                                onContentChange={onContentChange}
+                            />
                         );
+                    } else {
+                        const partText = (part as { text?: string }).text;
+                        if (partText && partText.trim().length > 0) {
+                            rendered.push(
+                                <FadeInOnReveal key={`reasoning-${messageId}-${i}`}>
+                                    <div className="text-sm text-muted-foreground/60 italic leading-relaxed whitespace-pre-wrap">
+                                        {partText}
+                                    </div>
+                                </FadeInOnReveal>
+                            );
+                        }
                     }
                 }
                 i++;
@@ -997,6 +1108,12 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
             if (part.type === 'tool') {
                 const toolPart = part as ToolPartType;
                 const toolName = toolPart.tool?.toLowerCase() ?? '';
+
+                const activity = activityByPart.get(part);
+                if (activity?.kind === 'tool' && !isStandaloneTool(toolName)) {
+                    i += 1;
+                    continue;
+                }
 
                 if (!shouldShowTool(toolPart)) {
                     i++;
@@ -1068,18 +1185,26 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
         return rendered;
     }, [
+        activityByPart,
+        activityGroupSegmentsForMessage,
+        animateActivityRows,
+        chatRenderMode,
         expandedTools,
+        hasStopFinish,
         isMobile,
+        isSortedRenderMode,
         messageId,
         onContentChange,
         onShowPopup,
         onToggleTool,
+        shouldRenderActivityGroup,
         shouldShowTool,
         streamPhase,
         showReasoningTraces,
         syntaxTheme,
-        animateActivityRows,
         shouldAnimateNewToolMount,
+        toggleActivityGroup,
+        turnGroupingContext,
         visibleParts,
     ]);
 

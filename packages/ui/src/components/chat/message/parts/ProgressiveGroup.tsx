@@ -7,7 +7,6 @@ import type { StreamPhase } from '../types';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 import type { ToolPopupContent } from '../types';
 import ToolPart from './ToolPart';
-import AssistantTextPart from './AssistantTextPart';
 import { MinDurationShineText } from './MinDurationShineText';
 import { ToolRevealOnMount } from './ToolRevealOnMount';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
@@ -16,6 +15,8 @@ import { FadeInOnReveal } from '../FadeInOnReveal';
 import { getToolIcon } from './ToolPart';
 import { getToolMetadata } from '@/lib/toolHelpers';
 import { getStaticGroupToolName, isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
+import ReasoningPart from './ReasoningPart';
+import JustificationBlock from './JustificationBlock';
 
 interface DiffStats {
     additions: number;
@@ -481,15 +482,13 @@ export const StaticToolRow: React.FC<{
  * Inline reasoning text block — rendered as dimmed italic markdown.
  */
 const InlineReasoningBlock: React.FC<{
-    part: TurnActivityPart;
-    streamPhase: StreamPhase;
+    activity: TurnActivityPart;
     onContentChange?: (reason?: ContentChangeReason) => void;
-}> = ({ part, streamPhase, onContentChange }) => {
+}> = ({ activity, onContentChange }) => {
     return (
-        <AssistantTextPart
-            part={part.part}
-            messageId={part.messageId}
-            streamPhase={streamPhase}
+        <ReasoningPart
+            part={activity.part}
+            messageId={activity.messageId}
             onContentChange={onContentChange}
         />
     );
@@ -499,15 +498,13 @@ const InlineReasoningBlock: React.FC<{
  * Inline justification text block — rendered as normal assistant text between tools.
  */
 const InlineJustificationBlock: React.FC<{
-    part: TurnActivityPart;
-    streamPhase: StreamPhase;
+    activity: TurnActivityPart;
     onContentChange?: (reason?: ContentChangeReason) => void;
-}> = ({ part, streamPhase, onContentChange }) => {
+}> = ({ activity, onContentChange }) => {
     return (
-        <AssistantTextPart
-            part={part.part}
-            messageId={part.messageId}
-            streamPhase={streamPhase}
+        <JustificationBlock
+            part={activity.part}
+            messageId={activity.messageId}
             onContentChange={onContentChange}
         />
     );
@@ -523,11 +520,12 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     onToggleTool,
     onShowPopup,
     onContentChange,
-    streamPhase,
+    streamPhase: _streamPhase,
     showHeader,
     animateRows = true,
     animateNewTools = false,
 }) => {
+    void _streamPhase;
     const shouldRenderRows = !showHeader || isExpanded;
 
     const sortedParts = React.useMemo(() => {
@@ -584,8 +582,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                     row.activity.id,
                     <>
                         <InlineReasoningBlock
-                            part={row.activity}
-                            streamPhase={streamPhase}
+                            activity={row.activity}
                             onContentChange={onContentChange}
                         />
                     </>
@@ -596,8 +593,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                     row.activity.id,
                     <>
                         <InlineJustificationBlock
-                            part={row.activity}
-                            streamPhase={streamPhase}
+                            activity={row.activity}
                             onContentChange={onContentChange}
                         />
                     </>

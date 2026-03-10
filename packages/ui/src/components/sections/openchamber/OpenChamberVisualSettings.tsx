@@ -113,11 +113,37 @@ const USER_MESSAGE_RENDERING_OPTIONS: Option<'markdown' | 'plain'>[] = [
     },
 ];
 
+const CHAT_RENDER_MODE_OPTIONS: Option<'sorted' | 'live'>[] = [
+    {
+        id: 'sorted',
+        label: 'Sorted',
+        description: 'Render completed assistant messages without live streaming.',
+    },
+    {
+        id: 'live',
+        label: 'Live',
+        description: 'Stream assistant text and tools as they arrive.',
+    },
+];
+
+const ACTIVITY_RENDER_MODE_OPTIONS: Option<'collapsed' | 'summary'>[] = [
+    {
+        id: 'collapsed',
+        label: 'Collapsed',
+        description: 'Keep Activity collapsed by default.',
+    },
+    {
+        id: 'summary',
+        label: 'Summary',
+        description: 'Expand Activity by default.',
+    },
+];
+
 const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' => {
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft';
+export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'navRail' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'activityRenderMode' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -137,6 +163,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setUserMessageRenderingMode = useUIStore(state => state.setUserMessageRenderingMode);
     const stickyUserHeader = useUIStore(state => state.stickyUserHeader);
     const setStickyUserHeader = useUIStore(state => state.setStickyUserHeader);
+    const chatRenderMode = useUIStore(state => state.chatRenderMode);
+    const setChatRenderMode = useUIStore(state => state.setChatRenderMode);
+    const activityRenderMode = useUIStore(state => state.activityRenderMode);
+    const setActivityRenderMode = useUIStore(state => state.setActivityRenderMode);
     const fontSize = useUIStore(state => state.fontSize);
     const setFontSize = useUIStore(state => state.setFontSize);
     const terminalFontSize = useUIStore(state => state.terminalFontSize);
@@ -224,6 +254,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const hasNavigationSettings = (!isMobile && shouldShow('navRail')) || (shouldShow('terminalQuickKeys') && !isMobile);
     const hasBehaviorSettings = shouldShow('mermaidRendering')
         || shouldShow('userMessageRendering')
+        || shouldShow('chatRenderMode')
+        || (shouldShow('activityRenderMode') && chatRenderMode === 'sorted')
         || shouldShow('stickyUserHeader')
         || shouldShow('diffLayout')
         || (shouldShow('mobileStatusBar') && isMobile)
@@ -693,7 +725,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
 
 
-                            {(shouldShow('userMessageRendering') || shouldShow('mermaidRendering') || (shouldShow('diffLayout') && !isVSCode)) && (
+                            {(shouldShow('userMessageRendering') || shouldShow('mermaidRendering') || shouldShow('chatRenderMode') || (shouldShow('activityRenderMode') && chatRenderMode === 'sorted') || (shouldShow('diffLayout') && !isVSCode)) && (
                                 <div className="grid grid-cols-1 gap-y-2 md:grid-cols-[minmax(0,16rem)_minmax(0,16rem)] md:justify-start md:gap-x-2">
                                     {shouldShow('userMessageRendering') && (
                                         <section className="p-2">
@@ -756,6 +788,78 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                                 checked={selected}
                                                                 onChange={() => setMermaidRenderingMode(option.id)}
                                                                 ariaLabel={`Mermaid rendering: ${option.label}`}
+                                                            />
+                                                            <span className={cn('typography-ui-label font-normal', selected ? 'text-foreground' : 'text-foreground/50')}>
+                                                                {option.label}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </section>
+                                    )}
+
+                                    {shouldShow('chatRenderMode') && (
+                                        <section className="p-2">
+                                            <h4 className="typography-ui-header font-medium text-foreground">Chat Render Mode</h4>
+                                            <div role="radiogroup" aria-label="Chat render mode" className="mt-1 space-y-0">
+                                                {CHAT_RENDER_MODE_OPTIONS.map((option) => {
+                                                    const selected = chatRenderMode === option.id;
+                                                    return (
+                                                        <div
+                                                            key={option.id}
+                                                            role="button"
+                                                            tabIndex={0}
+                                                            aria-pressed={selected}
+                                                            onClick={() => setChatRenderMode(option.id)}
+                                                            onKeyDown={(event) => {
+                                                                if (event.key === ' ' || event.key === 'Enter') {
+                                                                    event.preventDefault();
+                                                                    setChatRenderMode(option.id);
+                                                                }
+                                                            }}
+                                                            className="flex w-full items-center gap-2 py-0.5 text-left"
+                                                        >
+                                                            <Radio
+                                                                checked={selected}
+                                                                onChange={() => setChatRenderMode(option.id)}
+                                                                ariaLabel={`Chat render mode: ${option.label}`}
+                                                            />
+                                                            <span className={cn('typography-ui-label font-normal', selected ? 'text-foreground' : 'text-foreground/50')}>
+                                                                {option.label}
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </section>
+                                    )}
+
+                                    {shouldShow('activityRenderMode') && chatRenderMode === 'sorted' && (
+                                        <section className="p-2">
+                                            <h4 className="typography-ui-header font-medium text-foreground">Activity Default</h4>
+                                            <div role="radiogroup" aria-label="Activity default mode" className="mt-1 space-y-0">
+                                                {ACTIVITY_RENDER_MODE_OPTIONS.map((option) => {
+                                                    const selected = activityRenderMode === option.id;
+                                                    return (
+                                                        <div
+                                                            key={option.id}
+                                                            role="button"
+                                                            tabIndex={0}
+                                                            aria-pressed={selected}
+                                                            onClick={() => setActivityRenderMode(option.id)}
+                                                            onKeyDown={(event) => {
+                                                                if (event.key === ' ' || event.key === 'Enter') {
+                                                                    event.preventDefault();
+                                                                    setActivityRenderMode(option.id);
+                                                                }
+                                                            }}
+                                                            className="flex w-full items-center gap-2 py-0.5 text-left"
+                                                        >
+                                                            <Radio
+                                                                checked={selected}
+                                                                onChange={() => setActivityRenderMode(option.id)}
+                                                                ariaLabel={`Activity default mode: ${option.label}`}
                                                             />
                                                             <span className={cn('typography-ui-label font-normal', selected ? 'text-foreground' : 'text-foreground/50')}>
                                                                 {option.label}
