@@ -166,14 +166,61 @@ jobs:
       - name: Build Desktop app
         # Note: We use inline commands instead of desktop:build to pass architecture-specific --target flag
         # This enables cross-compilation for both arm64 and x86_64 from the same runner
-        run: bun run --cwd packages/desktop build && bun run --cwd packages/desktop tauri build --target ${{ matrix.target }}
+        run: |
+          export TAURI_ENV_TARGET_TRIPLE=${{ matrix.target }}
+          bun run --cwd packages/desktop build
+          bun run --cwd packages/desktop tauri build --target ${{ matrix.target }}
         env:
+          TAURI_ENV_TARGET_TRIPLE: ${{ matrix.target }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Verify binary architectures
+        run: |
+          set -euo pipefail
+          
+          BUNDLE_DIR="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+          
+          if [ ! -d "$BUNDLE_DIR" ]; then
+            echo "❌ Error: bundle directory not found: $BUNDLE_DIR"
+            exit 1
+          fi
+          
+          APP_PATH=$(find "$BUNDLE_DIR" -maxdepth 2 -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ Error: .app bundle not found under $BUNDLE_DIR"
+            exit 1
+          fi
+          
+          echo "🔍 Verifying binary architectures in $APP_PATH"
+          
+          MAIN_ARCH=$(file "$APP_PATH/Contents/MacOS/openchamber-desktop" | grep -oE 'x86_64|aarch64' | head -1)
+          SIDEARCH_ARCH=$(file "$APP_PATH/Contents/MacOS/openchamber-server" | grep -oE 'x86_64|aarch64' | head -1)
+          EXPECTED_ARCH=$(echo "${{ matrix.target }}" | grep -oE 'x86_64|aarch64' | head -1)
+          
+          echo "   Main binary: $MAIN_ARCH"
+          echo "   Sidecar binary: $SIDEARCH_ARCH"
+          echo "   Expected: $EXPECTED_ARCH"
+          
+          if [ "$MAIN_ARCH" != "$EXPECTED_ARCH" ]; then
+            echo "❌ ERROR: Main binary architecture mismatch!"
+            echo "   Expected: $EXPECTED_ARCH"
+            echo "   Got: $MAIN_ARCH"
+            exit 1
+          fi
+          
+          if [ "$SIDEARCH_ARCH" != "$EXPECTED_ARCH" ]; then
+            echo "❌ ERROR: Sidecar binary architecture mismatch!"
+            echo "   Expected: $EXPECTED_ARCH"
+            echo "   Got: $SIDEARCH_ARCH"
+            exit 1
+          fi
+          
+          echo "✅ Architecture verification passed: both binaries match $EXPECTED_ARCH"
 
       - name: Verify macOS entitlements
         run: |
