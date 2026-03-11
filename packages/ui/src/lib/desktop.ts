@@ -114,6 +114,7 @@ export type DesktopSettings = {
   gitProviderId?: string;
   gitModelId?: string;
   pwaAppName?: string;
+  inputSpellcheckEnabled?: boolean;
   userMessageRenderingMode?: 'markdown' | 'plain';
   stickyUserHeader?: boolean;
   fontSize?: number;
