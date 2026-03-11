@@ -23,8 +23,12 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
     chatRenderMode = 'live',
 }) => {
     const partWithText = part as PartWithText;
-    const rawText = partWithText.text;
-    const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+    const rawText = typeof partWithText.text === 'string' ? partWithText.text : '';
+    const contentText = typeof partWithText.content === 'string' ? partWithText.content : '';
+    const valueText = typeof partWithText.value === 'string' ? partWithText.value : '';
+    const textContent = [rawText, contentText, valueText].reduce((best, candidate) => {
+        return candidate.length > best.length ? candidate : best;
+    }, '');
     const isStreamingPhase = streamPhase === 'streaming';
     const isCooldownPhase = streamPhase === 'cooldown';
     const isStreaming = chatRenderMode === 'live' && (isStreamingPhase || isCooldownPhase);
@@ -40,6 +44,33 @@ const AssistantTextPart: React.FC<AssistantTextPartProps> = ({
         throttledTextContent,
         isStreaming,
     });
+
+    const lastDisplayLengthRef = React.useRef(0);
+    React.useEffect(() => {
+        if (!isStreaming || typeof window === 'undefined') {
+            lastDisplayLengthRef.current = displayTextContent.length;
+            return;
+        }
+        const debugEnabled = window.localStorage.getItem('openchamber_stream_debug') === '1';
+        if (!debugEnabled) {
+            lastDisplayLengthRef.current = displayTextContent.length;
+            return;
+        }
+        if (displayTextContent.length < lastDisplayLengthRef.current) {
+            console.info('[STREAM-TRACE] render_shrink', {
+                messageId,
+                partId: part.id,
+                rawTextLen: rawText.length,
+                contentLen: contentText.length,
+                valueLen: valueText.length,
+                chosenLen: textContent.length,
+                throttledLen: throttledTextContent.length,
+                displayLen: displayTextContent.length,
+                prevDisplayLen: lastDisplayLengthRef.current,
+            });
+        }
+        lastDisplayLengthRef.current = displayTextContent.length;
+    }, [contentText.length, displayTextContent.length, isStreaming, messageId, part.id, rawText.length, textContent.length, throttledTextContent.length, valueText.length]);
 
     const time = partWithText.time;
     const isFinalized = Boolean(time && typeof time.end !== 'undefined');

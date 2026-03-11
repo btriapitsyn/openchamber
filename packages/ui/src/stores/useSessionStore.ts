@@ -550,6 +550,11 @@ export const useSessionStore = create<SessionStore>()(
                     const effectiveCurrent = currentSessionId || sessionId;
                     return useMessageStore.getState().addStreamingPart(sessionId, messageId, part, role, effectiveCurrent);
                 },
+                applyPartDelta: (sessionId: string, messageId: string, partId: string, field: string, delta: string, role?: string) => {
+                    const currentSessionId = useSessionManagementStore.getState().currentSessionId;
+                    const effectiveCurrent = currentSessionId || sessionId;
+                    return useMessageStore.getState().applyPartDelta(sessionId, messageId, partId, field, delta, role, effectiveCurrent);
+                },
                 completeStreamingMessage: (sessionId: string, messageId: string) => useMessageStore.getState().completeStreamingMessage(sessionId, messageId),
                 markMessageStreamSettled: (messageId: string) => useMessageStore.getState().markMessageStreamSettled(messageId),
                 updateMessageInfo: (sessionId: string, messageId: string, messageInfo: Record<string, unknown>) => useMessageStore.getState().updateMessageInfo(sessionId, messageId, messageInfo),

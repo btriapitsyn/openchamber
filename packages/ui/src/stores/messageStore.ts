@@ -205,10 +205,13 @@ const computePartsTextLength = (parts: Part[] | undefined): number => {
         return 0;
     }
     return parts.reduce((sum, part) => {
-        if (!part || part.type !== "text") {
+        if (!part || (part.type !== "text" && part.type !== "reasoning")) {
             return sum;
         }
-        const content = (part as Record<string, unknown>).text ?? (part as Record<string, unknown>).content;
+        const content =
+            (part as Record<string, unknown>).text
+            ?? (part as Record<string, unknown>).content
+            ?? (part as Record<string, unknown>).value;
         if (typeof content === "string") {
             return sum + content.length;
         }
@@ -262,6 +265,15 @@ const findMatchingPartIndex = (parts: Part[], incoming: Part): number => {
         const byId = parts.findIndex((part) => part?.id === incoming.id);
         if (byId !== -1) {
             return byId;
+        }
+
+        if (incoming.type === "text" || incoming.type === "reasoning") {
+            for (let i = parts.length - 1; i >= 0; i -= 1) {
+                const candidate = parts[i];
+                if (candidate?.type === incoming.type) {
+                    return i;
+                }
+            }
         }
     }
 
@@ -466,6 +478,7 @@ interface MessageActions {
     abortCurrentOperation: (currentSessionId?: string) => Promise<void>;
     _addStreamingPartImmediate: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string, currentSessionId?: string) => void;
+    applyPartDelta: (sessionId: string, messageId: string, partId: string, field: string, delta: string, role?: string, currentSessionId?: string) => void;
     forceCompleteMessage: (sessionId: string | null | undefined, messageId: string, source?: "timeout" | "cooldown") => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;
@@ -1306,6 +1319,7 @@ export const useMessageStore = create<MessageStore>()(
                         try {
                             console.info("[STREAM-TRACE] part", {
                                 messageId,
+                                partId: (part as any)?.id,
                                 role: actualRole,
                                 type: (part as any)?.type || "text",
                                 textLen: incomingText.length,
@@ -1327,7 +1341,7 @@ export const useMessageStore = create<MessageStore>()(
 
                         if (messageIndex !== -1 && actualRole === 'user') {
                             const existingMessage = messagesArray[messageIndex];
-                            const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
+                            const existingPartIndex = findMatchingPartIndex(existingMessage.parts, part);
 
                             if ((part as any).synthetic === true) {
                                 const incomingText = extractTextFromPart(part).trim();
@@ -1368,7 +1382,7 @@ export const useMessageStore = create<MessageStore>()(
                         if (actualRole === 'assistant' && messageIndex !== -1) {
 
                             const existingMessage = messagesArray[messageIndex];
-                            const existingPartIndex = existingMessage.parts.findIndex((p) => p.id === part.id);
+                            const existingPartIndex = findMatchingPartIndex(existingMessage.parts, part);
 
                             const normalizedPart = normalizeStreamingPart(
                                 part,
@@ -1494,7 +1508,11 @@ export const useMessageStore = create<MessageStore>()(
                                 }
                             }
 
-                            const normalizedPart = normalizeStreamingPart(part);
+                            const pendingEntry = state.pendingAssistantParts.get(messageId);
+                            const pendingParts = pendingEntry ? [...pendingEntry.parts] : [];
+                            const pendingIndex = findMatchingPartIndex(pendingParts, part);
+                            const existingPendingPart = pendingIndex !== -1 ? pendingParts[pendingIndex] : undefined;
+                            const normalizedPart = normalizeStreamingPart(part, existingPendingPart);
                             (window as any).__messageTracker?.(messageId, `part_type:${(normalizedPart as any).type || 'unknown'}`);
 
                             if ((normalizedPart as any).type === 'text') {
@@ -1503,12 +1521,7 @@ export const useMessageStore = create<MessageStore>()(
                                 maintainTimeouts('');
                             }
 
-                            const pendingEntry = state.pendingAssistantParts.get(messageId);
-                            const pendingParts = pendingEntry ? [...pendingEntry.parts] : [];
-                            const pendingIndex = findMatchingPartIndex(pendingParts, normalizedPart);
-
                             if (pendingIndex !== -1) {
-                                const existingPendingPart = pendingParts[pendingIndex];
                                 const normalizedRecord = normalizedPart as Record<string, unknown>;
                                 if (
                                     normalizedRecord.type === 'tool' &&
@@ -1662,6 +1675,127 @@ export const useMessageStore = create<MessageStore>()(
                     }
 
                     scheduleStreamingFlush(flushQueuedParts);
+                },
+
+                applyPartDelta: (sessionId: string, messageId: string, partId: string, field: string, delta: string, role?: string, currentSessionId?: string) => {
+                    set((state) => {
+                        const sessionMessages = state.messages.get(sessionId) || [];
+                        const messageIndex = sessionMessages.findIndex((message) => message.info.id === messageId);
+                        if (messageIndex === -1) {
+                            return state;
+                        }
+
+                        const targetMessage = sessionMessages[messageIndex];
+                        const partIndex = targetMessage.parts.findIndex((part) => part?.id === partId);
+                        if (partIndex === -1) {
+                            return state;
+                        }
+
+                        const existingPart = targetMessage.parts[partIndex] as Record<string, unknown>;
+                        const existingField = existingPart[field];
+                        const partType = typeof existingPart.type === 'string' ? existingPart.type : null;
+                        const isStreamingTextLikePart = partType === 'text';
+
+                        if (isStreamingTextLikePart && typeof existingField === 'string') {
+                            const normalizedExisting = existingField.trimEnd();
+                            const normalizedDelta = delta.trimEnd();
+
+                            if (
+                                delta.length > 0 && (
+                                    existingField === delta ||
+                                    (normalizedDelta.length > 0 && normalizedExisting === normalizedDelta)
+                                )
+                            ) {
+                                if (streamDebugEnabled() && role !== 'user') {
+                                    console.info('[STREAM-TRACE] delta_skip_duplicate_full_payload', {
+                                        messageId,
+                                        partId,
+                                        field,
+                                        deltaLen: delta.length,
+                                        partType,
+                                    });
+                                }
+                                return state;
+                            }
+                        }
+
+                        const nextFieldValue = `${typeof existingField === 'string' ? existingField : ''}${delta}`;
+                        const nextPart: Record<string, unknown> = {
+                            ...existingPart,
+                            [field]: nextFieldValue,
+                        };
+
+                        const updatedParts = [...targetMessage.parts];
+                        updatedParts[partIndex] = nextPart as Part;
+
+                        const updatedMessage = {
+                            ...targetMessage,
+                            parts: updatedParts,
+                        };
+
+                        const updatedSessionMessages = [...sessionMessages];
+                        updatedSessionMessages[messageIndex] = updatedMessage;
+
+                        const nextMessages = new Map(state.messages);
+                        nextMessages.set(sessionId, updatedSessionMessages);
+
+                        const actualRole = (() => {
+                            if (role === 'user') return 'user';
+                            if (updatedMessage.info.role === 'user') return 'user';
+                            return role || updatedMessage.info.role || 'assistant';
+                        })();
+
+                        const updates: Partial<MessageState> = {
+                            messages: nextMessages,
+                        };
+
+                        if (streamDebugEnabled() && actualRole === 'assistant') {
+                            try {
+                                const previousText = extractTextFromPart(existingPart as Part);
+                                const nextText = extractTextFromPart(nextPart as Part);
+                                console.info('[STREAM-TRACE] delta_apply', {
+                                    messageId,
+                                    partId,
+                                    field,
+                                    deltaLen: delta.length,
+                                    prevFieldLen: typeof existingField === 'string' ? existingField.length : 0,
+                                    nextFieldLen: nextFieldValue.length,
+                                    prevTextLen: previousText.length,
+                                    nextTextLen: nextText.length,
+                                    partType: typeof existingPart.type === 'string' ? existingPart.type : 'unknown',
+                                });
+                            } catch {
+                                // ignore debug log failures
+                            }
+                        }
+
+                        if (actualRole === 'assistant') {
+                            updates.messageStreamStates = touchStreamingLifecycle(state.messageStreamStates, messageId);
+                            const effectiveCurrent = currentSessionId || sessionId;
+                            const nextStreamingMap = setStreamingIdForSession(state.streamingMessageIds, sessionId, messageId);
+                            if (nextStreamingMap !== state.streamingMessageIds) {
+                                updates.streamingMessageIds = nextStreamingMap;
+                            }
+
+                            if (effectiveCurrent !== sessionId) {
+                                const memoryState = state.sessionMemoryState.get(sessionId);
+                                if (memoryState) {
+                                    const now = Date.now();
+                                    const nextMemoryState = new Map(state.sessionMemoryState);
+                                    nextMemoryState.set(sessionId, {
+                                        ...memoryState,
+                                        isStreaming: true,
+                                        streamStartTime: memoryState.streamStartTime ?? now,
+                                        lastAccessedAt: now,
+                                        isZombie: false,
+                                    });
+                                    updates.sessionMemoryState = nextMemoryState;
+                                }
+                            }
+                        }
+
+                        return updates;
+                    });
                 },
 
                 forceCompleteMessage: (sessionId: string | null | undefined, messageId: string, source: "timeout" | "cooldown" = "timeout") => {

@@ -4877,10 +4877,21 @@ function mergeCanonicalStreamingText(existingText, incomingText) {
   if (!existingText) {
     return incomingText;
   }
+  const trimmedExistingText = existingText.trimEnd();
+  const trimmedIncomingText = incomingText.trimEnd();
+  if (trimmedExistingText === trimmedIncomingText) {
+    return incomingText;
+  }
   if (incomingText.startsWith(existingText)) {
     return incomingText;
   }
+  if (trimmedExistingText && incomingText.startsWith(trimmedExistingText)) {
+    return incomingText;
+  }
   if (existingText.endsWith(incomingText)) {
+    return existingText;
+  }
+  if (trimmedIncomingText && existingText.endsWith(trimmedIncomingText)) {
     return existingText;
   }
   return `${existingText}${incomingText}`;
@@ -4924,7 +4935,7 @@ function normalizeStreamingTextPayload(payload, state) {
   }
 
   const part = props.part;
-  if (part.type !== 'text' && part.type !== 'reasoning') {
+  if (part.type !== 'text') {
     return false;
   }
 

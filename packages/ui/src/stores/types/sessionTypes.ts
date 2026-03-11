@@ -238,6 +238,7 @@ export interface SessionStore {
     armAbortPrompt: (durationMs?: number) => number | null;
     clearAbortPrompt: () => void;
     addStreamingPart: (sessionId: string, messageId: string, part: Part, role?: string) => void;
+    applyPartDelta: (sessionId: string, messageId: string, partId: string, field: string, delta: string, role?: string) => void;
     completeStreamingMessage: (sessionId: string, messageId: string) => void;
     markMessageStreamSettled: (messageId: string) => void;
     updateMessageInfo: (sessionId: string, messageId: string, messageInfo: Message) => void;

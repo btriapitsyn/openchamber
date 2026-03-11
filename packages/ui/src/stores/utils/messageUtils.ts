@@ -102,27 +102,42 @@ const extractTextFromDelta = (delta: unknown): string => {
 
 export const extractTextFromPart = (part: unknown): string => {
     if (!part) return '';
-    const typedPart = part as { text?: string | unknown[]; delta?: unknown; content?: string | unknown[] };
-    if (typeof typedPart.text === 'string') return typedPart.text;
-    if (Array.isArray(typedPart.text)) {
-        return typedPart.text.map((item: unknown) => (typeof item === 'string' ? item : extractTextFromPart(item))).join('');
+    const typedPart = part as { text?: string | unknown[]; content?: string | unknown[]; value?: string | unknown[]; delta?: unknown };
+
+    const toText = (value: unknown): string => {
+        if (typeof value === 'string') {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            return value
+                .map((item: unknown) => {
+                    if (typeof item === 'string') return item;
+                    if (item && typeof item === 'object') {
+                        const typedItem = item as { text?: unknown; content?: unknown; value?: unknown; delta?: unknown };
+                        return toText(typedItem.text) || toText(typedItem.content) || toText(typedItem.value) || extractTextFromDelta(typedItem.delta);
+                    }
+                    return '';
+                })
+                .join('');
+        }
+        return '';
+    };
+
+    const candidates = [
+        toText(typedPart.text),
+        toText(typedPart.content),
+        toText(typedPart.value),
+        extractTextFromDelta(typedPart.delta),
+    ];
+
+    let best = '';
+    for (const candidate of candidates) {
+        if (candidate.length > best.length) {
+            best = candidate;
+        }
     }
-    const deltaText = extractTextFromDelta(typedPart.delta);
-    if (deltaText) return deltaText;
-    if (typeof typedPart.content === 'string') return typedPart.content;
-    if (Array.isArray(typedPart.content)) {
-        return typedPart.content
-            .map((item: unknown) => {
-                if (typeof item === 'string') return item;
-                if (item && typeof item === 'object') {
-                    const typedItem = item as { text?: string; delta?: unknown };
-                    return typedItem.text || extractTextFromDelta(typedItem.delta) || '';
-                }
-                return '';
-            })
-            .join('');
-    }
-    return '';
+
+    return best;
 };
 
 export const normalizeStreamingPart = (incoming: Part, existing?: Part): Part => {
@@ -135,32 +150,16 @@ export const normalizeStreamingPart = (incoming: Part, existing?: Part): Part =>
         : undefined;
     normalized.type = normalized.type || existingType || 'text';
 
-    const isStreamingTextLikePart = normalized.type === 'text' || normalized.type === 'reasoning';
+    const isStreamingTextPart = normalized.type === 'text';
+    const isStreamingReasoningPart = normalized.type === 'reasoning';
 
-    if (isStreamingTextLikePart) {
+    if (isStreamingTextPart || isStreamingReasoningPart) {
         const existingRecord = (existing ?? {}) as { text?: unknown; content?: unknown; value?: unknown };
         const existingText = extractTextFromPart(existing);
         const directText = extractTextFromPart(incoming);
         const deltaText = extractTextFromDelta((incoming as { delta?: unknown }).delta);
+        const incomingEnded = typeof (incoming as { time?: { end?: unknown } }).time?.end === 'number';
         let mergedText = '';
-
-        if (directText) {
-            if (!existingText) {
-                mergedText = directText;
-            } else if (directText.startsWith(existingText)) {
-                mergedText = directText;
-            } else if (existingText.endsWith(directText)) {
-                mergedText = existingText;
-            } else {
-                mergedText = `${existingText}${directText}`;
-            }
-        } else if (deltaText) {
-            mergedText = existingText ? `${existingText}${deltaText}` : deltaText;
-        } else if (existingText) {
-            mergedText = existingText;
-        } else {
-            mergedText = '';
-        }
 
         const incomingField =
             typeof normalized.text === 'string'
@@ -180,6 +179,49 @@ export const normalizeStreamingPart = (incoming: Part, existing?: Part): Part =>
                         ? 'value'
                         : 'text'
         );
+
+        if (isStreamingReasoningPart) {
+            if (deltaText) {
+                mergedText = existingText ? `${existingText}${deltaText}` : deltaText;
+            } else if (directText) {
+                mergedText = directText;
+            } else {
+                mergedText = existingText;
+            }
+        } else {
+            if (deltaText) {
+                const isPureDeltaPayload = directText === deltaText;
+                const directExtendsExisting = Boolean(existingText) && Boolean(directText) && directText.startsWith(existingText);
+
+                if (isPureDeltaPayload || (existingText.length > 0 && !directExtendsExisting)) {
+                    mergedText = existingText ? `${existingText}${deltaText}` : deltaText;
+                } else {
+                    mergedText = directText || (existingText ? `${existingText}${deltaText}` : deltaText);
+                }
+            } else if (directText) {
+                if (!existingText) {
+                    mergedText = directText;
+                } else if (directText.startsWith(existingText)) {
+                    mergedText = directText;
+                } else if (existingText.endsWith(directText)) {
+                    mergedText = existingText;
+                } else if (directText.includes(existingText)) {
+                    mergedText = directText;
+                } else if (existingText.includes(directText)) {
+                    mergedText = existingText;
+                } else {
+                    mergedText = incomingEnded
+                        ? (directText.length >= existingText.length ? directText : existingText)
+                        : existingText;
+                }
+            } else {
+                mergedText = existingText || '';
+            }
+        }
+
+        if (isStreamingTextPart && !incomingEnded && existingText.length > 0 && mergedText.length < existingText.length) {
+            mergedText = existingText;
+        }
 
         normalized[targetField] = mergedText;
         if (targetField !== 'text') {

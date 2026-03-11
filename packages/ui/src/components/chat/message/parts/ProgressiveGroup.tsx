@@ -15,6 +15,9 @@ import { FadeInOnReveal } from '../FadeInOnReveal';
 import { getToolIcon } from './toolPresentation';
 import { getToolMetadata } from '@/lib/toolHelpers';
 import { getStaticGroupToolName, isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
+import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useUIStore } from '@/stores/useUIStore';
 import ReasoningPart from './ReasoningPart';
 import JustificationBlock from './JustificationBlock';
 
@@ -218,6 +221,156 @@ const getToolFilePath = (activity: TurnActivityPart): string | null => {
     return typeof filePath === 'string' && filePath.trim().length > 0 ? filePath : null;
 };
 
+const toTodoStatusKey = (value: unknown): 'pending' | 'in_progress' | 'completed' | 'cancelled' | null => {
+    if (typeof value !== 'string') {
+        return null;
+    }
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'pending') return 'pending';
+    if (normalized === 'in_progress' || normalized === 'in progress' || normalized === 'inprogress') return 'in_progress';
+    if (normalized === 'completed' || normalized === 'done') return 'completed';
+    if (normalized === 'cancelled' || normalized === 'canceled') return 'cancelled';
+    return null;
+};
+
+const formatTodoSummary = (todos: unknown[]): string | null => {
+    if (todos.length === 0) {
+        return null;
+    }
+
+    let pending = 0;
+    let inProgress = 0;
+    let completed = 0;
+    let cancelled = 0;
+
+    for (const todo of todos) {
+        if (!todo || typeof todo !== 'object') {
+            continue;
+        }
+        const status = toTodoStatusKey((todo as { status?: unknown }).status);
+        if (!status) {
+            continue;
+        }
+        if (status === 'pending') pending += 1;
+        if (status === 'in_progress') inProgress += 1;
+        if (status === 'completed') completed += 1;
+        if (status === 'cancelled') cancelled += 1;
+    }
+
+    const total = pending + inProgress + completed + cancelled;
+    if (total === 0) {
+        return null;
+    }
+
+    if (completed === total) {
+        return `All ${total} tasks done`;
+    }
+
+    const parts: string[] = [];
+    if (inProgress > 0) parts.push(`${inProgress} in progress`);
+    if (pending > 0) parts.push(`${pending} pending`);
+    if (completed > 0) parts.push(`${completed} done`);
+    if (cancelled > 0) parts.push(`${cancelled} cancelled`);
+
+    return parts.length > 0 ? parts.join(', ') : null;
+};
+
+const getTodoSummaryFromActivity = (activity: TurnActivityPart): string | null => {
+    const part = activity.part as ToolPartType;
+    const state = part.state as { input?: Record<string, unknown>; output?: unknown } | undefined;
+    const input = state?.input;
+    const output = state?.output;
+
+    if (Array.isArray(input?.todos)) {
+        const summary = formatTodoSummary(input.todos);
+        if (summary) return summary;
+    }
+
+    if (Array.isArray(output)) {
+        const summary = formatTodoSummary(output);
+        if (summary) return summary;
+    }
+
+    if (output && typeof output === 'object' && Array.isArray((output as { todos?: unknown }).todos)) {
+        const summary = formatTodoSummary((output as { todos: unknown[] }).todos);
+        if (summary) return summary;
+    }
+
+    if (typeof output === 'string' && output.trim().length > 0) {
+        try {
+            const parsed = JSON.parse(output) as unknown;
+            if (Array.isArray(parsed)) {
+                const summary = formatTodoSummary(parsed);
+                if (summary) return summary;
+            }
+            if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { todos?: unknown }).todos)) {
+                const summary = formatTodoSummary((parsed as { todos: unknown[] }).todos);
+                if (summary) return summary;
+            }
+        } catch {
+            // Ignore non-JSON output.
+        }
+    }
+
+    return null;
+};
+
+const getToolReadOffset = (activity: TurnActivityPart): number | undefined => {
+    const part = activity.part as ToolPartType;
+    const state = part.state as { input?: Record<string, unknown>; metadata?: Record<string, unknown> } | undefined;
+    const input = state?.input;
+    const metadata = state?.metadata;
+
+    const rawOffset =
+        (typeof input?.offset === 'number' && Number.isFinite(input.offset) ? input.offset : undefined)
+        ?? (typeof input?.line === 'number' && Number.isFinite(input.line) ? input.line : undefined)
+        ?? (typeof metadata?.offset === 'number' && Number.isFinite(metadata.offset) ? metadata.offset : undefined)
+        ?? (typeof metadata?.line === 'number' && Number.isFinite(metadata.line) ? metadata.line : undefined);
+
+    if (typeof rawOffset !== 'number' || rawOffset <= 0) {
+        return undefined;
+    }
+
+    return Math.floor(rawOffset);
+};
+
+const normalizePathValue = (value: string): string => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+        return '';
+    }
+    return trimmed.replace(/\\/g, '/');
+};
+
+const resolveAbsolutePath = (currentDirectory: string, filePath: string): string => {
+    const normalizedPath = normalizePathValue(filePath);
+    if (!normalizedPath) {
+        return '';
+    }
+    if (normalizedPath.startsWith('/')) {
+        return normalizedPath;
+    }
+    const normalizedDirectory = normalizePathValue(currentDirectory);
+    if (!normalizedDirectory) {
+        return normalizedPath;
+    }
+    return normalizedDirectory.endsWith('/') ? `${normalizedDirectory}${normalizedPath}` : `${normalizedDirectory}/${normalizedPath}`;
+};
+
+const getContextDirectoryForPath = (currentDirectory: string, absolutePath: string): string => {
+    const normalizedDirectory = normalizePathValue(currentDirectory);
+    if (normalizedDirectory) {
+        return normalizedDirectory;
+    }
+
+    const normalizedPath = normalizePathValue(absolutePath);
+    if (!normalizedPath) {
+        return '';
+    }
+    const parent = normalizedPath.replace(/\/[^/]*$/, '');
+    return parent || normalizedPath;
+};
+
 /**
  * Get a short description for a static tool (for aggregation display).
  */
@@ -274,9 +427,9 @@ const getToolShortDescription = (activity: TurnActivityPart): string | null => {
         }
     }
 
-    // For todowrite/todoread, no extra description needed
+    // For todo tools, show status summary without task names
     if (toolName === 'todowrite' || toolName === 'todoread') {
-        return null;
+        return getTodoSummaryFromActivity(activity);
     }
 
     // Fallback: try filename
@@ -370,6 +523,8 @@ export const StaticToolRow: React.FC<{
     const displayName = getToolMetadata(toolName).displayName;
     const icon = getToolIcon(toolName);
     const isReadGroup = toolName.toLowerCase() === 'read';
+    const runtime = React.useContext(RuntimeAPIContext);
+    const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
     const hasRunningActivity = React.useMemo(() => activities.some((activity) => isActivityRunning(activity)), [activities]);
 
     const descriptions = React.useMemo(() => {
@@ -384,18 +539,39 @@ export const StaticToolRow: React.FC<{
     }, [activities]);
 
     const readFileEntries = React.useMemo(() => {
-        if (!isReadGroup) return [] as Array<{ path: string; name: string }>;
+        if (!isReadGroup) return [] as Array<{ path: string; name: string; offset?: number }>;
 
-        const entries: Array<{ path: string; name: string }> = [];
+        const entries: Array<{ path: string; name: string; offset?: number }> = [];
         for (const activity of activities) {
             const filePath = getToolFilePath(activity);
             const fileName = getToolFileName(activity);
+            const offset = getToolReadOffset(activity);
             if (!filePath || !fileName) continue;
             if (entries.some((entry) => entry.path === filePath)) continue;
-            entries.push({ path: filePath, name: fileName });
+            entries.push({ path: filePath, name: fileName, offset });
         }
         return entries;
     }, [activities, isReadGroup]);
+
+    const handleReadFileClick = React.useCallback((filePath: string, offset?: number) => {
+        const absolutePath = resolveAbsolutePath(currentDirectory, filePath);
+        if (!absolutePath) {
+            return;
+        }
+
+        if (runtime?.editor) {
+            void runtime.editor.openFile(absolutePath, offset);
+            return;
+        }
+
+        const uiStore = useUIStore.getState();
+        const contextDirectory = getContextDirectoryForPath(currentDirectory, absolutePath);
+        if (offset && Number.isFinite(offset)) {
+            uiStore.openContextFileAtLine(contextDirectory, absolutePath, Math.max(1, Math.trunc(offset)), 1);
+            return;
+        }
+        uiStore.openContextFile(contextDirectory, absolutePath);
+    }, [currentDirectory, runtime]);
 
     const isSearchGroup = toolName.toLowerCase() === 'grep';
     const isFetchGroup = toolName.toLowerCase() === 'webfetch' || toolName.toLowerCase() === 'fetch' || toolName.toLowerCase() === 'curl' || toolName.toLowerCase() === 'wget';
@@ -420,17 +596,28 @@ export const StaticToolRow: React.FC<{
             </MinDurationShineText>
             {isReadGroup && readFileEntries.length > 0
                 ? readFileEntries.map((entry) => (
-                    <span key={entry.path} className="inline-flex items-center gap-1 min-w-0 max-w-full typography-meta leading-5" style={{ color: 'var(--tools-description)' }}>
+                    <button
+                        key={entry.path}
+                        type="button"
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleReadFileClick(entry.path, entry.offset);
+                        }}
+                        className="inline-flex items-center gap-1 min-w-0 max-w-full typography-meta leading-5 hover:opacity-90"
+                        style={{ color: 'var(--tools-title)' }}
+                        title={entry.offset ? `${entry.path}:${entry.offset}` : entry.path}
+                    >
                         <FileTypeIcon filePath={entry.path} className="h-3.5 w-3.5" />
                         <Text
                             variant={animateTailText ? 'generate-effect' : undefined}
                             className="min-w-0 max-w-full truncate typography-meta leading-5"
-                            style={{ color: 'var(--tools-description)' }}
+                            style={{ color: 'var(--tools-title)' }}
                             title={entry.path}
                         >
                             {entry.name}
                         </Text>
-                    </span>
+                    </button>
                 ))
                 : null}
             {isSearchGroup && descriptions.length > 0

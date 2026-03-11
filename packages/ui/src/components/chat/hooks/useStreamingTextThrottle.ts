@@ -58,11 +58,12 @@ export const useStreamingTextThrottle = ({
     React.useEffect(() => {
         const state = stateRef.current;
         state.pendingText = text;
+        const stableText = isStreaming && throttledText.length > text.length ? throttledText : text;
 
         if (!isStreaming) {
             clearTimer(state);
             state.lastEmitAt = Date.now();
-            setThrottledText(text);
+            setThrottledText(stableText);
             return;
         }
 
@@ -72,7 +73,7 @@ export const useStreamingTextThrottle = ({
         if (remaining <= 0) {
             clearTimer(state);
             state.lastEmitAt = now;
-            setThrottledText(text);
+            setThrottledText(stableText);
             return;
         }
 
@@ -80,13 +81,18 @@ export const useStreamingTextThrottle = ({
         state.timer = setTimeout(() => {
             state.timer = null;
             state.lastEmitAt = Date.now();
-            setThrottledText(state.pendingText);
+            setThrottledText((prev) => {
+                if (isStreaming && prev.length > state.pendingText.length) {
+                    return prev;
+                }
+                return state.pendingText;
+            });
         }, remaining);
 
         return () => {
             clearTimer(state);
         };
-    }, [isStreaming, text, throttleMs]);
+    }, [isStreaming, text, throttleMs, throttledText]);
 
     React.useEffect(() => {
         const state = stateRef.current;
