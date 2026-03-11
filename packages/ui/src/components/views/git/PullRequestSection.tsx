@@ -94,12 +94,15 @@ const getPrVisualState = (status: GitHubPullRequestStatus | null): 'draft' | 'op
     return 'draft';
   }
   const checksFailed = status?.checks?.state === 'failure';
-  const notMergeable = status?.canMerge === false || pr.mergeable === false;
+  const mergeableState = typeof pr.mergeableState === 'string' ? pr.mergeableState : '';
+  const notMergeable = pr.mergeable === false || mergeableState === 'blocked' || mergeableState === 'dirty';
   if (checksFailed || notMergeable) {
     return 'blocked';
   }
   return 'open';
 };
+
+const PR_ACTION_REFRESH_DELAYS_MS = [2_000, 5_000] as const;
 
 const branchToTitle = (branch: string): string => {
   return branch
@@ -451,6 +454,7 @@ export const PullRequestSection: React.FC<{
   const lastSyncedPrNumberRef = React.useRef<number | null>(null);
   const didUserOverrideRemoteRef = React.useRef(false);
   const autoRemoteProbeDoneRef = React.useRef<Set<string>>(new Set());
+  const pendingActionRefreshTimersRef = React.useRef<number[]>([]);
 
   const canShow = Boolean(directory && branch && baseBranch && branch !== baseBranch);
 
@@ -959,6 +963,15 @@ export const PullRequestSection: React.FC<{
     await refreshPrStatus(prStatusKey, options);
   }, [prStatusKey, refreshPrStatus]);
 
+  const scheduleActionRefresh = React.useCallback(() => {
+    pendingActionRefreshTimersRef.current.forEach((timerId) => {
+      window.clearTimeout(timerId);
+    });
+    pendingActionRefreshTimersRef.current = PR_ACTION_REFRESH_DELAYS_MS.map((delayMs) => window.setTimeout(() => {
+      void refresh({ force: true, silent: true, markInitialResolved: true });
+    }, delayMs));
+  }, [refresh]);
+
   // Refetch PR status when selected remote changes
   const handleRemoteChange = React.useCallback((remote: GitRemote) => {
     didUserOverrideRemoteRef.current = true;
@@ -1072,6 +1085,18 @@ export const PullRequestSection: React.FC<{
   }, [canShow, refresh, selectedRemote?.name]);
 
   React.useEffect(() => {
+    const resolvedRemoteName = status?.resolvedRemoteName?.trim();
+    if (!resolvedRemoteName || didUserOverrideRemoteRef.current) {
+      return;
+    }
+    const resolvedRemote = remotes.find((candidate) => candidate.name === resolvedRemoteName);
+    if (!resolvedRemote) {
+      return;
+    }
+    setSelectedRemote((prev) => (prev?.name === resolvedRemote.name ? prev : resolvedRemote));
+  }, [remotes, status?.resolvedRemoteName]);
+
+  React.useEffect(() => {
     const isTerminal = status?.pr?.state === 'closed' || status?.pr?.state === 'merged';
     const lastRefreshAt = statusEntry?.lastRefreshAt ?? 0;
     const isStale = Date.now() - lastRefreshAt > 60_000;
@@ -1117,6 +1142,16 @@ export const PullRequestSection: React.FC<{
       selectedRemoteName: selectedRemote?.name,
     });
   }, [snapshotKey, title, body, draft, additionalContext, targetBaseBranch, selectedRemote?.name, directory, branch]);
+
+  React.useEffect(() => {
+    const pendingActionRefreshTimers = pendingActionRefreshTimersRef.current;
+    return () => {
+      pendingActionRefreshTimers.forEach((timerId) => {
+        window.clearTimeout(timerId);
+      });
+      pendingActionRefreshTimersRef.current = [];
+    };
+  }, []);
 
   const generateDescription = React.useCallback(async () => {
     if (isGenerating) return;
@@ -1184,13 +1219,14 @@ export const PullRequestSection: React.FC<{
       toast.success(t('pullRequest.prCreated'));
       updatePrStatus(prStatusKey, (prev) => (prev ? { ...prev, pr } : prev));
       await refresh({ force: true });
+      scheduleActionRefresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('pullRequest.failedToCreatePr'), { description: message });
     } finally {
       setIsCreating(false);
     }
-  }, [body, branch, directory, draft, github, prStatusKey, refresh, selectedRemote, targetBaseBranch, t, title, updatePrStatus]);
+  }, [body, branch, directory, draft, github, prStatusKey, refresh, scheduleActionRefresh, selectedRemote, targetBaseBranch, title, updatePrStatus,t]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
@@ -1206,6 +1242,7 @@ export const PullRequestSection: React.FC<{
         toast.message(t('pullRequest.prNotMerged'), { description: result.message || t('pullRequest.notMergeable') });
       }
       await refresh({ force: true });
+      scheduleActionRefresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('pullRequest.mergeFailed'), { description: message });
@@ -1215,7 +1252,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsMerging(false);
     }
-  }, [directory, github, mergeMethod, refresh, t]);
+  }, [directory, github, mergeMethod, refresh, scheduleActionRefresh,t]);
 
   const markReady = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prReady) {
@@ -1227,6 +1264,7 @@ export const PullRequestSection: React.FC<{
       await github.prReady({ directory, number: pr.number });
       toast.success(t('pullRequest.markedReadyForReview'));
       await refresh({ force: true });
+      scheduleActionRefresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('pullRequest.failedToMarkReady'), { description: message });
@@ -1236,7 +1274,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsMarkingReady(false);
     }
-  }, [directory, github, refresh, t]);
+  }, [directory, github, refresh, scheduleActionRefresh,t]);
 
   const updatePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prUpdate) {
@@ -1270,13 +1308,14 @@ export const PullRequestSection: React.FC<{
       setIsEditingPr(false);
       toast.success(t('pullRequest.prUpdated'));
       await refresh({ force: true });
+      scheduleActionRefresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       toast.error(t('pullRequest.failedToUpdatePr'), { description: message });
     } finally {
       setIsUpdating(false);
     }
-  }, [directory, editBody, editTitle, github, prStatusKey, refresh, t, updatePrStatus]);
+  }, [directory, editBody, editTitle, github, prStatusKey, refresh, scheduleActionRefresh, updatePrStatus,t]);
 
   if (!canShow) {
     return null;
