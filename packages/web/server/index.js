@@ -2940,6 +2940,7 @@ const updateSessionState = (sessionId, status, eventId, metadata = {}) => {
 
   const now = Date.now();
   const existing = sessionStates.get(sessionId);
+  const existingAttentionState = sessionAttentionStates.get(sessionId);
 
   // Only update if this is a newer event (simple ordering protection)
   if (existing && existing.lastUpdateAt > now - 5000 && status === existing.status) {
@@ -2956,13 +2957,14 @@ const updateSessionState = (sessionId, status, eventId, metadata = {}) => {
 
   // Update attention tracking state (must be called before broadcasting)
   updateSessionAttentionStatus(sessionId, status, eventId);
+  const attentionState = sessionAttentionStates.get(sessionId);
 
   // Broadcast status change to connected web clients via SSE
   // This enables real-time updates without polling
   // Include needsAttention in the same event to ensure atomic updates
-  if (uiNotificationClients.size > 0 && (!existing || existing.status !== status)) {
+  const attentionChanged = !!attentionState && existingAttentionState?.needsAttention !== attentionState.needsAttention;
+  if (uiNotificationClients.size > 0 && (!existing || existing.status !== status || attentionChanged)) {
     const state = sessionStates.get(sessionId);
-    const attentionState = sessionAttentionStates.get(sessionId);
     for (const res of uiNotificationClients) {
       try {
         writeSseEvent(res, {

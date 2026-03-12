@@ -89,10 +89,6 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             <span>{getBackgroundTrimLimit()} messages</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Background Stream Limit:</span>
-            <span>{MEMORY_LIMITS.BACKGROUND_STREAMING_BUFFER} messages</span>
-          </div>
-          <div className="flex justify-between">
             <span className="text-muted-foreground">Zombie Timeout:</span>
             <span>{MEMORY_LIMITS.ZOMBIE_TIMEOUT / 1000 / 60} minutes</span>
           </div>

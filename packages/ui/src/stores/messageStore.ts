@@ -1082,10 +1082,6 @@ export const useMessageStore = create<MessageStore>()(
                         const isBackgroundSession = sessionId !== currentSessionId;
                         const memoryState = state.sessionMemoryState.get(sessionId);
                         if (isBackgroundSession && memoryState?.isStreaming) {
-                            if (messagesArray.length >= MEMORY_LIMITS.BACKGROUND_STREAMING_BUFFER) {
-                                messagesArray.shift();
-                            }
-
                             const newMemoryState = new Map(state.sessionMemoryState);
                             newMemoryState.set(sessionId, {
                                 ...memoryState,

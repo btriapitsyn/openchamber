@@ -893,24 +893,44 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
     sessionActivityPhaseRef.current.clear();
   }, []);
 
+  const repairSessionDerivedState = React.useCallback((
+    reason: string,
+    options?: { refreshActivity?: boolean; pollStatus?: boolean }
+  ) => {
+    const refreshActivity = options?.refreshActivity !== false;
+    const pollStatus = options?.pollStatus !== false;
+
+    if (streamDebugEnabled()) {
+      console.debug('[useEventStream] Repairing derived session state', { reason, refreshActivity, pollStatus });
+    }
+
+    if (refreshActivity) {
+      void refreshSessionActivityStatus();
+    }
+
+    if (pollStatus) {
+      triggerSessionStatusPoll();
+    }
+  }, [refreshSessionActivityStatus]);
+
   React.useEffect(() => {
     const nextSessionId = currentSessionId ?? null;
     const prevSessionId = previousSessionIdRef.current;
     const nextDirectory = resolveSessionDirectoryForStatus(nextSessionId);
     const prevDirectory = previousSessionDirectoryRef.current;
 
-    if (prevSessionId && nextSessionId && prevSessionId !== nextSessionId) {
-      // Clear the message cache on session switch to free memory
-      messageCache.clear();
+      if (prevSessionId && nextSessionId && prevSessionId !== nextSessionId) {
+        // Clear the message cache on session switch to free memory
+        messageCache.clear();
 
-      if (prevDirectory && nextDirectory && prevDirectory !== nextDirectory) {
-        void refreshSessionActivityStatus();
+        if (prevDirectory && nextDirectory && prevDirectory !== nextDirectory) {
+        repairSessionDerivedState('session_switch_directory');
+        }
       }
-    }
 
     previousSessionIdRef.current = nextSessionId;
     previousSessionDirectoryRef.current = nextDirectory;
-  }, [currentSessionId, refreshSessionActivityStatus, resolveSessionDirectoryForStatus]);
+  }, [currentSessionId, repairSessionDerivedState, resolveSessionDirectoryForStatus]);
 
   const handleEvent = React.useCallback((event: EventData) => {
     lastEventTimestampRef.current = Date.now();
@@ -1027,6 +1047,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
             } else {
               updateSessionStatus(sessionId, { type: 'idle' }, 'sse:session.status');
               updateSessionActivityPhase(sessionId, 'idle', 'sse:session.status', { syncStatus: false });
+              repairSessionDerivedState('session.status_idle', { refreshActivity: false });
             }
             requestSessionMetadataRefresh(sessionId, typeof props.directory === 'string' ? props.directory : null);
           }
@@ -1068,6 +1089,9 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
             } else {
               updateSessionStatus(sessionId, { type: 'idle' }, 'sse:openchamber:session-status');
               updateSessionActivityPhase(sessionId, 'idle', 'sse:openchamber:session-status', { syncStatus: false });
+              if (needsAttention) {
+                repairSessionDerivedState('openchamber.session-status_attention_idle', { refreshActivity: false });
+              }
             }
 
             // Update attention state in the same update to ensure atomicity
@@ -1679,7 +1703,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
           void saveSessionCursor(sessionId, messageId, timeCompleted);
 
 	          completeStreamingMessage(sessionId, messageId);
-	          // Removed: void refreshSessionStatus();
+	          repairSessionDerivedState('assistant_message_completed');
 
 	          const rawMessageSessionId = (message as { sessionID?: string }).sessionID;
           const messageSessionId: string =
@@ -2045,6 +2069,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
     effectiveDirectory,
     updateSessionStatus,
     updateSessionActivityPhase,
+    repairSessionDerivedState,
     dispatchRuntimeNotification,
     writePartTypeHint,
   ]);
@@ -2158,8 +2183,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
       lastEventTimestampRef.current = Date.now();
       publishStatus('connected', null);
       checkConnection();
-      void refreshSessionActivityStatus();
-      triggerSessionStatusPoll();
+      repairSessionDerivedState('stream_open');
 
       requestPendingPermissionsRefreshRef.current(shouldRefresh);
 
@@ -2243,7 +2267,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
     requestSessionMetadataRefresh,
     stableHandleEvent,
     stableBootstrapState,
-    refreshSessionActivityStatus,
+    repairSessionDerivedState,
     effectiveDirectory,
     debugConnectionState,
   ]);
@@ -2321,8 +2345,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
 
       clearPauseTimeout();
       maybeBootstrapIfStale('visibility_restore');
-      void refreshSessionActivityStatus();
-      triggerSessionStatusPoll();
+      repairSessionDerivedState('visibility_restore');
 
       const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
       if (isStalled) {
@@ -2338,10 +2361,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
           requestSessionMetadataRefresh(sessionId);
         }
         requestPendingPermissionsRefreshRef.current(false);
-        void refreshSessionActivityStatus();
-
-        // Removed: void refreshSessionStatus();
-        triggerSessionStatusPoll();
+        repairSessionDerivedState('visibility_restore_resume');
         publishStatus('connecting', 'Resuming stream');
         startStream({ resetAttempts: true });
       }
@@ -2353,8 +2373,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
     if (visibilityStateRef.current === 'visible') {
       clearPauseTimeout();
       maybeBootstrapIfStale('window_focus');
-      void refreshSessionActivityStatus();
-      triggerSessionStatusPoll();
+      repairSessionDerivedState('window_focus');
 
       const isStalled = Date.now() - lastEventTimestampRef.current > 45000;
       if (isStalled) {
@@ -2369,9 +2388,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
              scheduleSoftResync(sessionId, 'window_focus', getMessageLimit());
            }
            requestPendingPermissionsRefreshRef.current(false);
-           void refreshSessionActivityStatus();
-           // Removed: void refreshSessionStatus();
-           triggerSessionStatusPoll();
+           repairSessionDerivedState('window_focus_resume');
 
            publishStatus('connecting', 'Resuming stream');
            startStream({ resetAttempts: true });
@@ -2382,10 +2399,9 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
       const handleOnline = () => {
         onlineStatusRef.current = true;
         maybeBootstrapIfStale('network_restored');
-        void refreshSessionActivityStatus();
+        repairSessionDerivedState('network_restored');
         requestPendingPermissionsRefreshRef.current(false);
         if (pendingResumeRef.current || !unsubscribeRef.current) {
-          triggerSessionStatusPoll();
           publishStatus('connecting', 'Network restored');
           startStream({ resetAttempts: true });
         }
@@ -2415,8 +2431,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
             requestSessionMetadataRefresh(sessionId);
           }
           requestPendingPermissionsRefreshRef.current(false);
-          // Removed: void refreshSessionStatus();
-          triggerSessionStatusPoll();
+          repairSessionDerivedState('page_show');
           startStream({ resetAttempts: true });
         }
       };
@@ -2450,8 +2465,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
           );
 
           if (hasBusySessions) {
-            void refreshSessionActivityStatus();
-            triggerSessionStatusPoll();
+            repairSessionDerivedState('stale_check_busy_sessions');
           }
           if (now - lastEventTimestampRef.current > 45000) {
             Promise.resolve().then(async () => {
@@ -2551,6 +2565,7 @@ export const useEventStream = (options?: { enabled?: boolean }) => {
     requestSessionMetadataRefresh,
     refreshSessionActivityStatus,
     clearSessionActivityTimers,
+    repairSessionDerivedState,
     
     
     shouldHoldConnection,
