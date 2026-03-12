@@ -155,13 +155,8 @@ export const useChatScrollManager = ({
             return;
         }
 
-        if (chatRenderMode === 'sorted') {
-            scrollToBottomInternal({ followBottom: true });
-            return;
-        }
-
         scrollToBottomInternal({ instant: true });
-    }, [chatRenderMode, scrollToBottomInternal, streamingMessageId]);
+    }, [scrollToBottomInternal, streamingMessageId]);
 
     const updateScrollButtonVisibility = React.useCallback(() => {
         const container = scrollRef.current;
