@@ -69,6 +69,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         context: this._context,
       });
       webviewView.webview.postMessage(response);
+
+      if (message.type === 'api:config/settings:save' && response.success) {
+        void vscode.commands.executeCommand('openchamber.internal.settingsSynced', response.data);
+      }
     });
   }
 
@@ -147,6 +151,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     if (this._view) {
       this._view.webview.postMessage(message);
     }
+  }
+
+  public notifySettingsSynced(settings: unknown): void {
+    if (!this._view) {
+      return;
+    }
+
+    this._view.webview.postMessage({
+      type: 'command',
+      command: 'settingsSynced',
+      payload: settings,
+    });
   }
 
   private _sendCachedState() {

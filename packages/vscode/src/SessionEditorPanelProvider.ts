@@ -106,6 +106,10 @@ export class SessionEditorPanelProvider {
         context: this._context,
       });
       state.panel.webview.postMessage(response);
+
+      if (message.type === 'api:config/settings:save' && response.success) {
+        void vscode.commands.executeCommand('openchamber.internal.settingsSynced', response.data);
+      }
     }, null, this._context.subscriptions);
   }
 
@@ -127,6 +131,16 @@ export class SessionEditorPanelProvider {
 
     for (const entry of this._panels.values()) {
       this._sendCachedStateToPanel(entry);
+    }
+  }
+
+  public notifySettingsSynced(settings: unknown): void {
+    for (const entry of this._panels.values()) {
+      entry.panel.webview.postMessage({
+        type: 'command',
+        command: 'settingsSynced',
+        payload: settings,
+      });
     }
   }
 
