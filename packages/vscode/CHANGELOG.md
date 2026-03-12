@@ -1,4 +1,4 @@
-## [Unreleased]
+## [1.8.6] - 2026-03-13
 
 - Chat: completed a turn-based render pipeline with steadier streaming, smoother auto-follow, and more stable activity/tool progress behavior during long responses.
 - Chat/Settings: added richer render controls with sorted/live modes, compact Activity previews, and default-open Bash/Edit options for faster review.
