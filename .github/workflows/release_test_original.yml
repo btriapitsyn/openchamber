@@ -1,0 +1,291 @@
+name: Release Test (Based on Original)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to test (e.g., 0.1.0)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run (skip publishing)'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+      release_upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=0.0.0-test" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release (draft)
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          draft: true
+          generate_release_notes: false
+          body: |
+            ## Test Release
+
+            This is a test release for building without code signing.
+          name: OpenChamber v${{ steps.get_version.outputs.version }} (Test)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-desktop-macos:
+    needs: create-release
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+        include:
+          - target: aarch64-apple-darwin
+            arch: aarch64
+            platform: darwin-aarch64
+          - target: x86_64-apple-darwin
+            arch: x86_64
+            platform: darwin-x86_64
+    outputs:
+      version: ${{ needs.create-release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build UI package
+        run: bun run --cwd packages/ui build
+
+      - name: Build Desktop app (unsigned, no notarization)
+        run: bun run --cwd packages/desktop build && bun run --cwd packages/desktop tauri build --target ${{ matrix.target }}
+
+      - name: Verify binary architectures
+        run: |
+          set -euo pipefail
+
+          BUNDLE_DIR="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos"
+
+          if [ ! -d "$BUNDLE_DIR" ]; then
+            echo "Error: bundle directory not found: $BUNDLE_DIR"
+            exit 1
+          fi
+
+          APP_PATH=$(find "$BUNDLE_DIR" -maxdepth 2 -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: .app bundle not found under $BUNDLE_DIR"
+            exit 1
+          fi
+
+          echo "Verifying binary architectures in $APP_PATH"
+
+          MAIN_ARCH=$(file "$APP_PATH/Contents/MacOS/openchamber-desktop" | grep -oE 'x86_64|aarch64' | head -1)
+          SIDEARCH_ARCH=$(file "$APP_PATH/Contents/MacOS/openchamber-server" | grep -oE 'x86_64|aarch64' | head -1)
+          EXPECTED_ARCH=$(echo "${{ matrix.target }}" | grep -oE 'x86_64|aarch64' | head -1)
+
+          echo "   Main binary: $MAIN_ARCH"
+          echo "   Sidecar binary: $SIDEARCH_ARCH"
+          echo "   Expected: $EXPECTED_ARCH"
+
+          if [ "$MAIN_ARCH" != "$EXPECTED_ARCH" ]; then
+            echo "ERROR: Main binary architecture mismatch!"
+            echo "   Expected: $EXPECTED_ARCH"
+            echo "   Got: $MAIN_ARCH"
+            exit 1
+          fi
+
+          if [ "$SIDEARCH_ARCH" != "$EXPECTED_ARCH" ]; then
+            echo "ERROR: Sidecar binary architecture mismatch!"
+            echo "   Expected: $EXPECTED_ARCH"
+            echo "   Got: $SIDEARCH_ARCH"
+            exit 1
+          fi
+
+          echo "Architecture verification passed!"
+
+      - name: Prepare release artifacts
+        run: |
+          mkdir -p artifacts
+          VERSION="${{ needs.create-release.outputs.version }}"
+
+          # Copy DMG
+          DMG_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg"
+          if ls $DMG_PATH 1> /dev/null 2>&1; then
+            DMG_FILE=$(ls $DMG_PATH | head -n 1)
+            DMG_NAME="OpenChamber_${VERSION}_${{ matrix.platform }}.dmg"
+            cp "$DMG_FILE" "artifacts/$DMG_NAME"
+          else
+            echo "Error: DMG file not found at $DMG_PATH"
+            exit 1
+          fi
+
+          # Copy tar.gz (no signature required for unsigned builds)
+          TAR_PATH="packages/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz"
+          if ls $TAR_PATH 1> /dev/null 2>&1; then
+            TAR_FILE=$(ls $TAR_PATH | head -n 1)
+            TAR_BASE=$(basename "$TAR_FILE")
+            TAR_NAME="${TAR_BASE%.tar.gz}-${{ matrix.platform }}.tar.gz"
+            cp "$TAR_FILE" "artifacts/$TAR_NAME"
+          else
+            echo "Error: tar.gz file not found at $TAR_PATH"
+            exit 1
+          fi
+
+          echo "Successfully prepared artifacts:"
+          ls -lh artifacts/
+
+      - name: Generate update manifest (without signature)
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+
+          # Find the tar.gz file name for this platform
+          TAR_FILE=$(find artifacts -name "*-${{ matrix.platform }}.tar.gz" ! -name "*.sig" | head -1)
+          TAR_NAME=$(basename "$TAR_FILE" 2>/dev/null || echo "OpenChamber-${{ matrix.platform }}.app.tar.gz")
+
+          cat > artifacts/latest-${{ matrix.platform }}.json << EOF
+          {
+            "version": "${VERSION}",
+            "notes": "See release notes at https://github.com/${{ github.repository }}/releases/tag/v${VERSION}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "${{ matrix.platform }}": {
+                "signature": "",
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${TAR_NAME}"
+              }
+            }
+          }
+          EOF
+
+          echo "Generated latest-${{ matrix.platform }}.json:"
+          cat artifacts/latest-${{ matrix.platform }}.json
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.create-release.outputs.version }}
+          files: |
+            artifacts/*.dmg
+            artifacts/*.tar.gz
+            artifacts/latest-${{ matrix.platform }}.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload manifest as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manifest-${{ matrix.platform }}
+          path: artifacts/latest-${{ matrix.platform }}.json
+          retention-days: 1
+
+  combine-manifests:
+    needs: [create-release, build-desktop-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download aarch64 manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: manifest-darwin-aarch64
+          path: artifacts
+
+      - name: Download x86_64 manifest
+        uses: actions/download-artifact@v4
+        with:
+          name: manifest-darwin-x86_64
+          path: artifacts
+
+      - name: Combine manifests
+        run: |
+          VERSION="${{ needs.create-release.outputs.version }}"
+          PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          REPO="${{ github.repository }}"
+
+          # Validate that both manifest files exist and are valid JSON
+          if [ ! -f artifacts/latest-darwin-aarch64.json ]; then
+            echo "Error: aarch64 manifest not found"
+            exit 1
+          fi
+
+          if [ ! -f artifacts/latest-darwin-x86_64.json ]; then
+            echo "Error: x86_64 manifest not found"
+            exit 1
+          fi
+
+          # Validate JSON structure
+          if ! jq empty artifacts/latest-darwin-aarch64.json 2>/dev/null; then
+            echo "Error: aarch64 manifest is not valid JSON"
+            exit 1
+          fi
+
+          if ! jq empty artifacts/latest-darwin-x86_64.json 2>/dev/null; then
+            echo "Error: x86_64 manifest is not valid JSON"
+            exit 1
+          fi
+
+          # Use jq to properly combine the manifests
+          jq -n \
+            --arg version "$VERSION" \
+            --arg notes "See release notes at https://github.com/${REPO}/releases/tag/v${VERSION}" \
+            --arg pub_date "$PUB_DATE" \
+            --slurpfile aarch64 artifacts/latest-darwin-aarch64.json \
+            --slurpfile x86_64 artifacts/latest-darwin-x86_64.json \
+            '{
+              version: $version,
+              notes: $notes,
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-aarch64": $aarch64[0].platforms["darwin-aarch64"],
+                "darwin-x86_64": $x86_64[0].platforms["darwin-x86_64"]
+              }
+            }' > artifacts/latest.json
+
+          echo "Generated combined latest.json:"
+          cat artifacts/latest.json
+
+      - name: Upload combined manifest
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.create-release.outputs.version }}
+          files: artifacts/latest.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
