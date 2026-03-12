@@ -892,7 +892,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                             className="inline-flex min-w-0 max-w-full items-center gap-1 typography-meta leading-5 text-muted-foreground/80"
                         >
                             <FileTypeIcon filePath={entry.filePath} className="h-3.5 w-3.5" />
-                            <span className={cn('truncate', isMobile ? 'max-w-[9rem]' : 'max-w-[12rem]')} style={{ color: 'var(--tools-title)' }} title={entry.filePath}>
+                            <span className={cn('truncate', isMobile ? 'max-w-[9rem]' : 'max-w-[12rem]')} style={{ color: 'var(--tools-description)' }} title={entry.filePath}>
                                 {toDisplayFileName(entry.filePath)}
                             </span>
                             <span className="flex-shrink-0 inline-flex items-center gap-0 tabular-nums">
