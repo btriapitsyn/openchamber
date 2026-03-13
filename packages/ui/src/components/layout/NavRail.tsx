@@ -355,7 +355,7 @@ const ProjectTile: React.FC<{
       <span
         aria-hidden={!projectTextVisible}
         className={cn(
-          'min-w-0 truncate text-left text-[13px] leading-tight transition-opacity duration-[180ms] ease-in-out',
+          'relative z-10 min-w-0 truncate text-left text-[13px] leading-tight transition-opacity duration-[180ms] ease-in-out',
           expanded ? 'flex-1' : 'w-0 flex-none',
           projectTextVisible ? 'opacity-100' : 'opacity-0',
           isActive && expanded ? 'font-medium text-[var(--interactive-selection-foreground)]' : 'text-[var(--surface-foreground)]',
