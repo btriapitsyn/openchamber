@@ -5,7 +5,7 @@ import { getMessageLimit, getBackgroundTrimLimit } from '@/stores/types/sessionT
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { RiCloseLine, RiDatabase2Line, RiDeleteBinLine, RiPulseLine } from '@remixicon/react';
+import { RiCloseLine, RiDatabase2Line, RiPulseLine } from '@remixicon/react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -20,8 +20,6 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
     messages,
     sessionMemoryState,
     currentSessionId,
-    trimToViewportWindow,
-    evictLeastRecentlyUsed
   } = useSessionStore();
   const totalGitHubRequests = useGitHubPrStatusStore((state) => state.totalRequestCount);
 
@@ -93,11 +91,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
             <span>{getBackgroundTrimLimit()} messages</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">{t('memoryDebugPanel.backgroundStreamLimit')}:</span>
-            <span>{MEMORY_LIMITS.BACKGROUND_STREAMING_BUFFER} messages</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">{t('memoryDebugPanel.zombieTimeout')}:</span>
+            <span className="text-muted-foreground">Zombie Timeout:</span>
             <span>{MEMORY_LIMITS.ZOMBIE_TIMEOUT / 1000 / 60} minutes</span>
           </div>
           <div className="flex justify-between">
@@ -141,45 +135,7 @@ export const MemoryDebugPanel: React.FC<MemoryDebugPanelProps> = ({ onClose }) =
           </ScrollableOverlay>
         </div>
 
-        {}
         <div className="flex gap-2 pt-2 border-t">
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                className="typography-meta"
-                onClick={() => {
-                  if (currentSessionId) {
-                    trimToViewportWindow(currentSessionId, 10);
-                  }
-                }}
-              >
-                <RiDeleteBinLine className="h-3 w-3 mr-1" />
-                Force Trim (10)
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {t('memoryDebugPanel.trimCurrentSessionHint')}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip delayDuration={1000}>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                className="typography-meta"
-                onClick={() => {
-                  evictLeastRecentlyUsed();
-                }}
-              >
-                Evict LRU
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">
-              {t('memoryDebugPanel.evictLruHint')}
-            </TooltipContent>
-          </Tooltip>
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <Button

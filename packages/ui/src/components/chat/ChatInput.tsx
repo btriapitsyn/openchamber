@@ -1226,8 +1226,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         clearAbortPrompt();
         startAbortIndicator();
 
-        void abortCurrentOperation();
-    }, [abortCurrentOperation, clearAbortPrompt, startAbortIndicator]);
+        void abortCurrentOperation(currentSessionId || undefined);
+    }, [abortCurrentOperation, clearAbortPrompt, currentSessionId, startAbortIndicator]);
 
     const handleCycleAgent = React.useCallback(() => {
         if (primaryAgents.length <= 1) return;
@@ -2383,19 +2383,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             data-keyboard-avoid="true"
             style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
-            {/* Absolute positioned above input - no layout shift */}
-            <div className="absolute bottom-full left-0 right-0">
-                <StatusRow
-                    isWorking={working.isWorking}
-                    statusText={workingStatusText}
-                    isGenericStatus={working.isGenericStatus}
-                    isWaitingForPermission={working.isWaitingForPermission}
-                    wasAborted={working.wasAborted}
-                    abortActive={working.abortActive}
-                    retryInfo={working.retryInfo}
-                    showAbortStatus={showAbortStatus}
-                />
-            </div>
             <div className={cn('chat-column relative overflow-visible', isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 <AttachedFilesList />
                 <QueuedMessageChips
@@ -2523,6 +2510,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         </button>
                     </div>
                 )}
+                <StatusRow
+                    isWorking={working.isWorking}
+                    statusText={workingStatusText}
+                    isGenericStatus={working.isGenericStatus}
+                    isWaitingForPermission={working.isWaitingForPermission}
+                    wasAborted={working.wasAborted}
+                    abortActive={working.abortActive}
+                    retryInfo={working.retryInfo}
+                    showAbortStatus={showAbortStatus}
+                    showAssistantStatus={false}
+                    showTodos
+                />
                 <div
                     className={cn(
                         "flex flex-col relative overflow-visible",
