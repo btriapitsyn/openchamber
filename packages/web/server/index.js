@@ -5877,6 +5877,7 @@ async function createManagedOpenCodeServerProcess({
   const child = spawn(binary, args, {
     cwd,
     env,
+    windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -12795,6 +12796,7 @@ async function main(options = {}) {
       const child = spawn(shell, [shellFlag, command], {
         cwd: resolvedCwd,
         env: execEnv,
+        windowsHide: true,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 

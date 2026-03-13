@@ -96,6 +96,7 @@ Or visit: https://developers.cloudflare.com/cloudflare-one/networks/connectors/c
 
 const spawnCloudflared = (args, envOverrides = {}, resolvedBinaryPath = 'cloudflared') => spawn(resolvedBinaryPath, args, {
   stdio: ['ignore', 'pipe', 'pipe'],
+  windowsHide: true,
   env: {
     ...process.env,
     CF_TELEMETRY_DISABLE: '1',

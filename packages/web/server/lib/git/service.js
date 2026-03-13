@@ -623,6 +623,7 @@ const runWorktreeStartCommand = async (directory, command) => {
     const result = await execFileAsync('cmd', ['/c', text], {
       cwd: directory,
       env: await buildGitEnv(),
+      windowsHide: true,
       maxBuffer: 20 * 1024 * 1024,
     }).then(({ stdout, stderr }) => ({ success: true, stdout, stderr })).catch((error) => ({
       success: false,
@@ -1454,6 +1455,7 @@ export async function getFileDiff(directory, { path: filePath, staged = false } 
         const { stdout } = await execFileAsync('git', ['show', `HEAD:${filePath}`], {
           cwd: directoryPath,
           encoding: 'buffer',
+          windowsHide: true,
           maxBuffer: 50 * 1024 * 1024, // 50MB max
         });
         if (stdout && stdout.length > 0) {
