@@ -125,10 +125,11 @@ const buildGitEnv = async () => {
 
 const createGit = async (directory) => {
   const env = await buildGitEnv();
+  const spawnOptions = { windowsHide: true };
   if (!directory) {
-    return simpleGit({ env });
+    return simpleGit({ env, spawnOptions });
   }
-  return simpleGit({ baseDir: normalizeDirectoryPath(directory), env });
+  return simpleGit({ baseDir: normalizeDirectoryPath(directory), env, spawnOptions });
 };
 
 const normalizeDirectoryPath = (value) => {
@@ -415,6 +416,7 @@ const runGitCommand = async (cwd, args) => {
     const { stdout, stderr } = await execFileAsync('git', args, {
       cwd,
       env: await buildGitEnv(),
+      windowsHide: true,
       maxBuffer: 20 * 1024 * 1024,
     });
     return {

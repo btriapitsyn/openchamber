@@ -2731,6 +2731,7 @@ const commands = {
 
     const child = spawn(runtimeBin, serverArgs, {
       detached: true,
+      windowsHide: true,
       stdio: ['ignore', logFd, logFd, 'ipc'],
       env: {
         ...process.env,

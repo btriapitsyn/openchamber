@@ -564,6 +564,7 @@ const searchFilesystemFiles = async (rootPath, options) => {
           const result = await new Promise((resolve) => {
             const child = spawn('git', ['check-ignore', '--', ...pathsToCheck], {
               cwd: dir,
+              windowsHide: true,
               stdio: ['ignore', 'pipe', 'pipe'],
             });
 
@@ -1135,7 +1136,7 @@ const buildTemplateVariables = async (payload, sessionId) => {
   if (worktreeDir) {
     try {
       const { simpleGit } = await import('simple-git');
-      const git = simpleGit(worktreeDir);
+      const git = simpleGit({ baseDir: worktreeDir, spawnOptions: { windowsHide: true } });
       branch = await Promise.race([
         git.revparse(['--abbrev-ref', 'HEAD']),
         new Promise((_, reject) => setTimeout(() => reject(new Error('git timeout')), 3000)),
@@ -12950,6 +12951,7 @@ async function main(options = {}) {
               const result = await new Promise((resolve) => {
                 const child = spawn('git', ['check-ignore', '--', ...pathsToCheck], {
                   cwd: resolvedPath,
+                  windowsHide: true,
                   stdio: ['ignore', 'pipe', 'pipe'],
                 });
 
