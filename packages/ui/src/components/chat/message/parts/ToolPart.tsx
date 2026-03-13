@@ -979,6 +979,7 @@ const renderPathLikeGitChanges = (path: string, grow = true) => {
 };
 
 const renderAnimatedPathWithIcon = (path: string, _animate = true, grow = true, showFileIcons = true) => {
+    void _animate;
     const lastSlash = path.lastIndexOf('/');
 
     if (lastSlash === -1) {
