@@ -1763,6 +1763,9 @@ const ToolPart: React.FC<ToolPartProps> = ({
     
     // Tool title/description — shown inline as context
     const justificationText = React.useMemo(() => {
+        if (normalizedPartTool === 'bash') {
+            return null;
+        }
         if (normalizedPartTool === 'apply_patch') {
             return null;
         }
@@ -1846,15 +1849,15 @@ const ToolPart: React.FC<ToolPartProps> = ({
             {}
             <div
                 className={cn(
-                    'group/tool flex gap-2 pr-2 pl-px py-1.5 rounded-xl cursor-pointer',
-                    isMultiFileApplyPatch ? 'flex-wrap items-start' : 'items-center'
-                )}
+                'group/tool flex gap-1.5 pr-2 pl-px py-2 rounded-xl cursor-pointer',
+                isMultiFileApplyPatch ? 'flex-wrap items-start' : 'items-center'
+            )}
                 onClick={handleMainClick}
                 onKeyDown={handleMainKeyDown}
                 role="button"
                 tabIndex={0}
             >
-                <div className={cn('flex gap-2', isMultiFileApplyPatch ? 'w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5' : 'items-center flex-shrink-0')}>
+                <div className={cn('flex gap-1.5', isMultiFileApplyPatch ? 'w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5' : 'items-center flex-shrink-0')}>
                     {}
                     <div
                         className="relative h-3.5 w-3.5 flex-shrink-0 cursor-pointer"
@@ -1893,15 +1896,6 @@ const ToolPart: React.FC<ToolPartProps> = ({
                             >
                                 {displayName}
                             </MinDurationShineText>
-                            {typeof effectiveTimeStart === 'number' ? (
-                                <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
-                                    <LiveDuration
-                                        start={effectiveTimeStart}
-                                        end={typeof effectiveTimeEnd === 'number' ? effectiveTimeEnd : undefined}
-                                        active={Boolean(isActive && typeof effectiveTimeEnd !== 'number')}
-                                    />
-                                </span>
-                            ) : null}
                             {getMultiFileDescription(metadata, animateTailText, showToolFileIcons)}
                         </>
                     ) : (
@@ -1917,7 +1911,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                                     {displayName}
                                 </MinDurationShineText>
                             </div>
-                            {typeof effectiveTimeStart === 'number' ? (
+                            {normalizedPartTool === 'bash' && typeof effectiveTimeStart === 'number' ? (
                                 <span className="flex-shrink-0 tabular-nums text-muted-foreground/80 typography-meta">
                                     <LiveDuration
                                         start={effectiveTimeStart}

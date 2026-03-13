@@ -14,18 +14,12 @@ import { Text } from '@/components/ui/text';
 import { FadeInOnReveal } from '../FadeInOnReveal';
 import { getToolIcon } from './toolPresentation';
 import { getToolMetadata } from '@/lib/toolHelpers';
-import { getStaticGroupToolName, isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
+import { isExpandableTool, isStandaloneTool, isStaticTool } from './toolRenderUtils';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useUIStore } from '@/stores/useUIStore';
 import ReasoningPart from './ReasoningPart';
 import JustificationBlock from './JustificationBlock';
-
-interface DiffStats {
-    additions: number;
-    deletions: number;
-    files: number;
-}
 
 interface ProgressiveGroupProps {
     parts: TurnActivityPart[];
@@ -42,120 +36,7 @@ interface ProgressiveGroupProps {
     showHeader: boolean;
     animateRows?: boolean;
     animatedToolIds?: Set<string>;
-    diffStats?: DiffStats;
 }
-
-const EDIT_LIKE_TOOL_NAMES = new Set<string>([
-    'edit',
-    'multiedit',
-    'apply_patch',
-    'str_replace',
-    'str_replace_based_edit_tool',
-]);
-
-const isEditLikeTool = (toolName: unknown): boolean => {
-    return typeof toolName === 'string' && EDIT_LIKE_TOOL_NAMES.has(toolName.toLowerCase());
-};
-
-const parseDiffCounts = (diffText: string): { added: number; removed: number } => {
-    const lines = diffText.split('\n');
-    let added = 0;
-    let removed = 0;
-
-    for (const line of lines) {
-        if (line.startsWith('+') && !line.startsWith('+++')) added += 1;
-        if (line.startsWith('-') && !line.startsWith('---')) removed += 1;
-    }
-
-    return { added, removed };
-};
-
-type FileDiffAggregate = { filePath: string; added: number; removed: number };
-
-const aggregateFileDiffs = (parts: TurnActivityPart[]): FileDiffAggregate[] => {
-    const byPath = new Map<string, { added: number; removed: number }>();
-
-    const addToPath = (filePath: string, added: number, removed: number) => {
-        if (!filePath) return;
-        const current = byPath.get(filePath) ?? { added: 0, removed: 0 };
-        current.added += Math.max(0, added);
-        current.removed += Math.max(0, removed);
-        byPath.set(filePath, current);
-    };
-
-    for (const activity of parts) {
-        if (activity.kind !== 'tool') continue;
-        const toolPart = activity.part as ToolPartType;
-        if (!isEditLikeTool(toolPart.tool)) continue;
-
-        const state = toolPart.state as { metadata?: Record<string, unknown>; input?: Record<string, unknown> } | undefined;
-        const metadata = state?.metadata;
-        const input = state?.input;
-        const files = Array.isArray(metadata?.files) ? metadata?.files : [];
-
-        if (files.length > 0) {
-            for (const file of files) {
-                if (!file || typeof file !== 'object') continue;
-                const record = file as {
-                    relativePath?: unknown;
-                    filePath?: unknown;
-                    path?: unknown;
-                    additions?: unknown;
-                    deletions?: unknown;
-                    diff?: unknown;
-                };
-
-                const filePath =
-                    (typeof record.relativePath === 'string' && record.relativePath) ||
-                    (typeof record.filePath === 'string' && record.filePath) ||
-                    (typeof record.path === 'string' && record.path) ||
-                    '';
-
-                const explicitAdditions = typeof record.additions === 'number' ? record.additions : null;
-                const explicitDeletions = typeof record.deletions === 'number' ? record.deletions : null;
-
-                if (explicitAdditions !== null || explicitDeletions !== null) {
-                    addToPath(filePath, explicitAdditions ?? 0, explicitDeletions ?? 0);
-                    continue;
-                }
-
-                if (typeof record.diff === 'string' && record.diff.trim().length > 0) {
-                    const counts = parseDiffCounts(record.diff);
-                    addToPath(filePath, counts.added, counts.removed);
-                }
-            }
-            continue;
-        }
-
-        const fallbackPath =
-            (typeof input?.filePath === 'string' && input.filePath) ||
-            (typeof input?.file_path === 'string' && input.file_path) ||
-            (typeof input?.path === 'string' && input.path) ||
-            '';
-
-        if (typeof metadata?.diff === 'string' && metadata.diff.trim().length > 0) {
-            const counts = parseDiffCounts(metadata.diff);
-            addToPath(fallbackPath || 'Diff', counts.added, counts.removed);
-        }
-    }
-
-    return Array.from(byPath.entries())
-        .map(([filePath, counts]) => ({ filePath, added: counts.added, removed: counts.removed }))
-        .filter((entry) => entry.added > 0 || entry.removed > 0)
-        .sort((a, b) => {
-            const aChanges = a.added + a.removed;
-            const bChanges = b.added + b.removed;
-            if (aChanges !== bChanges) return bChanges - aChanges;
-            return a.filePath.localeCompare(b.filePath);
-        });
-};
-
-const toDisplayFileName = (filePath: string): string => {
-    const normalized = filePath.replace(/\\/g, '/');
-    const segments = normalized.split('/').filter(Boolean);
-    if (segments.length === 0) return normalized;
-    return segments[segments.length - 1];
-};
 
 const isActivityRunning = (activity: TurnActivityPart): boolean => {
     if (activity.kind !== 'tool') return false;
@@ -236,14 +117,11 @@ const toTodoStatusKey = (value: unknown): 'pending' | 'in_progress' | 'completed
 
 const formatTodoSummary = (todos: unknown[]): string | null => {
     if (todos.length === 0) {
-        return null;
+        return '0 tasks';
     }
 
     let pending = 0;
     let inProgress = 0;
-    let completed = 0;
-    let cancelled = 0;
-
     for (const todo of todos) {
         if (!todo || typeof todo !== 'object') {
             continue;
@@ -254,26 +132,14 @@ const formatTodoSummary = (todos: unknown[]): string | null => {
         }
         if (status === 'pending') pending += 1;
         if (status === 'in_progress') inProgress += 1;
-        if (status === 'completed') completed += 1;
-        if (status === 'cancelled') cancelled += 1;
     }
 
-    const total = pending + inProgress + completed + cancelled;
-    if (total === 0) {
-        return null;
+    const activeCount = pending + inProgress;
+    if (activeCount === 0) {
+        return '0 tasks';
     }
 
-    if (completed === total) {
-        return `All ${total} tasks done`;
-    }
-
-    const parts: string[] = [];
-    if (inProgress > 0) parts.push(`${inProgress} in progress`);
-    if (pending > 0) parts.push(`${pending} pending`);
-    if (completed > 0) parts.push(`${completed} done`);
-    if (cancelled > 0) parts.push(`${cancelled} cancelled`);
-
-    return parts.length > 0 ? parts.join(', ') : null;
+    return `${activeCount} ${activeCount === 1 ? 'task' : 'tasks'}`;
 };
 
 const getTodoSummaryFromActivity = (activity: TurnActivityPart): string | null => {
@@ -341,6 +207,37 @@ const normalizePathValue = (value: string): string => {
         return '';
     }
     return trimmed.replace(/\\/g, '/');
+};
+
+const trimTrailingSlashes = (value: string): string => {
+    if (value === '/') {
+        return value;
+    }
+    return value.replace(/\/+$/, '');
+};
+
+const getRelativePathFromDirectory = (filePath: string, currentDirectory: string): string => {
+    const normalizedPath = trimTrailingSlashes(normalizePathValue(filePath));
+    const normalizedDirectory = trimTrailingSlashes(normalizePathValue(currentDirectory));
+
+    if (!normalizedPath) {
+        return '';
+    }
+
+    if (!normalizedDirectory) {
+        return normalizedPath;
+    }
+
+    if (normalizedPath === normalizedDirectory) {
+        return '.';
+    }
+
+    const prefix = `${normalizedDirectory}/`;
+    if (normalizedPath.startsWith(prefix)) {
+        return normalizedPath.slice(prefix.length);
+    }
+
+    return normalizedPath;
 };
 
 const resolveAbsolutePath = (currentDirectory: string, filePath: string): string => {
@@ -446,7 +343,7 @@ type AggregatedRow =
 
 /**
  * Aggregate sorted activity parts into display rows.
- * Consecutive static tools of the same type are merged into a single row.
+ * Static tools are rendered as one row per call.
  * Reasoning/justification become inline text.
  * Expandable tools (edit, bash, write, question) stay as individual rows.
  * Unknown tools stay as individual expandable rows (fallback).
@@ -487,20 +384,8 @@ const aggregateRows = (parts: TurnActivityPart[]): AggregatedRow[] => {
         }
 
         if (isStaticTool(toolName)) {
-            // Aggregate consecutive static tools of the same name
-            const groupedToolName = getStaticGroupToolName(toolName);
-            const group: TurnActivityPart[] = [activity];
-            let j = i + 1;
-            while (j < parts.length) {
-                const next = parts[j];
-                if (next.kind !== 'tool') break;
-                const nextTool = (next.part as ToolPartType).tool?.toLowerCase() ?? '';
-                if (getStaticGroupToolName(nextTool) !== groupedToolName) break;
-                group.push(next);
-                j++;
-            }
-            rows.push({ type: 'tool-static-group', toolName: groupedToolName, activities: group });
-            i = j;
+            rows.push({ type: 'tool-static-group', toolName, activities: [activity] });
+            i++;
             continue;
         }
 
@@ -541,19 +426,20 @@ export const StaticToolRow: React.FC<{
     }, [activities]);
 
     const readFileEntries = React.useMemo(() => {
-        if (!isReadGroup) return [] as Array<{ path: string; name: string; offset?: number }>;
+        if (!isReadGroup) return [] as Array<{ path: string; displayPath: string; offset?: number }>;
 
-        const entries: Array<{ path: string; name: string; offset?: number }> = [];
+        const entries: Array<{ path: string; displayPath: string; offset?: number }> = [];
         for (const activity of activities) {
             const filePath = getToolFilePath(activity);
-            const fileName = getToolFileName(activity);
             const offset = getToolReadOffset(activity);
-            if (!filePath || !fileName) continue;
+            if (!filePath) continue;
             if (entries.some((entry) => entry.path === filePath)) continue;
-            entries.push({ path: filePath, name: fileName, offset });
+            const displayPath = getRelativePathFromDirectory(filePath, currentDirectory);
+            if (!displayPath) continue;
+            entries.push({ path: filePath, displayPath, offset });
         }
         return entries;
-    }, [activities, isReadGroup]);
+    }, [activities, currentDirectory, isReadGroup]);
 
     const handleReadFileClick = React.useCallback((filePath: string, offset?: number) => {
         const absolutePath = resolveAbsolutePath(currentDirectory, filePath);
@@ -575,13 +461,18 @@ export const StaticToolRow: React.FC<{
         uiStore.openContextFile(contextDirectory, absolutePath);
     }, [currentDirectory, runtime]);
 
-    const isSearchGroup = toolName.toLowerCase() === 'grep';
-    const isFetchGroup = toolName.toLowerCase() === 'webfetch' || toolName.toLowerCase() === 'fetch' || toolName.toLowerCase() === 'curl' || toolName.toLowerCase() === 'wget';
+    const normalizedToolName = toolName.toLowerCase();
+    const isSearchGroup = normalizedToolName === 'grep'
+        || normalizedToolName === 'search'
+        || normalizedToolName === 'find'
+        || normalizedToolName === 'ripgrep'
+        || normalizedToolName === 'glob';
+    const isFetchGroup = normalizedToolName === 'webfetch' || normalizedToolName === 'fetch' || normalizedToolName === 'curl' || normalizedToolName === 'wget';
 
     return (
         <div
             className={cn(
-                'flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 pr-2 pl-px py-1.5 rounded-xl'
+                'flex w-full items-center gap-x-1.5 pr-2 pl-px py-1.5 rounded-xl min-w-0'
             )}
         >
             <div className="inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-icon)' }}>
@@ -606,28 +497,28 @@ export const StaticToolRow: React.FC<{
                             event.stopPropagation();
                             handleReadFileClick(entry.path, entry.offset);
                         }}
-                        className="inline-flex items-center gap-1 min-w-0 max-w-full typography-meta leading-5 hover:opacity-90"
-                        style={{ color: 'var(--tools-title)' }}
-                        title={entry.offset ? `${entry.path}:${entry.offset}` : entry.path}
+                        className="inline-flex items-center gap-1 min-w-0 flex-1 typography-meta leading-5 hover:opacity-90"
+                        style={{ color: 'var(--tools-description)' }}
+                        title={entry.offset ? `${entry.displayPath}:${entry.offset}` : entry.displayPath}
                     >
                         {showToolFileIcons ? <FileTypeIcon filePath={entry.path} className="h-3.5 w-3.5" /> : null}
                         <Text
                             variant={animateTailText ? 'generate-effect' : undefined}
-                            className="min-w-0 max-w-full truncate typography-meta leading-5"
-                            style={{ color: 'var(--tools-title)' }}
-                            title={entry.path}
+                            className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5"
+                            style={{ color: 'var(--tools-description)', direction: 'rtl', textAlign: 'left' }}
+                            title={entry.displayPath}
                         >
-                            {entry.name}
+                            {entry.displayPath}
                         </Text>
                     </button>
                 ))
                 : null}
             {isSearchGroup && descriptions.length > 0
                 ? descriptions.map((desc, index) => (
-                    <span key={`${desc}-${index}`} className="inline-flex min-w-0 max-w-full">
+                    <span key={`${desc}-${index}`} className="inline-flex min-w-0 flex-1">
                         <Text
                             variant={animateTailText ? 'generate-effect' : undefined}
-                            className="min-w-0 max-w-full truncate typography-meta leading-5"
+                            className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5"
                             style={{ color: 'var(--tools-description)' }}
                             title={desc}
                         >
@@ -644,8 +535,8 @@ export const StaticToolRow: React.FC<{
                         target="_blank"
                         rel="noopener noreferrer"
                         className={cn(
-                            'min-w-0 max-w-full underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
-                            'truncate max-w-[20rem] typography-meta'
+                            'min-w-0 flex-1 underline decoration-[color:var(--status-info)] underline-offset-2 hover:opacity-90',
+                            'truncate whitespace-nowrap typography-meta'
                         )}
                         style={{ color: 'var(--status-info)' }}
                         title={url}
@@ -657,7 +548,7 @@ export const StaticToolRow: React.FC<{
             {!isReadGroup && !isSearchGroup && !isFetchGroup && descriptions.length > 0 ? (
                 <Text
                     variant={animateTailText ? 'generate-effect' : undefined}
-                    className="min-w-0 max-w-full truncate typography-meta leading-5"
+                    className="min-w-0 flex-1 truncate whitespace-nowrap typography-meta leading-5"
                     style={{ color: 'var(--tools-description)' }}
                 >
                     {descriptions.join(' ')}
@@ -748,16 +639,6 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
         }
         return rows.slice(-previewCount);
     }, [isExpanded, previewCount, rows]);
-
-    const toolCount = React.useMemo(
-        () => parts.filter((activity) => activity.kind === 'tool').length,
-        [parts]
-    );
-
-    const aggregatedFileDiffs = React.useMemo(() => aggregateFileDiffs(parts), [parts]);
-
-    const hasToolMetric = toolCount > 0;
-    const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
 
     if (shouldRenderRows && rows.length === 0) {
         return null;
@@ -867,14 +748,14 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
     if (!showHeader) {
         return (
             <FadeInOnReveal>
-                <div className="my-1">{renderedRows}</div>
+                <div className="mt-1 mb-2 space-y-1.5">{renderedRows}</div>
             </FadeInOnReveal>
         );
     }
 
     return (
         <FadeInOnReveal>
-            <div className="my-1">
+            <div className="mt-1 mb-2">
                 <button
                     type="button"
                     className="group/tool flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 pr-2 pl-px py-1.5 rounded-xl text-left"
@@ -883,30 +764,16 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                     <span className="inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-icon)' }}>
                         <RiStackLine className="h-3.5 w-3.5" />
                     </span>
-                    <span className="typography-meta leading-5 font-medium inline-flex h-5 items-center flex-shrink-0" style={{ color: 'var(--tools-title)' }}>
+                    <span
+                        className="leading-5 font-semibold inline-flex h-5 items-center flex-shrink-0"
+                        style={{
+                            color: 'var(--tools-title)',
+                            fontSize: '0.9rem',
+                            letterSpacing: '0.005em',
+                        }}
+                    >
                         Activity
                     </span>
-                    {hasToolMetric ? (
-                        <span className="typography-meta leading-5 text-muted-foreground/80 flex-shrink-0">
-                            {toolCount} {toolCount === 1 ? 'tool' : 'tools'}
-                        </span>
-                    ) : null}
-                    {aggregatedFileDiffs.map((entry, index) => (
-                        <span
-                            key={`${entry.filePath}-${index}`}
-                            className="inline-flex min-w-0 max-w-full items-center gap-1 typography-meta leading-5 text-muted-foreground/80"
-                        >
-                            {showToolFileIcons ? <FileTypeIcon filePath={entry.filePath} className="h-3.5 w-3.5" /> : null}
-                            <span className={cn('truncate', isMobile ? 'max-w-[9rem]' : 'max-w-[12rem]')} style={{ color: 'var(--tools-description)' }} title={entry.filePath}>
-                                {toDisplayFileName(entry.filePath)}
-                            </span>
-                            <span className="flex-shrink-0 inline-flex items-center gap-0 tabular-nums">
-                                <span style={{ color: 'var(--status-success)' }}>+{entry.added}</span>
-                                <span style={{ color: 'var(--tools-description)' }}>/</span>
-                                <span style={{ color: 'var(--status-error)' }}>-{entry.removed}</span>
-                            </span>
-                        </span>
-                    ))}
                 </button>
                 {shouldShowRowsContainer ? (
                     <div className="relative ml-2 pl-3">
@@ -924,7 +791,7 @@ const ProgressiveGroup: React.FC<ProgressiveGroupProps> = ({
                                 +{previewHiddenCount} more...
                             </button>
                         ) : null}
-                        <div>{renderedRows}</div>
+                        <div className="space-y-1.5">{renderedRows}</div>
                     </div>
                 ) : null}
             </div>

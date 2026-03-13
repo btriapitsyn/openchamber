@@ -33,7 +33,7 @@ import { toast } from '@/components/ui';
 import { formatTimestampForDisplay } from './timeFormat';
 import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
 import { StaticToolRow } from './parts/ProgressiveGroup';
-import { getStaticGroupToolName, isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
+import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
 import TurnActivity from '../components/TurnActivity';
 
 type SubtaskPartLike = Part & {
@@ -1111,24 +1111,25 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                     return;
                 }
                 rendered.push(
-                    <TurnActivity
-                        key={`progressive-group-${segment.id}`}
-                        parts={visibleSegmentParts}
-                        isExpanded={turnGroupingContext.isGroupExpanded === true}
-                        collapsedPreviewCount={collapsedPreviewCount}
-                        onToggle={toggleActivityGroup}
-                        syntaxTheme={syntaxTheme}
-                        isMobile={isMobile}
-                        expandedTools={expandedTools}
-                        onToggleTool={onToggleTool}
-                        onShowPopup={onShowPopup}
-                        onContentChange={onContentChange}
-                        streamPhase={streamPhase}
-                        showHeader={true}
-                        animateRows={animateActivityRows}
-                        animatedToolIds={animatedToolIdsLookup}
-                        diffStats={turnGroupingContext.diffStats}
-                    />
+                    <div key={`progressive-group-${segment.id}`} className="mb-3">
+                        <TurnActivity
+                            parts={visibleSegmentParts}
+                            isExpanded={turnGroupingContext.isGroupExpanded === true}
+                            collapsedPreviewCount={collapsedPreviewCount}
+                            onToggle={toggleActivityGroup}
+                            syntaxTheme={syntaxTheme}
+                            isMobile={isMobile}
+                            expandedTools={expandedTools}
+                            onToggleTool={onToggleTool}
+                            onShowPopup={onShowPopup}
+                            onContentChange={onContentChange}
+                            streamPhase={streamPhase}
+                            showHeader={true}
+                            animateRows={animateActivityRows}
+                            animatedToolIds={animatedToolIdsLookup}
+                            diffStats={turnGroupingContext.diffStats}
+                        />
+                    </div>
                 );
             });
         }
@@ -1190,7 +1191,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                         if (partText && partText.trim().length > 0) {
                             rendered.push(
                                 <FadeInOnReveal key={`reasoning-${messageId}-${i}`}>
-                                    <div className="text-sm text-muted-foreground/60 italic leading-relaxed whitespace-pre-wrap">
+                                    <div className="my-0.5 text-sm text-muted-foreground/60 italic leading-relaxed whitespace-pre-wrap">
                                         {partText}
                                     </div>
                                 </FadeInOnReveal>
@@ -1239,40 +1240,28 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                     continue;
                 }
 
-                // Static tools: group consecutive tools of the same kind into compact rows
-                const groupToolName = getStaticGroupToolName(toolName);
-                const group: ToolPartType[] = [toolPart];
-                let j = i + 1;
-                while (j < visibleParts.length) {
-                    const next = visibleParts[j];
-                    if (next.type !== 'tool') break;
-                    const nextTool = next as ToolPartType;
-                    if (!shouldShowTool(nextTool)) { j++; continue; }
-                    const nextName = nextTool.tool?.toLowerCase() ?? '';
-                    if (getStaticGroupToolName(nextName) !== groupToolName) break;
-                    group.push(nextTool);
-                    j++;
-                }
-
+                // Static tools: one row per tool call (no grouping)
                 rendered.push(
                     <FadeInOnReveal key={`static-tools-${toolPart.id}`}>
-                        <ToolRevealOnMount animate={group.some((candidate) => animatedToolIdsLookup.has(candidate.id))} wipe>
+                        <ToolRevealOnMount animate={animatedToolIdsLookup.has(toolPart.id)} wipe>
                             <StaticToolRow
-                                toolName={groupToolName}
-                                activities={group.map(tp => ({
-                                    id: tp.id,
-                                    turnId: '',
-                                    messageId: messageId,
-                                    partIndex: 0,
-                                    part: tp,
-                                    kind: 'tool' as const,
-                                }))}
-                                animateTailText={group.some((candidate) => animatedToolIdsLookup.has(candidate.id))}
+                                toolName={toolName}
+                                activities={[
+                                    {
+                                        id: toolPart.id,
+                                        turnId: '',
+                                        messageId,
+                                        partIndex: 0,
+                                        part: toolPart,
+                                        kind: 'tool' as const,
+                                    },
+                                ]}
+                                animateTailText={animatedToolIdsLookup.has(toolPart.id)}
                             />
                         </ToolRevealOnMount>
                     </FadeInOnReveal>
                 );
-                i = j;
+                i++;
                 continue;
             }
 
