@@ -657,7 +657,7 @@ const searchFilesystemFiles = async (rootPath, options) => {
           }
 
           const result = await new Promise((resolve) => {
-            const child = spawn('git', ['check-ignore', '--', ...pathsToCheck], {
+            const child = spawn(resolveGitBinaryForSpawn(), ['check-ignore', '--', ...pathsToCheck], {
               cwd: dir,
               windowsHide: true,
               stdio: ['ignore', 'pipe', 'pipe'],
@@ -4040,10 +4040,59 @@ let resolvedOpencodeBinary = null;
 let resolvedOpencodeBinarySource = null;
 let resolvedNodeBinary = null;
 let resolvedBunBinary = null;
+let resolvedGitBinary = null;
 let useWslForOpencode = false;
 let resolvedWslBinary = null;
 let resolvedWslOpencodePath = null;
 let resolvedWslDistro = null;
+
+function resolveGitBinaryForSpawn() {
+  if (process.platform !== 'win32') {
+    return 'git';
+  }
+
+  if (resolvedGitBinary) {
+    return resolvedGitBinary;
+  }
+
+  const explicit = [process.env.GIT_BINARY, process.env.OPENCHAMBER_GIT_BINARY]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean);
+  for (const candidate of explicit) {
+    if (isExecutable(candidate)) {
+      resolvedGitBinary = candidate;
+      return resolvedGitBinary;
+    }
+  }
+
+  const candidates = [];
+  const pathCandidate = searchPathFor('git');
+  if (pathCandidate && isExecutable(pathCandidate)) {
+    candidates.push(pathCandidate);
+  }
+
+  try {
+    const result = spawnSync('where', ['git'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    if (result.status === 0) {
+      const whereMatches = String(result.stdout || '')
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => isExecutable(line));
+      candidates.push(...whereMatches);
+    }
+  } catch {
+    // ignore
+  }
+
+  const preferredExe = candidates.find((candidate) => candidate.toLowerCase().endsWith('.exe'));
+  resolvedGitBinary = preferredExe || candidates[0] || 'git';
+  return resolvedGitBinary;
+}
 
 function isExecutable(filePath) {
   try {
@@ -13078,7 +13127,7 @@ async function main(options = {}) {
               // Use git check-ignore with paths as arguments
               // Pass paths directly as arguments (works for reasonable directory sizes)
               const result = await new Promise((resolve) => {
-                const child = spawn('git', ['check-ignore', '--', ...pathsToCheck], {
+                const child = spawn(resolveGitBinaryForSpawn(), ['check-ignore', '--', ...pathsToCheck], {
                   cwd: resolvedPath,
                   windowsHide: true,
                   stdio: ['ignore', 'pipe', 'pipe'],
