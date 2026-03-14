@@ -2,7 +2,7 @@ import simpleGit from 'simple-git';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { execFile, spawnSync } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 const fsp = fs.promises;
@@ -50,6 +50,41 @@ const normalizeGitExecutableCandidate = (candidate) => {
   return trimmed;
 };
 
+const listPathExecutableCandidates = (binaryName) => {
+  const currentPath = process.env.PATH || '';
+  const seen = new Set();
+  const matches = [];
+  for (const segment of currentPath.split(path.delimiter)) {
+    const dir = typeof segment === 'string' ? segment.trim() : '';
+    if (!dir || seen.has(dir)) {
+      continue;
+    }
+    seen.add(dir);
+    matches.push(path.join(dir, binaryName));
+  }
+  return matches;
+};
+
+const listWindowsGitInstallCandidates = () => {
+  const roots = [
+    process.env.ProgramFiles,
+    process.env['ProgramFiles(x86)'],
+    process.env.LocalAppData,
+  ]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean);
+
+  const candidates = [];
+  for (const root of roots) {
+    candidates.push(path.join(root, 'Git', 'cmd', 'git.exe'));
+    candidates.push(path.join(root, 'Git', 'bin', 'git.exe'));
+    candidates.push(path.join(root, 'Git', 'mingw64', 'bin', 'git.exe'));
+    candidates.push(path.join(root, 'Programs', 'Git', 'cmd', 'git.exe'));
+    candidates.push(path.join(root, 'Programs', 'Git', 'bin', 'git.exe'));
+  }
+  return candidates;
+};
+
 const resolveGitBinary = () => {
   if (process.platform !== 'win32') {
     return 'git';
@@ -68,53 +103,17 @@ const resolveGitBinary = () => {
     }
   }
 
-  try {
-    const resultExe = spawnSync('where', ['git.exe'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    if (resultExe.status === 0) {
-      const matches = String(resultExe.stdout || '')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map(normalizeGitExecutableCandidate)
-        .filter(Boolean)
-        .filter((line) => isExecutableFile(line));
-      const preferredExe = matches.find((line) => line.toLowerCase().endsWith('.exe'));
-      const selected = preferredExe || matches[0];
-      if (selected) {
-        resolvedGitBinary = selected;
-        return resolvedGitBinary;
-      }
-    }
+  const discovered = [
+    ...listPathExecutableCandidates('git.exe'),
+    ...listPathExecutableCandidates('git'),
+    ...listWindowsGitInstallCandidates(),
+  ]
+    .map(normalizeGitExecutableCandidate)
+    .filter(Boolean)
+    .filter((candidate) => isExecutableFile(candidate));
 
-    const resultAny = spawnSync('where', ['git'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    if (resultAny.status === 0) {
-      const matches = String(resultAny.stdout || '')
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map(normalizeGitExecutableCandidate)
-        .filter(Boolean)
-        .filter((line) => isExecutableFile(line));
-      const preferredExe = matches.find((line) => line.toLowerCase().endsWith('.exe'));
-      const selected = preferredExe || matches[0];
-      if (selected) {
-        resolvedGitBinary = selected;
-        return resolvedGitBinary;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  resolvedGitBinary = 'git';
+  const preferredExe = discovered.find((candidate) => candidate.toLowerCase().endsWith('.exe'));
+  resolvedGitBinary = preferredExe || discovered[0] || 'git.exe';
   return resolvedGitBinary;
 };
 

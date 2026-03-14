@@ -1231,7 +1231,11 @@ const buildTemplateVariables = async (payload, sessionId) => {
   if (worktreeDir) {
     try {
       const { simpleGit } = await import('simple-git');
-      const git = simpleGit({ baseDir: worktreeDir, spawnOptions: { windowsHide: true } });
+      const git = simpleGit({
+        baseDir: worktreeDir,
+        spawnOptions: { windowsHide: true },
+        binary: resolveGitBinaryForSpawn(),
+      });
       branch = await Promise.race([
         git.revparse(['--abbrev-ref', 'HEAD']),
         new Promise((_, reject) => setTimeout(() => reject(new Error('git timeout')), 3000)),
@@ -4094,42 +4098,31 @@ function resolveGitBinaryForSpawn() {
     candidates.push(pathExeCandidate);
   }
 
-  try {
-    const resultExe = spawnSync('where', ['git.exe'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    if (resultExe.status === 0) {
-      const whereMatches = String(resultExe.stdout || '')
-        .split(/\r?\n/)
-        .map((line) => normalizeGitCandidate(line))
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .filter((line) => isExecutable(line));
-      candidates.push(...whereMatches);
+  const programRoots = [
+    process.env.ProgramFiles,
+    process.env['ProgramFiles(x86)'],
+    process.env.LocalAppData,
+  ]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean);
+  for (const root of programRoots) {
+    const installCandidates = [
+      path.join(root, 'Git', 'cmd', 'git.exe'),
+      path.join(root, 'Git', 'bin', 'git.exe'),
+      path.join(root, 'Git', 'mingw64', 'bin', 'git.exe'),
+      path.join(root, 'Programs', 'Git', 'cmd', 'git.exe'),
+      path.join(root, 'Programs', 'Git', 'bin', 'git.exe'),
+    ];
+    for (const candidate of installCandidates) {
+      const normalized = normalizeGitCandidate(candidate);
+      if (normalized && isExecutable(normalized)) {
+        candidates.push(normalized);
+      }
     }
-
-    const resultAny = spawnSync('where', ['git'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    if (resultAny.status === 0) {
-      const whereMatches = String(resultAny.stdout || '')
-        .split(/\r?\n/)
-        .map((line) => normalizeGitCandidate(line))
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .filter((line) => isExecutable(line));
-      candidates.push(...whereMatches);
-    }
-  } catch {
-    // ignore
   }
 
   const preferredExe = candidates.find((candidate) => candidate.toLowerCase().endsWith('.exe'));
-  resolvedGitBinary = preferredExe || candidates[0] || 'git';
+  resolvedGitBinary = preferredExe || candidates[0] || 'git.exe';
   return resolvedGitBinary;
 }
 
