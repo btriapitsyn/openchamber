@@ -746,6 +746,26 @@ const handleLocalApiRequest = async (url: URL, init?: RequestInit) => {
     }
   }
 
+  if (pathname.startsWith('/api/openchamber/update-check')) {
+    try {
+      const currentVersion = url.searchParams.get('currentVersion') || undefined;
+      const instanceMode = url.searchParams.get('instanceMode') || 'local';
+      const deviceClass = url.searchParams.get('deviceClass') || 'desktop';
+      const reportUsageRaw = (url.searchParams.get('reportUsage') || 'true').toLowerCase();
+      const reportUsage = !(reportUsageRaw === 'false' || reportUsageRaw === '0' || reportUsageRaw === 'no');
+      const data = await sendBridgeMessage('api:openchamber:update-check', {
+        currentVersion,
+        instanceMode,
+        deviceClass,
+        reportUsage,
+      });
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(JSON.stringify({ available: false, error: message }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+    }
+  }
+
   if (pathname === '/auth/session') {
     // VS Code host is trusted; mirror web server shape to keep UI logic happy
     const body = {

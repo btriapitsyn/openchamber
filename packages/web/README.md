@@ -50,8 +50,28 @@ openchamber update                   # Update to latest version
 ```yaml
 environment:
   UI_PASSWORD: your_secure_password
-  CF_TUNNEL: "true"   # Options: true, qr, password
+  OPENCHAMBER_TUNNEL_MODE: quick # quick | managed-remote | managed-local
+  OPENCHAMBER_TUNNEL_PROVIDER: cloudflare
 ```
+
+For `managed-remote` mode, also set:
+
+```yaml
+environment:
+  OPENCHAMBER_TUNNEL_MODE: managed-remote
+  OPENCHAMBER_TUNNEL_HOSTNAME: app.example.com
+  OPENCHAMBER_TUNNEL_TOKEN: <token>
+```
+
+For `managed-local` mode, you can set:
+
+```yaml
+environment:
+  OPENCHAMBER_TUNNEL_MODE: managed-local
+  OPENCHAMBER_TUNNEL_CONFIG: /home/openchamber/.cloudflared/config.yml
+```
+
+Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must use a container path under `/home/openchamber/...`. If the config file references `credentials-file`, ensure that JSON path is also mounted and reachable inside the container.
 
 **Data directory:** mount `data/` for persistent storage. Ensure permissions:
 ```bash
@@ -65,7 +85,7 @@ chown -R 1000:1000 data/
 <summary>Background & daemon mode</summary>
 
 ```bash
-openchamber --daemon    # Run in background
+openchamber             # Runs in background by default
 openchamber stop        # Stop background server
 ```
 
@@ -79,7 +99,7 @@ openchamber stop        # Stop background server
 - **Self-update** - update and restart from the UI, server settings stay intact
 - **Cross-tab tracking** - session activity stays in sync across browser tabs
 
-- Cloudflare tunnel access with Quick, managed-remote, and managed-local modes
+- Cloudflare tunnel access with quick, managed-remote, and managed-local modes
 - One-scan onboarding with tunnel QR + password URL helpers
 - Mobile-first experience: optimized chat controls, keyboard-safe layouts, and attachment-friendly UI
 - Background notifications plus reliable cross-tab session activity tracking

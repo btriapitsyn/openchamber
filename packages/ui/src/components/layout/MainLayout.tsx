@@ -144,23 +144,39 @@ export const MainLayout: React.FC = () => {
         }
     }, [isRightSidebarOpen, isMobile]);
 
-    // Trigger initial update check shortly after mount, then every hour.
+    // Trigger initial update check shortly after mount, then repeat using server-suggested cadence.
     const checkForUpdates = useUpdateStore((state) => state.checkForUpdates);
     React.useEffect(() => {
         const initialDelayMs = 3000;
-        const periodicIntervalMs = 60 * 60 * 1000;
+        const defaultIntervalMs = 60 * 60 * 1000;
+        const minIntervalMs = 5 * 60 * 1000;
+        const maxIntervalMs = 24 * 60 * 60 * 1000;
+        let disposed = false;
+        let timer: number | null = null;
 
-        const timer = window.setTimeout(() => {
-            checkForUpdates();
-        }, initialDelayMs);
+        const clampIntervalMs = (seconds: number): number => {
+            const ms = Math.round(seconds * 1000);
+            return Math.max(minIntervalMs, Math.min(maxIntervalMs, ms));
+        };
 
-        const interval = window.setInterval(() => {
-            checkForUpdates();
-        }, periodicIntervalMs);
+        const scheduleNext = (delayMs: number) => {
+            if (disposed) return;
+            timer = window.setTimeout(async () => {
+                const suggestedSec = await checkForUpdates();
+                const nextDelay = typeof suggestedSec === 'number' && Number.isFinite(suggestedSec)
+                    ? clampIntervalMs(suggestedSec)
+                    : defaultIntervalMs;
+                scheduleNext(nextDelay);
+            }, delayMs);
+        };
+
+        scheduleNext(initialDelayMs);
 
         return () => {
-            window.clearTimeout(timer);
-            window.clearInterval(interval);
+            disposed = true;
+            if (timer !== null) {
+                window.clearTimeout(timer);
+            }
         };
     }, [checkForUpdates]);
 
@@ -362,6 +378,10 @@ export const MainLayout: React.FC = () => {
             setKeyboardOpen(false);
         };
 
+        // Batch visualViewport updates to once per animation frame to avoid
+        // layout thrashing during keyboard open/close animations.
+        let rafId = 0;
+
         const updateVisualViewport = () => {
             const viewport = window.visualViewport;
 
@@ -464,13 +484,21 @@ export const MainLayout: React.FC = () => {
             }
         };
 
+        const scheduleVisualViewportUpdate = () => {
+            if (rafId) return;
+            rafId = requestAnimationFrame(() => {
+                rafId = 0;
+                updateVisualViewport();
+            });
+        };
+
         updateVisualViewport();
 
         const viewport = window.visualViewport;
-        viewport?.addEventListener('resize', updateVisualViewport);
-        viewport?.addEventListener('scroll', updateVisualViewport);
-        window.addEventListener('resize', updateVisualViewport);
-        window.addEventListener('orientationchange', updateVisualViewport);
+        viewport?.addEventListener('resize', scheduleVisualViewportUpdate);
+        viewport?.addEventListener('scroll', scheduleVisualViewportUpdate);
+        window.addEventListener('resize', scheduleVisualViewportUpdate);
+        window.addEventListener('orientationchange', scheduleVisualViewportUpdate);
         const isTextInputTarget = (element: HTMLElement | null) => {
             if (!element) {
                 return false;
@@ -488,7 +516,7 @@ export const MainLayout: React.FC = () => {
             if (isTextInputTarget(target)) {
                 ignoreOpenUntilZero = false;
             }
-            updateVisualViewport();
+            scheduleVisualViewportUpdate();
         };
         document.addEventListener('focusin', handleFocusIn, true);
 
@@ -533,10 +561,11 @@ export const MainLayout: React.FC = () => {
         document.addEventListener('focusout', handleFocusOut, true);
 
         return () => {
-            viewport?.removeEventListener('resize', updateVisualViewport);
-            viewport?.removeEventListener('scroll', updateVisualViewport);
-            window.removeEventListener('resize', updateVisualViewport);
-            window.removeEventListener('orientationchange', updateVisualViewport);
+            if (rafId) cancelAnimationFrame(rafId);
+            viewport?.removeEventListener('resize', scheduleVisualViewportUpdate);
+            viewport?.removeEventListener('scroll', scheduleVisualViewportUpdate);
+            window.removeEventListener('resize', scheduleVisualViewportUpdate);
+            window.removeEventListener('orientationchange', scheduleVisualViewportUpdate);
             document.removeEventListener('focusin', handleFocusIn, true);
             document.removeEventListener('focusout', handleFocusOut, true);
             clearKeyboardAvoidTarget();

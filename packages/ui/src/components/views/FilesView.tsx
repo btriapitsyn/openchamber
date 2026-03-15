@@ -549,6 +549,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   const [draftContent, setDraftContent] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
+  const autoSaveTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoSaveStatus, setAutoSaveStatus] = React.useState<'idle' | 'saved'>('idle');
 
   const [confirmDiscardOpen, setConfirmDiscardOpen] = React.useState(false);
   const pendingSelectFileRef = React.useRef<FileNode | null>(null);
@@ -1150,6 +1152,35 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     };
   }, [isDirty, setMainTabGuard]);
 
+  // Auto-save: debounce 1.5s after user stops typing
+  const AUTO_SAVE_DELAY = 1500;
+
+  React.useEffect(() => {
+    const canWrite = Boolean(selectedFile && files.writeFile);
+    if (!isDirty || !canWrite || isSaving) {
+      return;
+    }
+
+    autoSaveTimerRef.current = setTimeout(() => {
+      void saveDraft().then(() => {
+        setAutoSaveStatus('saved');
+        setTimeout(() => setAutoSaveStatus('idle'), 2000);
+      });
+    }, AUTO_SAVE_DELAY);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, [draftContent, isDirty, selectedFile, files.writeFile, isSaving, saveDraft]);
+
+  // Reset auto-save status when switching files
+  React.useEffect(() => {
+    setAutoSaveStatus('idle');
+  }, [selectedFile?.path]);
+
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!hasModifier(e)) {
@@ -1158,8 +1189,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
       if (e.key.toLowerCase() === 's') {
         e.preventDefault();
+        // Cancel pending auto-save; user wants immediate save
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
+          autoSaveTimerRef.current = null;
+        }
         if (!isSaving) {
-          void saveDraft();
+          void saveDraft().then(() => {
+            setAutoSaveStatus('saved');
+            setTimeout(() => setAutoSaveStatus('idle'), 2000);
+          });
         }
       } else if (e.key.toLowerCase() === 'f') {
         e.preventDefault();
@@ -2253,21 +2292,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         {selectedFile && (
           <div className={cn('flex items-center justify-end gap-1 px-3 pb-1.5', !showEditorTabsRow && 'pt-1.5')}>
             {canEdit && textViewMode === 'edit' && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => void saveDraft()}
-                disabled={!isDirty || isSaving}
-                className="h-5 w-5 p-0 text-[color:var(--status-success)] opacity-70 hover:opacity-100"
-                title={`Save (${getModifierLabel()}+S)`}
-                aria-label={`Save (${getModifierLabel()}+S)`}
-              >
-                {isSaving ? (
-                  <RiLoader4Line className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RiSave3Line className="h-4 w-4" />
-                )}
-              </Button>
+              isSaving ? (
+                <span className="flex items-center gap-1 text-muted-foreground typography-meta">
+                  <RiLoader4Line className="h-3.5 w-3.5 animate-spin" />
+                  Saving…
+                </span>
+              ) : autoSaveStatus === 'saved' && !isDirty ? (
+                <span className="flex items-center gap-1 text-[color:var(--status-success)] typography-meta">
+                  <RiCheckLine className="h-3.5 w-3.5" />
+                  Saved
+                </span>
+              ) : isDirty ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void saveDraft()}
+                  className="h-5 px-1 gap-1 text-muted-foreground opacity-70 hover:opacity-100"
+                  title={`Save now (${getModifierLabel()}+S) — auto-saves after 1.5s`}
+                  aria-label={`Save (${getModifierLabel()}+S)`}
+                >
+                  <RiSave3Line className="h-3.5 w-3.5" />
+                </Button>
+              ) : null
             )}
 
             <DropdownMenu>
@@ -2714,21 +2760,28 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
         <div className="flex items-center gap-1">
           {canEdit && textViewMode === 'edit' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => void saveDraft()}
-              disabled={!isDirty || isSaving}
-              className="h-6 w-6 p-0 text-[color:var(--status-success)] opacity-70 hover:opacity-100"
-              title={`Save (${getModifierLabel()}+S)`}
-              aria-label={`Save (${getModifierLabel()}+S)`}
-            >
-              {isSaving ? (
-                <RiLoader4Line className="h-4 w-4 animate-spin" />
-              ) : (
+            isSaving ? (
+              <span className="flex items-center gap-1 text-muted-foreground typography-meta">
+                <RiLoader4Line className="h-3.5 w-3.5 animate-spin" />
+                Saving…
+              </span>
+            ) : autoSaveStatus === 'saved' && !isDirty ? (
+              <span className="flex items-center gap-1 text-[color:var(--status-success)] typography-meta">
+                <RiCheckLine className="h-3.5 w-3.5" />
+                Saved
+              </span>
+            ) : isDirty ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void saveDraft()}
+                className="h-6 px-1 gap-1 text-muted-foreground opacity-70 hover:opacity-100"
+                title={`Save now (${getModifierLabel()}+S) — auto-saves after 1.5s`}
+                aria-label={`Save (${getModifierLabel()}+S)`}
+              >
                 <RiSave3Line className="h-4 w-4" />
-              )}
-            </Button>
+              </Button>
+            ) : null
           )}
 
           <DropdownMenu>
