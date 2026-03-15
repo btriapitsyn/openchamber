@@ -9,6 +9,52 @@ const __dirname = path.dirname(__filename);
 const PACKAGE_NAME = '@openchamber/web';
 const NPM_REGISTRY_URL = `https://registry.npmjs.org/${PACKAGE_NAME}`;
 const CHANGELOG_URL = 'https://raw.githubusercontent.com/btriapitsyn/openchamber/main/CHANGELOG.md';
+let cachedDetectedPm = null;
+
+function getSpawnSyncBaseOptions() {
+  return process.platform === 'win32' ? { windowsHide: true } : {};
+}
+
+function detectPackageManagerHint() {
+  const forcedPm = process.env.OPENCHAMBER_PACKAGE_MANAGER?.trim();
+  if (forcedPm && ['npm', 'pnpm', 'yarn', 'bun'].includes(forcedPm)) {
+    return forcedPm;
+  }
+
+  const runtimePm = detectPackageManagerFromRuntimePath(process.execPath);
+  if (runtimePm) {
+    return runtimePm;
+  }
+
+  const userAgent = process.env.npm_config_user_agent || '';
+  if (userAgent.startsWith('pnpm')) return 'pnpm';
+  if (userAgent.startsWith('yarn')) return 'yarn';
+  if (userAgent.startsWith('bun')) return 'bun';
+  if (userAgent.startsWith('npm')) return 'npm';
+
+  const execPath = process.env.npm_execpath || '';
+  if (execPath.includes('pnpm')) return 'pnpm';
+  if (execPath.includes('yarn')) return 'yarn';
+  if (execPath.includes('bun')) return 'bun';
+  if (execPath.includes('npm')) return 'npm';
+
+  const invokedPm = detectPackageManagerFromInvocationPath(process.argv?.[1]);
+  if (invokedPm) {
+    return invokedPm;
+  }
+
+  try {
+    const pkgPath = path.resolve(__dirname, '..', '..');
+    const pmFromPath = detectPackageManagerFromInstallPath(pkgPath);
+    if (pmFromPath) {
+      return pmFromPath;
+    }
+  } catch {
+    // Ignore path resolution errors
+  }
+
+  return 'npm';
+}
 
 /**
  * Detect which package manager was used to install this package.
@@ -19,18 +65,24 @@ const CHANGELOG_URL = 'https://raw.githubusercontent.com/btriapitsyn/openchamber
  * 4. Fall back to npm
  */
 export function detectPackageManager() {
+  if (cachedDetectedPm) {
+    return cachedDetectedPm;
+  }
+
   const forcedPm = process.env.OPENCHAMBER_PACKAGE_MANAGER?.trim();
   if (forcedPm && ['npm', 'pnpm', 'yarn', 'bun'].includes(forcedPm)) {
     const forcedPmCommand = resolvePackageManagerCommand(forcedPm);
     if (isCommandAvailable(forcedPmCommand)) {
-      return forcedPm;
+      cachedDetectedPm = forcedPm;
+      return cachedDetectedPm;
     }
   }
 
   // Strategy 1: Detect from runtime executable path (reliable for server-side updates)
   const runtimePm = detectPackageManagerFromRuntimePath(process.execPath);
   if (runtimePm && isCommandAvailable(resolvePackageManagerCommand(runtimePm))) {
-    return runtimePm;
+    cachedDetectedPm = runtimePm;
+    return cachedDetectedPm;
   }
 
   // Strategy 2: Check user agent (most reliable during install)
@@ -53,7 +105,8 @@ export function detectPackageManager() {
   // Strategy 4: Detect from invoked binary path (works for bun global symlink installs)
   const invokedPm = detectPackageManagerFromInvocationPath(process.argv?.[1]);
   if (invokedPm && isCommandAvailable(resolvePackageManagerCommand(invokedPm))) {
-    return invokedPm;
+    cachedDetectedPm = invokedPm;
+    return cachedDetectedPm;
   }
   if (!hintedPm) {
     hintedPm = invokedPm;
@@ -64,7 +117,8 @@ export function detectPackageManager() {
     const pkgPath = path.resolve(__dirname, '..', '..');
     const pmFromPath = detectPackageManagerFromInstallPath(pkgPath);
     if (pmFromPath && isCommandAvailable(resolvePackageManagerCommand(pmFromPath))) {
-      return pmFromPath;
+      cachedDetectedPm = pmFromPath;
+      return cachedDetectedPm;
     }
     if (!hintedPm) {
       hintedPm = pmFromPath;
@@ -76,7 +130,8 @@ export function detectPackageManager() {
   // Validate the hinted PM actually owns the global install.
   // This avoids false positives (for example running via bunx while installed with npm).
   if (hintedPm && isCommandAvailable(resolvePackageManagerCommand(hintedPm)) && isPackageInstalledWith(hintedPm)) {
-    return hintedPm;
+    cachedDetectedPm = hintedPm;
+    return cachedDetectedPm;
   }
 
   // Strategy 6: Check which PM binaries are available and preferred
@@ -91,12 +146,14 @@ export function detectPackageManager() {
     if (check()) {
       // Verify this PM actually has the package installed globally
       if (isPackageInstalledWith(name)) {
-        return name;
+        cachedDetectedPm = name;
+        return cachedDetectedPm;
       }
     }
   }
 
-  return 'npm';
+  cachedDetectedPm = 'npm';
+  return cachedDetectedPm;
 }
 
 function detectPackageManagerFromInstallPath(pkgPath) {
@@ -173,6 +230,7 @@ function isCommandAvailable(command) {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 5000,
+      ...getSpawnSyncBaseOptions(),
     });
     return result.status === 0;
   } catch {
@@ -202,6 +260,7 @@ function isPackageInstalledWith(pm) {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10000,
+      ...getSpawnSyncBaseOptions(),
     });
 
     if (result.status !== 0) return false;
@@ -323,7 +382,7 @@ export async function checkForUpdates() {
   const latestNum = parseVersion(latestVersion);
   const available = latestNum > currentNum;
 
-  const pm = detectPackageManager();
+  const pm = detectPackageManagerHint();
 
   let changelog;
   if (available) {
@@ -354,6 +413,7 @@ export function executeUpdate(pm = detectPackageManager(), options = {}) {
   const result = spawnSync(command, {
     stdio: 'inherit',
     shell: true,
+    ...getSpawnSyncBaseOptions(),
   });
 
   return {
