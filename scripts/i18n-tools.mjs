@@ -8,6 +8,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const SUPPORTED_SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
 const SUPPORTED_GAP_SCAN_EXTENSIONS = new Set(['.tsx', '.jsx']);
@@ -109,6 +111,165 @@ const ADD_OPERATION_LOG_LITERAL_PATTERN = /\baddOperationLog\s*\(\s*(['"])([^'"\
 const UPDATE_LAST_LOG_LITERAL_PATTERN = /\bupdateLastLog\s*\(\s*['"][^'"\n]+['"]\s*,\s*(['"])([^'"\n]{2,})\1/g;
 const CODE_FRAGMENT_PATTERN = /(=>|\b(?:Record|Promise|Array|React)\b|[{};]|\bextends\b|\bas\s+[A-Za-z])/;
 const PLURAL_SUFFIXES = new Set(['zero', 'one', 'two', 'few', 'many', 'other']);
+
+function getLineNumberFromPos(content, pos) {
+  return content.slice(0, pos).split('\n').length;
+}
+
+function getJsxTagName(node) {
+  if (!node) return '';
+  if (ts.isIdentifier(node)) return node.text;
+  if (ts.isPropertyAccessExpression(node)) return node.name.text;
+  return node.getText();
+}
+
+function getObjectPropertyName(node) {
+  if (!node || !('name' in node) || !node.name) return null;
+  if (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name) || ts.isNumericLiteral(node.name)) {
+    return node.name.text;
+  }
+  return null;
+}
+
+function isTranslationCallExpression(node) {
+  if (!node || !ts.isCallExpression(node)) return false;
+  const { expression } = node;
+  if (ts.isIdentifier(expression)) {
+    return expression.text === 't';
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    return expression.name.text === 't';
+  }
+  return false;
+}
+
+function expressionContainsTranslation(node) {
+  let found = false;
+  function visit(current) {
+    if (found || !current) return;
+    if (ts.isCallExpression(current) && isTranslationCallExpression(current)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(current, visit);
+  }
+  visit(node);
+  return found;
+}
+
+function hasI18nIgnoreComment(sourceFile, node) {
+  const ranges = ts.getLeadingCommentRanges(sourceFile.text, node.pos) ?? [];
+  return ranges.some((range) => sourceFile.text.slice(range.pos, range.end).includes('i18n-scan-ignore'));
+}
+
+function isInsideIgnoredJsx(sourceFile, node) {
+  let current = node;
+  while (current) {
+    if (hasI18nIgnoreComment(sourceFile, current)) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function isInsideTransComponent(node) {
+  let current = node.parent;
+  while (current) {
+    if (ts.isJsxElement(current)) {
+      return getJsxTagName(current.openingElement.tagName) === 'Trans';
+    }
+    if (ts.isJsxSelfClosingElement(current)) {
+      return getJsxTagName(current.tagName) === 'Trans';
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+function pushAstHit(hits, seen, lineNumber, reason, text) {
+  const normalized = String(text ?? '').trim().replace(/\s+/g, ' ');
+  if (!normalized) return;
+  const key = `${lineNumber}|${reason}|${normalized}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+  hits.push({ lineNumber, reason, text: normalized });
+}
+
+function scanFileForGapsAst(filePath, content) {
+  const sourceFile = ts.createSourceFile(filePath, content, ts.ScriptTarget.Latest, true, filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.JSX);
+  const hits = [];
+  const seen = new Set();
+
+  function visit(node) {
+    if (isInsideIgnoredJsx(sourceFile, node)) {
+      return;
+    }
+
+    if (ts.isJsxText(node)) {
+      const text = node.getText(sourceFile).replace(/\s+/g, ' ').trim();
+      if (text && !isInsideTransComponent(node) && !shouldIgnoreLiteral(text, null, text)) {
+        pushAstHit(hits, seen, getLineNumberFromPos(content, node.getStart(sourceFile)), 'jsx-text-visible', text);
+      }
+      return;
+    }
+
+    if (ts.isJsxAttribute(node)) {
+      const propName = node.name.text;
+      if (USER_VISIBLE_PROPS.has(propName) && node.initializer) {
+        if (ts.isStringLiteral(node.initializer)) {
+          const literal = node.initializer.text.trim();
+          if (!shouldIgnoreLiteral(node.getText(sourceFile), propName, literal)) {
+            pushAstHit(hits, seen, getLineNumberFromPos(content, node.getStart(sourceFile)), 'jsx-prop-literal', literal);
+          }
+        }
+        if (ts.isJsxExpression(node.initializer) && node.initializer.expression && expressionContainsTranslation(node.initializer.expression)) {
+          return;
+        }
+      }
+    }
+
+    if (ts.isPropertyAssignment(node)) {
+      const propName = getObjectPropertyName(node);
+      if (propName && USER_VISIBLE_OBJECT_KEYS.has(propName) && ts.isStringLiteralLike(node.initializer)) {
+        const literal = node.initializer.text.trim();
+        if (!shouldIgnoreLiteral(node.getText(sourceFile), propName, literal)) {
+          pushAstHit(hits, seen, getLineNumberFromPos(content, node.getStart(sourceFile)), 'object-visible-literal', literal);
+        }
+      }
+    }
+
+    if (ts.isCallExpression(node)) {
+      const expressionText = node.expression.getText(sourceFile);
+      const isToastCall = /^toast\.(success|error|warning|info)$/.test(expressionText);
+      const isOperationLogCall = expressionText === 'addOperationLog';
+      const isUpdateLastLogCall = expressionText === 'updateLastLog';
+
+      if ((isToastCall || isOperationLogCall) && node.arguments.length > 0) {
+        const firstArg = node.arguments[0];
+        if (ts.isStringLiteralLike(firstArg)) {
+          const literal = firstArg.text.trim();
+          if (!shouldIgnoreLiteral(node.getText(sourceFile), 'message', literal)) {
+            pushAstHit(hits, seen, getLineNumberFromPos(content, node.getStart(sourceFile)), isToastCall ? 'toast-literal' : 'call-literal', literal);
+          }
+        }
+      }
+
+      if (isUpdateLastLogCall && node.arguments.length > 1) {
+        const secondArg = node.arguments[1];
+        if (ts.isStringLiteralLike(secondArg)) {
+          const literal = secondArg.text.trim();
+          if (!shouldIgnoreLiteral(node.getText(sourceFile), 'message', literal)) {
+            pushAstHit(hits, seen, getLineNumberFromPos(content, node.getStart(sourceFile)), 'call-literal', literal);
+          }
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return hits;
+}
 
 function parseArgv(argv) {
   const positional = [];
@@ -411,6 +572,7 @@ function scanFileForGaps(filePath) {
   } catch {
     return [];
   }
+  const astHits = scanFileForGapsAst(filePath, content);
   const hits = [];
   const seen = new Set();
   let inJsdoc = false;
@@ -444,7 +606,14 @@ function scanFileForGaps(filePath) {
     hits.push(hit);
   }
 
-  return hits;
+  for (const hit of astHits) {
+    const key = `${hit.lineNumber}|${hit.reason}|${hit.text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    hits.push(hit);
+  }
+
+  return hits.sort((a, b) => a.lineNumber - b.lineNumber || a.reason.localeCompare(b.reason) || a.text.localeCompare(b.text));
 }
 
 function removeUnusedKeys(node, prefix, keepKeys, keepPrefixes, removed) {
@@ -721,6 +890,13 @@ function runCleanUnused(flags) {
   return 1;
 }
 
+export {
+  looksLikeHumanText,
+  scanFileForGaps,
+  scanFileForGapsAst,
+  runScanGaps,
+};
+
 function main() {
   const { positional, flags } = parseArgv(process.argv.slice(2));
   const command = positional[0];
@@ -751,4 +927,8 @@ function main() {
   return 2;
 }
 
-process.exit(main());
+const isEntrypoint = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntrypoint) {
+  process.exit(main());
+}
