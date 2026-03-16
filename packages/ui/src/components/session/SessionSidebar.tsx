@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
+import { RiLayoutLeftLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -257,6 +259,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const setAboutDialogOpen = useUIStore((state) => state.setAboutDialogOpen);
   const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
@@ -316,6 +319,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const isMacPlatform = React.useMemo(() => {
+    if (typeof navigator === 'undefined') {
+      return false;
+    }
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+  }, []);
+  const showDesktopSidebarChrome = !mobileVariant && !isVSCode;
+  const desktopSidebarTopPaddingClass = isDesktopShellRuntime && isMacPlatform ? 'pl-[5.5rem]' : 'pl-3';
+  const desktopSidebarToggleButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-md typography-ui-label font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50';
 
   const {
     buildGroupSearchText,
@@ -1090,10 +1102,37 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     <div
       ref={sessionSearchContainerRef}
       className={cn(
-        'flex h-full flex-col text-foreground overflow-x-hidden',
+        'relative flex h-full flex-col text-foreground overflow-x-hidden',
         mobileVariant ? '' : 'bg-transparent',
       )}
+      style={showDesktopSidebarChrome ? { paddingTop: 'var(--oc-header-height, 56px)' } : undefined}
     >
+      {showDesktopSidebarChrome ? (
+        <div
+          className={cn(
+            'absolute inset-x-0 top-0 z-20 flex items-center pr-3',
+            desktopSidebarTopPaddingClass,
+          )}
+          style={{ height: 'var(--oc-header-height, 56px)' }}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className={desktopSidebarToggleButtonClass}
+                aria-label="Close sessions"
+              >
+                <RiLayoutLeftLine className="h-[18px] w-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Close sessions</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      ) : null}
+
       <SidebarHeader
         hideDirectoryControls={hideDirectoryControls}
         handleOpenDirectoryDialog={handleOpenDirectoryDialog}

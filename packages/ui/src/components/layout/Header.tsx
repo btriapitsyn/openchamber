@@ -158,6 +158,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
+  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
@@ -736,12 +737,11 @@ export const Header: React.FC<HeaderProps> = ({
   const mobileHeaderIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
 
   const desktopPaddingClass = React.useMemo(() => {
-    if (isDesktopApp && isMacPlatform) {
-      // Always reserve space for Mac traffic lights since header is always on top
+    if (!isSidebarOpen && isDesktopApp && isMacPlatform) {
       return 'pl-[5.5rem]';
     }
     return 'pl-3';
-  }, [isDesktopApp, isMacPlatform]);
+  }, [isDesktopApp, isMacPlatform, isSidebarOpen]);
 
   const macosHeaderSizeClass = React.useMemo(() => {
     if (!isDesktopApp || !isMacPlatform || macosMajorVersion === null) {
@@ -1025,52 +1025,55 @@ export const Header: React.FC<HeaderProps> = ({
     <div
       onMouseDown={handleDragStart}
       className={cn(
-        'app-region-drag relative flex h-12 select-none items-center',
+        'app-region-drag relative flex h-12 select-none items-center pr-3',
         desktopPaddingClass,
         macosHeaderSizeClass
       )}
       role="tablist"
       aria-label="Main navigation"
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={handleOpenSessionSwitcher}
-            aria-label="Open sessions"
-            className={`${desktopHeaderIconButtonClass} mr-2 shrink-0`}
-          >
-            <RiLayoutLeftLine className="h-[18px] w-[18px]" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Open sessions ({shortcutLabel('toggle_sidebar')})</p>
-        </TooltipContent>
-      </Tooltip>
+      {!isSidebarOpen ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleOpenSessionSwitcher}
+              aria-label="Open sessions"
+              className={`${desktopHeaderIconButtonClass} shrink-0`}
+            >
+              <RiLayoutLeftLine className="h-[18px] w-[18px]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Open sessions ({shortcutLabel('toggle_sidebar')})</p>
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
 
-      {activeProjectLabel && (
-        <div className="mr-3 min-w-0 max-w-[16rem] truncate pl-2 typography-ui-header text-[calc(var(--text-ui-header)+0.125rem)] font-medium text-foreground">
-          {activeProjectLabel}
-        </div>
-      )}
+      <div className={cn('flex min-w-0 flex-1 items-center', !isSidebarOpen && 'pl-3')}>
+        {activeProjectLabel && (
+          <div className="mr-3 min-w-0 max-w-[16rem] truncate typography-ui-header text-[calc(var(--text-ui-header)+0.125rem)] font-medium text-foreground">
+            {activeProjectLabel}
+          </div>
+        )}
 
-      {projectActionsContext && (
-        <ProjectActionsButton
-          projectRef={projectActionsContext.projectRef}
-          directory={projectActionsContext.directory}
-          className="mr-1"
-        />
-      )}
+        {projectActionsContext && (
+          <ProjectActionsButton
+            projectRef={projectActionsContext.projectRef}
+            directory={projectActionsContext.directory}
+            className="mr-1"
+          />
+        )}
 
-      {tabs.length > 0 && (
-        <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-muted)]/50 p-1">
-          {tabs.map((tab) => renderTab(tab))}
-        </div>
-      )}
+        {tabs.length > 0 && (
+          <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-muted)]/50 p-1">
+            {tabs.map((tab) => renderTab(tab))}
+          </div>
+        )}
 
-      <div className="flex-1" />
+        <div className="flex-1" />
 
-      <div className="flex items-center gap-1 pr-3 shrink-0">
+        <div className="flex shrink-0 items-center gap-1">
         {showDesktopHeaderContextUsage && stableDesktopContextUsage && (
           <ContextUsageDisplay
             totalTokens={stableDesktopContextUsage.totalTokens}
@@ -1502,6 +1505,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           )
         ) : null}
+      </div>
       </div>
     </div>
   );

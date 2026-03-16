@@ -11,9 +11,10 @@ interface SidebarProps {
     isOpen: boolean;
     isMobile: boolean;
     children: React.ReactNode;
+    className?: string;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children, className }) => {
     const { sidebarWidth, setSidebarWidth } = useUIStore();
     const [isResizing, setIsResizing] = React.useState(false);
     const startXRef = React.useRef(0);
@@ -117,7 +118,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, isMobile, children }) 
                 'relative flex h-full overflow-hidden border-r border-border/40',
                 'bg-sidebar/50',
                 isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-in-out',
-                !isOpen && 'border-r-0'
+                !isOpen && 'border-r-0',
+                className,
             )}
             style={{
                 width: 'var(--oc-left-sidebar-width)',

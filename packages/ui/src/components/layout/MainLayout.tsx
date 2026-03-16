@@ -797,40 +797,45 @@ export const MainLayout: React.FC = () => {
                 </DrawerProvider>
             ) : (
                 <>
-                    {/* Desktop: Header always on top, then Sidebar + Content below */}
-                    <div className="flex flex-1 flex-col overflow-hidden relative">
-                        {/* Normal view: Header above Sidebar + content (like SettingsView) */}
-                        <div className={cn('absolute inset-0 flex flex-col', isMultiRunLauncherOpen && 'invisible')}>
-                            <Header />
-                            <div className="flex flex-1 overflow-hidden">
-                                <div className="flex flex-1 min-w-0 overflow-hidden border-t border-l border-border/50 rounded-tl-xl">
-                                <Sidebar isOpen={isSidebarOpen} isMobile={isMobile}>
-                                    <SessionSidebar />
-                                </Sidebar>
-                                <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
-                                    <div className="flex flex-1 min-h-0 overflow-hidden">
-                                        <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
-                                            <main className="flex-1 overflow-hidden bg-background relative">
-                                                <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
-                                                    <ErrorBoundary><ChatView /></ErrorBoundary>
+                    {/* Desktop: Sidebar is a left column; header belongs to content column */}
+                    <div className="flex flex-1 overflow-hidden relative">
+                        <div className={cn('absolute inset-0 flex overflow-hidden bg-sidebar', isMultiRunLauncherOpen && 'invisible')}>
+                            <Sidebar
+                                isOpen={isSidebarOpen}
+                                isMobile={isMobile}
+                                className="border-0"
+                            >
+                                <SessionSidebar />
+                            </Sidebar>
+                            <div className={cn(
+                                'relative flex flex-1 min-w-0 flex-col overflow-hidden bg-sidebar',
+                                isSidebarOpen && 'border-l border-border/50 rounded-tl-xl rounded-bl-xl'
+                            )}>
+                                <Header />
+                                <div className={cn(
+                                    'flex flex-1 min-h-0 overflow-hidden border-t border-border/50',
+                                    isSidebarOpen ? '' : 'border-l border-border/50'
+                                )}>
+                                    <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                                        <main className="flex-1 overflow-hidden bg-background relative">
+                                            <div className={cn('absolute inset-0', !isChatActive && 'invisible')}>
+                                                <ErrorBoundary><ChatView /></ErrorBoundary>
+                                            </div>
+                                            {secondaryView && (
+                                                <div className="absolute inset-0">
+                                                    <ErrorBoundary>{secondaryView}</ErrorBoundary>
                                                 </div>
-                                                {secondaryView && (
-                                                    <div className="absolute inset-0">
-                                                        <ErrorBoundary>{secondaryView}</ErrorBoundary>
-                                                    </div>
-                                                )}
-                                            </main>
-                                            <ContextPanel />
-                                        </div>
-                                        <RightSidebar isOpen={isRightSidebarOpen}>
-                                            <ErrorBoundary><RightSidebarTabs /></ErrorBoundary>
-                                        </RightSidebar>
+                                            )}
+                                        </main>
+                                        <ContextPanel />
                                     </div>
-                                    <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
-                                        <ErrorBoundary><TerminalView /></ErrorBoundary>
-                                    </BottomTerminalDock>
+                                    <RightSidebar isOpen={isRightSidebarOpen}>
+                                        <ErrorBoundary><RightSidebarTabs /></ErrorBoundary>
+                                    </RightSidebar>
                                 </div>
-                                </div>
+                                <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
+                                    <ErrorBoundary><TerminalView /></ErrorBoundary>
+                                </BottomTerminalDock>
                             </div>
                         </div>
 
