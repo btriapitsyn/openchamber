@@ -153,6 +153,26 @@ const extractBestUrl = (value: string): string | null => {
   return normalized[0] ?? null;
 };
 
+const formatActionButtonLabel = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 'Action';
+  }
+
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    const first = words[0];
+    const second = words[1].slice(0, 3);
+    const shortTwoWord = `${first} ${second}`.trim();
+    if (words.length > 2 || shortTwoWord.length < trimmed.length) {
+      return `${shortTwoWord}...`;
+    }
+    return shortTwoWord;
+  }
+
+  return trimmed.length > 12 ? `${trimmed.slice(0, 9).trimEnd()}...` : trimmed;
+};
+
 export const ProjectActionsButton = ({
   projectRef,
   directory,
@@ -671,6 +691,7 @@ export const ProjectActionsButton = ({
 
   const selectedIconKey = (resolvedSelected.icon || 'play') as keyof typeof PROJECT_ACTION_ICON_MAP;
   const SelectedIcon = PROJECT_ACTION_ICON_MAP[selectedIconKey] || RiPlayLine;
+  const selectedButtonLabel = formatActionButtonLabel(resolvedSelected.name);
   const selectedRunKey = toProjectActionRunKey(normalizedDirectory, resolvedSelected.id);
   const selectedRunning = runningByKey[selectedRunKey];
   const isStoppingSelected = selectedRunning?.status === 'stopping';
@@ -762,7 +783,7 @@ export const ProjectActionsButton = ({
               ? <RiStopLine className="h-4 w-4 text-[var(--status-warning)]" />
               : <SelectedIcon className="h-4 w-4" />}
         </span>
-        {!compact ? <span className="header-open-label">{resolvedSelected.name}</span> : null}
+        {!compact ? <span className="header-open-label">{selectedButtonLabel}</span> : null}
       </button>
 
       <DropdownMenu>

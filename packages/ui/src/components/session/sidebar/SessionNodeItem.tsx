@@ -150,6 +150,7 @@ export function SessionNodeItem(props: Props): React.ReactNode {
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
   const isMinimalMode = displayMode === 'minimal';
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const suppressNextSelectRef = React.useRef(false);
 
   const session = node.session;
   const sessionDirectory =
@@ -254,15 +255,33 @@ export function SessionNodeItem(props: Props): React.ReactNode {
     ? <RiErrorWarningLine className="h-4 w-4 text-status-warning" />
     : null;
 
+  const handleRowContextMenu = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNextSelectRef.current = true;
+    setOpenMenuSessionId(session.id);
+  }, [session.id, setOpenMenuSessionId]);
+
+  const handleRowSelect = React.useCallback(() => {
+    if (suppressNextSelectRef.current) {
+      suppressNextSelectRef.current = false;
+      return;
+    }
+    handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId);
+  }, [handleSessionSelect, isMissingDirectory, projectId, session.id, sessionDirectory]);
+
+  const handleRowMouseDown = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
+      suppressNextSelectRef.current = true;
+    }
+  }, []);
+
   return (
     <React.Fragment key={session.id}>
       <DraggableSessionRow sessionId={session.id} sessionDirectory={sessionDirectory ?? null} sessionTitle={sessionTitle}>
         <div
           className={cn('group relative flex items-center rounded-md px-1.5 py-1', isMissingDirectory ? 'opacity-75' : '', depth > 0 && 'pl-[20px]')}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setOpenMenuSessionId(session.id);
-          }}
+          onContextMenu={handleRowContextMenu}
         >
           {subsessionChevron}
           <div className="flex min-w-0 flex-1 items-center">
@@ -272,7 +291,8 @@ export function SessionNodeItem(props: Props): React.ReactNode {
                   <button
                     type="button"
                     disabled={isMissingDirectory}
-                    onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
+                    onMouseDown={handleRowMouseDown}
+                    onClick={handleRowSelect}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       handleSessionDoubleClick();
@@ -433,7 +453,8 @@ export function SessionNodeItem(props: Props): React.ReactNode {
               <button
                 type="button"
                 disabled={isMissingDirectory}
-                onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
+                onMouseDown={handleRowMouseDown}
+                onClick={handleRowSelect}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   handleSessionDoubleClick();

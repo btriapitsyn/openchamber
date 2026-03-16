@@ -122,6 +122,26 @@ const getPrVisualPriority = (state: PrVisualState): number => {
   }
 };
 
+const formatCompactHeaderLabel = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    const first = words[0];
+    const second = words[1].slice(0, 3);
+    const shortTwoWord = `${first} ${second}`.trim();
+    if (words.length > 2 || shortTwoWord.length < trimmed.length) {
+      return `${shortTwoWord}...`;
+    }
+    return shortTwoWord;
+  }
+
+  return trimmed.length > 12 ? `${trimmed.slice(0, 9).trimEnd()}...` : trimmed;
+};
+
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
   try {
@@ -343,6 +363,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [isDesktopServicesOpen, setIsDesktopServicesOpen] = React.useState(false);
   const [isUsageRefreshSpinning, setIsUsageRefreshSpinning] = React.useState(false);
   const [currentInstanceLabel, setCurrentInstanceLabel] = React.useState('Local');
+  const compactCurrentInstanceLabel = React.useMemo(() => formatCompactHeaderLabel(currentInstanceLabel), [currentInstanceLabel]);
   const [desktopServicesTab, setDesktopServicesTab] = React.useState<'instance' | 'usage' | 'mcp'>(
     isDesktopApp ? 'instance' : 'usage'
   );
@@ -1193,6 +1214,13 @@ export const Header: React.FC<HeaderProps> = ({
       ) : null}
 
       <div className={cn('flex min-w-0 flex-1 items-center', !isSidebarOpen && 'pl-3')}>
+        {projectActionsContext && (
+          <ProjectActionsButton
+            projectRef={projectActionsContext.projectRef}
+            directory={projectActionsContext.directory}
+            className="mr-2"
+          />
+        )}
         <div className="mr-3 min-w-0">
           <div className="truncate pl-1 typography-ui-label text-[14px] font-normal leading-tight text-foreground">
             {currentSessionTitle}
@@ -1258,13 +1286,6 @@ export const Header: React.FC<HeaderProps> = ({
             </TooltipContent>
           </Tooltip>
         )}
-        {projectActionsContext && (
-          <ProjectActionsButton
-            projectRef={projectActionsContext.projectRef}
-            directory={projectActionsContext.directory}
-            className="mr-1"
-          />
-        )}
         <OpenInAppButton directory={openDirectory} activeFilePath={selectedFilePath} className="mr-1" />
         <DropdownMenu
             open={isDesktopServicesOpen}
@@ -1294,7 +1315,7 @@ export const Header: React.FC<HeaderProps> = ({
                     )}
                   >
                     <RiStackLine className="h-[18px] w-[18px]" />
-                    {isDesktopApp && <span className="truncate typography-ui-label font-medium text-foreground">{currentInstanceLabel}</span>}
+                    {isDesktopApp && <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>}
                   </button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>

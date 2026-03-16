@@ -848,6 +848,53 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ];
   }, [activeNowSessions, sessionSidebarMetaById]);
 
+  const activitySessionIds = React.useMemo(() => {
+    const next = new Set<string>();
+    activitySections.forEach((section) => {
+      section.items.forEach((item) => {
+        next.add(item.node.session.id);
+      });
+    });
+    return next;
+  }, [activitySections]);
+
+  const filteredProjectSections = React.useMemo(() => {
+    if (hasSessionSearchQuery || activitySessionIds.size === 0) {
+      return projectSections;
+    }
+
+    const filterNodes = (nodes: SessionNode[]): SessionNode[] => {
+      return nodes.flatMap((node) => {
+        if (activitySessionIds.has(node.session.id)) {
+          return [];
+        }
+        return [{
+          ...node,
+          children: filterNodes(node.children),
+        }];
+      });
+    };
+
+    return projectSections.map((section) => ({
+      ...section,
+      groups: section.groups.map((group) => ({
+        ...group,
+        sessions: filterNodes(group.sessions),
+      })),
+    }));
+  }, [hasSessionSearchQuery, activitySessionIds, projectSections]);
+
+  const filteredSectionsForRender = React.useMemo(() => {
+    if (hasSessionSearchQuery || activitySessionIds.size === 0) {
+      return sectionsForRender;
+    }
+
+    const sectionsByProjectId = new Map(filteredProjectSections.map((section) => [section.project.id, section]));
+    return sectionsForRender
+      .map((section) => sectionsByProjectId.get(section.project.id) ?? section)
+      .filter(Boolean);
+  }, [hasSessionSearchQuery, activitySessionIds, filteredProjectSections, sectionsForRender]);
+
   const desktopHeaderActionButtonClass =
     'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed';
   const mobileHeaderActionButtonClass =
@@ -1150,8 +1197,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
       <SidebarProjectsList
         topContent={topContent}
-        sectionsForRender={sectionsForRender}
-        projectSections={projectSections}
+        sectionsForRender={filteredSectionsForRender}
+        projectSections={filteredProjectSections}
         activeProjectId={activeProjectId}
         showOnlyMainWorkspace={showOnlyMainWorkspace}
         hasSessionSearchQuery={hasSessionSearchQuery}

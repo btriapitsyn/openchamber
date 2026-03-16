@@ -92,6 +92,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
 
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [imageFailed, setImageFailed] = React.useState(false);
+  const suppressNextToggleRef = React.useRef(false);
 
   React.useEffect(() => {
     setImageFailed(false);
@@ -105,6 +106,27 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
       iconColor: currentTheme.colors.surface.foreground,
     })
     : null;
+
+  const handleContextMenu = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    suppressNextToggleRef.current = true;
+    setIsMenuOpen(true);
+  }, []);
+
+  const handleToggleMouseDown = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
+      suppressNextToggleRef.current = true;
+    }
+  }, []);
+
+  const handleToggleClick = React.useCallback(() => {
+    if (suppressNextToggleRef.current) {
+      suppressNextToggleRef.current = false;
+      return;
+    }
+    onToggle();
+  }, [onToggle]);
 
   return (
     <div
@@ -130,17 +152,15 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
             style={{ backgroundColor: isDesktopShell && isStuck ? 'transparent' : undefined }}
             onMouseEnter={() => onHoverChange(true)}
             onMouseLeave={() => onHoverChange(false)}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              setIsMenuOpen(true);
-            }}
+            onContextMenu={handleContextMenu}
           >
             <div className="relative flex items-center gap-1 px-0.5 py-0.5" {...attributes}>
               <Tooltip delayDuration={1500}>
                 <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={onToggle}
+                      onMouseDown={handleToggleMouseDown}
+                      onClick={handleToggleClick}
                       {...listeners}
                       className={cn(
                         'flex-1 min-w-0 flex items-center gap-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md cursor-grab active:cursor-grabbing transition-[padding]',
