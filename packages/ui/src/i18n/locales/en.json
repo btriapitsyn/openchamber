@@ -1086,6 +1086,52 @@
     "voiceError": "Voice Error",
     "conversationModeActive": "Conversation mode active"
   },
+  "assistantStatus": {
+    "status": {
+      "working": "working",
+      "editingFile": "editing file",
+      "thinking": "thinking",
+      "composing": "composing"
+    },
+    "toolStatus": {
+      "read": "reading file",
+      "write": "writing file",
+      "edit": "editing file",
+      "multiedit": "editing files",
+      "applyPatch": "applying patch",
+      "bash": "running command",
+      "grep": "searching content",
+      "glob": "finding files",
+      "list": "listing directory",
+      "task": "delegating task",
+      "webfetch": "fetching URL",
+      "websearch": "searching web",
+      "codesearch": "web code search",
+      "todowrite": "updating todos",
+      "todoread": "reading todos",
+      "skill": "learning skill",
+      "question": "asking question",
+      "planEnter": "switching to planning",
+      "planExit": "switching to building",
+      "usingTool": "using {{toolName}}"
+    },
+    "workingPhrases": {
+      "working": "working",
+      "processing": "processing",
+      "preparing": "preparing",
+      "warmingUp": "warming up",
+      "gearsTurning": "gears turning",
+      "computing": "computing",
+      "calculating": "calculating",
+      "analyzing": "analyzing",
+      "wheelsSpinning": "wheels spinning",
+      "calibrating": "calibrating",
+      "synthesizing": "synthesizing",
+      "connectingDots": "connecting dots",
+      "inspectingLogic": "inspecting logic",
+      "weighingOptions": "weighing options"
+    }
+  },
   "installSkillDialog": {
     "installSkill": "Install skill",
     "installing": "Installing...",

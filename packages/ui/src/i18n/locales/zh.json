@@ -1173,6 +1173,52 @@
     "voiceError": "语音错误",
     "conversationModeActive": "对话模式已启用"
   },
+  "assistantStatus": {
+    "status": {
+      "working": "处理中",
+      "editingFile": "正在编辑文件",
+      "thinking": "正在思考",
+      "composing": "正在生成内容"
+    },
+    "toolStatus": {
+      "read": "正在读取文件",
+      "write": "正在写入文件",
+      "edit": "正在编辑文件",
+      "multiedit": "正在编辑多个文件",
+      "applyPatch": "正在应用补丁",
+      "bash": "正在运行命令",
+      "grep": "正在搜索内容",
+      "glob": "正在查找文件",
+      "list": "正在列出目录",
+      "task": "正在委派任务",
+      "webfetch": "正在获取 URL",
+      "websearch": "正在搜索网页",
+      "codesearch": "正在搜索网页代码",
+      "todowrite": "正在更新待办",
+      "todoread": "正在读取待办",
+      "skill": "正在学习技能",
+      "question": "正在提问",
+      "planEnter": "正在切换到规划模式",
+      "planExit": "正在切换到构建模式",
+      "usingTool": "正在使用 {{toolName}}"
+    },
+    "workingPhrases": {
+      "working": "处理中",
+      "processing": "正在处理",
+      "preparing": "正在准备",
+      "warmingUp": "正在预热",
+      "gearsTurning": "齿轮转动中",
+      "computing": "正在计算",
+      "calculating": "计算中",
+      "analyzing": "正在分析",
+      "wheelsSpinning": "飞轮转动中",
+      "calibrating": "正在校准",
+      "synthesizing": "正在整合",
+      "connectingDots": "正在串联线索",
+      "inspectingLogic": "正在检查逻辑",
+      "weighingOptions": "正在权衡方案"
+    }
+  },
   "installSkillDialog": {
     "installSkill": "安装技能",
     "installing": "安装中...",
