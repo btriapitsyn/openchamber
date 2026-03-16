@@ -656,7 +656,7 @@ export const NavRail: React.FC<NavRailProps> = ({ className, mobile }) => {
         console.error('Failed to select directory:', error);
         toast.error(t('navigation.failedToSelectDirectory'));
       });
-  }, [addProject, tauriIpcAvailable]);
+  }, [addProject, t, tauriIpcAvailable]);
 
   const handleEditProject = React.useCallback(
     (projectId: string) => {

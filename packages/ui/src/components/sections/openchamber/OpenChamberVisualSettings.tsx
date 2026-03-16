@@ -406,8 +406,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 <SelectValue placeholder={t('appearance.selectLanguage')} />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="en">{t('settings.languageEnglish')}</SelectItem>
-                                                <SelectItem value="zh">{t('settings.languageChineseSimplified')}</SelectItem>
+                                                <SelectItem value="en">English</SelectItem>
+                                                <SelectItem value="zh">简体中文</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>

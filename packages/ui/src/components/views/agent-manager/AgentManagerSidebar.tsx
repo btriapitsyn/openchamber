@@ -69,7 +69,7 @@ const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, onSe
     }
     setIsDeleting(false);
     setConfirmOpen(false);
-  }, [deleteGroup, group.name, isDeleting]);
+  }, [deleteGroup, group.name, isDeleting, t]);
   
   return (
     <>

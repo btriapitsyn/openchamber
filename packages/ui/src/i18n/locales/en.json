@@ -37,8 +37,6 @@
     "title": "Settings",
     "general": "General",
     "language": "Language",
-    "languageEnglish": "English",
-    "languageChineseSimplified": "Simplified Chinese",
     "theme": "Theme",
     "fontSize": "Font Size",
     "terminal": "Terminal",
