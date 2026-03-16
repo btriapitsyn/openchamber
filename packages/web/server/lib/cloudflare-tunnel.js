@@ -56,7 +56,7 @@ export async function checkCloudflaredAvailable() {
   const cfPath = await searchPathFor('cloudflared');
   if (cfPath) {
     try {
-      const result = spawnSync(cfPath, ['--version'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+      const result = spawnSync(cfPath, ['--version'], { windowsHide: true,  encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
       if (result.status === 0) {
         return { available: true, path: cfPath, version: result.stdout.trim() };
       }
@@ -94,7 +94,7 @@ Or visit: https://developers.cloudflare.com/cloudflare-one/networks/connectors/c
 `);
 }
 
-const spawnCloudflared = (args, envOverrides = {}, resolvedBinaryPath = 'cloudflared') => spawn(resolvedBinaryPath, args, {
+const spawnCloudflared = (args, envOverrides = {}, resolvedBinaryPath = 'cloudflared') => spawn(resolvedBinaryPath, args, { windowsHide: true, 
   stdio: ['ignore', 'pipe', 'pipe'],
   env: {
     ...process.env,

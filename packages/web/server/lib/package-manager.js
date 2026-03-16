@@ -169,7 +169,7 @@ function quoteCommand(command) {
 
 function isCommandAvailable(command) {
   try {
-    const result = spawnSync(command, ['--version'], {
+    const result = spawnSync(command, ['--version'], { windowsHide: true, 
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 5000,
@@ -198,7 +198,7 @@ function isPackageInstalledWith(pm) {
         args = ['list', '-g', '--depth=0', PACKAGE_NAME];
     }
 
-    const result = spawnSync(pmCommand, args, {
+    const result = spawnSync(pmCommand, args, { windowsHide: true, 
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10000,
@@ -351,7 +351,7 @@ export function executeUpdate(pm = detectPackageManager(), options = {}) {
     console.log(`Running: ${command}`);
   }
 
-  const result = spawnSync(command, {
+  const result = spawnSync(command, { windowsHide: true, 
     stdio: 'inherit',
     shell: true,
   });

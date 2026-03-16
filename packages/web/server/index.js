@@ -3791,7 +3791,7 @@ function getLoginShellEnvSnapshot() {
     }
 
     try {
-      const result = spawnSync(shellPath, ['-lic', 'env -0'], {
+      const result = spawnSync(shellPath, ['-lic', 'env -0'], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         maxBuffer: 10 * 1024 * 1024,
@@ -3829,7 +3829,7 @@ function getWindowsShellEnvSnapshot() {
 
   for (const shellPath of powershellCandidates) {
     try {
-      const result = spawnSync(shellPath, ['-NoLogo', '-Command', psScript], {
+      const result = spawnSync(shellPath, ['-NoLogo', '-Command', psScript], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
         maxBuffer: 10 * 1024 * 1024,
@@ -3848,7 +3848,7 @@ function getWindowsShellEnvSnapshot() {
 
   const comspec = process.env.ComSpec || 'cmd.exe';
   try {
-    const result = spawnSync(comspec, ['/d', '/s', '/c', 'set'], {
+    const result = spawnSync(comspec, ['/d', '/s', '/c', 'set'], { windowsHide: true, 
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       maxBuffer: 10 * 1024 * 1024,
@@ -3993,7 +3993,7 @@ function resolveWslExecutablePath() {
   }
 
   try {
-    const result = spawnSync('where', ['wsl'], {
+    const result = spawnSync('where', ['wsl'], { windowsHide: true, 
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -4160,7 +4160,7 @@ function resolveOpencodeCliPath() {
 
   if (process.platform === 'win32') {
     try {
-      const result = spawnSync('where', ['opencode'], {
+      const result = spawnSync('where', ['opencode'], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -4195,7 +4195,7 @@ function resolveOpencodeCliPath() {
   for (const shell of shells) {
     if (!isExecutable(shell)) continue;
     try {
-      const result = spawnSync(shell, ['-lic', 'command -v opencode'], {
+      const result = spawnSync(shell, ['-lic', 'command -v opencode'], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -4245,7 +4245,7 @@ function resolveNodeCliPath() {
 
   if (process.platform === 'win32') {
     try {
-      const result = spawnSync('where', ['node'], {
+      const result = spawnSync('where', ['node'], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -4267,7 +4267,7 @@ function resolveNodeCliPath() {
   for (const shell of shells) {
     if (!isExecutable(shell)) continue;
     try {
-      const result = spawnSync(shell, ['-lic', 'command -v node'], {
+      const result = spawnSync(shell, ['-lic', 'command -v node'], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -4326,7 +4326,7 @@ function resolveBunCliPath() {
     }
 
     try {
-      const result = spawnSync('where', ['bun'], {
+      const result = spawnSync('where', ['bun'], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -4348,7 +4348,7 @@ function resolveBunCliPath() {
   for (const shell of shells) {
     if (!isExecutable(shell)) continue;
     try {
-      const result = spawnSync(shell, ['-lic', 'command -v bun'], {
+      const result = spawnSync(shell, ['-lic', 'command -v bun'], { windowsHide: true, 
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -5677,7 +5677,7 @@ function killProcessOnPort(port) {
   if (!port) return;
   try {
     // Kill any process listening on our port to clean up orphaned children.
-    const result = spawnSync('lsof', ['-ti', `:${port}`], { encoding: 'utf8', timeout: 5000 });
+    const result = spawnSync('lsof', ['-ti', `:${port}`], { windowsHide: true,  encoding: 'utf8', timeout: 5000 });
     const output = result.stdout || '';
     const myPid = process.pid;
     for (const pidStr of output.split(/\s+/)) {
@@ -5758,7 +5758,7 @@ async function createManagedOpenCodeServerProcess({
     }
   }
 
-  const child = spawn(binary, args, {
+  const child = spawn(binary, args, { windowsHide: true, 
     cwd,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -12617,18 +12617,18 @@ async function main(options = {}) {
         // macOS: open -R selects the file in Finder; open opens a folder
         const stat = await fsPromises.stat(resolved);
         if (stat.isDirectory()) {
-          spawn('open', [resolved], { stdio: 'ignore', detached: true }).unref();
+          spawn('open', [resolved], { windowsHide: true,  stdio: 'ignore', detached: true }).unref();
         } else {
-          spawn('open', ['-R', resolved], { stdio: 'ignore', detached: true }).unref();
+          spawn('open', ['-R', resolved], { windowsHide: true,  stdio: 'ignore', detached: true }).unref();
         }
       } else if (platform === 'win32') {
         // Windows: explorer /select, highlights the file
-        spawn('explorer', ['/select,', resolved], { stdio: 'ignore', detached: true }).unref();
+        spawn('explorer', ['/select,', resolved], { windowsHide: true,  stdio: 'ignore', detached: true }).unref();
       } else {
         // Linux: xdg-open opens the parent directory
         const stat = await fsPromises.stat(resolved);
         const dir = stat.isDirectory() ? resolved : path.dirname(resolved);
-        spawn('xdg-open', [dir], { stdio: 'ignore', detached: true }).unref();
+        spawn('xdg-open', [dir], { windowsHide: true,  stdio: 'ignore', detached: true }).unref();
       }
 
       res.json({ success: true, path: resolved });
@@ -12676,7 +12676,7 @@ async function main(options = {}) {
       const envPath = buildAugmentedPath();
       const execEnv = { ...process.env, PATH: envPath };
 
-      const child = spawn(shell, [shellFlag, command], {
+      const child = spawn(shell, [shellFlag, command], { windowsHide: true, 
         cwd: resolvedCwd,
         env: execEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
