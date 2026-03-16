@@ -16,6 +16,7 @@ interface BottomTerminalDockProps {
 export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, isMobile, children }) => {
   const bottomTerminalHeight = useUIStore((state) => state.bottomTerminalHeight);
   const isFullscreen = useUIStore((state) => state.isBottomTerminalExpanded);
+  const isChatMainTab = useUIStore((state) => state.activeMainTab === 'chat');
   const setBottomTerminalHeight = useUIStore((state) => state.setBottomTerminalHeight);
   const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen);
   const setBottomTerminalExpanded = useUIStore((state) => state.setBottomTerminalExpanded);
@@ -48,7 +49,14 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
       if (!parentHeight || parentHeight <= 0) {
         return;
       }
-      const next = Math.round(parentHeight);
+      const headerOffset = isChatMainTab
+        ? Number.parseFloat(
+          getComputedStyle(document.documentElement)
+            .getPropertyValue('--oc-header-height')
+            .replace('px', '')
+        ) || 56
+        : 0;
+      const next = Math.max(0, Math.round(parentHeight - headerOffset));
       setFullscreenHeight((prev) => (prev === next ? prev : next));
     };
 
@@ -65,7 +73,7 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
     return () => {
       observer.disconnect();
     };
-  }, [isFullscreen, isMobile, isOpen]);
+  }, [isChatMainTab, isFullscreen, isMobile, isOpen]);
 
   React.useEffect(() => {
     if (isMobile || !isResizing || isFullscreen) {
@@ -103,7 +111,7 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
   }
 
   const appliedHeight = isOpen
-    ? (isFullscreen ? Math.max(standardHeight, fullscreenHeight ?? standardHeight) : standardHeight)
+    ? (isFullscreen ? Math.max(0, fullscreenHeight ?? standardHeight) : standardHeight)
     : 0;
 
   const handlePointerDown = (event: React.PointerEvent) => {

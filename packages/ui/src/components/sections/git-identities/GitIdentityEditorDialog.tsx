@@ -1,6 +1,5 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import {
@@ -351,7 +350,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   <div className="flex items-center justify-between gap-4">
                     <span className="typography-ui-label text-foreground">Auth Method</span>
                     <div className="flex items-center gap-1">
-                      <ButtonSmall
+                      <Button size="sm"
                         type="button"
                         variant="outline"
                         onClick={() => setAuthType('ssh')}
@@ -362,8 +361,8 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                         )}
                       >
                         <RiLock2Line className="w-3.5 h-3.5 mr-1" /> SSH
-                      </ButtonSmall>
-                      <ButtonSmall
+                      </Button>
+                      <Button size="sm"
                         type="button"
                         variant="outline"
                         onClick={() => setAuthType('token')}
@@ -374,7 +373,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                         )}
                       >
                         <RiKeyLine className="w-3.5 h-3.5 mr-1" /> Token
-                      </ButtonSmall>
+                      </Button>
                     </div>
                   </div>
 

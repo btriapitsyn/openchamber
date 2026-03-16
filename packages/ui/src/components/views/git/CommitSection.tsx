@@ -10,7 +10,6 @@ import {
   CollapsibleContent,
 } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
-import { ButtonLarge } from '@/components/ui/button-large';
 import { CommitInput } from './CommitInput';
 import { AIHighlightsBox } from './AIHighlightsBox';
 import { useDeviceInfo } from '@/lib/device';
@@ -64,11 +63,11 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
   const headerClassName =
     variant === 'framed'
       ? 'flex w-full items-center justify-between px-3 py-2'
-      : 'flex w-full items-center justify-between px-0 py-3 border-b border-border/40';
+      : 'flex w-full items-center justify-between px-0 pt-2 pb-1';
   const contentClassName =
     variant === 'framed'
       ? 'flex flex-col gap-3 p-3 pt-0'
-      : 'flex flex-col gap-3 px-0 py-3';
+      : 'flex flex-col gap-3 px-0 pt-1 pb-3';
 
   return (
     <Collapsible
@@ -78,11 +77,6 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
     >
       <div className={headerClassName}>
         <h3 className="typography-ui-header font-semibold text-foreground">Commit</h3>
-        <span className="typography-meta text-muted-foreground">
-          {hasSelectedFiles
-            ? `${selectedCount} file${selectedCount === 1 ? '' : 's'} selected`
-            : 'No files selected'}
-        </span>
       </div>
 
       <CollapsibleContent>
@@ -146,7 +140,8 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
 
             <div className="flex-1" />
 
-            <ButtonLarge
+            <Button
+              size="sm"
               variant="outline"
               onClick={onCommit}
               disabled={!canCommit || isGeneratingMessage}
@@ -164,7 +159,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
                   <span className="commit-actions__label">Commit</span>
                 </>
               )}
-            </ButtonLarge>
+            </Button>
 
             {isMobile ? (
               <Tooltip>
@@ -180,7 +175,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
                     {commitAction === 'commitAndPush' ? (
                       <RiLoader4Line className="size-4 animate-spin" />
                     ) : (
-                      <RiArrowUpLine className="size-4" />
+                      <RiArrowUpLine className="size-3.5" />
                     )}
                   </Button>
                 </TooltipTrigger>
@@ -189,7 +184,8 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
                 </TooltipContent>
               </Tooltip>
             ) : (
-              <ButtonLarge
+              <Button
+                size="sm"
                 variant="default"
                 onClick={() => onCommitAndPush()}
                 disabled={!canCommit || isGeneratingMessage}
@@ -203,11 +199,11 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
                   </>
                 ) : (
                   <>
-                    <RiArrowUpLine className="size-4" />
+                    <RiArrowUpLine className="size-3.5" />
                     <span className="commit-actions__label">Push</span>
                   </>
                 )}
-              </ButtonLarge>
+              </Button>
             )}
           </div>
         </div>

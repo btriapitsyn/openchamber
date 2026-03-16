@@ -15,7 +15,7 @@ import { useChatScrollManager } from '@/hooks/useChatScrollManager';
 import { useChatTimelineController } from './hooks/useChatTimelineController';
 import { useChatTurnNavigation } from './hooks/useChatTurnNavigation';
 import { useDeviceInfo } from '@/lib/device';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
 import { TimelineDialog } from './TimelineDialog';
 import type { PermissionRequest } from '@/types/permission';
@@ -193,7 +193,7 @@ export const ChatContainer: React.FC = () => {
     }, [parentSession, setCurrentSession]);
 
     const returnToParentButton = parentSession ? (
-        <ButtonSmall
+        <Button
             type="button"
             variant="outline"
             size="xs"
@@ -204,7 +204,7 @@ export const ChatContainer: React.FC = () => {
         >
             <RiArrowLeftLine className="h-4 w-4" />
             Parent
-        </ButtonSmall>
+        </Button>
     ) : null;
 
     React.useEffect(() => {

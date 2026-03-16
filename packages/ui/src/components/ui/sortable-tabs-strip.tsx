@@ -353,6 +353,7 @@ export const SortableTabsStrip: React.FC<SortableTabsStripProps> = ({
                     usesActivePillIndicator
                       ? 'animated-tabs__button pill-tabs__button relative z-10 flex flex-1 items-center justify-center rounded-lg text-sm font-medium transition-colors duration-150 !min-h-0'
                       : 'flex h-full min-w-0 items-center typography-micro',
+                    usesActivePillIndicator ? 'lowercase' : null,
                     usesActivePillIndicator && (showInactiveIconOnly ? 'gap-0' : 'gap-1.5'),
                     usesActivePillIndicator
                       ? useIntrinsicPillSizing

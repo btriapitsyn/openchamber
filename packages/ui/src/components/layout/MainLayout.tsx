@@ -910,10 +910,18 @@ export const MainLayout: React.FC = () => {
                                 isSidebarOpen && 'border-l border-border/50 rounded-tl-xl rounded-bl-xl',
                                 isRightSidebarOpen && 'border-r border-border/50 rounded-tr-xl rounded-br-xl'
                             )}>
-                                <Header desktopRightSidebarActionsHost={desktopRightSidebarActionsHost} />
+                                {isChatActive ? (
+                                    <div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+                                        <div className="pointer-events-auto">
+                                            <Header desktopRightSidebarActionsHost={desktopRightSidebarActionsHost} />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Header desktopRightSidebarActionsHost={desktopRightSidebarActionsHost} />
+                                )}
                                 <div className={cn(
                                     'flex flex-1 min-h-0 overflow-hidden',
-                                    isSidebarOpen ? '' : 'border-l border-border/50',
+                                    isSidebarOpen || isChatActive ? '' : 'border-l border-border/50',
                                     isRightSidebarOpen ? '' : 'border-r border-border/50'
                                 )}>
                                     <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">

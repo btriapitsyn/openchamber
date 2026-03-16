@@ -1693,7 +1693,7 @@ export const PullRequestSection: React.FC<{
                     </div>
                   </div>
                   {repoUrl ? (
-                    <Button variant="outline" size="sm" className="h-7 px-2 py-0" asChild>
+                    <Button variant="outline" size="sm" asChild>
                       <a href={repoUrl} target="_blank" rel="noopener noreferrer">
                         <RiExternalLinkLine className="size-4" />
                         Repo
@@ -1863,7 +1863,6 @@ export const PullRequestSection: React.FC<{
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-2 py-0"
                     onClick={generateDescription}
                     disabled={isGenerating || isCreating}
                   >
@@ -1873,7 +1872,7 @@ export const PullRequestSection: React.FC<{
                   <div className="flex-1" />
                   <Button
                     size="sm"
-                    className="h-7 min-w-[7.5rem] justify-center gap-2 px-2 py-0"
+                    className="min-w-[7.5rem] justify-center gap-2"
                     onClick={createPr}
                     disabled={isCreating || !isConnected || !targetBaseBranch.trim() || targetBaseBranch.trim() === branch}
                   >

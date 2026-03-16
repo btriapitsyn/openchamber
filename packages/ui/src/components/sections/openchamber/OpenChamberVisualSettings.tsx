@@ -7,7 +7,7 @@ import type { ThemeMode } from '@/types/theme';
 import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore } from '@/stores/messageQueueStore';
 import { cn, getModifierLabel } from '@/lib/utils';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { NumberInput } from '@/components/ui/number-input';
 import { Radio } from '@/components/ui/radio';
@@ -400,7 +400,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     <span className="typography-ui-header font-medium text-foreground">Color Mode</span>
                                     <div className="flex flex-wrap items-center gap-1">
                                         {THEME_MODE_OPTIONS.map((option) => (
-                                            <ButtonSmall
+                                            <Button
                                                 key={option.value}
                                                 variant="outline"
                                                 size="xs"
@@ -413,7 +413,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 onClick={() => setThemeMode(option.value)}
                                             >
                                                 {option.label}
-                                            </ButtonSmall>
+                                            </Button>
                                         ))}
                                     </div>
                                 </div>
@@ -514,7 +514,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             maxLength={64}
                                             aria-label="PWA install app name"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => {
@@ -526,7 +526,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -556,7 +556,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             aria-label="Font size percentage"
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setFontSize(100)}
@@ -566,7 +566,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -585,7 +585,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step={1}
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setTerminalFontSize(13)}
@@ -595,7 +595,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -614,7 +614,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step={5}
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setPadding(100)}
@@ -624,7 +624,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -643,7 +643,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step={1}
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setCornerRadius(12)}
@@ -653,7 +653,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
@@ -682,7 +682,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             step={5}
                                             className="w-16"
                                         />
-                                        <ButtonSmall
+                                        <Button size="sm"
                                             type="button"
                                             variant="ghost"
                                             onClick={() => setInputBarOffset(0)}
@@ -692,7 +692,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />
-                                        </ButtonSmall>
+                                        </Button>
                                     </div>
                                 </div>
                             )}
