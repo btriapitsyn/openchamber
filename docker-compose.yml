@@ -17,7 +17,11 @@ services:
       - ./workspaces:/home/openchamber/workspaces
     #environment:
     # UI_PASSWORD: your_secure_password_here  # Uncomment to set UI password
-    # CF_TUNNEL: true  # Enable Cloudflare Tunnel (true/qr/password)
+    # OPENCHAMBER_TUNNEL_PROVIDER: cloudflare
+    # OPENCHAMBER_TUNNEL_MODE: quick  # quick | managed-remote | managed-local
+    # OPENCHAMBER_TUNNEL_HOSTNAME: app.example.com  # required for managed-remote
+    # OPENCHAMBER_TUNNEL_TOKEN: your_cloudflare_token  # required for managed-remote
+    # OPENCHAMBER_TUNNEL_CONFIG: /home/openchamber/.cloudflared/config.yml  # optional for managed-local
     # OH_MY_OPENCODE: true # enable oh-my-opencode
     # OPENCODE_HOST: http://172.17.0.1:4096 # Connect to external OpenCode server
     # OPENCODE_SKIP_START: true # skip start opencode

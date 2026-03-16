@@ -7556,10 +7556,49 @@ async function main(options = {}) {
     });
   });
 
-  app.get('/api/openchamber/update-check', async (_req, res) => {
+  app.get('/api/openchamber/update-check', async (req, res) => {
     try {
       const { checkForUpdates } = await import('./lib/package-manager.js');
-      const updateInfo = await checkForUpdates();
+      const parseString = (value) => (typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined);
+      const parseReportUsage = (value) => {
+        if (typeof value !== 'string') return true;
+        const normalized = value.trim().toLowerCase();
+        if (normalized === 'false' || normalized === '0' || normalized === 'no') return false;
+        return true;
+      };
+      const inferDeviceClass = (ua) => {
+        const value = (ua || '').toLowerCase();
+        if (!value) return 'unknown';
+        if (value.includes('ipad') || value.includes('tablet')) return 'tablet';
+        if (value.includes('mobi') || value.includes('android') || value.includes('iphone')) return 'mobile';
+        return 'desktop';
+      };
+      const inferArch = (ua) => {
+        const value = (ua || '').toLowerCase();
+        if (!value) return 'unknown';
+        if (value.includes('aarch64') || value.includes('arm64') || value.includes(' arm;') || value.includes('armv')) return 'arm64';
+        if (value.includes('x86_64') || value.includes('x64') || value.includes('amd64') || value.includes('win64') || value.includes('x86-64')) return 'x64';
+        return 'unknown';
+      };
+      const inferPlatform = (ua) => {
+        const value = (ua || '').toLowerCase();
+        if (!value) return undefined;
+        if (value.includes('mac os') || value.includes('macintosh') || value.includes('darwin')) return 'macos';
+        if (value.includes('windows') || value.includes('win32') || value.includes('win64')) return 'windows';
+        if (value.includes('linux') || value.includes('x11')) return 'linux';
+        return 'web';
+      };
+      const userAgent = typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : '';
+
+      const updateInfo = await checkForUpdates({
+        appType: parseString(req.query.appType),
+        deviceClass: parseString(req.query.deviceClass) || inferDeviceClass(userAgent),
+        platform: parseString(req.query.platform) || inferPlatform(userAgent),
+        arch: parseString(req.query.arch) || inferArch(userAgent),
+        instanceMode: parseString(req.query.instanceMode),
+        currentVersion: parseString(req.query.currentVersion),
+        reportUsage: parseReportUsage(parseString(req.query.reportUsage)),
+      });
       res.json(updateInfo);
     } catch (error) {
       console.error('Failed to check for updates:', error);

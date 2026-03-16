@@ -563,3 +563,28 @@ jobs:
             process.exit(1);
           });
           NODE
+
+      - name: Trigger openchamber-website site refresh (optional)
+        env:
+          WEBSITE_REPO: openchamber/openchamber-website
+          WEBSITE_TOKEN: ${{ secrets.OPENCHAMBER_WEBSITE_REPO_TOKEN }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: |
+          if [ -z "$WEBSITE_TOKEN" ]; then
+            echo "OPENCHAMBER_WEBSITE_REPO_TOKEN not set; skip site refresh dispatch."
+            exit 0
+          fi
+
+          curl --fail-with-body -sS -X POST \
+            -H "Authorization: Bearer $WEBSITE_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/$WEBSITE_REPO/dispatches \
+            -d @- <<JSON
+          {
+            "event_type": "site_refresh_requested",
+            "client_payload": {
+              "source_repo": "${{ github.repository }}",
+              "release_tag": "v$VERSION"
+            }
+          }
+          JSON

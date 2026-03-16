@@ -36,30 +36,9 @@ fi
 echo "[entrypoint] SSH public key:"
 cat "${SSH_PUBLIC_KEY_PATH}"
 
-# Handle UI_PASSWORD environment variable
-OPENCHAMBER_ARGS=""
-
+# Handle UI password environment variable
 if [ -n "${UI_PASSWORD:-}" ]; then
   echo "[entrypoint] UI password set, enabling authentication"
-  OPENCHAMBER_ARGS="${OPENCHAMBER_ARGS} --ui-password ${UI_PASSWORD}"
-fi
-
-# Handle Cloudflare Tunnel (CF_TUNNEL: true/qr/password/full)
-if [ -n "${CF_TUNNEL:-}" ] && [ "${CF_TUNNEL:-false}" != "false" ]; then
-  echo "[entrypoint] Cloudflare Tunnel enabled (${CF_TUNNEL})"
-  OPENCHAMBER_ARGS="${OPENCHAMBER_ARGS} --try-cf-tunnel"
-
-  case "${CF_TUNNEL}" in
-  "qr")
-    OPENCHAMBER_ARGS="${OPENCHAMBER_ARGS} --tunnel-qr"
-    ;;
-  esac
-
-  case "${CF_TUNNEL}" in
-  "password")
-    OPENCHAMBER_ARGS="${OPENCHAMBER_ARGS} --tunnel-password-url"
-    ;;
-  esac
 fi
 
 if [ "${OH_MY_OPENCODE:-false}" = "true" ]; then
@@ -82,5 +61,10 @@ if [ "$#" -gt 0 ]; then
   exec "$@"
 fi
 
-bun packages/web/bin/cli.js ${OPENCHAMBER_ARGS}
+set -- bun packages/web/bin/cli.js
+if [ -n "${UI_PASSWORD:-}" ]; then
+  set -- "$@" --ui-password "$UI_PASSWORD"
+fi
+"$@"
+
 bun packages/web/bin/cli.js logs

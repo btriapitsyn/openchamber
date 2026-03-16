@@ -1,10 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM archlinux:latest AS base
+FROM oven/bun:1 AS base
 WORKDIR /app
-
-# Install build dependencies in base stage
-RUN pacman -Sy --noconfirm --needed bun  && \
-  pacman -Scc --noconfirm
 
 FROM base AS deps
 WORKDIR /app
@@ -20,15 +16,26 @@ WORKDIR /app
 COPY . .
 RUN bun run build:web
 
-FROM base AS runtime
+FROM oven/bun:1 AS runtime
+WORKDIR /home/openchamber
 
-RUN pacman -Sy --noconfirm --needed base-devel python openssh cloudflared git nodejs npm less && \
-  pacman -Scc --noconfirm
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  bash \
+  ca-certificates \
+  git \
+  less \
+  nodejs \
+  npm \
+  openssh-client \
+  python3 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=cloudflare/cloudflared:latest /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 
 ENV NODE_ENV=production
 
 # Create openchamber user
-RUN useradd -m -s /bin/bash openchamber
+RUN useradd -m -s /bin/bash openchamber && mkdir -p /home/openchamber && chown -R openchamber:openchamber /home/openchamber
 
 # Switch to openchamber user
 USER openchamber
@@ -40,7 +47,6 @@ RUN npm config set prefix /home/openchamber/.npm-global && mkdir -p /home/opench
   mkdir -p /home/openchamber/.local /home/openchamber/.config /home/openchamber/.ssh && \
   npm install -g opencode-ai
 
-WORKDIR /home/openchamber
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/web/node_modules ./packages/web/node_modules
 COPY --from=builder /app/package.json ./package.json
@@ -48,8 +54,8 @@ COPY --from=builder /app/packages/web/package.json ./packages/web/package.json
 COPY --from=builder /app/packages/web/bin ./packages/web/bin
 COPY --from=builder /app/packages/web/server ./packages/web/server
 COPY --from=builder /app/packages/web/dist ./packages/web/dist
-COPY --chmod=755 scripts/docker-entrypoint.sh /app/openchamber-entrypoint.sh
+COPY scripts/docker-entrypoint.sh /home/openchamber/openchamber-entrypoint.sh
 
 EXPOSE 3000
 
-ENTRYPOINT ["/app/openchamber-entrypoint.sh"]
+ENTRYPOINT ["sh", "/home/openchamber/openchamber-entrypoint.sh"]

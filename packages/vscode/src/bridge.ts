@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { randomUUID } from 'crypto';
 import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import { type OpenCodeManager } from './opencode';
@@ -112,6 +113,37 @@ const execFileAsync = promisify(execFile);
 const gpgconfCandidates = ['gpgconf', '/opt/homebrew/bin/gpgconf', '/usr/local/bin/gpgconf'];
 
 const OPENCHAMBER_SHARED_SETTINGS_PATH = path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+const VSCODE_INSTALL_ID_KEY = 'openchamber.installId.vscode';
+const UPDATE_CHECK_URL = process.env.OPENCHAMBER_UPDATE_API_URL || 'https://api.openchamber.dev/v1/update/check';
+
+const mapNodePlatformToApiPlatform = (value: string): 'macos' | 'windows' | 'linux' | 'web' => {
+  if (value === 'darwin') return 'macos';
+  if (value === 'win32') return 'windows';
+  if (value === 'linux') return 'linux';
+  return 'web';
+};
+
+const mapNodeArchToApiArch = (value: string): 'arm64' | 'x64' | 'unknown' => {
+  if (value === 'arm64' || value === 'aarch64') return 'arm64';
+  if (value === 'x64' || value === 'amd64') return 'x64';
+  return 'unknown';
+};
+
+const getOrCreateVSCodeInstallId = async (ctx?: BridgeContext): Promise<string> => {
+  const state = ctx?.context?.globalState;
+  if (state) {
+    const existing = state.get<string>(VSCODE_INSTALL_ID_KEY);
+    if (typeof existing === 'string' && existing.trim().length > 0) {
+      return existing.trim();
+    }
+  }
+
+  const generated = randomUUID();
+  if (state) {
+    await state.update(VSCODE_INSTALL_ID_KEY, generated);
+  }
+  return generated;
+};
 
 const guessMimeTypeFromExtension = (ext: string) => {
   switch (ext) {
@@ -2883,6 +2915,56 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       case 'api:models/metadata': {
         try {
           const data = await fetchModelsMetadata();
+          return { id, type, success: true, data };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          return { id, type, success: false, error: errorMessage };
+        }
+      }
+
+      case 'api:openchamber:update-check': {
+        try {
+          const body = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>;
+          const currentVersion = typeof body.currentVersion === 'string' && body.currentVersion.trim().length > 0
+            ? body.currentVersion.trim()
+            : 'unknown';
+          const instanceMode = typeof body.instanceMode === 'string' && body.instanceMode.trim().length > 0
+            ? body.instanceMode.trim()
+            : 'local';
+          const deviceClass = typeof body.deviceClass === 'string' && body.deviceClass.trim().length > 0
+            ? body.deviceClass.trim()
+            : 'desktop';
+          const reportUsage = body.reportUsage !== false;
+
+          const installId = await getOrCreateVSCodeInstallId(ctx);
+          const requestBody = {
+            appType: 'vscode',
+            deviceClass,
+            platform: mapNodePlatformToApiPlatform(os.platform()),
+            arch: mapNodeArchToApiArch(os.arch()),
+            channel: 'stable',
+            currentVersion,
+            installId,
+            instanceMode,
+            reportUsage,
+          };
+
+          const response = await fetch(UPDATE_CHECK_URL, {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+            signal: AbortSignal.timeout(10_000),
+          });
+
+          if (!response.ok) {
+            const text = await response.text().catch(() => 'update check failed');
+            return { id, type, success: false, error: text || `Update check failed with ${response.status}` };
+          }
+
+          const data = await response.json();
           return { id, type, success: true, data };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);

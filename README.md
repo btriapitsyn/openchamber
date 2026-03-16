@@ -106,7 +106,7 @@ _requires Node.js 20+_
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/btriapitsyn/openchamber/main/scripts/install.sh | bash
-openchamber --ui-password be-creative-here --daemon
+openchamber --ui-password be-creative-here
 ```
 
 <details>
@@ -153,27 +153,31 @@ environment:
   UI_PASSWORD: your_secure_password
 ```
 
-**Cloudflare Tunnel:**
+**Cloudflare Tunnel (optional):**
 ```yaml
 environment:
-  CF_TUNNEL: "true" # Options: true, qr, password
+  OPENCHAMBER_TUNNEL_MODE: quick # quick | managed-remote | managed-local
+  OPENCHAMBER_TUNNEL_PROVIDER: cloudflare
 ```
 
-| Value      | Description                     |
-| ---------- | ------------------------------- |
-| `true`     | Enable tunnel only              |
-| `qr`       | Enable tunnel + QR code         |
-| `password` | Enable tunnel + password in URL |
+For `managed-remote` mode, provide:
 
-### Managed Cloudflare Tunnel (persistent hostname)
+```yaml
+environment:
+  OPENCHAMBER_TUNNEL_MODE: managed-remote
+  OPENCHAMBER_TUNNEL_HOSTNAME: app.example.com
+  OPENCHAMBER_TUNNEL_TOKEN: <token>
+```
 
-OpenChamber also supports managed-remote mode for more reliable long-lived access with your Cloudflare account and custom hostname.
+For `managed-local` mode, optionally provide:
 
-- Configure it in-app at **Settings -> OpenChamber -> Tunnel** and switch mode to **Managed Remote Tunnel**.
-- Managed-remote tunnels require a domain in your Cloudflare account.
-- Cloudflare setup guide: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/
-- Managed-local mode uses your local cloudflared config, for example:
-  - `openchamber tunnel start --provider cloudflare --mode managed-local --config ~/.cloudflared/config.yml`
+```yaml
+environment:
+  OPENCHAMBER_TUNNEL_MODE: managed-local
+  OPENCHAMBER_TUNNEL_CONFIG: /home/openchamber/.cloudflared/config.yml
+```
+
+Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must point to a path inside the container user home (`/home/openchamber/...`). If your Cloudflare config references a credentials JSON file, that file path must also be accessible inside the container (mount with `volumes`).
 
 ### Tunnel behavior notes
 
@@ -237,7 +241,7 @@ chown -R 1000:1000 data/
 <details>
 <summary><strong>Web / PWA</strong></summary>
 
-- Cloudflare tunnel with Quick and Named modes, secure one-time connect links, and QR onboarding
+- Cloudflare tunnel with quick, managed-remote, and managed-local modes, secure one-time connect links, and QR onboarding
 - Mobile-first: optimized chat controls, keyboard-safe layouts, drag-to-reorder projects
 - Background notifications and cross-tab session tracking
 - Self-update + restart flow that keeps your server settings intact
@@ -324,6 +328,8 @@ Independent project, not affiliated with the OpenCode team.
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
+
+Docs source lives in [`packages/docs`](packages/docs/README.md).
 
 ## License
 
