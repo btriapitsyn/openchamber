@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Tooltip,
   TooltipContent,
@@ -213,6 +214,7 @@ interface HeaderProps {
   onToggleRightDrawer?: () => void;
   leftDrawerOpen?: boolean;
   rightDrawerOpen?: boolean;
+  desktopRightSidebarActionsHost?: HTMLElement | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -220,10 +222,12 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleRightDrawer,
   leftDrawerOpen,
   rightDrawerOpen,
+  desktopRightSidebarActionsHost = null,
 }) => {
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
   const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+  const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
   const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
   const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
@@ -1184,6 +1188,420 @@ export const Header: React.FC<HeaderProps> = ({
     return <React.Fragment key={tab.id}>{tabButton}</React.Fragment>;
   };
 
+  const renderDesktopGitHubControl = () => {
+    if (!githubAuthStatus?.connected || isMobile) {
+      return null;
+    }
+
+    if (githubAccounts.length > 1) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className={cn(
+                desktopHeaderIconButtonClass,
+                'h-7 w-7 overflow-hidden rounded-full border border-border/60 bg-muted/80 p-0'
+              )}
+              title={githubLogin ? `GitHub: ${githubLogin}` : 'GitHub connected'}
+              disabled={isSwitchingGitHubAccount}
+            >
+              {githubAvatarUrl ? (
+                <img
+                  src={githubAvatarUrl}
+                  alt={githubLogin ? `${githubLogin} avatar` : 'GitHub avatar'}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <RiGithubFill className="h-3.5 w-3.5 text-foreground" />
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground">
+              GitHub Accounts
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {githubAccounts.map((account) => {
+              const accountUser = account.user;
+              const isCurrent = Boolean(account.current);
+              return (
+                <DropdownMenuItem
+                  key={account.id}
+                  className="gap-2"
+                  disabled={isCurrent || isSwitchingGitHubAccount}
+                  onSelect={() => {
+                    if (!isCurrent) {
+                      void handleGitHubAccountSwitch(account.id);
+                    }
+                  }}
+                >
+                  {accountUser?.avatarUrl ? (
+                    <img
+                      src={accountUser.avatarUrl}
+                      alt={accountUser.login ? `${accountUser.login} avatar` : 'GitHub avatar'}
+                      className="h-6 w-6 rounded-full border border-border/60 bg-muted object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-muted">
+                      <RiGithubFill className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                  )}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate typography-ui-label text-foreground">
+                      {accountUser?.name?.trim() || accountUser?.login || 'GitHub'}
+                    </span>
+                    {accountUser?.login ? (
+                      <span className="truncate typography-micro font-mono text-muted-foreground">
+                        {accountUser.login}
+                      </span>
+                    ) : null}
+                  </span>
+                  {isCurrent ? <RiCheckLine className="h-4 w-4 text-primary" /> : null}
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
+    return (
+      <div
+        className="app-region-no-drag flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
+        title={githubLogin ? `GitHub: ${githubLogin}` : 'GitHub connected'}
+      >
+        {githubAvatarUrl ? (
+          <img
+            src={githubAvatarUrl}
+            alt={githubLogin ? `${githubLogin} avatar` : 'GitHub avatar'}
+            className="h-full w-full object-cover"
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <RiGithubFill className="h-3.5 w-3.5 text-foreground" />
+        )}
+      </div>
+    );
+  };
+
+  const desktopSidebarActions = (
+    <>
+      {showPlanTab && (
+        <Tooltip delayDuration={500}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open plan"
+              onClick={handleOpenContextPlan}
+              className={cn(desktopHeaderIconButtonClass, isContextPlanActive && 'bg-[var(--interactive-hover)]')}
+            >
+              <RiFileTextLine className="h-[18px] w-[18px]" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Plan ({shortcutLabel('toggle_context_plan')})</p>
+          </TooltipContent>
+        </Tooltip>
+      )}
+      <OpenInAppButton directory={openDirectory} activeFilePath={selectedFilePath} className="mr-1" />
+      <DropdownMenu
+        open={isDesktopServicesOpen}
+        onOpenChange={(open) => {
+          setIsDesktopServicesOpen(open);
+          if (open) {
+            void refreshCurrentInstanceLabel();
+            if (desktopServicesTab === 'usage' && quotaResults.length === 0) {
+              fetchAllQuotas();
+            }
+          }
+        }}
+      >
+        <Tooltip delayDuration={500}>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label={isDesktopApp
+                  ? `Open instance, usage and MCP (current: ${currentInstanceLabel})`
+                  : 'Open services, usage and MCP'}
+                className={cn(
+                  desktopHeaderIconButtonClass,
+                  isDesktopApp ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5' : 'h-8 w-8'
+                )}
+              >
+                <RiStackLine className="h-[18px] w-[18px]" />
+                {isDesktopApp ? (
+                  <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>
+                ) : null}
+              </button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>
+              {isDesktopApp ? `Current instance: ${currentInstanceLabel}` : 'Services'} ({shortcutLabel('toggle_services_menu')}; next tab {shortcutLabel('cycle_services_tab')})
+            </p>
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent
+          align="end"
+          className="w-[min(30rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto bg-[var(--surface-elevated)] p-0"
+        >
+          <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-2 py-px">
+            <div className="h-9">
+              <SortableTabsStrip
+                items={servicesTabItems}
+                activeId={desktopServicesTab}
+                onSelect={(tabID) => {
+                  const value = tabID as 'instance' | 'usage' | 'mcp';
+                  setDesktopServicesTab(value);
+                  if (value === 'usage' && quotaResults.length === 0) {
+                    fetchAllQuotas();
+                  }
+                }}
+                layoutMode="fit"
+                variant="active-pill"
+                activePillInsetClassName="gap-0.5 px-px py-0"
+                activePillButtonClassName="h-8"
+                className="h-full"
+              />
+            </div>
+          </div>
+
+          {isDesktopApp && desktopServicesTab === 'instance' ? (
+            <DesktopHostSwitcherDialog
+              embedded
+              open={isDesktopServicesOpen && desktopServicesTab === 'instance'}
+              onOpenChange={() => {}}
+              onHostSwitched={() => setIsDesktopServicesOpen(false)}
+            />
+          ) : null}
+
+          {desktopServicesTab === 'mcp' ? (
+            <McpDropdownContent active={isDesktopServicesOpen && desktopServicesTab === 'mcp'} />
+          ) : null}
+
+          {desktopServicesTab === 'usage' ? (
+            <div className="overflow-x-hidden">
+              <div className="border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)]">
+                <DropdownMenuLabel className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
+                    <span className="truncate typography-ui-label text-muted-foreground">Last updated {formatTime(quotaLastUpdated)}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-7 w-[10.5rem]">
+                      <SortableTabsStrip
+                        items={quotaDisplayTabItems}
+                        activeId={quotaDisplayMode}
+                        onSelect={(tabID) => handleDisplayModeChange(tabID as 'usage' | 'remaining')}
+                        layoutMode="fit"
+                        variant="active-pill"
+                        activePillInsetClassName="gap-0.5 px-px py-0"
+                        className="h-full"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors',
+                        'hover:text-foreground hover:bg-interactive-hover',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                      )}
+                      onClick={handleUsageRefresh}
+                      disabled={isQuotaLoading || isUsageRefreshSpinning}
+                      aria-label="Refresh rate limits"
+                    >
+                      <RiRefreshLine className={cn('h-4 w-4', isUsageRefreshSpinning && 'animate-spin')} />
+                    </button>
+                  </div>
+                </DropdownMenuLabel>
+              </div>
+              {!hasRateLimits ? (
+                <DropdownMenuItem
+                  className="cursor-default hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
+                  onSelect={(event) => event.preventDefault()}
+                >
+                  <span className="typography-ui-label text-muted-foreground">No rate limits available.</span>
+                </DropdownMenuItem>
+              ) : null}
+              {rateLimitGroups.map((group, index) => {
+                const providerExpandedFamilies = expandedFamilies[group.providerId] ?? [];
+
+                return (
+                  <React.Fragment key={group.providerId}>
+                    <DropdownMenuLabel className="flex items-center gap-2 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] typography-ui-label text-foreground">
+                      <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
+                      {group.providerName}
+                    </DropdownMenuLabel>
+
+                    {group.entries.length === 0 && (!group.modelFamilies || group.modelFamilies.length === 0) ? (
+                      <DropdownMenuItem
+                        key={`${group.providerId}-empty`}
+                        className="cursor-default hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
+                        onSelect={(event) => event.preventDefault()}
+                      >
+                        <span className="typography-ui-label text-muted-foreground">{group.error ?? 'No rate limits reported.'}</span>
+                      </DropdownMenuItem>
+                    ) : (
+                      <>
+                        {group.entries.map(([label, window]) => {
+                          const displayPercent = quotaDisplayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
+                          const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
+                          const expectedMarker = paceInfo?.dailyAllocationPercent != null
+                            ? (quotaDisplayMode === 'remaining'
+                                ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
+                            : null;
+
+                          return (
+                            <DropdownMenuItem
+                              key={`${group.providerId}-${label}`}
+                              className="cursor-default items-start hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
+                              onSelect={(event) => event.preventDefault()}
+                            >
+                              <span className="flex min-w-0 flex-1 flex-col gap-2">
+                                <span className="flex min-w-0 items-center justify-between gap-3">
+                                  <span className="min-w-0 flex items-center gap-2">
+                                    <span className="truncate typography-ui-label text-foreground">{formatWindowLabel(label)}</span>
+                                    {window.resetAfterFormatted ?? window.resetAtFormatted ? (
+                                      <span className="truncate typography-ui-label text-muted-foreground">
+                                        {window.resetAfterFormatted ?? window.resetAtFormatted}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                  <span className="typography-ui-label tabular-nums text-foreground">
+                                    {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
+                                  </span>
+                                </span>
+                                <UsageProgressBar
+                                  percent={displayPercent}
+                                  tonePercent={window.usedPercent}
+                                  className="h-1.5"
+                                  expectedMarkerPercent={expectedMarker}
+                                />
+                                {paceInfo ? (
+                                  <div className="mb-1">
+                                    <PaceIndicator paceInfo={paceInfo} compact />
+                                  </div>
+                                ) : null}
+                              </span>
+                            </DropdownMenuItem>
+                          );
+                        })}
+
+                        {group.modelFamilies && group.modelFamilies.length > 0 ? (
+                          <div className="px-2 py-1">
+                            {group.modelFamilies.map((family) => {
+                              const isExpanded = providerExpandedFamilies.includes(family.familyId ?? 'other');
+
+                              return (
+                                <Collapsible
+                                  key={family.familyId ?? 'other'}
+                                  open={isExpanded}
+                                  onOpenChange={() => toggleFamilyExpanded(group.providerId, family.familyId ?? 'other')}
+                                >
+                                  <CollapsibleTrigger className="flex w-full items-center justify-between py-1.5 text-left">
+                                    <span className="typography-ui-label font-medium text-foreground">{family.familyLabel}</span>
+                                    {isExpanded ? (
+                                      <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                      <RiArrowRightSLine className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent>
+                                    <div className="space-y-1 pl-2">
+                                      {family.models.map(([modelName, window]) => {
+                                        const displayPercent = quotaDisplayMode === 'remaining' ? window.remainingPercent : window.usedPercent;
+                                        const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
+                                        const expectedMarker = paceInfo?.dailyAllocationPercent != null
+                                          ? (quotaDisplayMode === 'remaining'
+                                              ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
+                                              : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
+                                          : null;
+
+                                        return (
+                                          <div key={`${group.providerId}-${modelName}`} className="py-1.5">
+                                            <div className="flex min-w-0 flex-col gap-1.5">
+                                              <span className="flex min-w-0 items-center justify-between gap-3">
+                                                <span className="truncate typography-micro text-muted-foreground">{getDisplayModelName(modelName)}</span>
+                                                <span className="typography-ui-label tabular-nums text-foreground">
+                                                  {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
+                                                </span>
+                                              </span>
+                                              <UsageProgressBar
+                                                percent={displayPercent}
+                                                tonePercent={window.usedPercent}
+                                                className="h-1.5"
+                                                expectedMarkerPercent={expectedMarker}
+                                              />
+                                              {paceInfo ? (
+                                                <div className="mb-1">
+                                                  <PaceIndicator paceInfo={paceInfo} compact />
+                                                </div>
+                                              ) : null}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </CollapsibleContent>
+                                </Collapsible>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                    {index < rateLimitGroups.length - 1 ? <DropdownMenuSeparator /> : null}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Tooltip delayDuration={500}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={toggleBottomTerminal}
+            aria-label="Toggle terminal panel"
+            className={desktopHeaderIconButtonClass}
+          >
+            <RiTerminalBoxLine className="h-[18px] w-[18px]" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Terminal panel ({shortcutLabel('toggle_terminal')})</p>
+        </TooltipContent>
+      </Tooltip>
+      <Tooltip delayDuration={500}>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={toggleRightSidebar}
+            aria-label="Toggle right sidebar"
+            className={desktopHeaderIconButtonClass}
+          >
+            <RiLayoutRightLine className="h-[18px] w-[18px]" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Right sidebar ({shortcutLabel('toggle_right_sidebar')})</p>
+        </TooltipContent>
+      </Tooltip>
+      {renderDesktopGitHubControl()}
+    </>
+  );
+
+  const desktopSidebarActionsInline = !isRightSidebarOpen || !desktopRightSidebarActionsHost;
+
   const renderDesktop = () => (
     <div
       onMouseDown={handleDragStart}
@@ -1252,438 +1670,28 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex-1" />
 
         <div className="flex shrink-0 items-center gap-1">
-        {showDesktopHeaderContextUsage && stableDesktopContextUsage && (
-          <ContextUsageDisplay
-            totalTokens={stableDesktopContextUsage.totalTokens}
-            percentage={desktopHeaderDisplayPercentage}
-            colorPercentage={stableDesktopContextUsage.percentage}
-            contextLimit={stableDesktopContextUsage.contextLimit}
-            outputLimit={stableDesktopContextUsage.outputLimit ?? 0}
-            size="compact"
-            hideIcon
-            showPercentIcon
-            onClick={handleOpenContextPanel}
-            pressed={isContextPanelActive}
-            className="mr-3.5"
-            valueClassName="typography-ui-label font-medium leading-none text-foreground"
-            percentIconClassName="h-5 w-5"
-          />
-        )}
-        {showPlanTab && (
-          <Tooltip delayDuration={500}>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                aria-label="Open plan"
-                onClick={handleOpenContextPlan}
-                className={cn(desktopHeaderIconButtonClass, isContextPlanActive && 'bg-[var(--interactive-hover)]')}
-              >
-                <RiFileTextLine className="h-[18px] w-[18px]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Plan ({shortcutLabel('toggle_context_plan')})</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-        <OpenInAppButton directory={openDirectory} activeFilePath={selectedFilePath} className="mr-1" />
-        <DropdownMenu
-            open={isDesktopServicesOpen}
-            onOpenChange={(open) => {
-              setIsDesktopServicesOpen(open);
-              if (open) {
-                void refreshCurrentInstanceLabel();
-                if (desktopServicesTab === 'usage' && quotaResults.length === 0) {
-                  fetchAllQuotas();
-                }
-              }
-            }}
-          >
-            <Tooltip delayDuration={500}>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={isDesktopApp
-                      ? `Open instance, usage and MCP (current: ${currentInstanceLabel})`
-                      : 'Open services, usage and MCP'}
-                    className={cn(
-                      desktopHeaderIconButtonClass,
-                      isDesktopApp
-                        ? 'w-auto max-w-[14rem] justify-start gap-1.5 px-2.5'
-                        : 'h-8 w-8'
-                    )}
-                  >
-                    <RiStackLine className="h-[18px] w-[18px]" />
-                    {isDesktopApp && <span className="truncate typography-ui-label font-medium text-foreground">{compactCurrentInstanceLabel}</span>}
-                  </button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>
-                  {isDesktopApp
-                    ? `Current instance: ${currentInstanceLabel}`
-                    : 'Services'} ({shortcutLabel('toggle_services_menu')}; next tab {shortcutLabel('cycle_services_tab')})
-                </p>
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent
-              align="end"
-              className="w-[min(30rem,calc(100vw-2rem))] max-h-[75vh] overflow-y-auto bg-[var(--surface-elevated)] p-0"
-            >
-              <div className="sticky top-0 z-20 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] px-2 py-px">
-                <div className="h-9">
-                  <SortableTabsStrip
-                    items={servicesTabItems}
-                    activeId={desktopServicesTab}
-                    onSelect={(tabID) => {
-                      const value = tabID as 'instance' | 'usage' | 'mcp';
-                      setDesktopServicesTab(value);
-                      if (value === 'usage' && quotaResults.length === 0) {
-                        fetchAllQuotas();
-                      }
-                    }}
-                    layoutMode="fit"
-                    variant="active-pill"
-                    activePillInsetClassName="gap-0.5 px-px py-0"
-                    activePillButtonClassName="h-8"
-                    className="h-full"
-                  />
-                </div>
-              </div>
-
-              {isDesktopApp && desktopServicesTab === 'instance' && (
-                <DesktopHostSwitcherDialog
-                  embedded
-                  open={isDesktopServicesOpen && desktopServicesTab === 'instance'}
-                  onOpenChange={() => {}}
-                  onHostSwitched={() => setIsDesktopServicesOpen(false)}
-                />
-              )}
-
-              {desktopServicesTab === 'mcp' && (
-                <McpDropdownContent active={isDesktopServicesOpen && desktopServicesTab === 'mcp'} />
-              )}
-
-              {desktopServicesTab === 'usage' && (
-                <div className="overflow-x-hidden">
-                  <div className="bg-[var(--surface-elevated)] border-b border-[var(--interactive-border)]">
-                    <DropdownMenuLabel className="flex items-center justify-between gap-3 py-2.5">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="typography-ui-header font-semibold text-foreground">Rate limits</span>
-                        <span className="truncate typography-ui-label text-muted-foreground">
-                          Last updated {formatTime(quotaLastUpdated)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="h-7 w-[10.5rem]">
-                          <SortableTabsStrip
-                            items={quotaDisplayTabItems}
-                            activeId={quotaDisplayMode}
-                            onSelect={(tabID) => handleDisplayModeChange(tabID as 'usage' | 'remaining')}
-                            layoutMode="fit"
-                            variant="active-pill"
-                            activePillInsetClassName="gap-0.5 px-px py-0"
-                            className="h-full"
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          className={cn(
-                            'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors',
-                            'hover:text-foreground hover:bg-interactive-hover',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-                          )}
-                          onClick={handleUsageRefresh}
-                          disabled={isQuotaLoading || isUsageRefreshSpinning}
-                          aria-label="Refresh rate limits"
-                        >
-                          <RiRefreshLine className={cn('h-4 w-4', isUsageRefreshSpinning && 'animate-spin')} />
-                        </button>
-                      </div>
-                    </DropdownMenuLabel>
-                  </div>
-                  {!hasRateLimits && (
-                    <DropdownMenuItem
-                      className="cursor-default hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
-                      onSelect={(event) => event.preventDefault()}
-                    >
-                      <span className="typography-ui-label text-muted-foreground">No rate limits available.</span>
-                    </DropdownMenuItem>
-                  )}
-                  {rateLimitGroups.map((group, index) => {
-                    const providerExpandedFamilies = expandedFamilies[group.providerId] ?? [];
-
-                    return (
-                      <React.Fragment key={group.providerId}>
-                        <DropdownMenuLabel className="flex items-center gap-2 border-b border-[var(--interactive-border)] bg-[var(--surface-elevated)] typography-ui-label text-foreground">
-                          <ProviderLogo providerId={group.providerId} className="h-4 w-4" />
-                          {group.providerName}
-                        </DropdownMenuLabel>
-
-                        {group.entries.length === 0 && (!group.modelFamilies || group.modelFamilies.length === 0) ? (
-                          <DropdownMenuItem
-                            key={`${group.providerId}-empty`}
-                            className="cursor-default hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
-                            onSelect={(event) => event.preventDefault()}
-                          >
-                            <span className="typography-ui-label text-muted-foreground">
-                              {group.error ?? 'No rate limits reported.'}
-                            </span>
-                          </DropdownMenuItem>
-                        ) : (
-                          <>
-                            {group.entries.map(([label, window]) => {
-                              const displayPercent = quotaDisplayMode === 'remaining'
-                                ? window.remainingPercent
-                                : window.usedPercent;
-                              const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds, label);
-                              const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                ? (quotaDisplayMode === 'remaining'
-                                    ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
-                                    : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
-                                : null;
-                              return (
-                              <DropdownMenuItem
-                                key={`${group.providerId}-${label}`}
-                                className="cursor-default items-start hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent"
-                                onSelect={(event) => event.preventDefault()}
-                              >
-                                <span className="flex min-w-0 flex-1 flex-col gap-2">
-                                        <span className="flex min-w-0 items-center justify-between gap-3">
-                                          <span className="min-w-0 flex items-center gap-2">
-                                            <span className="truncate typography-ui-label text-foreground">{formatWindowLabel(label)}</span>
-                                            {(window.resetAfterFormatted ?? window.resetAtFormatted) ? (
-                                              <span className="truncate typography-ui-label text-muted-foreground">
-                                                {window.resetAfterFormatted ?? window.resetAtFormatted}
-                                              </span>
-                                            ) : null}
-                                          </span>
-                                          <span className="typography-ui-label text-foreground tabular-nums">
-                                            {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
-                                          </span>
-                                        </span>
-                                        <UsageProgressBar
-                                          percent={displayPercent}
-                                          tonePercent={window.usedPercent}
-                                          className="h-1.5"
-                                          expectedMarkerPercent={expectedMarker}
-                                        />
-                                        {paceInfo && (
-                                          <div className="mb-1">
-                                            <PaceIndicator paceInfo={paceInfo} compact />
-                                          </div>
-                                        )}
-                                </span>
-                              </DropdownMenuItem>
-                            );
-                            })}
-
-                            {group.modelFamilies && group.modelFamilies.length > 0 && (
-                              <div className="px-2 py-1">
-                                {group.modelFamilies.map((family) => {
-                                  const isExpanded = providerExpandedFamilies.includes(family.familyId ?? 'other');
-
-                                  return (
-                                    <Collapsible
-                                      key={family.familyId ?? 'other'}
-                                      open={isExpanded}
-                                      onOpenChange={() => toggleFamilyExpanded(group.providerId, family.familyId ?? 'other')}
-                                    >
-                                      <CollapsibleTrigger className="flex w-full items-center justify-between py-1.5 text-left">
-                                        <span className="typography-ui-label font-medium text-foreground">
-                                          {family.familyLabel}
-                                        </span>
-                                        {isExpanded ? (
-                                          <RiArrowDownSLine className="h-4 w-4 text-muted-foreground" />
-                                        ) : (
-                                          <RiArrowRightSLine className="h-4 w-4 text-muted-foreground" />
-                                        )}
-                                      </CollapsibleTrigger>
-                                      <CollapsibleContent>
-                                        <div className="space-y-1 pl-2">
-                                          {family.models.map(([modelName, window]) => {
-                                            const displayPercent = quotaDisplayMode === 'remaining'
-                                              ? window.remainingPercent
-                                              : window.usedPercent;
-                                            const paceInfo = calculatePace(window.usedPercent, window.resetAt, window.windowSeconds);
-                                            const expectedMarker = paceInfo?.dailyAllocationPercent != null
-                                              ? (quotaDisplayMode === 'remaining'
-                                                  ? 100 - calculateExpectedUsagePercent(paceInfo.elapsedRatio)
-                                                  : calculateExpectedUsagePercent(paceInfo.elapsedRatio))
-                                              : null;
-                                            return (
-                                            <div
-                                              key={`${group.providerId}-${modelName}`}
-                                              className="py-1.5"
-                                            >
-                                              <div className="flex min-w-0 flex-col gap-1.5">
-                                                <span className="flex min-w-0 items-center justify-between gap-3">
-                                                  <span className="truncate typography-micro text-muted-foreground">{getDisplayModelName(modelName)}</span>
-                                                  <span className="typography-ui-label text-foreground tabular-nums">
-                                                    {formatPercent(displayPercent) === '-' ? '' : formatPercent(displayPercent)}
-                                                  </span>
-                                                </span>
-                                                <UsageProgressBar
-                                                  percent={displayPercent}
-                                                  tonePercent={window.usedPercent}
-                                                  className="h-1.5"
-                                                  expectedMarkerPercent={expectedMarker}
-                                                />
-                                                {paceInfo && (
-                                                  <div className="mb-1">
-                                                    <PaceIndicator paceInfo={paceInfo} compact />
-                                                  </div>
-                                                )}
-                                              </div>
-                                            </div>
-                                            );
-                                          })}
-                                        </div>
-                                      </CollapsibleContent>
-                                    </Collapsible>
-                                  );
-                                })}
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {index < rateLimitGroups.length - 1 && <DropdownMenuSeparator />}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleBottomTerminal}
-              aria-label="Toggle terminal panel"
-              className={desktopHeaderIconButtonClass}
-            >
-              <RiTerminalBoxLine className="h-[18px] w-[18px]" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Terminal panel ({shortcutLabel('toggle_terminal')})</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip delayDuration={500}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={toggleRightSidebar}
-              aria-label="Toggle right sidebar"
-              className={desktopHeaderIconButtonClass}
-            >
-              <RiLayoutRightLine className="h-[18px] w-[18px]" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Right sidebar ({shortcutLabel('toggle_right_sidebar')})</p>
-          </TooltipContent>
-        </Tooltip>
-
-        {githubAuthStatus?.connected && !isMobile ? (
-          githubAccounts.length > 1 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    desktopHeaderIconButtonClass,
-                    'h-7 w-7 p-0 overflow-hidden rounded-full border border-border/60 bg-muted/80'
-                  )}
-                  title={githubLogin ? `GitHub: ${githubLogin}` : 'GitHub connected'}
-                  disabled={isSwitchingGitHubAccount}
-                >
-                  {githubAvatarUrl ? (
-                    <img
-                      src={githubAvatarUrl}
-                      alt={githubLogin ? `${githubLogin} avatar` : 'GitHub avatar'}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <RiGithubFill className="h-3.5 w-3.5 text-foreground" />
-                  )}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="typography-ui-header font-semibold text-foreground">
-                  GitHub Accounts
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {githubAccounts.map((account) => {
-                  const accountUser = account.user;
-                  const isCurrent = Boolean(account.current);
-                  return (
-                    <DropdownMenuItem
-                      key={account.id}
-                      className="gap-2"
-                      disabled={isCurrent || isSwitchingGitHubAccount}
-                      onSelect={() => {
-                        if (!isCurrent) {
-                          void handleGitHubAccountSwitch(account.id);
-                        }
-                      }}
-                    >
-                      {accountUser?.avatarUrl ? (
-                        <img
-                          src={accountUser.avatarUrl}
-                          alt={accountUser.login ? `${accountUser.login} avatar` : 'GitHub avatar'}
-                          className="h-6 w-6 rounded-full border border-border/60 bg-muted object-cover"
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border/60 bg-muted">
-                          <RiGithubFill className="h-3 w-3 text-muted-foreground" />
-                        </div>
-                      )}
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="typography-ui-label text-foreground truncate">
-                          {accountUser?.name?.trim() || accountUser?.login || 'GitHub'}
-                        </span>
-                        {accountUser?.login ? (
-                          <span className="typography-micro text-muted-foreground truncate font-mono">
-                            {accountUser.login}
-                          </span>
-                        ) : null}
-                      </span>
-                      {isCurrent ? (
-                        <RiCheckLine className="h-4 w-4 text-primary" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <div
-              className="app-region-no-drag flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-border/60 bg-muted/80"
-              title={githubLogin ? `GitHub: ${githubLogin}` : 'GitHub connected'}
-            >
-              {githubAvatarUrl ? (
-                <img
-                  src={githubAvatarUrl}
-                  alt={githubLogin ? `${githubLogin} avatar` : 'GitHub avatar'}
-                  className="h-full w-full object-cover"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <RiGithubFill className="h-3.5 w-3.5 text-foreground" />
-              )}
-            </div>
-          )
-        ) : null}
-      </div>
+          {showDesktopHeaderContextUsage && stableDesktopContextUsage ? (
+            <ContextUsageDisplay
+              totalTokens={stableDesktopContextUsage.totalTokens}
+              percentage={desktopHeaderDisplayPercentage}
+              colorPercentage={stableDesktopContextUsage.percentage}
+              contextLimit={stableDesktopContextUsage.contextLimit}
+              outputLimit={stableDesktopContextUsage.outputLimit ?? 0}
+              size="compact"
+              hideIcon
+              showPercentIcon
+              onClick={handleOpenContextPanel}
+              pressed={isContextPanelActive}
+              className={desktopSidebarActionsInline ? 'mr-3.5' : ''}
+              valueClassName="typography-ui-label font-medium leading-none text-foreground"
+              percentIconClassName="h-5 w-5"
+            />
+          ) : null}
+          {desktopSidebarActionsInline ? desktopSidebarActions : null}
+          {!desktopSidebarActionsInline && desktopRightSidebarActionsHost
+            ? createPortal(desktopSidebarActions, desktopRightSidebarActionsHost)
+            : null}
+        </div>
       </div>
     </div>
   );

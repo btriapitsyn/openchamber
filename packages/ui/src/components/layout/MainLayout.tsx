@@ -3,7 +3,7 @@ import { motion, useMotionValue, animate } from 'motion/react';
 import { Header } from './Header';
 import { BottomTerminalDock } from './BottomTerminalDock';
 import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
-import { RightSidebar } from './RightSidebar';
+import { RightSidebar, RIGHT_SIDEBAR_CONTENT_WIDTH } from './RightSidebar';
 import { RightSidebarTabs } from './RightSidebarTabs';
 import { ContextPanel } from './ContextPanel';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
@@ -29,6 +29,8 @@ import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, Setting
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
 const DESKTOP_SIDEBAR_MIN_WIDTH = 250;
 const DESKTOP_SIDEBAR_MAX_WIDTH = 500;
+const DESKTOP_RIGHT_SIDEBAR_MIN_WIDTH = 400;
+const DESKTOP_RIGHT_SIDEBAR_MAX_WIDTH = 860;
 
 const normalizeDirectoryKey = (value: string): string => {
     if (!value) return '';
@@ -73,6 +75,8 @@ export const MainLayout: React.FC = () => {
     const { isMobile } = useDeviceInfo();
     const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
     const sidebarWidth = useUIStore((state) => state.sidebarWidth);
+    const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth);
+    const [desktopRightSidebarActionsHost, setDesktopRightSidebarActionsHost] = React.useState<HTMLDivElement | null>(null);
     const effectiveDirectory = useEffectiveDirectory() ?? '';
     const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
     const isContextPanelOpen = useUIStore((state) => {
@@ -598,6 +602,10 @@ export const MainLayout: React.FC = () => {
         const rawWidth = sidebarWidth || SIDEBAR_CONTENT_WIDTH;
         return Math.min(DESKTOP_SIDEBAR_MAX_WIDTH, Math.max(DESKTOP_SIDEBAR_MIN_WIDTH, rawWidth));
     }, [sidebarWidth]);
+    const visibleRightSidebarWidth = React.useMemo(() => {
+        const rawWidth = rightSidebarWidth || RIGHT_SIDEBAR_CONTENT_WIDTH;
+        return Math.min(DESKTOP_RIGHT_SIDEBAR_MAX_WIDTH, Math.max(DESKTOP_RIGHT_SIDEBAR_MIN_WIDTH, rawWidth));
+    }, [rightSidebarWidth]);
 
     return (
         <DiffWorkerProvider>
@@ -851,6 +859,42 @@ export const MainLayout: React.FC = () => {
                                     />
                                 </>
                             ) : null}
+                            {isRightSidebarOpen ? (
+                                <>
+                                    <div
+                                        aria-hidden
+                                        className={cn(
+                                            'pointer-events-none absolute top-0 z-0',
+                                            isDesktopShellRuntime
+                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                                                : 'bg-sidebar'
+                                        )}
+                                        style={{
+                                            right: `${visibleRightSidebarWidth}px`,
+                                            width: 'var(--radius-xl)',
+                                            height: 'var(--radius-xl)',
+                                            WebkitMaskImage: 'radial-gradient(circle at 0 100%, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                            maskImage: 'radial-gradient(circle at 0 100%, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                        }}
+                                    />
+                                    <div
+                                        aria-hidden
+                                        className={cn(
+                                            'pointer-events-none absolute bottom-0 z-0',
+                                            isDesktopShellRuntime
+                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                                                : 'bg-sidebar'
+                                        )}
+                                        style={{
+                                            right: `${visibleRightSidebarWidth}px`,
+                                            width: 'var(--radius-xl)',
+                                            height: 'var(--radius-xl)',
+                                            WebkitMaskImage: 'radial-gradient(circle at 0 0, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                            maskImage: 'radial-gradient(circle at 0 0, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                        }}
+                                    />
+                                </>
+                            ) : null}
                             <Sidebar
                                 isOpen={isSidebarOpen}
                                 isMobile={isMobile}
@@ -863,12 +907,14 @@ export const MainLayout: React.FC = () => {
                                 isDesktopShellRuntime
                                     ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
                                     : 'bg-sidebar',
-                                isSidebarOpen && 'border-l border-border/50 rounded-tl-xl rounded-bl-xl'
+                                isSidebarOpen && 'border-l border-border/50 rounded-tl-xl rounded-bl-xl',
+                                isRightSidebarOpen && 'border-r border-border/50 rounded-tr-xl rounded-br-xl'
                             )}>
-                                <Header />
+                                <Header desktopRightSidebarActionsHost={desktopRightSidebarActionsHost} />
                                 <div className={cn(
-                                    'flex flex-1 min-h-0 overflow-hidden border-t border-border/50',
-                                    isSidebarOpen ? '' : 'border-l border-border/50'
+                                    'flex flex-1 min-h-0 overflow-hidden',
+                                    isSidebarOpen ? '' : 'border-l border-border/50',
+                                    isRightSidebarOpen ? '' : 'border-r border-border/50'
                                 )}>
                                     <div className="relative flex flex-1 min-h-0 min-w-0 overflow-hidden">
                                         <main className="flex-1 overflow-hidden bg-background relative">
@@ -883,14 +929,18 @@ export const MainLayout: React.FC = () => {
                                         </main>
                                         <ContextPanel />
                                     </div>
-                                    <RightSidebar isOpen={isRightSidebarOpen}>
-                                        <ErrorBoundary><RightSidebarTabs /></ErrorBoundary>
-                                    </RightSidebar>
                                 </div>
                                 <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
                                     <ErrorBoundary><TerminalView /></ErrorBoundary>
                                 </BottomTerminalDock>
                             </div>
+                            <RightSidebar
+                                isOpen={isRightSidebarOpen}
+                                className="border-0"
+                                onTopActionsHostChange={setDesktopRightSidebarActionsHost}
+                            >
+                                <ErrorBoundary><RightSidebarTabs /></ErrorBoundary>
+                            </RightSidebar>
                         </div>
 
                         {/* Multi-Run Launcher: replaces tabs content only */}

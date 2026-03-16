@@ -2,15 +2,18 @@ import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
 
+export const RIGHT_SIDEBAR_CONTENT_WIDTH = 420;
 const RIGHT_SIDEBAR_MIN_WIDTH = 400;
 const RIGHT_SIDEBAR_MAX_WIDTH = 860;
 
 interface RightSidebarProps {
   isOpen: boolean;
   children: React.ReactNode;
+  className?: string;
+  onTopActionsHostChange?: (element: HTMLDivElement | null) => void;
 }
 
-export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children }) => {
+export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, className, onTopActionsHostChange }) => {
   const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth);
   const setRightSidebarWidth = useUIStore((state) => state.setRightSidebarWidth);
   const [isResizing, setIsResizing] = React.useState(false);
@@ -34,7 +37,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children }) 
   }, []);
 
   const appliedWidth = isOpen
-    ? Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth || 420))
+    ? Math.min(RIGHT_SIDEBAR_MAX_WIDTH, Math.max(RIGHT_SIDEBAR_MIN_WIDTH, rightSidebarWidth || RIGHT_SIDEBAR_CONTENT_WIDTH))
     : 0;
 
   const handlePointerDown = (event: React.PointerEvent) => {
@@ -97,13 +100,23 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children }) 
     }
   }, [isResizing]);
 
+  React.useEffect(() => {
+    if (!isOpen) {
+      onTopActionsHostChange?.(null);
+    }
+  }, [isOpen, onTopActionsHostChange]);
+
   return (
     <aside
       ref={sidebarRef}
       className={cn(
-        'relative flex h-full overflow-hidden border-l border-border/40 bg-sidebar/50',
+        'relative flex h-full overflow-hidden border-l border-border/40',
+        isOpen
+          ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+          : 'bg-sidebar',
         isResizing ? 'transition-none' : 'transition-[width] duration-300 ease-in-out',
-        !isOpen && 'border-l-0'
+        !isOpen && 'border-l-0',
+        className,
       )}
       style={{
         width: 'var(--oc-right-sidebar-width)',
@@ -114,6 +127,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children }) 
       }}
       aria-hidden={!isOpen || appliedWidth === 0}
     >
+      {isOpen ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[var(--oc-header-height,56px)] items-center justify-end px-3"
+          aria-hidden
+        >
+          <div
+            ref={onTopActionsHostChange}
+            className="pointer-events-auto flex items-center gap-1"
+          />
+        </div>
+      ) : null}
       {isOpen && (
         <div
           className={cn(
@@ -135,6 +159,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children }) 
           isResizing && 'pointer-events-none',
           !isOpen && 'pointer-events-none select-none opacity-0'
         )}
+        style={isOpen ? { paddingTop: 'var(--oc-header-height, 56px)' } : undefined}
         aria-hidden={!isOpen}
       >
         {isOpen ? children : null}
