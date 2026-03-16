@@ -547,7 +547,7 @@ const SkillsInstalledPage: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={handleConfirmDeleteFile} disabled={isDeletingFile} className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white border-0">
+            <Button size="sm" variant="destructive" onClick={handleConfirmDeleteFile} disabled={isDeletingFile}>
               Delete
             </Button>
           </DialogFooter>

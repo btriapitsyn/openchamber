@@ -388,7 +388,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               >
                 Cancel
               </Button>
-              <Button size="sm" className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
+              <Button size="sm" variant="destructive" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
                 Remove Catalog
               </Button>
             </DialogFooter>

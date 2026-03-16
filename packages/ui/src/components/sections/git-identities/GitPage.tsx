@@ -211,7 +211,7 @@ export const GitPage: React.FC = () => {
             <Button variant="ghost" onClick={() => setDeleteDialogProfile(null)} disabled={isDeletePending}>
               Cancel
             </Button>
-            <Button size="sm" onClick={() => void handleConfirmDelete()} disabled={isDeletePending} className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white border-0">
+            <Button size="sm" variant="destructive" onClick={() => void handleConfirmDelete()} disabled={isDeletePending}>
               Delete
             </Button>
           </DialogFooter>

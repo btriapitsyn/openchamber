@@ -455,7 +455,7 @@ export const VoiceSettings: React.FC = () => {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <Button size="sm" variant="ghost" className="h-7 w-7 px-0" onClick={previewOpenAIVoice} title="Preview">
+                                            <Button size="xs" variant="ghost" onClick={previewOpenAIVoice} title="Preview">
                                                 {isOpenAIPreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
                                             </Button>
                                         </>
@@ -473,7 +473,7 @@ export const VoiceSettings: React.FC = () => {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <Button size="sm" variant="ghost" className="h-7 w-7 px-0" onClick={previewVoice} title="Preview">
+                                            <Button size="xs" variant="ghost" onClick={previewVoice} title="Preview">
                                                 {isPreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
                                             </Button>
                                         </>
@@ -492,7 +492,7 @@ export const VoiceSettings: React.FC = () => {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <Button size="sm" variant="ghost" className="h-7 w-7 px-0" onClick={previewBrowserVoice} title="Preview">
+                                            <Button size="xs" variant="ghost" onClick={previewBrowserVoice} title="Preview">
                                                 {isBrowserPreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
                                             </Button>
                                         </>

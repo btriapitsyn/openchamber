@@ -147,9 +147,8 @@ export const ChangesSection: React.FC<ChangesSectionProps> = ({
           <div className={cn('flex items-center gap-2', variant === 'plain' && 'pr-1')}>
             {totalCount > 0 && onRevertAll ? (
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-xs text-[var(--status-error)] hover:text-[var(--status-error)]"
+                variant="destructive"
+                size="xs"
                 onClick={() => setConfirmRevertAllOpen(true)}
                 disabled={isRevertingAll}
               >
@@ -237,10 +236,10 @@ export const ChangesSection: React.FC<ChangesSectionProps> = ({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmRevertAllOpen(false)} disabled={isRevertingAll}>
+            <Button variant="outline" size="sm" onClick={() => setConfirmRevertAllOpen(false)} disabled={isRevertingAll}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => void handleConfirmRevertAll()} disabled={isRevertingAll}>
+            <Button variant="destructive" size="sm" onClick={() => void handleConfirmRevertAll()} disabled={isRevertingAll}>
               {isRevertingAll ? 'Reverting...' : 'Revert all'}
             </Button>
           </DialogFooter>

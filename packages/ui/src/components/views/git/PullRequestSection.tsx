@@ -1382,7 +1382,7 @@ export const PullRequestSection: React.FC<{
             {hasMultipleRemotes ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 gap-1">
+                  <Button variant="ghost" size="xs" className="gap-1">
                     <span className="typography-micro">{selectedRemote?.name}</span>
                     <RiArrowDownSLine className="size-3" />
                   </Button>

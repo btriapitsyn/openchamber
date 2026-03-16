@@ -284,7 +284,7 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
         </p>
         <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen} modal={false}>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between h-10">
+            <Button variant="outline" size="lg" className="w-full justify-between">
               <span className={cn('truncate', !selectedBranch && 'text-muted-foreground')}>
                 {selectedBranch || 'Select a branch...'}
               </span>
@@ -378,7 +378,7 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
         </DialogFooter>
       ) : (
         <div className="flex items-center gap-2 pt-1">
-          <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isDisabled}>
+          <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isDisabled}>
             Reset
           </Button>
           <div className="flex-1" />

@@ -197,7 +197,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
 
                       <DropdownMenu open={openMenuMcp === server.name} onOpenChange={(open) => setOpenMenuMcp(open ? server.name : null)}>
                         <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="ghost" className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                          <Button size="xs" variant="ghost" className="flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                             <RiMore2Line className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -267,7 +267,7 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
 
                       <DropdownMenu open={openMenuMcp === server.name} onOpenChange={(open) => setOpenMenuMcp(open ? server.name : null)}>
                         <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="ghost" className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+                          <Button size="xs" variant="ghost" className="flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
                             <RiMore2Line className="h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
