@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -24,6 +24,8 @@ import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
+import { useGitStore } from '@/stores/useGitStore';
+import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
 
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -52,13 +54,14 @@ import {
 } from '@/components/ui/collapsible';
 import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
 import type { UsageWindow } from '@/types';
-import type { GitHubAuthStatus } from '@/lib/api/types';
+import type { GitHubAuthStatus, GitHubPullRequestStatus } from '@/lib/api/types';
 import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { DesktopHostSwitcherDialog } from '@/components/desktop/DesktopHostSwitcher';
 import { OpenInAppButton } from '@/components/desktop/OpenInAppButton';
 import { ProjectActionsButton } from '@/components/layout/ProjectActionsButton';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { desktopHostsGet, locationMatchesHost, redactSensitiveUrl } from '@/lib/desktopHosts';
+import { resolveSessionDiffStats } from '@/components/session/sidebar/utils';
 
 
 const isSameContextUsage = (
@@ -75,6 +78,48 @@ const isSameContextUsage = (
     && (a.normalizedOutput ?? 0) === (b.normalizedOutput ?? 0)
     && a.thresholdLimit === b.thresholdLimit
     && (a.lastMessageId ?? '') === (b.lastMessageId ?? '');
+};
+
+type PrVisualState = 'draft' | 'open' | 'blocked' | 'merged' | 'closed';
+
+const getPrVisualState = (status: GitHubPullRequestStatus | null): PrVisualState | null => {
+  const pr = status?.pr;
+  if (!pr) {
+    return null;
+  }
+  if (pr.state === 'merged') {
+    return 'merged';
+  }
+  if (pr.state === 'closed') {
+    return 'closed';
+  }
+  if (pr.draft) {
+    return 'draft';
+  }
+  const checksFailed = status?.checks?.state === 'failure';
+  const mergeableState = typeof pr.mergeableState === 'string' ? pr.mergeableState : '';
+  const notMergeable = pr.mergeable === false || mergeableState === 'blocked' || mergeableState === 'dirty';
+  if (checksFailed || notMergeable) {
+    return 'blocked';
+  }
+  return 'open';
+};
+
+const getPrVisualPriority = (state: PrVisualState): number => {
+  switch (state) {
+    case 'open':
+      return 5;
+    case 'blocked':
+      return 4;
+    case 'draft':
+      return 3;
+    case 'merged':
+      return 2;
+    case 'closed':
+      return 1;
+    default:
+      return 0;
+  }
 };
 
 const formatTime = (timestamp: number | null) => {
@@ -490,6 +535,12 @@ export const Header: React.FC<HeaderProps> = ({
     if (!currentSessionId) return '';
     return state.worktreeMetadata.get(currentSessionId)?.path ?? '';
   });
+  const currentSessionWorktreeBranch = useSessionStore((state) => {
+    if (!currentSessionId) return null;
+    return state.worktreeMetadata.get(currentSessionId)?.branch?.trim() ?? null;
+  });
+  const gitDirectories = useGitStore((state) => state.directories);
+  const prStatusEntries = useGitHubPrStatusStore((state) => state.entries);
 
   const worktreeDirectory = React.useMemo(() => {
     return normalize(worktreePath || '');
@@ -510,6 +561,97 @@ export const Header: React.FC<HeaderProps> = ({
   const openDirectory = React.useMemo(() => {
     return worktreeDirectory || sessionDirectory || draftDirectory;
   }, [draftDirectory, sessionDirectory, worktreeDirectory]);
+
+  const currentSessionTitle = React.useMemo(() => {
+    if (!currentSessionId) {
+      return activeProjectLabel ?? 'OpenChamber';
+    }
+    const trimmedTitle = currentSession?.title?.trim();
+    return trimmedTitle && trimmedTitle.length > 0 ? trimmedTitle : 'Untitled Session';
+  }, [activeProjectLabel, currentSession?.title, currentSessionId]);
+
+  const currentSessionDiffStats = React.useMemo(() => {
+    return resolveSessionDiffStats(currentSession?.summary as Parameters<typeof resolveSessionDiffStats>[0]);
+  }, [currentSession?.summary]);
+
+  const currentBranchLabel = React.useMemo(() => {
+    const directory = normalize(openDirectory || '');
+    if (directory) {
+      const gitBranch = gitDirectories.get(directory)?.status?.current?.trim();
+      if (gitBranch) {
+        return gitBranch;
+      }
+    }
+    return currentSessionWorktreeBranch;
+  }, [currentSessionWorktreeBranch, gitDirectories, openDirectory]);
+
+  const currentSessionPr = React.useMemo(() => {
+    const directory = normalize(openDirectory || '');
+    const branch = currentBranchLabel?.trim();
+    if (!directory || !branch) {
+      return null;
+    }
+
+    let bestMatch: { visualState: PrVisualState; number: number; canMerge: boolean | null; checksState: string | null } | null = null;
+    const prEntries = Object.values(prStatusEntries);
+    for (const entry of prEntries) {
+      const entryDirectory = normalize(entry.params?.directory ?? entry.identity?.directory ?? '');
+      const entryBranch = entry.params?.branch?.trim() ?? entry.identity?.branch?.trim() ?? '';
+      if (!entryDirectory || !entryBranch || entryDirectory !== directory || entryBranch !== branch) {
+        continue;
+      }
+
+      const visualState = getPrVisualState(entry.status ?? null);
+      const number = entry.status?.pr?.number;
+      if (!visualState || !number) {
+        continue;
+      }
+
+      const next = {
+        visualState,
+        number,
+        canMerge: typeof entry.status?.canMerge === 'boolean' ? entry.status.canMerge : null,
+        checksState: entry.status?.checks?.state ?? null,
+      };
+
+      if (!bestMatch || getPrVisualPriority(next.visualState) > getPrVisualPriority(bestMatch.visualState)) {
+        bestMatch = next;
+      }
+    }
+
+    return bestMatch;
+  }, [currentBranchLabel, openDirectory, prStatusEntries]);
+
+  const currentSessionPrLabel = React.useMemo(() => {
+    if (!currentSessionPr) {
+      return null;
+    }
+
+    switch (currentSessionPr.visualState) {
+      case 'merged':
+        return `PR #${currentSessionPr.number} merged`;
+      case 'closed':
+        return `PR #${currentSessionPr.number} closed`;
+      case 'draft':
+        return `PR #${currentSessionPr.number} draft`;
+      case 'blocked':
+        return `PR #${currentSessionPr.number} blocked`;
+      case 'open':
+        if (currentSessionPr.canMerge === true || currentSessionPr.checksState === 'success') {
+          return `PR #${currentSessionPr.number} ready`;
+        }
+        return `PR #${currentSessionPr.number} open`;
+      default:
+        return null;
+    }
+  }, [currentSessionPr]);
+
+  const currentSessionChanges = React.useMemo(() => {
+    if (currentSessionDiffStats) {
+      return currentSessionDiffStats;
+    }
+    return { additions: 0, deletions: 0 };
+  }, [currentSessionDiffStats]);
 
   const selectedFilePath = useFilesViewTabsStore((state) => {
     const directory = normalize(openDirectory || '');
@@ -1051,19 +1193,27 @@ export const Header: React.FC<HeaderProps> = ({
       ) : null}
 
       <div className={cn('flex min-w-0 flex-1 items-center', !isSidebarOpen && 'pl-3')}>
-        {activeProjectLabel && (
-          <div className="mr-3 min-w-0 max-w-[16rem] truncate typography-ui-header text-[calc(var(--text-ui-header)+0.125rem)] font-medium text-foreground">
-            {activeProjectLabel}
+        <div className="mr-3 min-w-0">
+          <div className="truncate pl-1 typography-ui-label text-[14px] font-normal leading-tight text-foreground">
+            {currentSessionTitle}
           </div>
-        )}
-
-        {projectActionsContext && (
-          <ProjectActionsButton
-            projectRef={projectActionsContext.projectRef}
-            directory={projectActionsContext.directory}
-            className="mr-1"
-          />
-        )}
+          {(activeProjectLabel || currentBranchLabel || currentSessionPrLabel || currentSessionChanges) ? (
+            <div className="flex min-w-0 items-center gap-1.5 truncate pl-1 typography-micro text-[10.5px] font-normal leading-tight text-muted-foreground/75">
+              {activeProjectLabel ? <span className="truncate">{activeProjectLabel}</span> : null}
+              {currentBranchLabel ? (
+                <span className="inline-flex min-w-0 items-center gap-0.5">
+                  <RiGitBranchLine className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+                  <span className="truncate">{currentBranchLabel}</span>
+                </span>
+              ) : null}
+              {currentSessionPrLabel ? <span className="truncate">{currentSessionPrLabel}</span> : null}
+              <span className="inline-flex flex-shrink-0 items-center gap-0 text-[0.92em]">
+                <span className="text-status-success/80">+{currentSessionChanges.additions}</span>
+                <span className="text-status-error/65">/-{currentSessionChanges.deletions}</span>
+              </span>
+            </div>
+          ) : null}
+        </div>
 
         {tabs.length > 0 && (
           <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-muted)]/50 p-1">
@@ -1107,6 +1257,13 @@ export const Header: React.FC<HeaderProps> = ({
               <p>Plan ({shortcutLabel('toggle_context_plan')})</p>
             </TooltipContent>
           </Tooltip>
+        )}
+        {projectActionsContext && (
+          <ProjectActionsButton
+            projectRef={projectActionsContext.projectRef}
+            directory={projectActionsContext.directory}
+            className="mr-1"
+          />
         )}
         <OpenInAppButton directory={openDirectory} activeFilePath={selectedFilePath} className="mr-1" />
         <DropdownMenu

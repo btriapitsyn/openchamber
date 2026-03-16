@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import { motion, useMotionValue, animate } from 'motion/react';
 import { Header } from './Header';
 import { BottomTerminalDock } from './BottomTerminalDock';
-import { Sidebar } from './Sidebar';
+import { Sidebar, SIDEBAR_CONTENT_WIDTH } from './Sidebar';
 import { RightSidebar } from './RightSidebar';
 import { RightSidebarTabs } from './RightSidebarTabs';
 import { ContextPanel } from './ContextPanel';
@@ -21,11 +21,14 @@ import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
+import { isDesktopShell } from '@/lib/desktop';
 
 import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
 
 // Mobile drawer width as screen percentage
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
+const DESKTOP_SIDEBAR_MIN_WIDTH = 250;
+const DESKTOP_SIDEBAR_MAX_WIDTH = 500;
 
 const normalizeDirectoryKey = (value: string): string => {
     if (!value) return '';
@@ -68,6 +71,8 @@ export const MainLayout: React.FC = () => {
     } = useUIStore();
 
     const { isMobile } = useDeviceInfo();
+    const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
+    const sidebarWidth = useUIStore((state) => state.sidebarWidth);
     const effectiveDirectory = useEffectiveDirectory() ?? '';
     const directoryKey = React.useMemo(() => normalizeDirectoryKey(effectiveDirectory), [effectiveDirectory]);
     const isContextPanelOpen = useUIStore((state) => {
@@ -589,6 +594,10 @@ export const MainLayout: React.FC = () => {
     }, [activeMainTab]);
 
     const isChatActive = activeMainTab === 'chat';
+    const visibleSidebarWidth = React.useMemo(() => {
+        const rawWidth = sidebarWidth || SIDEBAR_CONTENT_WIDTH;
+        return Math.min(DESKTOP_SIDEBAR_MAX_WIDTH, Math.max(DESKTOP_SIDEBAR_MIN_WIDTH, rawWidth));
+    }, [sidebarWidth]);
 
     return (
         <DiffWorkerProvider>
@@ -596,7 +605,7 @@ export const MainLayout: React.FC = () => {
                 className={cn(
                     'main-content-safe-area h-[100dvh]',
                     isMobile ? 'flex flex-col' : 'flex',
-                    'bg-background'
+                    isDesktopShellRuntime ? 'bg-transparent' : 'bg-background'
                 )}
             >
                 <CommandPalette />
@@ -799,7 +808,49 @@ export const MainLayout: React.FC = () => {
                 <>
                     {/* Desktop: Sidebar is a left column; header belongs to content column */}
                     <div className="flex flex-1 overflow-hidden relative">
-                        <div className={cn('absolute inset-0 flex overflow-hidden bg-sidebar', isMultiRunLauncherOpen && 'invisible')}>
+                        <div className={cn(
+                            'absolute inset-0 flex overflow-hidden',
+                            isDesktopShellRuntime
+                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                                : 'bg-sidebar',
+                            isMultiRunLauncherOpen && 'invisible'
+                        )}>
+                            {isSidebarOpen ? (
+                                <>
+                                    <div
+                                        aria-hidden
+                                        className={cn(
+                                            'pointer-events-none absolute top-0 z-0',
+                                            isDesktopShellRuntime
+                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                                                : 'bg-sidebar'
+                                        )}
+                                        style={{
+                                            left: `${visibleSidebarWidth}px`,
+                                            width: 'var(--radius-xl)',
+                                            height: 'var(--radius-xl)',
+                                            WebkitMaskImage: 'radial-gradient(circle at 100% 100%, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                            maskImage: 'radial-gradient(circle at 100% 100%, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                        }}
+                                    />
+                                    <div
+                                        aria-hidden
+                                        className={cn(
+                                            'pointer-events-none absolute bottom-0 z-0',
+                                            isDesktopShellRuntime
+                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                                                : 'bg-sidebar'
+                                        )}
+                                        style={{
+                                            left: `${visibleSidebarWidth}px`,
+                                            width: 'var(--radius-xl)',
+                                            height: 'var(--radius-xl)',
+                                            WebkitMaskImage: 'radial-gradient(circle at 100% 0%, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                            maskImage: 'radial-gradient(circle at 100% 0%, transparent calc(var(--radius-xl) - 1px), black var(--radius-xl))',
+                                        }}
+                                    />
+                                </>
+                            ) : null}
                             <Sidebar
                                 isOpen={isSidebarOpen}
                                 isMobile={isMobile}
@@ -808,7 +859,10 @@ export const MainLayout: React.FC = () => {
                                 <SessionSidebar />
                             </Sidebar>
                             <div className={cn(
-                                'relative flex flex-1 min-w-0 flex-col overflow-hidden bg-sidebar',
+                                'relative flex flex-1 min-w-0 flex-col overflow-hidden',
+                                isDesktopShellRuntime
+                                    ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
+                                    : 'bg-sidebar',
                                 isSidebarOpen && 'border-l border-border/50 rounded-tl-xl rounded-bl-xl'
                             )}>
                                 <Header />

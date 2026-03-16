@@ -24,6 +24,8 @@ use std::{
 };
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+#[cfg(target_os = "macos")]
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -2358,6 +2360,24 @@ fn build_init_script(local_origin: &str) -> String {
     init_script
 }
 
+#[cfg(target_os = "macos")]
+fn apply_macos_window_vibrancy(window: &tauri::WebviewWindow) {
+    let macos_version = macos_major_version().unwrap_or(0);
+    let corner_radius = if macos_version >= 26 { 24.0 } else { 10.0 };
+
+    if let Err(error) = apply_vibrancy(
+        window,
+        NSVisualEffectMaterial::Sidebar,
+        None,
+        Some(corner_radius),
+    ) {
+        log::warn!("[desktop:vibrancy] Failed to apply macOS vibrancy: {error}");
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn apply_macos_window_vibrancy(_window: &tauri::WebviewWindow) {}
+
 fn is_window_state_visible(app: &tauri::AppHandle, state: &DesktopWindowState) -> bool {
     if state.width == 0 || state.height == 0 {
         return false;
@@ -2523,6 +2543,7 @@ fn create_window(
     #[cfg(target_os = "macos")]
     {
         builder = builder
+            .transparent(true)
             .hidden_title(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition {
@@ -2532,6 +2553,7 @@ fn create_window(
     }
 
     let window = builder.build()?;
+    apply_macos_window_vibrancy(&window);
 
     if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
         if state.maximized || state.fullscreen {
@@ -2583,6 +2605,7 @@ fn create_startup_window(app: &tauri::AppHandle, restore_geometry: bool) -> Resu
     #[cfg(target_os = "macos")]
     {
         builder = builder
+            .transparent(true)
             .hidden_title(true)
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition {
@@ -2592,6 +2615,7 @@ fn create_startup_window(app: &tauri::AppHandle, restore_geometry: bool) -> Resu
     }
 
     let window = builder.build()?;
+    apply_macos_window_vibrancy(&window);
 
     if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
         if state.maximized || state.fullscreen {

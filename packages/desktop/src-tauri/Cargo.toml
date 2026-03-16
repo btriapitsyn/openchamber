@@ -30,3 +30,6 @@ url = "2.5"
 
 [build-dependencies]
 tauri-build = { version = "2.5.3", features = [] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+window-vibrancy = "0.7.1"
