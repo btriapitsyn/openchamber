@@ -25,7 +25,9 @@ use std::{
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 #[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+use window_vibrancy::{
+    apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial,
+};
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -2360,8 +2362,50 @@ fn build_init_script(local_origin: &str) -> String {
     init_script
 }
 
+fn parse_theme_override(theme_mode: Option<&str>, theme_variant: Option<&str>) -> Option<tauri::Theme> {
+    match theme_mode.map(str::trim) {
+        Some("system") => None,
+        Some("dark") => Some(tauri::Theme::Dark),
+        Some("light") => Some(tauri::Theme::Light),
+        _ => match theme_variant.map(str::trim) {
+            Some("dark") => Some(tauri::Theme::Dark),
+            Some("light") => Some(tauri::Theme::Light),
+            _ => None,
+        },
+    }
+}
+
+fn read_desktop_theme_override() -> Option<tauri::Theme> {
+    let settings = fs::read_to_string(settings_file_path())
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok());
+
+    let use_system_theme = settings
+        .as_ref()
+        .and_then(|value| value.get("useSystemTheme"))
+        .and_then(|value| value.as_bool());
+
+    if matches!(use_system_theme, Some(true)) {
+        return None;
+    }
+
+    let theme_mode = settings
+        .as_ref()
+        .and_then(|value| value.get("themeMode"))
+        .and_then(|value| value.as_str());
+
+    let theme_variant = settings
+        .as_ref()
+        .and_then(|value| value.get("themeVariant"))
+        .and_then(|value| value.as_str());
+
+    parse_theme_override(theme_mode, theme_variant)
+}
+
 #[cfg(target_os = "macos")]
 fn apply_macos_window_vibrancy(window: &tauri::WebviewWindow) {
+    let _ = clear_vibrancy(window);
+
     let macos_version = macos_major_version().unwrap_or(0);
     let corner_radius = if macos_version >= 26 { 24.0 } else { 10.0 };
 
@@ -2377,6 +2421,21 @@ fn apply_macos_window_vibrancy(window: &tauri::WebviewWindow) {
 
 #[cfg(not(target_os = "macos"))]
 fn apply_macos_window_vibrancy(_window: &tauri::WebviewWindow) {}
+
+#[tauri::command]
+fn desktop_set_window_theme(
+    window: tauri::WebviewWindow,
+    theme_mode: Option<String>,
+    theme_variant: Option<String>,
+) -> Result<(), String> {
+    let override_theme = parse_theme_override(theme_mode.as_deref(), theme_variant.as_deref());
+
+    window
+        .set_theme(override_theme)
+        .map_err(|error| format!("failed to set window theme: {error}"))?;
+
+    Ok(())
+}
 
 fn is_window_state_visible(app: &tauri::AppHandle, state: &DesktopWindowState) -> bool {
     if state.width == 0 || state.height == 0 {
@@ -2553,6 +2612,7 @@ fn create_window(
     }
 
     let window = builder.build()?;
+    let _ = window.set_theme(read_desktop_theme_override());
     apply_macos_window_vibrancy(&window);
 
     if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
@@ -2615,6 +2675,7 @@ fn create_startup_window(app: &tauri::AppHandle, restore_geometry: bool) -> Resu
     }
 
     let window = builder.build()?;
+    let _ = window.set_theme(read_desktop_theme_override());
     apply_macos_window_vibrancy(&window);
 
     if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
@@ -3049,6 +3110,7 @@ fn main() {
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,
+            desktop_set_window_theme,
             remote_ssh::desktop_ssh_instances_get,
             remote_ssh::desktop_ssh_instances_set,
             remote_ssh::desktop_ssh_import_hosts,
