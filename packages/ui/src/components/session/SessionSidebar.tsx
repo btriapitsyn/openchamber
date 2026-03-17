@@ -1173,6 +1173,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     />
   ) : null;
   const isInlineEditing = Boolean(renamingFolderId || editingId || editingProjectDialogId);
+  const handleSidebarNewSession = React.useCallback(() => {
+    setActiveMainTab('chat');
+    if (mobileVariant) {
+      setSessionSwitcherOpen(false);
+    }
+    openNewSessionDraft();
+  }, [mobileVariant, openNewSessionDraft, setActiveMainTab, setSessionSwitcherOpen]);
 
   return (
     <div
@@ -1211,6 +1218,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       <SidebarHeader
         hideDirectoryControls={hideDirectoryControls}
         handleOpenDirectoryDialog={handleOpenDirectoryDialog}
+        handleNewSession={handleSidebarNewSession}
         headerActionIconClass={headerActionIconClass}
         reserveHeaderActionsSpace={reserveHeaderActionsSpace}
         headerActionButtonClass={headerActionButtonClass}

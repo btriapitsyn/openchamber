@@ -8,6 +8,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   RiCheckLine,
+  RiChatNewLine,
   RiEqualizer2Line,
   RiFolderAddLine,
   RiSearchLine,
@@ -18,6 +19,7 @@ import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 type Props = {
   hideDirectoryControls: boolean;
   handleOpenDirectoryDialog: () => void;
+  handleNewSession: () => void;
   headerActionIconClass: string;
   reserveHeaderActionsSpace: boolean;
   headerActionButtonClass: string;
@@ -34,6 +36,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
   const {
     hideDirectoryControls,
     handleOpenDirectoryDialog,
+    handleNewSession,
     headerActionIconClass,
     reserveHeaderActionsSpace,
     headerActionButtonClass,
@@ -71,6 +74,19 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={4}><p>Add project</p></TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleNewSession}
+                    className={headerActionButtonClass}
+                    aria-label="New session"
+                  >
+                    <RiChatNewLine className={headerActionIconClass} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={4}><p>New session</p></TooltipContent>
               </Tooltip>
             </div>
 

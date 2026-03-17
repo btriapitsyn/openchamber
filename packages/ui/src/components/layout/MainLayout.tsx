@@ -670,7 +670,7 @@ export const MainLayout: React.FC = () => {
                             opacity: mobileLeftDrawerOpen || isRightSidebarOpen ? 1 : 0,
                             pointerEvents: mobileLeftDrawerOpen || isRightSidebarOpen ? 'auto' : 'none',
                         }}
-                        className="fixed inset-0 z-40 bg-black/50 cursor-default"
+                        className="fixed left-0 right-0 bottom-0 top-[var(--oc-header-height,56px)] z-40 bg-black/50 cursor-default"
                         onClick={() => {
                             setMobileLeftDrawerOpen(false);
                             setRightSidebarOpen(false);
@@ -712,12 +712,15 @@ export const MainLayout: React.FC = () => {
                             }
                         }}
                         className={cn(
-                            'fixed left-0 top-0 z-50 h-full bg-transparent',
+                            'fixed left-0 top-[var(--oc-header-height,56px)] z-50 h-[calc(100%-var(--oc-header-height,56px))] bg-transparent',
                             'cursor-grab active:cursor-grabbing'
                         )}
                         aria-hidden={!mobileLeftDrawerOpen}
                     >
-                        <div className="h-full overflow-hidden flex bg-sidebar shadow-none drawer-safe-area">
+                        <div
+                            className="h-full overflow-hidden flex bg-[var(--surface-background)] shadow-none drawer-safe-area"
+                            style={{ backgroundImage: 'linear-gradient(var(--surface-muted), var(--surface-muted))' }}
+                        >
                             <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
                                 <ErrorBoundary>
                                     <SessionSidebar mobileVariant />
@@ -760,7 +763,7 @@ export const MainLayout: React.FC = () => {
                             }
                         }}
                         className={cn(
-                            'fixed right-0 top-0 z-50 h-full bg-transparent',
+                            'fixed right-0 top-[var(--oc-header-height,56px)] z-50 h-[calc(100%-var(--oc-header-height,56px))] bg-transparent',
                             'cursor-grab active:cursor-grabbing'
                         )}
                         aria-hidden={!isRightSidebarOpen}

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/sortable-tabs-strip';
 
-import { RiArrowLeftSLine, RiChat4Line, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
+import { RiArrowLeftSLine, RiChat4Line, RiChatNewLine, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -242,6 +242,7 @@ export const Header: React.FC<HeaderProps> = ({
   const runtimeApis = useRuntimeAPIs();
 
   const getContextUsage = useSessionStore((state) => state.getContextUsage);
+  const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
   const currentSessionId = useSessionStore((state) => state.currentSessionId);
   const currentSessionMessages = useSessionStore((state) => {
     if (!currentSessionId) {
@@ -379,6 +380,15 @@ export const Header: React.FC<HeaderProps> = ({
   }, [desktopServicesTab, isDesktopApp]);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const isLeftSidebarOpen = React.useMemo(() => {
+    if (!isMobile) {
+      return isSidebarOpen;
+    }
+    if (typeof onToggleLeftDrawer === 'function') {
+      return Boolean(leftDrawerOpen);
+    }
+    return isSessionSwitcherOpen;
+  }, [isMobile, isSessionSwitcherOpen, isSidebarOpen, leftDrawerOpen, onToggleLeftDrawer]);
   const showDesktopHeaderContextUsage = !isVSCode && activeMainTab === 'chat' && !!stableDesktopContextUsage && stableDesktopContextUsage.totalTokens > 0;
   const desktopHeaderDisplayPercentage = stableDesktopContextUsage && stableDesktopContextUsage.contextLimit > 0
     ? Math.min(999, (stableDesktopContextUsage.totalTokens / stableDesktopContextUsage.contextLimit) * 100)
@@ -852,6 +862,12 @@ export const Header: React.FC<HeaderProps> = ({
     }
     toggleSidebar();
   }, [blurActiveElement, isMobile, isSessionSwitcherOpen, setSessionSwitcherOpen, toggleSidebar]);
+
+  const handleHeaderNewSession = React.useCallback(() => {
+    setActiveMainTab('chat');
+    setSessionSwitcherOpen(false);
+    openNewSessionDraft();
+  }, [openNewSessionDraft, setActiveMainTab, setSessionSwitcherOpen]);
 
   const handleOpenContextPanel = React.useCallback(() => {
     const directory = normalize(openDirectory || '');
@@ -1633,6 +1649,23 @@ export const Header: React.FC<HeaderProps> = ({
       ) : null}
 
       <div className={cn('flex min-w-0 flex-1 items-center', !isSidebarOpen && 'pl-3')}>
+        {!isLeftSidebarOpen ? (
+          <Tooltip delayDuration={500}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label="New session"
+                onClick={handleHeaderNewSession}
+                className={cn(desktopHeaderIconButtonClass, 'mr-6 shrink-0')}
+              >
+                <RiChatNewLine className="h-[18px] w-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>New session ({shortcutLabel('new_chat')})</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         {projectActionsContext && (
           <ProjectActionsButton
             projectRef={projectActionsContext.projectRef}
@@ -2119,7 +2152,9 @@ export const Header: React.FC<HeaderProps> = ({
   const headerClassName = cn(
     'header-safe-area relative z-10',
     isMobile && 'border-b border-border/50',
-    isDesktopApp ? 'bg-background' : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80'
+    isMobile
+      ? 'bg-background'
+      : (isDesktopApp ? 'bg-background' : 'bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80')
   );
 
   return (

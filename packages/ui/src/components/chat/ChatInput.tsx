@@ -224,6 +224,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const [textareaScrollTop, setTextareaScrollTop] = React.useState(0);
 
     const isDesktopExpanded = isExpandedInput && !isMobile;
+    const chatInputRadius = 'var(--radius-lg)';
 
     const sendableAttachedFiles = React.useMemo(
         () => attachedFiles.filter((file) => file.source !== 'server'),
@@ -2861,7 +2862,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         isDragging && "ring-2 ring-primary ring-offset-2"
                     )}
                     style={{
-                        borderRadius: cornerRadius,
+                        borderRadius: chatInputRadius,
                         backgroundColor: currentTheme?.colors?.surface?.subtle,
                     }}
                     ref={dropZoneRef}
@@ -3027,8 +3028,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                 flex: isDesktopExpanded ? '1 1 auto' : 'none',
                                 height: !isDesktopExpanded && textareaSize ? `${textareaSize.height}px` : undefined,
                                 maxHeight: !isDesktopExpanded && textareaSize ? `${textareaSize.maxHeight}px` : undefined,
-                                borderTopLeftRadius: cornerRadius,
-                                borderTopRightRadius: cornerRadius,
+                                borderTopLeftRadius: chatInputRadius,
+                                borderTopRightRadius: chatInputRadius,
                             }}
                             rows={1}
                         />
@@ -3040,8 +3041,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             isMobile ? 'flex items-center gap-x-1.5' : cn('flex items-center justify-between', footerGapClass)
                         )}
                         style={{
-                            borderBottomLeftRadius: cornerRadius,
-                            borderBottomRightRadius: cornerRadius,
+                            borderBottomLeftRadius: chatInputRadius,
+                            borderBottomRightRadius: chatInputRadius,
                         }}
                         data-chat-input-footer="true"
                     >

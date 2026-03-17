@@ -143,7 +143,7 @@ const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' 
     return mode === 'markdown' ? 'markdown' : 'plain';
 };
 
-export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'cornerRadius' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'activityRenderMode' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'showToolFileIcons' | 'expandedTools' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft' | 'inputSpellcheck';
+export type VisibleSetting = 'theme' | 'pwaInstallName' | 'fontSize' | 'terminalFontSize' | 'spacing' | 'inputBarOffset' | 'mermaidRendering' | 'userMessageRendering' | 'chatRenderMode' | 'activityRenderMode' | 'stickyUserHeader' | 'diffLayout' | 'mobileStatusBar' | 'dotfiles' | 'reasoning' | 'showToolFileIcons' | 'expandedTools' | 'queueMode' | 'terminalQuickKeys' | 'persistDraft' | 'inputSpellcheck';
 
 interface OpenChamberVisualSettingsProps {
     /** Which settings to show. If undefined, shows all. */
@@ -173,8 +173,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setTerminalFontSize = useUIStore(state => state.setTerminalFontSize);
     const padding = useUIStore(state => state.padding);
     const setPadding = useUIStore(state => state.setPadding);
-    const cornerRadius = useUIStore(state => state.cornerRadius);
-    const setCornerRadius = useUIStore(state => state.setCornerRadius);
     const inputBarOffset = useUIStore(state => state.inputBarOffset);
     const setInputBarOffset = useUIStore(state => state.setInputBarOffset);
     const diffLayoutPreference = useUIStore(state => state.diffLayoutPreference);
@@ -303,7 +301,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
     const isVSCode = isVSCodeRuntime();
     const hasAppearanceSettings = (shouldShow('theme') || shouldShow('pwaInstallName')) && !isVSCode;
-    const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('cornerRadius') || shouldShow('inputBarOffset');
+    const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('inputBarOffset');
     const hasNavigationSettings = shouldShow('terminalQuickKeys') && !isMobile;
     const hasBehaviorSettings = shouldShow('mermaidRendering')
         || shouldShow('userMessageRendering')
@@ -621,35 +619,6 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                             disabled={padding === 100}
                                             className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
                                             aria-label="Reset spacing"
-                                            title="Reset"
-                                        >
-                                            <RiRestartLine className="h-3.5 w-3.5" />
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-
-                            {shouldShow('cornerRadius') && (
-                                <div className={cn("py-1", isMobile ? "flex flex-col gap-3" : "flex items-center gap-8")}>
-                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-56 shrink-0")}>
-                                        <span className="typography-ui-label text-foreground">Corner Radius</span>
-                                    </div>
-                                    <div className={cn("flex items-center gap-2", isMobile ? "w-full" : "w-fit")}>
-                                        <NumberInput
-                                            value={cornerRadius}
-                                            onValueChange={setCornerRadius}
-                                            min={0}
-                                            max={32}
-                                            step={1}
-                                            className="w-16"
-                                        />
-                                        <Button size="sm"
-                                            type="button"
-                                            variant="ghost"
-                                            onClick={() => setCornerRadius(18)}
-                                            disabled={cornerRadius === 18}
-                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
-                                            aria-label="Reset corner radius"
                                             title="Reset"
                                         >
                                             <RiRestartLine className="h-3.5 w-3.5" />

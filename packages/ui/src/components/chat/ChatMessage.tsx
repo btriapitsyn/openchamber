@@ -971,6 +971,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const assistantTopPaddingClass = !isUser && shouldShowHeader
         ? (stickyUserHeader ? (isMobile ? 'pt-4' : 'pt-6') : 'pt-0')
         : 'pt-0';
+    const userMessageRadius = 'var(--radius-lg)';
 
     return (
         <>
@@ -995,7 +996,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                             >
                                 <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
                                     <div className="max-w-[85%]">
-                                        <div style={{ backgroundColor: 'var(--chat-user-message-bg)' }} className="rounded-[var(--radius-xl)] rounded-br-[var(--radius-sm)] px-5 py-3 shadow-none border border-primary/5">
+                                        <div
+                                            style={{
+                                                backgroundColor: 'var(--chat-user-message-bg)',
+                                                borderRadius: userMessageRadius,
+                                                borderBottomRightRadius: 'var(--radius-sm)',
+                                            }}
+                                            className="px-5 py-3 shadow-none border border-primary/5"
+                                        >
                                             <MessageBody
                                                 messageId={message.info.id}
                                                 parts={displayParts}
