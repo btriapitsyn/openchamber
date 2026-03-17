@@ -318,6 +318,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
+  const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const isMacPlatform = React.useMemo(() => {
@@ -327,8 +328,55 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
   }, []);
   const showDesktopSidebarChrome = !mobileVariant && !isVSCode;
-  const desktopSidebarTopPaddingClass = isDesktopShellRuntime && isMacPlatform ? 'pl-[5.5rem]' : 'pl-3';
+  const desktopSidebarTopPaddingClass = isDesktopShellRuntime && isMacPlatform && !isDesktopWindowFullscreen ? 'pl-[5.5rem]' : 'pl-3';
   const desktopSidebarToggleButtonClass = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center rounded-md typography-ui-label font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50';
+
+  React.useEffect(() => {
+    if (!isDesktopShellRuntime || !isMacPlatform) {
+      setIsDesktopWindowFullscreen(false);
+      return;
+    }
+
+    let disposed = false;
+    let unlistenResize: (() => void) | null = null;
+
+    const syncFullscreenState = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const currentWindow = getCurrentWindow();
+        const fullscreen = await currentWindow.isFullscreen();
+        if (!disposed) {
+          setIsDesktopWindowFullscreen(fullscreen);
+        }
+      } catch {
+        if (!disposed) {
+          setIsDesktopWindowFullscreen(false);
+        }
+      }
+    };
+
+    const attach = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const currentWindow = getCurrentWindow();
+        unlistenResize = await currentWindow.onResized(() => {
+          void syncFullscreenState();
+        });
+      } catch {
+        // Ignore listener setup failures; fallback state remains false.
+      }
+    };
+
+    void syncFullscreenState();
+    void attach();
+
+    return () => {
+      disposed = true;
+      if (unlistenResize) {
+        unlistenResize();
+      }
+    };
+  }, [isDesktopShellRuntime, isMacPlatform]);
 
   const handleDesktopSidebarDragStart = React.useCallback(async (event: React.MouseEvent) => {
     const target = event.target as HTMLElement;

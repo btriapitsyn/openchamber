@@ -292,6 +292,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
     return isDesktopShell();
   });
+  const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false);
 
   const isMacPlatform = React.useMemo(() => {
     if (typeof navigator === 'undefined') {
@@ -921,11 +922,58 @@ export const Header: React.FC<HeaderProps> = ({
   const mobileHeaderIconButtonClass = 'app-region-no-drag inline-flex h-9 w-9 items-center justify-center gap-2 p-2 rounded-md typography-ui-label font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50 hover:text-foreground hover:bg-interactive-hover transition-colors';
 
   const desktopPaddingClass = React.useMemo(() => {
-    if (!isSidebarOpen && isDesktopApp && isMacPlatform) {
+    if (!isSidebarOpen && isDesktopApp && isMacPlatform && !isDesktopWindowFullscreen) {
       return 'pl-[5.5rem]';
     }
     return 'pl-3';
-  }, [isDesktopApp, isMacPlatform, isSidebarOpen]);
+  }, [isDesktopApp, isDesktopWindowFullscreen, isMacPlatform, isSidebarOpen]);
+
+  useEffect(() => {
+    if (!isDesktopApp || !isMacPlatform) {
+      setIsDesktopWindowFullscreen(false);
+      return;
+    }
+
+    let disposed = false;
+    let unlistenResize: (() => void) | null = null;
+
+    const syncFullscreenState = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const currentWindow = getCurrentWindow();
+        const fullscreen = await currentWindow.isFullscreen();
+        if (!disposed) {
+          setIsDesktopWindowFullscreen(fullscreen);
+        }
+      } catch {
+        if (!disposed) {
+          setIsDesktopWindowFullscreen(false);
+        }
+      }
+    };
+
+    const attach = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const currentWindow = getCurrentWindow();
+        unlistenResize = await currentWindow.onResized(() => {
+          void syncFullscreenState();
+        });
+      } catch {
+        // Ignore listener setup failures; fallback state remains false.
+      }
+    };
+
+    void syncFullscreenState();
+    void attach();
+
+    return () => {
+      disposed = true;
+      if (unlistenResize) {
+        unlistenResize();
+      }
+    };
+  }, [isDesktopApp, isMacPlatform]);
 
   const macosHeaderSizeClass = React.useMemo(() => {
     if (!isDesktopApp || !isMacPlatform || macosMajorVersion === null) {
