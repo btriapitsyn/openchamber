@@ -190,7 +190,7 @@ Managed-local path note: `OPENCHAMBER_TUNNEL_CONFIG` must point to a path inside
 
 ```bash
 mkdir -p data/openchamber data/opencode/share data/opencode/config data/ssh
-chown -R 1000:1000 data/
+chown -R 1001:1000 data/
 ```
 
 **SSH/Git:** If git push/pull fails, run `ssh -T git@github.com` in terminal.
