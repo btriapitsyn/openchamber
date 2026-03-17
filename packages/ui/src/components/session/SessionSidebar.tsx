@@ -327,7 +327,31 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, []);
   const showDesktopSidebarChrome = !mobileVariant && !isVSCode;
   const desktopSidebarTopPaddingClass = isDesktopShellRuntime && isMacPlatform ? 'pl-[5.5rem]' : 'pl-3';
-  const desktopSidebarToggleButtonClass = 'inline-flex h-8 w-8 items-center justify-center rounded-md typography-ui-label font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50';
+  const desktopSidebarToggleButtonClass = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center rounded-md typography-ui-label font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50';
+
+  const handleDesktopSidebarDragStart = React.useCallback(async (event: React.MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('.app-region-no-drag')) {
+      return;
+    }
+    if (target.closest('button, a, input, select, textarea')) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+    if (!isDesktopShellRuntime) {
+      return;
+    }
+
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const appWindow = getCurrentWindow();
+      await appWindow.startDragging();
+    } catch (error) {
+      console.error('Failed to start window dragging:', error);
+    }
+  }, [isDesktopShellRuntime]);
 
   const {
     buildGroupSearchText,
@@ -1157,8 +1181,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     >
       {showDesktopSidebarChrome ? (
         <div
+          onMouseDown={handleDesktopSidebarDragStart}
           className={cn(
-            'flex h-12 flex-shrink-0 items-center pr-3',
+            'app-region-drag flex h-[var(--oc-header-height,56px)] flex-shrink-0 items-center pr-3',
             desktopSidebarTopPaddingClass,
           )}
         >

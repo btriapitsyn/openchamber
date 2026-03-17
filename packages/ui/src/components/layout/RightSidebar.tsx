@@ -1,6 +1,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
+import { isDesktopShell } from '@/lib/desktop';
 
 export const RIGHT_SIDEBAR_CONTENT_WIDTH = 420;
 const RIGHT_SIDEBAR_MIN_WIDTH = 400;
@@ -16,6 +17,7 @@ interface RightSidebarProps {
 export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, className, onTopActionsHostChange }) => {
   const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth);
   const setRightSidebarWidth = useUIStore((state) => state.setRightSidebarWidth);
+  const isDesktopApp = React.useMemo(() => isDesktopShell(), []);
   const [isResizing, setIsResizing] = React.useState(false);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(rightSidebarWidth || 420);
@@ -106,6 +108,30 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
     }
   }, [isOpen, onTopActionsHostChange]);
 
+  const handleDragStart = React.useCallback(async (event: React.MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('.app-region-no-drag')) {
+      return;
+    }
+    if (target.closest('button, a, input, select, textarea')) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+    if (!isDesktopApp) {
+      return;
+    }
+
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const appWindow = getCurrentWindow();
+      await appWindow.startDragging();
+    } catch (error) {
+      console.error('Failed to start window dragging:', error);
+    }
+  }, [isDesktopApp]);
+
   return (
     <aside
       ref={sidebarRef}
@@ -129,12 +155,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
     >
       {isOpen ? (
         <div
-          className="pointer-events-none absolute inset-x-0 top-0 z-20 flex h-[var(--oc-header-height,56px)] items-center justify-end px-3"
+          onMouseDown={handleDragStart}
+          className="app-region-drag absolute inset-x-0 top-0 z-20 flex h-[var(--oc-header-height,56px)] items-center justify-end px-3"
           aria-hidden
         >
           <div
             ref={onTopActionsHostChange}
-            className="pointer-events-auto flex items-center gap-1"
+            className="app-region-no-drag flex items-center gap-1"
           />
         </div>
       ) : null}
