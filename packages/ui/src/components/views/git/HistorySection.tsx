@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
-import { SegmentDivider } from '@/components/ui/segment-divider';
 import { HistoryCommitRow } from './HistoryCommitRow';
 import type { GitLogEntry, CommitFileEntry } from '@/lib/api/types';
 
@@ -110,10 +109,14 @@ export const HistorySection: React.FC<HistorySectionProps> = ({
             </div>
           ) : null}
 
-          <SegmentDivider
-            label={branchDivider.branchName}
-            icon={dividerIcon}
-          />
+          <div className="flex items-center gap-2 px-3 py-1.5" aria-hidden>
+            <span className="h-px flex-1 bg-border/60" />
+            <span className="inline-flex max-w-[80%] items-center gap-1 typography-micro text-muted-foreground">
+              <span className="truncate" title={branchDivider.branchName}>{branchDivider.branchName}</span>
+              {dividerIcon}
+            </span>
+            <span className="h-px flex-1 bg-border/60" />
+          </div>
 
           {bottomEntries.length > 0 ? (
             <div className="rounded-xl border border-border/60 bg-background/70 overflow-hidden">
