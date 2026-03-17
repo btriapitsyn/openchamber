@@ -687,7 +687,16 @@ const shouldRenderGitPathLabel = (toolName: string, label: string): boolean => {
         return false;
     }
 
-    return trimmed.includes('/') || trimmed.includes('\\');
+    if (trimmed.includes('/') || trimmed.includes('\\')) {
+        return true;
+    }
+
+    const baseName = trimmed.split(/[\\/]/).pop() || trimmed;
+    if (baseName.startsWith('.') || baseName.includes('.')) {
+        return true;
+    }
+
+    return /^[A-Za-z0-9_-]+$/.test(baseName);
 };
 
 const stripTaskMetadataFromOutput = (output: string): string => {
