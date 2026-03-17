@@ -194,7 +194,8 @@ export const ProjectNotesTodoPanel: React.FC<ProjectNotesTodoPanelProps> = ({
         return;
       }
       routeToChat();
-      setPendingInputText(todoText, 'append');
+      const fenced = `\`\`\`md\n${todoText}\n\`\`\``;
+      setPendingInputText(fenced, 'append');
       toast.success(t('projectNotes.todoSentToCurrentSession'));
       onActionComplete?.();
     },

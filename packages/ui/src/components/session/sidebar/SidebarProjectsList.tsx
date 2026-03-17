@@ -61,6 +61,7 @@ type Props = {
   settingsAutoCreateWorktree: boolean;
   getOrderedGroups: (projectId: string, groups: SessionGroup[]) => SessionGroup[];
   setGroupOrderByProject: React.Dispatch<React.SetStateAction<Map<string, string[]>>>;
+  isInlineEditing: boolean;
 };
 
 export function SidebarProjectsList(props: Props): React.ReactNode {
@@ -200,7 +201,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                           {orderedGroups.map((group) => {
                             const groupKey = `${projectKey}:${group.id}`;
                             return (
-                              <SortableGroupItem key={group.id} id={group.id}>
+                              <SortableGroupItem key={group.id} id={group.id} disabled={props.isInlineEditing}>
                                 {props.renderGroupSessions(group, groupKey, projectKey)}
                               </SortableGroupItem>
                             );
