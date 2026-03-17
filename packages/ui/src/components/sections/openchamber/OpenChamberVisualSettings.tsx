@@ -646,8 +646,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         <Button size="sm"
                                             type="button"
                                             variant="ghost"
-                                            onClick={() => setCornerRadius(12)}
-                                            disabled={cornerRadius === 12}
+                                            onClick={() => setCornerRadius(18)}
+                                            disabled={cornerRadius === 18}
                                             className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
                                             aria-label="Reset corner radius"
                                             title="Reset"

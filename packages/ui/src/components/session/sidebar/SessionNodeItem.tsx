@@ -259,27 +259,27 @@ export function SessionNodeItem(props: Props): React.ReactNode {
     ? <RiErrorWarningLine className="h-4 w-4 text-status-warning" />
     : null;
 
-  const handleMenuOpenChange = React.useCallback((open: boolean) => {
+  const handleMenuOpenChange = (open: boolean) => {
     setOpenSidebarMenuKey(open ? menuInstanceKey : null);
-  }, [menuInstanceKey, setOpenSidebarMenuKey]);
+  };
 
-  const handleMenuTriggerClick = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleMenuTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-  }, []);
+  };
 
-  const handleRowSelect = React.useCallback(() => {
+  const handleRowSelect = () => {
     if (suppressNextSelectRef.current) {
       suppressNextSelectRef.current = false;
       return;
     }
     handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId);
-  }, [handleSessionSelect, isMissingDirectory, projectId, session.id, sessionDirectory]);
+  };
 
-  const handleRowMouseDown = React.useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleRowMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
       suppressNextSelectRef.current = true;
     }
-  }, []);
+  };
 
   const sessionMenuContent = (
     <DropdownMenuContent align="end" className="min-w-[180px]" onCloseAutoFocus={(event) => { if (renamingFolderId) event.preventDefault(); }}>

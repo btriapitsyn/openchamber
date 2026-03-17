@@ -735,7 +735,7 @@ export const useUIStore = create<UIStore>()(
         fontSize: 100,
         terminalFontSize: 13,
         padding: 100,
-        cornerRadius: 12,
+        cornerRadius: 18,
         inputBarOffset: 0,
         favoriteModels: [],
         hiddenModels: [],
