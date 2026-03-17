@@ -2487,7 +2487,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       </div>
 
       <div className="flex-1 min-h-0 min-w-0 relative">
-        {selectedFile && (
+        {selectedFile && !isSearchOpen && (
           <div className="absolute right-3 top-3 z-30">
             {renderFloatingFileControls()}
           </div>
