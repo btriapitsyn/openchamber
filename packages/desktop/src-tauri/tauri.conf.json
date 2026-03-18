@@ -52,7 +52,7 @@
     ],
     "macOS": {
       "exceptionDomain": "localhost",
-      "minimumSystemVersion": "14.0",
+      "minimumSystemVersion": "13.0",
       "signingIdentity": null,
       "entitlements": "./entitlements.plist",
       "infoPlist": "Info.plist",
