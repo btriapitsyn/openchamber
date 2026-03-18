@@ -2406,14 +2406,11 @@ fn read_desktop_theme_override() -> Option<tauri::Theme> {
 fn apply_macos_window_vibrancy(window: &tauri::WebviewWindow) {
     let _ = clear_vibrancy(window);
 
-    let macos_version = macos_major_version().unwrap_or(0);
-    let corner_radius = if macos_version >= 26 { 24.0 } else { 10.0 };
-
     if let Err(error) = apply_vibrancy(
         window,
         NSVisualEffectMaterial::Sidebar,
         None,
-        Some(corner_radius),
+        None,
     ) {
         log::warn!("[desktop:vibrancy] Failed to apply macOS vibrancy: {error}");
     }
