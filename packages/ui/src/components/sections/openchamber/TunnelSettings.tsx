@@ -72,6 +72,12 @@ const TUNNEL_MODE_OPTIONS: Array<{ value: TunnelMode; label: string; tooltip: st
   { value: 'managed-local', label: 'tunnelSettings.managedLocalMode', tooltip: 'tunnelSettings.managedLocalTooltip' },
 ];
 
+const TUNNEL_MODE_LABEL_KEYS: Record<TunnelMode, string> = {
+  quick: 'tunnelSettings.quickMode',
+  'managed-remote': 'tunnelSettings.managedRemoteMode',
+  'managed-local': 'tunnelSettings.managedLocalMode',
+};
+
 const MANAGED_LOCAL_CONFIG_ALLOWED_EXTENSIONS = ['.yml', '.yaml', '.json'];
 const MANAGED_LOCAL_CONFIG_EXTENSION_ERROR = 'tunnelSettings.managedLocalConfigExtensionError';
 
@@ -177,6 +183,11 @@ const toUiTunnelMode = (mode: string | null | undefined): TunnelMode => {
     return 'managed-local';
   }
   return 'quick';
+};
+
+// 为什么不用字符串拼接生成 key：隧道模式值使用 kebab-case，而 locale key 使用 camelCase，显式映射可以避免运行时拿到不存在的翻译键。
+const getTunnelModeLabelKey = (mode: TunnelMode): string => {
+  return TUNNEL_MODE_LABEL_KEYS[mode];
 };
 
 const ttlOptionValue = (options: TtlOption[], ttlMs: number | null, fallback: string) => {
@@ -1532,7 +1543,7 @@ export const TunnelSettings: React.FC = () => {
                       </>
                     )}
                     <p className="typography-meta text-[var(--status-info)]">
-                      {t('tunnelSettings.startTunnelInfo', { mode: t(`tunnelSettings.${tunnelMode}Mode`) })}
+                      {t('tunnelSettings.startTunnelInfo', { mode: t(getTunnelModeLabelKey(tunnelMode)) })}
                     </p>
                   </div>
                 </div>
