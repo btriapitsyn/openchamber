@@ -3399,12 +3399,30 @@ export async function handleBridgeMessage(message: BridgeRequest, ctx?: BridgeCo
       }
 
       case 'api:git/remotes': {
-        const { directory } = (payload || {}) as { directory?: string };
+        const { directory, method, remote } = (payload || {}) as {
+          directory?: string;
+          method?: string;
+          remote?: string;
+        };
         if (!directory) {
           return { id, type, success: false, error: 'Directory is required' };
         }
-        const result = await gitService.getRemotes(directory);
-        return { id, type, success: true, data: result };
+
+        const normalizedMethod = typeof method === 'string' ? method.toUpperCase() : 'GET';
+        if (normalizedMethod === 'GET') {
+          const result = await gitService.getRemotes(directory);
+          return { id, type, success: true, data: result };
+        }
+
+        if (normalizedMethod === 'DELETE') {
+          if (!remote) {
+            return { id, type, success: false, error: 'Remote name is required' };
+          }
+          const result = await gitService.removeRemote(directory, remote);
+          return { id, type, success: true, data: result };
+        }
+
+        return { id, type, success: false, error: `Unsupported method: ${normalizedMethod}` };
       }
 
       case 'api:git/rebase': {

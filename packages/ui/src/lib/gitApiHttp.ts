@@ -9,6 +9,7 @@ import type {
   GitBranch,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
+  GitRemoveRemotePayload,
   GeneratedCommitMessage,
   GitWorktreeInfo,
   CreateGitWorktreePayload,
@@ -267,6 +268,26 @@ export async function deleteRemoteBranch(directory: string, payload: GitDeleteRe
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: response.statusText }));
     throw new Error(error.error || 'Failed to delete remote branch');
+  }
+
+  return response.json();
+}
+
+export async function removeRemote(directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }> {
+  const remote = payload?.remote?.trim();
+  if (!remote) {
+    throw new Error('remote is required to remove a remote');
+  }
+
+  const response = await fetch(buildUrl(`${API_BASE}/remotes`, directory), {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ remote }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to remove remote');
   }
 
   return response.json();

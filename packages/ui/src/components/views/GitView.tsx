@@ -433,6 +433,7 @@ export const GitView: React.FC = () => {
     return isActionTab(stored) ? stored : 'commit';
   });
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
+  const [removingRemoteName, setRemovingRemoteName] = React.useState<string | null>(null);
   const [branchOperation, setBranchOperation] = React.useState<BranchOperation>(null);
   const [operationLogs, setOperationLogs] = React.useState<OperationLogEntry[]>([]);
   const [conflictDialogOpen, setConflictDialogOpen] = React.useState(false);
@@ -585,13 +586,22 @@ export const GitView: React.FC = () => {
     git.getRemoteUrl(currentDirectory).then(setRemoteUrl).catch(() => setRemoteUrl(null));
   }, [currentDirectory, git]);
 
-  React.useEffect(() => {
+  const refreshRemotes = React.useCallback(async () => {
     if (!currentDirectory || !git?.getRemotes) {
       setRemotes([]);
       return;
     }
-    git.getRemotes(currentDirectory).then(setRemotes).catch(() => setRemotes([]));
+    try {
+      const remoteList = await git.getRemotes(currentDirectory);
+      setRemotes(remoteList);
+    } catch {
+      setRemotes([]);
+    }
   }, [currentDirectory, git]);
+
+  React.useEffect(() => {
+    void refreshRemotes();
+  }, [refreshRemotes]);
 
   React.useEffect(() => {
     if (!settingsGitmojiEnabled) {
@@ -824,6 +834,35 @@ export const GitView: React.FC = () => {
       setSyncAction(null);
     }
   };
+
+  const handleRemoveRemote = React.useCallback(async (remote: GitRemote) => {
+    if (!currentDirectory) return;
+
+    const remoteName = remote.name.trim();
+    if (!remoteName) {
+      toast.error('Remote name is required');
+      return;
+    }
+    if (remoteName === 'origin') {
+      toast.error('Cannot remove origin remote');
+      return;
+    }
+
+    setRemovingRemoteName(remoteName);
+    try {
+      await git.removeRemote(currentDirectory, { remote: remoteName });
+      toast.success(`Removed ${remoteName} remote`);
+      await Promise.all([
+        refreshStatusAndBranches(false),
+        refreshRemotes(),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : `Failed to remove ${remoteName}`;
+      toast.error(message);
+    } finally {
+      setRemovingRemoteName(null);
+    }
+  }, [currentDirectory, git, refreshRemotes, refreshStatusAndBranches]);
 
   const handleCommit = async (options: { pushAfter?: boolean } = {}) => {
     if (!currentDirectory) return;
@@ -1815,6 +1854,8 @@ export const GitView: React.FC = () => {
         onFetch={(remote) => handleSyncAction('fetch', remote)}
         onPull={(remote) => handleSyncAction('pull', remote)}
         onPush={() => handleSyncAction('push')}
+        onRemoveRemote={handleRemoveRemote}
+        removingRemoteName={removingRemoteName}
         onCheckoutBranch={handleCheckoutBranch}
         onCreateBranch={handleCreateBranch}
         onRenameBranch={handleRenameBranch}

@@ -2692,6 +2692,26 @@ export async function getRemotes(directory) {
   }
 }
 
+export async function removeRemote(directory, options = {}) {
+  const remoteName = String(options.remote || '').trim();
+  if (!remoteName) {
+    throw new Error('remote is required to remove a remote');
+  }
+  if (remoteName === 'origin') {
+    throw new Error('Cannot remove origin remote');
+  }
+
+  const git = await createGit(directory);
+
+  try {
+    await git.removeRemote(remoteName);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to remove remote:', error);
+    throw error;
+  }
+}
+
 export async function rebase(directory, options = {}) {
   const git = await createGit(directory);
 
