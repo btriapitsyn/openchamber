@@ -38,6 +38,7 @@ const LERP_FACTOR = 0.14;
 
 // When the remaining distance is below this, snap exactly to bottom.
 const SNAP_EPSILON = 0.5;
+const FOLLOW_STABLE_FRAME_LIMIT = 8;
 
 export const useScrollEngine = ({
     containerRef,
@@ -81,6 +82,7 @@ export const useScrollEngine = ({
         if (followActiveRef.current) return; // already running
         followActiveRef.current = true;
         setIsFollowingBottom(true);
+        let stableFrames = 0;
 
         const tick = () => {
             const container = containerRef.current;
@@ -97,11 +99,18 @@ export const useScrollEngine = ({
 
             if (Math.abs(delta) <= SNAP_EPSILON) {
                 container.scrollTop = target;
-                // Don't stop — keep running so next content growth is caught immediately.
+                stableFrames += 1;
+                if (stableFrames >= FOLLOW_STABLE_FRAME_LIMIT) {
+                    followActiveRef.current = false;
+                    followRafRef.current = null;
+                    setIsFollowingBottom(false);
+                    return;
+                }
                 followRafRef.current = window.requestAnimationFrame(tick);
                 return;
             }
 
+            stableFrames = 0;
             container.scrollTop = current + delta * LERP_FACTOR;
             followRafRef.current = window.requestAnimationFrame(tick);
         };

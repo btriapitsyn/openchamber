@@ -72,6 +72,7 @@ const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 200;
 const DIRECT_SCROLL_INTENT_WINDOW_MS = 250;
 // Threshold for re-pinning: 10% of container height (matches bottom spacer)
 const PIN_THRESHOLD_RATIO = 0.10;
+const VIEWPORT_ANCHOR_MIN_UPDATE_MS = 150;
 
 export const useChatScrollManager = ({
     currentSessionId,
@@ -108,6 +109,11 @@ export const useChatScrollManager = ({
     const isPinnedRef = React.useRef(true);
     const lastScrollTopRef = React.useRef<number>(0);
     const touchLastYRef = React.useRef<number | null>(null);
+    const pinnedSyncRafRef = React.useRef<number | null>(null);
+    const viewportAnchorTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pendingViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
+    const lastViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
+    const lastViewportAnchorWriteAtRef = React.useRef<number>(0);
 
     const markProgrammaticScroll = React.useCallback(() => {
         suppressUserScrollUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_SUPPRESS_MS;
@@ -164,6 +170,79 @@ export const useChatScrollManager = ({
         setShowScrollButton(!isNearBottom(distanceFromBottom, getPinThreshold()));
     }, [getDistanceFromBottom, getPinThreshold]);
 
+    const syncPinnedStateAndIndicators = React.useCallback(() => {
+        pinnedSyncRafRef.current = null;
+        updateScrollButtonVisibility();
+        if (!isPinnedRef.current) {
+            return;
+        }
+
+        const distanceFromBottom = getDistanceFromBottom();
+        if (distanceFromBottom > getAutoFollowThreshold()) {
+            scrollPinnedToBottom();
+        }
+    }, [getAutoFollowThreshold, getDistanceFromBottom, scrollPinnedToBottom, updateScrollButtonVisibility]);
+
+    const schedulePinnedStateAndIndicators = React.useCallback(() => {
+        if (typeof window === 'undefined') {
+            syncPinnedStateAndIndicators();
+            return;
+        }
+        if (pinnedSyncRafRef.current !== null) {
+            return;
+        }
+        pinnedSyncRafRef.current = window.requestAnimationFrame(() => {
+            syncPinnedStateAndIndicators();
+        });
+    }, [syncPinnedStateAndIndicators]);
+
+    const flushViewportAnchor = React.useCallback(() => {
+        if (viewportAnchorTimerRef.current !== null) {
+            clearTimeout(viewportAnchorTimerRef.current);
+            viewportAnchorTimerRef.current = null;
+        }
+
+        const pending = pendingViewportAnchorRef.current;
+        if (!pending) {
+            return;
+        }
+
+        const lastPersisted = lastViewportAnchorRef.current;
+        if (lastPersisted && lastPersisted.sessionId === pending.sessionId && lastPersisted.anchor === pending.anchor) {
+            pendingViewportAnchorRef.current = null;
+            return;
+        }
+
+        updateViewportAnchor(pending.sessionId, pending.anchor);
+        lastViewportAnchorRef.current = pending;
+        pendingViewportAnchorRef.current = null;
+        lastViewportAnchorWriteAtRef.current = Date.now();
+    }, [updateViewportAnchor]);
+
+    const queueViewportAnchor = React.useCallback((sessionId: string, anchor: number) => {
+        const lastPersisted = lastViewportAnchorRef.current;
+        if (lastPersisted && lastPersisted.sessionId === sessionId && lastPersisted.anchor === anchor) {
+            return;
+        }
+
+        pendingViewportAnchorRef.current = { sessionId, anchor };
+        const now = Date.now();
+        const elapsed = now - lastViewportAnchorWriteAtRef.current;
+        if (elapsed >= VIEWPORT_ANCHOR_MIN_UPDATE_MS) {
+            flushViewportAnchor();
+            return;
+        }
+
+        if (viewportAnchorTimerRef.current !== null) {
+            return;
+        }
+
+        viewportAnchorTimerRef.current = setTimeout(() => {
+            viewportAnchorTimerRef.current = null;
+            flushViewportAnchor();
+        }, VIEWPORT_ANCHOR_MIN_UPDATE_MS - elapsed);
+    }, [flushViewportAnchor]);
+
     const scrollToPosition = React.useCallback((position: number, options?: { instant?: boolean }) => {
         const container = scrollRef.current;
         if (!container) return;
@@ -186,8 +265,8 @@ export const useChatScrollManager = ({
     const releasePinnedScroll = React.useCallback(() => {
         scrollEngine.cancelFollow();
         updatePinnedState(false);
-        updateScrollButtonVisibility();
-    }, [scrollEngine, updatePinnedState, updateScrollButtonVisibility]);
+        schedulePinnedStateAndIndicators();
+    }, [schedulePinnedStateAndIndicators, scrollEngine, updatePinnedState]);
 
     const handleScrollEvent = React.useCallback((event?: Event) => {
         const container = scrollRef.current;
@@ -200,7 +279,7 @@ export const useChatScrollManager = ({
         const hasDirectIntent = now - lastDirectScrollIntentAtRef.current <= DIRECT_SCROLL_INTENT_WINDOW_MS;
 
         scrollEngine.handleScroll();
-        updateScrollButtonVisibility();
+        schedulePinnedStateAndIndicators();
 
         // Handle pin/unpin logic
         const currentScrollTop = container.scrollTop;
@@ -226,16 +305,16 @@ export const useChatScrollManager = ({
         const { scrollTop, scrollHeight, clientHeight } = container;
         const position = (scrollTop + clientHeight / 2) / Math.max(scrollHeight, 1);
         const estimatedIndex = Math.floor(position * sessionMessages.length);
-        updateViewportAnchor(currentSessionId, estimatedIndex);
+        queueViewportAnchor(currentSessionId, estimatedIndex);
     }, [
         currentSessionId,
         getDistanceFromBottom,
         getPinThreshold,
+        queueViewportAnchor,
+        schedulePinnedStateAndIndicators,
         scrollEngine,
         sessionMessages.length,
         updatePinnedState,
-        updateScrollButtonVisibility,
-        updateViewportAnchor,
     ]);
 
     const handleWheelIntent = React.useCallback((event: WheelEvent) => {
@@ -340,6 +419,8 @@ export const useChatScrollManager = ({
 
         lastSessionIdRef.current = currentSessionId;
         MessageFreshnessDetector.getInstance().recordSessionStart(currentSessionId);
+        flushViewportAnchor();
+        pendingViewportAnchorRef.current = null;
 
         // Always start pinned at bottom on session switch
         updatePinnedState(true);
@@ -350,22 +431,15 @@ export const useChatScrollManager = ({
             markProgrammaticScroll();
             scrollToBottomInternal({ instant: true });
         }
-    }, [currentSessionId, markProgrammaticScroll, scrollToBottomInternal, updatePinnedState]);
+    }, [currentSessionId, flushViewportAnchor, markProgrammaticScroll, scrollToBottomInternal, updatePinnedState]);
 
     // Maintain pin-to-bottom when content changes
     React.useEffect(() => {
-        if (!isPinnedRef.current) return;
-        if (isSyncing) return;
-
-        const container = scrollRef.current;
-        if (!container) return;
-
-        // When pinned and content grows, follow bottom with fast smooth scroll
-        const distanceFromBottom = getDistanceFromBottom();
-        if (distanceFromBottom > getAutoFollowThreshold()) {
-            scrollPinnedToBottom();
+        if (isSyncing) {
+            return;
         }
-    }, [getAutoFollowThreshold, getDistanceFromBottom, isSyncing, scrollPinnedToBottom, sessionMessages]);
+        schedulePinnedStateAndIndicators();
+    }, [isSyncing, schedulePinnedStateAndIndicators, sessionMessages.length]);
 
     // Use ResizeObserver to detect content changes and maintain pin
     React.useEffect(() => {
@@ -373,27 +447,14 @@ export const useChatScrollManager = ({
         if (!container || typeof ResizeObserver === 'undefined') return;
 
         const observer = new ResizeObserver(() => {
-            updateScrollButtonVisibility();
-
-            // Maintain pin when content grows - fast smooth follow
-            if (isPinnedRef.current) {
-                const distanceFromBottom = getDistanceFromBottom();
-                if (distanceFromBottom > getAutoFollowThreshold()) {
-                    scrollPinnedToBottom();
-                }
-            }
+            schedulePinnedStateAndIndicators();
         });
 
         observer.observe(container);
 
         // Also observe children for content changes
         const childObserver = new MutationObserver(() => {
-            if (isPinnedRef.current) {
-                const distanceFromBottom = getDistanceFromBottom();
-                if (distanceFromBottom > getAutoFollowThreshold()) {
-                    scrollPinnedToBottom();
-                }
-            }
+            schedulePinnedStateAndIndicators();
         });
 
         childObserver.observe(container, { childList: true, subtree: true });
@@ -402,36 +463,28 @@ export const useChatScrollManager = ({
             observer.disconnect();
             childObserver.disconnect();
         };
-    }, [getAutoFollowThreshold, getDistanceFromBottom, scrollPinnedToBottom, updateScrollButtonVisibility]);
+    }, [schedulePinnedStateAndIndicators]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined') {
-            updateScrollButtonVisibility();
+            schedulePinnedStateAndIndicators();
             return;
         }
 
         const rafId = window.requestAnimationFrame(() => {
-            updateScrollButtonVisibility();
+            schedulePinnedStateAndIndicators();
         });
 
         return () => {
             window.cancelAnimationFrame(rafId);
         };
-    }, [currentSessionId, sessionMessages.length, updateScrollButtonVisibility]);
+    }, [currentSessionId, schedulePinnedStateAndIndicators, sessionMessages.length]);
 
     const animationHandlersRef = React.useRef<Map<string, AnimationHandlers>>(new Map());
 
     const handleMessageContentChange = React.useCallback(() => {
-        updateScrollButtonVisibility();
-
-        // Maintain pin when content changes - fast smooth follow
-        if (isPinnedRef.current) {
-            const distanceFromBottom = getDistanceFromBottom();
-            if (distanceFromBottom > getAutoFollowThreshold()) {
-                scrollPinnedToBottom();
-            }
-        }
-    }, [getAutoFollowThreshold, getDistanceFromBottom, scrollPinnedToBottom, updateScrollButtonVisibility]);
+        schedulePinnedStateAndIndicators();
+    }, [schedulePinnedStateAndIndicators]);
 
     const getAnimationHandlers = React.useCallback((messageId: string): AnimationHandlers => {
         const existing = animationHandlersRef.current.get(messageId);
@@ -441,27 +494,15 @@ export const useChatScrollManager = ({
 
         const handlers: AnimationHandlers = {
             onChunk: () => {
-                updateScrollButtonVisibility();
-                if (isPinnedRef.current) {
-                    const distanceFromBottom = getDistanceFromBottom();
-                    if (distanceFromBottom > getAutoFollowThreshold()) {
-                        scrollPinnedToBottom();
-                    }
-                }
+                schedulePinnedStateAndIndicators();
             },
             onComplete: () => {
-                updateScrollButtonVisibility();
+                schedulePinnedStateAndIndicators();
             },
             onStreamingCandidate: () => {},
             onAnimationStart: () => {},
             onAnimatedHeightChange: () => {
-                updateScrollButtonVisibility();
-                if (isPinnedRef.current) {
-                    const distanceFromBottom = getDistanceFromBottom();
-                    if (distanceFromBottom > getAutoFollowThreshold()) {
-                        scrollPinnedToBottom();
-                    }
-                }
+                schedulePinnedStateAndIndicators();
             },
             onReservationCancelled: () => {},
             onReasoningBlock: () => {},
@@ -469,7 +510,22 @@ export const useChatScrollManager = ({
 
         animationHandlersRef.current.set(messageId, handlers);
         return handlers;
-    }, [getAutoFollowThreshold, getDistanceFromBottom, scrollPinnedToBottom, updateScrollButtonVisibility]);
+    }, [schedulePinnedStateAndIndicators]);
+
+    React.useEffect(() => {
+        return () => {
+            if (pinnedSyncRafRef.current !== null && typeof window !== 'undefined') {
+                window.cancelAnimationFrame(pinnedSyncRafRef.current);
+                pinnedSyncRafRef.current = null;
+            }
+
+            flushViewportAnchor();
+            if (viewportAnchorTimerRef.current !== null) {
+                clearTimeout(viewportAnchorTimerRef.current);
+                viewportAnchorTimerRef.current = null;
+            }
+        };
+    }, [flushViewportAnchor]);
 
     React.useEffect(() => {
         if (!onActiveTurnChange) {
@@ -505,8 +561,19 @@ export const useChatScrollManager = ({
 
         registerTurns();
 
+        let registerTimer: ReturnType<typeof setTimeout> | null = null;
+        const scheduleRegisterTurns = () => {
+            if (registerTimer !== null) {
+                return;
+            }
+            registerTimer = setTimeout(() => {
+                registerTimer = null;
+                registerTurns();
+            }, 80);
+        };
+
         const mutationObserver = new MutationObserver(() => {
-            registerTurns();
+            scheduleRegisterTurns();
         });
         mutationObserver.observe(container, { subtree: true, childList: true });
 
@@ -518,6 +585,9 @@ export const useChatScrollManager = ({
         return () => {
             container.removeEventListener('scroll', handleScroll);
             mutationObserver.disconnect();
+            if (registerTimer !== null) {
+                clearTimeout(registerTimer);
+            }
             spy.destroy();
             onActiveTurnChange(null);
         };

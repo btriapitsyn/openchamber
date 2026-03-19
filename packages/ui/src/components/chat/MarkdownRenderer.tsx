@@ -971,12 +971,14 @@ const useFileReferenceInteractions = ({
   readFile,
   editor,
   preferRuntimeEditor,
+  deferValidationUntilIdle = false,
 }: {
   containerRef: React.RefObject<HTMLDivElement | null>;
   effectiveDirectory: string;
   readFile?: (path: string) => Promise<{ content: string; path: string }>;
   editor?: EditorAPI;
   preferRuntimeEditor?: boolean;
+  deferValidationUntilIdle?: boolean;
 }) => {
   const validationCacheRef = React.useRef<Map<string, boolean>>(new Map());
   const inFlightValidationsRef = React.useRef<Map<string, Promise<boolean>>>(new Map());
@@ -1048,6 +1050,9 @@ const useFileReferenceInteractions = ({
     };
 
     const runValidationSweep = async (paths: string[], expectedPassID: number) => {
+      if (deferValidationUntilIdle) {
+        return;
+      }
       if (isValidationSweepRunningRef.current || paths.length === 0) {
         return;
       }
@@ -1208,9 +1213,13 @@ const useFileReferenceInteractions = ({
       annotationDebounceRef.current = window.setTimeout(() => {
         annotationDebounceRef.current = null;
         void annotateFileLinks();
-      }, 120);
+      }, deferValidationUntilIdle ? 280 : 120);
     });
-    observer.observe(container, { childList: true, subtree: true, characterData: true });
+    observer.observe(container, {
+      childList: true,
+      subtree: true,
+      ...(deferValidationUntilIdle ? {} : { characterData: true }),
+    });
 
     container.addEventListener('click', handleClick);
     container.addEventListener('keydown', handleKeyDown);
@@ -1226,7 +1235,7 @@ const useFileReferenceInteractions = ({
       container.removeEventListener('click', handleClick);
       container.removeEventListener('keydown', handleKeyDown);
     };
-  }, [containerRef, editor, effectiveDirectory, preferRuntimeEditor, readFile]);
+  }, [containerRef, deferValidationUntilIdle, editor, effectiveDirectory, preferRuntimeEditor, readFile]);
 };
 
 const useMermaidInlineInteractions = ({
@@ -1345,6 +1354,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     readFile: files.readFile,
     editor,
     preferRuntimeEditor: runtime.isVSCode,
+    deferValidationUntilIdle: isStreaming,
   });
 
   const shikiThemes = useMarkdownShikiThemes();

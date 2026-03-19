@@ -2278,6 +2278,10 @@ export const useMessageStore = create<MessageStore>()(
                             backgroundMessageCount: 0,
                         };
 
+                        if (memoryState.viewportAnchor === anchor) {
+                            return state;
+                        }
+
                         const newMemoryState = new Map(state.sessionMemoryState);
                         newMemoryState.set(sessionId, { ...memoryState, viewportAnchor: anchor });
                         return { sessionMemoryState: newMemoryState };
@@ -2343,9 +2347,7 @@ export const useMessageStore = create<MessageStore>()(
                         sessionId,
                         {
                             viewportAnchor: memory.viewportAnchor,
-                            isStreaming: memory.isStreaming,
                             lastAccessedAt: memory.lastAccessedAt,
-                            backgroundMessageCount: memory.backgroundMessageCount,
                             totalAvailableMessages: memory.totalAvailableMessages,
                             loadedTurnCount: memory.loadedTurnCount,
                             hasMoreAbove: memory.hasMoreAbove,
@@ -2374,6 +2376,10 @@ export const useMessageStore = create<MessageStore>()(
                                 // recomputed from a fresh API fetch on session open.
                                 return [id, {
                                     ...memory,
+                                    isStreaming: false,
+                                    backgroundMessageCount: typeof memory.backgroundMessageCount === 'number'
+                                        ? memory.backgroundMessageCount
+                                        : 0,
                                     hasMoreAbove: undefined,
                                     hasMoreTurnsAbove: undefined,
                                     historyComplete: undefined,
