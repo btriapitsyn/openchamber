@@ -686,7 +686,7 @@ export function DesktopHostSwitcherDialog({
             <div className="min-w-0 flex items-baseline gap-1.5 typography-ui-label">
               <span className="font-medium text-foreground">Current</span>
               <span className="max-w-[9rem] truncate text-muted-foreground">{redactSensitiveUrl(current.label)}</span>
-              <span className="text-muted-foreground/50">·</span>
+              <span className="text-muted-foreground/50">•</span>
               <span className="font-medium text-foreground">Default</span>
               <span className="max-w-[9rem] truncate text-muted-foreground">{redactSensitiveUrl(currentDefaultLabel)}</span>
             </div>
@@ -742,7 +742,7 @@ export function DesktopHostSwitcherDialog({
 
         {tauriAvailable && (
           <div className="flex-shrink-0 flex items-center justify-between gap-2 px-2.5 py-1.5">
-            <span className="typography-micro text-muted-foreground">Need SSH instances? Manage them in Settings.</span>
+            <span className="typography-micro text-muted-foreground">Need SSH instances?<br />Manage them in Settings.</span>
             <Button type="button" variant="ghost" size="sm" onClick={openRemoteInstancesSettings}>
               <RiSettings3Line className="h-4 w-4" />
               Remote SSH
