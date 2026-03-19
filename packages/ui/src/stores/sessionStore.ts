@@ -82,6 +82,8 @@ const readSessionSelectionMap = (): SessionSelectionMap => {
 
 let sessionSelectionCache: SessionSelectionMap | null = null;
 let loadSessionsRequestSeq = 0;
+let loadSessionsInFlight: Promise<void> | null = null;
+let loadSessionsQueued = false;
 let persistSelectionTimer: ReturnType<typeof setTimeout> | undefined;
 let pendingSelectionMap: SessionSelectionMap | null = null;
 
@@ -482,10 +484,16 @@ export const useSessionStore = create<SessionStore>()(
                 availableWorktreesByProject: new Map(),
 
                 loadSessions: async () => {
-                    const requestSeq = ++loadSessionsRequestSeq;
-                    const isLatestRequest = () => requestSeq === loadSessionsRequestSeq;
-                    set({ isLoading: true, error: null });
-                    try {
+                    if (loadSessionsInFlight) {
+                        loadSessionsQueued = true;
+                        return loadSessionsInFlight;
+                    }
+
+                    const task = (async () => {
+                        const requestSeq = ++loadSessionsRequestSeq;
+                        const isLatestRequest = () => requestSeq === loadSessionsRequestSeq;
+                        set({ isLoading: true, error: null });
+                        try {
                         const directoryStore = useDirectoryStore.getState();
                         const projectsStore = useProjectsStore.getState();
                         const apiClient = opencodeClient.getApiClient();
@@ -828,14 +836,28 @@ export const useSessionStore = create<SessionStore>()(
                         const fallbackSessions = dedupeSessionsById(Array.isArray(fallbackResponse.data) ? fallbackResponse.data : []);
                         const fallbackProjectResults = await buildProjectResults(fallbackSessions);
                         await applyProjectResults(fallbackProjectResults, []);
-                    } catch (error) {
-                        if (!isLatestRequest()) {
-                            return;
+                        } catch (error) {
+                            if (!isLatestRequest()) {
+                                return;
+                            }
+                            set({
+                                error: error instanceof Error ? error.message : "Failed to load sessions",
+                                isLoading: false,
+                            });
                         }
-                        set({
-                            error: error instanceof Error ? error.message : "Failed to load sessions",
-                            isLoading: false,
-                        });
+                    })();
+
+                    loadSessionsInFlight = task;
+                    try {
+                        await task;
+                    } finally {
+                        if (loadSessionsInFlight === task) {
+                            loadSessionsInFlight = null;
+                        }
+                        if (loadSessionsQueued) {
+                            loadSessionsQueued = false;
+                            void get().loadSessions();
+                        }
                     }
                 },
 

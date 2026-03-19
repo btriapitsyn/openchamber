@@ -64,6 +64,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
 const FILE_MENTION_TOKEN = /^@[^\s]+$/;
+const CHAT_DRAFT_PERSIST_DEBOUNCE_MS = 500;
 
 const normalizePath = (value?: string | null): string | null => {
     if (typeof value !== 'string') {
@@ -190,6 +191,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const skillRef = React.useRef<SkillAutocompleteHandle>(null);
     // Ref to track current message value without triggering re-renders in effects
     const messageRef = React.useRef(message);
+    const draftPersistTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+    const skipNextDraftPersistRef = React.useRef(false);
+    const lastPersistedDraftRef = React.useRef<Map<string, string>>(new Map());
+    const currentSessionIdForDraftRef = React.useRef<string | null>(null);
 
     const sendMessage = useSessionStore((state) => state.sendMessage);
     const currentSessionId = useSessionStore((state) => state.currentSessionId);
@@ -467,6 +472,29 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         messageRef.current = message;
     }, [message]);
 
+    React.useEffect(() => {
+        currentSessionIdForDraftRef.current = currentSessionId;
+    }, [currentSessionId]);
+
+    const persistDraftImmediately = React.useCallback((sessionId: string | null, draft: string) => {
+        const key = getDraftKey(sessionId);
+        const lastPersisted = lastPersistedDraftRef.current.get(key);
+        if (lastPersisted === draft) {
+            return;
+        }
+
+        saveStoredDraft(sessionId, draft);
+        lastPersistedDraftRef.current.set(key, draft);
+    }, []);
+
+    const clearPendingDraftPersist = React.useCallback(() => {
+        if (!draftPersistTimerRef.current) {
+            return;
+        }
+        clearTimeout(draftPersistTimerRef.current);
+        draftPersistTimerRef.current = null;
+    }, []);
+
     // Handle initial draft restoration and text selection
     const hasHandledInitialDraftRef = React.useRef(false);
     React.useEffect(() => {
@@ -499,10 +527,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             const oldSessionId = prevSessionIdRef.current;
             prevSessionIdRef.current = currentSessionId;
             setInputMode('normal');
+            clearPendingDraftPersist();
+            skipNextDraftPersistRef.current = true;
 
             if (persistChatDraft) {
                 // Save current draft for the session we're leaving
-                saveStoredDraft(oldSessionId, messageRef.current);
+                persistDraftImmediately(oldSessionId, messageRef.current);
                 // Restore draft for the session we're entering
                 const newDraft = getStoredDraft(currentSessionId);
                 setMessage(newDraft);
@@ -516,7 +546,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 setMessage('');
             }
         }
-    }, [currentSessionId, persistChatDraft]);
+    }, [clearPendingDraftPersist, currentSessionId, persistChatDraft, persistDraftImmediately]);
 
     // Focus textarea when new session draft is opened
     const prevNewSessionDraftOpenRef = React.useRef(newSessionDraftOpen);
@@ -538,16 +568,37 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     // Persist chat input draft to localStorage per session (only if setting enabled)
     React.useEffect(() => {
         if (!persistChatDraft) {
-            // Clear stored draft for current session when setting is disabled
-            try {
-                localStorage.removeItem(getDraftKey(currentSessionId));
-            } catch {
-                // Ignore
-            }
+            clearPendingDraftPersist();
+            persistDraftImmediately(currentSessionId, '');
             return;
         }
-        saveStoredDraft(currentSessionId, message);
-    }, [message, persistChatDraft, currentSessionId]);
+
+        if (skipNextDraftPersistRef.current) {
+            skipNextDraftPersistRef.current = false;
+            return;
+        }
+
+        clearPendingDraftPersist();
+        const draftSnapshot = message;
+        const sessionSnapshot = currentSessionId;
+        draftPersistTimerRef.current = setTimeout(() => {
+            draftPersistTimerRef.current = null;
+            persistDraftImmediately(sessionSnapshot, draftSnapshot);
+        }, CHAT_DRAFT_PERSIST_DEBOUNCE_MS);
+
+        return () => {
+            clearPendingDraftPersist();
+        };
+    }, [clearPendingDraftPersist, currentSessionId, message, persistChatDraft, persistDraftImmediately]);
+
+    React.useEffect(() => {
+        return () => {
+            clearPendingDraftPersist();
+            if (persistChatDraft) {
+                persistDraftImmediately(currentSessionIdForDraftRef.current, messageRef.current);
+            }
+        };
+    }, [clearPendingDraftPersist, persistChatDraft, persistDraftImmediately]);
 
     // Session activity for queue availability and controls
     const { phase: sessionPhase } = useCurrentSessionActivity();
