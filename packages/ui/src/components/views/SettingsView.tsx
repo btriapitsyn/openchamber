@@ -240,6 +240,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   const isMobile = forceMobile ?? deviceInfo.isMobile;
 
   const settingsPageRaw = useUIStore((state) => state.settingsPage);
+  const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const settingsSlug = resolveSettingsSlug(settingsPageRaw);
 
@@ -322,25 +323,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   // Load stores when project changes or when a page becomes active.
   React.useEffect(() => {
+    if (!isSettingsDialogOpen && !runtimeCtx.isVSCode) {
+      return;
+    }
+
     if (settingsSlug === 'agents') {
-      setTimeout(() => void useAgentsStore.getState().loadAgents(), 0);
+      void useAgentsStore.getState().loadAgents();
       return;
     }
     if (settingsSlug === 'commands') {
-      setTimeout(() => void useCommandsStore.getState().loadCommands(), 0);
+      void useCommandsStore.getState().loadCommands();
       return;
     }
     if (settingsSlug === 'mcp') {
-      setTimeout(() => void useMcpConfigStore.getState().loadMcpConfigs(), 0);
+      void useMcpConfigStore.getState().loadMcpConfigs();
       return;
     }
     if (settingsSlug === 'skills.installed' || settingsSlug === 'skills.catalog') {
-      setTimeout(() => {
-        void useSkillsStore.getState().loadSkills();
-        void useSkillsCatalogStore.getState().loadCatalog();
-      }, 0);
+      void useSkillsStore.getState().loadSkills();
+      void useSkillsCatalogStore.getState().loadCatalog();
     }
-  }, [activeProjectId, settingsSlug]);
+  }, [activeProjectId, isSettingsDialogOpen, runtimeCtx.isVSCode, settingsSlug]);
 
   const openPage = React.useCallback((slug: SettingsPageSlug) => {
     setSettingsPage(slug);

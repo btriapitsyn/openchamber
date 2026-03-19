@@ -195,6 +195,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setShowExpandedEditTools = useUIStore(state => state.setShowExpandedEditTools);
     const showMobileSessionStatusBar = useUIStore(state => state.showMobileSessionStatusBar);
     const setShowMobileSessionStatusBar = useUIStore(state => state.setShowMobileSessionStatusBar);
+    const isSettingsDialogOpen = useUIStore(state => state.isSettingsDialogOpen);
     const {
         themeMode,
         setThemeMode,
@@ -210,7 +211,14 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const [themesReloading, setThemesReloading] = React.useState(false);
     const [chatRenderPreviewTick, setChatRenderPreviewTick] = React.useState(0);
 
+    const shouldAnimateChatPreview = isSettingsDialogOpen
+        && (visibleSettings ? visibleSettings.includes('chatRenderMode') : true);
+
     React.useEffect(() => {
+        if (!shouldAnimateChatPreview) {
+            return;
+        }
+
         const intervalId = setInterval(() => {
             setChatRenderPreviewTick((prev) => (prev + 1) % 24);
         }, 420);
@@ -218,7 +226,7 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
         return () => {
             clearInterval(intervalId);
         };
-    }, []);
+    }, [shouldAnimateChatPreview]);
 
     const handleUserMessageRenderingModeChange = React.useCallback((mode: 'markdown' | 'plain') => {
         setUserMessageRenderingMode(mode);
