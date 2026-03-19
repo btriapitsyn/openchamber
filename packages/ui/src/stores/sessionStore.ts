@@ -82,6 +82,8 @@ const readSessionSelectionMap = (): SessionSelectionMap => {
 
 let sessionSelectionCache: SessionSelectionMap | null = null;
 let loadSessionsRequestSeq = 0;
+let persistSelectionTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingSelectionMap: SessionSelectionMap | null = null;
 
 type ProjectSessionResult = {
     projectId: string;
@@ -152,10 +154,27 @@ const getSessionSelectionMap = (): SessionSelectionMap => {
 
 const persistSessionSelectionMap = (map: SessionSelectionMap) => {
     sessionSelectionCache = map;
-    try {
-        safeStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify(map));
-    } catch { /* ignored */ }
+    pendingSelectionMap = map;
+    clearTimeout(persistSelectionTimer);
+    persistSelectionTimer = setTimeout(() => {
+        try {
+            safeStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify(map));
+            pendingSelectionMap = null;
+        } catch { /* ignored */ }
+    }, 300);
 };
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+        if (pendingSelectionMap !== null) {
+            clearTimeout(persistSelectionTimer);
+            try {
+                safeStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify(pendingSelectionMap));
+            } catch { /* ignored */ }
+            pendingSelectionMap = null;
+        }
+    });
+}
 
 const getStoredSessionForDirectory = (directory: string | null | undefined): string | null => {
     if (!directory) {
@@ -1464,9 +1483,9 @@ export const useSessionStore = create<SessionStore>()(
                             mergedSession.directory !== existingSession.directory ||
                             mergedSession.version !== existingSession.version ||
                             mergedSession.projectID !== existingSession.projectID ||
-                            JSON.stringify(mergedSession.time) !== JSON.stringify(existingSession.time) ||
-                            JSON.stringify(mergedSession.summary ?? null) !== JSON.stringify(existingSession.summary ?? null) ||
-                            JSON.stringify(mergedSession.share ?? null) !== JSON.stringify(existingSession.share ?? null);
+                            (mergedTime !== existingSession.time && JSON.stringify(mergedTime) !== JSON.stringify(existingSession.time)) ||
+                            (mergedSummary !== existingSession.summary && JSON.stringify(mergedSummary ?? null) !== JSON.stringify(existingSession.summary ?? null)) ||
+                            (mergedShare !== existingSession.share && JSON.stringify(mergedShare ?? null) !== JSON.stringify(existingSession.share ?? null));
 
                         const sessions = [...state.sessions];
                         sessions[index] = hasChanged ? mergedSession : existingSession;
