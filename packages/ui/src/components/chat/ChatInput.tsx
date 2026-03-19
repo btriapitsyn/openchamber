@@ -10,8 +10,8 @@ import {
     RiFolderLine,
     RiFullscreenLine,
     RiGitPullRequestLine,
-    RiCheckboxCircleLine,
-    RiQuestionLine,
+    RiShieldCheckLine,
+    RiShieldUserLine,
     RiGithubLine,
     RiSendPlane2Line,
 } from '@remixicon/react';
@@ -2292,12 +2292,32 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const selectedDraftProjectBranches = useGitBranches(selectedDraftProjectPath);
     const fetchBranches = useGitStore((state) => state.fetchBranches);
+    const [isDiscoveringDraftBranches, setIsDiscoveringDraftBranches] = React.useState(false);
 
     React.useEffect(() => {
-        if (!showDraftTargetSelectors || !selectedDraftProjectPath || !selectedDraftProject || !runtimeGit || selectedDraftProjectBranches?.all) {
+        if (!showDraftTargetSelectors || !selectedDraftProjectPath || !selectedDraftProject || !runtimeGit) {
+            setIsDiscoveringDraftBranches(false);
             return;
         }
-        void fetchBranches(selectedDraftProjectPath, runtimeGit);
+
+        if (selectedDraftProjectBranches?.all) {
+            setIsDiscoveringDraftBranches(false);
+            return;
+        }
+
+        let cancelled = false;
+        setIsDiscoveringDraftBranches(true);
+
+        void fetchBranches(selectedDraftProjectPath, runtimeGit)
+            .finally(() => {
+                if (!cancelled) {
+                    setIsDiscoveringDraftBranches(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
     }, [fetchBranches, runtimeGit, selectedDraftProject, selectedDraftProjectBranches?.all, selectedDraftProjectPath, showDraftTargetSelectors]);
 
     const projectRootBranchOption = React.useMemo(() => {
@@ -2309,9 +2329,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
             return null;
         }
         const projectRootBranch = selectedDraftProjectBranches?.current?.trim() ?? '';
+        if (!projectRootBranch) {
+            return null;
+        }
         return {
             value,
-            label: projectRootBranch || 'HEAD',
+            label: projectRootBranch,
         };
     }, [selectedDraftProject, selectedDraftProjectBranches]);
 
@@ -2392,6 +2415,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         }
         return worktreeBranchOptions.some((option) => option.value === selectedDraftDirectory);
     }, [projectRootBranchOption?.value, selectedDraftDirectory, worktreeBranchOptions]);
+
+    const shouldShowDraftBranchSelector = React.useMemo(() => {
+        if (isDiscoveringDraftBranches) {
+            return false;
+        }
+        if (projectRootBranchOption) {
+            return true;
+        }
+        return worktreeBranchOptions.length > 0;
+    }, [isDiscoveringDraftBranches, projectRootBranchOption, worktreeBranchOptions.length]);
 
     const handleDraftProjectChange = React.useCallback((projectId: string) => {
         const project = projects.find((entry) => entry.id === projectId);
@@ -2474,8 +2507,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
     const sendIconSizeClass = isMobile ? 'h-4 w-4' : (isVSCode ? 'h-3.5 w-3.5' : 'h-4 w-4');
     const stopIconSizeClass = isMobile ? 'h-6 w-6' : (isVSCode ? 'h-4 w-4' : 'h-5 w-5');
     const iconSizeClass = isMobile ? 'h-[18px] w-[18px]' : (isVSCode ? 'h-4 w-4' : 'h-[18px] w-[18px]');
-    const shieldButtonClass = isMobile ? 'h-7 px-0.5' : (isVSCode ? 'h-5 px-0' : 'h-[22px] px-0.5');
-    const shieldIconSizeClass = isMobile ? 'h-[17px] w-[17px]' : (isVSCode ? 'h-[15px] w-[15px]' : 'h-[17px] w-[17px]');
 
     const iconButtonBaseClass = 'flex cursor-pointer items-center justify-center text-foreground transition-none outline-none focus:outline-none flex-shrink-0 disabled:cursor-not-allowed';
     const footerIconButtonClass = cn(iconButtonBaseClass, buttonSizeClass);
@@ -2499,14 +2530,19 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
         });
     }, [permissionAutoAcceptEnabled, permissionScopeSessionId, setSessionAutoAccept]);
 
+    const permissionAutoAcceptAriaLabel = permissionAutoAcceptEnabled
+        ? 'Disable permission auto-accept'
+        : 'Enable permission auto-accept';
+    const permissionAutoAcceptTooltipLabel = permissionAutoAcceptEnabled
+        ? 'Permission auto-accept: on'
+        : 'Permission auto-accept: off';
+
     const permissionAutoAcceptButton = (
         <button
             type="button"
             onClick={handlePermissionAutoAcceptToggle}
             className={cn(
-                iconButtonBaseClass,
-                shieldButtonClass,
-                '-mx-1 md:-mx-1.5',
+                footerIconButtonClass,
                 'rounded-md hover:bg-transparent',
                 !permissionScopeSessionId && 'opacity-30',
             )}
@@ -2520,15 +2556,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                 }
             }}
             aria-pressed={permissionAutoAcceptEnabled}
-            aria-label={permissionAutoAcceptEnabled ? 'Disable permission auto-accept' : 'Enable permission auto-accept'}
-            title={permissionAutoAcceptEnabled ? 'Disable permission auto-accept' : 'Enable permission auto-accept'}
+            aria-label={permissionAutoAcceptAriaLabel}
+            title={permissionAutoAcceptAriaLabel}
         >
             {permissionAutoAcceptEnabled ? (
-                <RiCheckboxCircleLine className={cn(shieldIconSizeClass)} style={{ color: 'var(--status-success)' }} />
+                <RiShieldCheckLine className={cn(iconSizeClass)} style={{ color: 'var(--status-info)' }} />
             ) : (
-                <RiQuestionLine className={cn(shieldIconSizeClass)} />
+                <RiShieldUserLine className={cn(iconSizeClass)} />
             )}
         </button>
+    );
+
+    const permissionAutoAcceptButtonWithTooltip = (
+        <Tooltip delayDuration={600}>
+            <TooltipTrigger asChild>
+                {permissionAutoAcceptButton}
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={8}>
+                {permissionAutoAcceptTooltipLabel}
+            </TooltipContent>
+        </Tooltip>
     );
 
     // Send button - respects queue mode setting
@@ -2917,47 +2964,49 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                             </SelectContent>
                         </Select>
 
-                        <Select
-                            value={selectedDraftDirectory ?? draftBranchItems[0]?.value ?? normalizePath(selectedDraftProject.path) ?? ''}
-                            onValueChange={handleDraftDirectoryChange}
-                        >
-                            <SelectTrigger
-                                size="sm"
-                                className="h-7 min-w-0 w-fit max-w-[48vw] sm:max-w-[20rem] border-transparent bg-transparent px-1.5 hover:bg-transparent data-[state=open]:bg-transparent"
+                        {shouldShowDraftBranchSelector ? (
+                            <Select
+                                value={selectedDraftDirectory ?? draftBranchItems[0]?.value ?? normalizePath(selectedDraftProject.path) ?? ''}
+                                onValueChange={handleDraftDirectoryChange}
                             >
-                                <SelectValue>
-                                    {selectedDraftBranchLabel ?? 'Branch'}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent fitContent>
-                                {projectRootBranchOption ? (
-                                    <SelectGroup>
-                                        <SelectLabel>Project root</SelectLabel>
-                                        <SelectItem key={projectRootBranchOption.value} value={projectRootBranchOption.value} className="max-w-[24rem] truncate">
-                                            {projectRootBranchOption.label}
-                                        </SelectItem>
-                                    </SelectGroup>
-                                ) : null}
-                                {worktreeBranchOptions.length > 0 ? (
-                                    <>
-                                        {projectRootBranchOption ? <SelectSeparator /> : null}
+                                <SelectTrigger
+                                    size="sm"
+                                    className="h-7 min-w-0 w-fit max-w-[48vw] sm:max-w-[20rem] border-transparent bg-transparent px-1.5 hover:bg-transparent data-[state=open]:bg-transparent"
+                                >
+                                    <SelectValue>
+                                        {selectedDraftBranchLabel ?? 'Branch'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent fitContent>
+                                    {projectRootBranchOption ? (
                                         <SelectGroup>
-                                            <SelectLabel>Worktrees</SelectLabel>
-                                            {worktreeBranchOptions.map((option) => (
-                                                <SelectItem key={option.value} value={option.value} className="max-w-[24rem] truncate">
-                                                    {option.label}
-                                                </SelectItem>
-                                            ))}
+                                            <SelectLabel>Project root</SelectLabel>
+                                            <SelectItem key={projectRootBranchOption.value} value={projectRootBranchOption.value} className="max-w-[24rem] truncate">
+                                                {projectRootBranchOption.label}
+                                            </SelectItem>
                                         </SelectGroup>
-                                    </>
-                                ) : null}
-                                {selectedDraftDirectory && !selectedDraftBranchIsKnown ? (
-                                    <SelectItem value={selectedDraftDirectory} className="max-w-[24rem] truncate">
-                                        {selectedDraftBranchLabel}
-                                    </SelectItem>
-                                ) : null}
-                            </SelectContent>
-                        </Select>
+                                    ) : null}
+                                    {worktreeBranchOptions.length > 0 ? (
+                                        <>
+                                            {projectRootBranchOption ? <SelectSeparator /> : null}
+                                            <SelectGroup>
+                                                <SelectLabel>Worktrees</SelectLabel>
+                                                {worktreeBranchOptions.map((option) => (
+                                                    <SelectItem key={option.value} value={option.value} className="max-w-[24rem] truncate">
+                                                        {option.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        </>
+                                    ) : null}
+                                    {selectedDraftDirectory && !selectedDraftBranchIsKnown ? (
+                                        <SelectItem value={selectedDraftDirectory} className="max-w-[24rem] truncate">
+                                            {selectedDraftBranchLabel}
+                                        </SelectItem>
+                                    ) : null}
+                                </SelectContent>
+                            </Select>
+                        ) : null}
                     </div>
                 ) : null}
                 <div
@@ -3159,8 +3208,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                         {isMobile ? (
                             <>
                                 <div className="flex w-full items-center justify-between gap-x-1.5">
-                                    <div className="flex items-center gap-x-1">
+                                    <div className="flex items-center gap-x-1.5">
                                         {attachmentsControls}
+                                        {permissionAutoAcceptButton}
                                     </div>
                                     <div className="flex items-center min-w-0 gap-x-1 justify-end">
                                         <div className="flex items-center gap-x-1 min-w-0 max-w-[60vw] flex-shrink">
@@ -3172,7 +3222,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                             />
                                         </div>
                                         <div className="flex items-center gap-x-1 flex-shrink-0">
-                                            {permissionAutoAcceptButton}
                                             <BrowserVoiceButton />
                                             {actionButtons}
                                         </div>
@@ -3226,10 +3275,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                             </div>
                                         </TooltipContent>
                                     </Tooltip>
+                                    {permissionAutoAcceptButtonWithTooltip}
                                 </div>
                                 <div className={cn('flex items-center flex-1 justify-end', footerGapClass, 'md:gap-x-3')}>
                                     <ModelControls className={cn('flex-1 min-w-0 justify-end')} />
-                                    {permissionAutoAcceptButton}
                                     <BrowserVoiceButton />
                                     {actionButtons}
                                 </div>

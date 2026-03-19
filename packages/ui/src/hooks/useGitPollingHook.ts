@@ -100,11 +100,6 @@ export function useGitPolling() {
 
         setActiveDirectory(effectiveDirectory);
 
-        if (activeSessionStatus !== 'idle') {
-            stopPolling();
-            return;
-        }
-
         void fetchAll(effectiveDirectory, git, { silentIfCached: true });
         startPolling(git);
 
