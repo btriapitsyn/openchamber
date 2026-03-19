@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useUIStore } from '@/stores/useUIStore';
+import { useDurationTickerNow } from './useDurationTicker';
 
 type PartWithText = Part & { text?: string; content?: string; time?: { start?: number; end?: number } };
 
@@ -65,19 +66,7 @@ const formatDuration = (start: number, end?: number, now: number = Date.now()): 
 };
 
 const LiveDuration: React.FC<{ start: number; end?: number; active: boolean }> = ({ start, end, active }) => {
-    const [now, setNow] = React.useState(() => Date.now());
-
-    React.useEffect(() => {
-        if (!active) {
-            return;
-        }
-
-        const timer = window.setInterval(() => {
-            setNow(Date.now());
-        }, 100);
-
-        return () => window.clearInterval(timer);
-    }, [active]);
+    const now = useDurationTickerNow(active, 250);
 
     return <>{formatDuration(start, end, now)}</>;
 };
