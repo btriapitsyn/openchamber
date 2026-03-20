@@ -10,6 +10,22 @@ type TauriShell = {
   };
 };
 
+const parseUrlSafely = (value: string): URL | null => {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+};
+
+export const isExternalHttpUrl = (url: string): boolean => {
+  const parsed = parseUrlSafely(url.trim());
+  if (!parsed) {
+    return false;
+  }
+  return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+};
+
 /**
  * Opens an external URL in the system browser.
  * In Tauri desktop runtime, uses tauri.shell.open() for proper handling.
@@ -19,25 +35,38 @@ type TauriShell = {
  * @returns Promise<boolean> - true if the URL was opened successfully
  */
 export const openExternalUrl = async (url: string): Promise<boolean> => {
-  const target = url.trim();
-  if (!target || typeof window === 'undefined') {
+  if (typeof window === 'undefined') {
     return false;
   }
 
-  // Check for Tauri runtime
+  const target = url.trim();
+  if (!target) {
+    return false;
+  }
+
+  const parsed = parseUrlSafely(target);
+  if (!parsed) {
+    return false;
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return false;
+  }
+
+  const normalizedTarget = parsed.toString();
+
   const tauri = (window as unknown as { __TAURI__?: TauriShell }).__TAURI__;
   if (tauri?.shell?.open) {
     try {
-      await tauri.shell.open(target);
+      await tauri.shell.open(normalizedTarget);
       return true;
     } catch {
       // Fall through to window.open
     }
   }
 
-  // Fallback to window.open for web runtime
   try {
-    window.open(target, '_blank', 'noopener,noreferrer');
+    window.open(normalizedTarget, '_blank', 'noopener,noreferrer');
     return true;
   } catch {
     return false;

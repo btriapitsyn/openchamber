@@ -11,7 +11,7 @@ import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
 
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { openExternalUrl } from '@/lib/url';
+import { isExternalHttpUrl, openExternalUrl } from '@/lib/url';
 import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { getStreamdownThemePair } from '@/lib/shiki/appThemeRegistry';
 import { getDefaultTheme } from '@/lib/theme/themes';
@@ -151,6 +151,59 @@ const useCurrentMermaidTheme = () => {
     ?? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
       ? fallbackDark
       : fallbackLight);
+};
+
+const useExternalLinkInteractions = ({
+  containerRef,
+  enabled,
+}: {
+  containerRef: React.RefObject<HTMLDivElement | null>;
+  enabled?: boolean;
+}) => {
+  React.useEffect(() => {
+    if (enabled === false) {
+      return;
+    }
+
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+
+    const handleClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) {
+        return;
+      }
+
+      if (anchor.getAttribute('data-openchamber-file-link') === 'true') {
+        return;
+      }
+
+      const href = anchor.getAttribute('href') ?? '';
+      if (!isExternalHttpUrl(href)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      void openExternalUrl(href);
+    };
+
+    container.addEventListener('click', handleClick);
+    return () => {
+      container.removeEventListener('click', handleClick);
+    };
+  }, [containerRef, enabled]);
 };
 
 // Table utility functions
@@ -1357,6 +1410,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
     preferRuntimeEditor: runtime.isVSCode,
     deferValidationUntilIdle: isStreaming,
   });
+  useExternalLinkInteractions({ containerRef: streamdownContainerRef });
 
   const shikiThemes = useMarkdownShikiThemes();
   const streamdownPlugins = useStreamdownPlugins(shikiThemes);
@@ -1384,13 +1438,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           animated={disableStreamAnimation ? undefined : streamdownAnimated}
           isAnimating={disableStreamAnimation ? false : isStreaming}
           // @ts-expect-error Streamdown type missing linkSafety in older minor
-          linkSafety={{
-            enabled: true,
-            onLinkCheck: async (url: string) => {
-              await openExternalUrl(url);
-              return false;
-            },
-          }}
+          linkSafety={{ enabled: false }}
          >
         {content}
       </Streamdown>
@@ -1447,6 +1495,7 @@ export const SimpleMarkdownRenderer: React.FC<{
     editor,
     preferRuntimeEditor: runtime.isVSCode,
   });
+  useExternalLinkInteractions({ containerRef: streamdownContainerRef, enabled: !disableLinkSafety });
 
   const shikiThemes = useMarkdownShikiThemes();
   const streamdownPlugins = useStreamdownPlugins(shikiThemes);
@@ -1469,17 +1518,7 @@ export const SimpleMarkdownRenderer: React.FC<{
         plugins={streamdownPlugins}
         components={streamdownComponents}
         // @ts-expect-error Streamdown type missing linkSafety in older minor
-        linkSafety={
-          disableLinkSafety
-            ? { enabled: false }
-            : {
-                enabled: true,
-                onLinkCheck: async (url: string) => {
-                  await openExternalUrl(url);
-                  return false;
-                },
-              }
-        }
+        linkSafety={{ enabled: false }}
       >
         {renderedContent}
       </Streamdown>

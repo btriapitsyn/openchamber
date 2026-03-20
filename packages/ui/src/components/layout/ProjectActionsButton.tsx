@@ -21,6 +21,7 @@ import { isDesktopShell } from '@/lib/desktop';
 import { useUIStore } from '@/stores/useUIStore';
 import { useTerminalStore } from '@/stores/useTerminalStore';
 import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
+import { openExternalUrl } from '@/lib/url';
 import {
   getProjectActionsState,
   type OpenChamberProjectAction,
@@ -225,22 +226,7 @@ export const ProjectActionsButton = ({
   }, [isDesktopShellApp, loadDesktopSsh]);
 
   const openExternal = React.useCallback(async (url: string) => {
-    try {
-      const tauri = (window as unknown as {
-        __TAURI__?: {
-          shell?: {
-            open?: (target: string) => Promise<unknown>;
-          };
-        };
-      }).__TAURI__;
-      if (tauri?.shell?.open) {
-        await tauri.shell.open(url);
-        return;
-      }
-    } catch {
-      // noop
-    }
-    window.open(url, '_blank', 'noopener,noreferrer');
+    await openExternalUrl(url);
   }, []);
 
   const loadActions = React.useCallback(async () => {

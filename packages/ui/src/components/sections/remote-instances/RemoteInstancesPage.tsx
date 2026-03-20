@@ -40,6 +40,7 @@ import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { toast } from '@/components/ui';
 import { copyTextToClipboard } from '@/lib/clipboard';
+import { openExternalUrl } from '@/lib/url';
 import {
   desktopSshLogsClear,
   desktopSshLogs,
@@ -196,37 +197,6 @@ const formatLogLine = (line: string): string => {
   const level = (match[2] || 'INFO').toUpperCase();
   const message = match[3] || '';
   return `[${iso}] [${level}] ${message}`;
-};
-
-type TauriShell = {
-  shell?: {
-    open?: (url: string) => Promise<unknown>;
-  };
-};
-
-const openExternalUrl = async (url: string): Promise<boolean> => {
-  const target = url.trim();
-  if (!target || typeof window === 'undefined') {
-    return false;
-  }
-
-  const tauri = (window as unknown as { __TAURI__?: TauriShell }).__TAURI__;
-  if (tauri?.shell?.open) {
-    const openedWithTauri = await tauri.shell
-      .open(target)
-      .then(() => true)
-      .catch(() => false);
-    if (openedWithTauri) {
-      return true;
-    }
-  }
-
-  try {
-    window.open(target, '_blank', 'noopener,noreferrer');
-    return true;
-  } catch {
-    return false;
-  }
 };
 
 const navigateToUrl = (rawUrl: string): void => {

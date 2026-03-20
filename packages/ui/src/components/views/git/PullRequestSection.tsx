@@ -45,6 +45,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { generatePullRequestDescription } from '@/lib/gitApi';
+import { openExternalUrl } from '@/lib/url';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDeviceInfo } from '@/lib/device';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
@@ -266,31 +267,7 @@ type ChatDispatchTarget = {
 
 const pullRequestDraftSnapshots = new Map<string, PullRequestDraftSnapshot>();
 
-type TauriShell = {
-  shell?: {
-    open?: (url: string) => Promise<unknown>;
-  };
-};
-
-const openExternal = async (url: string) => {
-  if (typeof window === 'undefined') return;
-
-  const tauri = (window as unknown as { __TAURI__?: TauriShell }).__TAURI__;
-  if (tauri?.shell?.open) {
-    try {
-      await tauri.shell.open(url);
-      return;
-    } catch {
-      // fall through
-    }
-  }
-
-  try {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  } catch {
-    // ignore
-  }
-};
+const openExternal = openExternalUrl;
 
 export const PullRequestSection: React.FC<{
   directory: string;
