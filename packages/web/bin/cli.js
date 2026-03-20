@@ -61,6 +61,7 @@ const DEFAULT_TUNNEL_PROVIDER_CAPABILITIES = [cloudflareTunnelProviderCapabiliti
 
 let onCancelCleanup = null;
 let activeCommandOptions = null;
+let foregroundServerActive = false;
 
 function setCancelCleanup(handler) {
   onCancelCleanup = typeof handler === 'function' ? handler : null;
@@ -2776,14 +2777,70 @@ const commands = {
         console.log(`Starting OpenChamber on port ${targetPort === 0 ? 'auto' : targetPort} (foreground)`);
       }
 
+      // Let the server's own SIGINT/SIGTERM handlers drive graceful shutdown.
+      foregroundServerActive = true;
+
       const { startWebUiServer } = await import(pathToFileURL(serverPath).href);
-      await startWebUiServer({
+      const controller = await startWebUiServer({
         port: targetPort,
         uiPassword: effectiveUiPassword,
         attachSignals: true,
-        exitOnShutdown: true,
+        exitOnShutdown: false,
       });
-      return targetPort;
+
+      const resolvedPort = controller.getPort();
+
+      // Write PID / instance files so status, stop, and restart can discover
+      // this foreground instance the same way they discover daemon instances.
+      const fgPidFilePath = await getPidFilePath(resolvedPort);
+      const fgInstanceFilePath = await getInstanceFilePath(resolvedPort);
+      writePidFile(fgPidFilePath, process.pid, emitNotice);
+      writeInstanceOptions(fgInstanceFilePath, {
+        port: resolvedPort,
+        uiPassword: effectiveUiPassword,
+      }, emitNotice);
+
+      // Deterministic --json output: emit startup JSON then continue running.
+      if (isJsonMode(options)) {
+        printJson({
+          port: resolvedPort,
+          pid: process.pid,
+          url: buildLocalUrl(resolvedPort, '/'),
+          foreground: true,
+          messages: jsonMessages,
+        });
+      }
+
+      // Clean up PID / instance files on shutdown, then exit.
+      const cleanupAndExit = async () => {
+        removePidFile(fgPidFilePath);
+        removeInstanceFile(fgInstanceFilePath);
+      };
+
+      // Hook into the server's graceful shutdown via process exit events.
+      process.on('beforeExit', cleanupAndExit);
+      process.on('exit', () => {
+        // Synchronous fallback in case beforeExit was skipped.
+        removePidFile(fgPidFilePath);
+        removeInstanceFile(fgInstanceFilePath);
+      });
+
+      // Now perform graceful shutdown when signalled, then exit.
+      const handleForegroundSignal = async () => {
+        await controller.stop({ exitProcess: false });
+        await cleanupAndExit();
+        process.exit(0);
+      };
+      // Replace the server's signal handlers so we can clean up PID files too.
+      process.removeAllListeners('SIGINT');
+      process.removeAllListeners('SIGTERM');
+      process.removeAllListeners('SIGQUIT');
+      process.on('SIGINT', handleForegroundSignal);
+      process.on('SIGTERM', handleForegroundSignal);
+      process.on('SIGQUIT', handleForegroundSignal);
+
+      // Block forever – the process stays alive until signalled.
+      await new Promise(() => {});
     }
 
     const serverArgs = [serverPath, '--port', String(targetPort)];
@@ -4688,6 +4745,11 @@ if (isCliExecution) {
   let isHandlingSigint = false;
   process.on('SIGINT', () => {
     if (isHandlingSigint) {
+      return;
+    }
+    // In foreground mode the server's own SIGINT handler drives graceful
+    // shutdown (with exitOnShutdown: true), so the CLI must not race it.
+    if (foregroundServerActive) {
       return;
     }
     isHandlingSigint = true;
