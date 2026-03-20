@@ -264,7 +264,7 @@ Important:
                 {t('gitConflict.continueLater')}
               </Button>
               <Button variant="destructive" size="sm" onClick={handleAbort} className="flex-1">
-                Abort {operationLabel}
+                {t('gitConflict.abortOperation', { operation: operationLabel })}
               </Button>
             </div>
           </div>

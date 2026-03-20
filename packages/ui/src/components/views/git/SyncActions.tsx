@@ -48,6 +48,7 @@ export const SyncActions: React.FC<SyncActionsProps> = ({
   aheadCount = 0,
   behindCount = 0,
 }) => {
+  const { t } = useLanguage();
   const skipRemoteSelectRef = React.useRef(false);
   const hasNoRemotes = remotes.length === 0;
   const isRemovingRemote = Boolean(removingRemoteName);

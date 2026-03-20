@@ -1237,7 +1237,7 @@ export const TunnelSettings: React.FC = () => {
               )}
 
               <div className="mb-1 flex items-center justify-between gap-3">
-                <p className="typography-ui-label text-foreground">Saved managed remote tunnels</p>
+                <p className="typography-ui-label text-foreground">{t('tunnelSettings.savedManagedRemoteTunnels')}</p>
                 <Button
                   variant="ghost"
                   size="xs"
@@ -1246,7 +1246,7 @@ export const TunnelSettings: React.FC = () => {
                   disabled={state === 'starting' || state === 'stopping' || isSavingMode}
                 >
                   <RiAddLine className="h-3.5 w-3.5" />
-                  Add
+                  {t('common.add')}
                 </Button>
               </div>
 
@@ -1340,7 +1340,7 @@ export const TunnelSettings: React.FC = () => {
                                     });
                                   }}
                                 >
-                                  Save token
+                                  {t('tunnelSettings.saveToken')}
                                 </Button>
                               </div>
                             </div>
@@ -1393,7 +1393,7 @@ export const TunnelSettings: React.FC = () => {
                       }}
                       disabled={isSavingMode || state === 'starting' || state === 'stopping'}
                     >
-                      Save
+                      {t('tunnelSettings.save')}
                     </Button>
                     <Button
                       variant="ghost"
@@ -1407,7 +1407,7 @@ export const TunnelSettings: React.FC = () => {
                       }}
                       disabled={isSavingMode || state === 'starting' || state === 'stopping'}
                     >
-                      Cancel
+                      {t('common.cancel')}
                     </Button>
                   </div>
                 </div>
@@ -1599,8 +1599,8 @@ export const TunnelSettings: React.FC = () => {
                 className={cn(primaryCtaClass, state === 'starting' && 'opacity-70')}
               >
                 {state === 'starting'
-                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> Starting tunnel...</>
-                  : 'Start Tunnel'}
+                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> {t('tunnelSettings.startingTunnel')}</>
+                  : t('tunnelSettings.startTunnel')}
               </Button>
             </div>
           )}
@@ -1635,7 +1635,7 @@ export const TunnelSettings: React.FC = () => {
                       {copied
                         ? <RiCheckLine className="size-3.5 text-[var(--status-success)]" />
                         : <RiFileCopyLine className="size-3.5" />}
-                      {copied ? 'Copied' : 'Copy'}
+                      {copied ? t('tunnelSettings.copied') : t('common.copy')}
                     </Button>
                   </div>
                   <p className="typography-meta mt-1 text-muted-foreground/70">
@@ -1662,7 +1662,7 @@ export const TunnelSettings: React.FC = () => {
                 className={primaryCtaClass}
               >
                 <RiRestartLine className="size-3.5" />
-                New connect link
+                {t('tunnelSettings.newConnectLink')}
               </Button>
 
               <Button size="sm"
@@ -1672,8 +1672,8 @@ export const TunnelSettings: React.FC = () => {
                 className="gap-2 text-[var(--status-error)]"
               >
                 {state === 'stopping'
-                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> Stopping...</>
-                  : 'Stop Tunnel'}
+                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> {t('tunnelSettings.stoppingTunnel')}</>
+                  : t('tunnelSettings.stopTunnel')}
               </Button>
             </div>
           </div>
@@ -1683,7 +1683,7 @@ export const TunnelSettings: React.FC = () => {
       {state === 'error' && errorMessage && (
         <section className="space-y-3 px-2 pb-2 pt-0">
           <p className="typography-meta text-[var(--status-error)]">{errorMessage}</p>
-          <Button size="sm" variant="ghost" onClick={handleStart}>Retry</Button>
+          <Button size="sm" variant="ghost" onClick={handleStart}>{t('common.retry')}</Button>
         </section>
       )}
     </div>

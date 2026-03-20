@@ -125,7 +125,7 @@ export const GitPage: React.FC = () => {
                 <h3 className="typography-ui-header font-semibold text-foreground">{t('gitPage.identitiesTitle')}</h3>
               </div>
               <Button size="sm" variant="outline" onClick={() => openEditor('new')}>
-                <RiAddLine className="w-3.5 h-3.5 mr-1" /> New
+                <RiAddLine className="w-3.5 h-3.5 mr-1" /> {t('gitPage.newButton')}
               </Button>
             </div>
 
@@ -214,7 +214,7 @@ export const GitPage: React.FC = () => {
               {t('common.cancel')}
             </Button>
             <Button size="sm" variant="destructive" onClick={() => void handleConfirmDelete()} disabled={isDeletePending}>
-              Delete
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -344,7 +344,7 @@ const DiscoveredRow: React.FC<DiscoveredRowProps> = ({ credential, onImport, has
       </div>
       <Button size="sm" variant="ghost" onClick={onImport} className="gap-1 shrink-0">
         <RiDownloadLine className="h-3 w-3" />
-        Import
+        {t('gitPage.importButton')}
       </Button>
     </div>
   );

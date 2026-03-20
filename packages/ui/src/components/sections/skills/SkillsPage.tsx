@@ -461,7 +461,7 @@ const SkillsInstalledPage: React.FC = () => {
               {t('skillsPage.supportingFiles')}
             </h3>
             <Button variant="outline" size="xs" className="!font-normal gap-1" onClick={handleAddFile}>
-              <RiAddLine className="h-3.5 w-3.5" /> Add File
+              <RiAddLine className="h-3.5 w-3.5" /> {t('skillsPage.addFile')}
             </Button>
           </div>
 
@@ -518,7 +518,7 @@ const SkillsInstalledPage: React.FC = () => {
             size="xs"
             className="!font-normal"
           >
-            {isSaving ? 'Saving...' : isNewSkill ? 'Create Skill' : 'Save Changes'}
+            {isSaving ? t('common.saving') : isNewSkill ? t('skillsPage.createSkill') : t('common.saveChanges')}
           </Button>
         </div>
 
@@ -547,10 +547,10 @@ const SkillsInstalledPage: React.FC = () => {
               onClick={() => setDeleteFilePath(null)}
               disabled={isDeletingFile}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button size="sm" variant="destructive" onClick={handleConfirmDeleteFile} disabled={isDeletingFile}>
-              Delete
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -613,10 +613,10 @@ const SkillsInstalledPage: React.FC = () => {
                 setEditingFilePath(null);
               }}
             >
-              Cancel
+               {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleSaveFile} disabled={isLoadingFile || !hasFileChanges}>
-              {editingFilePath ? 'Save Changes' : 'Create File'}
+              {editingFilePath ? t('common.saveChanges') : t('skillsPage.createFile')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -240,7 +240,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
               variant="ghost"
               onClick={() => onOpenChange(false)}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               size="sm"

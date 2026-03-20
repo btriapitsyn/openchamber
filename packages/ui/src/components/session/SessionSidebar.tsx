@@ -64,6 +64,7 @@ import {
   formatProjectLabel,
   normalizePath,
 } from './sidebar/utils';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const PROJECT_COLLAPSE_STORAGE_KEY = 'oc.sessions.projectCollapse';
 const GROUP_ORDER_STORAGE_KEY = 'oc.sessions.groupOrder';
@@ -599,17 +600,17 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
 
     void updateStore.checkForUpdates().then(() => {
       const { available, error } = useUpdateStore.getState();
-      if (error) {
-        toast.error('Failed to check for updates', { description: error });
-        return;
-      }
-      if (!available) {
-        toast.success('You are on the latest version');
-        return;
-      }
+        if (error) {
+          toast.error(t('aboutSettings.checkForUpdates'), { description: error });
+          return;
+        }
+        if (!available) {
+          toast.success(t('aboutSettings.latestVersion'));
+          return;
+        }
       setUpdateDialogOpen(true);
     });
-  }, [updateStore]);
+  }, [t, updateStore]);
 
   const showSidebarUpdateButton =
     updateStore.available &&
@@ -992,10 +993,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       };
     };
 
-    return [
-      { key: 'active-now' as const, title: 'recent', items: activeNowSessions.map(toItem) },
-    ];
-  }, [activeNowSessions, sessionSidebarMetaById]);
+      return [
+       { key: 'active-now' as const, title: t('modelSelector.recent'), items: activeNowSessions.map(toItem) },
+     ];
+  }, [activeNowSessions, sessionSidebarMetaById, t]);
 
   const activitySessionIds = React.useMemo(() => {
     const next = new Set<string>();
@@ -1327,13 +1328,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                 type="button"
                 onClick={toggleSidebar}
                 className={desktopSidebarToggleButtonClass}
-                aria-label="Close sessions"
+                aria-label={t('header.closeSessions')}
               >
                 <RiLayoutLeftLine className="h-[18px] w-[18px]" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Close sessions</p>
+              <p>{t('header.closeSessions')}</p>
             </TooltipContent>
           </Tooltip>
         </div>

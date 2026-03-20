@@ -106,7 +106,7 @@ export const McpDropdownContent: React.FC<McpDropdownContentProps> = ({ active, 
       <div className="border-b border-[var(--interactive-border)]">
         <div className="flex items-center justify-between gap-3 px-4 py-2.5">
           <div className="min-w-0 flex items-baseline gap-2">
-            <div className="typography-ui-header font-semibold text-foreground">MCP Servers</div>
+            <div className="typography-ui-header font-semibold text-foreground">{t('mcpDropdown.mcpServers')}</div>
             {directory && (
               <div className="truncate typography-micro text-muted-foreground">
                 {directory.split('/').pop() || directory}
@@ -184,7 +184,7 @@ export const McpDropdownContent: React.FC<McpDropdownContentProps> = ({ active, 
 
         {sortedNames.length === 0 && (
           <div className="px-4 py-5 typography-ui-label text-muted-foreground text-center">
-            Configure MCP servers in Opencode config.
+            {t('mcpDropdown.configureServersHint')}
           </div>
         )}
       </div>

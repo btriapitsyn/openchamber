@@ -375,7 +375,7 @@ export const VoiceSettings: React.FC = () => {
                                                     : 'text-foreground'
                                             )}
                                         >
-                                            Browser
+                                            {t('voiceSettings.browser')}
                                         </Button>
                                         <Button
                                             variant="outline"
@@ -388,7 +388,7 @@ export const VoiceSettings: React.FC = () => {
                                                     : 'text-foreground'
                                             )}
                                         >
-                                            OpenAI
+                                            {t('voiceSettings.openai')}
                                         </Button>
                                         {isSayAvailable && (
                                             <Button
@@ -403,7 +403,7 @@ export const VoiceSettings: React.FC = () => {
                                                 )}
                                             >
                                                 <RiAppleLine className="w-3.5 h-3.5 mr-0.5" />
-                                                Say
+                                                {t('voiceSettings.say')}
                                             </Button>
                                         )}
                                     </div>
@@ -460,7 +460,7 @@ export const VoiceSettings: React.FC = () => {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <Button size="xs" variant="ghost" onClick={previewOpenAIVoice} title="Preview">
+                                            <Button size="xs" variant="ghost" onClick={previewOpenAIVoice} title={t('voiceSettings.preview')}>
                                                 {isOpenAIPreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
                                             </Button>
                                         </>
@@ -478,7 +478,7 @@ export const VoiceSettings: React.FC = () => {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <Button size="xs" variant="ghost" onClick={previewVoice} title="Preview">
+                                            <Button size="xs" variant="ghost" onClick={previewVoice} title={t('voiceSettings.preview')}>
                                                 {isPreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
                                             </Button>
                                         </>
@@ -497,7 +497,7 @@ export const VoiceSettings: React.FC = () => {
                                                     ))}
                                                 </SelectContent>
                                             </Select>
-                                            <Button size="xs" variant="ghost" onClick={previewBrowserVoice} title="Preview">
+                                            <Button size="xs" variant="ghost" onClick={previewBrowserVoice} title={t('voiceSettings.preview')}>
                                                 {isBrowserPreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
                                             </Button>
                                         </>

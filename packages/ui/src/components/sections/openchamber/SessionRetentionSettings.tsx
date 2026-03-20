@@ -91,7 +91,7 @@ export const SessionRetentionSettings: React.FC = () => {
               aria-label={t('sessionRetentionSettings.retentionPeriodInDays')}
               className="w-20 tabular-nums"
             />
-            <span className="typography-ui-label text-muted-foreground">days</span>
+            <span className="typography-ui-label text-muted-foreground">{t('sessionRetentionSettings.days')}</span>
             <Button size="sm"
               type="button"
               variant="ghost"

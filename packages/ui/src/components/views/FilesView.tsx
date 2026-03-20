@@ -2128,12 +2128,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           isSaving ? (
             <span className="flex items-center gap-1 px-1 text-muted-foreground typography-meta">
               <RiLoader4Line className="h-3.5 w-3.5 animate-spin" />
-              Saving...
+              {t('common.saving')}
             </span>
           ) : autoSaveStatus === 'saved' && !isDirty ? (
             <span className="flex items-center gap-1 px-1 text-[color:var(--status-success)] typography-meta">
               <RiCheckLine className="h-3.5 w-3.5" />
-              Saved
+              {t('common.done')}
             </span>
           ) : isDirty ? (
             <Button
@@ -2155,8 +2155,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 text-muted-foreground opacity-80 hover:opacity-100"
-              title="Open in desktop app"
-              aria-label="Open in desktop app"
+              title={t('filesView.openInDesktopApp')}
+              aria-label={t('filesView.openInDesktopApp')}
             >
               <RiFileTransferLine className="h-4 w-4" />
             </Button>
@@ -2178,7 +2178,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                 onClick={() => void loadOpenInApps(true)}
               >
                 <RiRefreshLine className="h-4 w-4" />
-                <span className="typography-ui-label text-foreground">Refresh Apps</span>
+                <span className="typography-ui-label text-foreground">{t('filesView.refreshApps')}</span>
               </DropdownMenuItem>
             ) : null}
           </DropdownMenuContent>
@@ -2207,7 +2207,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   'h-6 w-6 p-0 transition-opacity',
                   isSearchOpen ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-65 hover:opacity-100'
                 )}
-                title="Find in file"
+                title={t('filesView.findInFile')}
               >
                 <RiSearchLine className="size-4" />
               </Button>
@@ -2237,12 +2237,12 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   setCopiedContent(false);
                 }, 1200);
               } else {
-                toast.error('Copy failed');
+                toast.error(t('common.copyFailed'));
               }
             }}
             className="h-6 w-6 p-0"
-            title="Copy file contents"
-            aria-label="Copy file contents"
+            title={t('filesView.copyFileContents')}
+            aria-label={t('filesView.copyFileContents')}
           >
             {copiedContent ? (
               <RiCheckLine className="h-4 w-4 text-[color:var(--status-success)]" />
@@ -2267,7 +2267,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   setCopiedPath(false);
                 }, 1200);
               } else {
-                toast.error('Copy failed');
+                toast.error(t('common.copyFailed'));
               }
             }}
             className="h-6 w-6 p-0"
@@ -2288,8 +2288,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             size="sm"
             onClick={() => setIsFullscreen(false)}
             className="h-6 w-6 p-0"
-            title="Exit fullscreen"
-            aria-label="Exit fullscreen"
+            title={t('filesView.exitFullscreen')}
+            aria-label={t('filesView.exitFullscreen')}
           >
             <RiFullscreenExitLine className="h-4 w-4" />
           </Button>
@@ -2299,8 +2299,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
             size="sm"
             onClick={() => setIsFullscreen(!isFullscreen)}
             className="h-6 w-6 p-0"
-            title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-            aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            title={isFullscreen ? t('filesView.exitFullscreen') : t('filesView.fullscreen')}
+            aria-label={isFullscreen ? t('filesView.exitFullscreen') : t('filesView.fullscreen')}
           >
             {isFullscreen ? (
               <RiFullscreenExitLine className="h-4 w-4" />

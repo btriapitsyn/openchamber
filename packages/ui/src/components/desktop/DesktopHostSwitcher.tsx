@@ -689,10 +689,10 @@ export function DesktopHostSwitcherDialog({
         <div className="flex-shrink-0 border-b border-[var(--interactive-border)] px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0 flex items-baseline gap-1.5 typography-ui-label">
-              <span className="font-medium text-foreground">Current</span>
+              <span className="font-medium text-foreground">{t('desktopHostSwitcher.current')}</span>
               <span className="max-w-[9rem] truncate text-muted-foreground">{redactSensitiveUrl(current.label)}</span>
               <span className="text-muted-foreground/50">•</span>
-              <span className="font-medium text-foreground">Default</span>
+              <span className="font-medium text-foreground">{t('desktopHostSwitcher.default')}</span>
               <span className="max-w-[9rem] truncate text-muted-foreground">{redactSensitiveUrl(currentDefaultLabel)}</span>
             </div>
             <button
@@ -747,10 +747,10 @@ export function DesktopHostSwitcherDialog({
 
         {tauriAvailable && (
           <div className="flex-shrink-0 flex items-center justify-between gap-2 px-2.5 py-1.5">
-            <span className="typography-micro text-muted-foreground">Need SSH instances?<br />Manage them in Settings.</span>
+            <span className="typography-micro text-muted-foreground">{t('desktopHostSwitcher.needSshInstances')}</span>
             <Button type="button" variant="ghost" size="sm" onClick={openRemoteInstancesSettings}>
               <RiSettings3Line className="h-4 w-4" />
-              Remote SSH
+              {t('desktopHostSwitcher.remoteSsh')}
             </Button>
           </div>
         )}

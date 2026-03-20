@@ -162,7 +162,7 @@ export const AboutSettings: React.FC = () => {
                 onClick={() => setUpdateDialogOpen(true)}
               >
                 <RiDownloadLine className="h-4 w-4 mr-1" />
-                Update to {updateStore.info?.version}
+                {t('aboutSettings.updateToVersion', { version: updateStore.info?.version ?? '' })}
               </Button>
             )}
 
@@ -175,7 +175,7 @@ export const AboutSettings: React.FC = () => {
               onClick={() => updateStore.checkForUpdates()}
               disabled={updateStore.checking}
             >
-              Check for updates
+              {t('aboutSettings.checkForUpdates')}
             </Button>
           </div>
         </div>

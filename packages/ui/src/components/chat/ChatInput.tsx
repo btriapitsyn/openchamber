@@ -58,6 +58,7 @@ import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { GitHubIssuePickerDialog } from '@/components/session/GitHubIssuePickerDialog';
 import { GitHubPrPickerDialog } from '@/components/session/GitHubPrPickerDialog';
 import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
+import { useLanguage } from '@/hooks/useLanguage';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, getProjectIconImageUrl } from '@/lib/projectMeta';
@@ -2521,22 +2522,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
 
     const handlePermissionAutoAcceptToggle = React.useCallback(() => {
         if (!permissionScopeSessionId) {
-            toast.error('Open a session first');
+            toast.error(t('projectNotes.noActiveSessionSelected'));
             return;
         }
 
         const nextEnabled = !permissionAutoAcceptEnabled;
         setSessionAutoAccept(permissionScopeSessionId, nextEnabled).catch(() => {
-            toast.error('Failed to toggle permission auto-accept');
+            toast.error(t('chatInput.failedToTogglePermissionAutoAccept'));
         });
-    }, [permissionAutoAcceptEnabled, permissionScopeSessionId, setSessionAutoAccept]);
+    }, [permissionAutoAcceptEnabled, permissionScopeSessionId, setSessionAutoAccept, t]);
 
     const permissionAutoAcceptAriaLabel = permissionAutoAcceptEnabled
-        ? 'Disable permission auto-accept'
-        : 'Enable permission auto-accept';
+        ? t('chatInput.disablePermissionAutoAccept')
+        : t('chatInput.enablePermissionAutoAccept');
     const permissionAutoAcceptTooltipLabel = permissionAutoAcceptEnabled
-        ? 'Permission auto-accept: on'
-        : 'Permission auto-accept: off';
+        ? t('chatInput.permissionAutoAcceptOn')
+        : t('chatInput.permissionAutoAcceptOff');
 
     const permissionAutoAcceptButton = (
         <button
@@ -2975,13 +2976,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                     className="h-7 min-w-0 w-fit max-w-[48vw] sm:max-w-[20rem] border-transparent bg-transparent px-1.5 hover:bg-transparent data-[state=open]:bg-transparent"
                                 >
                                     <SelectValue>
-                                        {selectedDraftBranchLabel ?? 'Branch'}
+                                        {selectedDraftBranchLabel ?? t('chatInput.branch')}
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent fitContent>
                                     {projectRootBranchOption ? (
                                         <SelectGroup>
-                                            <SelectLabel>Project root</SelectLabel>
+                                            <SelectLabel>{t('chatInput.projectRoot')}</SelectLabel>
                                             <SelectItem key={projectRootBranchOption.value} value={projectRootBranchOption.value} className="max-w-[24rem] truncate">
                                                 {projectRootBranchOption.label}
                                             </SelectItem>
@@ -2991,7 +2992,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onOpenSettings, scrollToBo
                                         <>
                                             {projectRootBranchOption ? <SelectSeparator /> : null}
                                             <SelectGroup>
-                                                <SelectLabel>Worktrees</SelectLabel>
+                                                <SelectLabel>{t('chatInput.worktrees')}</SelectLabel>
                                                 {worktreeBranchOptions.map((option) => (
                                                     <SelectItem key={option.value} value={option.value} className="max-w-[24rem] truncate">
                                                         {option.label}

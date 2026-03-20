@@ -306,7 +306,7 @@ export const GitHubSettings: React.FC = () => {
             </div>
 
             <Button size="sm" variant="outline" onClick={disconnect} disabled={isBusy} className={cn("text-[var(--status-error)] hover:text-[var(--status-error)]", isMobile ? "w-full" : undefined)}>
-              Disconnect
+              {t('githubSettings.disconnect')}
             </Button>
           </div>
         ) : (
@@ -315,7 +315,7 @@ export const GitHubSettings: React.FC = () => {
               <span className="typography-ui-label text-foreground">{t('githubSettings.notConnected')}</span>
             </div>
             <Button size="sm" variant="default" onClick={startConnect} disabled={isBusy}>
-              Connect GitHub
+              {t('githubSettings.connect')}
             </Button>
           </div>
         )}
@@ -365,7 +365,7 @@ export const GitHubSettings: React.FC = () => {
                         onClick={() => activateAccount(account.id)}
                         disabled={isBusy}
                       >
-                        Switch to
+                        {t('githubSettings.switchTo')}
                       </Button>
                     )}
                   </div>
@@ -385,7 +385,7 @@ export const GitHubSettings: React.FC = () => {
             disabled={isBusy}
             className={cn(isMobile ? 'w-full' : undefined)}
           >
-            Add Account
+            {t('githubSettings.addAccount')}
           </Button>
         </div>
       )}
@@ -418,7 +418,7 @@ export const GitHubSettings: React.FC = () => {
               stopPolling();
               setFlow(null);
             }}>
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
         </div>

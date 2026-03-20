@@ -315,10 +315,10 @@ export const McpSidebar: React.FC<McpSidebarProps> = ({ onItemSelect }) => {
               onClick={() => setDeleteTarget(null)}
               disabled={isDeleting}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleDelete} disabled={isDeleting}>
-              {isDeleting ? 'Deleting…' : 'Delete'}
+              {isDeleting ? t('mcpSidebar.deleting') : t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

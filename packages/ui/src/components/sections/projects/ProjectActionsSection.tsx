@@ -202,7 +202,7 @@ export const ProjectActionsSection: React.FC<ProjectActionsSectionProps> = ({ pr
         </div>
         <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={handleAddAction}>
           <RiAddLine className="h-3.5 w-3.5" />
-          Add action
+          {t('projectActions.addAction')}
         </Button>
       </div>
 

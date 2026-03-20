@@ -844,11 +844,11 @@ export const GitView: React.FC = () => {
 
     const remoteName = remote.name.trim();
     if (!remoteName) {
-      toast.error('Remote name is required');
+      toast.error(t('gitView.remoteNameRequired'));
       return;
     }
     if (remoteName === 'origin') {
-      toast.error('Cannot remove origin remote');
+      toast.error(t('gitView.cannotRemoveOriginRemote'));
       return;
     }
 
@@ -866,7 +866,7 @@ export const GitView: React.FC = () => {
     } finally {
       setRemovingRemoteName(null);
     }
-  }, [currentDirectory, git, refreshRemotes, refreshStatusAndBranches]);
+  }, [currentDirectory, git, refreshRemotes, refreshStatusAndBranches, t]);
 
   const handleCommit = async (options: { pushAfter?: boolean } = {}) => {
     if (!currentDirectory) return;

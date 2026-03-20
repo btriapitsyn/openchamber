@@ -314,7 +314,7 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
 
         <DialogFooter>
           <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             size="sm"
@@ -324,14 +324,14 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
             disabled={isScanning || !source.trim()}
           >
             <RiGitRepositoryLine className="h-4 w-4" />
-            {isScanning ? 'Scanning...' : 'Scan'}
+            {isScanning ? t('addCatalogDialog.scanning') : t('addCatalogDialog.scan')}
           </Button>
           <Button
             size="sm"
             onClick={() => void handleAdd()}
             disabled={!scanOk || isDuplicate || !label.trim() || !source.trim()}
           >
-            Add catalog
+            {t('addCatalogDialog.addCatalog')}
           </Button>
         </DialogFooter>
       </DialogContent>

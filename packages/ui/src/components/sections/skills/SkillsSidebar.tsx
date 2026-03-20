@@ -207,7 +207,7 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
         <h2 className="text-base font-semibold text-foreground mb-3">{t('skillsSidebar.title')}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">Total {skills.length}</span>
+          <span className="typography-meta text-muted-foreground">{t('skillsSidebar.total', { count: skills.length })}</span>
           <Button size="sm"
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
@@ -355,10 +355,10 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
               onClick={() => setDeleteDialogSkill(null)}
               disabled={isDeletePending}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleConfirmDeleteSkill} disabled={isDeletePending}>
-              Delete
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -391,10 +391,10 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
               variant="ghost"
               onClick={() => setRenameDialogSkill(null)}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleRenameSkill}>
-              Rename
+              {t('common.rename')}
             </Button>
           </DialogFooter>
         </DialogContent>

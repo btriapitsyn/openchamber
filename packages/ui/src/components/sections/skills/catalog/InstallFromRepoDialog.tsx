@@ -489,14 +489,14 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
 
           <DialogFooter className="flex-shrink-0">
             <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               size="sm"
               disabled={isInstalling || selectedDirs.length === 0 || !source.trim() || (scope === 'project' && !directoryOverride)}
               onClick={() => void doInstall({})}
             >
-              {isInstalling ? 'Installing…' : 'Install selected'}
+              {isInstalling ? t('installFromRepoDialog.installing') : t('installFromRepoDialog.installSelected')}
             </Button>
           </DialogFooter>
         </DialogContent>

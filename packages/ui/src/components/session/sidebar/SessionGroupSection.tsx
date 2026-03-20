@@ -249,20 +249,20 @@ export function SessionGroupSection(props: Props): React.ReactNode {
     }
     switch (prIndicator.visualState) {
       case 'merged':
-        return { label: 'Merged', color: 'var(--pr-merged)' };
+        return { label: t('sessionSidebar.prStateMerged'), color: 'var(--pr-merged)' };
       case 'open':
         return (prIndicator.canMerge === true || prIndicator.mergeableState === 'clean' || prIndicator.checks?.state === 'success')
-          ? { label: 'Ready to merge', color: 'var(--pr-open)' }
-          : { label: 'PR open', color: 'var(--pr-open)' };
+          ? { label: t('sessionSidebar.prStateReadyToMerge'), color: 'var(--pr-open)' }
+          : { label: t('sessionSidebar.prStateOpen'), color: 'var(--pr-open)' };
       case 'blocked':
         return {
-          label: prIndicator.mergeableState === 'dirty' ? 'Merge conflicts' : 'Merge blocked',
+          label: prIndicator.mergeableState === 'dirty' ? t('sessionSidebar.prStateMergeConflicts') : t('sessionSidebar.prStateMergeBlocked'),
           color: 'var(--pr-blocked)',
         };
       case 'draft':
-        return { label: 'Draft PR', color: 'var(--pr-draft)' };
+        return { label: t('sessionSidebar.prStateDraft'), color: 'var(--pr-draft)' };
       case 'closed':
-        return { label: 'Closed', color: 'var(--pr-closed)' };
+        return { label: t('sessionSidebar.prStateClosed'), color: 'var(--pr-closed)' };
       default:
         return null;
     }
@@ -440,7 +440,7 @@ export function SessionGroupSection(props: Props): React.ReactNode {
             onToggleCollapsedGroup(groupKey);
           }
         }}
-        aria-label={isCollapsed ? `Expand ${group.label}` : `Collapse ${group.label}`}
+        aria-label={isCollapsed ? t('sessionSidebar.expandGroup', { label: group.label }) : t('sessionSidebar.collapseGroup', { label: group.label })}
         aria-expanded={!isCollapsed}
       >
         <div
@@ -610,12 +610,12 @@ export function SessionGroupSection(props: Props): React.ReactNode {
                     });
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  aria-label={`Delete archived sessions in ${group.label}`}
+                   aria-label={t('sessionSidebar.deleteArchivedSessionsInGroup', { label: group.label })}
                 >
                   <RiDeleteBinLine className="h-4 w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={4}><p>Delete archived sessions</p></TooltipContent>
+               <TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.deleteArchivedSessions')}</p></TooltipContent>
             </Tooltip>
           </div>
         ) : null}
@@ -657,12 +657,12 @@ export function SessionGroupSection(props: Props): React.ReactNode {
                     openNewSessionDraft({ directoryOverride: group.directory });
                   }}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                   aria-label={`New draft session in ${group.label}`}
+                    aria-label={t('sessionSidebar.newSessionInGroup', { label: group.label })}
                  >
                    <RiAddLine className="h-4 w-4" />
                  </button>
                </TooltipTrigger>
-               <TooltipContent side="bottom" sideOffset={4}><p>New draft session</p></TooltipContent>
+                <TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.newDraftSession')}</p></TooltipContent>
              </Tooltip>
            </div>
          ) : null}

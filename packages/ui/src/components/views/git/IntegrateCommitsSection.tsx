@@ -372,7 +372,7 @@ Important:
             <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
-                  Target
+                  {t('integrateCommits.target')}
                   <span className="max-w-[160px] truncate font-mono text-xs text-muted-foreground">{targetBranch}</span>
                   <RiArrowDownSLine className="size-4 opacity-60" />
                 </Button>
@@ -411,15 +411,15 @@ Important:
 
             {ui.kind === 'ready' ? (
               <Button size="sm" onClick={() => void handleMove()} disabled={!isEligible || ui.plan.commits.length === 0}>
-                Move
+                {t('integrateCommits.move')}
               </Button>
             ) : ui.kind === 'loading' ? (
               <Button size="sm" variant="outline" disabled>
-                Checking…
+                {t('integrateCommits.checking')}
               </Button>
             ) : ui.kind === 'running' ? (
               <Button size="sm" variant="outline" disabled>
-                Moving…
+                {t('integrateCommits.moving')}
               </Button>
             ) : null}
           </div>
@@ -485,7 +485,7 @@ Important:
               </div>
               <div className="flex items-center gap-2 pt-1">
                 <Button size="sm" variant="ghost" className="typography-meta" onClick={() => void handleAbort()}>
-                  Abort
+                  {t('integrateCommits.abort')}
                 </Button>
                 <Button
                   size="sm"
@@ -507,7 +507,7 @@ Important:
                   {t('integrateCommits.newSession')}
                 </Button>
                 <Button size="sm" className="typography-meta" onClick={() => void handleContinue()}>
-                  Continue
+                  {t('integrateCommits.continue')}
                 </Button>
               </div>
             </div>

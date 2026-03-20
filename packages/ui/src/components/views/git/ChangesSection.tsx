@@ -228,7 +228,7 @@ export const ChangesSection: React.FC<ChangesSectionProps> = ({
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setConfirmRevertAllOpen(false)} disabled={isRevertingAll}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button variant="destructive" size="sm" onClick={() => void handleConfirmRevertAll()} disabled={isRevertingAll}>
               {isRevertingAll ? 'Reverting...' : 'Revert all'}

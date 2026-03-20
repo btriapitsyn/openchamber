@@ -702,7 +702,7 @@ export const ProvidersPage: React.FC = () => {
                                   onClick={() => handleOAuthStart(candidateProviderId, index)}
                                   disabled={authBusyKey === `oauth:${candidateProviderId}:${index}`}
                                 >
-                                  Connect
+                                  {t('providersPage.connect')}
                                 </Button>
                               </div>
 
@@ -715,7 +715,7 @@ export const ProvidersPage: React.FC = () => {
                               {oauthDetails[codeKey]?.userCode && (
                                 <div className="flex items-center gap-2 mt-2">
                                   <Input value={oauthDetails[codeKey]?.userCode} readOnly className="font-mono text-center tracking-widest" />
-                                  <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}>Copy Code</Button>
+                                  <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}>{t('providersPage.copyCode')}</Button>
                                 </div>
                               )}
 
@@ -723,8 +723,8 @@ export const ProvidersPage: React.FC = () => {
                                 <div className="flex items-center gap-2 mt-2">
                                   <Input value={oauthDetails[codeKey]?.url} readOnly className="text-xs text-muted-foreground" />
                                   <div className="flex gap-1 shrink-0">
-                                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => window.open(oauthDetails[codeKey]?.url, '_blank', 'noopener,noreferrer')}>Open</Button>
-                                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}>Copy</Button>
+                                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => window.open(oauthDetails[codeKey]?.url, '_blank', 'noopener,noreferrer')}>{t('common.open')}</Button>
+                                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}>{t('common.copy')}</Button>
                                   </div>
                                 </div>
                               )}
@@ -748,7 +748,7 @@ export const ProvidersPage: React.FC = () => {
                                     onClick={() => handleOAuthComplete(candidateProviderId, index)}
                                     disabled={authBusyKey === `oauth-complete:${candidateProviderId}:${index}`}
                                   >
-                                    {authBusyKey === `oauth-complete:${candidateProviderId}:${index}` ? 'Saving...' : 'Complete'}
+                                    {authBusyKey === `oauth-complete:${candidateProviderId}:${index}` ? t('common.saving') : t('providersPage.complete')}
                                   </Button>
                                 </div>
                               )}
@@ -811,14 +811,14 @@ export const ProvidersPage: React.FC = () => {
         {/* Authentication */}
         <div className="mb-8">
           <div className="mb-1 px-1 flex items-center justify-between gap-2">
-            <h3 className="typography-ui-header font-medium text-foreground">Authentication</h3>
+            <h3 className="typography-ui-header font-medium text-foreground">{t('providersPage.authenticationTitle')}</h3>
             <Button
               variant="outline"
               size="xs"
               className="!font-normal"
               onClick={() => setShowAuthPanel((prev) => !prev)}
             >
-              {showAuthPanel ? 'Hide' : 'Reconnect'}
+              {showAuthPanel ? t('common.hide') : t('providersPage.reconnect')}
             </Button>
           </div>
 
@@ -864,7 +864,7 @@ export const ProvidersPage: React.FC = () => {
                       onClick={() => handleSaveApiKey(selectedProvider.id)}
                       disabled={authBusyKey === `api:${selectedProvider.id}`}
                     >
-                      {authBusyKey === `api:${selectedProvider.id}` ? 'Saving...' : 'Save Key'}
+                      {authBusyKey === `api:${selectedProvider.id}` ? t('providersPage.saving') : t('providersPage.saveKey')}
                     </Button>
                   </div>
                 </div>
@@ -895,7 +895,7 @@ export const ProvidersPage: React.FC = () => {
                               onClick={() => handleOAuthStart(selectedProvider.id, index)}
                               disabled={authBusyKey === `oauth:${selectedProvider.id}:${index}`}
                             >
-                              Connect
+                              {t('providersPage.connect')}
                             </Button>
                           </div>
 
@@ -908,7 +908,7 @@ export const ProvidersPage: React.FC = () => {
                           {oauthDetails[codeKey]?.userCode && (
                             <div className="flex items-center gap-2 mt-2">
                               <Input value={oauthDetails[codeKey]?.userCode} readOnly className="font-mono text-center tracking-widest" />
-                              <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}>Copy Code</Button>
+                              <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthCode(oauthDetails[codeKey]?.userCode ?? '')}>{t('providersPage.copyCode')}</Button>
                             </div>
                           )}
 
@@ -916,8 +916,8 @@ export const ProvidersPage: React.FC = () => {
                             <div className="flex items-center gap-2 mt-2">
                               <Input value={oauthDetails[codeKey]?.url} readOnly className="text-xs text-muted-foreground" />
                               <div className="flex gap-1 shrink-0">
-                                <Button variant="outline" size="xs" className="!font-normal" onClick={() => window.open(oauthDetails[codeKey]?.url, '_blank', 'noopener,noreferrer')}>Open</Button>
-                                <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}>Copy</Button>
+                                <Button variant="outline" size="xs" className="!font-normal" onClick={() => window.open(oauthDetails[codeKey]?.url, '_blank', 'noopener,noreferrer')}>{t('common.open')}</Button>
+                                <Button variant="outline" size="xs" className="!font-normal" onClick={() => handleCopyOAuthLink(oauthDetails[codeKey]?.url ?? '')}>{t('common.copy')}</Button>
                               </div>
                             </div>
                           )}
@@ -941,7 +941,7 @@ export const ProvidersPage: React.FC = () => {
                                 onClick={() => handleOAuthComplete(selectedProvider.id, index)}
                                 disabled={authBusyKey === `oauth-complete:${selectedProvider.id}:${index}`}
                               >
-                                {authBusyKey === `oauth-complete:${selectedProvider.id}:${index}` ? 'Saving...' : 'Complete'}
+                                {authBusyKey === `oauth-complete:${selectedProvider.id}:${index}` ? t('providersPage.saving') : t('providersPage.complete')}
                               </Button>
                             </div>
                           )}
@@ -985,7 +985,7 @@ export const ProvidersPage: React.FC = () => {
                 onClick={() => handleDisconnectProvider(selectedProvider.id)}
                 disabled={authBusyKey === `disconnect:${selectedProvider.id}`}
               >
-                {authBusyKey === `disconnect:${selectedProvider.id}` ? 'Disconnecting...' : 'Disconnect'}
+                {authBusyKey === `disconnect:${selectedProvider.id}` ? t('providersPage.disconnecting') : t('providersPage.disconnect')}
               </Button>
             </div>
           </section>
@@ -1014,7 +1014,7 @@ export const ProvidersPage: React.FC = () => {
                   hideAllModels(selectedProvider.id, allIds);
                 }}
               >
-                Hide all
+                {t('providersPage.hideAll')}
               </Button>
               <Button
                 variant="outline"
@@ -1022,7 +1022,7 @@ export const ProvidersPage: React.FC = () => {
                 className="!font-normal"
                 onClick={() => showAllModels(selectedProvider.id)}
               >
-                Show all
+                {t('providersPage.showAll')}
               </Button>
             </div>
           </div>

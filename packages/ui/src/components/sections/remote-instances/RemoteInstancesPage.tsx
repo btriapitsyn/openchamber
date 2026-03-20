@@ -712,7 +712,7 @@ const retryButtonLabel = isConnecting
                     className="!font-normal"
                     onClick={() => void handleImportCandidate(candidate.host, candidate.pattern)}
                   >
-                    Create
+                    {t('common.create')}
                   </Button>
                 </div>
               ))}
@@ -751,10 +751,10 @@ const retryButtonLabel = isConnecting
               />
               <div className="flex items-center justify-end gap-2">
                 <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={closePatternDialog} disabled={patternCreating}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" size="xs" className="!font-normal" disabled={patternCreating}>
-                  Create
+                  {t('common.create')}
                 </Button>
               </div>
             </form>
@@ -818,7 +818,7 @@ const retryButtonLabel = isConnecting
               }}
             >
               <RiTerminalWindowLine className="h-3.5 w-3.5" />
-              Logs
+              {t('remoteInstancesPage.logs')}
             </Button>
             <Button
               type="button"
@@ -841,7 +841,7 @@ const retryButtonLabel = isConnecting
               }}
             >
               <RiDeleteBinLine className="h-3.5 w-3.5" />
-              Remove
+              {t('remoteInstancesPage.remove')}
             </Button>
           </div>
           {status?.localUrl ? (
@@ -1257,7 +1257,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                     </CollapsibleTrigger>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Switch checked={forward.enabled} onCheckedChange={(checked) => updateForward((item) => ({ ...item, enabled: checked }))} aria-label="Enable forward" />
+                    <Switch checked={forward.enabled} onCheckedChange={(checked) => updateForward((item) => ({ ...item, enabled: checked }))} aria-label={t('remoteInstancesPage.enableForward')} />
                     <Button
                       type="button"
                       variant="ghost"
@@ -1434,7 +1434,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                           }}
                         >
                           <RiExternalLinkLine className="h-3.5 w-3.5" />
-                          Open local
+                          {t('remoteInstancesPage.openLocal')}
                         </Button>
                       ) : null}
                     </div>
@@ -1462,7 +1462,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
             }}
           >
             <RiAddLine className="h-3.5 w-3.5" />
-            Add forward
+            {t('remoteInstancesPage.addForward')}
           </Button>
         </section>
       </div>
@@ -1497,7 +1497,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                   className="!font-normal"
                   onClick={() => void handleImportCandidate(candidate.host, candidate.pattern)}
                 >
-                  Import
+                  {t('remoteInstancesPage.import')}
                 </Button>
               </div>
             ))}
@@ -1509,7 +1509,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
       <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-6 bg-[var(--surface-background)] border-t border-[var(--interactive-border)] px-3 sm:px-6 py-3">
         <div className="flex items-center gap-2">
           <Button type="button" size="xs" className="!font-normal" onClick={() => void handleSave()} disabled={!hasChanges || isSaving}>
-            Save changes
+            {t('common.saveChanges')}
           </Button>
           {status?.localUrl ? (
             <>
@@ -1527,7 +1527,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                 }}
               >
                 <RiFileCopyLine className="h-3.5 w-3.5" />
-                Copy local URL
+                {t('remoteInstancesPage.copyLocalUrl')}
               </Button>
               <Button
                 type="button"
@@ -1539,7 +1539,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                 }}
               >
                 <RiExternalLinkLine className="h-3.5 w-3.5" />
-                Open
+                {t('common.open')}
               </Button>
             </>
           ) : null}
@@ -1558,11 +1558,11 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
           <div className="flex items-center justify-end gap-2">
             <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={handleCopyAllLogs} disabled={logDialogLoading || !logLinesText.trim()}>
               <RiFileCopyLine className="h-3.5 w-3.5" />
-              Copy all
+               {t('remoteInstancesPage.copyAll')}
             </Button>
             <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={() => void handleClearLogs()} disabled={logDialogLoading}>
               <RiDeleteBinLine className="h-3.5 w-3.5" />
-              Clear
+               {t('common.clear')}
             </Button>
           </div>
           {logDialogLoading ? (
@@ -1607,10 +1607,10 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
             />
             <div className="flex items-center justify-end gap-2">
               <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={closePatternDialog} disabled={patternCreating}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" size="xs" className="!font-normal" disabled={patternCreating}>
-                Create
+                {t('common.create')}
               </Button>
             </div>
           </form>

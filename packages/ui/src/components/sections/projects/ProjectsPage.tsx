@@ -457,7 +457,7 @@ export const ProjectsPage: React.FC = () => {
                     onClick={() => setPendingRemoveImageIcon(false)}
                     disabled={isRemovingCustomIcon}
                   >
-                    Undo Remove
+                    {t('projectsPage.undoRemove')}
                   </Button>
                 )}
               </div>
@@ -472,7 +472,7 @@ export const ProjectsPage: React.FC = () => {
               size="xs"
               className="!font-normal"
             >
-              Save Changes
+              {t('common.saveChanges')}
             </Button>
           </div>
         </div>

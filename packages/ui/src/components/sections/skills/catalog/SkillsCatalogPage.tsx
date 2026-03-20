@@ -231,7 +231,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 className="!font-normal gap-1"
                 onClick={() => setAddCatalogOpen(true)}
               >
-                <RiAddLine className="h-3.5 w-3.5" /> Add Catalog
+                <RiAddLine className="h-3.5 w-3.5" /> {t('skillsCatalogPage.addCatalog')}
               </Button>
             </div>
 
@@ -339,7 +339,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                             setInstallDialogOpen(true);
                           }}
                         >
-                          Install
+                          {t('skillsCatalogPage.install')}
                         </Button>
                       </div>
                     </div>
@@ -358,7 +358,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 onClick={() => void loadMoreClawdHub()}
                 disabled={isLoadingMore}
               >
-                {isLoadingMore ? 'Loading...' : 'Load More Skills'}
+                {isLoadingMore ? t('common.loading') : t('skillsCatalogPage.loadMoreSkills')}
               </Button>
             </div>
           )}
@@ -388,10 +388,10 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 onClick={() => setIsRemoveCatalogDialogOpen(false)}
                 disabled={isRemovingCatalog}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button size="sm" variant="destructive" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
-                Remove Catalog
+                {t('skillsCatalogPage.removeCatalog')}
               </Button>
             </DialogFooter>
           </DialogContent>

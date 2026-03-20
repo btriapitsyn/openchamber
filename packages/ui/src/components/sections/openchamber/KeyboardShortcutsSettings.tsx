@@ -15,6 +15,7 @@ import {
   UNASSIGNED_SHORTCUT,
   type ShortcutCombo,
 } from '@/lib/shortcuts';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const MODIFIER_KEYS = new Set(['shift', 'control', 'alt', 'meta']);
 
@@ -138,7 +139,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
     <div className="mb-8">
       <div className="mb-1 px-1">
         <div className="flex items-center gap-2">
-          <h3 className="typography-ui-header font-medium text-foreground">Keyboard Shortcuts</h3>
+          <h3 className="typography-ui-header font-medium text-foreground">{t('keyboardShortcutsSettings.title')}</h3>
           <Button
             type="button"
             variant="outline"
@@ -152,7 +153,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
               setWarningText('');
             }}
           >
-            Reset All
+            {t('keyboardShortcutsSettings.resetAll')}
           </Button>
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
@@ -173,8 +174,8 @@ export const KeyboardShortcutsSettings: React.FC = () => {
                 {t('keyboardShortcutsSettings.overwriteConfirm')}
               </span>
               <div className="flex gap-2 shrink-0">
-                <Button type="button" size="xs" className="!font-normal" onClick={confirmOverwrite}>Overwrite</Button>
-                <Button type="button" size="xs" className="!font-normal" variant="ghost" onClick={() => setPendingOverwrite(null)}>Cancel</Button>
+                 <Button type="button" size="xs" className="!font-normal" onClick={confirmOverwrite}>{t('keyboardShortcutsSettings.overwrite')}</Button>
+                 <Button type="button" size="xs" className="!font-normal" variant="ghost" onClick={() => setPendingOverwrite(null)}>{t('common.cancel')}</Button>
               </div>
             </div>
           )}
@@ -259,10 +260,10 @@ export const KeyboardShortcutsSettings: React.FC = () => {
                   }}
                   disabled={!hasDraft}
                 >
-                  Save
+                  {t('common.save')}
                 </Button>
                 <Button type="button" size="xs" className="!font-normal" variant="ghost" onClick={() => resetOne(action.id)}>
-                  Reset
+                  {t('common.resetButton')}
                 </Button>
               </div>
             </div>

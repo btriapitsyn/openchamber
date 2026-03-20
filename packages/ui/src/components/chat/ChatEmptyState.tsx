@@ -2,6 +2,7 @@ import React from 'react';
 import { OpenChamberLogo } from '@/components/ui/OpenChamberLogo';
 import { TextLoop } from '@/components/ui/TextLoop';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const phraseKeys = [
     'chatEmptyState.phrases.fixFailingTests',
@@ -23,6 +24,7 @@ const phraseKeys = [
 ] as const;
 
 const ChatEmptyState: React.FC = () => {
+    const { t } = useLanguage();
     const { currentTheme } = useThemeSystem();
 
     // Use theme's muted foreground for secondary text

@@ -362,7 +362,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                             : 'text-foreground'
                         )}
                       >
-                        <RiLock2Line className="w-3.5 h-3.5 mr-1" /> SSH
+                        <RiLock2Line className="w-3.5 h-3.5 mr-1" /> {t('gitIdentityEditor.ssh')}
                       </Button>
                       <Button size="sm"
                         type="button"
@@ -374,7 +374,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                             : 'text-foreground'
                         )}
                       >
-                        <RiKeyLine className="w-3.5 h-3.5 mr-1" /> Token
+                        <RiKeyLine className="w-3.5 h-3.5 mr-1" /> {t('gitIdentityEditor.token')}
                       </Button>
                     </div>
                   </div>
@@ -469,7 +469,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
               {t('common.cancel')}
             </Button>
             <Button size="sm" variant="destructive" onClick={() => void handleConfirmDelete()} disabled={isDeleting}>
-              Delete
+              {t('common.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

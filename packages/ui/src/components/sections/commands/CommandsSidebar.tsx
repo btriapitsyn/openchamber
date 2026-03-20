@@ -221,7 +221,7 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
         <h2 className="text-base font-semibold text-foreground mb-3">{t('commandsSidebar.title')}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">Total {commandOnlyItems.length}</span>
+          <span className="typography-meta text-muted-foreground">{t('commandsSidebar.total', { count: commandOnlyItems.length })}</span>
           <Button size="sm"
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
@@ -317,10 +317,10 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
               onClick={closeConfirmActionDialog}
               disabled={isConfirmActionPending}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleConfirmAction} disabled={isConfirmActionPending}>
-              {confirmActionType === 'delete' ? 'Delete' : 'Reset'}
+              {confirmActionType === 'delete' ? t('common.delete') : t('common.resetButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -352,10 +352,10 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
               variant="ghost"
               onClick={() => setRenameDialogCommand(null)}
             >
-              Cancel
+               {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleRenameCommand}>
-              Rename
+               {t('common.rename')}
             </Button>
           </DialogFooter>
         </DialogContent>

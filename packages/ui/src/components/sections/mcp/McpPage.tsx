@@ -119,7 +119,7 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange }) =>
           title={t('mcpPage.pasteFullCommandTitle')}
         >
           <RiClipboardLine className="h-3 w-3" />
-          Paste command
+          {t('mcpPage.pasteCommand')}
         </Button>
       </div>
 
@@ -262,7 +262,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({ value, onChange }) => {
           title={t('mcpPage.pasteEnvTitle')}
         >
           <RiClipboardLine className="h-3 w-3" />
-          Paste .env
+          {t('mcpPage.pasteEnv')}
         </Button>
       </div>
 
@@ -319,7 +319,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({ value, onChange }) => {
         type="button"
       >
         <RiAddLine className="h-3.5 w-3.5" />
-        Add variable
+        {t('mcpPage.addVariable')}
       </Button>
 
       {hasSensitiveValues && (
@@ -545,7 +545,7 @@ export const McpPage: React.FC = () => {
                   onClick={handleToggleConnect}
                   disabled={isConnecting || !enabled}
                 >
-                  {isConnecting ? 'Working...' : isConnected ? 'Disconnect' : 'Connect'}
+                  {isConnecting ? t('mcpPage.working') : isConnected ? t('mcpPage.disconnect') : t('mcpPage.connect')}
                 </Button>
               )}
             </div>
@@ -632,7 +632,7 @@ export const McpPage: React.FC = () => {
                         : 'text-foreground'
                     )}
                   >
-                    Local · stdio
+                    {t('mcpPage.localStdio')}
                   </Button>
                   <Button
                     variant="outline"
@@ -645,7 +645,7 @@ export const McpPage: React.FC = () => {
                         : 'text-foreground'
                     )}
                   >
-                    Remote · SSE
+                    {t('mcpPage.remoteSse')}
                   </Button>
                 </div>
               </div>
@@ -702,7 +702,7 @@ export const McpPage: React.FC = () => {
             size="xs"
             className="!font-normal"
           >
-            {isSaving ? 'Saving...' : isNewServer ? 'Create' : 'Save Changes'}
+            {isSaving ? t('mcpPage.saving') : isNewServer ? t('mcpPage.create') : t('mcpPage.saveChanges')}
           </Button>
           {!isNewServer && (
             <Button
@@ -711,7 +711,7 @@ export const McpPage: React.FC = () => {
               className="!font-normal text-[var(--status-error)] hover:text-[var(--status-error)]"
               onClick={() => setShowDeleteConfirm(true)}
             >
-              Delete
+              {t('common.delete')}
             </Button>
           )}
         </div>

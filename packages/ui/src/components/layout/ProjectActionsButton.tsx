@@ -683,7 +683,7 @@ export const ProjectActionsButton = ({
         onClick={openProjectActionsSettings}
       >
         <RiAddLine className="h-4 w-4 text-muted-foreground" />
-        <span className="header-open-label whitespace-nowrap">Add action</span>
+        <span className="header-open-label whitespace-nowrap">{t('projectActions.addAction')}</span>
       </button>
     );
   }

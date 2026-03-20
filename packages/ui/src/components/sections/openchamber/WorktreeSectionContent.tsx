@@ -316,7 +316,7 @@ export const WorktreeSectionContent: React.FC<WorktreeSectionContentProps> = ({ 
               onClick={handleAddCommand}
             >
               <RiAddLine className="h-3.5 w-3.5" />
-              Add command
+              {t('worktreeSectionContent.addCommand')}
             </Button>
           </div>
         )}

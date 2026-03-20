@@ -70,12 +70,12 @@ export function SidebarHeader(props: Props): React.ReactNode {
                     type="button"
                     onClick={handleOpenDirectoryDialog}
                     className={headerActionButtonClass}
-                    aria-label="Add project"
+                    aria-label={t('navigation.addProject')}
                   >
                     <RiFolderAddLine className={headerActionIconClass} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>Add project</p></TooltipContent>
+                <TooltipContent side="bottom" sideOffset={4}><p>{t('navigation.addProject')}</p></TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -83,12 +83,12 @@ export function SidebarHeader(props: Props): React.ReactNode {
                     type="button"
                     onClick={handleNewSession}
                     className={headerActionButtonClass}
-                    aria-label="New session"
+                    aria-label={t('sessionSidebar.newSession')}
                   >
                     <RiChatNewLine className={headerActionIconClass} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>New session</p></TooltipContent>
+                <TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.newSession')}</p></TooltipContent>
               </Tooltip>
             </div>
 
@@ -99,13 +99,13 @@ export function SidebarHeader(props: Props): React.ReactNode {
                     type="button"
                     onClick={() => setIsSessionSearchOpen((prev) => !prev)}
                     className={headerActionButtonClass}
-                    aria-label="Search sessions"
+                    aria-label={t('sessionSidebar.searchSessions')}
                     aria-expanded={isSessionSearchOpen}
                   >
                     <RiSearchLine className={headerActionIconClass} />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={4}><p>Search sessions</p></TooltipContent>
+                <TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.searchSessions')}</p></TooltipContent>
               </Tooltip>
 
               <DropdownMenu>
@@ -115,27 +115,27 @@ export function SidebarHeader(props: Props): React.ReactNode {
                       <button
                         type="button"
                         className={headerActionButtonClass}
-                        aria-label="Session display mode"
+                        aria-label={t('sessionSidebar.displayMode')}
                       >
                         <RiEqualizer2Line className={headerActionIconClass} />
                       </button>
                     </DropdownMenuTrigger>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={4}><p>Display mode</p></TooltipContent>
+                  <TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.displayMode')}</p></TooltipContent>
                 </Tooltip>
                 <DropdownMenuContent align="end" className="min-w-[160px]">
                   <DropdownMenuItem
                     onClick={() => setDisplayMode('default')}
                     className="flex items-center justify-between"
                   >
-                    <span>Default</span>
+                    <span>{t('sessionSidebar.displayModeDefault')}</span>
                     {displayMode === 'default' ? <RiCheckLine className="h-4 w-4 text-primary" /> : null}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={() => setDisplayMode('minimal')}
                     className="flex items-center justify-between"
                   >
-                    <span>Minimal</span>
+                    <span>{t('sessionSidebar.displayModeMinimal')}</span>
                     {displayMode === 'minimal' ? <RiCheckLine className="h-4 w-4 text-primary" /> : null}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -147,9 +147,9 @@ export function SidebarHeader(props: Props): React.ReactNode {
             <div className="pb-1">
               <div className="mb-1 flex items-center justify-between px-0.5 typography-micro text-muted-foreground/80">
                 {hasSessionSearchQuery ? (
-                  <span>{searchMatchCount} {searchMatchCount === 1 ? 'match' : 'matches'}</span>
+                  <span>{t('sessionSidebar.matchesCount', { count: searchMatchCount })}</span>
                 ) : <span />}
-                <span>Esc to clear</span>
+                <span>{t('sessionSidebar.escToClear')}</span>
               </div>
               <div className="relative">
                 <RiSearchLine className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -157,7 +157,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   ref={sessionSearchInputRef}
                   value={sessionSearchQuery}
                   onChange={(event) => setSessionSearchQuery(event.target.value)}
-                  placeholder="Search sessions..."
+                  placeholder={t('sessionSidebar.searchSessionsPlaceholder')}
                   className="h-8 w-full rounded-md border border-border bg-transparent pl-8 pr-8 typography-ui-label text-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                   onKeyDown={(event) => {
                     if (event.key === 'Escape') {
@@ -175,7 +175,7 @@ export function SidebarHeader(props: Props): React.ReactNode {
                     type="button"
                     onClick={() => setSessionSearchQuery('')}
                     className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-interactive-hover/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                    aria-label="Clear search"
+                     aria-label={t('filesView.clearSearch')}
                   >
                     <RiCloseLine className="h-3.5 w-3.5" />
                   </button>

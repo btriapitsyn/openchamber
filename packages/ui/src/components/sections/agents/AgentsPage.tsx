@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useLanguage } from '@/hooks/useLanguage';
 
 type PermissionAction = 'allow' | 'ask' | 'deny';
 type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
@@ -697,7 +698,7 @@ export const AgentsPage: React.FC = () => {
                       : 'text-foreground'
                   )}
                 >
-                  Primary
+                  {t('agentsPage.primary')}
                 </Button>
                 <Button
                   variant="outline"
@@ -710,7 +711,7 @@ export const AgentsPage: React.FC = () => {
                       : 'text-foreground'
                   )}
                 >
-                  Subagent
+                  {t('agentsPage.subagent')}
                 </Button>
                 <Button
                   variant="outline"
@@ -723,7 +724,7 @@ export const AgentsPage: React.FC = () => {
                       : 'text-foreground'
                   )}
                 >
-                  All
+                  {t('agentsPage.all')}
                 </Button>
                 </div>
               </div>
@@ -883,7 +884,7 @@ export const AgentsPage: React.FC = () => {
               className="!font-normal"
               onClick={() => setShowPermissionEditor((prev) => !prev)}
             >
-              {showPermissionEditor ? 'Hide Editor' : 'Advanced Editor'}
+              {showPermissionEditor ? t('agentsPage.hideEditor') : t('agentsPage.advancedEditor')}
             </Button>
           </div>
 
@@ -1070,9 +1071,9 @@ export const AgentsPage: React.FC = () => {
                   />
 
                   <div className="flex gap-1">
-                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('allow')}>Allow</Button>
-                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('ask')}>Ask</Button>
-                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('deny')}>Deny</Button>
+                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('allow')}>{t('agentsPage.allow')}</Button>
+                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('ask')}>{t('agentsPage.ask')}</Button>
+                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('deny')}>{t('agentsPage.deny')}</Button>
                   </div>
                 </div>
               </div>
@@ -1088,7 +1089,7 @@ export const AgentsPage: React.FC = () => {
             size="xs"
             className="!font-normal"
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? t('common.saving') : t('common.saveChanges')}
           </Button>
         </div>
 

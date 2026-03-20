@@ -173,6 +173,7 @@ export function WorkingPlaceholder({
     isGenericStatus,
     isWaitingForPermission,
     retryInfo,
+    t,
     displayedText,
     displayedPermission,
     clearTimers,
