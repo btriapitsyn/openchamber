@@ -347,6 +347,14 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
     return filename || path;
   };
 
+  const resolveDisplayName = (file: FilePart): string => {
+    const isGitHubLink = getGitHubLinkKind(file) !== null;
+    if (isGitHubLink && typeof file.filename === 'string' && file.filename.trim().length > 0) {
+      return file.filename.trim();
+    }
+    return extractFilename(file.filename || file.url);
+  };
+
   const formatFileSize = (bytes?: number) => {
     if (!bytes || !Number.isFinite(bytes) || bytes <= 0) return '';
     if (bytes < 1024) return `${bytes} B`;
@@ -361,7 +369,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
     () =>
       imageFiles.flatMap((file) => {
         if (!file.url) return [];
-        const filename = extractFilename(file.filename) || 'Image';
+        const filename = resolveDisplayName(file) || 'Image';
         return [{
           url: file.url,
           mimeType: file.mime,
@@ -411,7 +419,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
         {otherFiles.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {otherFiles.map((file, index) => {
-              const fileName = extractFilename(file.filename || file.url);
+              const fileName = resolveDisplayName(file);
               const sizeText = formatFileSize(file.size);
               const githubLinkKind = getGitHubLinkKind(file);
               return (
@@ -460,7 +468,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
           <div className="overflow-x-auto -mx-1 px-1 py-0.5 scrollbar-thin">
             <div className="flex snap-x snap-mandatory gap-2">
               {imageFiles.map((file, index) => {
-                const filename = extractFilename(file.filename) || 'Image';
+                const filename = resolveDisplayName(file) || 'Image';
 
                 return (
                   <Tooltip key={`img-${file.url || file.filename || index}`} delayDuration={1000}>
@@ -509,7 +517,7 @@ export const MessageFilesDisplay = memo(({ files, onShowPopup, compact = false }
       compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
     )}>
       {fileItems.map((file, index) => {
-        const fileName = extractFilename(file.filename || file.url);
+        const fileName = resolveDisplayName(file);
         const isImage = file.mime?.startsWith('image/');
         const sizeText = formatFileSize(file.size);
         const githubLinkKind = getGitHubLinkKind(file);
