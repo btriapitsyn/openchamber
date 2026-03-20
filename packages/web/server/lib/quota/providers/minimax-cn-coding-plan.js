@@ -74,33 +74,39 @@ export const fetchQuota = async () => {
 
     if (Array.isArray(modelRemains) && modelRemains.length > 0) {
       const firstModel = modelRemains[0];
-      const total = toNumber(firstModel?.current_interval_total_count);
-      const used = 600 - toNumber(firstModel?.current_interval_usage_count);
-
-      if (total === null || used === null) {
-        return buildResult({
-          providerId,
-          providerName,
-          ok: false,
-          configured: true,
-          error: 'Missing required quota fields',
-        });
-      }
-
-      const usedPercent =
-        total > 0 ? Math.max(0, Math.min(100, (used / total) * 100)) : null;
-
-      const startTime = toTimestamp(firstModel?.start_time);
-      const endTime = toTimestamp(firstModel?.end_time);
-      const windowSeconds =
-        startTime && endTime && endTime > startTime
-          ? Math.floor((endTime - startTime) / 1000)
+      const intervalTotal = toNumber(firstModel?.current_interval_total_count);
+      const intervalUsage = toNumber(firstModel?.current_interval_usage_count);
+      const intervalStartAt = toTimestamp(firstModel?.start_time);
+      const intervalResetAt = toTimestamp(firstModel?.end_time);
+      const weeklyTotal = toNumber(firstModel?.current_weekly_total_count);
+      const weeklyUsage = toNumber(firstModel?.current_weekly_usage_count);
+      const weeklyStartAt = toTimestamp(firstModel?.weekly_start_time);
+      const weeklyResetAt = toTimestamp(firstModel?.weekly_end_time);
+      const intervalUsed = intervalTotal - intervalUsage;
+      const weeklyUsed = weeklyTotal - weeklyUsage;
+      const intervalUsedPercent =
+        intervalTotal > 0 ? Math.max(0, Math.min(100, (intervalUsed / intervalTotal) * 100)) : null;
+      const intervalWindowSeconds =
+        intervalStartAt && intervalResetAt && intervalResetAt > intervalStartAt
+          ? Math.floor((intervalResetAt - intervalStartAt) / 1000)
+          : null;
+      const weeklyUsedPercent =
+        weeklyTotal > 0 ? Math.max(0, Math.min(100, (weeklyUsed / weeklyTotal) * 100)) : null;
+      const weeklyWindowSeconds =
+        weeklyStartAt && weeklyResetAt && weeklyResetAt > weeklyStartAt
+          ? Math.floor((weeklyResetAt - weeklyStartAt) / 1000)
           : null;
 
       windows['5h'] = toUsageWindow({
-        usedPercent,
-        windowSeconds,
-        resetAt: endTime,
+        usedPercent: intervalUsedPercent,
+        windowSeconds: intervalWindowSeconds,
+        resetAt: intervalResetAt,
+      });
+
+      windows['weekly'] = toUsageWindow({
+        usedPercent: weeklyUsedPercent,
+        windowSeconds: weeklyWindowSeconds,
+        resetAt: weeklyResetAt,
       });
     } else {
       return buildResult({
