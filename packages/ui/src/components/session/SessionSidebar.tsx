@@ -745,6 +745,34 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     });
   }, []);
 
+  const collapseAllProjects = React.useCallback(() => {
+    ignoreIntersectionUntil.current = Date.now() + 150;
+    setCollapsedProjects(() => {
+      const allIds = new Set(projects.map((p) => p.id));
+      try {
+        safeStorage.setItem(PROJECT_COLLAPSE_STORAGE_KEY, JSON.stringify(Array.from(allIds)));
+      } catch { /* ignored */ }
+      if (!isVSCode) {
+        scheduleCollapsedProjectsPersist(allIds);
+      }
+      return allIds;
+    });
+  }, [projects, isVSCode, safeStorage, scheduleCollapsedProjectsPersist]);
+
+  const expandAllProjects = React.useCallback(() => {
+    ignoreIntersectionUntil.current = Date.now() + 150;
+    setCollapsedProjects(() => {
+      const empty = new Set<string>();
+      try {
+        safeStorage.setItem(PROJECT_COLLAPSE_STORAGE_KEY, JSON.stringify([]));
+      } catch { /* ignored */ }
+      if (!isVSCode) {
+        scheduleCollapsedProjectsPersist(empty);
+      }
+      return empty;
+    });
+  }, [isVSCode, safeStorage, scheduleCollapsedProjectsPersist]);
+
   const toggleProject = React.useCallback((projectId: string) => {
     // Ignore intersection events for a short period after toggling
     ignoreIntersectionUntil.current = Date.now() + 150;
@@ -997,53 +1025,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
        { key: 'active-now' as const, title: t('modelSelector.recent'), items: activeNowSessions.map(toItem) },
      ];
   }, [activeNowSessions, sessionSidebarMetaById, t]);
-
-  const activitySessionIds = React.useMemo(() => {
-    const next = new Set<string>();
-    activitySections.forEach((section) => {
-      section.items.forEach((item) => {
-        next.add(item.node.session.id);
-      });
-    });
-    return next;
-  }, [activitySections]);
-
-  const filteredProjectSections = React.useMemo(() => {
-    if (hasSessionSearchQuery || activitySessionIds.size === 0) {
-      return projectSections;
-    }
-
-    const filterNodes = (nodes: SessionNode[]): SessionNode[] => {
-      return nodes.flatMap((node) => {
-        if (activitySessionIds.has(node.session.id)) {
-          return [];
-        }
-        return [{
-          ...node,
-          children: filterNodes(node.children),
-        }];
-      });
-    };
-
-    return projectSections.map((section) => ({
-      ...section,
-      groups: section.groups.map((group) => ({
-        ...group,
-        sessions: filterNodes(group.sessions),
-      })),
-    }));
-  }, [hasSessionSearchQuery, activitySessionIds, projectSections]);
-
-  const filteredSectionsForRender = React.useMemo(() => {
-    if (hasSessionSearchQuery || activitySessionIds.size === 0) {
-      return sectionsForRender;
-    }
-
-    const sectionsByProjectId = new Map(filteredProjectSections.map((section) => [section.project.id, section]));
-    return sectionsForRender
-      .map((section) => sectionsByProjectId.get(section.project.id) ?? section)
-      .filter(Boolean);
-  }, [hasSessionSearchQuery, activitySessionIds, filteredProjectSections, sectionsForRender]);
 
   const desktopHeaderActionButtonClass =
     'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed';
@@ -1354,12 +1335,14 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setSessionSearchQuery={setSessionSearchQuery}
         hasSessionSearchQuery={hasSessionSearchQuery}
         searchMatchCount={searchMatchCount}
+        collapseAllProjects={collapseAllProjects}
+        expandAllProjects={expandAllProjects}
       />
 
       <SidebarProjectsList
         topContent={topContent}
-        sectionsForRender={filteredSectionsForRender}
-        projectSections={filteredProjectSections}
+        sectionsForRender={sectionsForRender}
+        projectSections={projectSections}
         activeProjectId={activeProjectId}
         showOnlyMainWorkspace={showOnlyMainWorkspace}
         hasSessionSearchQuery={hasSessionSearchQuery}

@@ -3,6 +3,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -13,6 +14,8 @@ import {
   RiFolderAddLine,
   RiSearchLine,
   RiCloseLine,
+  RiContractUpDownLine,
+  RiExpandUpDownLine,
 } from '@remixicon/react';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -31,6 +34,8 @@ type Props = {
   setSessionSearchQuery: (value: string) => void;
   hasSessionSearchQuery: boolean;
   searchMatchCount: number;
+  collapseAllProjects: () => void;
+  expandAllProjects: () => void;
 };
 
 export function SidebarHeader(props: Props): React.ReactNode {
@@ -49,6 +54,8 @@ export function SidebarHeader(props: Props): React.ReactNode {
     setSessionSearchQuery,
     hasSessionSearchQuery,
     searchMatchCount,
+    collapseAllProjects,
+    expandAllProjects,
   } = props;
 
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
@@ -137,6 +144,15 @@ export function SidebarHeader(props: Props): React.ReactNode {
                   >
                     <span>{t('sessionSidebar.displayModeMinimal')}</span>
                     {displayMode === 'minimal' ? <RiCheckLine className="h-4 w-4 text-primary" /> : null}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={collapseAllProjects} className="flex items-center gap-2">
+                    <RiContractUpDownLine className="h-4 w-4" />
+                    <span>Collapse all</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={expandAllProjects} className="flex items-center gap-2">
+                    <RiExpandUpDownLine className="h-4 w-4" />
+                    <span>Expand all</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
