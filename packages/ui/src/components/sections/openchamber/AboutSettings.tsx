@@ -6,7 +6,7 @@ import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { useDeviceInfo } from '@/lib/device';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 
 const GITHUB_URL = 'https://github.com/btriapitsyn/openchamber';
 
@@ -157,26 +157,26 @@ export const AboutSettings: React.FC = () => {
             )}
 
             {!updateStore.checking && updateStore.available && (
-              <ButtonSmall
+              <Button size="sm"
                 variant="default"
                 onClick={() => setUpdateDialogOpen(true)}
               >
                 <RiDownloadLine className="h-4 w-4 mr-1" />
-                {t('aboutSettings.updateToVersion', { version: updateStore.info?.version ?? '' })}
-              </ButtonSmall>
+                Update to {updateStore.info?.version}
+              </Button>
             )}
 
             {!updateStore.checking && !updateStore.available && !updateStore.error && (
               <span className="typography-meta text-muted-foreground">{t('aboutSettings.upToDate')}</span>
             )}
 
-            <ButtonSmall
+            <Button size="sm"
               variant="outline"
               onClick={() => updateStore.checkForUpdates()}
               disabled={updateStore.checking}
             >
-              {t('aboutSettings.checkForUpdates')}
-            </ButtonSmall>
+              Check for updates
+            </Button>
           </div>
         </div>
         

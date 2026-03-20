@@ -13,8 +13,6 @@ interface HistoryCommitRowProps {
   files: CommitFileEntry[];
   isLoadingFiles: boolean;
   onCopyHash: (hash: string) => void;
-  roundTop?: boolean;
-  roundBottom?: boolean;
 }
 
 function formatCommitDate(date: string) {
@@ -55,8 +53,6 @@ export const HistoryCommitRow: React.FC<HistoryCommitRowProps> = ({
   files,
   isLoadingFiles,
   onCopyHash,
-  roundTop = false,
-  roundBottom = false,
 }) => {
   const { t } = useLanguage();
 
@@ -67,8 +63,6 @@ export const HistoryCommitRow: React.FC<HistoryCommitRowProps> = ({
         onClick={onToggle}
         className={cn(
           'w-full flex items-start gap-3 px-3 py-2 text-left transition-colors',
-          roundTop && 'rounded-t-lg',
-          roundBottom && !isExpanded && 'rounded-b-lg',
           isExpanded ? 'bg-sidebar/90' : 'hover:bg-sidebar/40'
         )}
       >
@@ -116,7 +110,7 @@ export const HistoryCommitRow: React.FC<HistoryCommitRowProps> = ({
       </button>
 
       {isExpanded && (
-        <div className={cn('px-3 pb-2 pl-8 border-t border-border/40', roundBottom && 'rounded-b-lg')}>
+        <div className="px-3 pb-2 pl-8 border-t border-border/40">
           {isLoadingFiles ? (
             <div className="flex items-center gap-2 py-2">
               <RiLoader4Line className="size-4 animate-spin text-muted-foreground" />

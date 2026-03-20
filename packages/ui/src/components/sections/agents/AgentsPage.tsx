@@ -1,6 +1,5 @@
 import React from 'react';
-import { useLanguage } from '@/hooks/useLanguage';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
 import { Textarea } from '@/components/ui/textarea';
@@ -687,7 +686,7 @@ export const AgentsPage: React.FC = () => {
                   </Tooltip>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
-                <ButtonSmall
+                <Button
                   variant="outline"
                   size="xs"
                   onClick={() => setMode('primary')}
@@ -698,9 +697,9 @@ export const AgentsPage: React.FC = () => {
                       : 'text-foreground'
                   )}
                 >
-                  {t('agentsPage.primary')}
-                </ButtonSmall>
-                <ButtonSmall
+                  Primary
+                </Button>
+                <Button
                   variant="outline"
                   size="xs"
                   onClick={() => setMode('subagent')}
@@ -711,9 +710,9 @@ export const AgentsPage: React.FC = () => {
                       : 'text-foreground'
                   )}
                 >
-                  {t('agentsPage.subagent')}
-                </ButtonSmall>
-                <ButtonSmall
+                  Subagent
+                </Button>
+                <Button
                   variant="outline"
                   size="xs"
                   onClick={() => setMode('all')}
@@ -724,8 +723,8 @@ export const AgentsPage: React.FC = () => {
                       : 'text-foreground'
                   )}
                 >
-                  {t('agentsPage.all')}
-                </ButtonSmall>
+                  All
+                </Button>
                 </div>
               </div>
             </div>
@@ -792,7 +791,7 @@ export const AgentsPage: React.FC = () => {
                   className="w-16"
                 />
                 {temperature !== undefined && (
-                  <ButtonSmall
+                  <Button size="sm"
                     type="button"
                     variant="ghost"
                     onClick={() => setTemperature(undefined)}
@@ -801,7 +800,7 @@ export const AgentsPage: React.FC = () => {
                     title={t('common.clear')}
                   >
                     <RiCloseLine className="h-3.5 w-3.5" />
-                  </ButtonSmall>
+                  </Button>
                 )}
               </div>
             </div>
@@ -836,7 +835,7 @@ export const AgentsPage: React.FC = () => {
                   className="w-16"
                 />
                 {topP !== undefined && (
-                  <ButtonSmall
+                  <Button size="sm"
                     type="button"
                     variant="ghost"
                     onClick={() => setTopP(undefined)}
@@ -845,7 +844,7 @@ export const AgentsPage: React.FC = () => {
                     title={t('common.clear')}
                   >
                     <RiCloseLine className="h-3.5 w-3.5" />
-                  </ButtonSmall>
+                  </Button>
                 )}
               </div>
             </div>
@@ -878,14 +877,14 @@ export const AgentsPage: React.FC = () => {
             <h3 className="typography-ui-header font-medium text-foreground">
               {t('agentsPage.toolPermissions')}
             </h3>
-            <ButtonSmall
+            <Button
               variant="outline"
               size="xs"
               className="!font-normal"
               onClick={() => setShowPermissionEditor((prev) => !prev)}
             >
-              {showPermissionEditor ? t('agentsPage.hideEditor') : t('agentsPage.advancedEditor')}
-            </ButtonSmall>
+              {showPermissionEditor ? 'Hide Editor' : 'Advanced Editor'}
+            </Button>
           </div>
 
           {!showPermissionEditor ? (
@@ -963,13 +962,13 @@ export const AgentsPage: React.FC = () => {
                             <span className="typography-micro text-muted-foreground">{t('agentsPage.pattern')}</span>
                             <span className="typography-micro font-mono text-foreground bg-[var(--surface-muted)] px-1 rounded">*</span>
                             {wildcardOverride && (
-                              <ButtonSmall
+                              <Button size="sm"
                                 variant="ghost"
                                 onClick={() => revertRule(permissionName, '*')}
                                 className="px-1.5 py-0 h-5"
                               >
                                 <RiSubtractLine className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                              </ButtonSmall>
+                              </Button>
                             )}
                           </div>
                           <Select
@@ -1010,13 +1009,13 @@ export const AgentsPage: React.FC = () => {
                                 {isAdded && <span className="typography-micro text-[var(--status-success)]">{t('agentsPage.new')}</span>}
                                 {isModified && <span className="typography-micro text-[var(--status-warning)]">{t('agentsPage.modified')}</span>}
                                 {(isAdded || isModified) && (
-                                  <ButtonSmall
+                                  <Button size="sm"
                                     variant="ghost"
                                     onClick={() => isAdded ? removeRule(rule.permission, rule.pattern) : revertRule(rule.permission, rule.pattern)}
                                     className="px-1.5 py-0 h-5"
                                   >
                                     <RiSubtractLine className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                                  </ButtonSmall>
+                                  </Button>
                                 )}
                               </div>
                               <Select
@@ -1071,9 +1070,9 @@ export const AgentsPage: React.FC = () => {
                   />
 
                   <div className="flex gap-1">
-                    <ButtonSmall variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('allow')}>{t('agentsPage.allow')}</ButtonSmall>
-                    <ButtonSmall variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('ask')}>{t('agentsPage.ask')}</ButtonSmall>
-                    <ButtonSmall variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('deny')}>{t('agentsPage.deny')}</ButtonSmall>
+                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('allow')}>Allow</Button>
+                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('ask')}>Ask</Button>
+                    <Button variant="outline" size="xs" className="!font-normal" onClick={() => applyPendingRule('deny')}>Deny</Button>
                   </div>
                 </div>
               </div>
@@ -1083,14 +1082,14 @@ export const AgentsPage: React.FC = () => {
 
         {/* Save action */}
         <div className="px-2 py-1">
-          <ButtonSmall
+          <Button
             onClick={handleSave}
             disabled={isSaving || !isDirty}
             size="xs"
             className="!font-normal"
           >
-            {isSaving ? t('common.saving') : t('common.saveChanges')}
-          </ButtonSmall>
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </Button>
         </div>
 
       </div>

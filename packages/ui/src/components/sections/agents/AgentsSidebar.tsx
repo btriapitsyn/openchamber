@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
-import { ButtonSmall } from '@/components/ui/button-small';
-import { ButtonLarge } from '@/components/ui/button-large';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { isMobileDeviceViaCSS } from '@/lib/device';
@@ -325,14 +324,14 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
         <h2 className="text-base font-semibold text-foreground mb-3">{t('agentsSidebar.title')}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('agentsSidebar.total', { count: visibleAgents.length })}</span>
-          <ButtonSmall
+          <span className="typography-meta text-muted-foreground">Total {visibleAgents.length}</span>
+          <Button size="sm"
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
             onClick={handleCreateNew}
           >
             <RiAddLine className="h-3.5 w-3.5" />
-          </ButtonSmall>
+          </Button>
         </div>
       </div>
 
@@ -448,16 +447,17 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <ButtonLarge
+            <Button
+              size="sm"
               variant="ghost"
               onClick={closeConfirmActionDialog}
               disabled={isConfirmActionPending}
             >
-              {t('common.cancel')}
-            </ButtonLarge>
-            <ButtonLarge onClick={handleConfirmAction} disabled={isConfirmActionPending}>
-              {confirmActionType === 'delete' ? t('common.delete') : t('common.resetButton')}
-            </ButtonLarge>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleConfirmAction} disabled={isConfirmActionPending}>
+              {confirmActionType === 'delete' ? 'Delete' : 'Reset'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -483,15 +483,16 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
             }}
           />
           <DialogFooter>
-            <ButtonLarge
+            <Button
+              size="sm"
               variant="ghost"
               onClick={() => setRenameDialogAgent(null)}
             >
-              {t('common.cancel')}
-            </ButtonLarge>
-            <ButtonLarge onClick={handleRenameAgent}>
-              {t('common.rename')}
-            </ButtonLarge>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleRenameAgent}>
+              Rename
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -566,12 +567,12 @@ const AgentListItem: React.FC<AgentListItemProps> = ({
 
         <DropdownMenu open={isMenuOpen} onOpenChange={onMenuOpenChange}>
           <DropdownMenuTrigger asChild>
-            <ButtonSmall
+            <Button size="sm"
               variant="ghost"
               className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
             >
               <RiMore2Line className="h-3.5 w-3.5" />
-            </ButtonSmall>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-fit min-w-20">
             {onRename && (

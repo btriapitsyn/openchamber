@@ -19,7 +19,7 @@ import {
   RiRestartLine,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { GridLoader } from '@/components/ui/grid-loader';
 import { Input } from '@/components/ui/input';
@@ -1142,7 +1142,7 @@ export const TunnelSettings: React.FC = () => {
                 {TUNNEL_MODE_OPTIONS.map((option) => (
                   <Tooltip key={option.value} delayDuration={700}>
                     <TooltipTrigger asChild>
-                      <ButtonSmall
+                      <Button
                         variant="outline"
                         size="xs"
                         className={cn(
@@ -1156,8 +1156,8 @@ export const TunnelSettings: React.FC = () => {
                         }}
                         disabled={isSavingMode || state === 'starting' || state === 'stopping'}
                       >
-                        {t(option.label)}
-                      </ButtonSmall>
+                        {option.label}
+                      </Button>
                     </TooltipTrigger>
                     <TooltipContent sideOffset={8} className="max-w-xs">
                        {t(option.tooltip)}
@@ -1237,8 +1237,8 @@ export const TunnelSettings: React.FC = () => {
               )}
 
               <div className="mb-1 flex items-center justify-between gap-3">
-                <p className="typography-ui-label text-foreground">{t('tunnelSettings.savedManagedRemoteTunnels')}</p>
-                <ButtonSmall
+                <p className="typography-ui-label text-foreground">Saved managed remote tunnels</p>
+                <Button
                   variant="ghost"
                   size="xs"
                   className="!font-normal"
@@ -1246,8 +1246,8 @@ export const TunnelSettings: React.FC = () => {
                   disabled={state === 'starting' || state === 'stopping' || isSavingMode}
                 >
                   <RiAddLine className="h-3.5 w-3.5" />
-                  {t('common.add')}
-                </ButtonSmall>
+                  Add
+                </Button>
               </div>
 
               {managedRemoteTunnelPresets.length > 0 ? (
@@ -1284,7 +1284,7 @@ export const TunnelSettings: React.FC = () => {
                               <span className="typography-ui-label min-w-0 flex-1 truncate text-foreground">{preset.name}</span>
                             </CollapsibleTrigger>
 
-                            <ButtonSmall
+                            <Button
                               variant="ghost"
                               size="xs"
                               className="h-7 w-7 p-0 text-muted-foreground hover:text-[var(--status-error)]"
@@ -1295,7 +1295,7 @@ export const TunnelSettings: React.FC = () => {
                               disabled={state === 'starting' || state === 'stopping' || isSavingMode}
                             >
                               <RiDeleteBinLine className="h-3.5 w-3.5" />
-                            </ButtonSmall>
+                            </Button>
                           </div>
 
                           <CollapsibleContent className="pt-1.5">
@@ -1326,7 +1326,7 @@ export const TunnelSettings: React.FC = () => {
                                 disabled={state === 'starting' || state === 'stopping'}
                               />
                               <div className="flex items-center justify-end">
-                                <ButtonSmall
+                                <Button
                                   variant="ghost"
                                   size="xs"
                                   className="!font-normal"
@@ -1340,8 +1340,8 @@ export const TunnelSettings: React.FC = () => {
                                     });
                                   }}
                                 >
-                                  {t('tunnelSettings.saveToken')}
-                                </ButtonSmall>
+                                  Save token
+                                </Button>
                               </div>
                             </div>
                           </CollapsibleContent>
@@ -1384,7 +1384,7 @@ export const TunnelSettings: React.FC = () => {
                     </p>
                   )}
                   <div className="flex items-center gap-2">
-                    <ButtonSmall
+                    <Button
                       variant="ghost"
                       size="xs"
                       className="!font-normal"
@@ -1393,9 +1393,9 @@ export const TunnelSettings: React.FC = () => {
                       }}
                       disabled={isSavingMode || state === 'starting' || state === 'stopping'}
                     >
-                      {t('common.save')}
-                    </ButtonSmall>
-                    <ButtonSmall
+                      Save
+                    </Button>
+                    <Button
                       variant="ghost"
                       size="xs"
                       className="!font-normal"
@@ -1407,8 +1407,8 @@ export const TunnelSettings: React.FC = () => {
                       }}
                       disabled={isSavingMode || state === 'starting' || state === 'stopping'}
                     >
-                      {t('common.cancel')}
-                    </ButtonSmall>
+                      Cancel
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1463,7 +1463,7 @@ export const TunnelSettings: React.FC = () => {
                     className="h-7"
                     disabled={state === 'starting' || state === 'stopping' || isSavingMode}
                   />
-                  <ButtonSmall
+                  <Button
                     variant="outline"
                     size="xs"
                     className="h-7 w-7 p-0"
@@ -1474,9 +1474,9 @@ export const TunnelSettings: React.FC = () => {
                     disabled={state === 'starting' || state === 'stopping' || isSavingMode}
                   >
                     <RiFolderLine className="size-3.5" />
-                  </ButtonSmall>
+                  </Button>
                   {managedLocalConfigPath && (
-                    <ButtonSmall
+                    <Button
                       variant="ghost"
                       size="xs"
                       className="h-7 w-7 p-0"
@@ -1487,7 +1487,7 @@ export const TunnelSettings: React.FC = () => {
                       disabled={state === 'starting' || state === 'stopping' || isSavingMode}
                     >
                       <RiCloseLine className="size-3.5" />
-                    </ButtonSmall>
+                    </Button>
                   )}
                 </div>
                 <p className="typography-meta text-muted-foreground/70">
@@ -1587,7 +1587,7 @@ export const TunnelSettings: React.FC = () => {
                 </div>
               )}
 
-              <ButtonSmall
+              <Button size="sm"
                 variant="outline"
                 onClick={handleStart}
                 disabled={
@@ -1599,9 +1599,9 @@ export const TunnelSettings: React.FC = () => {
                 className={cn(primaryCtaClass, state === 'starting' && 'opacity-70')}
               >
                 {state === 'starting'
-                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> {t('tunnelSettings.startingTunnel')}</>
-                  : t('tunnelSettings.startTunnel')}
-              </ButtonSmall>
+                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> Starting tunnel...</>
+                  : 'Start Tunnel'}
+              </Button>
             </div>
           )}
 
@@ -1631,12 +1631,12 @@ export const TunnelSettings: React.FC = () => {
                     <code className="typography-code flex-1 truncate rounded bg-muted/50 px-2 py-1 text-xs text-foreground">
                       {tunnelInfo.connectUrl}
                     </code>
-                    <ButtonSmall variant="ghost" onClick={handleCopyUrl} className="shrink-0 gap-1.5">
+                    <Button size="sm" variant="ghost" onClick={handleCopyUrl} className="shrink-0 gap-1.5">
                       {copied
                         ? <RiCheckLine className="size-3.5 text-[var(--status-success)]" />
                         : <RiFileCopyLine className="size-3.5" />}
-                      {copied ? t('tunnelSettings.copied') : t('common.copy')}
-                    </ButtonSmall>
+                      {copied ? 'Copied' : 'Copy'}
+                    </Button>
                   </div>
                   <p className="typography-meta mt-1 text-muted-foreground/70">
                     {t('tunnelSettings.expires')}: {tunnelInfo.bootstrapExpiresAt ? remainingText : t('tunnelSettings.noExpiry')}
@@ -1655,26 +1655,26 @@ export const TunnelSettings: React.FC = () => {
 
           <div className="pt-1">
             <div className="flex flex-wrap items-center gap-2">
-              <ButtonSmall
+              <Button size="sm"
                 variant="outline"
                 onClick={handleStart}
                 disabled={state === 'stopping' || isSavingMode || (tunnelMode === 'managed-local' && isManagedLocalConfigPathInvalid)}
                 className={primaryCtaClass}
               >
                 <RiRestartLine className="size-3.5" />
-                {t('tunnelSettings.newConnectLink')}
-              </ButtonSmall>
+                New connect link
+              </Button>
 
-              <ButtonSmall
+              <Button size="sm"
                 variant="ghost"
                 onClick={handleStop}
                 disabled={state === 'stopping' || isSavingMode}
                 className="gap-2 text-[var(--status-error)]"
               >
                 {state === 'stopping'
-                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> {t('tunnelSettings.stoppingTunnel')}</>
-                  : t('tunnelSettings.stopTunnel')}
-              </ButtonSmall>
+                  ? <><RiLoader4Line className="size-3.5 animate-spin" /> Stopping...</>
+                  : 'Stop Tunnel'}
+              </Button>
             </div>
           </div>
         </section>
@@ -1683,7 +1683,7 @@ export const TunnelSettings: React.FC = () => {
       {state === 'error' && errorMessage && (
         <section className="space-y-3 px-2 pb-2 pt-0">
           <p className="typography-meta text-[var(--status-error)]">{errorMessage}</p>
-          <ButtonSmall variant="ghost" onClick={handleStart}>{t('common.retry')}</ButtonSmall>
+          <Button size="sm" variant="ghost" onClick={handleStart}>Retry</Button>
         </section>
       )}
     </div>

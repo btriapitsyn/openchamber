@@ -10,7 +10,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ButtonLarge } from '@/components/ui/button-large';
 import { Input } from '@/components/ui/input';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -489,15 +488,16 @@ export const InstallFromRepoDialog: React.FC<InstallFromRepoDialogProps> = ({ op
           </div>
 
           <DialogFooter className="flex-shrink-0">
-            <ButtonLarge variant="ghost" onClick={() => onOpenChange(false)}>
-              {t('common.cancel')}
-            </ButtonLarge>
-            <ButtonLarge
+            <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
               disabled={isInstalling || selectedDirs.length === 0 || !source.trim() || (scope === 'project' && !directoryOverride)}
               onClick={() => void doInstall({})}
             >
-              {isInstalling ? t('installFromRepoDialog.installing') : t('installFromRepoDialog.installSelected')}
-            </ButtonLarge>
+              {isInstalling ? 'Installing…' : 'Install selected'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -47,7 +47,6 @@ export const IntegrateCommitsSection: React.FC<{
   defaultTargetBranch: string;
   refreshKey?: number;
   onRefresh?: () => void;
-  variant?: 'framed' | 'plain';
 }> = ({
   repoRoot,
   sourceBranch,
@@ -56,7 +55,6 @@ export const IntegrateCommitsSection: React.FC<{
   defaultTargetBranch,
   refreshKey,
   onRefresh,
-  variant = 'framed',
 }) => {
   const { t } = useLanguage();
   const currentSessionId = useSessionStore((s) => s.currentSessionId);
@@ -339,15 +337,9 @@ Important:
     return null;
   }
 
-  const containerClassName =
-    variant === 'framed'
-      ? 'rounded-xl border border-border/60 bg-background/70 overflow-hidden'
-      : 'border-0 bg-transparent rounded-none';
-  const headerClassName =
-    variant === 'framed'
-      ? 'px-3 py-2 border-b border-border/40 flex items-center justify-between gap-2'
-      : 'px-0 py-3 border-b border-border/40 flex items-center justify-between gap-2';
-  const bodyClassName = variant === 'framed' ? 'flex flex-col gap-3 p-3' : 'flex flex-col gap-3 py-3';
+  const containerClassName = 'border-0 bg-transparent rounded-none';
+  const headerClassName = 'px-0 py-3 border-b border-border/40 flex items-center justify-between gap-2';
+  const bodyClassName = 'flex flex-col gap-3 py-3';
 
   return (
     <section className={containerClassName}>
@@ -379,8 +371,8 @@ Important:
 
             <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 px-2 py-0 gap-1.5">
-                  {t('integrateCommits.target')}
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  Target
                   <span className="max-w-[160px] truncate font-mono text-xs text-muted-foreground">{targetBranch}</span>
                   <RiArrowDownSLine className="size-4 opacity-60" />
                 </Button>
@@ -418,16 +410,16 @@ Important:
             </DropdownMenu>
 
             {ui.kind === 'ready' ? (
-              <Button size="sm" className="h-7 px-2 py-0" onClick={() => void handleMove()} disabled={!isEligible || ui.plan.commits.length === 0}>
-                {t('integrateCommits.move')}
+              <Button size="sm" onClick={() => void handleMove()} disabled={!isEligible || ui.plan.commits.length === 0}>
+                Move
               </Button>
             ) : ui.kind === 'loading' ? (
-              <Button size="sm" variant="outline" className="h-7 px-2 py-0" disabled>
-                {t('integrateCommits.checking')}
+              <Button size="sm" variant="outline" disabled>
+                Checking…
               </Button>
             ) : ui.kind === 'running' ? (
-              <Button size="sm" variant="outline" className="h-7 px-2 py-0" disabled>
-                {t('integrateCommits.moving')}
+              <Button size="sm" variant="outline" disabled>
+                Moving…
               </Button>
             ) : null}
           </div>
@@ -492,13 +484,13 @@ Important:
                 )}
               </div>
               <div className="flex items-center gap-2 pt-1">
-                <Button size="sm" variant="ghost" className="h-7 px-2 py-0 typography-meta" onClick={() => void handleAbort()}>
-                  {t('integrateCommits.abort')}
+                <Button size="sm" variant="ghost" className="typography-meta" onClick={() => void handleAbort()}>
+                  Abort
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-7 px-2 py-0 typography-meta gap-1"
+                  className="typography-meta gap-1"
                   disabled={!currentSessionId}
                   onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details }, false)}
                 >
@@ -508,14 +500,14 @@ Important:
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-7 px-2 py-0 typography-meta gap-1"
+                  className="typography-meta gap-1"
                   onClick={() => void handleResolveWithAi({ state: ui.state, details: ui.details }, true)}
                 >
                   <RiSparklingLine className="size-3.5" />
                   {t('integrateCommits.newSession')}
                 </Button>
-                <Button size="sm" className="h-7 px-2 py-0 typography-meta" onClick={() => void handleContinue()}>
-                  {t('integrateCommits.continue')}
+                <Button size="sm" className="typography-meta" onClick={() => void handleContinue()}>
+                  Continue
                 </Button>
               </div>
             </div>

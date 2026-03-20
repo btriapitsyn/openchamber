@@ -1,6 +1,5 @@
 import React from 'react';
-import { useLanguage } from '@/hooks/useLanguage';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RiInformationLine } from '@remixicon/react';
@@ -139,8 +138,8 @@ export const KeyboardShortcutsSettings: React.FC = () => {
     <div className="mb-8">
       <div className="mb-1 px-1">
         <div className="flex items-center gap-2">
-          <h3 className="typography-ui-header font-medium text-foreground">{t('keyboardShortcutsSettings.title')}</h3>
-          <ButtonSmall
+          <h3 className="typography-ui-header font-medium text-foreground">Keyboard Shortcuts</h3>
+          <Button
             type="button"
             variant="outline"
             size="xs"
@@ -153,8 +152,8 @@ export const KeyboardShortcutsSettings: React.FC = () => {
               setWarningText('');
             }}
           >
-            {t('keyboardShortcutsSettings.resetAll')}
-          </ButtonSmall>
+            Reset All
+          </Button>
           <Tooltip delayDuration={1000}>
             <TooltipTrigger asChild>
               <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
@@ -174,8 +173,8 @@ export const KeyboardShortcutsSettings: React.FC = () => {
                 {t('keyboardShortcutsSettings.overwriteConfirm')}
               </span>
               <div className="flex gap-2 shrink-0">
-                <ButtonSmall type="button" size="xs" className="!font-normal" onClick={confirmOverwrite}>{t('keyboardShortcutsSettings.overwrite')}</ButtonSmall>
-                <ButtonSmall type="button" size="xs" className="!font-normal" variant="ghost" onClick={() => setPendingOverwrite(null)}>{t('common.cancel')}</ButtonSmall>
+                <Button type="button" size="xs" className="!font-normal" onClick={confirmOverwrite}>Overwrite</Button>
+                <Button type="button" size="xs" className="!font-normal" variant="ghost" onClick={() => setPendingOverwrite(null)}>Cancel</Button>
               </div>
             </div>
           )}
@@ -245,7 +244,7 @@ export const KeyboardShortcutsSettings: React.FC = () => {
                   }}
                   className="h-7 w-40 min-w-0 typography-ui-label text-center"
                 />
-                <ButtonSmall
+                <Button
                   type="button"
                   variant="secondary"
                   size="xs"
@@ -260,11 +259,11 @@ export const KeyboardShortcutsSettings: React.FC = () => {
                   }}
                   disabled={!hasDraft}
                 >
-                  {t('common.save')}
-                </ButtonSmall>
-                <ButtonSmall type="button" size="xs" className="!font-normal" variant="ghost" onClick={() => resetOne(action.id)}>
-                  {t('common.resetButton')}
-                </ButtonSmall>
+                  Save
+                </Button>
+                <Button type="button" size="xs" className="!font-normal" variant="ghost" onClick={() => resetOne(action.id)}>
+                  Reset
+                </Button>
               </div>
             </div>
           );

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ButtonSmall } from '@/components/ui/button-small';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import {
@@ -353,7 +352,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   <div className="flex items-center justify-between gap-4">
                     <span className="typography-ui-label text-foreground">{t('gitIdentityEditor.authMethod')}</span>
                     <div className="flex items-center gap-1">
-                      <ButtonSmall
+                      <Button size="sm"
                         type="button"
                         variant="outline"
                         onClick={() => setAuthType('ssh')}
@@ -363,9 +362,9 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                             : 'text-foreground'
                         )}
                       >
-                        <RiLock2Line className="w-3.5 h-3.5 mr-1" /> {t('gitIdentityEditor.ssh')}
-                      </ButtonSmall>
-                      <ButtonSmall
+                        <RiLock2Line className="w-3.5 h-3.5 mr-1" /> SSH
+                      </Button>
+                      <Button size="sm"
                         type="button"
                         variant="outline"
                         onClick={() => setAuthType('token')}
@@ -375,8 +374,8 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                             : 'text-foreground'
                         )}
                       >
-                        <RiKeyLine className="w-3.5 h-3.5 mr-1" /> {t('gitIdentityEditor.token')}
-                      </ButtonSmall>
+                        <RiKeyLine className="w-3.5 h-3.5 mr-1" /> Token
+                      </Button>
                     </div>
                   </div>
 
@@ -469,8 +468,8 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
             <Button variant="ghost" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
               {t('common.cancel')}
             </Button>
-            <Button size="sm" onClick={() => void handleConfirmDelete()} disabled={isDeleting} className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white border-0">
-              {t('common.delete')}
+            <Button size="sm" variant="destructive" onClick={() => void handleConfirmDelete()} disabled={isDeleting}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
+import { RiLayoutLeftLine } from '@remixicon/react';
 import { toast } from '@/components/ui';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { isDesktopLocalOriginActive, isDesktopShell, isTauriShell } from '@/lib/desktop';
 import { MobileOverlayPanel } from '@/components/ui/MobileOverlayPanel';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -9,10 +11,8 @@ import { useSessionStore } from '@/stores/useSessionStore';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { useUIStore } from '@/stores/useUIStore';
-import { useConfigStore } from '@/stores/useConfigStore';
 import type { GitHubPullRequestStatus } from '@/lib/api/types';
 import { getSafeStorage } from '@/stores/utils/safeStorage';
-import { createWorktreeSession } from '@/lib/worktreeSessionCreator';
 import { useGitStore } from '@/stores/useGitStore';
 import { useDeviceInfo } from '@/lib/device';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -35,11 +35,16 @@ import { useProjectSessionLists } from './sidebar/hooks/useProjectSessionLists';
 import { useSessionFolderCleanup } from './sidebar/hooks/useSessionFolderCleanup';
 import { useStickyProjectHeaders } from './sidebar/hooks/useStickyProjectHeaders';
 import { useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
-import { useLanguage } from '@/hooks/useLanguage';
+import { ProjectEditDialog } from '@/components/layout/ProjectEditDialog';
+import { UpdateDialog } from '@/components/ui/UpdateDialog';
 import { SessionGroupSection } from './sidebar/SessionGroupSection';
 import { SidebarHeader } from './sidebar/SidebarHeader';
+import { SidebarActivitySections } from './sidebar/SidebarActivitySections';
+import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsList } from './sidebar/SidebarProjectsList';
 import { SessionNodeItem } from './sidebar/SessionNodeItem';
+import { useUpdateStore } from '@/stores/useUpdateStore';
+import type { SortableDragHandleProps } from './sidebar/sortableItems';
 import {
   FolderDeleteConfirmDialog,
   SessionDeleteConfirmDialog,
@@ -47,6 +52,13 @@ import {
   type DeleteSessionConfirmState,
 } from './sidebar/ConfirmDialogs';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
+import {
+  addActiveNowSession,
+  deriveActiveNowSessions,
+  persistActiveNowEntries,
+  pruneActiveNowEntries,
+  readActiveNowEntries,
+} from './sidebar/activitySections';
 import {
   compareSessionsByPinnedAndTime,
   formatProjectLabel,
@@ -131,7 +143,6 @@ interface SessionSidebarProps {
   onSessionSelected?: (sessionId: string) => void;
   allowReselect?: boolean;
   hideDirectoryControls?: boolean;
-  hideProjectSelector?: boolean;
   showOnlyMainWorkspace?: boolean;
 }
 
@@ -140,7 +151,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   onSessionSelected,
   allowReselect = false,
   hideDirectoryControls = false,
-  hideProjectSelector = true,
   showOnlyMainWorkspace = false,
 }) => {
   const { t } = useLanguage();
@@ -150,21 +160,22 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const sessionSearchInputRef = React.useRef<HTMLInputElement | null>(null);
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [editTitle, setEditTitle] = React.useState('');
-  const [editingProjectId, setEditingProjectId] = React.useState<string | null>(null);
-  const [editProjectTitle, setEditProjectTitle] = React.useState('');
+  const [editingProjectDialogId, setEditingProjectDialogId] = React.useState<string | null>(null);
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
   const [directoryStatus, setDirectoryStatus] = React.useState<Map<string, 'unknown' | 'exists' | 'missing'>>(
     () => new Map(),
   );
   const safeStorage = React.useMemo(() => getSafeStorage(), []);
+  const [activeNowEntries, setActiveNowEntries] = React.useState(() => readActiveNowEntries(safeStorage));
   const [collapsedProjects, setCollapsedProjects] = React.useState<Set<string>>(new Set());
 
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [hoveredProjectId, setHoveredProjectId] = React.useState<string | null>(null);
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
+  const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
   const [projectNotesPanelOpen, setProjectNotesPanelOpen] = React.useState(false);
-  const [openMenuSessionId, setOpenMenuSessionId] = React.useState<string | null>(null);
+  const [openSidebarMenuKey, setOpenSidebarMenuKey] = React.useState<string | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
   const [renameFolderDraft, setRenameFolderDraft] = React.useState('');
   const [deleteSessionConfirm, setDeleteSessionConfirm] = React.useState<DeleteSessionConfirmState>(null);
@@ -230,8 +241,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     }
   });
 
-  const [isProjectRenameInline, setIsProjectRenameInline] = React.useState(false);
-  const [projectRenameDraft, setProjectRenameDraft] = React.useState('');
   const [projectRootBranches, setProjectRootBranches] = React.useState<Map<string, string>>(new Map());
   const projectHeaderSentinelRefs = React.useRef<Map<string, HTMLDivElement | null>>(new Map());
   const ignoreIntersectionUntil = React.useRef<number>(0);
@@ -245,17 +254,21 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const addProject = useProjectsStore((state) => state.addProject);
   const removeProject = useProjectsStore((state) => state.removeProject);
   const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
-  const renameProject = useProjectsStore((state) => state.renameProject);
+  const updateProjectMeta = useProjectsStore((state) => state.updateProjectMeta);
+  const reorderProjects = useProjectsStore((state) => state.reorderProjects);
 
   const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const openContextPanelTab = useUIStore((state) => state.openContextPanelTab);
+  const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+  const toggleHelpDialog = useUIStore((state) => state.toggleHelpDialog);
+  const setAboutDialogOpen = useUIStore((state) => state.setAboutDialogOpen);
   const deviceInfo = useDeviceInfo();
   const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
+  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
   const openMultiRunLauncher = useUIStore((state) => state.openMultiRunLauncher);
   const notifyOnSubtasks = useUIStore((state) => state.notifyOnSubtasks);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
-  const settingsAutoCreateWorktree = useConfigStore((state) => state.settingsAutoCreateWorktree);
 
   const debouncedSessionSearchQuery = useDebouncedValue(sessionSearchQuery, 120);
   const normalizedSessionSearchQuery = React.useMemo(
@@ -306,11 +319,93 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const getSessionsByDirectory = useSessionStore((state) => state.getSessionsByDirectory);
   const openNewSessionDraft = useSessionStore((state) => state.openNewSessionDraft);
   const prStatusEntries = useGitHubPrStatusStore((state) => state.entries);
+  const updateStore = useUpdateStore();
 
   const tauriIpcAvailable = React.useMemo(() => isTauriShell(), []);
   const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
+  const [isDesktopWindowFullscreen, setIsDesktopWindowFullscreen] = React.useState(false);
 
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const isMacPlatform = React.useMemo(() => {
+    if (typeof navigator === 'undefined') {
+      return false;
+    }
+    return /Macintosh|Mac OS X/.test(navigator.userAgent || '');
+  }, []);
+  const showDesktopSidebarChrome = !mobileVariant && !isVSCode;
+  const desktopSidebarTopPaddingClass = isDesktopShellRuntime && isMacPlatform && !isDesktopWindowFullscreen ? 'pl-[5.5rem]' : 'pl-3';
+  const desktopSidebarToggleButtonClass = 'app-region-no-drag inline-flex h-8 w-8 items-center justify-center rounded-md typography-ui-label font-medium text-foreground transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-50';
+
+  React.useEffect(() => {
+    if (!isDesktopShellRuntime || !isMacPlatform) {
+      setIsDesktopWindowFullscreen(false);
+      return;
+    }
+
+    let disposed = false;
+    let unlistenResize: (() => void) | null = null;
+
+    const syncFullscreenState = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const currentWindow = getCurrentWindow();
+        const fullscreen = await currentWindow.isFullscreen();
+        if (!disposed) {
+          setIsDesktopWindowFullscreen(fullscreen);
+        }
+      } catch {
+        if (!disposed) {
+          setIsDesktopWindowFullscreen(false);
+        }
+      }
+    };
+
+    const attach = async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const currentWindow = getCurrentWindow();
+        unlistenResize = await currentWindow.onResized(() => {
+          void syncFullscreenState();
+        });
+      } catch {
+        // Ignore listener setup failures; fallback state remains false.
+      }
+    };
+
+    void syncFullscreenState();
+    void attach();
+
+    return () => {
+      disposed = true;
+      if (unlistenResize) {
+        unlistenResize();
+      }
+    };
+  }, [isDesktopShellRuntime, isMacPlatform]);
+
+  const handleDesktopSidebarDragStart = React.useCallback(async (event: React.MouseEvent) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('.app-region-no-drag')) {
+      return;
+    }
+    if (target.closest('button, a, input, select, textarea')) {
+      return;
+    }
+    if (event.button !== 0) {
+      return;
+    }
+    if (!isDesktopShellRuntime) {
+      return;
+    }
+
+    try {
+      const { getCurrentWindow } = await import('@tauri-apps/api/window');
+      const appWindow = getCurrentWindow();
+      await appWindow.startDragging();
+    } catch (error) {
+      console.error('Failed to start window dragging:', error);
+    }
+  }, [isDesktopShellRuntime]);
 
   const {
     buildGroupSearchText,
@@ -361,11 +456,93 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     return [...sessions].sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds));
   }, [sessions, pinnedSessionIds]);
 
-  useSessionPrefetch({
-    currentSessionId,
-    sortedSessions,
-    loadMessages,
-  });
+  const allKnownSessionsById = React.useMemo(() => {
+    const next = new Map<string, Session>();
+    [...sessions, ...archivedSessions].forEach((session) => {
+      next.set(session.id, session);
+    });
+    return next;
+  }, [sessions, archivedSessions]);
+
+  React.useEffect(() => {
+    const pruned = pruneActiveNowEntries(activeNowEntries, allKnownSessionsById);
+    if (pruned.length === activeNowEntries.length && pruned.every((entry, index) => entry.sessionId === activeNowEntries[index]?.sessionId)) {
+      return;
+    }
+    setActiveNowEntries(pruned);
+    persistActiveNowEntries(safeStorage, pruned);
+  }, [activeNowEntries, allKnownSessionsById, safeStorage]);
+
+  const previousStreamingIdsRef = React.useRef<Set<string>>(new Set());
+  React.useEffect(() => {
+    const nextStreamingIds = new Set<string>();
+    sessionStatus?.forEach((status, sessionId) => {
+      if (status?.type === 'busy' || status?.type === 'retry') {
+        nextStreamingIds.add(sessionId);
+      }
+    });
+
+    const previousStreamingIds = previousStreamingIdsRef.current;
+    const startedStreamingIds = Array.from(nextStreamingIds).filter((sessionId) => !previousStreamingIds.has(sessionId));
+    if (startedStreamingIds.length > 0) {
+      setActiveNowEntries((prev) => {
+        const next = startedStreamingIds.reduce((entries, sessionId) => addActiveNowSession(entries, sessionId), prev);
+        if (next === prev) {
+          return prev;
+        }
+        persistActiveNowEntries(safeStorage, next);
+        return next;
+      });
+    }
+
+    previousStreamingIdsRef.current = nextStreamingIds;
+  }, [sessionStatus, safeStorage]);
+
+  React.useEffect(() => {
+    const busyIds: string[] = [];
+    sessionStatus?.forEach((status, sessionId) => {
+      if (status?.type === 'busy' || status?.type === 'retry') {
+        busyIds.push(sessionId);
+      }
+    });
+
+    if (busyIds.length === 0) {
+      return;
+    }
+
+    setActiveNowEntries((prev) => {
+      const known = new Set(prev.map((entry) => entry.sessionId));
+      let next = prev;
+      let changed = false;
+
+      busyIds.forEach((sessionId) => {
+        if (known.has(sessionId)) {
+          return;
+        }
+
+        const session = allKnownSessionsById.get(sessionId);
+        if (!session || session.time?.archived) {
+          return;
+        }
+
+        const isSubtask = Boolean((session as Session & { parentID?: string | null }).parentID);
+        if (isSubtask) {
+          return;
+        }
+
+        next = addActiveNowSession(next, sessionId);
+        known.add(sessionId);
+        changed = true;
+      });
+
+      if (!changed) {
+        return prev;
+      }
+
+      persistActiveNowEntries(safeStorage, next);
+      return next;
+    });
+  }, [sessionStatus, allKnownSessionsById, safeStorage]);
 
   const childrenMap = React.useMemo(() => {
     const map = new Map<string, Session[]>();
@@ -396,18 +573,47 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     </div>
   );
 
-  const handleSaveProjectEdit = React.useCallback(() => {
-    if (editingProjectId && editProjectTitle.trim()) {
-      renameProject(editingProjectId, editProjectTitle.trim());
-      setEditingProjectId(null);
-      setEditProjectTitle('');
-    }
-  }, [editingProjectId, editProjectTitle, renameProject]);
+  const editingProject = React.useMemo(
+    () => projects.find((project) => project.id === editingProjectDialogId) ?? null,
+    [projects, editingProjectDialogId],
+  );
 
-  const handleCancelProjectEdit = React.useCallback(() => {
-    setEditingProjectId(null);
-    setEditProjectTitle('');
+  const handleSaveProjectEdit = React.useCallback((data: { label: string; icon: string | null; color: string | null; iconBackground: string | null }) => {
+    if (!editingProjectDialogId) {
+      return;
+    }
+    updateProjectMeta(editingProjectDialogId, data);
+    setEditingProjectDialogId(null);
+  }, [editingProjectDialogId, updateProjectMeta]);
+
+  const openNewWorktreeDialog = React.useCallback(() => {
+    setNewWorktreeDialogOpen(true);
   }, []);
+
+  const handleOpenUpdateDialog = React.useCallback(() => {
+    const current = useUpdateStore.getState();
+    if (current.available && current.info) {
+      setUpdateDialogOpen(true);
+      return;
+    }
+
+    void updateStore.checkForUpdates().then(() => {
+      const { available, error } = useUpdateStore.getState();
+      if (error) {
+        toast.error('Failed to check for updates', { description: error });
+        return;
+      }
+      if (!available) {
+        toast.success('You are on the latest version');
+        return;
+      }
+      setUpdateDialogOpen(true);
+    });
+  }, [updateStore]);
+
+  const showSidebarUpdateButton =
+    updateStore.available &&
+    (updateStore.runtimeType === 'desktop' || updateStore.runtimeType === 'web');
 
   const deleteSession = useSessionStore((state) => state.deleteSession);
   const deleteSessions = useSessionStore((state) => state.deleteSessions);
@@ -571,6 +777,10 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         path: string;
         label?: string;
         normalizedPath: string;
+        icon?: string;
+        color?: string;
+        iconImage?: { mime: string; updatedAt: number; source: 'custom' | 'auto' };
+        iconBackground?: string;
       }>;
   }, [projects]);
 
@@ -629,7 +839,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     searchMatchCount,
   } = useSessionSidebarSections({
     normalizedProjects,
-    activeProjectId,
     getSessionsForProject,
     getArchivedSessionsForProject,
     availableWorktreesByProject,
@@ -673,7 +882,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const stableActiveProjectIsRepo = activeProjectForHeader && projectRepoStatus.has(activeProjectForHeader.id)
     ? activeProjectIsRepo
     : lastRepoStatusRef.current;
-  const reserveHeaderActionsSpace = Boolean(activeProjectForHeader);
+  const reserveHeaderActionsSpace = true;
   const useMobileNotesPanel = mobileVariant || deviceInfo.isMobile;
 
   React.useEffect(() => {
@@ -689,7 +898,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     setActiveSessionByProject,
     currentSessionId,
     handleSessionSelect,
-    isVSCode,
     newSessionDraftOpen,
     mobileVariant,
     openNewSessionDraft,
@@ -700,30 +908,141 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   });
 
   const { getOrderedGroups } = useGroupOrdering(groupOrderByProject);
+  const hasInitializedArchivedCollapseRef = React.useRef(false);
 
-  const handleStartInlineProjectRename = React.useCallback(() => {
-    if (!activeProjectForHeader) {
+  React.useEffect(() => {
+    if (hasInitializedArchivedCollapseRef.current || projectSections.length === 0) {
       return;
     }
-    setProjectRenameDraft(formatProjectLabel(
-      activeProjectForHeader.label?.trim()
-      || formatDirectoryName(activeProjectForHeader.normalizedPath, homeDirectory)
-      || activeProjectForHeader.normalizedPath,
-    ));
-    setIsProjectRenameInline(true);
-  }, [activeProjectForHeader, homeDirectory]);
+    const archivedGroupKeys = projectSections.flatMap((section) =>
+      section.groups
+        .filter((group) => group.isArchivedBucket)
+        .map((group) => `${section.project.id}:${group.id}`),
+    );
+    if (archivedGroupKeys.length > 0) {
+      setCollapsedGroups((prev) => new Set([...prev, ...archivedGroupKeys]));
+    }
+    hasInitializedArchivedCollapseRef.current = true;
+  }, [projectSections]);
 
-  const handleSaveInlineProjectRename = React.useCallback(() => {
-    if (!activeProjectForHeader) {
-      return;
+  const sessionSidebarMetaById = React.useMemo(() => {
+    const meta = new Map<string, {
+      node: SessionNode;
+      projectId: string | null;
+      groupDirectory: string | null;
+      secondaryMeta: {
+        projectLabel?: string | null;
+        branchLabel?: string | null;
+      } | null;
+    }>();
+
+    projectSections.forEach((section) => {
+      const projectLabel = formatProjectLabel(
+        section.project.label?.trim()
+        || formatDirectoryName(section.project.normalizedPath, homeDirectory)
+        || section.project.normalizedPath,
+      );
+      section.groups.forEach((group) => {
+        const secondaryMeta = group.branch && group.branch !== projectLabel
+          ? { projectLabel, branchLabel: group.branch }
+          : { projectLabel, branchLabel: null };
+
+        const visit = (nodes: SessionNode[]) => {
+          nodes.forEach((node) => {
+            meta.set(node.session.id, {
+              node,
+              projectId: section.project.id,
+              groupDirectory: group.directory,
+              secondaryMeta,
+            });
+            if (node.children.length > 0) {
+              visit(node.children);
+            }
+          });
+        };
+
+        visit(group.sessions);
+      });
+    });
+
+    return meta;
+  }, [projectSections, homeDirectory]);
+
+  const activeNowSessions = React.useMemo(
+    () => deriveActiveNowSessions(activeNowEntries, new Map(sessions.map((session) => [session.id, session]))),
+    [activeNowEntries, sessions],
+  );
+
+  useSessionPrefetch({
+    currentSessionId,
+    sortedSessions,
+    recentSessionIds: activeNowSessions.map((session) => session.id),
+    loadMessages,
+  });
+
+  const activitySections = React.useMemo(() => {
+    const toItem = (session: Session) => {
+      const existing = sessionSidebarMetaById.get(session.id);
+      const sessionDirectory = normalizePath((session as Session & { directory?: string | null }).directory ?? null);
+      return {
+        node: existing?.node ?? { session, children: [], worktree: null },
+        projectId: existing?.projectId ?? null,
+        groupDirectory: existing?.groupDirectory ?? sessionDirectory,
+        secondaryMeta: existing?.secondaryMeta ?? null,
+      };
+    };
+
+    return [
+      { key: 'active-now' as const, title: 'recent', items: activeNowSessions.map(toItem) },
+    ];
+  }, [activeNowSessions, sessionSidebarMetaById]);
+
+  const activitySessionIds = React.useMemo(() => {
+    const next = new Set<string>();
+    activitySections.forEach((section) => {
+      section.items.forEach((item) => {
+        next.add(item.node.session.id);
+      });
+    });
+    return next;
+  }, [activitySections]);
+
+  const filteredProjectSections = React.useMemo(() => {
+    if (hasSessionSearchQuery || activitySessionIds.size === 0) {
+      return projectSections;
     }
-    const trimmed = projectRenameDraft.trim();
-    if (!trimmed) {
-      return;
+
+    const filterNodes = (nodes: SessionNode[]): SessionNode[] => {
+      return nodes.flatMap((node) => {
+        if (activitySessionIds.has(node.session.id)) {
+          return [];
+        }
+        return [{
+          ...node,
+          children: filterNodes(node.children),
+        }];
+      });
+    };
+
+    return projectSections.map((section) => ({
+      ...section,
+      groups: section.groups.map((group) => ({
+        ...group,
+        sessions: filterNodes(group.sessions),
+      })),
+    }));
+  }, [hasSessionSearchQuery, activitySessionIds, projectSections]);
+
+  const filteredSectionsForRender = React.useMemo(() => {
+    if (hasSessionSearchQuery || activitySessionIds.size === 0) {
+      return sectionsForRender;
     }
-    renameProject(activeProjectForHeader.id, trimmed);
-    setIsProjectRenameInline(false);
-  }, [activeProjectForHeader, projectRenameDraft, renameProject]);
+
+    const sectionsByProjectId = new Map(filteredProjectSections.map((section) => [section.project.id, section]));
+    return sectionsForRender
+      .map((section) => sectionsByProjectId.get(section.project.id) ?? section)
+      .filter(Boolean);
+  }, [hasSessionSearchQuery, activitySessionIds, filteredProjectSections, sectionsForRender]);
 
   const desktopHeaderActionButtonClass =
     'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-foreground hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed';
@@ -731,14 +1050,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     'inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md leading-none text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed';
   const headerActionButtonClass = mobileVariant ? mobileHeaderActionButtonClass : desktopHeaderActionButtonClass;
   const headerActionIconClass = 'h-4.5 w-4.5';
-  const addProjectButtonClass = cn(
-    'inline-flex cursor-pointer items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed',
-    mobileVariant
-      ? 'h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50'
-      : 'h-8 w-8 text-foreground hover:bg-interactive-hover',
-    !isDesktopShellRuntime && 'bg-transparent hover:bg-sidebar/40',
-  );
-
   const stuckProjectHeaders = useStickyProjectHeaders({
     isDesktopShellRuntime,
     projectSections,
@@ -752,6 +1063,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       groupDirectory?: string | null,
       projectId?: string | null,
       archivedBucket = false,
+      secondaryMeta?: { projectLabel?: string | null; branchLabel?: string | null } | null,
+      renderContext: 'project' | 'recent' = 'project',
     ): React.ReactNode => (
       <SessionNodeItem
         node={node}
@@ -784,8 +1097,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         copiedSessionId={copiedSessionId}
         handleCopyShareUrl={handleCopyShareUrl}
         handleUnshareSession={handleUnshareSession}
-        openMenuSessionId={openMenuSessionId}
-        setOpenMenuSessionId={setOpenMenuSessionId}
+        openSidebarMenuKey={openSidebarMenuKey}
+        setOpenSidebarMenuKey={setOpenSidebarMenuKey}
         renamingFolderId={renamingFolderId}
         getFoldersForScope={getFoldersForScope}
         getSessionFolderId={getSessionFolderId}
@@ -796,6 +1109,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         handleDeleteSession={handleDeleteSession}
         mobileVariant={mobileVariant}
         renderSessionNode={renderSessionNode}
+        secondaryMeta={secondaryMeta}
+        renderContext={renderContext}
       />
     ),
     [
@@ -824,8 +1139,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       copiedSessionId,
       handleCopyShareUrl,
       handleUnshareSession,
-      openMenuSessionId,
-      setOpenMenuSessionId,
+      openSidebarMenuKey,
+      setOpenSidebarMenuKey,
       renamingFolderId,
       getFoldersForScope,
       getSessionFolderId,
@@ -900,7 +1215,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [prStatusEntries]);
 
   const renderGroupSessions = React.useCallback(
-    (group: SessionGroup, groupKey: string, projectId?: string | null, hideGroupLabel?: boolean) => (
+    (group: SessionGroup, groupKey: string, projectId?: string | null, hideGroupLabel?: boolean, dragHandleProps?: SortableDragHandleProps | null) => (
       <SessionGroupSection
         group={group}
         groupKey={groupKey}
@@ -939,6 +1254,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         pinnedSessionIds={pinnedSessionIds}
         prVisualStateByDirectoryBranch={prVisualStateByDirectoryBranch}
         onToggleCollapsedGroup={toggleCollapsedGroup}
+        dragHandleProps={dragHandleProps}
       />
     ),
     [
@@ -974,44 +1290,62 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     ],
   );
 
-  const isInlineEditing = Boolean(renamingFolderId || editingId || editingProjectId);
+  const topContent = !hasSessionSearchQuery ? (
+    <SidebarActivitySections
+      sections={activitySections}
+      renderSessionNode={renderSessionNode}
+    />
+  ) : null;
+  const isInlineEditing = Boolean(renamingFolderId || editingId || editingProjectDialogId);
+  const handleSidebarNewSession = React.useCallback(() => {
+    setActiveMainTab('chat');
+    if (mobileVariant) {
+      setSessionSwitcherOpen(false);
+    }
+    openNewSessionDraft();
+  }, [mobileVariant, openNewSessionDraft, setActiveMainTab, setSessionSwitcherOpen]);
 
   return (
     <div
       ref={sessionSearchContainerRef}
       className={cn(
-        'flex h-full flex-col text-foreground overflow-x-hidden',
+        'relative flex h-full flex-col text-foreground overflow-x-hidden',
         mobileVariant ? '' : 'bg-transparent',
       )}
     >
+      {showDesktopSidebarChrome ? (
+        <div
+          onMouseDown={handleDesktopSidebarDragStart}
+          className={cn(
+            'app-region-drag flex h-[var(--oc-header-height,56px)] flex-shrink-0 items-center pr-3',
+            desktopSidebarTopPaddingClass,
+          )}
+        >
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className={desktopSidebarToggleButtonClass}
+                aria-label="Close sessions"
+              >
+                <RiLayoutLeftLine className="h-[18px] w-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Close sessions</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      ) : null}
+
       <SidebarHeader
         hideDirectoryControls={hideDirectoryControls}
-        hideProjectSelector={hideProjectSelector}
-        activeProjectForHeader={activeProjectForHeader}
-        homeDirectory={homeDirectory}
-        normalizedProjects={normalizedProjects}
-        activeProjectId={activeProjectId}
-        setActiveProjectIdOnly={setActiveProjectIdOnly}
-        isProjectRenameInline={isProjectRenameInline}
-        setIsProjectRenameInline={setIsProjectRenameInline}
-        handleStartInlineProjectRename={handleStartInlineProjectRename}
-        handleSaveInlineProjectRename={handleSaveInlineProjectRename}
-        projectRenameDraft={projectRenameDraft}
-        setProjectRenameDraft={setProjectRenameDraft}
-        removeProject={removeProject}
         handleOpenDirectoryDialog={handleOpenDirectoryDialog}
-        addProjectButtonClass={addProjectButtonClass}
+        handleNewSession={handleSidebarNewSession}
         headerActionIconClass={headerActionIconClass}
         reserveHeaderActionsSpace={reserveHeaderActionsSpace}
-        stableActiveProjectIsRepo={stableActiveProjectIsRepo}
-        useMobileNotesPanel={useMobileNotesPanel}
-        projectNotesPanelOpen={projectNotesPanelOpen}
-        setProjectNotesPanelOpen={setProjectNotesPanelOpen}
-        activeProjectRefForHeader={activeProjectRefForHeader}
-        openMultiRunLauncher={openMultiRunLauncher}
         headerActionButtonClass={headerActionButtonClass}
-        setNewWorktreeDialogOpen={setNewWorktreeDialogOpen}
-        setActiveMainTab={setActiveMainTab}
         isSessionSearchOpen={isSessionSearchOpen}
         setIsSessionSearchOpen={setIsSessionSearchOpen}
         sessionSearchInputRef={sessionSearchInputRef}
@@ -1022,8 +1356,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       />
 
       <SidebarProjectsList
-        sectionsForRender={sectionsForRender}
-        projectSections={projectSections}
+        topContent={topContent}
+        sectionsForRender={filteredSectionsForRender}
+        projectSections={filteredProjectSections}
         activeProjectId={activeProjectId}
         showOnlyMainWorkspace={showOnlyMainWorkspace}
         hasSessionSearchQuery={hasSessionSearchQuery}
@@ -1044,21 +1379,57 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         setActiveMainTab={setActiveMainTab}
         setSessionSwitcherOpen={setSessionSwitcherOpen}
         openNewSessionDraft={openNewSessionDraft}
-        createWorktreeSession={createWorktreeSession}
+        openNewWorktreeDialog={openNewWorktreeDialog}
         openMultiRunLauncher={openMultiRunLauncher}
-        setEditingProjectId={setEditingProjectId}
-        setEditProjectTitle={setEditProjectTitle}
-        editingProjectId={editingProjectId}
-        editProjectTitle={editProjectTitle}
-        handleSaveProjectEdit={handleSaveProjectEdit}
-        handleCancelProjectEdit={handleCancelProjectEdit}
+        openProjectEditDialog={setEditingProjectDialogId}
         removeProject={removeProject}
         projectHeaderSentinelRefs={projectHeaderSentinelRefs}
-        settingsAutoCreateWorktree={settingsAutoCreateWorktree}
+        reorderProjects={reorderProjects}
         getOrderedGroups={getOrderedGroups}
         setGroupOrderByProject={setGroupOrderByProject}
+        openSidebarMenuKey={openSidebarMenuKey}
+        setOpenSidebarMenuKey={setOpenSidebarMenuKey}
         isInlineEditing={isInlineEditing}
       />
+
+      <SidebarFooter
+        onOpenSettings={() => setSettingsDialogOpen(true)}
+        onOpenShortcuts={toggleHelpDialog}
+        onOpenAbout={() => setAboutDialogOpen(true)}
+        onOpenUpdate={handleOpenUpdateDialog}
+        showUpdateButton={showSidebarUpdateButton}
+      />
+
+      <UpdateDialog
+        open={updateDialogOpen}
+        onOpenChange={setUpdateDialogOpen}
+        info={updateStore.info}
+        downloading={updateStore.downloading}
+        downloaded={updateStore.downloaded}
+        progress={updateStore.progress}
+        error={updateStore.error}
+        onDownload={updateStore.downloadUpdate}
+        onRestart={updateStore.restartToUpdate}
+        runtimeType={updateStore.runtimeType}
+      />
+
+      {editingProject ? (
+        <ProjectEditDialog
+          open={Boolean(editingProject)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingProjectDialogId(null);
+            }
+          }}
+          projectId={editingProject.id}
+          projectName={editingProject.label || formatDirectoryName(editingProject.path, homeDirectory)}
+          projectPath={editingProject.path}
+          initialIcon={editingProject.icon}
+          initialColor={editingProject.color}
+          initialIconBackground={editingProject.iconBackground}
+          onSave={handleSaveProjectEdit}
+        />
+      ) : null}
 
       <NewWorktreeDialog
         open={newWorktreeDialogOpen}

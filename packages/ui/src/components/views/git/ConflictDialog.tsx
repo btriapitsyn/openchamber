@@ -263,8 +263,8 @@ Important:
               <Button variant="ghost" size="sm" onClick={handleContinueLater} className="flex-1">
                 {t('gitConflict.continueLater')}
               </Button>
-              <Button variant="ghost" size="sm" onClick={handleAbort} className="flex-1 text-[var(--status-error)]">
-                {t('gitConflict.abortOperation', { operation: operationLabel })}
+              <Button variant="destructive" size="sm" onClick={handleAbort} className="flex-1">
+                Abort {operationLabel}
               </Button>
             </div>
           </div>

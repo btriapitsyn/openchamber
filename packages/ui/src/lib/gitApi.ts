@@ -29,6 +29,7 @@ export type {
   GitWorktreeValidationResult,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
+  GitRemoveRemotePayload,
   DiscoveredGitCredential,
   GitRemote,
   GitMergeResult,
@@ -637,6 +638,15 @@ export async function getRemotes(directory: string): Promise<import('./api/types
   const runtime = getRuntimeGit();
   if (runtime) return runtime.getRemotes(directory);
   return gitHttp.getRemotes(directory);
+}
+
+export async function removeRemote(
+  directory: string,
+  payload: import('./api/types').GitRemoveRemotePayload
+): Promise<{ success: boolean }> {
+  const runtime = getRuntimeGit();
+  if (runtime) return runtime.removeRemote(directory, payload);
+  return gitHttp.removeRemote(directory, payload);
 }
 
 export async function rebase(

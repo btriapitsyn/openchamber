@@ -8,8 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ButtonLarge } from '@/components/ui/button-large';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -75,8 +74,8 @@ export const InstallConflictsDialog: React.FC<InstallConflictsDialogProps> = ({
           <div className="flex items-center justify-between gap-2">
             <span className="typography-meta text-muted-foreground">{t('installConflictsDialog.conflictsCount', { count: conflicts.length })}</span>
             <div className="flex items-center gap-2">
-              <ButtonSmall variant="outline" size="xs" className="!font-normal" onClick={() => setAll('skip')}>{t('installConflictsDialog.skipAll')}</ButtonSmall>
-              <ButtonSmall variant="outline" size="xs" className="!font-normal" onClick={() => setAll('overwrite')}>{t('installConflictsDialog.overwriteAll')}</ButtonSmall>
+              <Button variant="outline" size="xs" className="!font-normal" onClick={() => setAll('skip')}>Skip all</Button>
+              <Button variant="outline" size="xs" className="!font-normal" onClick={() => setAll('overwrite')}>Overwrite all</Button>
             </div>
           </div>
 
@@ -115,15 +114,16 @@ export const InstallConflictsDialog: React.FC<InstallConflictsDialogProps> = ({
         </div>
 
         <DialogFooter>
-          <ButtonLarge variant="ghost" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </ButtonLarge>
-          <ButtonLarge
+          <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
             onClick={() => onConfirm(decisions)}
             disabled={!canConfirm}
           >
-            {t('installConflictsDialog.continue')}
-          </ButtonLarge>
+            Continue
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

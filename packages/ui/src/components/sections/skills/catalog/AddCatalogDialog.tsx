@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ButtonLarge } from '@/components/ui/button-large';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -313,24 +313,26 @@ export const AddCatalogDialog: React.FC<AddCatalogDialogProps> = ({ open, onOpen
         </div>
 
         <DialogFooter>
-          <ButtonLarge variant="ghost" onClick={() => onOpenChange(false)}>
-            {t('common.cancel')}
-          </ButtonLarge>
-          <ButtonLarge
+          <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            className="gap-2"
             variant="ghost"
             onClick={() => void handleScan()}
             disabled={isScanning || !source.trim()}
-            className="gap-2"
           >
             <RiGitRepositoryLine className="h-4 w-4" />
-            {isScanning ? t('addCatalogDialog.scanning') : t('addCatalogDialog.scan')}
-          </ButtonLarge>
-          <ButtonLarge
+            {isScanning ? 'Scanning...' : 'Scan'}
+          </Button>
+          <Button
+            size="sm"
             onClick={() => void handleAdd()}
             disabled={!scanOk || isDuplicate || !label.trim() || !source.trim()}
           >
-            {t('addCatalogDialog.addCatalog')}
-          </ButtonLarge>
+            Add catalog
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

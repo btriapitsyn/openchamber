@@ -1,7 +1,7 @@
 import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ProviderLogo } from '@/components/ui/ProviderLogo';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { RiAddLine, RiStackLine } from '@remixicon/react';
@@ -111,8 +111,8 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
         <h2 className="text-base font-semibold text-foreground mb-3">{t('providersSidebar.title')}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('providersSidebar.total', { count: providers.length })}</span>
-          <ButtonSmall
+          <span className="typography-meta text-muted-foreground">Total {providers.length}</span>
+          <Button size="sm"
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
             onClick={() => {
@@ -123,7 +123,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
             title={t('providersSidebar.connectProvider')}
           >
             <RiAddLine className="h-3.5 w-3.5" />
-          </ButtonSmall>
+          </Button>
         </div>
       </div>
 

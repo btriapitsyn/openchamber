@@ -12157,6 +12157,27 @@ async function main(options = {}) {
     }
   });
 
+  app.delete('/api/git/remotes', async (req, res) => {
+    const { removeRemote } = await getGitLibraries();
+    try {
+      const directory = req.query.directory;
+      if (!directory) {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const remote = String(req.body?.remote || '').trim();
+      if (!remote) {
+        return res.status(400).json({ error: 'remote is required' });
+      }
+
+      const result = await removeRemote(directory, { remote });
+      res.json(result);
+    } catch (error) {
+      console.error('Failed to remove remote:', error);
+      res.status(500).json({ error: error.message || 'Failed to remove remote' });
+    }
+  });
+
   app.post('/api/git/rebase', async (req, res) => {
     const { rebase } = await getGitLibraries();
     try {

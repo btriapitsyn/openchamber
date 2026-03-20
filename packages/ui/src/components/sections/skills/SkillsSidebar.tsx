@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
-import { ButtonSmall } from '@/components/ui/button-small';
-import { ButtonLarge } from '@/components/ui/button-large';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from '@/components/ui';
 import { isMobileDeviceViaCSS } from '@/lib/device';
@@ -208,14 +207,14 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
         <h2 className="text-base font-semibold text-foreground mb-3">{t('skillsSidebar.title')}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">{t('skillsSidebar.total', { count: skills.length })}</span>
-          <ButtonSmall
+          <span className="typography-meta text-muted-foreground">Total {skills.length}</span>
+          <Button size="sm"
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
             onClick={handleCreateNew}
           >
             <RiAddLine className="h-3.5 w-3.5" />
-          </ButtonSmall>
+          </Button>
         </div>
       </div>
 
@@ -349,17 +348,18 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <ButtonLarge
+            <Button
+              size="sm"
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
               variant="ghost"
               onClick={() => setDeleteDialogSkill(null)}
               disabled={isDeletePending}
-              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
             >
-              {t('common.cancel')}
-            </ButtonLarge>
-            <ButtonLarge onClick={handleConfirmDeleteSkill} disabled={isDeletePending}>
-              {t('common.delete')}
-            </ButtonLarge>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleConfirmDeleteSkill} disabled={isDeletePending}>
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -385,16 +385,17 @@ export const SkillsSidebar: React.FC<SkillsSidebarProps> = ({ onItemSelect }) =>
             }}
           />
           <DialogFooter>
-            <ButtonLarge
+            <Button
+              size="sm"
+              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
               variant="ghost"
               onClick={() => setRenameDialogSkill(null)}
-              className="text-foreground hover:bg-interactive-hover hover:text-foreground"
             >
-              {t('common.cancel')}
-            </ButtonLarge>
-            <ButtonLarge onClick={handleRenameSkill}>
-              {t('common.rename')}
-            </ButtonLarge>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleRenameSkill}>
+              Rename
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -464,12 +465,12 @@ const SkillListItem: React.FC<SkillListItemProps> = ({
 
         <DropdownMenu open={isMenuOpen} onOpenChange={onMenuOpenChange}>
           <DropdownMenuTrigger asChild>
-            <ButtonSmall
+            <Button size="sm"
               variant="ghost"
               className="h-6 w-6 px-0 flex-shrink-0 -mr-1 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
             >
               <RiMore2Line className="h-3.5 w-3.5" />
-            </ButtonSmall>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-fit min-w-20">
             <DropdownMenuItem

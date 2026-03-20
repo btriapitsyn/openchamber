@@ -1,6 +1,6 @@
 import { useLanguage } from '@/hooks/useLanguage';
 import React from 'react';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NumberInput } from '@/components/ui/number-input';
 import { Switch } from '@/components/ui/switch';
@@ -705,15 +705,15 @@ const retryButtonLabel = isConnecting
                     </div>
                     <div className="typography-micro text-muted-foreground">{candidate.source} {t('remoteInstancesPage.sourceConfig')}</div>
                   </div>
-                  <ButtonSmall
+                  <Button
                     type="button"
                     variant="outline"
                     size="xs"
                     className="!font-normal"
                     onClick={() => void handleImportCandidate(candidate.host, candidate.pattern)}
                   >
-                    {t('remoteInstancesPage.create')}
-                  </ButtonSmall>
+                    Create
+                  </Button>
                 </div>
               ))}
             </div>
@@ -750,12 +750,12 @@ const retryButtonLabel = isConnecting
                 autoFocus
               />
               <div className="flex items-center justify-end gap-2">
-                <ButtonSmall type="button" variant="outline" size="xs" className="!font-normal" onClick={closePatternDialog} disabled={patternCreating}>
-                  {t('remoteInstancesPage.cancel')}
-                </ButtonSmall>
-                <ButtonSmall type="submit" size="xs" className="!font-normal" disabled={patternCreating}>
-                  {t('remoteInstancesPage.create')}
-                </ButtonSmall>
+                <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={closePatternDialog} disabled={patternCreating}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="xs" className="!font-normal" disabled={patternCreating}>
+                  Create
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -786,7 +786,7 @@ const retryButtonLabel = isConnecting
         </div>
         <section className="px-2 pb-2 pt-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <ButtonSmall
+            <Button
               type="button"
               variant={canDisconnect ? 'outline' : 'default'}
               size="xs"
@@ -796,8 +796,8 @@ const retryButtonLabel = isConnecting
             >
               {canDisconnect ? <RiStopLine className="h-3.5 w-3.5" /> : <RiPlug2Line className="h-3.5 w-3.5" />}
               {primaryButtonLabel}
-            </ButtonSmall>
-            <ButtonSmall
+            </Button>
+            <Button
               type="button"
               variant="outline"
               size="xs"
@@ -807,8 +807,8 @@ const retryButtonLabel = isConnecting
             >
               <RiRefreshLine className={`h-3.5 w-3.5 ${isConnecting || (isReconnecting && !reconnectAppearsStuck) ? 'animate-spin' : ''}`} />
               {retryButtonLabel}
-            </ButtonSmall>
-            <ButtonSmall
+            </Button>
+            <Button
               type="button"
               variant="outline"
               size="xs"
@@ -818,9 +818,9 @@ const retryButtonLabel = isConnecting
               }}
             >
               <RiTerminalWindowLine className="h-3.5 w-3.5" />
-              {t('remoteInstancesPage.logs')}
-            </ButtonSmall>
-            <ButtonSmall
+              Logs
+            </Button>
+            <Button
               type="button"
               variant="outline"
               size="xs"
@@ -841,8 +841,8 @@ const retryButtonLabel = isConnecting
               }}
             >
               <RiDeleteBinLine className="h-3.5 w-3.5" />
-              {t('remoteInstancesPage.remove')}
-            </ButtonSmall>
+              Remove
+            </Button>
           </div>
           {status?.localUrl ? (
             <div className="flex flex-wrap items-center gap-2 typography-meta text-muted-foreground">
@@ -1118,7 +1118,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                 }}
                 emptyLabel={t('remoteInstancesPage.auto')}
               />
-              <ButtonSmall
+              <Button
                 type="button"
                 variant="outline"
                 size="xs"
@@ -1135,7 +1135,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                 }
               >
                 <RiShuffleLine className="h-3.5 w-3.5" />
-              </ButtonSmall>
+              </Button>
             </div>
           </div>
         </section>
@@ -1257,8 +1257,8 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                     </CollapsibleTrigger>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Switch checked={forward.enabled} onCheckedChange={(checked) => updateForward((item) => ({ ...item, enabled: checked }))} aria-label={t('remoteInstancesPage.enableForward')} />
-                    <ButtonSmall
+                    <Switch checked={forward.enabled} onCheckedChange={(checked) => updateForward((item) => ({ ...item, enabled: checked }))} aria-label="Enable forward" />
+                    <Button
                       type="button"
                       variant="ghost"
                       size="xs"
@@ -1271,7 +1271,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                       }
                     >
                       <RiDeleteBinLine className="h-3.5 w-3.5" />
-                    </ButtonSmall>
+                    </Button>
                   </div>
                 </div>
                 <CollapsibleContent className="pt-2">
@@ -1420,7 +1420,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                       </div>
 
                       {canOpenLocalEndpoint ? (
-                        <ButtonSmall
+                        <Button
                           type="button"
                           variant="outline"
                           size="xs"
@@ -1434,8 +1434,8 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                           }}
                         >
                           <RiExternalLinkLine className="h-3.5 w-3.5" />
-                          {t('remoteInstancesPage.openLocal')}
-                        </ButtonSmall>
+                          Open local
+                        </Button>
                       ) : null}
                     </div>
                   </div>
@@ -1444,7 +1444,7 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
             );
           })}
 
-          <ButtonSmall
+          <Button
             type="button"
             variant="outline"
             size="xs"
@@ -1462,8 +1462,8 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
             }}
           >
             <RiAddLine className="h-3.5 w-3.5" />
-            {t('remoteInstancesPage.addForward')}
-          </ButtonSmall>
+            Add forward
+          </Button>
         </section>
       </div>
 
@@ -1490,15 +1490,15 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                   </div>
                   <div className="typography-micro text-muted-foreground truncate">{candidate.sshCommand}</div>
                 </div>
-                <ButtonSmall
+                <Button
                   type="button"
                   variant="outline"
                   size="xs"
                   className="!font-normal"
                   onClick={() => void handleImportCandidate(candidate.host, candidate.pattern)}
                 >
-                  {t('remoteInstancesPage.import')}
-                </ButtonSmall>
+                  Import
+                </Button>
               </div>
             ))}
           </div>
@@ -1508,12 +1508,12 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
 
       <div className="sticky bottom-0 z-10 -mx-3 sm:-mx-6 bg-[var(--surface-background)] border-t border-[var(--interactive-border)] px-3 sm:px-6 py-3">
         <div className="flex items-center gap-2">
-          <ButtonSmall type="button" size="xs" className="!font-normal" onClick={() => void handleSave()} disabled={!hasChanges || isSaving}>
-            {t('common.saveChanges')}
-          </ButtonSmall>
+          <Button type="button" size="xs" className="!font-normal" onClick={() => void handleSave()} disabled={!hasChanges || isSaving}>
+            Save changes
+          </Button>
           {status?.localUrl ? (
             <>
-              <ButtonSmall
+              <Button
                 type="button"
                 variant="outline"
                 size="xs"
@@ -1527,9 +1527,9 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                 }}
               >
                 <RiFileCopyLine className="h-3.5 w-3.5" />
-                {t('remoteInstancesPage.copyLocalUrl')}
-              </ButtonSmall>
-              <ButtonSmall
+                Copy local URL
+              </Button>
+              <Button
                 type="button"
                 variant="outline"
                 size="xs"
@@ -1539,8 +1539,8 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
                 }}
               >
                 <RiExternalLinkLine className="h-3.5 w-3.5" />
-                {t('common.open')}
-              </ButtonSmall>
+                Open
+              </Button>
             </>
           ) : null}
           {error ? <div className="ml-auto typography-meta text-[var(--status-error)]">{error}</div> : null}
@@ -1556,14 +1556,14 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center justify-end gap-2">
-            <ButtonSmall type="button" variant="outline" size="xs" className="!font-normal" onClick={handleCopyAllLogs} disabled={logDialogLoading || !logLinesText.trim()}>
+            <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={handleCopyAllLogs} disabled={logDialogLoading || !logLinesText.trim()}>
               <RiFileCopyLine className="h-3.5 w-3.5" />
-              {t('remoteInstancesPage.copyAll')}
-            </ButtonSmall>
-            <ButtonSmall type="button" variant="outline" size="xs" className="!font-normal" onClick={() => void handleClearLogs()} disabled={logDialogLoading}>
+              Copy all
+            </Button>
+            <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={() => void handleClearLogs()} disabled={logDialogLoading}>
               <RiDeleteBinLine className="h-3.5 w-3.5" />
-              {t('common.clear')}
-            </ButtonSmall>
+              Clear
+            </Button>
           </div>
           {logDialogLoading ? (
             <div className="typography-meta text-muted-foreground">{t('remoteInstancesPage.loadingLogs')}</div>
@@ -1606,12 +1606,12 @@ placeholder={t('remoteInstancesPage.nicknamePlaceholder')}
               autoFocus
             />
             <div className="flex items-center justify-end gap-2">
-              <ButtonSmall type="button" variant="outline" size="xs" className="!font-normal" onClick={closePatternDialog} disabled={patternCreating}>
-                {t('common.cancel')}
-              </ButtonSmall>
-              <ButtonSmall type="submit" size="xs" className="!font-normal" disabled={patternCreating}>
-                {t('common.create')}
-              </ButtonSmall>
+              <Button type="button" variant="outline" size="xs" className="!font-normal" onClick={closePatternDialog} disabled={patternCreating}>
+                Cancel
+              </Button>
+              <Button type="submit" size="xs" className="!font-normal" disabled={patternCreating}>
+                Create
+              </Button>
             </div>
           </form>
         </DialogContent>

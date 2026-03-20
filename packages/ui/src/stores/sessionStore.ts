@@ -82,6 +82,10 @@ const readSessionSelectionMap = (): SessionSelectionMap => {
 
 let sessionSelectionCache: SessionSelectionMap | null = null;
 let loadSessionsRequestSeq = 0;
+let loadSessionsInFlight: Promise<void> | null = null;
+let loadSessionsQueued = false;
+let persistSelectionTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingSelectionMap: SessionSelectionMap | null = null;
 
 type ProjectSessionResult = {
     projectId: string;
@@ -152,10 +156,27 @@ const getSessionSelectionMap = (): SessionSelectionMap => {
 
 const persistSessionSelectionMap = (map: SessionSelectionMap) => {
     sessionSelectionCache = map;
-    try {
-        safeStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify(map));
-    } catch { /* ignored */ }
+    pendingSelectionMap = map;
+    clearTimeout(persistSelectionTimer);
+    persistSelectionTimer = setTimeout(() => {
+        try {
+            safeStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify(map));
+            pendingSelectionMap = null;
+        } catch { /* ignored */ }
+    }, 300);
 };
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', () => {
+        if (pendingSelectionMap !== null) {
+            clearTimeout(persistSelectionTimer);
+            try {
+                safeStorage.setItem(SESSION_SELECTION_STORAGE_KEY, JSON.stringify(pendingSelectionMap));
+            } catch { /* ignored */ }
+            pendingSelectionMap = null;
+        }
+    });
+}
 
 const getStoredSessionForDirectory = (directory: string | null | undefined): string | null => {
     if (!directory) {
@@ -463,10 +484,16 @@ export const useSessionStore = create<SessionStore>()(
                 availableWorktreesByProject: new Map(),
 
                 loadSessions: async () => {
-                    const requestSeq = ++loadSessionsRequestSeq;
-                    const isLatestRequest = () => requestSeq === loadSessionsRequestSeq;
-                    set({ isLoading: true, error: null });
-                    try {
+                    if (loadSessionsInFlight) {
+                        loadSessionsQueued = true;
+                        return loadSessionsInFlight;
+                    }
+
+                    const task = (async () => {
+                        const requestSeq = ++loadSessionsRequestSeq;
+                        const isLatestRequest = () => requestSeq === loadSessionsRequestSeq;
+                        set({ isLoading: true, error: null });
+                        try {
                         const directoryStore = useDirectoryStore.getState();
                         const projectsStore = useProjectsStore.getState();
                         const apiClient = opencodeClient.getApiClient();
@@ -809,14 +836,28 @@ export const useSessionStore = create<SessionStore>()(
                         const fallbackSessions = dedupeSessionsById(Array.isArray(fallbackResponse.data) ? fallbackResponse.data : []);
                         const fallbackProjectResults = await buildProjectResults(fallbackSessions);
                         await applyProjectResults(fallbackProjectResults, []);
-                    } catch (error) {
-                        if (!isLatestRequest()) {
-                            return;
+                        } catch (error) {
+                            if (!isLatestRequest()) {
+                                return;
+                            }
+                            set({
+                                error: error instanceof Error ? error.message : "Failed to load sessions",
+                                isLoading: false,
+                            });
                         }
-                        set({
-                            error: error instanceof Error ? error.message : "Failed to load sessions",
-                            isLoading: false,
-                        });
+                    })();
+
+                    loadSessionsInFlight = task;
+                    try {
+                        await task;
+                    } finally {
+                        if (loadSessionsInFlight === task) {
+                            loadSessionsInFlight = null;
+                        }
+                        if (loadSessionsQueued) {
+                            loadSessionsQueued = false;
+                            void get().loadSessions();
+                        }
                     }
                 },
 
@@ -1464,9 +1505,9 @@ export const useSessionStore = create<SessionStore>()(
                             mergedSession.directory !== existingSession.directory ||
                             mergedSession.version !== existingSession.version ||
                             mergedSession.projectID !== existingSession.projectID ||
-                            JSON.stringify(mergedSession.time) !== JSON.stringify(existingSession.time) ||
-                            JSON.stringify(mergedSession.summary ?? null) !== JSON.stringify(existingSession.summary ?? null) ||
-                            JSON.stringify(mergedSession.share ?? null) !== JSON.stringify(existingSession.share ?? null);
+                            (mergedTime !== existingSession.time && JSON.stringify(mergedTime) !== JSON.stringify(existingSession.time)) ||
+                            (mergedSummary !== existingSession.summary && JSON.stringify(mergedSummary ?? null) !== JSON.stringify(existingSession.summary ?? null)) ||
+                            (mergedShare !== existingSession.share && JSON.stringify(mergedShare ?? null) !== JSON.stringify(existingSession.share ?? null));
 
                         const sessions = [...state.sessions];
                         sessions[index] = hasChanged ? mergedSession : existingSession;

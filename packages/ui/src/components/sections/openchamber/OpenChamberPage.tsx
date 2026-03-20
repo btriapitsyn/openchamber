@@ -99,7 +99,7 @@ const ShortcutsSectionContent: React.FC = () => {
     return <KeyboardShortcutsSettings />;
 };
 
-// Visual section: Theme Mode, Font Size, Spacing, Corner Radius, Input Bar Offset (mobile), Nav Rail
+// Visual section: Theme Mode, Font Size, Spacing, Input Bar Offset (mobile), Nav Rail
 const VisualSectionContent: React.FC = () => {
     const isVSCode = isVSCodeRuntime();
     return <OpenChamberVisualSettings visibleSettings={[
@@ -109,9 +109,8 @@ const VisualSectionContent: React.FC = () => {
         'fontSize',
         'terminalFontSize',
         'spacing',
-        'cornerRadius',
         'inputBarOffset',
-        ...(!isVSCode ? ['terminalQuickKeys' as const, 'navRail' as const] : []),
+        ...(!isVSCode ? ['terminalQuickKeys' as const] : []),
     ]} />;
 };
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
 
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
@@ -13,7 +13,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ButtonLarge } from '@/components/ui/button-large';
 import {
   Select,
   SelectContent,
@@ -197,7 +196,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 </SelectContent>
               </Select>
 
-              <ButtonSmall
+              <Button
                 variant="outline"
                 size="xs"
                 className="!font-normal h-6 w-6 px-0"
@@ -212,10 +211,10 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                 title={t('common.refresh')}
               >
                 <RiRefreshLine className={cn("h-3.5 w-3.5", (isLoadingCatalog || isLoadingSource) && "animate-spin")} />
-              </ButtonSmall>
+              </Button>
 
               {isCustomSource && (
-                <ButtonSmall
+                <Button
                   variant="ghost"
                   size="xs"
                   className="!font-normal h-6 w-6 px-0 text-[var(--status-error)] hover:text-[var(--status-error)]"
@@ -224,16 +223,16 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                   title={t('skillsCatalogPage.removeCatalog')}
                 >
                   <RiDeleteBinLine className="h-3.5 w-3.5" />
-                </ButtonSmall>
+                </Button>
               )}
 
-              <ButtonSmall
+              <Button
                 size="xs"
                 className="!font-normal gap-1"
                 onClick={() => setAddCatalogOpen(true)}
               >
-                <RiAddLine className="h-3.5 w-3.5" /> {t('skillsCatalogPage.addCatalog')}
-              </ButtonSmall>
+                <RiAddLine className="h-3.5 w-3.5" /> Add Catalog
+              </Button>
             </div>
 
             <div className="py-1.5">
@@ -330,7 +329,7 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                           ) : null}
                         </div>
 
-                        <ButtonSmall
+                        <Button
                           variant="outline"
                           size="xs"
                           className="!font-normal shrink-0"
@@ -340,8 +339,8 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
                             setInstallDialogOpen(true);
                           }}
                         >
-                          {t('skillsCatalogPage.install')}
-                        </ButtonSmall>
+                          Install
+                        </Button>
                       </div>
                     </div>
                   );
@@ -352,15 +351,15 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
 
           {isClawdHubSource && hasMoreClawdHub && !isLoadingSource && filtered.length > 0 && (
             <div className="flex justify-center mt-2 px-2">
-              <ButtonSmall
+              <Button
                 variant="outline"
                 size="xs"
                 className="!font-normal"
                 onClick={() => void loadMoreClawdHub()}
                 disabled={isLoadingMore}
               >
-                {isLoadingMore ? t('common.loading') : t('skillsCatalogPage.loadMoreSkills')}
-              </ButtonSmall>
+                {isLoadingMore ? 'Loading...' : 'Load More Skills'}
+              </Button>
             </div>
           )}
         </div>
@@ -383,16 +382,17 @@ export const SkillsCatalogPage: React.FC<SkillsCatalogPageProps> = ({ mode, onMo
               <DialogDescription>{t('skillsCatalogPage.removeCatalogConfirm')}</DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <ButtonLarge
+              <Button
+                size="sm"
                 variant="ghost"
                 onClick={() => setIsRemoveCatalogDialogOpen(false)}
                 disabled={isRemovingCatalog}
               >
-                {t('common.cancel')}
-              </ButtonLarge>
-              <ButtonLarge className="bg-[var(--status-error)] hover:bg-[var(--status-error)]/90 text-white" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
-                {t('skillsCatalogPage.removeCatalog')}
-              </ButtonLarge>
+                Cancel
+              </Button>
+              <Button size="sm" variant="destructive" onClick={() => void removeSelectedCatalog()} disabled={isRemovingCatalog}>
+                Remove Catalog
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

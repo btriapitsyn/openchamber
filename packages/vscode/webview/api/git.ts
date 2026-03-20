@@ -14,6 +14,7 @@ import type {
   GitBranch,
   GitDeleteBranchPayload,
   GitDeleteRemoteBranchPayload,
+  GitRemoveRemotePayload,
   GeneratedCommitMessage,
   GeneratedPullRequestDescription,
   GitWorktreeInfo,
@@ -86,6 +87,14 @@ export const createVSCodeGitAPI = (): GitAPI => ({
     return sendBridgeMessage<{ success: boolean }>('api:git/remote-branches', {
       directory,
       branch: payload.branch,
+      remote: payload.remote,
+    });
+  },
+
+  removeRemote: async (directory: string, payload: GitRemoveRemotePayload): Promise<{ success: boolean }> => {
+    return sendBridgeMessage<{ success: boolean }>('api:git/remotes', {
+      directory,
+      method: 'DELETE',
       remote: payload.remote,
     });
   },

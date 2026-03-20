@@ -22,22 +22,21 @@ import {
   RiDeleteBinLine,
   RiErrorWarningLine,
   RiFileCopyLine,
-  RiFileEditLine,
   RiFolderLine,
   RiLinkUnlinkM,
   RiMore2Line,
   RiPencilAiLine,
   RiPushpinLine,
-  RiRobot2Line,
   RiShare2Line,
   RiShieldLine,
   RiUnpinLine,
+  RiGitBranchLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { DraggableSessionRow } from './sessionFolderDnd';
 import type { SessionNode, SessionSummaryMeta } from './types';
-import { formatSessionDateLabel, normalizePath, renderHighlightedText, resolveSessionDiffStats } from './utils';
+import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText, resolveSessionDiffStats } from './utils';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useLanguage } from '@/hooks/useLanguage';
 
@@ -48,6 +47,11 @@ const getAttentionDiamondDelay = (index: number): string => {
 };
 
 type Folder = { id: string; name: string; sessionIds: string[] };
+
+type SecondaryMeta = {
+  projectLabel?: string | null;
+  branchLabel?: string | null;
+};
 
 type Props = {
   node: SessionNode;
@@ -80,8 +84,8 @@ type Props = {
   copiedSessionId: string | null;
   handleCopyShareUrl: (url: string, sessionId: string) => void;
   handleUnshareSession: (sessionId: string) => void;
-  openMenuSessionId: string | null;
-  setOpenMenuSessionId: (id: string | null) => void;
+  openSidebarMenuKey: string | null;
+  setOpenSidebarMenuKey: (key: string | null) => void;
   renamingFolderId: string | null;
   getFoldersForScope: (scopeKey: string) => Folder[];
   getSessionFolderId: (scopeKey: string, sessionId: string) => string | null;
@@ -91,7 +95,9 @@ type Props = {
   openContextPanelTab: (directory: string, options: { mode: 'chat'; dedupeKey: string; label: string }) => void;
   handleDeleteSession: (session: Session, source?: { archivedBucket?: boolean }) => void;
   mobileVariant: boolean;
-  renderSessionNode: (node: SessionNode, depth?: number, groupDirectory?: string | null, projectId?: string | null, archivedBucket?: boolean) => React.ReactNode;
+  renderSessionNode: (node: SessionNode, depth?: number, groupDirectory?: string | null, projectId?: string | null, archivedBucket?: boolean, secondaryMeta?: SecondaryMeta | null, renderContext?: 'project' | 'recent') => React.ReactNode;
+  secondaryMeta?: SecondaryMeta | null;
+  renderContext?: 'project' | 'recent';
 };
 
 export function SessionNodeItem(props: Props): React.ReactNode {
@@ -127,8 +133,8 @@ export function SessionNodeItem(props: Props): React.ReactNode {
     copiedSessionId,
     handleCopyShareUrl,
     handleUnshareSession,
-    openMenuSessionId,
-    setOpenMenuSessionId,
+    openSidebarMenuKey,
+    setOpenSidebarMenuKey,
     renamingFolderId,
     getFoldersForScope,
     getSessionFolderId,
@@ -139,13 +145,19 @@ export function SessionNodeItem(props: Props): React.ReactNode {
     handleDeleteSession,
     mobileVariant,
     renderSessionNode,
+    secondaryMeta,
+    renderContext = 'project',
   } = props;
+  const hasSecondaryProjectLabel = Boolean(secondaryMeta?.projectLabel);
+  const hasSecondaryBranchLabel = Boolean(secondaryMeta?.branchLabel);
 
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
   const isMinimalMode = displayMode === 'minimal';
   const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+  const suppressNextSelectRef = React.useRef(false);
 
   const session = node.session;
+  const menuInstanceKey = `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${session.id}`;
   const sessionDirectory =
     normalizePath((session as Session & { directory?: string | null }).directory ?? null)
     ?? normalizePath(groupDirectory ?? null);
@@ -162,12 +174,16 @@ export function SessionNodeItem(props: Props): React.ReactNode {
   const needsAttention = rawNeedsAttention && (!isSubtaskSession || notifyOnSubtasks);
   const sessionSummary = session.summary as SessionSummaryMeta | undefined;
   const sessionDiffStats = resolveSessionDiffStats(sessionSummary);
+  const sessionTimestamp = session.time?.updated || session.time?.created || Date.now();
+  const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
+  const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
+  const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
 
   if (editingId === session.id) {
     return (
       <div
         key={session.id}
-        className={cn('group relative flex items-center rounded-md px-1.5 py-1', 'bg-interactive-selection', depth > 0 && 'pl-[20px]')}
+        className={cn('group relative flex items-center rounded-sm px-1.5 py-1', depth > 0 && 'pl-[20px]')}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <form
@@ -199,17 +215,14 @@ export function SessionNodeItem(props: Props): React.ReactNode {
             <button type="button" onClick={handleCancelEdit} className="shrink-0 text-muted-foreground hover:text-foreground"><RiCloseLine className="size-4" /></button>
           </form>
           {!isMinimalMode ? (
-            <div className="flex items-center gap-2 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
-              {hasChildren ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <RiArrowDownSLine className="h-3 w-3" /> : <RiArrowRightSLine className="h-3 w-3" />}</span> : null}
-              <span className="flex-shrink-0">{formatSessionDateLabel(session.time?.updated || session.time?.created || Date.now())}</span>
-              {sessionDiffStats ? <span className="flex-shrink-0"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/80">-{sessionDiffStats.deletions}</span></span> : null}
-              {session.share ? <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" /> : null}
-              {(sessionSummary?.files ?? 0) > 0 || hasChildren ? (
-                <span className="flex items-center gap-2 flex-shrink-0">
-                  {(sessionSummary?.files ?? 0) > 0 ? <Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-0.5"><RiFileEditLine className="h-3 w-3 text-muted-foreground/70" /><span>{sessionSummary!.files}</span></span></TooltipTrigger><TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.changedFilesCount', { count: sessionSummary?.files ?? 0 })}</p></TooltipContent></Tooltip> : null}
-                  {hasChildren ? <Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-0.5"><RiRobot2Line className="h-3 w-3 text-muted-foreground/70" /><span>{node.children.length}</span></span></TooltipTrigger><TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.subSessionsCount', { count: node.children.length })}</p></TooltipContent></Tooltip> : null}
-                </span>
-              ) : null}
+            <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
+              <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                {hasChildren ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <RiArrowDownSLine className="h-3 w-3" /> : <RiArrowRightSLine className="h-3 w-3" />}</span> : null}
+                <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
+                {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-status-error/65">/-{sessionDiffStats.deletions}</span></span> : null}
+                {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
+                {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><RiGitBranchLine className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
+              </div>
             </div>
           ) : null}
         </div>
@@ -222,21 +235,191 @@ export function SessionNodeItem(props: Props): React.ReactNode {
   const pendingPermissionCount = permissions.get(session.id)?.length ?? 0;
   const showUnreadStatus = !isStreaming && needsAttention && !isActive;
   const showStatusMarker = isStreaming || showUnreadStatus;
+  const statusMarkerContent = isStreaming
+    ? <GridLoader size="xs" className="text-primary" />
+    : (
+        <span className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]" aria-label="Unread updates" title="Unread updates">
+          {Array.from({ length: 9 }, (_, i) => (
+            ATTENTION_DIAMOND_INDICES.has(i) ? (
+              <span key={i} className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse" style={{ animationDelay: getAttentionDiamondDelay(i) }} />
+            ) : (
+              <span key={i} className="h-[3px] w-[3px]" />
+            )
+          ))}
+        </span>
+      );
+  const inlineStatusMarker = !isMinimalMode && showStatusMarker ? (
+    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
+      {statusMarkerContent}
+    </span>
+  ) : null;
+  const minimalLeadingStatusMarker = isMinimalMode && showStatusMarker ? (
+    <span
+      className={cn(
+        'pointer-events-none absolute left-[-10px] top-1/2 inline-flex h-3.5 w-3.5 -translate-y-1/2 items-center justify-center transition-opacity',
+        hasChildren ? 'opacity-100 group-hover:opacity-0 group-focus-within:opacity-0' : '',
+      )}
+    >
+      {statusMarkerContent}
+    </span>
+  ) : null;
+  const subsessionChevron = hasChildren ? (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={(event) => {
+        event.stopPropagation();
+        toggleParent(session.id);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleParent(session.id);
+        }
+      }}
+      className={cn(
+        'absolute left-[-10px] top-1/2 inline-flex h-3.5 w-3.5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
+        isMinimalMode && showStatusMarker
+          ? 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
+          : '',
+      )}
+      aria-label={isExpanded ? 'Collapse subsessions' : 'Expand subsessions'}
+    >
+      {isExpanded ? <RiArrowDownSLine className="h-3 w-3" /> : <RiArrowRightSLine className="h-3 w-3" />}
+    </span>
+  ) : null;
 
   const streamingIndicator = memoryState?.isZombie
     ? <RiErrorWarningLine className="h-4 w-4 text-status-warning" />
     : null;
 
+  const handleMenuOpenChange = (open: boolean) => {
+    setOpenSidebarMenuKey(open ? menuInstanceKey : null);
+  };
+
+  const handleMenuTriggerClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+  };
+
+  const handleRowSelect = () => {
+    if (suppressNextSelectRef.current) {
+      suppressNextSelectRef.current = false;
+      return;
+    }
+    handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId);
+  };
+
+  const handleRowMouseDown = (event: React.MouseEvent<HTMLButtonElement>) => {
+    if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
+      suppressNextSelectRef.current = true;
+    }
+  };
+
+  const sessionMenuContent = (
+    <DropdownMenuContent align="end" className="min-w-[180px]" onCloseAutoFocus={(event) => { if (renamingFolderId) event.preventDefault(); }}>
+      <DropdownMenuItem
+        onClick={() => {
+          setEditingId(session.id);
+          setEditTitle(sessionTitle);
+        }}
+        className="[&>svg]:mr-1"
+      >
+        <RiPencilAiLine className="mr-1 h-4 w-4" />
+        Rename
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={() => togglePinnedSession(session.id)} className="[&>svg]:mr-1">
+        {isPinnedSession ? <RiUnpinLine className="mr-1 h-4 w-4" /> : <RiPushpinLine className="mr-1 h-4 w-4" />}
+        {isPinnedSession ? 'Unpin session' : 'Pin session'}
+      </DropdownMenuItem>
+      {!session.share ? (
+        <DropdownMenuItem onClick={() => handleShareSession(session)} className="[&>svg]:mr-1">
+          <RiShare2Line className="mr-1 h-4 w-4" />
+          Share
+        </DropdownMenuItem>
+      ) : (
+        <>
+          <DropdownMenuItem onClick={() => { if (session.share?.url) handleCopyShareUrl(session.share.url, session.id); }} className="[&>svg]:mr-1">
+            {copiedSessionId === session.id ? <><RiCheckLine className="mr-1 h-4 w-4" style={{ color: 'var(--status-success)' }} />Copied</> : <><RiFileCopyLine className="mr-1 h-4 w-4" />Copy link</>}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleUnshareSession(session.id)} className="[&>svg]:mr-1">
+            <RiLinkUnlinkM className="mr-1 h-4 w-4" />
+            Unshare
+          </DropdownMenuItem>
+        </>
+      )}
+
+      {sessionDirectory && !archivedBucket ? (() => {
+        const scopeFolders = getFoldersForScope(sessionDirectory);
+        const currentFolderId = getSessionFolderId(sessionDirectory, session.id);
+        return (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="[&>svg]:mr-1"><RiFolderLine className="h-4 w-4" />Move to folder</DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="min-w-[180px]">
+                {scopeFolders.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-muted-foreground">No folders yet</DropdownMenuItem>
+                ) : (
+                  scopeFolders.map((folder) => (
+                    <DropdownMenuItem key={folder.id} onClick={() => { if (currentFolderId === folder.id) removeSessionFromFolder(sessionDirectory, session.id); else addSessionToFolder(sessionDirectory, folder.id, session.id); }}>
+                      <span className="flex-1 truncate">{folder.name}</span>
+                      {currentFolderId === folder.id ? <RiCheckLine className="ml-2 h-3.5 w-3.5 text-primary flex-shrink-0" /> : null}
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => { const newFolder = createFolderAndStartRename(sessionDirectory); if (!newFolder) return; addSessionToFolder(sessionDirectory, newFolder.id, session.id); }}>
+                  <RiAddLine className="mr-1 h-4 w-4" />
+                  New folder...
+                </DropdownMenuItem>
+                {currentFolderId ? (
+                  <DropdownMenuItem onClick={() => { removeSessionFromFolder(sessionDirectory, session.id); }} className="text-destructive focus:text-destructive">
+                    <RiCloseLine className="mr-1 h-4 w-4" />
+                    Remove from folder
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+          </>
+        );
+      })() : null}
+
+      {!isVSCode ? (
+        <DropdownMenuItem
+          disabled={!sessionDirectory}
+          onClick={() => {
+            if (!sessionDirectory) return;
+            openContextPanelTab(sessionDirectory, {
+              mode: 'chat',
+              dedupeKey: `session:${session.id}`,
+              label: sessionTitle,
+            });
+          }}
+          className="[&>svg]:mr-1"
+        >
+          <RiChat4Line className="mr-1 h-4 w-4" />
+          <span className="truncate">Open in Side Panel</span>
+          <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">beta</span>
+        </DropdownMenuItem>
+      ) : null}
+
+      <DropdownMenuSeparator />
+      <DropdownMenuItem className="text-destructive focus:text-destructive [&>svg]:mr-1" onClick={() => handleDeleteSession(session, { archivedBucket })}>
+        <RiDeleteBinLine className="mr-1 h-4 w-4" />
+        {archivedBucket ? 'Delete' : 'Archive'}
+      </DropdownMenuItem>
+    </DropdownMenuContent>
+  );
+
   return (
     <React.Fragment key={session.id}>
       <DraggableSessionRow sessionId={session.id} sessionDirectory={sessionDirectory ?? null} sessionTitle={sessionTitle}>
         <div
-          className={cn('group relative flex items-center rounded-md px-1.5 py-1', isActive ? 'bg-interactive-selection' : 'hover:bg-interactive-hover', isMissingDirectory ? 'opacity-75' : '', depth > 0 && 'pl-[20px]')}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setOpenMenuSessionId(session.id);
-          }}
+          className={cn('group relative flex items-center rounded-sm px-1.5 py-1', isMissingDirectory ? 'opacity-75' : '', depth > 0 && 'pl-[20px]')}
         >
+          {minimalLeadingStatusMarker}
+          {subsessionChevron}
           <div className="flex min-w-0 flex-1 items-center">
             {isMinimalMode ? (
               <Tooltip>
@@ -244,38 +427,52 @@ export function SessionNodeItem(props: Props): React.ReactNode {
                   <button
                     type="button"
                     disabled={isMissingDirectory}
-                    onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
+                    onMouseDown={handleRowMouseDown}
+                    onClick={handleRowSelect}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       handleSessionDoubleClick();
                     }}
-                    className={cn('flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]', mobileVariant ? 'pr-7' : 'group-hover:pr-5 group-focus-within:pr-5')}
+                    className={cn(
+                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+                      mobileVariant ? 'pr-7' : '',
+                    )}
                   >
-                    <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-2')}>
-                      {isMinimalMode && hasChildren ? (
-                        <span role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); toggleParent(session.id); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); toggleParent(session.id); } }} className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 flex-shrink-0 rounded-sm" aria-label={isExpanded ? t('sessionSidebar.collapseSubsessions') : t('sessionSidebar.expandSubsessions')}>
-                          {isExpanded ? <RiArrowDownSLine className="h-3 w-3" /> : <RiArrowRightSLine className="h-3 w-3" />}
-                        </span>
+                    <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-1')}>
+                      {isPinnedSession ? <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" /> : null}
+                      <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive ? 'text-primary' : 'text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
+                      {mobileVariant ? <span className="ml-2 flex-shrink-0 text-[0.72rem] text-muted-foreground/75">{sessionCompactUpdatedLabel}</span> : null}
+                      {!mobileVariant ? (
+                        <div className="relative ml-1 flex h-4 min-w-4 flex-shrink-0 items-center justify-end">
+                          <span className={cn(
+                            'whitespace-nowrap text-right text-[0.72rem] text-muted-foreground/75 transition-opacity duration-150',
+                            isMenuOpen
+                              ? 'opacity-0'
+                              : 'group-hover:opacity-0 group-focus-within:opacity-0',
+                          )}>
+                            {sessionCompactUpdatedLabel}
+                          </span>
+                          <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange}>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                className={cn(
+                                  'absolute inset-y-0 right-0 inline-flex h-4 w-4 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
+                                  isMenuOpen
+                                    ? 'opacity-100 pointer-events-auto'
+                                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
+                                )}
+                                aria-label="Session menu"
+                                onClick={handleMenuTriggerClick}
+                                onKeyDown={(event) => event.stopPropagation()}
+                              >
+                                <RiMore2Line className="h-2.5 w-2.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            {sessionMenuContent}
+                          </DropdownMenu>
+                        </div>
                       ) : null}
-                      {showStatusMarker ? (
-                        <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
-                          {isStreaming ? (
-                            <GridLoader size="xs" className="text-primary" />
-                          ) : (
-                            <span className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]" aria-label={t('sessionSidebar.unreadUpdates')} title={t('sessionSidebar.unreadUpdates')}>
-                              {Array.from({ length: 9 }, (_, i) => (
-                                ATTENTION_DIAMOND_INDICES.has(i) ? (
-                                  <span key={i} className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse" style={{ animationDelay: getAttentionDiamondDelay(i) }} />
-                                ) : (
-                                  <span key={i} className="h-[3px] w-[3px]" />
-                                )
-                              ))}
-                            </span>
-                          )}
-                        </span>
-                      ) : null}
-                      {isPinnedSession ? <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label={t('sessionSidebar.pinnedSession')} /> : null}
-                      <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
                       {pendingPermissionCount > 0 ? (
                         <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[0.7rem] text-destructive flex-shrink-0" title={t('sessionSidebar.permissionRequired')} aria-label={t('sessionSidebar.permissionRequired')}>
                           <RiShieldLine className="h-3 w-3" />
@@ -285,40 +482,20 @@ export function SessionNodeItem(props: Props): React.ReactNode {
                     </div>
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8} className="max-w-xs">
-                  <div className="flex flex-col gap-1 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">{formatSessionDateLabel(session.time?.updated || session.time?.created || Date.now())}</span>
-                      {sessionDiffStats ? (
-                        <span className="flex items-center gap-1">
-                          <span className="text-status-success">+{sessionDiffStats.additions}</span>
-                          <span className="text-muted-foreground">/</span>
-                          <span className="text-status-error">-{sessionDiffStats.deletions}</span>
-                        </span>
-                      ) : null}
+                <TooltipContent side="right" sideOffset={8} className="max-w-xs text-left">
+                  <div className="flex flex-col gap-1 text-left text-xs">
+                    <div className={cn('flex items-center gap-3 text-left text-muted-foreground', secondaryMeta?.projectLabel ? 'justify-between' : 'justify-start')}>
+                      {secondaryMeta?.projectLabel ? <div className="min-w-0 truncate">{secondaryMeta.projectLabel}</div> : null}
+                      <div className="flex-shrink-0">{sessionUpdatedLabel}</div>
                     </div>
-                    {session.share ? (
-                      <div className="flex items-center gap-1 text-[color:var(--status-info)]">
-                        <RiShare2Line className="h-3 w-3" />
-                        <span>{t('sessionSidebar.sessionShared')}</span>
-                      </div>
-                    ) : null}
-                    {(sessionSummary?.files ?? 0) > 0 ? (
-                      <div className="flex items-center gap-1">
-                        <RiFileEditLine className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-muted-foreground">{t('sessionSidebar.changedFilesCount', { count: sessionSummary?.files ?? 0 })}</span>
-                      </div>
-                    ) : null}
-                    {hasChildren ? (
-                      <div className="flex items-center gap-1">
-                        <RiRobot2Line className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-muted-foreground">{t('sessionSidebar.subSessionsCount', { count: node.children.length })}</span>
-                      </div>
-                    ) : null}
-                    {isMissingDirectory ? (
-                      <div className="flex items-center gap-1 text-status-warning">
-                        <RiErrorWarningLine className="h-3 w-3" />
-                        <span>{t('sessionSidebar.directoryMissing')}</span>
+                    {secondaryMeta?.branchLabel || sessionDiffStats ? (
+                      <div className={cn('flex items-center gap-3 text-left text-muted-foreground', secondaryMeta?.branchLabel ? 'justify-between' : 'justify-start')}>
+                        {secondaryMeta?.branchLabel ? (
+                          <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                            <span className="inline-flex min-w-0 items-center gap-0.5"><RiGitBranchLine className="h-3 w-3 flex-shrink-0" /><span className="truncate">{secondaryMeta.branchLabel}</span></span>
+                          </div>
+                        ) : null}
+                        {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0.5"><span className="text-status-success">+{sessionDiffStats.additions}</span><span className="text-status-error">-{sessionDiffStats.deletions}</span></span> : null}
                       </div>
                     ) : null}
                   </div>
@@ -328,176 +505,85 @@ export function SessionNodeItem(props: Props): React.ReactNode {
               <button
                 type="button"
                 disabled={isMissingDirectory}
-                onClick={() => handleSessionSelect(session.id, sessionDirectory, isMissingDirectory, projectId)}
+                onMouseDown={handleRowMouseDown}
+                onClick={handleRowSelect}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   handleSessionDoubleClick();
                 }}
                 className={cn('flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]', mobileVariant ? 'pr-7' : 'group-hover:pr-5 group-focus-within:pr-5')}
               >
-                <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-2')}>
-                  {showStatusMarker ? (
-                    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
-                      {isStreaming ? (
-                        <GridLoader size="xs" className="text-primary" />
-                      ) : (
-                        <span className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]" aria-label={t('sessionSidebar.unreadUpdates')} title={t('sessionSidebar.unreadUpdates')}>
-                          {Array.from({ length: 9 }, (_, i) => (
-                            ATTENTION_DIAMOND_INDICES.has(i) ? (
-                              <span key={i} className="h-[3px] w-[3px] rounded-full bg-current animate-attention-diamond-pulse" style={{ animationDelay: getAttentionDiamondDelay(i) }} />
-                            ) : (
-                              <span key={i} className="h-[3px] w-[3px]" />
-                            )
-                          ))}
-                        </span>
-                      )}
-                    </span>
-                  ) : null}
-                  {isPinnedSession ? <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label={t('sessionSidebar.pinnedSession')} /> : null}
-                  <div className="block min-w-0 flex-1 truncate typography-ui-label font-normal text-foreground">{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
-                  {pendingPermissionCount > 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[0.7rem] text-destructive flex-shrink-0" title={t('sessionSidebar.permissionRequired')} aria-label={t('sessionSidebar.permissionRequired')}>
-                      <RiShieldLine className="h-3 w-3" />
-                      <span className="leading-none">{pendingPermissionCount}</span>
-                    </span>
-                  ) : null}
-                </div>
-
-              {!isMinimalMode ? (
-                <div className="flex items-center gap-2 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
-                  {hasChildren ? (
-                    <span role="button" tabIndex={0} onClick={(event) => { event.stopPropagation(); toggleParent(session.id); }} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); event.stopPropagation(); toggleParent(session.id); } }} className="inline-flex items-center justify-center text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 flex-shrink-0 rounded-sm" aria-label={isExpanded ? t('sessionSidebar.collapseSubsessions') : t('sessionSidebar.expandSubsessions')}>
-                      {isExpanded ? <RiArrowDownSLine className="h-3 w-3" /> : <RiArrowRightSLine className="h-3 w-3" />}
-                    </span>
-                  ) : null}
-                  <span className="flex-shrink-0">{formatSessionDateLabel(session.time?.updated || session.time?.created || Date.now())}</span>
-                  {sessionDiffStats ? <span className="flex-shrink-0"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/80">-{sessionDiffStats.deletions}</span></span> : null}
-                  {session.share ? <RiShare2Line className="h-3 w-3 text-[color:var(--status-info)] flex-shrink-0" /> : null}
-                  {(sessionSummary?.files ?? 0) > 0 || hasChildren ? (
-                    <span className="flex items-center gap-2 flex-shrink-0">
-                      {(sessionSummary?.files ?? 0) > 0 ? <Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-0.5"><RiFileEditLine className="h-3 w-3 text-muted-foreground/70" /><span>{sessionSummary!.files}</span></span></TooltipTrigger><TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.changedFilesCount', { count: sessionSummary?.files ?? 0 })}</p></TooltipContent></Tooltip> : null}
-                      {hasChildren ? <Tooltip><TooltipTrigger asChild><span className="inline-flex items-center gap-0.5"><RiRobot2Line className="h-3 w-3 text-muted-foreground/70" /><span>{node.children.length}</span></span></TooltipTrigger><TooltipContent side="bottom" sideOffset={4}><p>{t('sessionSidebar.subSessionsCount', { count: node.children.length })}</p></TooltipContent></Tooltip> : null}
-                    </span>
-                  ) : null}
-                  {isMissingDirectory ? <span className="inline-flex items-center gap-0.5 text-status-warning flex-shrink-0"><RiErrorWarningLine className="h-3 w-3" />{t('sessionSidebar.missing')}</span> : null}
-                </div>
-              ) : null}
+                <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-1')}>
+                    {inlineStatusMarker}
+                    {isPinnedSession ? <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" /> : null}
+                    <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive ? 'text-primary' : 'text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
+                    {pendingPermissionCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1 py-0.5 text-[0.7rem] text-destructive flex-shrink-0" title="Permission required" aria-label="Permission required">
+                        <RiShieldLine className="h-3 w-3" />
+                        <span className="leading-none">{pendingPermissionCount}</span>
+                      </span>
+                    ) : null}
+                  </div>
+ 
+                {!isMinimalMode ? (
+                  <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
+                    <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                      <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
+                      {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/65">-{sessionDiffStats.deletions}</span></span> : null}
+                      {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
+                      {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><RiGitBranchLine className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
+                    </div>
+                  </div>
+                ) : null}
               </button>
             )}
           </div>
 
           {streamingIndicator && !mobileVariant ? (
-            <div className={cn('absolute top-1/2 -translate-y-1/2 z-10', isMinimalMode ? 'right-7' : 'right-[30px]')}>
+            <div className={cn('absolute top-1/2 -translate-y-1/2 z-10', isMinimalMode ? 'right-0' : 'right-[30px]')}>
               {streamingIndicator}
             </div>
           ) : null}
 
-          <div className={cn('absolute right-0.5 top-1/2 -translate-y-1/2 z-10 transition-opacity', mobileVariant ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100')}>
-            <DropdownMenu open={openMenuSessionId === session.id} onOpenChange={(open) => setOpenMenuSessionId(open ? session.id : null)}>
-              <DropdownMenuTrigger asChild>
-                <button type="button" className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" aria-label={t('sessionSidebar.sessionMenu')} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-                  <RiMore2Line className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[180px]" onCloseAutoFocus={(event) => { if (renamingFolderId) event.preventDefault(); }}>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEditingId(session.id);
-                      setEditTitle(sessionTitle);
-                    }}
-                    className="[&>svg]:mr-1"
-                  >
-                    <RiPencilAiLine className="mr-1 h-4 w-4" />
-                    {t('sessionSidebar.rename')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => togglePinnedSession(session.id)} className="[&>svg]:mr-1">
-                    {isPinnedSession ? <RiUnpinLine className="mr-1 h-4 w-4" /> : <RiPushpinLine className="mr-1 h-4 w-4" />}
-                    {isPinnedSession ? t('sessionSidebar.unpinSession') : t('sessionSidebar.pinSession')}
-                  </DropdownMenuItem>
-                  {!session.share ? (
-                    <DropdownMenuItem onClick={() => handleShareSession(session)} className="[&>svg]:mr-1">
-                      <RiShare2Line className="mr-1 h-4 w-4" />
-                      {t('sessionSidebar.share')}
-                    </DropdownMenuItem>
-                  ) : (
-                    <>
-                      <DropdownMenuItem onClick={() => { if (session.share?.url) handleCopyShareUrl(session.share.url, session.id); }} className="[&>svg]:mr-1">
-                        {copiedSessionId === session.id ? <><RiCheckLine className="mr-1 h-4 w-4" style={{ color: 'var(--status-success)' }} />{t('sessionSidebar.copied')}</> : <><RiFileCopyLine className="mr-1 h-4 w-4" />{t('sessionSidebar.copyLink')}</>}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleUnshareSession(session.id)} className="[&>svg]:mr-1">
-                        <RiLinkUnlinkM className="mr-1 h-4 w-4" />
-                        {t('sessionSidebar.unshare')}
-                      </DropdownMenuItem>
-                    </>
-                  )}
-
-                  {sessionDirectory && !archivedBucket ? (() => {
-                    const scopeFolders = getFoldersForScope(sessionDirectory);
-                    const currentFolderId = getSessionFolderId(sessionDirectory, session.id);
-                    return (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger className="[&>svg]:mr-1"><RiFolderLine className="h-4 w-4" />{t('sessionSidebar.moveToFolder')}</DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="min-w-[180px]">
-                            {scopeFolders.length === 0 ? (
-                              <DropdownMenuItem disabled className="text-muted-foreground">{t('sessionSidebar.noFoldersYet')}</DropdownMenuItem>
-                            ) : (
-                              scopeFolders.map((folder) => (
-                                <DropdownMenuItem key={folder.id} onClick={() => { if (currentFolderId === folder.id) removeSessionFromFolder(sessionDirectory, session.id); else addSessionToFolder(sessionDirectory, folder.id, session.id); }}>
-                                  <span className="flex-1 truncate">{folder.name}</span>
-                                  {currentFolderId === folder.id ? <RiCheckLine className="ml-2 h-3.5 w-3.5 text-primary flex-shrink-0" /> : null}
-                                </DropdownMenuItem>
-                              ))
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => { const newFolder = createFolderAndStartRename(sessionDirectory); if (!newFolder) return; addSessionToFolder(sessionDirectory, newFolder.id, session.id); }}>
-                              <RiAddLine className="mr-1 h-4 w-4" />
-                              {t('sessionSidebar.newFolder')}
-                            </DropdownMenuItem>
-                            {currentFolderId ? (
-                              <DropdownMenuItem onClick={() => { removeSessionFromFolder(sessionDirectory, session.id); }} className="text-destructive focus:text-destructive">
-                                <RiCloseLine className="mr-1 h-4 w-4" />
-                                {t('sessionSidebar.removeFromFolder')}
-                              </DropdownMenuItem>
-                            ) : null}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      </>
-                    );
-                  })() : null}
-
-                  {!isVSCode ? (
-                    <DropdownMenuItem
-                      disabled={!sessionDirectory}
-                      onClick={() => {
-                        if (!sessionDirectory) return;
-                        openContextPanelTab(sessionDirectory, {
-                          mode: 'chat',
-                          dedupeKey: `session:${session.id}`,
-                          label: sessionTitle,
-                        });
-                      }}
-                      className="[&>svg]:mr-1"
+          {!isMinimalMode || mobileVariant ? (
+            <div className={cn(
+              'absolute right-0 top-1/2 z-10 -translate-y-1/2',
+              cn(
+                'transition-opacity',
+                isMenuOpen
+                  ? 'opacity-100 pointer-events-auto'
+                  : mobileVariant
+                    ? 'opacity-100 pointer-events-auto'
+                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
+              ),
+            )}>
+              <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      'inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
+                      isMinimalMode && !mobileVariant
+                        ? (isMenuOpen
+                            ? 'h-4 w-4 opacity-100 pointer-events-auto'
+                            : 'h-4 w-4 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto')
+                        : 'h-6 w-6 opacity-100',
+                    )}
+                    aria-label="Session menu"
+                    onClick={handleMenuTriggerClick}
+                    onKeyDown={(event) => event.stopPropagation()}
                     >
-                      <RiChat4Line className="mr-1 h-4 w-4" />
-                      <span className="truncate">{t('sessionSidebar.openInSidePanel')}</span>
-                      <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">{t('beta')}</span>
-                    </DropdownMenuItem>
-                  ) : null}
-
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive focus:text-destructive [&>svg]:mr-1" onClick={() => handleDeleteSession(session, { archivedBucket })}>
-                    <RiDeleteBinLine className="mr-1 h-4 w-4" />
-                    {archivedBucket ? t('common.delete') : t('common.archive')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+                      <RiMore2Line className={cn(isMinimalMode && !mobileVariant ? 'h-2.5 w-2.5' : 'h-3.5 w-3.5')} />
+                  </button>
+                </DropdownMenuTrigger>
+                {sessionMenuContent}
+                </DropdownMenu>
+              </div>
+            ) : null}
         </div>
       </DraggableSessionRow>
       {hasChildren && isExpanded
-        ? node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory, projectId, archivedBucket))
+        ? node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory, projectId, archivedBucket, undefined, renderContext))
         : null}
     </React.Fragment>
   );

@@ -200,14 +200,14 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
       {operationCompleted ? (
         mode === 'dialog' ? (
           <DialogFooter>
-            <Button variant="default" size="sm" className="h-7 px-2 py-0" onClick={handleClose}>
-              {hasError ? t('common.close') : t('branchIntegration.done')}
+            <Button variant="default" size="sm" onClick={handleClose}>
+              {hasError ? 'Close' : 'Done'}
             </Button>
           </DialogFooter>
         ) : (
           <div className="flex justify-end">
-            <Button variant="default" size="sm" className="h-7 px-2 py-0" onClick={handleClose}>
-              {hasError ? t('common.close') : t('branchIntegration.done')}
+            <Button variant="default" size="sm" onClick={handleClose}>
+              {hasError ? 'Close' : 'Done'}
             </Button>
           </div>
         )
@@ -286,7 +286,7 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
         </p>
         <DropdownMenu open={branchDropdownOpen} onOpenChange={setBranchDropdownOpen} modal={false}>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full justify-between h-10">
+            <Button variant="outline" size="lg" className="w-full justify-between">
               <span className={cn('truncate', !selectedBranch && 'text-muted-foreground')}>
                 {selectedBranch || t('branchIntegration.selectBranch')}
               </span>
@@ -355,15 +355,15 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
 
       {mode === 'dialog' ? (
         <DialogFooter className="gap-2 pt-1">
-          <Button variant="ghost" size="sm" className="h-7 px-2 py-0" onClick={handleCancel}>
-            {t('common.cancel')}
+          <Button variant="ghost" size="sm" onClick={handleCancel}>
+            Cancel
           </Button>
           <Button
             variant="default"
             size="sm"
             onClick={handleConfirm}
             disabled={!selectedBranch}
-            className="h-7 px-2 py-0 gap-1.5"
+            className="gap-1.5"
           >
             {operation === 'merge' ? (
               <>
@@ -380,12 +380,12 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
         </DialogFooter>
       ) : (
         <div className="flex items-center gap-2 pt-1">
-          <Button variant="ghost" size="sm" className="h-7 px-2 py-0" onClick={handleCancel} disabled={isDisabled}>
-            {t('common.resetButton')}
+          <Button variant="destructive" size="sm" onClick={handleCancel} disabled={isDisabled}>
+            Reset
           </Button>
           <div className="flex-1" />
-          <Button variant="default" size="sm" className="h-7 px-2 py-0" onClick={handleConfirm} disabled={isDisabled || !selectedBranch}>
-            {operation === 'merge' ? t('branchIntegration.merge') : t('branchIntegration.rebase')}
+          <Button variant="default" size="sm" onClick={handleConfirm} disabled={isDisabled || !selectedBranch}>
+            {operation === 'merge' ? 'Merge' : 'Rebase'}
           </Button>
         </div>
       )}
@@ -418,7 +418,7 @@ export const BranchIntegrationSection: React.FC<BranchIntegrationSectionProps> =
           <Button
             variant="outline"
             size="sm"
-            className="h-7 px-2 py-0 gap-1.5"
+            className="gap-1.5"
             onClick={handleOpenDialog}
             disabled={isDisabled}
           >

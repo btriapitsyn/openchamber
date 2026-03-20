@@ -1,6 +1,5 @@
 import * as React from 'react';
-import { useLanguage } from '@/hooks/useLanguage';
-import { ButtonSmall } from '@/components/ui/button-small';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { RiFolderLine, RiInformationLine } from '@remixicon/react';
@@ -113,7 +112,7 @@ export const OpenCodeCliSettings: React.FC = () => {
               disabled={isLoading || isSaving}
               className="h-7 min-w-0 flex-1 font-mono text-xs"
             />
-            <ButtonSmall
+            <Button
               type="button"
               variant="outline"
               size="xs"
@@ -124,7 +123,7 @@ export const OpenCodeCliSettings: React.FC = () => {
               title={t('openCodeCliSettings.browse')}
             >
               <RiFolderLine className="h-4 w-4" />
-            </ButtonSmall>
+            </Button>
           </div>
         </div>
 
@@ -135,15 +134,15 @@ export const OpenCodeCliSettings: React.FC = () => {
         </div>
 
         <div className="flex justify-start py-1.5">
-          <ButtonSmall
+          <Button
             type="button"
             size="xs"
             onClick={handleSaveAndReload}
             disabled={isLoading || isSaving}
             className="shrink-0 !font-normal"
           >
-            {isSaving ? t('common.saving') : t('openCodeCliSettings.saveReload')}
-          </ButtonSmall>
+            {isSaving ? 'Saving…' : 'Save + Reload'}
+          </Button>
         </div>
       </section>
     </div>

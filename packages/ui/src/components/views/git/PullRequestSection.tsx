@@ -300,10 +300,8 @@ export const PullRequestSection: React.FC<{
   trackingBranch?: string;
   remotes?: GitRemote[];
   remoteBranches?: string[];
-  variant?: 'framed' | 'plain';
   onGeneratedDescription?: () => void;
-}> = ({ directory, branch, baseBranch, trackingBranch, remotes = [], remoteBranches = [], variant = 'framed', onGeneratedDescription }) => {
-  const { t } = useLanguage();
+}> = ({ directory, branch, baseBranch, trackingBranch, remotes = [], remoteBranches = [], onGeneratedDescription }) => {
   const { github } = useRuntimeAPIs();
   const githubAuthStatus = useGitHubAuthStore((state) => state.status);
   const githubAuthChecked = useGitHubAuthStore((state) => state.hasChecked);
@@ -1338,15 +1336,9 @@ export const PullRequestSection: React.FC<{
         ? RiGitClosePullRequestLine
         : RiGitPullRequestLine;
 
-  const containerClassName =
-    variant === 'framed'
-      ? 'rounded-xl border border-border/60 bg-transparent overflow-hidden'
-      : 'border-0 bg-transparent rounded-none';
-  const headerClassName =
-    variant === 'framed'
-      ? 'px-3 py-2 border-b border-border/40 flex flex-col gap-1'
-      : 'px-0 py-3 border-b border-border/40 flex flex-col gap-1';
-  const bodyClassName = variant === 'framed' ? 'flex flex-col gap-3 p-3' : 'flex flex-col gap-3 py-3';
+  const containerClassName = 'border-0 bg-transparent rounded-none';
+  const headerClassName = 'px-0 py-3 border-b border-border/40 flex flex-col gap-1';
+  const bodyClassName = 'flex flex-col gap-3 py-3';
 
   return (
     <section className={containerClassName}>
@@ -1386,7 +1378,7 @@ export const PullRequestSection: React.FC<{
             {hasMultipleRemotes ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 gap-1">
+                  <Button variant="ghost" size="xs" className="gap-1">
                     <span className="typography-micro">{selectedRemote?.name}</span>
                     <RiArrowDownSLine className="size-3" />
                   </Button>
@@ -1697,7 +1689,7 @@ export const PullRequestSection: React.FC<{
                     </div>
                   </div>
                   {repoUrl ? (
-                    <Button variant="outline" size="sm" className="h-7 px-2 py-0" asChild>
+                    <Button variant="outline" size="sm" asChild>
                       <a href={repoUrl} target="_blank" rel="noopener noreferrer">
                         <RiExternalLinkLine className="size-4" />
                         {t('pullRequest.repo')}
@@ -1863,7 +1855,6 @@ export const PullRequestSection: React.FC<{
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-2 py-0"
                     onClick={generateDescription}
                     disabled={isGenerating || isCreating}
                   >
@@ -1873,7 +1864,7 @@ export const PullRequestSection: React.FC<{
                   <div className="flex-1" />
                   <Button
                     size="sm"
-                    className="h-7 min-w-[7.5rem] justify-center gap-2 px-2 py-0"
+                    className="min-w-[7.5rem] justify-center gap-2"
                     onClick={createPr}
                     disabled={isCreating || !isConnected || !targetBaseBranch.trim() || targetBaseBranch.trim() === branch}
                   >
