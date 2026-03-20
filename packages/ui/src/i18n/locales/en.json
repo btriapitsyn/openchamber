@@ -2889,6 +2889,8 @@
   "terminalView": {
     "selectSessionToOpenTerminal": "Select a session to open the terminal",
     "noWorkingDirectorySelected": "No working directory selected.",
+    "defaultTab": "Terminal",
+    "defaultTabWithIndex": "Terminal {{index}}",
     "tab": "Tab",
     "ctrl": "Ctrl",
     "controlModifier": "Control modifier",
@@ -3082,6 +3084,8 @@
     "terminalInput": "Terminal input"
   },
   "bottomTerminalDock": {
+    "expandTerminalPanel": "Expand terminal panel",
+    "restoreTerminalPanelHeight": "Restore terminal panel height",
     "closeTerminalPanel": "Close terminal panel",
     "resizeTerminalPanel": "Resize terminal panel"
   },

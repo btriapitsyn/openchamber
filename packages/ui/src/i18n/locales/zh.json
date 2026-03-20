@@ -2889,6 +2889,8 @@
   "terminalView": {
     "selectSessionToOpenTerminal": "选择会话以打开终端",
     "noWorkingDirectorySelected": "未选择工作目录。",
+    "defaultTab": "终端",
+    "defaultTabWithIndex": "终端 {{index}}",
     "tab": "Tab",
     "ctrl": "Ctrl",
     "controlModifier": "Control 修饰键",
@@ -3082,11 +3084,13 @@
     "terminalInput": "终端输入"
   },
   "bottomTerminalDock": {
-    "closeTerminalPanel": "Close terminal panel",
-    "resizeTerminalPanel": "Resize terminal panel"
+    "expandTerminalPanel": "展开终端面板",
+    "restoreTerminalPanelHeight": "恢复终端面板高度",
+    "closeTerminalPanel": "关闭终端面板",
+    "resizeTerminalPanel": "调整终端面板大小"
   },
   "commandDialog": {
-    "commandPalette": "Command Palette",
-    "searchForCommand": "Search for a command to run..."
+    "commandPalette": "命令面板",
+    "searchForCommand": "搜索要运行的命令..."
   }
 }
