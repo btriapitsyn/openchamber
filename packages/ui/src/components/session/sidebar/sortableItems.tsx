@@ -217,7 +217,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
 
               <div className={cn(
                 'absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1',
-                isRepo && !hideDirectoryControls ? 'right-7' : 'right-0.5',
+                showCreateButtons ? 'right-7' : 'right-0.5',
               )}>
                 {showCreateButtons && isRepo && !hideDirectoryControls && onNewWorktreeSession ? (
                   <Tooltip>
