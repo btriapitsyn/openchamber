@@ -1799,7 +1799,57 @@ fn build_local_url(port: u16) -> String {
     format!("http://127.0.0.1:{port}")
 }
 
+/// Kills any stale openchamber-server processes that may be lingering from
+/// previous app sessions or incomplete shutdowns. This ensures a clean
+/// startup and prevents port conflicts.
+fn kill_stale_sidecar_processes() {
+    let process_name = if cfg!(windows) {
+        "openchamber-server.exe"
+    } else {
+        "openchamber-server"
+    };
+
+    let result = if cfg!(target_os = "macos") {
+        // macOS: use pkill to terminate by process name
+        std::process::Command::new("pkill")
+            .arg("-x") // exact match
+            .arg(process_name)
+            .output()
+    } else if cfg!(target_os = "linux") {
+        // Linux: use pkill
+        std::process::Command::new("pkill")
+            .arg("-x")
+            .arg(process_name)
+            .output()
+    } else if cfg!(windows) {
+        // Windows: use taskkill
+        std::process::Command::new("taskkill")
+            .arg("/F")
+            .arg("/IM")
+            .arg(process_name)
+            .output()
+    } else {
+        return;
+    };
+
+    // Log result for debugging (pkill returns 1 if no processes found, which is fine)
+    if let Ok(output) = result {
+        log::debug!(
+            "[sidecar] cleanup result: exit_code={:?}, stdout={}, stderr={}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout).trim(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    // Brief pause to let the OS clean up the processes
+    std::thread::sleep(Duration::from_millis(100));
+}
+
 async fn spawn_local_server(app: &tauri::AppHandle) -> Result<String> {
+    // Clean up any stale sidecar processes from previous sessions
+    kill_stale_sidecar_processes();
+
     let stored_port = read_desktop_local_port_from_disk();
     let mut candidates: Vec<Option<u16>> = Vec::new();
     if let Some(port) = stored_port {
