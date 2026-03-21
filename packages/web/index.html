@@ -198,6 +198,7 @@
 
       const manifestLink = document.createElement('link');
       manifestLink.rel = 'manifest';
+      manifestLink.crossOrigin = 'use-credentials';
       document.head.appendChild(manifestLink);
 
       let activeManifestBlobUrl = null;
