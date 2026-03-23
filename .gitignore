@@ -1,0 +1,58 @@
+# Logs
+logs
+*.log
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+node_modules
+dist
+dist-ssr
+release
+*.local
+*.tgz
+*.vsix
+/npm
+/tsc
+/openchamber@*
+local-dev*
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.opencode/plans/*
+.hive
+
+# Build outputs
+build/
+.gradle/
+.*.bun-build
+
+# Built webview assets (generated during build)
+src/main/resources/webview/
+
+# IDE
+*.iml
+*.ipr
+*.iws
+
+# Local env
+.env
+.env.local
+
+# IntelliJ plugin (separate project)
+packages/intellij/
+
+# OS
+Thumbs.db
+
+# Local runtime state (docker/dev)
+data/
+workspaces/
+*.pid

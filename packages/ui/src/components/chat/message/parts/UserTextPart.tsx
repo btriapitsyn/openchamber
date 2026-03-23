@@ -1,0 +1,164 @@
+import React from 'react';
+import { cn } from '@/lib/utils';
+import type { Part } from '@opencode-ai/sdk/v2';
+import type { AgentMentionInfo } from '../types';
+import { SimpleMarkdownRenderer } from '../../MarkdownRenderer';
+import { useUIStore } from '@/stores/useUIStore';
+
+type PartWithText = Part & { text?: string; content?: string; value?: string };
+
+type UserTextPartProps = {
+    part: Part;
+    messageId: string;
+    isMobile: boolean;
+    agentMention?: AgentMentionInfo;
+};
+
+const buildMentionUrl = (name: string): string => {
+    const encoded = encodeURIComponent(name);
+    return `https://opencode.ai/docs/agents/#${encoded}`;
+};
+
+const normalizeUserMessageRenderingMode = (mode: unknown): 'markdown' | 'plain' => {
+    return mode === 'markdown' ? 'markdown' : 'plain';
+};
+
+const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMention }) => {
+    const CLAMP_LINES = 2;
+    const partWithText = part as PartWithText;
+    const rawText = partWithText.text;
+    const textContent = typeof rawText === 'string' ? rawText : partWithText.content || partWithText.value || '';
+
+    const [isExpanded, setIsExpanded] = React.useState(false);
+    const [isTruncated, setIsTruncated] = React.useState(false);
+    const [collapseZoneHeight, setCollapseZoneHeight] = React.useState<number>(0);
+    const userMessageRenderingMode = useUIStore((state) => state.userMessageRenderingMode);
+    const normalizedRenderingMode = normalizeUserMessageRenderingMode(userMessageRenderingMode);
+    const textRef = React.useRef<HTMLDivElement>(null);
+
+    const hasActiveSelectionInElement = React.useCallback((element: HTMLElement): boolean => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+            return false;
+        }
+
+        const range = selection.getRangeAt(0);
+        return element.contains(range.startContainer) || element.contains(range.endContainer);
+    }, []);
+
+    React.useEffect(() => {
+        const el = textRef.current;
+        if (!el) return;
+
+        const checkTruncation = () => {
+            if (!isExpanded) {
+                setIsTruncated(el.scrollHeight > el.clientHeight);
+            }
+
+            const styles = window.getComputedStyle(el);
+            const lineHeight = parseFloat(styles.lineHeight);
+            const fontSize = parseFloat(styles.fontSize);
+            const fallbackLineHeight = isFinite(fontSize) ? fontSize * 1.4 : 20;
+            const resolvedLineHeight = isFinite(lineHeight) ? lineHeight : fallbackLineHeight;
+            setCollapseZoneHeight(Math.max(1, Math.round(resolvedLineHeight * CLAMP_LINES)));
+        };
+
+        checkTruncation();
+
+        const resizeObserver = new ResizeObserver(checkTruncation);
+        resizeObserver.observe(el);
+
+        return () => resizeObserver.disconnect();
+    }, [textContent, isExpanded]);
+
+    const handleClick = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        const element = textRef.current;
+        if (!element) {
+            return;
+        }
+
+        if (hasActiveSelectionInElement(element)) {
+            return;
+        }
+
+        if (!isExpanded) {
+            if (isTruncated) {
+                setIsExpanded(true);
+            }
+            return;
+        }
+
+        const clickY = event.clientY - element.getBoundingClientRect().top;
+        if (clickY <= collapseZoneHeight) {
+            setIsExpanded(false);
+        }
+    }, [collapseZoneHeight, hasActiveSelectionInElement, isExpanded, isTruncated]);
+
+    const processedMarkdownContent = React.useMemo(() => {
+        if (!agentMention?.token || !textContent.includes(agentMention.token)) {
+            return textContent;
+        }
+        
+        const mentionHtml = `<a href="${buildMentionUrl(agentMention.name)}" class="text-primary hover:underline" target="_blank" rel="noopener noreferrer">${agentMention.token}</a>`;
+        return textContent.replace(agentMention.token, mentionHtml);
+    }, [agentMention, textContent]);
+
+    const plainTextContent = React.useMemo(() => {
+        if (!agentMention?.token || !textContent.includes(agentMention.token)) {
+            return textContent;
+        }
+
+        const idx = textContent.indexOf(agentMention.token);
+        const before = textContent.slice(0, idx);
+        const after = textContent.slice(idx + agentMention.token.length);
+        return (
+            <>
+                {before}
+                <a
+                    href={buildMentionUrl(agentMention.name)}
+                    className="text-primary hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    {agentMention.token}
+                </a>
+                {after}
+            </>
+        );
+    }, [agentMention, textContent]);
+
+    if (!textContent || textContent.trim().length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="relative" key={part.id || `${messageId}-user-text`}>
+            <div
+                className={cn(
+                    "break-words font-sans typography-markdown",
+                    normalizedRenderingMode === 'plain' && 'whitespace-pre-wrap',
+                    !isExpanded && "line-clamp-2",
+                    isTruncated && !isExpanded && "cursor-pointer"
+                )}
+                ref={textRef}
+                onClick={handleClick}
+            >
+                {normalizedRenderingMode === 'markdown' ? (
+                    <SimpleMarkdownRenderer 
+                        content={processedMarkdownContent} 
+                        disableLinkSafety 
+                    />
+                ) : (
+                    plainTextContent
+                )}
+            </div>
+        </div>
+    );
+};
+
+export default React.memo(UserTextPart);

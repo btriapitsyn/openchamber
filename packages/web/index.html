@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" href="/favicon-32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/favicon-16.png" sizes="16x16" />
+    <link rel="mask-icon" href="/favicon.svg" color="#edb449" />
+
+    <!-- Apple touch icon - PNG format required for iOS PWA support -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png" />
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png" />
+
+    <!-- Preload Nerd Fonts for terminal icon display -->
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2"
+          as="font" type="font/woff2" crossorigin="anonymous">
+    <link rel="preload" href="https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2"
+          as="font" type="font/woff2" crossorigin="anonymous">
+
+    <!-- Web app manifest (endpoint-first with data URL fallback) -->
+    <script>
+      const baseUrl = location.origin;
+      const defaultAppName = 'OpenChamber - AI Coding Assistant';
+      const defaultShortName = 'OpenChamber';
+      const pwaNameStorageKey = 'openchamber.pwaName';
+      const pwaRecentSessionsStorageKey = 'openchamber.pwaRecentSessions';
+
+      const normalizePwaName = (value, fallback) => {
+        if (typeof value !== 'string') {
+          return fallback;
+        }
+        const normalized = value.trim().replace(/\s+/g, ' ');
+        if (!normalized) {
+          return fallback;
+        }
+        return normalized.slice(0, 64);
+      };
+
+      const truncate = (value, maxLength) => {
+        if (typeof value !== 'string') {
+          return '';
+        }
+        return value.length > maxLength ? value.slice(0, maxLength) : value;
+      };
+
+      const getStoredInstallName = () => {
+        try {
+          const storedName = localStorage.getItem(pwaNameStorageKey);
+          return normalizePwaName(storedName, defaultAppName);
+        } catch {
+          return defaultAppName;
+        }
+      };
+
+      const setStoredInstallName = (value) => {
+        const normalizedName = normalizePwaName(value, '');
+        try {
+          if (normalizedName) {
+            localStorage.setItem(pwaNameStorageKey, normalizedName);
+          } else {
+            localStorage.removeItem(pwaNameStorageKey);
+          }
+        } catch {
+          return defaultAppName;
+        }
+        return normalizedName || defaultAppName;
+      };
+
+      const getQueryInstallNameOverride = () => {
+        try {
+          const params = new URLSearchParams(location.search);
+          const queryName = params.get('pwa_name') ?? params.get('app_name') ?? params.get('appName');
+          if (queryName === null) {
+            return null;
+          }
+
+          const normalizedQueryName = normalizePwaName(queryName, '');
+          if (normalizedQueryName) {
+            localStorage.setItem(pwaNameStorageKey, normalizedQueryName);
+            return normalizedQueryName;
+          }
+
+          localStorage.removeItem(pwaNameStorageKey);
+          return defaultAppName;
+        } catch {
+          return null;
+        }
+      };
+
+      const parseRecentSessionShortcuts = () => {
+        try {
+          const raw = localStorage.getItem(pwaRecentSessionsStorageKey);
+          if (!raw) {
+            return [];
+          }
+
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) {
+            return [];
+          }
+
+          const seen = new Set();
+          const recentSessions = [];
+
+          for (const item of parsed) {
+            if (!item || typeof item !== 'object') {
+              continue;
+            }
+
+            const sessionId = typeof item.sessionId === 'string' ? item.sessionId.trim().slice(0, 160) : '';
+            if (!sessionId || seen.has(sessionId)) {
+              continue;
+            }
+
+            const fallbackTitle = `Session ${recentSessions.length + 1}`;
+            const title = truncate(normalizePwaName(item.title, fallbackTitle), 48);
+
+            seen.add(sessionId);
+            recentSessions.push({ sessionId, title });
+
+            if (recentSessions.length >= 3) {
+              break;
+            }
+          }
+
+          return recentSessions;
+        } catch {
+          return [];
+        }
+      };
+
+      const buildShortcuts = (recentSessions) => {
+        const shortcuts = [
+          {
+            name: 'Appearance Settings',
+            short_name: 'Settings',
+            description: 'Open appearance settings',
+            url: `${baseUrl}/?settings=appearance`,
+            icons: [{ src: `${baseUrl}/pwa-192.png`, sizes: '192x192', type: 'image/png' }],
+          },
+        ];
+
+        for (const session of recentSessions) {
+          const sessionTitle = truncate(session.title, 32);
+          shortcuts.push({
+            name: sessionTitle,
+            short_name: sessionTitle,
+            description: 'Open recent session',
+            url: `${baseUrl}/?session=${encodeURIComponent(session.sessionId)}`,
+            icons: [{ src: `${baseUrl}/pwa-192.png`, sizes: '192x192', type: 'image/png' }],
+          });
+        }
+
+        return shortcuts;
+      };
+
+      const buildManifest = (appName, recentSessions) => {
+        const shortName = appName === defaultAppName ? defaultShortName : truncate(appName, 30);
+        return {
+          name: appName,
+          short_name: shortName,
+          description: 'Web interface companion for OpenCode AI coding agent',
+          id: `${baseUrl}/`,
+          start_url: `${baseUrl}/`,
+          scope: `${baseUrl}/`,
+          display: 'standalone',
+          orientation: 'portrait-primary',
+          background_color: '#151313',
+          theme_color: '#edb449',
+          icons: [
+            { src: `${baseUrl}/pwa-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: `${baseUrl}/pwa-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: `${baseUrl}/pwa-maskable-192.png`, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+            { src: `${baseUrl}/pwa-maskable-512.png`, sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+            { src: `${baseUrl}/apple-touch-icon-180x180.png`, sizes: '180x180', type: 'image/png', purpose: 'any' },
+            { src: `${baseUrl}/apple-touch-icon-152x152.png`, sizes: '152x152', type: 'image/png', purpose: 'any' },
+            { src: `${baseUrl}/favicon-32.png`, sizes: '32x32', type: 'image/png' },
+            { src: `${baseUrl}/favicon-16.png`, sizes: '16x16', type: 'image/png' },
+          ],
+          shortcuts: buildShortcuts(recentSessions),
+          categories: ['developer', 'tools', 'productivity'],
+          lang: 'en',
+        };
+      };
+
+      const buildManifestEndpointUrl = (installNameOverride = null) => {
+        const params = new URLSearchParams();
+        if (typeof installNameOverride === 'string') {
+          params.set('appName', installNameOverride);
+        }
+        const search = params.toString();
+        return `${baseUrl}/manifest.webmanifest${search ? `?${search}` : ''}`;
+      };
+
+      const manifestLink = document.createElement('link');
+      manifestLink.rel = 'manifest';
+      // Required so the browser sends auth cookies when fetching the manifest,
+      // enabling PWA installation behind authentication proxies (e.g. Cloudflare Access).
+      manifestLink.crossOrigin = 'use-credentials';
+      document.head.appendChild(manifestLink);
+
+      let activeManifestBlobUrl = null;
+      let manifestRequestVersion = 0;
+
+      const setManifestFromBlob = (manifest) => {
+        if (activeManifestBlobUrl) {
+          URL.revokeObjectURL(activeManifestBlobUrl);
+        }
+
+        const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+        activeManifestBlobUrl = URL.createObjectURL(manifestBlob);
+        manifestLink.href = activeManifestBlobUrl;
+      };
+
+      const setManifestFromEndpoint = (manifestUrl) => {
+        if (activeManifestBlobUrl) {
+          URL.revokeObjectURL(activeManifestBlobUrl);
+          activeManifestBlobUrl = null;
+        }
+        manifestLink.href = manifestUrl;
+      };
+
+      const canUseManifestEndpoint = async (manifestUrl, requestVersion) => {
+        if (typeof fetch !== 'function') {
+          return false;
+        }
+
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timeoutId = setTimeout(() => {
+          controller?.abort();
+        }, 1500);
+
+        try {
+          const response = await fetch(manifestUrl, {
+            credentials: 'include',
+            cache: 'no-store',
+            headers: {
+              Accept: 'application/manifest+json, application/json;q=0.9, */*;q=0.1',
+            },
+            ...(controller ? { signal: controller.signal } : {}),
+          });
+
+          if (requestVersion !== manifestRequestVersion || !response.ok) {
+            return false;
+          }
+
+          const contentType = response.headers.get('content-type') || '';
+          return /manifest|json/i.test(contentType);
+        } catch {
+          return false;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      const updateManifest = async (installNameOverride = null) => {
+        const resolvedFallbackName = typeof installNameOverride === 'string' ? installNameOverride : getStoredInstallName();
+        const recentSessions = parseRecentSessionShortcuts();
+        const manifest = buildManifest(resolvedFallbackName, recentSessions);
+        const manifestUrl = buildManifestEndpointUrl(installNameOverride);
+        const requestVersion = ++manifestRequestVersion;
+
+        const useEndpoint = await canUseManifestEndpoint(manifestUrl, requestVersion);
+        if (requestVersion !== manifestRequestVersion) {
+          return;
+        }
+
+        if (useEndpoint) {
+          setManifestFromEndpoint(manifestUrl);
+          return;
+        }
+
+        setManifestFromBlob(manifest);
+      };
+
+      const refreshManifestFromStorage = () => {
+        void updateManifest();
+      };
+
+      const initialInstallNameOverride = getQueryInstallNameOverride();
+      void updateManifest(initialInstallNameOverride);
+
+      window.__OPENCHAMBER_GET_PWA_INSTALL_NAME__ = () => getStoredInstallName();
+      window.__OPENCHAMBER_SET_PWA_INSTALL_NAME__ = (value) => {
+        const resolvedName = setStoredInstallName(value);
+        void updateManifest(resolvedName);
+        return resolvedName;
+      };
+      window.__OPENCHAMBER_UPDATE_PWA_MANIFEST__ = () => {
+        refreshManifestFromStorage();
+      };
+    </script>
+
+    <script>
+      // Blocking script to detect and apply theme before first paint
+      (function() {
+        try {
+          var themeMode = localStorage.getItem('themeMode');
+          var variant = localStorage.getItem('selectedThemeVariant');
+          var useSystem = localStorage.getItem('useSystemTheme');
+          var isDark;
+
+          // Check themeMode first (new storage key)
+          if (themeMode === 'dark') {
+            isDark = true;
+          } else if (themeMode === 'light') {
+            isDark = false;
+          } else if (themeMode === 'system' || useSystem === null || useSystem === 'true') {
+            // System preference
+            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          } else if (variant === 'light' || variant === 'dark') {
+            // Legacy storage key fallback
+            isDark = variant === 'dark';
+          } else {
+            // Default to system
+            isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          }
+
+          // Apply theme class and data attribute
+          document.documentElement.classList.add(isDark ? 'dark' : 'light');
+          document.documentElement.setAttribute('data-splash-variant', isDark ? 'dark' : 'light');
+          document.documentElement.style.setProperty('color-scheme', isDark ? 'dark' : 'light');
+
+          // Splash colors persisted by the app theme system
+          var splashBgLight = localStorage.getItem('splashBgLight');
+          var splashFgLight = localStorage.getItem('splashFgLight');
+          var splashBgDark = localStorage.getItem('splashBgDark');
+          var splashFgDark = localStorage.getItem('splashFgDark');
+
+          if (splashBgLight) document.documentElement.style.setProperty('--splash-background-light', splashBgLight);
+          if (splashFgLight) document.documentElement.style.setProperty('--splash-stroke-light', splashFgLight);
+          if (splashBgDark) document.documentElement.style.setProperty('--splash-background-dark', splashBgDark);
+          if (splashFgDark) document.documentElement.style.setProperty('--splash-stroke-dark', splashFgDark);
+        } catch (error) {
+          console.warn('Failed to apply theme:', error);
+        }
+      })();
+    </script>
+
+    <!-- Theme color - Safari iOS 26+ prioritizes CSS background-color over this, but keep as fallback -->
+    <meta name="theme-color" content="#151313" />
+    <meta name="theme-color" content="#151313" media="(prefers-color-scheme: dark)" />
+
+    <!-- iOS Safari PWA styling -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="OpenChamber" />
+
+    <title>OpenChamber - AI Coding Assistant</title>
+    <meta name="description" content="Web interface companion for OpenCode AI coding agent" />
+    <meta name="application-name" content="OpenChamber" />
+    <meta name="apple-mobile-web-app-title" content="OpenChamber" />
+
+    <!-- Inline CSS for loading screen and Nerd Fonts (before Tailwind loads) -->
+    <style>
+      /* Nerd Font @font-face declarations for terminal icon support */
+      @font-face {
+        font-family: 'JetBrainsMono Nerd Font';
+        src:
+          local('JetBrainsMono Nerd Font'),
+          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2') format('woff2'),
+          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff') format('woff');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+        unicode-range: U+E000-F8FF, U+F0000-FFFFF;
+      }
+
+      @font-face {
+        font-family: 'FiraCode Nerd Font';
+        src:
+          local('FiraCode Nerd Font'),
+          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2') format('woff2'),
+          url('https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff') format('woff');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+        unicode-range: U+E000-F8FF, U+F0000-FFFFF;
+      }
+
+      :root {
+        --splash-background-dark: #151313;
+        --splash-stroke-dark: #CECDC3;
+        --splash-background-light: #FFFCF0;
+        --splash-stroke-light: #100F0F;
+
+        --splash-background: var(--splash-background-dark);
+        --splash-stroke: var(--splash-stroke-dark);
+
+        /* Fallback fills (overridden below when supported) */
+        --splash-face-fill: rgba(255, 255, 255, 0.15);
+        --splash-cell-fill: rgba(255, 255, 255, 0.35);
+        --splash-logo-fill: var(--splash-stroke);
+      }
+
+      html[data-splash-variant='light'] {
+        --splash-background: var(--splash-background-light);
+        --splash-stroke: var(--splash-stroke-light);
+        --splash-face-fill: rgba(0, 0, 0, 0.15);
+        --splash-cell-fill: rgba(0, 0, 0, 0.4);
+        --splash-logo-fill: var(--splash-stroke);
+      }
+
+      html[data-splash-variant='dark'] {
+        --splash-background: var(--splash-background-dark);
+        --splash-stroke: var(--splash-stroke-dark);
+        --splash-logo-fill: var(--splash-stroke);
+      }
+
+      @supports (color: color-mix(in srgb, white 50%, transparent)) {
+        :root {
+          --splash-face-fill: color-mix(in srgb, var(--splash-stroke) 15%, transparent);
+          --splash-cell-fill: color-mix(in srgb, var(--splash-stroke) 35%, transparent);
+        }
+      }
+      @keyframes logo-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+      .logo-pulse {
+        animation: logo-pulse 3s ease-in-out infinite;
+      }
+      #initial-loading {
+        background-color: var(--splash-background);
+        color: var(--splash-foreground);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        font-family: system-ui, -apple-system, sans-serif;
+        transition: opacity 0.3s ease-out;
+        position: absolute;
+        width: 100%;
+        z-index: 9999;
+      }
+      #initial-loading.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body class="h-full bg-background text-foreground">
+    <div id="root" class="h-full">
+      <!-- Loading fallback while React initializes -->
+      <div id="initial-loading">
+        <div style="display: flex; align-items: center; justify-content: center;">
+          <svg width="120" height="120" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="OpenChamber loading icon">
+            <!-- Isometric cube: edge=48, centerY=50 -->
+            <!-- Points: top(50,2), left(8.432,26), right(91.568,26), center(50,50), bottomLeft(8.432,74), bottomRight(91.568,74), bottom(50,98) -->
+
+            <!-- Left face - base fill with stroke -->
+            <path d="M50 50 L8.432 26 L8.432 74 L50 98 Z" fill="var(--splash-face-fill)" stroke="var(--splash-stroke)" stroke-width="2" stroke-linejoin="round"/>
+
+            <!-- Left face grid cells (4x4) with varying opacity -->
+            <path d="M50 50 L39.608 44 L39.608 56 L50 62 Z" fill="var(--splash-cell-fill)" opacity="0.2"/>
+            <path d="M39.608 44 L29.216 38 L29.216 50 L39.608 56 Z" fill="var(--splash-cell-fill)" opacity="0.45"/>
+            <path d="M29.216 38 L18.824 32 L18.824 44 L29.216 50 Z" fill="var(--splash-cell-fill)" opacity="0.15"/>
+            <path d="M18.824 32 L8.432 26 L8.432 38 L18.824 44 Z" fill="var(--splash-cell-fill)" opacity="0.55"/>
+            <path d="M50 62 L39.608 56 L39.608 68 L50 74 Z" fill="var(--splash-cell-fill)" opacity="0.35"/>
+            <path d="M39.608 56 L29.216 50 L29.216 62 L39.608 68 Z" fill="var(--splash-cell-fill)" opacity="0.1"/>
+            <path d="M29.216 50 L18.824 44 L18.824 56 L29.216 62 Z" fill="var(--splash-cell-fill)" opacity="0.5"/>
+            <path d="M18.824 44 L8.432 38 L8.432 50 L18.824 56 Z" fill="var(--splash-cell-fill)" opacity="0.25"/>
+            <path d="M50 74 L39.608 68 L39.608 80 L50 86 Z" fill="var(--splash-cell-fill)" opacity="0.4"/>
+            <path d="M39.608 68 L29.216 62 L29.216 74 L39.608 80 Z" fill="var(--splash-cell-fill)" opacity="0.3"/>
+            <path d="M29.216 62 L18.824 56 L18.824 68 L29.216 74 Z" fill="var(--splash-cell-fill)" opacity="0.45"/>
+            <path d="M18.824 56 L8.432 50 L8.432 62 L18.824 68 Z" fill="var(--splash-cell-fill)" opacity="0.15"/>
+            <path d="M50 86 L39.608 80 L39.608 92 L50 98 Z" fill="var(--splash-cell-fill)" opacity="0.55"/>
+            <path d="M39.608 80 L29.216 74 L29.216 86 L39.608 92 Z" fill="var(--splash-cell-fill)" opacity="0.2"/>
+            <path d="M29.216 74 L18.824 68 L18.824 80 L29.216 86 Z" fill="var(--splash-cell-fill)" opacity="0.35"/>
+            <path d="M18.824 68 L8.432 62 L8.432 74 L18.824 80 Z" fill="var(--splash-cell-fill)" opacity="0.1"/>
+
+            <!-- Right face - base fill with stroke -->
+            <path d="M50 50 L91.568 26 L91.568 74 L50 98 Z" fill="var(--splash-face-fill)" stroke="var(--splash-stroke)" stroke-width="2" stroke-linejoin="round"/>
+
+            <!-- Right face grid cells (4x4) with varying opacity -->
+            <path d="M50 50 L60.392 44 L60.392 56 L50 62 Z" fill="var(--splash-cell-fill)" opacity="0.3"/>
+            <path d="M60.392 44 L70.784 38 L70.784 50 L60.392 56 Z" fill="var(--splash-cell-fill)" opacity="0.15"/>
+            <path d="M70.784 38 L81.176 32 L81.176 44 L70.784 50 Z" fill="var(--splash-cell-fill)" opacity="0.45"/>
+            <path d="M81.176 32 L91.568 26 L91.568 38 L81.176 44 Z" fill="var(--splash-cell-fill)" opacity="0.25"/>
+            <path d="M50 62 L60.392 56 L60.392 68 L50 74 Z" fill="var(--splash-cell-fill)" opacity="0.5"/>
+            <path d="M60.392 56 L70.784 50 L70.784 62 L60.392 68 Z" fill="var(--splash-cell-fill)" opacity="0.35"/>
+            <path d="M70.784 50 L81.176 44 L81.176 56 L70.784 62 Z" fill="var(--splash-cell-fill)" opacity="0.1"/>
+            <path d="M81.176 44 L91.568 38 L91.568 50 L81.176 56 Z" fill="var(--splash-cell-fill)" opacity="0.4"/>
+            <path d="M50 74 L60.392 68 L60.392 80 L50 86 Z" fill="var(--splash-cell-fill)" opacity="0.2"/>
+            <path d="M60.392 68 L70.784 62 L70.784 74 L60.392 80 Z" fill="var(--splash-cell-fill)" opacity="0.55"/>
+            <path d="M70.784 62 L81.176 56 L81.176 68 L70.784 74 Z" fill="var(--splash-cell-fill)" opacity="0.3"/>
+            <path d="M81.176 56 L91.568 50 L91.568 62 L81.176 68 Z" fill="var(--splash-cell-fill)" opacity="0.15"/>
+            <path d="M50 86 L60.392 80 L60.392 92 L50 98 Z" fill="var(--splash-cell-fill)" opacity="0.45"/>
+            <path d="M60.392 80 L70.784 74 L70.784 86 L60.392 92 Z" fill="var(--splash-cell-fill)" opacity="0.25"/>
+            <path d="M70.784 74 L81.176 68 L81.176 80 L70.784 86 Z" fill="var(--splash-cell-fill)" opacity="0.4"/>
+            <path d="M81.176 68 L91.568 62 L91.568 74 L81.176 80 Z" fill="var(--splash-cell-fill)" opacity="0.2"/>
+
+            <!-- Top face - open (no fill), only stroke -->
+            <path d="M50 2 L8.432 26 L50 50 L91.568 26 Z" fill="none" stroke="var(--splash-stroke)" stroke-width="2" stroke-linejoin="round"/>
+
+            <!-- OpenCode logo on top face -->
+            <g class="logo-pulse" transform="matrix(0.866, 0.5, -0.866, 0.5, 50, 26) scale(0.75)">
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M-16 -20 L16 -20 L16 20 L-16 20 Z M-8 -12 L-8 12 L8 12 L8 -12 Z" fill="var(--splash-logo-fill)"/>
+              <path d="M-8 -4 L8 -4 L8 12 L-8 12 Z" fill="var(--splash-logo-fill)" fill-opacity="0.4"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Fallback: hide loading screen after 10 seconds if React fails to load
+      setTimeout(function() {
+        const loading = document.getElementById('initial-loading');
+        if (loading) {
+          console.warn('Loading screen timeout - forcing hide after 10s');
+          loading.classList.add('fade-out');
+          setTimeout(function() {
+            loading.remove();
+          }, 300);
+        }
+      }, 10000);
+    </script>
+
+    <!-- CSS Font Loading API for reliable Nerd Font loading -->
+    <script>
+      (function() {
+        const fonts = [
+          {
+            name: 'JetBrainsMono Nerd Font',
+            url: 'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/JetBrainsMonoNerdFont-Regular.woff2'
+          },
+          {
+            name: 'FiraCode Nerd Font',
+            url: 'https://cdn.jsdelivr.net/gh/mshaugh/nerdfont-webfonts@v3.3.0/build/fonts/FiraCodeNerdFont-Regular.woff2'
+          }
+        ];
+
+        const fontPromises = fonts.map(font => {
+          const fontFace = new FontFace(font.name, `url(${font.url}) format('woff2')`);
+          document.fonts.add(fontFace);
+          return fontFace.load().catch(err => {
+            console.warn(`Failed to load font: ${font.name}`, err);
+          });
+        });
+
+        Promise.allSettled(fontPromises).then(() => {
+          document.documentElement.classList.add('fonts-loaded');
+        });
+      })();
+    </script>
+
+    <!-- Polyfill for process before loading React -->
+    <script>
+      if (typeof process === 'undefined') {
+        window.process = { env: {} };
+      }
+    </script>
+
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

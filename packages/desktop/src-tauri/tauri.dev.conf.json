@@ -1,0 +1,9 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "bundle": {
+    "icon": [
+      "icons/dev-icon.icns",
+      "icons/dev-icon.png"
+    ]
+  }
+}

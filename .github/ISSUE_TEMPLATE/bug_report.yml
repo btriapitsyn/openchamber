@@ -1,0 +1,45 @@
+name: Bug report
+description: Report something broken
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What's wrong? Maybe some steps to reproduce.
+      description: What happened and what you expected.
+      placeholder: "Expected … but got …"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Where does it happen?
+      options:
+        - Desktop (macOS)
+        - Desktop Web
+        - Mobile (Web/PWA)
+        - VS Code extension
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version (if known)
+      placeholder: "e.g. 1.2.3"
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots / recordings (optional)
+      description: "Anything visual that helps."
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: "Paste relevant logs."
+      render: shell

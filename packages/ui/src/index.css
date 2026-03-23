@@ -1,0 +1,1385 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./styles/design-system.css";
+@import "./styles/typography.css";
+@import "./styles/mobile.css";
+@source "./**/*.{ts,tsx,css}";
+
+@custom-variant dark (&:is(.dark *));
+
+:root.oc-theme-switching *,
+:root.oc-theme-switching *::before,
+:root.oc-theme-switching *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Suppress WebKit-specific hover/focus adornments on the chat textarea */
+textarea[data-chat-input="true"] {
+  -webkit-appearance: none;
+  background: transparent !important;
+  border: none;
+  box-shadow: none;
+}
+
+textarea[data-chat-input="true"]:hover,
+textarea[data-chat-input="true"]:focus,
+textarea[data-chat-input="true"]:focus-visible {
+  outline: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* Ensure interactive controls consistently show pointer cursor */
+:where(
+  button,
+  [role="button"],
+  a[href]
+):not(:disabled) {
+  cursor: pointer;
+}
+
+:where(button, [role="button"]):disabled {
+  cursor: not-allowed;
+}
+
+.oc-cm-selected-line {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.oc-plan-editor .cm-scroller,
+.oc-plan-editor .cm-content,
+.oc-plan-editor .cm-gutters {
+  font-family: "IBM Plex Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+/* Codemirror syntax fallback for classHighlighter tokens */
+.cm-editor .tok-comment,
+.cm-editor .tok-docComment,
+.cm-editor .tok-meta,
+.cm-editor .tok-documentMeta {
+  color: var(--syntax-comment);
+}
+
+.cm-editor .tok-keyword,
+.cm-editor .tok-controlKeyword,
+.cm-editor .tok-definitionKeyword,
+.cm-editor .tok-modifier,
+.cm-editor .tok-moduleKeyword {
+  color: var(--syntax-keyword);
+}
+
+.cm-editor .tok-operator,
+.cm-editor .tok-operatorKeyword,
+.cm-editor .tok-derefOperator,
+.cm-editor .tok-updateOperator,
+.cm-editor .tok-definitionOperator,
+.cm-editor .tok-typeOperator,
+.cm-editor .tok-controlOperator,
+.cm-editor .tok-logicOperator,
+.cm-editor .tok-bitwiseOperator,
+.cm-editor .tok-arithmeticOperator,
+.cm-editor .tok-compareOperator {
+  color: var(--syntax-operator);
+}
+
+.cm-editor .tok-string,
+.cm-editor .tok-special.tok-string,
+.cm-editor .tok-escape,
+.cm-editor .tok-regexp,
+.cm-editor .tok-attributeValue,
+.cm-editor .tok-monospace {
+  color: var(--syntax-string);
+}
+
+.cm-editor .tok-number,
+.cm-editor .tok-bool,
+.cm-editor .tok-atom,
+.cm-editor .tok-null,
+.cm-editor .tok-self {
+  color: var(--syntax-number);
+}
+
+.cm-editor .tok-function.tok-variableName,
+.cm-editor .tok-function.tok-propertyName,
+.cm-editor .tok-standard.tok-variableName,
+.cm-editor .tok-special.tok-variableName {
+  color: var(--syntax-function);
+}
+
+.cm-editor .tok-variableName,
+.cm-editor .tok-definition.tok-variableName,
+.cm-editor .tok-local.tok-variableName,
+.cm-editor .tok-constant.tok-variableName,
+.cm-editor .tok-propertyName,
+.cm-editor .tok-attributeName {
+  color: var(--syntax-variable);
+}
+
+.cm-editor .tok-className,
+.cm-editor .tok-typeName,
+.cm-editor .tok-namespace {
+  color: var(--syntax-type);
+}
+
+.cm-editor .tok-tagName,
+.cm-editor .tok-labelName,
+.cm-editor .tok-annotation,
+.cm-editor .tok-macroName {
+  color: var(--syntax-keyword);
+}
+
+.cm-editor .tok-link {
+  color: var(--syntax-function);
+  text-decoration: underline;
+}
+
+.cm-editor .tok-punctuation,
+.cm-editor .tok-separator,
+.cm-editor .tok-bracket,
+.cm-editor .tok-paren,
+.cm-editor .tok-brace,
+.cm-editor .tok-squareBracket,
+.cm-editor .tok-angleBracket {
+  color: color-mix(in srgb, var(--syntax-comment) 85%, var(--syntax-foreground) 15%);
+}
+
+/* Codemirror syntax fallback for class-based HighlightStyle tokens */
+.cm-editor .cm-comment,
+.cm-editor .cm-meta {
+  color: var(--syntax-comment);
+}
+
+.cm-editor .cm-keyword,
+.cm-editor .cm-tag {
+  color: var(--syntax-keyword);
+}
+
+.cm-editor .cm-operator {
+  color: var(--syntax-operator);
+}
+
+.cm-editor .cm-string,
+.cm-editor .cm-string-2,
+.cm-editor .cm-link {
+  color: var(--syntax-string);
+}
+
+.cm-editor .cm-number,
+.cm-editor .cm-atom {
+  color: var(--syntax-number);
+}
+
+.cm-editor .cm-builtin,
+.cm-editor .cm-def {
+  color: var(--syntax-function);
+}
+
+.cm-editor .cm-variable,
+.cm-editor .cm-variable-2,
+.cm-editor .cm-property,
+.cm-editor .cm-attribute {
+  color: var(--syntax-variable);
+}
+
+.cm-editor .cm-variable-3 {
+  color: var(--syntax-type);
+}
+
+.cm-editor .cm-punctuation {
+  color: color-mix(in srgb, var(--syntax-comment) 85%, var(--syntax-foreground) 15%);
+}
+
+:root.vscode-runtime textarea[data-chat-input="true"]::placeholder {
+  color: color-mix(in srgb, var(--vscode-input-placeholderForeground, var(--muted-foreground)) 65%, transparent);
+}
+
+/* Match chat footer background to input in WebKit to avoid dual-tone hover/focus */
+[data-chat-input="true"] + div[data-chat-input-footer="true"] {
+  background: transparent !important;
+  border: none;
+  box-shadow: none;
+  -webkit-appearance: none;
+}
+
+[data-keyboard-avoid-active="true"] {
+  transform: translateY(calc(-1 * var(--oc-keyboard-avoid-offset, 0px)));
+}
+
+/* Scroll shadow (HeroUI) fallback styling to ensure visible gradients without the Tailwind plugin */
+[data-scroll-shadow="true"] {
+  --scroll-shadow-size: var(--scroll-shadow-size, 48px);
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"] {
+  mask-mode: alpha;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"][data-top-bottom-scroll="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"][data-top-scroll="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 var(--scroll-shadow-size),
+    #000 100%
+  );
+}
+
+[data-scroll-shadow="true"][data-orientation="vertical"][data-bottom-scroll="true"] {
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    #000 calc(100% - var(--scroll-shadow-size)),
+    transparent 100%
+  );
+}
+
+
+@keyframes spin-once {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes oc-migrate-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes gradient-shimmer {
+  0% {
+    stop-color: currentColor;
+  }
+  50% {
+    stop-color: color-mix(in srgb, currentColor 60%, white 40%);
+  }
+  100% {
+    stop-color: currentColor;
+  }
+}
+
+@keyframes shimmer-position {
+  0% {
+    x: -100%;
+  }
+  100% {
+    x: 100%;
+  }
+}
+
+@keyframes oc-file-mention-marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(calc(-100% + var(--file-mention-marquee-width, 360px)));
+  }
+}
+
+.file-mention-marquee-container {
+  --file-mention-marquee-width: 360px;
+  --file-mention-marquee-duration: 4s;
+  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+}
+
+.file-mention-marquee {
+  animation: oc-file-mention-marquee var(--file-mention-marquee-duration, 4s) linear 0.2s 1 both;
+  will-change: transform;
+}
+
+/* Safari/WebKit fixes for buttons and SVG icons */
+/* Remixicon puts fill="currentColor" on root SVG which WebKit renders as background */
+button svg.remixicon,
+[role="button"] svg.remixicon,
+button svg,
+[role="button"] svg {
+  background: none !important;
+  background-color: transparent !important;
+  /* Override inline fill attribute on SVG root */
+  fill: none !important;
+  /* Ensure SVG uses CSS rendering, not native */
+  shape-rendering: geometricPrecision;
+}
+
+/* GPU acceleration for non-spinning SVGs */
+button svg:not(.animate-spin),
+[role="button"] svg:not(.animate-spin) {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Fix SVG elements inside buttons - remove any rect/circle backgrounds */
+button svg rect,
+button svg circle,
+[role="button"] svg rect,
+[role="button"] svg circle {
+  fill: none !important;
+}
+
+/* Ensure SVG paths/shapes inherit color properly */
+button svg.remixicon path,
+button svg.remixicon circle[fill],
+[role="button"] svg.remixicon path,
+[role="button"] svg.remixicon circle[fill],
+button svg path,
+[role="button"] svg path {
+  fill: currentColor !important;
+}
+
+/* Safari/WebKit animation fixes - outside @layer for higher specificity */
+.animate-spin {
+  animation: webkit-spin 1s linear infinite !important;
+  will-change: transform !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Specific SVG spinner fixes for WebKit */
+svg.animate-spin {
+  /* Use CSS box as transform reference for proper centering with scaled SVGs */
+  transform-box: fill-box !important;
+  transform-origin: 50% 50% !important;
+  background: none !important;
+  background-color: transparent !important;
+  overflow: visible !important;
+  /* Ensure SVG content is centered */
+  display: block !important;
+}
+
+@keyframes webkit-spin {
+  0% {
+    transform: translateZ(0) rotate(0deg);
+  }
+  100% {
+    transform: translateZ(0) rotate(360deg);
+  }
+}
+
+/* Starfield twinkle — dots fade through varying brightness like stars */
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.7; }
+}
+
+@keyframes pulse-opacity {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-opacity-dim {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.app-region-drag {
+  -webkit-app-region: drag;
+}
+
+.app-region-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+.animate-spin-once {
+  animation: spin-once 0.5s linear forwards;
+}
+
+/* Custom scrollbar styles */
+*::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  background: transparent;
+  -webkit-appearance: none;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--oc-scrollbar-thumb);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--oc-scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.dark {
+  color-scheme: dark;
+  --oc-scrollbar-thumb: oklch(0.6 0.02 80 / 0.3);
+  --oc-scrollbar-thumb-hover: oklch(0.6 0.02 80 / 0.5);
+}
+
+[data-scrollbar="chat"]::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+[data-scrollbar="chat"].chat-scroll,
+.chat-scroll {
+  scrollbar-gutter: stable both-edges;
+}
+
+html:not(.dark) .chat-scroll {
+  color-scheme: dark;
+}
+
+[data-scrollbar="chat"]::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+  background: transparent !important;
+  -webkit-appearance: none;
+}
+
+[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar,
+.chat-scroll::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+}
+
+[data-scrollbar="chat"]::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar-track,
+.chat-scroll::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+[data-scrollbar="chat"]::-webkit-scrollbar-thumb {
+  background: var(--oc-scrollbar-thumb) !important;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar-thumb,
+.chat-scroll::-webkit-scrollbar-thumb {
+  background: var(--oc-scrollbar-thumb) !important;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+[data-scrollbar="chat"]::-webkit-scrollbar-thumb:hover {
+  background: var(--oc-scrollbar-thumb-hover) !important;
+  background-clip: padding-box;
+}
+
+[data-scrollbar="chat"].chat-scroll::-webkit-scrollbar-thumb:hover,
+.chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--oc-scrollbar-thumb-hover) !important;
+  background-clip: padding-box;
+}
+
+[data-scrollbar="chat"]::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+/* Hide native scrollbars for overlay targets (all browsers) */
+.overlay-scrollbar-target {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  scrollbar-gutter: auto !important;
+}
+
+.overlay-scrollbar-target--no-gutter {
+  scrollbar-gutter: unset !important;
+}
+
+.overlay-scrollbar-target::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}
+
+/* Firefox scrollbar support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--oc-scrollbar-thumb) transparent;
+}
+
+.scrollbar-hidden {
+  scrollbar-width: none !important;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.dark * {
+  scrollbar-color: oklch(0.6 0.02 80 / 0.3) transparent;
+}
+
+/* Overlay scrollbar styling (custom thumb) */
+.overlay-scrollbar {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+}
+
+.overlay-scrollbar--dense,
+.overlay-scrollbar--bottom-right,
+.overlay-scrollbar--zero,
+.overlay-scrollbar--flush {
+  /* no-op: positioning handled inline */
+}
+
+.overlay-scrollbar__thumb {
+  pointer-events: auto;
+  position: absolute;
+  width: 6px;
+  background: var(--oc-scrollbar-thumb);
+  border-radius: 9999px;
+  opacity: 0.8;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+  will-change: transform, height;
+}
+
+.overlay-scrollbar__thumb:hover,
+.overlay-scrollbar__thumb:active {
+  background: var(--oc-scrollbar-thumb-hover);
+  opacity: 1;
+}
+
+.overlay-scrollbar__thumb--horizontal {
+  height: 6px;
+  margin: 0;
+}
+
+.overlay-scrollbar__thumb--vertical {
+  margin: 0;
+}
+
+/* Pierre diff viewer styling */
+.pierre-diff-wrapper {
+  --diffs-font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  --diffs-font-size: var(--text-code);
+  --diffs-line-height: 24px;
+  --diffs-tab-size: 2;
+  --diffs-header-font-family: var(--font-sans, 'IBM Plex Sans', sans-serif);
+  --diffs-min-number-column-width: 4ch;
+  --diffs-gap-inline: 0;
+  --diffs-gap-block: 0;
+
+  /* Prevent browser scroll anchoring jumps during async highlight/virtualization */
+  overflow-anchor: none;
+}
+
+/* Prevent scroll anchoring in stacked diff scroll container */
+[data-diff-virtual-root] {
+  overflow-anchor: none;
+}
+
+/* Desktop: slightly smaller diff code text */
+
+
+.pierre-diff-wrapper diffs-container {
+  display: block;
+}
+
+/* Header tab responsiveness */
+:root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
+  display: inline;
+}
+:root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
+  display: inline;
+}
+
+@media (max-width: 940px) {
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-label {
+    display: none;
+  }
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-open-label {
+    display: none;
+  }
+  :root:not(.mobile-pointer):not(.vscode-runtime) .header-tab-badge {
+    margin-left: -0.125rem;
+  }
+}
+
+/* ============================================
+   Streamdown Styles
+   Minimal overrides - fonts only, using Streamdown defaults
+   ============================================ */
+
+/* VS Code webviews can inject default pre/code/blockquote backgrounds; tool input/output should inherit the card surface. */
+.tool-input-surface pre,
+.tool-input-surface code,
+.tool-input-surface blockquote,
+.tool-input-text {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* VSCode: tool cards should honor semantic code sizing, even when syntax themes inject sizes. */
+:root.vscode-runtime .tool-input-surface,
+:root.vscode-runtime .tool-output-surface {
+  font-size: var(--text-code) !important;
+}
+
+:root.vscode-runtime .tool-input-surface code,
+:root.vscode-runtime .tool-input-surface pre,
+:root.vscode-runtime .tool-output-surface code,
+:root.vscode-runtime .tool-output-surface pre {
+  font-size: inherit !important;
+}
+
+/* Model/agent controls: agent label hides before model label. */
+@container model-controls (max-width: 11rem) {
+  .model-controls__agent-label {
+    display: none;
+  }
+}
+
+@container model-controls (max-width: 9rem) {
+  .model-controls__model-label {
+    display: none;
+  }
+}
+
+/* VS Code side panel: collapse earlier to save horizontal space. */
+@container model-controls (max-width: 9rem) {
+  :root.vscode-runtime .model-controls__agent-label {
+    display: none;
+  }
+}
+
+@container model-controls (max-width: 10rem) {
+  :root.vscode-runtime .model-controls__model-label {
+    display: none;
+  }
+}
+
+/* Commit actions: collapse labels when narrow. */
+@container commit-actions (max-width: 21rem) {
+  .commit-actions__label--long {
+    display: none;
+  }
+}
+
+@container commit-actions (max-width: 19rem) {
+  .commit-actions__label {
+    display: none;
+  }
+
+  .commit-actions__btn {
+    padding-inline: 0.5rem;
+  }
+}
+
+/* Utility: hide scrollbars without affecting layout */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Git right-sidebar header/actions collapse to icon-only when narrow. */
+@container git-header (max-width: 26rem) {
+  .git-header-label {
+    display: none;
+  }
+}
+
+/* Animated tabs: collapse labels based on local container width. */
+@container animated-tabs (max-width: 23rem) {
+  .animated-tabs__label {
+    display: none;
+  }
+
+  .animated-tabs__button {
+    padding-inline: 0.5rem;
+    gap: 0;
+  }
+}
+
+.pill-tabs__track {
+  padding-inline: 0.375rem;
+}
+
+@container pill-tabs (max-width: 23rem) {
+  .pill-tabs__track {
+    padding-inline: 1px;
+  }
+
+  .pill-tabs__button {
+    padding-inline: 0.5rem;
+  }
+}
+
+/* Text font: IBM Plex Sans */
+.streamdown-content {
+  font-family: var(--font-sans);
+  font-size: var(--text-markdown);
+}
+
+/* Tool markdown should render at code size to match tool card typography. */
+.streamdown-content.streamdown-tool {
+  font-size: var(--text-code) !important;
+}
+
+/* Reasoning markdown renders at meta size, dimmed. */
+.streamdown-content.streamdown-reasoning {
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+}
+
+.streamdown-content.streamdown-reasoning strong,
+.streamdown-content.streamdown-reasoning b,
+.streamdown-content.streamdown-reasoning [data-streamdown="strong"],
+.streamdown-content.streamdown-reasoning [data-streamdown="bold"] {
+  font-weight: inherit !important;
+  color: inherit !important;
+  font-style: inherit !important;
+}
+
+.streamdown-content.streamdown-tool code,
+.streamdown-content.streamdown-tool pre {
+  font-size: inherit !important;
+}
+
+/* Streamdown headers: keep proportional but not oversized */
+.streamdown-content h1 {
+  font-size: 1.125em;
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.streamdown-content h2 {
+  font-size: 1.0625em;
+  font-weight: 600;
+  margin-top: 0.875em;
+  margin-bottom: 0.375em;
+}
+
+.streamdown-content h3 {
+  font-size: 1em;
+  font-weight: 600;
+  margin-top: 0.75em;
+  margin-bottom: 0.25em;
+}
+
+.streamdown-content h4,
+.streamdown-content h5,
+.streamdown-content h6 {
+  font-size: 1em;
+  font-weight: 600;
+  margin-top: 0.625em;
+  margin-bottom: 0.25em;
+}
+
+/* Code font: IBM Plex Mono */
+.streamdown-content code,
+.streamdown-content pre {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+}
+
+/* Override Streamdown's hardcoded bg-muted for inline code - use theme colors instead */
+.streamdown-content code[data-streamdown="inline-code"] {
+  background-color: var(--markdown-inline-code-bg, var(--surface-muted)) !important;
+  color: var(--markdown-inline-code, var(--foreground)) !important;
+}
+
+/* Markdown headings - use theme colors */
+.streamdown-content h1 {
+  color: var(--markdown-heading1, var(--primary));
+}
+
+.streamdown-content h2 {
+  color: var(--markdown-heading2, var(--primary));
+}
+
+.streamdown-content h3 {
+  color: var(--markdown-heading3, var(--primary));
+}
+
+.streamdown-content h4,
+.streamdown-content h5,
+.streamdown-content h6 {
+  color: var(--markdown-heading4, var(--foreground));
+}
+
+/* Markdown links - use theme colors */
+.streamdown-content a {
+  color: var(--markdown-link, var(--primary));
+}
+
+.streamdown-content a:hover {
+  color: var(--markdown-link-hover, var(--primary));
+}
+
+.streamdown-content [data-openchamber-file-link="true"] {
+  color: var(--markdown-link, var(--primary));
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.streamdown-content [data-openchamber-file-link="true"]:hover {
+  color: var(--markdown-link-hover, var(--primary));
+}
+
+/* Markdown blockquote - use theme colors */
+.streamdown-content blockquote {
+  color: var(--markdown-blockquote, var(--muted-foreground));
+  border-left-color: var(--markdown-blockquote-border, var(--border));
+}
+
+/* Markdown horizontal rule - use theme colors */
+.streamdown-content hr {
+  border-color: var(--markdown-hr, var(--border));
+}
+
+/* Markdown bold/italic/strikethrough - use theme colors */
+.streamdown-content strong {
+  color: var(--markdown-bold, var(--foreground));
+}
+
+.streamdown-content em {
+  color: var(--markdown-italic, var(--foreground));
+}
+
+.streamdown-content del {
+  color: var(--markdown-strikethrough, var(--muted-foreground));
+}
+
+/* Streamdown code blocks: ensure light/dark Shiki vars work even when Tailwind doesn't scan Streamdown's internal class names. */
+.streamdown-content [data-streamdown="code-block-body"] {
+  font-size: var(--text-code);
+  background-color: transparent;
+  color: var(--shiki-light, inherit);
+}
+
+.streamdown-content [data-streamdown="code-block-body"] span[style*="--sdm-c"] {
+  color: var(--sdm-c) !important;
+}
+
+.streamdown-content [data-streamdown="code-block-body"] span[style*="--sdm-tbg"] {
+  background-color: var(--sdm-tbg) !important;
+}
+
+.streamdown-content [data-streamdown="code-block-body"] span[style*="--shiki-light"] {
+  color: var(--shiki-light) !important;
+}
+
+.streamdown-content [data-streamdown="code-block-body"] span[style*="--shiki-light-bg"] {
+  background-color: var(--shiki-light-bg) !important;
+}
+
+.dark .streamdown-content [data-streamdown="code-block-body"] {
+  background-color: transparent;
+  color: var(--shiki-dark, var(--shiki-light, inherit));
+}
+
+.dark .streamdown-content [data-streamdown="code-block-body"] span[style*="--shiki-dark"] {
+  color: var(--shiki-dark) !important;
+}
+
+.dark .streamdown-content [data-streamdown="code-block-body"] span[style*="--shiki-dark-bg"] {
+  background-color: var(--shiki-dark-bg) !important;
+}
+
+/* Fix list styling - override Tailwind reset */
+.streamdown-content ul {
+  list-style-type: disc;
+  list-style-position: outside;
+  padding-left: 1.5em;
+}
+
+.streamdown-content ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  padding-left: 1.5em;
+}
+
+.streamdown-content li {
+  display: list-item;
+}
+
+/* Reduce code block header height */
+[data-streamdown="code-block-header"] {
+  margin: 0;
+  padding: 0.375rem 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding-right: 5.25rem;
+  border: 0;
+  border-bottom: 1px solid var(--interactive-border);
+  border-radius: 0;
+  background: var(--surface-muted);
+}
+
+/* Disable Streamdown's code block virtualization and keep block chrome fixed */
+.streamdown-content [data-streamdown="code-block"] {
+  content-visibility: visible !important;
+  contain-intrinsic-size: none !important;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 0 !important;
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  min-inline-size: 0;
+  overflow: hidden;
+  background: var(--surface-background);
+  border: 1px solid var(--interactive-border);
+  border-radius: 0.75rem;
+}
+
+.streamdown-content [data-streamdown="code-block"] > div:not([data-streamdown]) {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin-top: 0;
+  height: 2rem;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Streamdown code block body: scroll text content within the card body */
+.streamdown-content [data-streamdown="code-block-body"] {
+  display: block;
+  inline-size: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.streamdown-content [data-streamdown="code-block-body"] pre {
+  display: block;
+  width: 100%;
+  min-width: 100%;
+  max-width: 100%;
+  margin: 0 !important;
+  padding: 0.75rem !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.streamdown-content [data-streamdown="code-block-body"] > * {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+.streamdown-content [data-streamdown="code-block-body"] code {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+  background: transparent !important;
+}
+
+.streamdown-content [data-streamdown="code-block-actions"] {
+  pointer-events: auto;
+  transition: opacity 0.15s ease;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  gap: 0.125rem;
+}
+
+.streamdown-content [data-streamdown="code-block-actions"] button {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.25rem !important;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+}
+
+.streamdown-content [data-streamdown="code-block-actions"] button svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .streamdown-content [data-streamdown="code-block"] [data-streamdown="code-block-actions"] {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .streamdown-content [data-streamdown="code-block"]:hover [data-streamdown="code-block-actions"],
+  .streamdown-content [data-streamdown="code-block"]:focus-within [data-streamdown="code-block-actions"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Mermaid block: position context for controls wrapper. */
+[data-streamdown="mermaid-block"] {
+  position: relative;
+  border-radius: 0.75rem;
+  border: 1px solid var(--interactive-border);
+  background: var(--surface-elevated);
+  padding: 0.5rem;
+}
+
+[data-streamdown="mermaid-block"] [data-streamdown="mermaid-scroll"] {
+  overflow: auto;
+}
+
+[data-streamdown="mermaid-block"] [data-streamdown="mermaid"] {
+  width: max-content;
+  min-width: 100%;
+  display: block;
+}
+
+[data-streamdown="mermaid-block"] [data-streamdown="mermaid-ascii"] {
+  margin: 0;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: var(--surface-foreground);
+  background: transparent;
+}
+
+[data-streamdown="mermaid-block"] [data-streamdown="mermaid"] svg {
+  width: auto !important;
+  min-width: 100%;
+  max-width: none !important;
+  height: auto !important;
+}
+
+[data-streamdown="mermaid-block"] svg {
+  display: block;
+  background: var(--surface-elevated);
+}
+
+/* Fullscreen Mermaid popup: scale diagrams to fill available viewport panel area. */
+.streamdown-mermaid-fullscreen {
+  height: 100%;
+  width: 100%;
+}
+
+.streamdown-mermaid-fullscreen .streamdown-content {
+  height: 100%;
+  width: 100%;
+}
+
+.streamdown-mermaid-fullscreen [data-streamdown="mermaid-block"] {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  padding: 0.75rem;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-elevated);
+}
+
+.streamdown-mermaid-fullscreen [data-streamdown="mermaid-block"] [data-streamdown="mermaid-scroll"] {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+}
+
+.streamdown-mermaid-fullscreen [data-streamdown="mermaid-block"] [data-streamdown="mermaid"] {
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  display: block;
+}
+
+.streamdown-mermaid-fullscreen [data-streamdown="mermaid-block"] [data-streamdown="mermaid-ascii"] {
+  margin: 0;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: var(--surface-foreground);
+  background: transparent;
+}
+
+.streamdown-mermaid-fullscreen [data-streamdown="mermaid-block"] svg {
+  width: auto !important;
+  height: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  min-width: 100%;
+  display: block;
+  background: transparent;
+}
+
+/* Hide system caret in terminal - targets both Ghostty internal input and our custom touch input */
+.terminal-viewport-container textarea,
+.terminal-viewport-container input {
+  caret-color: transparent !important;
+}
+
+.terminal-viewport-container [contenteditable="true"][aria-label="Terminal input"] {
+  caret-color: transparent !important;
+  outline: none !important;
+}
+
+[contenteditable="true"][aria-label="Terminal input"] {
+  caret-color: transparent !important;
+  outline: none !important;
+}
+
+/* Keep Ghostty's internal focus textarea fully non-painting on desktop. */
+.terminal-viewport-container textarea:not([data-terminal-hidden-input="true"]) {
+  opacity: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+textarea[aria-label="Terminal input"],
+input[aria-label="Terminal input"] {
+  caret-color: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  opacity: 0 !important;
+  outline: none !important;
+}
+
+/* Terminal touch input is portaled to document.body; keep it fully non-painting across engines. */
+input[data-terminal-hidden-input="true"],
+textarea[data-terminal-hidden-input="true"] {
+  caret-color: transparent !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  background: transparent !important;
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[data-terminal-hidden-input="true"]::selection,
+textarea[data-terminal-hidden-input="true"]::selection {
+  background: transparent;
+  color: transparent;
+}
+
+input[data-terminal-hidden-input="true"]::placeholder,
+textarea[data-terminal-hidden-input="true"]::placeholder {
+  color: transparent !important;
+}
+
+/* Mobile Terminal Optimizations */
+@media (max-width: 1024px) {
+  .terminal-viewport-container {
+    font-variant-ligatures: none;
+    font-feature-settings: "liga" 0, "calt" 0;
+  }
+}
+
+/* Font loading states */
+.fonts-loading .terminal-viewport-container {
+  font-family: monospace;
+}
+
+.fonts-loaded .terminal-viewport-container {
+  font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+@keyframes grid-pulse {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-grid-pulse {
+  animation: grid-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes attention-diamond-pulse {
+  0%, 100% {
+    opacity: 0.52;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+.animate-attention-diamond-pulse {
+  animation: attention-diamond-pulse 2.3s ease-in-out infinite;
+}
+
+@keyframes navrail-dot-wave {
+  0%, 100% {
+    transform: scale(0.72);
+    opacity: 0.52;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-navrail-dot-wave {
+  animation: navrail-dot-wave 1.2s ease-in-out infinite;
+}
+
+@keyframes border-glow-pulse {
+  0%, 100% {
+    border-color: var(--interactive-border);
+    outline-color: transparent;
+  }
+  12.5% {
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  }
+  25% {
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+  37.5% {
+    border-color: color-mix(in srgb, var(--primary) 62%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 26%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--primary) 78%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  }
+  62.5% {
+    border-color: color-mix(in srgb, var(--primary) 62%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 26%, transparent);
+  }
+  75% {
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 16%, transparent);
+  }
+  87.5% {
+    border-color: color-mix(in srgb, var(--primary) 22%, var(--interactive-border));
+    outline-color: color-mix(in srgb, var(--primary) 8%, transparent);
+  }
+}
+
+.animate-border-glow-pulse {
+  outline: 1px solid transparent;
+  outline-offset: 1px;
+  will-change: border-color, outline-color;
+  animation: border-glow-pulse 3.8s linear infinite;
+}
+
+@keyframes marquee-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+.marquee-text {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.marquee-text--auto {
+  animation: marquee-scroll 6s linear infinite alternate;
+  will-change: transform;
+}
+
+.group:hover .marquee-text--active,
+.marquee-text--active:hover {
+  animation: marquee-scroll 5s linear infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-text--auto,
+  .group:hover .marquee-text--active,
+  .marquee-text--active:hover {
+    animation: none;
+  }
+
+  .animate-grid-pulse,
+  .animate-attention-diamond-pulse {
+    animation: none;
+  }
+
+
+}
