@@ -3254,6 +3254,9 @@ const commands = {
         } else if (isQuietMode(options) && !isJsonMode(options)) {
           process.stdout.write(`restarting ${restartPort} mode:foreground attached\n`);
         }
+
+        // Foreground serve() blocks forever — emit final summary after the
+        // stop succeeds but before the serve call (see below).
       }
 
       // Use spinner only for daemon restarts; foreground prints a static line
@@ -3272,6 +3275,21 @@ const commands = {
           suppressQuietOutput: true,
         });
         await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // Foreground serve() blocks forever, so emit the final restart
+        // summary now — after stop succeeded but before serve blocks.
+        // Daemon instances are sorted first, so `restarted` already
+        // contains all their results.
+        if (isForeground) {
+          restarted.push({ fromPort: instance.port, toPort: restartPort, launchMode, ok: true });
+          if (isJsonMode(options)) {
+            printJson({ restartedCount: restarted.length, willAttach: true, results: restarted.map((r) => ({ ...r, launchMode: r.launchMode })) });
+          } else if (showOutput) {
+            clackOutro(`${restarted.length} instance(s) restarted`);
+          } else if (isQuietMode(options)) {
+            process.stdout.write(`restarted ${restarted.length}\n`);
+          }
+        }
 
         const restartedPort = await this.serve({
           port: restartPort,
