@@ -93,6 +93,8 @@ export type FilesystemEntry = {
   isDirectory: boolean;
   isFile: boolean;
   isSymbolicLink?: boolean;
+  size?: number;
+  modifiedTime?: number;
 };
 
 export type ProjectFileSearchHit = {
@@ -2065,6 +2067,8 @@ class OpencodeService {
           isDirectory: !!entry.isDirectory,
           isFile: !entry.isDirectory,
           isSymbolicLink: false,
+          size: typeof entry.size === 'number' ? entry.size : undefined,
+          modifiedTime: typeof entry.modifiedTime === 'number' ? entry.modifiedTime : undefined,
         }));
         this.listDirectoryCache.set(cacheKey, {
           entries,
