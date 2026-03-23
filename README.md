@@ -142,7 +142,7 @@ dev machine over a VPN (e.g. Tailscale) or LAN without a Cloudflare tunnel.
 
 **How it works:**
 - OpenCode runs as its own service, binding only to `localhost`.
-- OpenChamber connects to it via `OPENCODE_HOST` and binds to all interfaces so it's reachable on your VPN IP.
+- OpenChamber connects to it via `OPENCODE_HOST` and `--host 0.0.0.0` makes it reachable on your VPN IP.
 - `--foreground` keeps the CLI process alive so systemd can track and restart it.
 
 **`~/.config/systemd/user/opencode.service`**
@@ -177,7 +177,7 @@ After=opencode.service
 
 [Service]
 Type=simple
-ExecStart=openchamber serve --port 3000 --ui-password your-password --foreground
+ExecStart=openchamber serve --port 3000 --host 0.0.0.0 --ui-password your-password --foreground
 Environment="OPENCODE_HOST=http://localhost:4095"
 Environment="OPENCODE_SKIP_START=true"
 Restart=on-failure
@@ -194,8 +194,9 @@ systemctl --user enable --now opencode openchamber
 
 OpenChamber will be reachable at `http://<your-vpn-hostname>:3000` from any device on your VPN.
 
-> **Tip:** Set `OPENCHAMBER_HOST` to restrict which interface the server binds to
-> (e.g. `Environment="OPENCHAMBER_HOST=100.x.x.x"` for a specific Tailscale IP).
+> **Note:** `--host 0.0.0.0` is required to listen on all interfaces. The default
+> bind address is `127.0.0.1` (localhost only). Use `--host <ip>` or
+> `OPENCHAMBER_HOST=<ip>` to bind to a specific interface instead.
 
 </details>
 

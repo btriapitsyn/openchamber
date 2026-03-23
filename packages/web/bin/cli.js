@@ -2763,6 +2763,13 @@ const commands = {
     // IMPORTANT: foreground MUST remain inline (in-process). Do not convert to
     // child-process orchestration — that causes shell job-control suspension.
     if (options.foreground) {
+      if (isJsonMode(options)) {
+        throw new TunnelCliError(
+          '--json is not supported with --foreground. Use --json with background (daemon) mode instead.',
+          EXIT_CODE.USAGE_ERROR
+        );
+      }
+
       // Propagate resolved values into env before importing the server module.
       if (opencodeBinary) {
         process.env.OPENCODE_BINARY = opencodeBinary;
@@ -2771,11 +2778,11 @@ const commands = {
         process.env.OPENCHAMBER_UI_PASSWORD = effectiveUiPassword;
       }
 
-      // In --json or --quiet mode, redirect stdout/stderr to the log file so
-      // that server runtime output (console.log calls) does not pollute the
+      // In --quiet mode, redirect stdout/stderr to the log file so that
+      // server runtime output (console.log calls) does not pollute the
       // deterministic CLI output contract.  In plain human mode, close the
       // log fd and let output go to the inherited terminal as before.
-      const suppressServerOutput = isJsonMode(options) || isQuietMode(options);
+      const suppressServerOutput = isQuietMode(options);
       // Keep a reference to the real stdout.write so CLI output (port, JSON)
       // can bypass the log-file redirect.
       const realStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -2796,13 +2803,17 @@ const commands = {
         }
       }
 
-      if (!isQuietMode(options) && !isJsonMode(options)) {
+      if (!isQuietMode(options)) {
         console.log(`Starting OpenChamber on port ${targetPort === 0 ? 'auto' : targetPort} (foreground)`);
       }
+
+      const effectiveHost = typeof options.host === 'string' && options.host.length > 0
+        ? options.host : undefined;
 
       const { startWebUiServer } = await import(pathToFileURL(serverPath).href);
       const controller = await startWebUiServer({
         port: targetPort,
+        host: effectiveHost,
         uiPassword: effectiveUiPassword,
         attachSignals: false,
         exitOnShutdown: false,
@@ -2821,21 +2832,7 @@ const commands = {
         uiPassword: effectiveUiPassword,
       }, emitNotice);
 
-      // Deterministic --json output: emit startup JSON then continue running.
-      // Use realStdoutWrite to bypass the log-file redirect.
-      if (isJsonMode(options)) {
-        const payload = JSON.stringify({
-          status: jsonMessages.some((m) => m.level === 'warning') ? 'warning' : 'ok',
-          port: resolvedPort,
-          pid: process.pid,
-          url: buildLocalUrl(resolvedPort, '/'),
-          launchMode: 'foreground',
-          foreground: true,
-          logs: `openchamber logs -p ${resolvedPort}`,
-          messages: jsonMessages,
-        }, null, 2);
-        realStdoutWrite(payload + '\n');
-      } else if (isQuietMode(options)) {
+      if (isQuietMode(options)) {
         if (!options.suppressQuietOutput) {
           realStdoutWrite(`${resolvedPort}\n`);
         }

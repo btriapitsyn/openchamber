@@ -155,7 +155,7 @@ After=opencode.service
 
 [Service]
 Type=simple
-ExecStart=openchamber serve --port 3000 --ui-password your-password --foreground
+ExecStart=openchamber serve --port 3000 --host 0.0.0.0 --ui-password your-password --foreground
 Environment="OPENCODE_HOST=http://localhost:4095"
 Environment="OPENCODE_SKIP_START=true"
 Restart=on-failure
@@ -170,7 +170,7 @@ systemctl --user daemon-reload
 systemctl --user enable --now opencode openchamber
 ```
 
-OpenChamber binds to all interfaces by default, so it's reachable on any VPN (e.g. Tailscale) or LAN IP. Set `OPENCHAMBER_HOST=<ip>` to restrict it to a specific interface.
+`--host 0.0.0.0` is required to listen on all interfaces (the default is `127.0.0.1`). Use `--host <ip>` or `OPENCHAMBER_HOST=<ip>` to bind to a specific interface instead.
 
 </details>
 
