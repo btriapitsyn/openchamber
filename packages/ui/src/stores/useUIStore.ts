@@ -562,6 +562,10 @@ interface UIStore {
 
   isExpandedInput: boolean;
 
+  // Full Immersion Mode
+  isImmersionMode: boolean;
+  focusedMessageId: string | null;
+
   shortcutOverrides: Record<string, ShortcutCombo>;
 
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
@@ -672,6 +676,9 @@ interface UIStore {
   setViewPagerPage: (page: 'left' | 'center' | 'right') => void;
   toggleExpandedInput: () => void;
   setExpandedInput: (value: boolean) => void;
+  toggleImmersionMode: () => void;
+  setImmersionMode: (value: boolean) => void;
+  setFocusedMessageId: (id: string | null) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
   setShortcutOverride: (actionId: string, combo: ShortcutCombo) => void;
@@ -782,6 +789,11 @@ export const useUIStore = create<UIStore>()(
         showMobileSessionStatusBar: true,
         isMobileSessionStatusBarCollapsed: false,
         isExpandedInput: false,
+
+        // Full Immersion Mode
+        isImmersionMode: false,
+        focusedMessageId: null,
+
         shortcutOverrides: {},
 
         setTheme: (theme) => {
@@ -1729,6 +1741,18 @@ export const useUIStore = create<UIStore>()(
 
         setExpandedInput: (value) => {
           set({ isExpandedInput: value });
+        },
+
+        toggleImmersionMode: () => {
+          set((state) => ({ isImmersionMode: !state.isImmersionMode }));
+        },
+
+        setImmersionMode: (value) => {
+          set({ isImmersionMode: value });
+        },
+
+        setFocusedMessageId: (id) => {
+          set({ focusedMessageId: id });
         },
       }),
       {

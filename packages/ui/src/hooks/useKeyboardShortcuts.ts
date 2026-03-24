@@ -335,6 +335,19 @@ export const useKeyboardShortcuts = () => {
         return;
       }
 
+      if (eventMatchesShortcut(e, combo('immersion_mode'))) {
+        e.preventDefault();
+        const { toggleImmersionMode, isImmersionMode } = useUIStore.getState();
+        // When entering immersion mode, also hide sidebars
+        if (!isImmersionMode) {
+          useUIStore.getState().setSidebarOpen(false);
+          useUIStore.getState().setRightSidebarOpen(false);
+          useUIStore.getState().setBottomTerminalOpen(false);
+        }
+        toggleImmersionMode();
+        return;
+      }
+
       if (e.key === 'Escape') {
         const target = e.target as Element | null;
         const isInsideDialog = Boolean(target?.closest('[role="dialog"]'));

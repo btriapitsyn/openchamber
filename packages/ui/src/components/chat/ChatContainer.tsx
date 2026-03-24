@@ -105,6 +105,8 @@ export const ChatContainer: React.FC = () => {
         isExpandedInput,
         stickyUserHeader,
         chatRenderMode,
+        isImmersionMode,
+        setImmersionMode,
     } = useUIStore();
 
     const sessionMessages = useSessionStore(
@@ -481,6 +483,20 @@ export const ChatContainer: React.FC = () => {
             style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
         >
             {returnToParentButton}
+            {isImmersionMode && (
+                <>
+                    <button
+                        className="immersion-exit-btn"
+                        onClick={() => setImmersionMode(false)}
+                        title="Exit Immersion Mode (Cmd+Shift+I)"
+                    >
+                        Exit Immersion
+                    </button>
+                    <div className="immersion-nav-hint">
+                        ↑↓ Navigate • Enter Scroll • Esc Exit
+                    </div>
+                </>
+            )}
             <div
                 className={cn(
                     'relative min-h-0',
