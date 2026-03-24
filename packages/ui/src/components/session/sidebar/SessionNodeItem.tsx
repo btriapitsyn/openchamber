@@ -571,8 +571,7 @@ export function SessionNodeItem(props: Props): React.ReactNode {
                   <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
                     <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
                       <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
-                      {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/65">-{sessionDiffStats.deletions}</span></span> : null}
-{renderContext === 'recent' && secondaryMeta?.projectLabel ? (
+                      {renderContext === 'recent' && secondaryMeta?.projectLabel ? (
                         (() => {
                           const tagColor = getProjectTagColor(projectId);
                           return (
