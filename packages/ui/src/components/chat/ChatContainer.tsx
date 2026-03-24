@@ -71,6 +71,12 @@ const HYDRATING_SKELETON_ITEMS: Array<{
 ];
 
 export const ChatContainer: React.FC = () => {
+    // Track if component has mounted (for hydration-safe rendering)
+    const [hasMounted, setHasMounted] = React.useState(false);
+    React.useEffect(() => {
+        setHasMounted(true);
+    }, []);
+
     const {
         currentSessionId,
         loadMessages,
@@ -107,6 +113,10 @@ export const ChatContainer: React.FC = () => {
         chatRenderMode,
         isImmersionMode,
         setImmersionMode,
+        setAllMessageIds,
+        setFocusedMessageId,
+        focusedMessageId,
+        allMessageIds,
     } = useUIStore();
 
     const sessionMessages = useSessionStore(
@@ -263,6 +273,46 @@ export const ChatContainer: React.FC = () => {
     React.useEffect(() => {
         activeTurnChangeRef.current = timelineController.handleActiveTurnChange;
     }, [timelineController.handleActiveTurnChange]);
+
+    // Full Immersion Mode: Extract all message IDs from renderedMessages
+    React.useEffect(() => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const entries = timelineController.renderedMessages as any[];
+        const ids: string[] = [];
+
+        for (const entry of entries) {
+            if (entry.kind === 'ungrouped') {
+                ids.push(entry.message?.info?.id);
+            } else if (entry.kind === 'turn') {
+                ids.push(entry.turn?.userMessageId);
+                if (entry.turn?.assistantMessageIds) {
+                    ids.push(...entry.turn.assistantMessageIds);
+                }
+            }
+        }
+
+        // Filter out undefined/null IDs
+        const validIds = ids.filter(Boolean);
+        setAllMessageIds(validIds);
+    }, [timelineController.renderedMessages, setAllMessageIds]);
+
+    // Full Immersion Mode: Set initial focused message when entering immersion mode
+    React.useEffect(() => {
+        if (isImmersionMode && allMessageIds.length > 0 && !focusedMessageId) {
+            setFocusedMessageId(allMessageIds[0]);
+        }
+    }, [isImmersionMode, allMessageIds, focusedMessageId, setFocusedMessageId]);
+
+    // Full Immersion Mode: Auto-scroll when focused message changes
+    React.useEffect(() => {
+        if (isImmersionMode && focusedMessageId && messageListRef.current) {
+            // Use setTimeout to ensure DOM has updated with new spotlight
+            const timeoutId = setTimeout(() => {
+                messageListRef.current?.scrollToMessageId(focusedMessageId, { behavior: 'smooth' });
+            }, 50);
+            return () => clearTimeout(timeoutId);
+        }
+    }, [isImmersionMode, focusedMessageId]);
 
     const navigation = useChatTurnNavigation({
         sessionId: currentSessionId,
@@ -483,7 +533,7 @@ export const ChatContainer: React.FC = () => {
             style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
         >
             {returnToParentButton}
-            {isImmersionMode && (
+            {hasMounted && isImmersionMode && (
                 <>
                     <button
                         className="immersion-exit-btn"

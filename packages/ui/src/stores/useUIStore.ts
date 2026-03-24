@@ -565,6 +565,7 @@ interface UIStore {
   // Full Immersion Mode
   isImmersionMode: boolean;
   focusedMessageId: string | null;
+  allMessageIds: string[];
 
   shortcutOverrides: Record<string, ShortcutCombo>;
 
@@ -679,6 +680,7 @@ interface UIStore {
   toggleImmersionMode: () => void;
   setImmersionMode: (value: boolean) => void;
   setFocusedMessageId: (id: string | null) => void;
+  setAllMessageIds: (ids: string[]) => void;
   openMultiRunLauncher: () => void;
   openMultiRunLauncherWithPrompt: (prompt: string) => void;
   setShortcutOverride: (actionId: string, combo: ShortcutCombo) => void;
@@ -793,6 +795,7 @@ export const useUIStore = create<UIStore>()(
         // Full Immersion Mode
         isImmersionMode: false,
         focusedMessageId: null,
+        allMessageIds: [],
 
         shortcutOverrides: {},
 
@@ -1753,6 +1756,10 @@ export const useUIStore = create<UIStore>()(
 
         setFocusedMessageId: (id) => {
           set({ focusedMessageId: id });
+        },
+
+        setAllMessageIds: (ids) => {
+          set({ allMessageIds: ids });
         },
       }),
       {
