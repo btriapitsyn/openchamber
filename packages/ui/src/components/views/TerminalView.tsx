@@ -54,7 +54,7 @@ const STREAM_OPTIONS = {
 
 const REHYDRATED_STREAM_OPTIONS = {
     retry: {
-        maxRetries: 0,
+        ...STREAM_OPTIONS.retry,
         initialDelayMs: 200,
         maxDelayMs: 500,
     },
