@@ -105,6 +105,7 @@ export const TerminalView: React.FC = () => {
     const setActiveTab = terminalStore.setActiveTab;
     const closeTab = terminalStore.closeTab;
     const setTabSessionId = terminalStore.setTabSessionId;
+    const setTabLifecycle = terminalStore.setTabLifecycle;
     const setConnecting = terminalStore.setConnecting;
     const appendToBuffer = terminalStore.appendToBuffer;
 
@@ -131,6 +132,7 @@ export const TerminalView: React.FC = () => {
     }, [directoryTerminalState, activeTabId]);
 
     const terminalSessionId = activeTab?.terminalSessionId ?? null;
+    const terminalLifecycle = activeTab?.lifecycle ?? 'idle';
     const bufferChunks = activeTab?.bufferChunks ?? [];
     const isConnecting = activeTab?.isConnecting ?? false;
 
@@ -312,6 +314,7 @@ export const TerminalView: React.FC = () => {
                                         exitCode !== null ? ` with code ${exitCode}` : ''
                                     }${signal !== null ? ` (signal ${signal})` : ''}]\r\n`
                                 );
+                                setTabLifecycle(directory, tabId, 'exited');
                                 setTabSessionId(directory, tabId, null);
                                 setConnecting(directory, tabId, false);
                                 setConnectionError(isActionTab ? null : 'Terminal session ended');
@@ -335,6 +338,7 @@ export const TerminalView: React.FC = () => {
 
                         if (fatal) {
                             setConnecting(directory, tabId, false);
+                            setTabLifecycle(directory, tabId, 'exited');
                             setTabSessionId(directory, tabId, null);
                             disconnectStream();
                         }
@@ -348,7 +352,7 @@ export const TerminalView: React.FC = () => {
                 activeTerminalIdRef.current = null;
             };
         },
-        [appendToBuffer, disconnectStream, focusTerminalWhenWindowActive, setConnecting, setTabSessionId, terminal]
+        [appendToBuffer, disconnectStream, focusTerminalWhenWindowActive, setConnecting, setTabLifecycle, setTabSessionId, terminal]
     );
 
     React.useEffect(() => {
@@ -388,6 +392,7 @@ export const TerminalView: React.FC = () => {
 
             const tab = state.tabs.find((t) => t.id === tabId) ?? state.tabs[0];
             let terminalId = tab?.terminalSessionId ?? null;
+            const terminalLifecycle = tab?.lifecycle ?? 'idle';
             const isActionTab = Boolean(tab?.label?.startsWith('Action:'));
             const hasBufferedOutput = (tab?.bufferLength ?? 0) > 0 || (tab?.bufferChunks?.length ?? 0) > 0;
 
@@ -401,6 +406,11 @@ export const TerminalView: React.FC = () => {
                 Boolean(terminalId) && rehydratedTerminalIdsRef.current.has(terminalId as string);
 
             if (!terminalId) {
+                if (terminalLifecycle === 'exited') {
+                    setConnecting(directory, tabId, false);
+                    return;
+                }
+
                 if (isActionTab && hasBufferedOutput) {
                     setConnecting(directory, tabId, false);
                     return;
@@ -475,12 +485,14 @@ export const TerminalView: React.FC = () => {
         hasActiveContext,
         effectiveDirectory,
         terminalSessionId,
+        terminalLifecycle,
         activeTabId,
         hasOpenedTerminalViewport,
         enableTabs,
         terminalHydrated,
         ensureDirectory,
         setConnecting,
+        setTabLifecycle,
         setTabSessionId,
         startStream,
         disconnectStream,
