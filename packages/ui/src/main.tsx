@@ -6,6 +6,7 @@ import App from './App.tsx'
 import { SessionAuthGate } from './components/auth/SessionAuthGate'
 import { ThemeSystemProvider } from './contexts/ThemeSystemContext'
 import { ThemeProvider } from './components/providers/ThemeProvider'
+import { I18nProvider } from './contexts/I18nContext'
 import './lib/debug'
 import { syncDesktopSettings, initializeAppearancePreferences } from './lib/persistence'
 import { startAppearanceAutoSave } from './lib/appearanceAutoSave'
@@ -13,15 +14,30 @@ import { applyPersistedDirectoryPreferences } from './lib/directoryPersistence'
 import { startTypographyWatcher } from './lib/typographyWatcher'
 import { startModelPrefsAutoSave } from './lib/modelPrefsAutoSave'
 import type { RuntimeAPIs } from './lib/api/types'
+import { pickNormalizedLocale, type SupportedLocale } from './lib/i18n/locale'
 
 declare global {
   interface Window {
     __OPENCHAMBER_RUNTIME_APIS__?: RuntimeAPIs;
+    __OPENCHAMBER_BOOTSTRAP__?: {
+      locale?: string;
+    };
   }
 }
 
 const runtimeAPIs = (typeof window !== 'undefined' && window.__OPENCHAMBER_RUNTIME_APIS__) || (() => {
   throw new Error('Runtime APIs not provided for legacy UI entrypoint.');
+})();
+
+const bootstrapLocale: SupportedLocale = (() => {
+  if (typeof window === 'undefined') {
+    return 'en';
+  }
+
+  const bootstrapLocaleValue = window.__OPENCHAMBER_BOOTSTRAP__?.locale;
+  const navigatorLanguages = Array.isArray(navigator.languages) ? navigator.languages : [];
+
+  return pickNormalizedLocale([bootstrapLocaleValue, navigator.language, ...navigatorLanguages]);
 })();
 
 await syncDesktopSettings();
@@ -90,12 +106,14 @@ if (!rootElement) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ThemeSystemProvider>
-      <ThemeProvider>
-        <SessionAuthGate>
-          <App apis={runtimeAPIs} />
-        </SessionAuthGate>
-      </ThemeProvider>
-    </ThemeSystemProvider>
+    <I18nProvider locale={bootstrapLocale}>
+      <ThemeSystemProvider>
+        <ThemeProvider>
+          <SessionAuthGate>
+            <App apis={runtimeAPIs} />
+          </SessionAuthGate>
+        </ThemeProvider>
+      </ThemeSystemProvider>
+    </I18nProvider>
   </StrictMode>,
 );

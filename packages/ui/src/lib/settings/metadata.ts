@@ -1,4 +1,5 @@
 import type { SidebarSection } from '@/constants/sidebar';
+import { defaultMessages, type MessageDictionary } from '@/lib/i18n/messages';
 
 export type SettingsPageSlug =
   | 'home'
@@ -46,132 +47,136 @@ export interface SettingsPageMeta {
   isAvailable?: (ctx: SettingsRuntimeContext) => boolean;
 }
 
-export const SETTINGS_GROUP_LABELS: Record<SettingsPageGroup, string> = {
-  appearance: 'Appearance',
-  projects: 'Projects',
-  general: 'General',
-  opencode: 'OpenCode',
-  git: 'Git',
-  skills: 'Skills',
-  usage: 'Usage',
-  advanced: 'Advanced',
-};
+export function getSettingsGroupLabels(messages: MessageDictionary): Record<SettingsPageGroup, string> {
+  return {
+    appearance: messages.settings.groups.appearance,
+    projects: messages.settings.groups.projects,
+    general: messages.settings.groups.general,
+    opencode: messages.settings.groups.opencode,
+    git: messages.settings.groups.git,
+    skills: messages.settings.groups.skills,
+    usage: messages.settings.groups.usage,
+    advanced: messages.settings.groups.advanced,
+  };
+}
 
-export const SETTINGS_PAGE_METADATA: readonly SettingsPageMeta[] = [
+export function getSettingsPageMetadata(messages: MessageDictionary): readonly SettingsPageMeta[] {
+  return [
   {
     slug: 'home',
-    title: 'Settings',
+    title: messages.settings.pages.home.title,
     group: 'general',
     kind: 'single',
-    description: 'Search and jump to common pages.',
-    keywords: ['search', 'settings'],
+    description: messages.settings.pages.home.description,
+    keywords: messages.settings.pages.home.keywords,
   },
   {
     slug: 'projects',
-    title: 'Projects',
+    title: messages.settings.pages.projects.title,
     group: 'projects',
     kind: 'split',
-    keywords: ['project', 'projects', 'worktree', 'worktrees', 'repo', 'repository', 'directory'],
+    keywords: messages.settings.pages.projects.keywords,
   },
   {
     slug: 'remote-instances',
-    title: 'Remote Instances',
+    title: messages.settings.pages.remoteInstances.title,
     group: 'projects',
     kind: 'split',
-    keywords: ['ssh', 'remote', 'instances', 'tunnels', 'forwarding', 'connection'],
+    keywords: messages.settings.pages.remoteInstances.keywords,
     isAvailable: (ctx) => ctx.isDesktop && !ctx.isWeb && !ctx.isVSCode,
   },
   {
     slug: 'providers',
-    title: 'Providers',
+    title: messages.settings.pages.providers.title,
     group: 'opencode',
     kind: 'split',
-    keywords: ['provider', 'providers', 'models', 'model', 'api key', 'api keys', 'openai', 'anthropic', 'ollama', 'credentials'],
+    keywords: messages.settings.pages.providers.keywords,
   },
   {
     slug: 'usage',
-    title: 'Usage',
+    title: messages.settings.pages.usage.title,
     group: 'usage',
     kind: 'split',
-    keywords: ['quota', 'billing', 'tokens', 'usage', 'limits'],
+    keywords: messages.settings.pages.usage.keywords,
   },
   {
     slug: 'agents',
-    title: 'Agents',
+    title: messages.settings.pages.agents.title,
     group: 'opencode',
     kind: 'split',
-    keywords: ['agent', 'agents', 'prompts', 'tools', 'permissions'],
+    keywords: messages.settings.pages.agents.keywords,
   },
   {
     slug: 'commands',
-    title: 'Commands',
+    title: messages.settings.pages.commands.title,
     group: 'opencode',
     kind: 'split',
-    keywords: ['command', 'commands', 'slash', 'macros', 'automation'],
+    keywords: messages.settings.pages.commands.keywords,
   },
   {
     slug: 'mcp',
-    title: 'MCP',
+    title: messages.settings.pages.mcp.title,
     group: 'opencode',
     kind: 'split',
-    keywords: ['mcp', 'model context protocol', 'servers', 'tools', 'remote', 'stdio'],
+    keywords: messages.settings.pages.mcp.keywords,
   },
   {
     slug: 'skills.installed',
-    title: 'Skills',
+    title: messages.settings.pages.skillsInstalled.title,
     group: 'skills',
     kind: 'split',
-    keywords: ['skill', 'skills', 'instructions', 'install', 'catalog'],
+    keywords: messages.settings.pages.skillsInstalled.keywords,
   },
   {
     slug: 'skills.catalog',
-    title: 'Skills Catalog',
+    title: messages.settings.pages.skillsCatalog.title,
     group: 'skills',
     kind: 'single',
-    keywords: ['install', 'catalog', 'external', 'repository', 'skills catalog'],
+    keywords: messages.settings.pages.skillsCatalog.keywords,
   },
   {
     slug: 'git',
-    title: 'Git',
+    title: messages.settings.pages.git.title,
     group: 'git',
     kind: 'single',
-    keywords: ['git', 'github', 'identity', 'identities', 'ssh', 'profiles', 'credentials', 'keys', 'commit', 'gitmoji', 'oauth', 'prs', 'issues'],
+    keywords: messages.settings.pages.git.keywords,
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'appearance',
-    title: 'Appearance',
+    title: messages.settings.pages.appearance.title,
     group: 'appearance',
     kind: 'single',
-    keywords: ['theme', 'font', 'spacing', 'padding', 'corner radius', 'radius', 'input bar', 'terminal', 'pwa', 'install name', 'app shortcuts'],
+    keywords: messages.settings.pages.appearance.keywords,
   },
   {
     slug: 'chat',
-    title: 'Chat',
+    title: messages.settings.pages.chat.title,
     group: 'general',
     kind: 'single',
-    keywords: ['tools', 'diff', 'reasoning', 'dotfiles', 'draft', 'queue', 'output'],
+    keywords: messages.settings.pages.chat.keywords,
   },
   {
     slug: 'shortcuts',
-    title: 'Shortcuts',
+    title: messages.settings.pages.shortcuts.title,
     group: 'general',
     kind: 'single',
-    keywords: ['keyboard', 'hotkeys', 'shortcuts', 'bindings'],
+    keywords: messages.settings.pages.shortcuts.keywords,
     isAvailable: (ctx) => !ctx.isVSCode,
   },
   {
     slug: 'sessions',
-    title: 'Sessions',
+    title: messages.settings.pages.sessions.title,
     group: 'general',
     kind: 'single',
-    keywords: ['defaults', 'default agent', 'default model', 'retention', 'memory', 'limits', 'zen'],
+    keywords: messages.settings.pages.sessions.keywords,
   },
 
-  { slug: 'notifications', title: 'Notifications', group: 'general', kind: 'single', keywords: ['alerts', 'native', 'summary', 'summarization'], },
-  { slug: 'voice', title: 'Voice', group: 'advanced', kind: 'single', keywords: ['tts', 'speech', 'voice'], isAvailable: (ctx) => !ctx.isVSCode },
-  { slug: 'tunnel', title: 'Remote Tunnel', group: 'advanced', kind: 'single', keywords: ['tunnel', 'cloudflare', 'qr', 'remote', 'mobile', 'share'], isAvailable: (ctx) => !ctx.isVSCode },
+  { slug: 'notifications', title: messages.settings.pages.notifications.title, group: 'general', kind: 'single', keywords: messages.settings.pages.notifications.keywords },
+  { slug: 'voice', title: messages.settings.pages.voice.title, group: 'advanced', kind: 'single', keywords: messages.settings.pages.voice.keywords, isAvailable: (ctx) => !ctx.isVSCode },
+  { slug: 'tunnel', title: messages.settings.pages.tunnel.title, group: 'advanced', kind: 'single', keywords: messages.settings.pages.tunnel.keywords, isAvailable: (ctx) => !ctx.isVSCode },
 ] as const;
+}
 
 export const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, SettingsPageSlug> = {
   sessions: 'sessions',
@@ -185,12 +190,12 @@ export const LEGACY_SIDEBAR_SECTION_TO_SETTINGS_SLUG: Record<SidebarSection, Set
   settings: 'home',
 };
 
-export function getSettingsPageMeta(slug: string): SettingsPageMeta | null {
+export function getSettingsPageMeta(slug: string, messages: MessageDictionary = defaultMessages): SettingsPageMeta | null {
   const normalized = slug.trim().toLowerCase();
-  return (SETTINGS_PAGE_METADATA as readonly SettingsPageMeta[]).find((page) => page.slug === normalized) ?? null;
+  return getSettingsPageMetadata(messages).find((page) => page.slug === normalized) ?? null;
 }
 
-export function resolveSettingsSlug(value: string | null | undefined): SettingsPageSlug {
+export function resolveSettingsSlug(value: string | null | undefined, messages: MessageDictionary = defaultMessages): SettingsPageSlug {
   const normalized = (value ?? '').trim().toLowerCase();
   if (!normalized) {
     return 'home';
@@ -201,7 +206,7 @@ export function resolveSettingsSlug(value: string | null | undefined): SettingsP
     return legacy;
   }
 
-  const direct = getSettingsPageMeta(normalized);
+  const direct = getSettingsPageMeta(normalized, messages);
   if (direct) {
     return direct.slug;
   }

@@ -1,5 +1,6 @@
 import { RiBrainAi3Line, RiChatAi3Line, RiCommandLine, RiGitBranchLine, RiSettings3Line, RiStackLine, RiBookLine, RiBarChart2Line, RiPlugLine } from '@remixicon/react';
 import type { ComponentType } from 'react';
+import type { MessageDictionary } from '@/lib/i18n/messages';
 
 export type SidebarSection = 'sessions' | 'agents' | 'commands' | 'skills' | 'mcp' | 'providers' | 'usage' | 'git-identities' | 'settings';
 
@@ -13,73 +14,97 @@ export interface SidebarSectionConfig {
     icon: IconComponent;
 }
 
-export const SIDEBAR_SECTIONS: SidebarSectionConfig[] = [
-    {
-        id: 'sessions',
-        label: 'Sessions',
-        description: 'Browse and manage chat sessions scoped to the current directory.',
-        icon: RiChatAi3Line,
-    },
-    {
-        id: 'agents',
-        label: 'Agents',
-        description: 'Configure OpenCode agents, prompts, and permissions.',
-        icon: RiBrainAi3Line,
-    },
-    {
-        id: 'commands',
-        label: 'Commands',
-        description: 'Create and maintain custom slash commands for OpenCode.',
-        icon: RiCommandLine,
-    },
-    {
-        id: 'skills',
-        label: 'Skills',
-        description: 'Create reusable instruction files for agents to load on-demand.',
-        icon: RiBookLine,
-    },
-    {
-        id: 'mcp',
-        label: 'MCP',
-        description: 'Manage Model Context Protocol servers and their configurations.',
-        icon: RiPlugLine,
-    },
-    {
-        id: 'providers',
-        label: 'Providers',
-        description: 'Configure AI model providers and API credentials.',
-        icon: RiStackLine,
-    },
-    {
-        id: 'usage',
-        label: 'Usage',
-        description: 'Monitor API quota and usage across providers.',
-        icon: RiBarChart2Line,
-    },
-    {
-        id: 'git-identities',
-        label: 'Git Identities',
-        description: 'Manage Git profiles with different credentials and SSH keys.',
-        icon: RiGitBranchLine,
-    },
-    {
-        id: 'settings',
-        label: 'OpenChamber',
-        description: 'OpenChamber app settings: themes, fonts, and preferences.',
-        icon: RiSettings3Line,
-    },
-];
+const SIDEBAR_SECTION_ICONS: Record<SidebarSection, IconComponent> = {
+    sessions: RiChatAi3Line,
+    agents: RiBrainAi3Line,
+    commands: RiCommandLine,
+    skills: RiBookLine,
+    mcp: RiPlugLine,
+    providers: RiStackLine,
+    usage: RiBarChart2Line,
+    'git-identities': RiGitBranchLine,
+    settings: RiSettings3Line,
+};
 
-const sidebarSectionLabels = {} as Record<SidebarSection, string>;
-const sidebarSectionDescriptions = {} as Record<SidebarSection, string>;
-const sidebarSectionConfigMap = {} as Record<SidebarSection, SidebarSectionConfig>;
+export function getSidebarSections(messages: MessageDictionary): SidebarSectionConfig[] {
+    return [
+        {
+            id: 'sessions',
+            label: messages.sidebar.sessions.label,
+            description: messages.sidebar.sessions.description,
+            icon: SIDEBAR_SECTION_ICONS.sessions,
+        },
+        {
+            id: 'agents',
+            label: messages.sidebar.agents.label,
+            description: messages.sidebar.agents.description,
+            icon: SIDEBAR_SECTION_ICONS.agents,
+        },
+        {
+            id: 'commands',
+            label: messages.sidebar.commands.label,
+            description: messages.sidebar.commands.description,
+            icon: SIDEBAR_SECTION_ICONS.commands,
+        },
+        {
+            id: 'skills',
+            label: messages.sidebar.skills.label,
+            description: messages.sidebar.skills.description,
+            icon: SIDEBAR_SECTION_ICONS.skills,
+        },
+        {
+            id: 'mcp',
+            label: messages.sidebar.mcp.label,
+            description: messages.sidebar.mcp.description,
+            icon: SIDEBAR_SECTION_ICONS.mcp,
+        },
+        {
+            id: 'providers',
+            label: messages.sidebar.providers.label,
+            description: messages.sidebar.providers.description,
+            icon: SIDEBAR_SECTION_ICONS.providers,
+        },
+        {
+            id: 'usage',
+            label: messages.sidebar.usage.label,
+            description: messages.sidebar.usage.description,
+            icon: SIDEBAR_SECTION_ICONS.usage,
+        },
+        {
+            id: 'git-identities',
+            label: messages.sidebar.gitIdentities.label,
+            description: messages.sidebar.gitIdentities.description,
+            icon: SIDEBAR_SECTION_ICONS['git-identities'],
+        },
+        {
+            id: 'settings',
+            label: messages.sidebar.settings.label,
+            description: messages.sidebar.settings.description,
+            icon: SIDEBAR_SECTION_ICONS.settings,
+        },
+    ];
+}
 
-SIDEBAR_SECTIONS.forEach((section) => {
-    sidebarSectionLabels[section.id] = section.label;
-    sidebarSectionDescriptions[section.id] = section.description;
-    sidebarSectionConfigMap[section.id] = section;
-});
+export function getSidebarSectionLabels(messages: MessageDictionary): Record<SidebarSection, string> {
+    const labels = {} as Record<SidebarSection, string>;
+    getSidebarSections(messages).forEach((section) => {
+        labels[section.id] = section.label;
+    });
+    return labels;
+}
 
-export const SIDEBAR_SECTION_LABELS = sidebarSectionLabels;
-export const SIDEBAR_SECTION_DESCRIPTIONS = sidebarSectionDescriptions;
-export const SIDEBAR_SECTION_CONFIG_MAP = sidebarSectionConfigMap;
+export function getSidebarSectionDescriptions(messages: MessageDictionary): Record<SidebarSection, string> {
+    const descriptions = {} as Record<SidebarSection, string>;
+    getSidebarSections(messages).forEach((section) => {
+        descriptions[section.id] = section.description;
+    });
+    return descriptions;
+}
+
+export function getSidebarSectionConfigMap(messages: MessageDictionary): Record<SidebarSection, SidebarSectionConfig> {
+    const configMap = {} as Record<SidebarSection, SidebarSectionConfig>;
+    getSidebarSections(messages).forEach((section) => {
+        configMap[section.id] = section;
+    });
+    return configMap;
+}

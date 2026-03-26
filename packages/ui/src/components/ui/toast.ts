@@ -4,6 +4,17 @@ import { isValidElement } from "react"
 import { toast as sonnerToast } from "sonner"
 import type { ExternalToast } from "sonner"
 import { copyTextToClipboard } from '@/lib/clipboard'
+import { messagesByLocale } from '@/lib/i18n/messages'
+import { pickNormalizedLocale } from '@/lib/i18n/locale'
+
+const getToastActionLabels = () => {
+  if (typeof navigator === 'undefined') {
+    return messagesByLocale.en.common
+  }
+
+  const locale = pickNormalizedLocale([navigator.language, ...(Array.isArray(navigator.languages) ? navigator.languages : [])])
+  return messagesByLocale[locale].common
+}
 
 const copyToClipboard = async (text: string) => {
   const result = await copyTextToClipboard(text)
@@ -48,37 +59,41 @@ const getToastCopyText = (message: string | React.ReactNode, data?: ExternalToas
 export const toast = {
   ...sonnerToast,
   success: (message: string | React.ReactNode, data?: ExternalToast) => {
+    const labels = getToastActionLabels()
     return sonnerToast.success(message, {
       ...data,
       action: data?.action || {
-        label: 'OK',
+        label: labels.ok,
         onClick: () => {},
       },
     })
   },
   info: (message: string | React.ReactNode, data?: ExternalToast) => {
+    const labels = getToastActionLabels()
     return sonnerToast.info(message, {
       ...data,
       action: data?.action || {
-        label: 'OK',
+        label: labels.ok,
         onClick: () => {},
       },
     })
   },
   error: (message: string | React.ReactNode, data?: ExternalToast) => {
+    const labels = getToastActionLabels()
     return sonnerToast.error(message, {
       ...data,
       action: data?.action || {
-        label: 'Copy',
+        label: labels.copy,
         onClick: () => copyToClipboard(getToastCopyText(message, data)),
       },
     })
   },
   warning: (message: string | React.ReactNode, data?: ExternalToast) => {
+    const labels = getToastActionLabels()
     return sonnerToast.warning(message, {
       ...data,
       action: data?.action || {
-        label: 'Copy',
+        label: labels.copy,
         onClick: () => copyToClipboard(getToastCopyText(message, data)),
       },
     })

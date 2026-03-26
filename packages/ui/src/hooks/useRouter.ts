@@ -5,6 +5,7 @@ import { parseRoute, updateBrowserURL, hasRouteParams } from '@/lib/router';
 import type { RouteState, AppRouteState } from '@/lib/router';
 import type { MainTab } from '@/stores/useUIStore';
 import { resolveSettingsSlug } from '@/lib/settings/metadata';
+import { useI18n } from '@/contexts/useI18n';
 
 /**
  * Check if running in VS Code webview context.
@@ -32,6 +33,7 @@ function isVSCodeContext(): boolean {
  */
 export function useRouter(): void {
   const isVSCode = React.useMemo(() => isVSCodeContext(), []);
+  const { messages } = useI18n();
 
   // Track initialization to avoid duplicate applies
   const initializedRef = React.useRef(false);
@@ -66,7 +68,7 @@ export function useRouter(): void {
 
         // 2. Handle settings (takes precedence over tabs - it's a full-screen overlay)
         if (route.settingsPath) {
-          setSettingsPage(resolveSettingsSlug(route.settingsPath));
+          setSettingsPage(resolveSettingsSlug(route.settingsPath, messages));
           setSettingsDialogOpen(true);
           // Don't process tab when settings is open
           return;
@@ -90,7 +92,7 @@ export function useRouter(): void {
         isApplyingRouteRef.current = false;
       }
     },
-    [setCurrentSession, setActiveMainTab, setSettingsDialogOpen, setSettingsPage, navigateToDiff]
+    [messages, setCurrentSession, setActiveMainTab, setSettingsDialogOpen, setSettingsPage, navigateToDiff]
   );
 
   /**

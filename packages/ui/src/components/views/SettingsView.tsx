@@ -56,13 +56,14 @@ import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { reloadOpenCodeConfiguration } from '@/stores/useAgentsStore';
 import {
-  SETTINGS_PAGE_METADATA,
+  getSettingsPageMetadata,
   getSettingsPageMeta,
   resolveSettingsSlug,
   type SettingsPageSlug,
   type SettingsRuntimeContext,
   type SettingsPageMeta,
 } from '@/lib/settings/metadata';
+import { useI18n } from '@/contexts/useI18n';
 
 // Same constraints as main sidebar
 const SETTINGS_NAV_MIN_WIDTH = 176;
@@ -160,12 +161,13 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
 }
 
 const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ onOpen }) => {
+  const { messages } = useI18n();
   return (
     <div className="h-full overflow-auto">
       <div className="mx-auto w-full max-w-3xl px-6 py-6 space-y-6">
         <div className="space-y-1">
-          <h1 className="typography-ui-header font-semibold text-foreground">Settings</h1>
-          <p className="typography-ui text-muted-foreground">Jump to common pages.</p>
+          <h1 className="typography-ui-header font-semibold text-foreground">{messages.settings.home.title}</h1>
+          <p className="typography-ui text-muted-foreground">{messages.settings.home.description}</p>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -177,8 +179,8 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
               'hover:bg-[var(--interactive-hover)] transition-colors'
             )}
           >
-            <div className="typography-ui-label text-foreground">Providers</div>
-            <div className="typography-micro text-muted-foreground/70">Connect models + credentials</div>
+            <div className="typography-ui-label text-foreground">{messages.settings.home.quickLinks.providersTitle}</div>
+            <div className="typography-micro text-muted-foreground/70">{messages.settings.home.quickLinks.providersDescription}</div>
           </button>
 
           <button
@@ -189,8 +191,8 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
               'hover:bg-[var(--interactive-hover)] transition-colors'
             )}
           >
-            <div className="typography-ui-label text-foreground">Agents</div>
-            <div className="typography-micro text-muted-foreground/70">Prompts, tools, permissions</div>
+            <div className="typography-ui-label text-foreground">{messages.settings.home.quickLinks.agentsTitle}</div>
+            <div className="typography-micro text-muted-foreground/70">{messages.settings.home.quickLinks.agentsDescription}</div>
           </button>
 
           <button
@@ -201,8 +203,8 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
               'hover:bg-[var(--interactive-hover)] transition-colors'
             )}
           >
-            <div className="typography-ui-label text-foreground">Skills Catalog</div>
-            <div className="typography-micro text-muted-foreground/70">Install skills from catalogs</div>
+            <div className="typography-ui-label text-foreground">{messages.settings.home.quickLinks.skillsCatalogTitle}</div>
+            <div className="typography-micro text-muted-foreground/70">{messages.settings.home.quickLinks.skillsCatalogDescription}</div>
           </button>
 
           <button
@@ -213,8 +215,8 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
               'hover:bg-[var(--interactive-hover)] transition-colors'
             )}
           >
-            <div className="typography-ui-label text-foreground">MCP</div>
-            <div className="typography-micro text-muted-foreground/70">Configure MCP servers + connections</div>
+            <div className="typography-ui-label text-foreground">{messages.settings.home.quickLinks.mcpTitle}</div>
+            <div className="typography-micro text-muted-foreground/70">{messages.settings.home.quickLinks.mcpDescription}</div>
           </button>
 
           <button
@@ -225,8 +227,8 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
               'hover:bg-[var(--interactive-hover)] transition-colors'
             )}
           >
-            <div className="typography-ui-label text-foreground">Usage</div>
-            <div className="typography-micro text-muted-foreground/70">Quota + spend visibility</div>
+            <div className="typography-ui-label text-foreground">{messages.settings.home.quickLinks.usageTitle}</div>
+            <div className="typography-micro text-muted-foreground/70">{messages.settings.home.quickLinks.usageDescription}</div>
           </button>
         </div>
       </div>
@@ -235,13 +237,14 @@ const SettingsHome: React.FC<{ onOpen: (slug: SettingsPageSlug) => void }> = ({ 
 };
 
 export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile, isWindowed }) => {
+  const { messages } = useI18n();
   const deviceInfo = useDeviceInfo();
   const isMobile = forceMobile ?? deviceInfo.isMobile;
 
   const settingsPageRaw = useUIStore((state) => state.settingsPage);
   const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
-  const settingsSlug = resolveSettingsSlug(settingsPageRaw);
+  const settingsSlug = resolveSettingsSlug(settingsPageRaw, messages);
 
   const [mobileStage, setMobileStage] = React.useState<MobileStage>('nav');
   const autoNavSlugRef = React.useRef<string | null>(null);
@@ -260,14 +263,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   // keep platform check available for future window chrome tweaks
 
   const runtimeCtx = React.useMemo(() => buildRuntimeContext(isDesktopApp), [isDesktopApp]);
+  const settingsPageMetadata = React.useMemo(() => getSettingsPageMetadata(messages), [messages]);
 
   const visiblePages = React.useMemo(() => {
-    return SETTINGS_PAGE_METADATA
+    return settingsPageMetadata
       .filter((page) => page.slug !== 'home')
       .filter((page) => isPageAvailable(page, runtimeCtx))
       .filter((page) => !(runtimeCtx.isVSCode && page.slug === 'projects'))
       .filter((page) => !(isMobile && page.slug === 'shortcuts'));
-  }, [runtimeCtx, isMobile]);
+  }, [isMobile, runtimeCtx, settingsPageMetadata]);
 
   const sortedFilteredPages = React.useMemo(() => {
     const rank = new Map<SettingsPageSlug, number>(pageOrder.map((s, i) => [s, i]));
@@ -350,17 +354,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (!isMobile) {
       return;
     }
-    const def = getSettingsPageMeta(slug);
+      const def = getSettingsPageMeta(slug, messages);
     if (!def || def.slug === 'home') {
       setMobileStage('nav');
       return;
     }
     setMobileStage(def.kind === 'split' ? 'page-sidebar' : 'page-content');
-  }, [isMobile, setSettingsPage]);
+  }, [isMobile, messages, setSettingsPage]);
 
   const activePageMeta = React.useMemo(() => {
-    return getSettingsPageMeta(settingsSlug);
-  }, [settingsSlug]);
+    return getSettingsPageMeta(settingsSlug, messages);
+  }, [messages, settingsSlug]);
 
   // Collapse main nav to icon rail when active page has its own sidebar
   const isNavCollapsed = !isMobile && activePageMeta?.kind === 'split';
@@ -377,14 +381,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
   const renderUnavailable = React.useCallback(() => {
     return (
-      <div className="flex h-full items-center justify-center px-6">
+          <div className="flex h-full items-center justify-center px-6">
         <div className="max-w-md text-center">
-          <div className="typography-ui-header font-semibold text-foreground">Not available</div>
-          <p className="typography-ui text-muted-foreground mt-1">This settings page is not available in this runtime.</p>
+          <div className="typography-ui-header font-semibold text-foreground">{messages.common.notAvailable}</div>
+          <p className="typography-ui text-muted-foreground mt-1">{messages.common.notAvailableInRuntime}</p>
         </div>
       </div>
     );
-  }, []);
+  }, [messages.common.notAvailable, messages.common.notAvailableInRuntime]);
 
   const renderPageSidebar = React.useCallback((slug: SettingsPageSlug, opts: { onItemSelect?: () => void }) => {
     switch (slug) {
@@ -410,7 +414,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
   }, []);
 
   const renderPageContent = React.useCallback((slug: SettingsPageSlug) => {
-    const meta = getSettingsPageMeta(slug);
+    const meta = getSettingsPageMeta(slug, messages);
     if (meta && !isPageAvailable(meta, runtimeCtx)) {
       return renderUnavailable();
     }
@@ -451,7 +455,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       default:
         return <SettingsHome onOpen={openPage} />;
     }
-  }, [openChamberSectionBySlug, openPage, renderUnavailable, runtimeCtx]);
+  }, [messages, openChamberSectionBySlug, openPage, renderUnavailable, runtimeCtx]);
 
   // Mobile: if opened via deep-link / palette to a non-home page, jump into it once.
   React.useEffect(() => {
@@ -467,13 +471,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     if (autoNavSlugRef.current === settingsSlug) {
       return;
     }
-    const def = getSettingsPageMeta(settingsSlug);
+    const def = getSettingsPageMeta(settingsSlug, messages);
     if (!def || def.slug === 'home') {
       return;
     }
     autoNavSlugRef.current = settingsSlug;
     setMobileStage(def.kind === 'split' ? 'page-sidebar' : 'page-content');
-  }, [isMobile, mobileStage, settingsSlug]);
+  }, [isMobile, messages, mobileStage, settingsSlug]);
 
   const showBackButton = isMobile && mobileStage !== 'nav';
   const shortcutKey = getModifierLabel();
@@ -520,7 +524,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                         <span className="typography-ui-label font-normal truncate">{page.title}</span>
                         {(page.slug === 'voice' || page.slug === 'tunnel') && (
                           <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">
-                            beta
+                            {messages.common.beta}
                           </span>
                         )}
                       </span>
@@ -555,14 +559,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                       'text-sm font-semibold text-sidebar-foreground/90',
                       'hover:text-sidebar-foreground hover:bg-interactive-hover',
                     )}
-                    onClick={() => void reloadOpenCodeConfiguration({ message: 'Restarting OpenCode…', mode: 'projects', scopes: ['all'] })}
+                    onClick={() => void reloadOpenCodeConfiguration({ message: messages.settings.nav.reloadOpenCode, mode: 'projects', scopes: ['all'] })}
                   >
                     <RiRestartLine className="h-4 w-4 shrink-0" />
-                    <span>Reload OpenCode</span>
+                    <span>{messages.settings.nav.reloadOpenCode}</span>
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  Restart OpenCode and reload its configuration.
+                    {messages.settings.nav.reloadOpenCodeDescription}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -655,7 +659,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
           <button
             type="button"
             onClick={showBackButton ? handleBack : onClose}
-            aria-label={showBackButton ? 'Back to Settings' : 'Close settings'}
+            aria-label={showBackButton ? messages.common.back : messages.common.closeSettings}
             className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <RiArrowLeftSLine className="h-5 w-5" />
@@ -663,15 +667,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
           <div className="min-w-0 flex-1 typography-ui-label font-medium text-foreground truncate">
             {mobileStage === 'nav'
-              ? 'Settings'
-              : (activePageMeta?.title ?? 'Settings')}
+              ? messages.settings.home.title
+              : (activePageMeta?.title ?? messages.settings.home.title)}
           </div>
 
           {mobileStage === 'page-content' && activePageMeta?.kind === 'split' && (
             <button
               type="button"
               onClick={handleOpenPageSidebar}
-              aria-label="Open section list"
+              aria-label={messages.common.openSectionList}
               className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <RiListUnordered className="h-5 w-5" />
@@ -682,8 +686,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close settings"
-              title={`Close Settings (${shortcutKey}+,)`}
+              aria-label={messages.common.closeSettings}
+              title={messages.common.closeSettingsWithShortcut(`${shortcutKey}+,`)}
               className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <RiCloseLine className="h-5 w-5" />
@@ -697,7 +701,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
               <button
                 type="button"
                 onClick={handleBack}
-                aria-label="Back"
+                aria-label={messages.common.back}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <RiArrowLeftSLine className="h-5 w-5" />
@@ -710,8 +714,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close settings"
-            title={`Close Settings (${shortcutKey}+,)`}
+            aria-label={messages.common.closeSettings}
+            title={messages.common.closeSettingsWithShortcut(`${shortcutKey}+,`)}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md p-0.5 text-muted-foreground hover:text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <RiCloseLine className="h-5 w-5" />
