@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
+import { RiArrowDownSLine, RiArrowRightSLine, RiFolderLine } from '@remixicon/react';
 import {
   DndContext,
   DragOverlay,
@@ -100,7 +100,8 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
           <span className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground">
             {projectsCollapsed ? <RiArrowRightSLine className="h-3.5 w-3.5" /> : <RiArrowDownSLine className="h-3.5 w-3.5" />}
           </span>
-          <span className="text-[14px] font-normal text-foreground/95">Projects</span>
+          <RiFolderLine className="h-3.5 w-3.5 text-primary mr-1" />
+          <span className="text-[14px] font-normal text-foreground/95 uppercase tracking-wide">Projects</span>
         </button>
       )}
       

@@ -1044,7 +1044,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     };
 
     return [
-      { key: 'active-now' as const, title: 'recent', items: recentSessions.map(toItem) },
+      { key: 'active-now' as const, title: 'RECENT', items: recentSessions.map(toItem) },
     ];
   }, [recentSessions, sessionSidebarMetaById, projectColorById]);
 
