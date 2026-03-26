@@ -1,4 +1,5 @@
 import React from 'react';
+import { RiArrowDownSLine, RiArrowRightSLine } from '@remixicon/react';
 import {
   DndContext,
   DragOverlay,
@@ -67,6 +68,8 @@ type Props = {
 };
 
 export function SidebarProjectsList(props: Props): React.ReactNode {
+  const [projectsCollapsed, setProjectsCollapsed] = React.useState(false);
+  
   const projectSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -86,6 +89,21 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
   return (
     <ScrollableOverlay useScrollShadow scrollShadowSize={96} outerClassName="flex-1 min-h-0" className={cn('space-y-1 pb-1 pl-2.5 pr-2', props.mobileVariant ? '' : '')}>
       {props.topContent}
+      
+      {/* Projects Section Header - Collapsible */}
+      {!props.showOnlyMainWorkspace && (
+        <button
+          type="button"
+          onClick={() => setProjectsCollapsed(!projectsCollapsed)}
+          className="group flex w-full items-center gap-1 rounded-md px-0.5 py-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        >
+          <span className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground">
+            {projectsCollapsed ? <RiArrowRightSLine className="h-3.5 w-3.5" /> : <RiArrowDownSLine className="h-3.5 w-3.5" />}
+          </span>
+          <span className="text-[14px] font-normal text-foreground/95">Projects</span>
+        </button>
+      )}
+      
       {props.showOnlyMainWorkspace ? (
         <div className="space-y-[0.6rem] py-1">
           {(() => {
@@ -118,7 +136,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
             });
           })()}
         </div>
-      ) : (
+      ) : !projectsCollapsed ? (
         <>
           <DndContext
             sensors={projectSensors}
@@ -243,7 +261,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
             <DragOverlay dropAnimation={null} />
           </DndContext>
         </>
-      )}
+      ) : null}
     </ScrollableOverlay>
   );
 }
