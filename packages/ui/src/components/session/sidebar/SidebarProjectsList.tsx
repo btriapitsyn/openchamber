@@ -137,7 +137,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
           })()}
         </div>
       ) : !projectsCollapsed ? (
-        <>
+        <div className="pl-3">
           <DndContext
             sensors={projectSensors}
             collisionDetection={closestCenter}
@@ -260,7 +260,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
             </SortableContext>
             <DragOverlay dropAnimation={null} />
           </DndContext>
-        </>
+        </div>
       ) : null}
     </ScrollableOverlay>
   );
