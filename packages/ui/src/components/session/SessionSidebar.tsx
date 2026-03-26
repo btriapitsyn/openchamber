@@ -1403,6 +1403,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         isInlineEditing={isInlineEditing}
         onCreateFolder={() => setFolderNameDialog({ mode: 'create' })}
         onRenameFolder={(folderId, currentName) => setFolderNameDialog({ mode: 'rename', folderId, folderName: currentName })}
+        onMoveProjectToFolder={(projectId, targetFolderId) => useProjectFoldersStore.getState().moveProjectToFolder(projectId, targetFolderId)}
       />
 
       <SidebarFooter
