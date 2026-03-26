@@ -4,7 +4,6 @@ logs
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-
 node_modules
 dist
 dist-ssr
@@ -16,6 +15,7 @@ release
 /tsc
 /openchamber@*
 local-dev*
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -27,6 +27,7 @@ local-dev*
 *.sln
 *.sw?
 .opencode/plans/*
+.sisyphus
 .hive
 
 # Build outputs
@@ -56,3 +57,4 @@ Thumbs.db
 data/
 workspaces/
 *.pid
+
