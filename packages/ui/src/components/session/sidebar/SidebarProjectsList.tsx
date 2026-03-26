@@ -65,6 +65,8 @@ type Props = {
   openSidebarMenuKey: string | null;
   setOpenSidebarMenuKey: (key: string | null) => void;
   isInlineEditing: boolean;
+  onCreateFolder: () => void;
+  onRenameFolder: (folderId: string, currentName: string) => void;
 };
 
 export function SidebarProjectsList(props: Props): React.ReactNode {
@@ -74,8 +76,6 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
   const folders = useProjectFoldersStore((s) => s.folders);
   const collapsedFolderIds = useProjectFoldersStore((s) => s.collapsedFolderIds);
   const toggleFolder = useProjectFoldersStore((s) => s.toggleFolderCollapse);
-  const createFolder = useProjectFoldersStore((s) => s.createFolder);
-  const renameFolder = useProjectFoldersStore((s) => s.renameFolder);
   
   // Get all project IDs and find unfiled ones
   const allProjectIds = React.useMemo(() => 
@@ -96,10 +96,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
   
   // Handle create new folder
   const handleCreateFolder = () => {
-    const name = prompt('Folder name:');
-    if (name?.trim()) {
-      createFolder(name.trim());
-    }
+    props.onCreateFolder();
   };
 
   // Sensors for session reordering (defined before conditional returns so hooks are always called same number of times)
@@ -249,12 +246,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
           </button>
           <button
             type="button"
-            onClick={() => {
-              const newName = prompt('Rename folder:', folder.name);
-              if (newName?.trim() && newName.trim() !== folder.name) {
-                renameFolder(folder.id, newName.trim());
-              }
-            }}
+            onClick={() => props.onRenameFolder(folder.id, folder.name)}
             className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-interactive-hover"
           >
             <RiMore2Line className="h-3.5 w-3.5 text-muted-foreground" />
