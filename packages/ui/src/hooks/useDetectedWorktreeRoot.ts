@@ -57,37 +57,43 @@ export function useDetectedWorktreeMetadata(
       return;
     }
 
+    // Reset immediately so callers never see stale metadata from a previous directory.
+    setDetected(undefined);
+
     let cancelled = false;
     void (async () => {
-      const result = await execCommand('git rev-parse --absolute-git-dir', currentDirectory);
+      const [gitDirResult, toplevelResult] = await Promise.all([
+        execCommand('git rev-parse --absolute-git-dir', currentDirectory),
+        execCommand('git rev-parse --show-toplevel', currentDirectory),
+      ]);
       if (cancelled) return;
 
-      if (!result.success) {
-        setDetected(undefined);
+      if (!gitDirResult.success || !toplevelResult.success) {
         return;
       }
 
-      const gitDir = normalizePath((result.stdout || '').trim());
+      const gitDir = normalizePath((gitDirResult.stdout || '').trim());
       const projectRoot = deriveProjectRoot(gitDir);
 
       if (!projectRoot) {
-        setDetected(undefined);
         return;
       }
+
+      // Use the worktree toplevel, not the active sub-directory, so that
+      // worktree operations (e.g. `git worktree remove`) receive a valid root path.
+      const worktreePath = normalizePath((toplevelResult.stdout || '').trim());
 
       // Sanity-check: secondary worktree path must differ from project root
-      if (projectRoot === normalizePath(currentDirectory)) {
-        setDetected(undefined);
+      if (!worktreePath || worktreePath === projectRoot) {
         return;
       }
 
-      const normalizedPath = normalizePath(currentDirectory);
       const branch = currentBranch || '';
-      const name = normalizedPath.split('/').filter(Boolean).pop() || normalizedPath;
+      const name = worktreePath.split('/').filter(Boolean).pop() || worktreePath;
 
       setDetected({
         source: 'sdk',
-        path: normalizedPath,
+        path: worktreePath,
         projectDirectory: projectRoot,
         branch,
         label: branch || name,
