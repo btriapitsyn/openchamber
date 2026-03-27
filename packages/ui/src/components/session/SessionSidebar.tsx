@@ -19,7 +19,6 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { NewWorktreeDialog } from './NewWorktreeDialog';
 import { ProjectNotesTodoPanel } from './ProjectNotesTodoPanel';
 import { useSessionFoldersStore } from '@/stores/useSessionFoldersStore';
-import { useProjectFoldersStore } from '@/stores/useProjectFoldersStore';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useArchivedAutoFolders } from './sidebar/hooks/useArchivedAutoFolders';
 import { useSessionSidebarSections } from './sidebar/hooks/useSessionSidebarSections';
@@ -49,10 +48,8 @@ import type { SortableDragHandleProps } from './sidebar/sortableItems';
 import {
   FolderDeleteConfirmDialog,
   SessionDeleteConfirmDialog,
-  FolderNameDialog,
   type DeleteFolderConfirmState,
   type DeleteSessionConfirmState,
-  type FolderNameDialogState,
 } from './sidebar/ConfirmDialogs';
 import { type SessionGroup, type SessionNode } from './sidebar/types';
 import {
@@ -182,7 +179,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [renameFolderDraft, setRenameFolderDraft] = React.useState('');
   const [deleteSessionConfirm, setDeleteSessionConfirm] = React.useState<DeleteSessionConfirmState>(null);
   const [deleteFolderConfirm, setDeleteFolderConfirm] = React.useState<DeleteFolderConfirmState>(null);
-  const [folderNameDialog, setFolderNameDialog] = React.useState<FolderNameDialogState>(null);
   const [pinnedSessionIds, setPinnedSessionIds] = React.useState<Set<string>>(() => {
     try {
       const raw = getSafeStorage().getItem(SESSION_PINNED_STORAGE_KEY);
@@ -1401,9 +1397,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         openSidebarMenuKey={openSidebarMenuKey}
         setOpenSidebarMenuKey={setOpenSidebarMenuKey}
         isInlineEditing={isInlineEditing}
-        onCreateFolder={() => setFolderNameDialog({ mode: 'create' })}
-        onRenameFolder={(folderId, currentName) => setFolderNameDialog({ mode: 'rename', folderId, folderName: currentName })}
-        onMoveProjectToFolder={(projectId, targetFolderId) => useProjectFoldersStore.getState().moveProjectToFolder(projectId, targetFolderId)}
       />
 
       <SidebarFooter
@@ -1490,18 +1483,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         onConfirm={confirmDeleteFolder}
       />
 
-      <FolderNameDialog
-        value={folderNameDialog}
-        setValue={setFolderNameDialog}
-        onConfirm={(name) => {
-          const { createFolder, renameFolder } = useProjectFoldersStore.getState();
-          if (folderNameDialog?.mode === 'create') {
-            createFolder(name);
-          } else if (folderNameDialog?.mode === 'rename' && folderNameDialog.folderId) {
-            renameFolder(folderNameDialog.folderId, name);
-          }
-        }}
-      />
     </div>
   );
 };
