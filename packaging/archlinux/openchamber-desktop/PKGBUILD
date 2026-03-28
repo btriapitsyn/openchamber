@@ -1,0 +1,92 @@
+pkgname=openchamber-desktop
+pkgver=i18n
+pkgrel=1
+pkgdesc="Unofficial Arch Linux source package skeleton for the OpenChamber desktop app"
+arch=('x86_64')
+url="https://github.com/gqcdm/openchamber"
+license=('MIT')
+
+# Linux desktop packaging is not an upstream-supported release target yet.
+# This PKGBUILD is intentionally a starting skeleton for source-built Arch packaging.
+
+depends=(
+  'webkit2gtk-4.1'
+  'gtk3'
+  'libayatana-appindicator'
+  'librsvg'
+  'opencode'
+)
+makedepends=(
+  'bun'
+  'cargo'
+  'desktop-file-utils'
+  'git'
+  'nodejs'
+  'npm'
+  'rust'
+)
+optdepends=(
+  'xdg-utils: desktop integration helpers'
+)
+
+source=(
+  "$pkgname-$pkgver.tar.gz::https://github.com/gqcdm/openchamber/archive/refs/heads/i18n.tar.gz"
+  "$pkgname.desktop"
+)
+sha256sums=(
+  'SKIP'
+  'SKIP'
+)
+
+prepare() {
+  cd "$srcdir/openchamber-i18n"
+
+  # Upstream desktop builds currently target macOS first.
+  # Linux packagers should verify runtime/build prerequisites before publishing.
+  export npm_config_cache="$srcdir/npm-cache"
+  export CARGO_HOME="$srcdir/cargo-home"
+
+  bun install --frozen-lockfile
+}
+
+build() {
+  cd "$srcdir/openchamber-i18n"
+
+  export TAURI_ENV_TARGET_TRIPLE='x86_64-unknown-linux-gnu'
+
+  # Root build entrypoint matches the repo-native desktop packaging flow:
+  # packages/desktop/scripts/build-sidecar.mjs -> tauri build
+  bun run desktop:build
+}
+
+package() {
+  cd "$srcdir/openchamber-i18n"
+
+  local appdir="packages/desktop/src-tauri/target/release/bundle/appimage/${pkgname}.AppDir"
+
+  # Skeleton note:
+  # The exact Linux bundle layout still needs verification in a later task.
+  # This install step assumes Tauri's AppDir output and should be refined once
+  # a Linux build artifact has been produced and inspected.
+  if [[ ! -d "$appdir" ]]; then
+    error "Expected Linux AppDir not found: $appdir"
+    error "Verify the Tauri Linux bundle path and update packaging/archlinux/openchamber-desktop/PKGBUILD"
+    return 1
+  fi
+
+  install -dm755 "$pkgdir/usr/lib/$pkgname"
+  cp -a "$appdir/." "$pkgdir/usr/lib/$pkgname/"
+
+  install -dm755 "$pkgdir/usr/bin"
+  ln -s "/usr/lib/$pkgname/$pkgname" "$pkgdir/usr/bin/$pkgname"
+
+  install -dm755 "$pkgdir/usr/share/applications"
+  install -Dm644 "$srcdir/$pkgname.desktop" "$pkgdir/usr/share/applications/$pkgname.desktop"
+
+  if [[ -f "$pkgdir/usr/lib/$pkgname/usr/share/icons/hicolor/128x128/apps/openchamber.png" ]]; then
+    install -dm755 "$pkgdir/usr/share/pixmaps"
+    install -Dm644 \
+      "$pkgdir/usr/lib/$pkgname/usr/share/icons/hicolor/128x128/apps/openchamber.png" \
+      "$pkgdir/usr/share/pixmaps/openchamber.png"
+  fi
+}
