@@ -2448,6 +2448,11 @@ const sanitizeSettingsUpdate = (payload) => {
     }
   }
 
+  // Usage reporting opt-out (default: true/enabled)
+  if (typeof candidate.reportUsage === 'boolean') {
+    result.reportUsage = candidate.reportUsage;
+  }
+
   return result;
 };
 
@@ -3782,6 +3787,21 @@ const ENV_CONFIGURED_OPENCODE_HOST = (() => {
 
 // OPENCODE_HOST takes precedence over OPENCODE_PORT when both are set
 const ENV_EFFECTIVE_PORT = ENV_CONFIGURED_OPENCODE_HOST?.port ?? ENV_CONFIGURED_OPENCODE_PORT;
+
+const ENV_CONFIGURED_OPENCODE_HOSTNAME = (() => {
+  const raw = process.env.OPENCHAMBER_OPENCODE_HOSTNAME;
+  if (typeof raw !== 'string') {
+    return '127.0.0.1';
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    console.warn(
+      `[config] Ignoring OPENCHAMBER_OPENCODE_HOSTNAME=${JSON.stringify(raw)}: empty after trimming`,
+    );
+    return '127.0.0.1';
+  }
+  return trimmed;
+})();
 
 const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
                                     process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
@@ -5783,6 +5803,7 @@ function parseArgs(argv = process.argv.slice(2)) {
 
   const options = {
     port: DEFAULT_PORT,
+    host: undefined,
     uiPassword: envPassword,
     tryCfTunnel: envCfTunnel,
     tunnelProvider: envTunnelProvider,
@@ -5818,6 +5839,13 @@ function parseArgs(argv = process.argv.slice(2)) {
       i = nextIndex;
       const parsedPort = parseInt(value ?? '', 10);
       options.port = Number.isFinite(parsedPort) ? parsedPort : DEFAULT_PORT;
+      continue;
+    }
+
+    if (optionName === 'host') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.host = typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
       continue;
     }
 
@@ -6036,7 +6064,7 @@ async function createManagedOpenCodeServerProcess({
   };
 }
 
-async function resolveManagedOpenCodePort(requestedPort) {
+async function resolveManagedOpenCodePort(requestedPort, hostname = '127.0.0.1') {
   if (typeof requestedPort === 'number' && Number.isFinite(requestedPort) && requestedPort > 0) {
     return requestedPort;
   }
@@ -6066,13 +6094,13 @@ async function resolveManagedOpenCodePort(requestedPort) {
       });
     });
 
-    server.listen(0, '127.0.0.1');
+    server.listen(0, hostname);
   });
 }
 
 async function startOpenCode() {
   const desiredPort = ENV_CONFIGURED_OPENCODE_PORT ?? 0;
-  const spawnPort = await resolveManagedOpenCodePort(desiredPort);
+  const spawnPort = await resolveManagedOpenCodePort(desiredPort, ENV_CONFIGURED_OPENCODE_HOSTNAME);
   console.log(
     desiredPort > 0
       ? `Starting OpenCode on requested port ${desiredPort}...`
@@ -6087,7 +6115,7 @@ async function startOpenCode() {
 
   try {
     const serverInstance = await createManagedOpenCodeServerProcess({
-      hostname: '127.0.0.1',
+      hostname: ENV_CONFIGURED_OPENCODE_HOSTNAME,
       port: spawnPort,
       timeout: 30000,
       cwd: openCodeWorkingDirectory,
@@ -7090,6 +7118,7 @@ async function gracefulShutdown(options = {}) {
 
 async function main(options = {}) {
   const port = Number.isFinite(options.port) && options.port >= 0 ? Math.trunc(options.port) : DEFAULT_PORT;
+  const host = typeof options.host === 'string' && options.host.length > 0 ? options.host : undefined;
   const tryCfTunnel = options.tryCfTunnel === true;
   const shouldUseCanonicalTunnelConfig = typeof options.tunnelMode === 'string'
     || typeof options.tunnelProvider === 'string'
@@ -11992,6 +12021,17 @@ async function main(options = {}) {
 
   app.get('/api/git/status', async (req, res) => {
     const { getStatus, isGitRepository } = await getGitLibraries();
+
+    const extractGitErrorText = (error) => {
+      const message = typeof error?.message === 'string' ? error.message : '';
+      const stderr = typeof error?.stderr === 'string' ? error.stderr : '';
+      const stdout = typeof error?.stdout === 'string' ? error.stdout : '';
+      return [message, stderr, stdout]
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .join('\n');
+    };
+
     try {
       const directory = req.query.directory;
       if (!directory) {
@@ -12006,6 +12046,10 @@ async function main(options = {}) {
       const status = await getStatus(directory);
       res.json(status);
     } catch (error) {
+      const errorText = extractGitErrorText(error);
+      if (/not a git repository/i.test(errorText)) {
+        return res.json({ isGitRepository: false, files: [], branch: null, ahead: 0, behind: 0 });
+      }
       console.error('Failed to get git status:', error);
       res.status(500).json({ error: error.message || 'Failed to get git status' });
     }
@@ -12526,6 +12570,46 @@ async function main(options = {}) {
     } catch (error) {
       console.error('Failed to create worktree:', error);
       res.status(500).json({ error: error.message || 'Failed to create worktree' });
+    }
+  });
+
+  app.post('/api/git/worktrees/preview', async (req, res) => {
+    const { previewWorktreeCreate } = await getGitLibraries();
+    if (typeof previewWorktreeCreate !== 'function') {
+      return res.status(501).json({ error: 'Worktree preview is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const preview = await previewWorktreeCreate(directory, req.body || {});
+      res.json(preview);
+    } catch (error) {
+      console.error('Failed to preview worktree:', error);
+      res.status(500).json({ error: error.message || 'Failed to preview worktree' });
+    }
+  });
+
+  app.get('/api/git/worktrees/bootstrap-status', async (req, res) => {
+    const { getWorktreeBootstrapStatus } = await getGitLibraries();
+    if (typeof getWorktreeBootstrapStatus !== 'function') {
+      return res.status(501).json({ error: 'Worktree bootstrap status is not available' });
+    }
+
+    try {
+      const directory = req.query.directory;
+      if (!directory || typeof directory !== 'string') {
+        return res.status(400).json({ error: 'directory parameter is required' });
+      }
+
+      const status = await getWorktreeBootstrapStatus(directory);
+      res.json(status);
+    } catch (error) {
+      console.error('Failed to get worktree bootstrap status:', error);
+      res.status(500).json({ error: error.message || 'Failed to get worktree bootstrap status' });
     }
   });
 
@@ -14190,9 +14274,10 @@ async function main(options = {}) {
 
   let activePort = port;
 
-  const bindHost = typeof process.env.OPENCHAMBER_HOST === 'string' && process.env.OPENCHAMBER_HOST.trim().length > 0
-    ? process.env.OPENCHAMBER_HOST.trim()
-    : null;
+  const bindHost = host
+    || (typeof process.env.OPENCHAMBER_HOST === 'string' && process.env.OPENCHAMBER_HOST.trim().length > 0
+      ? process.env.OPENCHAMBER_HOST.trim()
+      : '127.0.0.1');
 
   await new Promise((resolve, reject) => {
     const onError = (error) => {
@@ -14211,9 +14296,12 @@ async function main(options = {}) {
         // ignore
       }
 
-      console.log(`OpenChamber server running on port ${activePort}`);
-      console.log(`Health check: http://localhost:${activePort}/health`);
-      console.log(`Web interface: http://localhost:${activePort}`);
+      const displayHost = (bindHost === '0.0.0.0' || bindHost === '::' || bindHost === '[::]')
+        ? 'localhost'
+        : (bindHost.includes(':') ? `[${bindHost}]` : bindHost);
+      console.log(`OpenChamber server listening on ${bindHost}:${activePort}`);
+      console.log(`Health check: http://${displayHost}:${activePort}/health`);
+      console.log(`Web interface: http://${displayHost}:${activePort}`);
 
       if (startupTunnelRequest) {
         const startupModeLabel = startupTunnelRequest.mode === TUNNEL_MODE_QUICK
@@ -14263,11 +14351,7 @@ async function main(options = {}) {
       resolve();
     };
 
-    if (bindHost) {
-      server.listen(port, bindHost, onListening);
-    } else {
-      server.listen(port, onListening);
-    }
+    server.listen(port, bindHost, onListening);
   });
 
   if (attachSignals && !signalsAttached) {
@@ -14310,6 +14394,7 @@ if (isCliExecution) {
   exitOnShutdown = true;
   main({
     port: cliOptions.port,
+    host: cliOptions.host,
     tryCfTunnel: cliOptions.tryCfTunnel,
     tunnelProvider: cliOptions.tunnelProvider,
     tunnelMode: cliOptions.tunnelMode,

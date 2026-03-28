@@ -118,6 +118,9 @@ export type NewSessionDraftState = {
     open: boolean;
     selectedProjectId?: string | null;
     directoryOverride: string | null;
+    pendingWorktreeRequestId?: string | null;
+    bootstrapPendingDirectory?: string | null;
+    preserveDirectoryOverride?: boolean;
     parentID: string | null;
     title?: string;
     initialPrompt?: string;
@@ -197,7 +200,7 @@ export interface SessionStore {
     userSummaryTitles: Map<string, { title: string; createdAt: number | null }>;
 
     pendingInputText: string | null;
-    pendingInputMode: 'replace' | 'append';
+    pendingInputMode: 'replace' | 'append' | 'append-inline';
     /** Synthetic context parts to include with the next message sent */
     pendingSyntheticParts: SyntheticContextPart[] | null;
 
@@ -216,8 +219,13 @@ export interface SessionStore {
     setSessionAgentEditMode: (sessionId: string, agentName: string | undefined, mode: EditPermissionMode, defaultMode?: EditPermissionMode) => void;
     loadSessions: () => Promise<void>;
 
-    openNewSessionDraft: (options?: { projectId?: string | null; directoryOverride?: string | null; parentID?: string | null; title?: string; initialPrompt?: string; syntheticParts?: SyntheticContextPart[]; targetFolderId?: string }) => void;
-    setNewSessionDraftTarget: (target: { projectId?: string | null; directoryOverride?: string | null }) => void;
+    openNewSessionDraft: (options?: { projectId?: string | null; directoryOverride?: string | null; pendingWorktreeRequestId?: string | null; bootstrapPendingDirectory?: string | null; preserveDirectoryOverride?: boolean; parentID?: string | null; title?: string; initialPrompt?: string; syntheticParts?: SyntheticContextPart[]; targetFolderId?: string }) => void;
+    overrideNewSessionDraftTarget: (options: { projectId?: string | null; directoryOverride?: string | null; pendingWorktreeRequestId?: string | null; bootstrapPendingDirectory?: string | null; preserveDirectoryOverride?: boolean; title?: string; initialPrompt?: string }) => void;
+    setNewSessionDraftTarget: (target: { projectId?: string | null; directoryOverride?: string | null }, options?: { force?: boolean }) => void;
+    setPendingDraftWorktreeRequest: (requestId: string | null) => void;
+    resolvePendingDraftWorktreeTarget: (requestId: string, directory: string | null, options?: { projectId?: string | null; bootstrapPendingDirectory?: string | null; preserveDirectoryOverride?: boolean }) => void;
+    setDraftBootstrapPendingDirectory: (directory: string | null) => void;
+    setDraftPreserveDirectoryOverride: (value: boolean) => void;
     closeNewSessionDraft: () => void;
 
     createSession: (title?: string, directoryOverride?: string | null, parentID?: string | null) => Promise<Session | null>;
@@ -312,8 +320,8 @@ export interface SessionStore {
       handleSlashUndo: (sessionId: string) => Promise<void>;
       handleSlashRedo: (sessionId: string) => Promise<void>;
       forkFromMessage: (sessionId: string, messageId: string) => Promise<void>;
-      setPendingInputText: (text: string | null, mode?: 'replace' | 'append') => void;
-      consumePendingInputText: () => { text: string; mode: 'replace' | 'append' } | null;
+      setPendingInputText: (text: string | null, mode?: 'replace' | 'append' | 'append-inline') => void;
+      consumePendingInputText: () => { text: string; mode: 'replace' | 'append' | 'append-inline' } | null;
       setPendingSyntheticParts: (parts: SyntheticContextPart[] | null) => void;
      consumePendingSyntheticParts: () => SyntheticContextPart[] | null;
    }

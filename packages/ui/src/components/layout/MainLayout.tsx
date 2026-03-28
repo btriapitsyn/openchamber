@@ -23,7 +23,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 import { isDesktopShell } from '@/lib/desktop';
 
-import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow } from '@/components/views';
+import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow, MultiRunWindow } from '@/components/views';
 
 // Mobile drawer width as screen percentage
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
@@ -645,7 +645,7 @@ export const MainLayout: React.FC = () => {
                     setRightSidebarOpen,
                 }}>
                     {/* Mobile: header + drawer mode */}
-                    {!(isSettingsDialogOpen || isMultiRunLauncherOpen) && <Header 
+                    {!isSettingsDialogOpen && <Header 
                         onToggleLeftDrawer={() => {
                             if (isRightSidebarOpen) {
                                 setRightSidebarOpen(false);
@@ -779,7 +779,7 @@ export const MainLayout: React.FC = () => {
                     <div
                         className={cn(
                             'flex flex-1 overflow-hidden relative',
-                            (isSettingsDialogOpen || isMultiRunLauncherOpen) && 'hidden'
+                            isSettingsDialogOpen && 'hidden'
                         )}
                     >
                         <main className="w-full h-full overflow-hidden bg-background relative">
@@ -791,24 +791,19 @@ export const MainLayout: React.FC = () => {
                                     <ErrorBoundary>{secondaryView}</ErrorBoundary>
                                 </div>
                             )}
+                            {isMultiRunLauncherOpen && (
+                                <div className="absolute inset-0 z-10 bg-background">
+                                    <ErrorBoundary>
+                                        <MultiRunLauncher
+                                            initialPrompt={multiRunLauncherPrefillPrompt}
+                                            onCreated={() => setMultiRunLauncherOpen(false)}
+                                            onCancel={() => setMultiRunLauncherOpen(false)}
+                                        />
+                                    </ErrorBoundary>
+                                </div>
+                            )}
                         </main>
                     </div>
-
-                    {/* Mobile multi-run launcher: full screen */}
-                    {isMultiRunLauncherOpen && (
-                        <div
-                            className="absolute inset-0 z-10 bg-background"
-                            style={{ paddingTop: 'var(--oc-safe-area-top, 0px)' }}
-                        >
-                            <ErrorBoundary>
-                                <MultiRunLauncher
-                                    initialPrompt={multiRunLauncherPrefillPrompt}
-                                    onCreated={() => setMultiRunLauncherOpen(false)}
-                                    onCancel={() => setMultiRunLauncherOpen(false)}
-                                />
-                            </ErrorBoundary>
-                        </div>
-                    )}
 
                     {/* Mobile settings: full screen */}
                     {isSettingsDialogOpen && (
@@ -828,8 +823,7 @@ export const MainLayout: React.FC = () => {
                             'absolute inset-0 flex overflow-hidden',
                             isDesktopShellRuntime
                                 ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
-                                : 'bg-sidebar',
-                            isMultiRunLauncherOpen && 'invisible'
+                                : 'bg-sidebar'
                         )}>
                             {isSidebarOpen ? (
                                 <>
@@ -951,24 +945,17 @@ export const MainLayout: React.FC = () => {
                             </RightSidebar>
                         </div>
 
-                        {/* Multi-Run Launcher: replaces tabs content only */}
-                        {isMultiRunLauncherOpen && (
-                            <div className={cn('absolute inset-0 z-10 bg-background')}>
-                                <ErrorBoundary>
-                                    <MultiRunLauncher
-                                        initialPrompt={multiRunLauncherPrefillPrompt}
-                                        onCreated={() => setMultiRunLauncherOpen(false)}
-                                        onCancel={() => setMultiRunLauncherOpen(false)}
-                                    />
-                                </ErrorBoundary>
-                            </div>
-                        )}
                     </div>
 
                     {/* Desktop settings: windowed dialog with blur */}
                     <SettingsWindow
                         open={isSettingsDialogOpen}
                         onOpenChange={setSettingsDialogOpen}
+                    />
+                    <MultiRunWindow
+                        open={isMultiRunLauncherOpen}
+                        onOpenChange={setMultiRunLauncherOpen}
+                        initialPrompt={multiRunLauncherPrefillPrompt}
                     />
                 </>
             )}

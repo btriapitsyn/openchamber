@@ -46,6 +46,34 @@ openchamber update                   # Update to latest version
 - Replacing or stopping a tunnel revokes existing connect links and invalidates remote tunnel sessions.
 - Connect links are one-time tokens; generating a new link revokes the previous unused link.
 
+<details>
+<summary>Connect to external OpenCode server</summary>
+
+```bash
+OPENCODE_PORT=4096 OPENCODE_SKIP_START=true openchamber
+OPENCODE_HOST=https://myhost:4096 OPENCODE_SKIP_START=true openchamber
+```
+
+| Variable | Description |
+|----------|-------------|
+| `OPENCODE_HOST` | Full base URL of external server (overrides `OPENCODE_PORT`) |
+| `OPENCODE_PORT` | Port of external server |
+| `OPENCODE_SKIP_START` | Skip starting embedded OpenCode server |
+| `OPENCHAMBER_OPENCODE_HOSTNAME` | Bind hostname for managed OpenCode server (default: `127.0.0.1`, use `0.0.0.0` for LAN/remote access — trusted networks only) |
+
+</details>
+
+<details>
+<summary>Bind managed OpenCode to LAN / Tailscale</summary>
+
+```bash
+OPENCHAMBER_OPENCODE_HOSTNAME=0.0.0.0 openchamber --port 3000
+```
+
+**Security note:** binding to `0.0.0.0` exposes the server on all network interfaces — use only on trusted networks and protect with firewall rules or `--ui-password`.
+
+</details>
+
 **Optional env vars:**
 ```yaml
 environment:
@@ -88,6 +116,61 @@ chown -R 1000:1000 data/
 openchamber             # Runs in background by default
 openchamber stop        # Stop background server
 ```
+
+</details>
+
+<details>
+<summary>systemd service (VPN / LAN access)</summary>
+
+Use `--foreground` to keep the CLI process alive so systemd (or any other process manager) can track and restart it. Combine with `OPENCODE_HOST` to connect to an OpenCode instance running as a separate service.
+
+**`~/.config/systemd/user/opencode.service`**
+```ini
+[Unit]
+Description=OpenCode Server
+
+[Service]
+Type=simple
+ExecStart=opencode serve --port 4095
+Environment="PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/YOU/.local/bin:/home/YOU/.npm-global/bin:/usr/local/bin:/usr/bin:/bin"
+Environment=SSH_AUTH_SOCK=%t/ssh-agent.socket
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+> **Why set `PATH` and `SSH_AUTH_SOCK`?**
+> systemd user services start with a minimal environment — no shell profile is sourced.
+> Without an explicit `PATH`, OpenCode won't find tools installed via Homebrew, npm, or `~/.local/bin`.
+> Without `SSH_AUTH_SOCK`, git operations over SSH (push, pull, clone) will fail.
+> `%t` expands to `$XDG_RUNTIME_DIR` (e.g. `/run/user/1000`), where most SSH agents write their socket.
+
+**`~/.config/systemd/user/openchamber.service`**
+```ini
+[Unit]
+Description=OpenChamber Web Server
+After=opencode.service
+
+[Service]
+Type=simple
+ExecStart=openchamber serve --port 3000 --host 0.0.0.0 --ui-password your-password --foreground
+Environment="OPENCODE_HOST=http://localhost:4095"
+Environment="OPENCODE_SKIP_START=true"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now opencode openchamber
+```
+
+`--host 0.0.0.0` is required to listen on all interfaces (the default is `127.0.0.1`). Use `--host <ip>` or `OPENCHAMBER_HOST=<ip>` to bind to a specific interface instead.
 
 </details>
 

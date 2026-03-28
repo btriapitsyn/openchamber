@@ -18,7 +18,6 @@ import {
   RiNodeTree,
   RiPencilAiLine,
 } from '@remixicon/react';
-import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import { cn } from '@/lib/utils';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, getProjectIconImageUrl } from '@/lib/projectMeta';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -43,7 +42,6 @@ export interface SortableProjectItemProps {
   onHoverChange: (hovered: boolean) => void;
   onNewSession: () => void;
   onNewWorktreeSession?: () => void;
-  onOpenMultiRunLauncher: () => void;
   onRenameStart: () => void;
   onClose: () => void;
   sentinelRef: (el: HTMLDivElement | null) => void;
@@ -79,7 +77,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
   onHoverChange,
   onNewSession,
   onNewWorktreeSession,
-  onOpenMultiRunLauncher,
   onRenameStart,
   onClose,
   sentinelRef,
@@ -217,7 +214,7 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
 
               <div className={cn(
                 'absolute top-1/2 z-10 flex -translate-y-1/2 items-center gap-1',
-                isRepo && !hideDirectoryControls ? 'right-7' : 'right-0.5',
+                showCreateButtons ? 'right-7' : 'right-0.5',
               )}>
                 {showCreateButtons && isRepo && !hideDirectoryControls && onNewWorktreeSession ? (
                   <Tooltip>
@@ -267,12 +264,6 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                         New Session
                       </DropdownMenuItem>
                     )}
-                    {showCreateButtons && isRepo && !hideDirectoryControls && (
-                      <DropdownMenuItem onClick={onOpenMultiRunLauncher}>
-                        <ArrowsMerge className="mr-1.5 h-4 w-4" />
-                        New Multi-Run
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuItem onClick={onRenameStart}>
                       <RiPencilAiLine className="mr-1.5 h-4 w-4" />
                       Rename
@@ -299,8 +290,8 @@ export const SortableProjectItem: React.FC<SortableProjectItemProps> = ({
                           onNewSession();
                         }}
                         className={cn(
-                          'h-6 w-6 rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50',
-                          mobileVariant ? 'inline-flex items-center justify-center' : isHovered ? 'inline-flex items-center justify-center' : 'hidden',
+                          'inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 transition-opacity',
+                          mobileVariant ? 'opacity-100' : isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none',
                         )}
                         aria-label={isRepo ? 'New draft session' : 'New session'}
                       >

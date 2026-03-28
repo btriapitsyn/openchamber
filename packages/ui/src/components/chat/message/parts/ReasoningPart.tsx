@@ -7,6 +7,7 @@ import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDurationTickerNow } from './useDurationTicker';
+import { MarkdownRenderer } from '../../MarkdownRenderer';
 
 type PartWithText = Part & { text?: string; content?: string; time?: { start?: number; end?: number } };
 
@@ -78,6 +79,7 @@ type ReasoningTimelineBlockProps = {
     blockId: string;
     time?: { start?: number; end?: number };
     showDuration?: boolean;
+    isStreaming?: boolean;
 };
 
 export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
@@ -87,6 +89,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     blockId,
     time,
     showDuration = true,
+    isStreaming = false,
 }) => {
     const [isExpanded, setIsExpanded] = React.useState(false);
 
@@ -140,7 +143,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
 
                 {(summary || (showDuration && typeof timeStart === 'number')) ? (
                     <div className="flex items-center gap-1 flex-1 min-w-0 typography-meta text-muted-foreground/70">
-                        {summary ? <span className="flex-1 min-w-0 truncate italic">{summary}</span> : null}
+                        {summary ? <span className="flex-1 min-w-0 truncate">{summary}</span> : null}
                         {showDuration && typeof timeStart === 'number' ? (
                             <span className="relative flex-shrink-0 tabular-nums text-right">
                                 <span className="text-muted-foreground/80 transition-opacity duration-150">
@@ -163,11 +166,17 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                     )}
                 >
                     <ScrollableOverlay
-                        as="blockquote"
+                        as="div"
                         outerClassName="max-h-80"
-                        className="whitespace-pre-wrap break-words typography-meta italic text-muted-foreground/70 p-0"
+                        className="p-0"
                     >
-                        {text}
+                        <MarkdownRenderer
+                            content={text}
+                            messageId={blockId}
+                            isAnimated={false}
+                            isStreaming={isStreaming}
+                            variant="reasoning"
+                        />
                     </ScrollableOverlay>
                 </div>
             )}
@@ -191,6 +200,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
     const rawText = partWithText.text || partWithText.content || '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
     const time = partWithText.time;
+    const isStreaming = chatRenderMode === 'live' && typeof time?.end !== 'number';
 
     // Show reasoning even if time.end isn't set yet (during streaming)
     // Only hide if there's no text content
@@ -206,6 +216,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
             blockId={part.id || `${messageId}-reasoning`}
             time={time}
             showDuration={chatRenderMode !== 'sorted'}
+            isStreaming={isStreaming}
         />
     );
 };

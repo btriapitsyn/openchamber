@@ -39,7 +39,7 @@ type Props = {
   hasSessionSearchQuery: boolean;
   emptyState: React.ReactNode;
   searchEmptyState: React.ReactNode;
-  renderGroupSessions: (group: SessionGroup, groupKey: string, projectId?: string | null, hideGroupLabel?: boolean, dragHandleProps?: SortableDragHandleProps | null) => React.ReactNode;
+  renderGroupSessions: (group: SessionGroup, groupKey: string, projectId?: string | null, hideGroupLabel?: boolean, dragHandleProps?: SortableDragHandleProps | null, compactBodyPadding?: boolean) => React.ReactNode;
   homeDirectory: string | null;
   collapsedProjects: Set<string>;
   hideDirectoryControls: boolean;
@@ -55,7 +55,6 @@ type Props = {
   setSessionSwitcherOpen: (open: boolean) => void;
   openNewSessionDraft: (options?: { directoryOverride?: string | null }) => void;
   openNewWorktreeDialog: () => void;
-  openMultiRunLauncher: () => void;
   openProjectEditDialog: (id: string) => void;
   removeProject: (id: string) => void;
   projectHeaderSentinelRefs: React.MutableRefObject<Map<string, HTMLDivElement | null>>;
@@ -131,7 +130,7 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
               const hideGroupLabel = group.id === primaryGroup.id;
               return (
                 <React.Fragment key={groupKey}>
-                  {props.renderGroupSessions(group, groupKey, activeSection.project.id, hideGroupLabel)}
+                  {props.renderGroupSessions(group, groupKey, activeSection.project.id, hideGroupLabel, null, true)}
                 </React.Fragment>
               );
             });
@@ -203,10 +202,6 @@ export function SidebarProjectsList(props: Props): React.ReactNode {
                       props.setActiveMainTab('chat');
                       if (props.mobileVariant) props.setSessionSwitcherOpen(false);
                       props.openNewWorktreeDialog();
-                    }}
-                    onOpenMultiRunLauncher={() => {
-                      if (projectKey !== props.activeProjectId) props.setActiveProjectIdOnly(projectKey);
-                      props.openMultiRunLauncher();
                     }}
                     onRenameStart={() => props.openProjectEditDialog(projectKey)}
                     onClose={() => props.removeProject(projectKey)}
