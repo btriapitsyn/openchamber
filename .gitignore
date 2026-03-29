@@ -34,6 +34,11 @@ local-dev*
 build/
 .gradle/
 .*.bun-build
+# Arch Linux packaging build outputs
+/packaging/archlinux/openchamber-desktop/pkg/
+/packaging/archlinux/openchamber-desktop/src/
+/packaging/archlinux/openchamber-desktop/*.pkg.tar.*
+/packaging/archlinux/openchamber-desktop/*.tar.gz
 
 # Built webview assets (generated during build)
 src/main/resources/webview/
