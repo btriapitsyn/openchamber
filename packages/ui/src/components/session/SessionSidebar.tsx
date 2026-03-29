@@ -1408,7 +1408,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         projectNotesPanelOpen={projectNotesPanelOpen}
         setProjectNotesPanelOpen={setProjectNotesPanelOpen}
         activeProjectRefForHeader={activeProjectRefForHeader}
-        activeProjectLabelForHeader={activeProjectLabelForHeader}
         canOpenMultiRun={projects.length > 0}
         openMultiRunLauncher={handleOpenMultiRunFromHeader}
         stableActiveProjectIsRepo={stableActiveProjectIsRepo}
