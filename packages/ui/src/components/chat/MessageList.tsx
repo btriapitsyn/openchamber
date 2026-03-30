@@ -1388,9 +1388,8 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
         return userAnimationRef.current.animatedIds.has(message.info.id);
     }, []);
 
-    const onUserAnimationConsumed = React.useCallback(() => {
-        // Animation plays once via ToolRevealOnMount; no cleanup needed.
-        // The ref-based animatedIds set is reset on session switch.
+    const onUserAnimationConsumed = React.useCallback((messageId: string) => {
+        userAnimationRef.current.animatedIds.delete(messageId);
     }, []);
 
     const messageIndexMap = React.useMemo(() => {

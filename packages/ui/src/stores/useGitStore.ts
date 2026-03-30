@@ -746,15 +746,22 @@ export const useGitStore = create<GitStore>()(
 
             let anyStatusChanged = false;
 
+            const heavyFollowUps: string[] = [];
             for (const targetDirectory of pollTargets) {
               const statusChanged = await get().fetchStatus(targetDirectory, git, { silent: true, mode: 'light' });
               if (statusChanged) {
                 anyStatusChanged = true;
+                heavyFollowUps.push(targetDirectory);
                 if (targetDirectory === activeDirectory) {
                   await get().fetchLog(activeDirectory, git);
                   // Diff prefetch deferred — triggered on-demand when Git tab opens (GitView reactive prefetch)
                 }
               }
+            }
+
+            // Light mode detected real changes — follow up with heavy fetch for diffStats
+            for (const dir of heavyFollowUps) {
+              get().fetchStatus(dir, git, { silent: true });
             }
 
             const bounds = getPollingBounds(get().pollingMode);
