@@ -264,48 +264,27 @@ function App({ apis }: AppProps) {
     init();
   }, [initializeApp, isVSCodeRuntime]);
 
-  const startupRecoveryInProgressRef = React.useRef(false);
-  const startupRecoveryLastAttemptRef = React.useRef(0);
-
+  // Startup recovery: poll until providers AND agents are loaded.
+  // loadProviders/loadAgents resolve normally even on failure (errors swallowed),
+  // so a reactive effect can't detect failure — we need an interval.
   React.useEffect(() => {
-    if (isVSCodeRuntime) {
-      return;
-    }
-    if (!isConnected) {
-      return;
-    }
-    if (providersCount > 0 && agentsCount > 0) {
-      return;
-    }
-    if (startupRecoveryInProgressRef.current) {
-      return;
-    }
+    if (isVSCodeRuntime || !isConnected) return;
+    if (providersCount > 0 && agentsCount > 0) return;
 
-    const now = Date.now();
-    if (now - startupRecoveryLastAttemptRef.current < 750) {
-      return;
-    }
-
-    startupRecoveryLastAttemptRef.current = now;
-    startupRecoveryInProgressRef.current = true;
-
-    const repair = async () => {
+    let active = true;
+    const attempt = async () => {
+      const state = useConfigStore.getState();
+      if (state.providers.length > 0 && state.agents.length > 0) return;
       try {
-        if (providersCount === 0) {
-          await loadProviders();
-        }
-        if (agentsCount === 0) {
-          await loadAgents();
-        }
-      } catch {
-        // Keep UI responsive; we'll retry on next cycle.
-      } finally {
-        startupRecoveryInProgressRef.current = false;
-      }
+        if (state.providers.length === 0) await loadProviders();
+        if (useConfigStore.getState().agents.length === 0) await loadAgents();
+      } catch { /* retry next interval */ }
     };
 
-    void repair();
-  }, [agentsCount, isConnected, isVSCodeRuntime, loadAgents, loadProviders, providersCount]);
+    void attempt();
+    const id = setInterval(() => { if (active) void attempt(); }, 2000);
+    return () => { active = false; clearInterval(id); };
+  }, [isConnected, isVSCodeRuntime, loadAgents, loadProviders, providersCount, agentsCount]);
 
   React.useEffect(() => {
     if (isSwitchingDirectory) {

@@ -84,7 +84,8 @@ const resolveSessionSendConfig = (sessionId: string) => {
 
   const variant =
     selectedAgent && providerID && modelID
-      ? context.getAgentModelVariantForSession(sessionId, selectedAgent, providerID, modelID)
+      ? (selection.getAgentModelVariantForSession(sessionId, selectedAgent, providerID, modelID)
+        ?? context.getAgentModelVariantForSession(sessionId, selectedAgent, providerID, modelID))
       : undefined;
 
   return {
@@ -129,7 +130,11 @@ export function useQueuedMessageAutoSend(options?: { enabled?: boolean }) {
         return;
       }
 
-      const resolved = resolveSessionSendConfig(sessionId);
+      // Use send config captured at queue time; fall back to current config
+      const captured = queueSnapshot[0]?.sendConfig;
+      const resolved = captured?.providerID && captured?.modelID
+        ? captured
+        : resolveSessionSendConfig(sessionId);
       if (!resolved.providerID || !resolved.modelID) {
         return;
       }
