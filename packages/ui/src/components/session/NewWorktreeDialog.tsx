@@ -240,12 +240,6 @@ export function NewWorktreeDialog({
   const isLoadingBranches = useGitStore((state) => state.isLoadingBranches);
   const fetchBranches = useGitStore((state) => state.fetchBranches);
 
-  React.useEffect(() => {
-    if (!open || !projectDirectory || !git) return;
-    if (branches?.all) return;
-    void fetchBranches(projectDirectory, git);
-  }, [open, projectDirectory, git, branches?.all, fetchBranches]);
-  
   // Compute local and remote branch lists (same pattern as GitView)
   const localBranches = React.useMemo(() => {
     if (!branches?.all) return [];
@@ -295,6 +289,39 @@ export function NewWorktreeDialog({
   // Shared query state per picker (desktop + mobile)
   const [existingBranchQuery, setExistingBranchQuery] = React.useState('');
   const [sourceBranchQuery, setSourceBranchQuery] = React.useState('');
+  const existingBranchDropdownContentRef = React.useRef<HTMLDivElement | null>(null);
+  const sourceBranchDropdownContentRef = React.useRef<HTMLDivElement | null>(null);
+  const existingBranchMobileListWrapperRef = React.useRef<HTMLDivElement | null>(null);
+  const sourceBranchMobileListWrapperRef = React.useRef<HTMLDivElement | null>(null);
+
+  const findScrollableContainer = React.useCallback((startNode: HTMLElement | null): HTMLElement | null => {
+    let node: HTMLElement | null = startNode;
+    while (node && node !== document.body) {
+      const { overflowY } = window.getComputedStyle(node);
+      if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+        return node;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }, []);
+
+  const resetScrollToTop = React.useCallback((container: HTMLElement | null) => {
+    if (!container) {
+      return;
+    }
+    container.scrollTop = 0;
+  }, []);
+
+  const resetDesktopPickerScroll = React.useCallback((contentRef: React.RefObject<HTMLDivElement | null>) => {
+    const list = contentRef.current?.querySelector<HTMLElement>('[data-slot="command-list"]') ?? null;
+    resetScrollToTop(list);
+  }, [resetScrollToTop]);
+
+  const resetMobilePickerScroll = React.useCallback((wrapperRef: React.RefObject<HTMLDivElement | null>) => {
+    const scrollContainer = findScrollableContainer(wrapperRef.current);
+    resetScrollToTop(scrollContainer);
+  }, [findScrollableContainer, resetScrollToTop]);
 
   const existingBranchRankedGroups = React.useMemo(() => {
     return rankBranchesForQuery({
@@ -316,6 +343,14 @@ export function NewWorktreeDialog({
   const hasSourceBranchQuery = sourceBranchQuery.trim().length > 0;
   const hasExistingBranchMatches = existingBranchRankedGroups.matching.length > 0;
   const hasSourceBranchMatches = sourceBranchRankedGroups.matching.length > 0;
+  const canFetchBranches = Boolean(projectDirectory && git);
+
+  const handleFetchBranches = React.useCallback(() => {
+    if (!projectDirectory || !git) {
+      return;
+    }
+    void fetchBranches(projectDirectory, git);
+  }, [projectDirectory, git, fetchBranches]);
 
   React.useEffect(() => {
     if (!existingBranchDropdownOpen && !existingBranchPickerOpen) {
@@ -328,7 +363,37 @@ export function NewWorktreeDialog({
       setSourceBranchQuery('');
     }
   }, [sourceBranchDropdownOpen, sourceBranchPickerOpen]);
-  
+
+  React.useEffect(() => {
+    if (existingBranchDropdownOpen) {
+      resetDesktopPickerScroll(existingBranchDropdownContentRef);
+    }
+    if (existingBranchPickerOpen) {
+      resetMobilePickerScroll(existingBranchMobileListWrapperRef);
+    }
+  }, [
+    existingBranchDropdownOpen,
+    existingBranchPickerOpen,
+    existingBranchQuery,
+    resetDesktopPickerScroll,
+    resetMobilePickerScroll,
+  ]);
+
+  React.useEffect(() => {
+    if (sourceBranchDropdownOpen) {
+      resetDesktopPickerScroll(sourceBranchDropdownContentRef);
+    }
+    if (sourceBranchPickerOpen) {
+      resetMobilePickerScroll(sourceBranchMobileListWrapperRef);
+    }
+  }, [
+    sourceBranchDropdownOpen,
+    sourceBranchPickerOpen,
+    sourceBranchQuery,
+    resetDesktopPickerScroll,
+    resetMobilePickerScroll,
+  ]);
+
   // Validation state
   const [validation, setValidation] = React.useState<ValidationState>({
     isValidating: false,
@@ -1088,17 +1153,29 @@ Nice-to-have:
                 <label className="typography-ui-label text-foreground block font-semibold">
                   Select Branch
                 </label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setExistingBranchPickerOpen(true)}
-                  className="w-full justify-between h-9"
-                >
-                  <span className={existingBranchState.selectedBranch ? 'text-foreground' : 'text-muted-foreground'}>
-                    {existingBranchState.selectedBranch || 'Choose a branch...'}
-                  </span>
-                  <RiGitBranchLine className="h-4 w-4 text-muted-foreground" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setExistingBranchPickerOpen(true)}
+                    className="flex-1 justify-between h-9"
+                  >
+                    <span className={existingBranchState.selectedBranch ? 'text-foreground' : 'text-muted-foreground'}>
+                      {existingBranchState.selectedBranch || 'Choose a branch...'}
+                    </span>
+                    <RiGitBranchLine className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 px-0 shrink-0"
+                    onClick={handleFetchBranches}
+                    disabled={!canFetchBranches || isLoadingBranches}
+                    title="Fetch branches"
+                  >
+                    {isLoadingBranches ? <RiLoader4Line className="size-4 animate-spin" /> : <RiRefreshLine className="size-4" />}
+                  </Button>
+                </div>
                 
                 {/* Mobile Branch Picker Overlay */}
                 <MobileOverlayPanel
@@ -1106,7 +1183,7 @@ Nice-to-have:
                   title="Select Branch"
                   onClose={() => setExistingBranchPickerOpen(false)}
                 >
-                  <div className="space-y-4">
+                  <div className="space-y-4" ref={existingBranchMobileListWrapperRef}>
                     <Input
                       value={existingBranchQuery}
                       onChange={(e) => setExistingBranchQuery(e.target.value)}
@@ -1370,7 +1447,7 @@ Nice-to-have:
                   title="Select Source Branch"
                   onClose={() => setSourceBranchPickerOpen(false)}
                 >
-                  <div className="space-y-4">
+                  <div className="space-y-4" ref={sourceBranchMobileListWrapperRef}>
                     <Input
                       value={sourceBranchQuery}
                       onChange={(e) => setSourceBranchQuery(e.target.value)}
@@ -1571,17 +1648,18 @@ Nice-to-have:
                   <label className="typography-ui-label text-foreground block font-semibold">
                     Select Branch
                   </label>
-                  <DropdownMenu open={existingBranchDropdownOpen} onOpenChange={setExistingBranchDropdownOpen}>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="h-9 min-w-[220px] max-w-full justify-between gap-2">
-                        <span className={cn('truncate', existingBranchState.selectedBranch ? 'text-foreground' : 'text-muted-foreground')}>
-                          {existingBranchState.selectedBranch || 'Choose a branch...'}
-                        </span>
-                        <RiArrowDownSLine className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-[320px] p-0">
-                      <Command shouldFilter={false}>
+                  <div className="flex items-center gap-2">
+                    <DropdownMenu open={existingBranchDropdownOpen} onOpenChange={setExistingBranchDropdownOpen}>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-9 min-w-[220px] max-w-full justify-between gap-2">
+                          <span className={cn('truncate', existingBranchState.selectedBranch ? 'text-foreground' : 'text-muted-foreground')}>
+                            {existingBranchState.selectedBranch || 'Choose a branch...'}
+                          </span>
+                          <RiArrowDownSLine className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[320px] p-0" ref={existingBranchDropdownContentRef}>
+                        <Command shouldFilter={false}>
                         <CommandInput
                           placeholder="Search branches..."
                           value={existingBranchQuery}
@@ -1678,9 +1756,20 @@ Nice-to-have:
                             </>
                           )}
                         </CommandList>
-                      </Command>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                        </Command>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 px-0 shrink-0"
+                      onClick={handleFetchBranches}
+                      disabled={!canFetchBranches || isLoadingBranches}
+                      title="Fetch branches"
+                    >
+                      {isLoadingBranches ? <RiLoader4Line className="size-4 animate-spin" /> : <RiRefreshLine className="size-4" />}
+                    </Button>
+                  </div>
                 </div>
             ) : (
               <div className="space-y-1.5">
@@ -1809,7 +1898,7 @@ Nice-to-have:
                         <RiArrowDownSLine className="h-4 w-4 shrink-0 text-muted-foreground" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-[320px] p-0">
+                    <DropdownMenuContent align="start" className="w-[320px] p-0" ref={sourceBranchDropdownContentRef}>
                       <Command shouldFilter={false}>
                         <CommandInput
                           placeholder="Search branches..."
