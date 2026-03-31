@@ -365,6 +365,17 @@ export const createNotificationTriggerRuntime = (deps) => {
       return;
     }
 
+    if (payload.type === 'permission.replied' && sessionId) {
+      const requestId = payload.properties?.requestID;
+      const requestKey = typeof requestId === 'string' ? `${sessionId}:${requestId}` : null;
+      const pendingNotification = pushPermissionDebounceTimers.get(sessionId);
+      if (requestKey && pendingNotification?.requestKey === requestKey) {
+        clearTimeout(pendingNotification.timer);
+        pushPermissionDebounceTimers.delete(sessionId);
+      }
+      return;
+    }
+
     if (payload.type === 'permission.asked' && sessionId) {
       const requestId = payload.properties?.id;
       const permission = payload.properties?.permission;
@@ -375,11 +386,12 @@ export const createNotificationTriggerRuntime = (deps) => {
 
       const existingTimer = pushPermissionDebounceTimers.get(sessionId);
       if (existingTimer) {
-        clearTimeout(existingTimer);
+        clearTimeout(existingTimer.timer);
       }
 
       const timer = setTimeout(async () => {
         pushPermissionDebounceTimers.delete(sessionId);
+
         const settings = await readSettingsFromDisk();
 
         if (settings.notifyOnQuestion === false) {
@@ -449,7 +461,7 @@ export const createNotificationTriggerRuntime = (deps) => {
         );
       }, PUSH_PERMISSION_DEBOUNCE_MS);
 
-      pushPermissionDebounceTimers.set(sessionId, timer);
+      pushPermissionDebounceTimers.set(sessionId, { timer, requestKey });
     }
   };
 
