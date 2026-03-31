@@ -91,13 +91,17 @@ export const fetchQuota = async () => {
     const weeklyUsed = weeklyUsage;
 
     const intervalUsedPercent =
-      intervalTotal > 0 ? Math.max(0, Math.min(100, (intervalUsed / intervalTotal) * 100)) : null;
+      intervalTotal > 0 && intervalUsed !== null
+        ? Math.max(0, Math.min(100, (intervalUsed / intervalTotal) * 100))
+        : null;
     const intervalWindowSeconds =
       intervalStartAt && intervalResetAt && intervalResetAt > intervalStartAt
         ? Math.floor((intervalResetAt - intervalStartAt) / 1000)
         : null;
     const weeklyUsedPercent =
-      weeklyTotal > 0 ? Math.max(0, Math.min(100, (weeklyUsed / weeklyTotal) * 100)) : null;
+      weeklyTotal > 0 && weeklyUsed !== null
+        ? Math.max(0, Math.min(100, (weeklyUsed / weeklyTotal) * 100))
+        : null;
     const weeklyWindowSeconds =
       weeklyStartAt && weeklyResetAt && weeklyResetAt > weeklyStartAt
         ? Math.floor((weeklyResetAt - weeklyStartAt) / 1000)
