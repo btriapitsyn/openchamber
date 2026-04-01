@@ -6,6 +6,7 @@ This module provides WebSocket transport utilities for terminal input and output
 ## Entrypoints and structure
 - `packages/web/server/lib/terminal/`: Terminal module directory.
   - `index.js`: Stable module entrypoint that re-exports protocol helpers and replay-buffer helpers.
+  - `runtime.js`: Runtime module that owns terminal session state, WS server setup, and `/api/terminal/*` route registration.
   - `terminal-ws-protocol.js`: Single-file module containing terminal WebSocket protocol utilities.
   - `output-replay-buffer.js`: Helper module for buffering recent terminal output so late subscribers can receive startup prompt data.
 - `packages/web/server/lib/terminal/terminal-ws-protocol.test.js`: Test file for protocol utilities.
