@@ -13,8 +13,6 @@
 - Settings/MCP: adding MCP servers now correctly respects user scope so user entries are not written into project config files.
 - Reliability: managed server startup now imports login-shell environment values and normalizes Windows paths to reduce session-loading mismatches and proxy-related connection issues.
 - Usage: added MiniMax Weekly quota provider support for broader quota tracking coverage (thanks to @nzlov).
-- Chat/Model Selector: added arrow key navigation for thinking mode selection in the model picker, so you can adjust thinking variants with ←→ before confirming model selection, with contextual footer hints and per-model metadata display (thanks to @daveotero).
-
 ## [1.9.0] - 2026-03-20
 
 - Navigation/UI: refreshed the extension shell with a redesigned sidebar, clearer hierarchy, and cleaner session grouping so active work is easier to navigate.

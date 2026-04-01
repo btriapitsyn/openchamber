@@ -4,8 +4,6 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-- Chat/Model Selector: added arrow key navigation for thinking mode selection in the model picker, so you can adjust thinking variants with ←→ before confirming model selection, with contextual footer hints and per-model metadata display (thanks to @daveotero).
-
 ## [1.9.2] - 2026-03-31
 
 - Chat/Performance: rebuilt live session sync and streaming updates to cut render churn, reduce CPU spikes, and keep long-running chats smoother and more stable across runtimes.
