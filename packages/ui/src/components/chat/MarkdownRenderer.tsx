@@ -1279,7 +1279,7 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   variant = 'assistant',
   onShowPopup,
 }) => {
-  const { files, editor, runtime } = useRuntimeAPIs();
+  const { editor, runtime } = useRuntimeAPIs();
   const streamdownContainerRef = React.useRef<HTMLDivElement>(null);
   const effectiveDirectory = useEffectiveDirectory() ?? '';
   const mermaidBlocks = React.useMemo(() => extractMermaidBlocks(content), [content]);
@@ -1354,7 +1354,7 @@ export const SimpleMarkdownRenderer: React.FC<{
   onShowPopup,
   allowMermaidWheelZoom = false,
 }) => {
-  const { files, editor, runtime } = useRuntimeAPIs();
+  const { editor, runtime } = useRuntimeAPIs();
   const renderedContent = React.useMemo(
     () => (stripFrontmatter ? stripLeadingFrontmatter(content) : content),
     [content, stripFrontmatter],
