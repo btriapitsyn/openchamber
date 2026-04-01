@@ -1,6 +1,8 @@
 import express from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
+import { shouldForwardProxyResponseHeader } from '../../proxy-headers.js';
+
 export const registerOpenCodeProxy = (app, deps) => {
   const {
     fs,
@@ -159,6 +161,13 @@ export const registerOpenCodeProxy = (app, deps) => {
         // Defensive: request identity encoding from upstream OpenCode.
         // This avoids compressed-body/header mismatches in multi-proxy setups.
         proxyReq.setHeader('accept-encoding', 'identity');
+      },
+      proxyRes: (proxyRes) => {
+        for (const key of Object.keys(proxyRes.headers || {})) {
+          if (!shouldForwardProxyResponseHeader(key)) {
+            delete proxyRes.headers[key];
+          }
+        }
       },
       error: (err, _req, res) => {
         console.error('[proxy] OpenCode proxy error:', err.message);

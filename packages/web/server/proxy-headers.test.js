@@ -23,6 +23,11 @@ describe('OpenCode proxy header handling', () => {
     expect(shouldForwardProxyResponseHeader('Content-Encoding')).toBe(false);
   });
 
+  it('drops transfer-encoding from forwarded response headers', () => {
+    expect(shouldForwardProxyResponseHeader('transfer-encoding')).toBe(false);
+    expect(shouldForwardProxyResponseHeader('Transfer-Encoding')).toBe(false);
+  });
+
   it('still keeps ordinary response headers', () => {
     expect(shouldForwardProxyResponseHeader('content-type')).toBe(true);
     expect(shouldForwardProxyResponseHeader('etag')).toBe(true);
