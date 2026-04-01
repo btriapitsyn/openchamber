@@ -244,7 +244,7 @@ export function BranchPickerDialog({ open, onOpenChange, project }: BranchPicker
 
     const findSubsessions = (parentIds: Set<string>): typeof sessions => {
       const subsessions = sessions.filter((session) => {
-        const parentID = (session as { parentID?: string | null }).parentID;
+        const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
         if (!parentID) {
           return false;
         }

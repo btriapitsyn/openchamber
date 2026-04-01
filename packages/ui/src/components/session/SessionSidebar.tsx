@@ -597,7 +597,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
           return;
         }
 
-        const isSubtask = Boolean((session as Session & { parentID?: string | null }).parentID);
+        const isSubtask = Boolean(
+          (session as any).parentID || (session as any).parentId || (session as any).parent_session_id
+        );
         if (isSubtask) {
           return;
         }
@@ -619,7 +621,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const childrenMap = React.useMemo(() => {
     const map = new Map<string, Session[]>();
     sortedSessions.forEach((session) => {
-      const parentID = (session as Session & { parentID?: string | null }).parentID;
+      const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
       if (!parentID) {
         return;
       }
@@ -1106,7 +1108,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     const cutoff = Date.now() - FIFTY_EIGHT_HOURS_MS;
     return sortedSessions.filter((session) => {
       if (session.time?.archived) return false;
-      if ((session as Session & { parentID?: string | null }).parentID) return false;
+      // Kiểm tra tất cả các khả năng tên trường để xác định session con (sub-session)
+      const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
+      if (parentID) return false;
       const sessionTimestamp = session.time?.updated || session.time?.created || 0;
       if (sessionTimestamp < cutoff) return false;
       return true;

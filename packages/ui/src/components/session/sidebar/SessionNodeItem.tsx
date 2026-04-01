@@ -219,7 +219,9 @@ export function SessionNodeItem(props: Props): React.ReactNode {
   const hasChildren = node.children.length > 0;
   const isPinnedSession = pinnedSessionIds.has(session.id);
   const isExpanded = hasSessionSearchQuery ? true : expandedParents.has(session.id);
-  const isSubtaskSession = Boolean((session as Session & { parentID?: string | null }).parentID);
+  const isSubtaskSession = Boolean(
+    (session as any).parentID || (session as any).parentId || (session as any).parent_session_id
+  );
   const unseenCount = useSessionUnseenCount(session.id);
   const needsAttention = unseenCount > 0 && (!isSubtaskSession || notifyOnSubtasks);
   const sessionSummary = session.summary as SessionSummaryMeta | undefined;

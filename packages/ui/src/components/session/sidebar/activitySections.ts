@@ -8,7 +8,8 @@ export type ActiveNowEntry = {
 };
 
 const isSubtaskSession = (session: Session): boolean => {
-  return Boolean((session as Session & { parentID?: string | null }).parentID);
+  const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
+  return Boolean(parentID);
 };
 
 const isArchivedSession = (session: Session): boolean => {

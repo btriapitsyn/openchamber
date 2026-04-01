@@ -69,8 +69,8 @@ export const useSessionGrouping = (args: Args) => {
 
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
       const childrenMap = new Map<string, Session[]>();
-      sortedProjectSessions.forEach((session) => {
-        const parentID = (session as Session & { parentID?: string | null }).parentID;
+        sortedProjectSessions.forEach((session) => {
+          const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
         if (!parentID) return;
         const parentSession = sessionMap.get(parentID);
         if (!parentSession || isArchivedSession(parentSession) !== isArchivedSession(session)) {
@@ -109,7 +109,7 @@ export const useSessionGrouping = (args: Args) => {
       };
 
       const roots = sortedProjectSessions.filter((session) => {
-        const parentID = (session as Session & { parentID?: string | null }).parentID;
+        const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
         if (!parentID) return true;
         const parentSession = sessionMap.get(parentID);
         if (!parentSession) return true;
