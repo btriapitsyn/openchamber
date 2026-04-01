@@ -155,6 +155,10 @@ export const registerOpenCodeProxy = (app, deps) => {
         if (authHeaders.Authorization) {
           proxyReq.setHeader('Authorization', authHeaders.Authorization);
         }
+
+        // Defensive: request identity encoding from upstream OpenCode.
+        // This avoids compressed-body/header mismatches in multi-proxy setups.
+        proxyReq.setHeader('accept-encoding', 'identity');
       },
       error: (err, _req, res) => {
         console.error('[proxy] OpenCode proxy error:', err.message);
