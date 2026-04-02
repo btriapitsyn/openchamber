@@ -1,15 +1,11 @@
 import type { Session } from '@opencode-ai/sdk/v2';
+import { isSubtaskSession } from './types';
 
 export const ACTIVE_NOW_STORAGE_KEY = 'oc.sessions.activeNow';
 export const ACTIVE_NOW_MAX_AGE_MS = 36 * 60 * 60 * 1000;
 
 export type ActiveNowEntry = {
   sessionId: string;
-};
-
-const isSubtaskSession = (session: Session): boolean => {
-  const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
-  return Boolean(parentID);
 };
 
 const isArchivedSession = (session: Session): boolean => {

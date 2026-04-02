@@ -2,6 +2,7 @@ import React from 'react';
 import type { Session } from '@opencode-ai/sdk/v2';
 import type { WorktreeMetadata } from '@/types/worktree';
 import type { SessionGroup, SessionNode } from '../types';
+import { getSessionParentId } from '../types';
 import {
   compareSessionsByPinnedAndTime,
   dedupeSessionsById,
@@ -70,7 +71,7 @@ export const useSessionGrouping = (args: Args) => {
       const sessionMap = new Map(sortedProjectSessions.map((session) => [session.id, session]));
       const childrenMap = new Map<string, Session[]>();
         sortedProjectSessions.forEach((session) => {
-          const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
+          const parentID = getSessionParentId(session);
         if (!parentID) return;
         const parentSession = sessionMap.get(parentID);
         if (!parentSession || isArchivedSession(parentSession) !== isArchivedSession(session)) {
@@ -109,7 +110,7 @@ export const useSessionGrouping = (args: Args) => {
       };
 
       const roots = sortedProjectSessions.filter((session) => {
-        const parentID = (session as any).parentID || (session as any).parentId || (session as any).parent_session_id;
+        const parentID = getSessionParentId(session);
         if (!parentID) return true;
         const parentSession = sessionMap.get(parentID);
         if (!parentSession) return true;

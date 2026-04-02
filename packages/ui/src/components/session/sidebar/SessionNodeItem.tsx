@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { DraggableSessionRow } from './sessionFolderDnd';
 import type { SessionNode, SessionSummaryMeta } from './types';
+import { getSessionParentId } from './types';
 import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText, resolveSessionDiffStats } from './utils';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionUnseenCount } from '@/sync/notification-store';
@@ -219,9 +220,7 @@ export function SessionNodeItem(props: Props): React.ReactNode {
   const hasChildren = node.children.length > 0;
   const isPinnedSession = pinnedSessionIds.has(session.id);
   const isExpanded = hasSessionSearchQuery ? true : expandedParents.has(session.id);
-  const isSubtaskSession = Boolean(
-    (session as any).parentID || (session as any).parentId || (session as any).parent_session_id
-  );
+  const isSubtaskSession = Boolean(getSessionParentId(session));
   const unseenCount = useSessionUnseenCount(session.id);
   const needsAttention = unseenCount > 0 && (!isSubtaskSession || notifyOnSubtasks);
   const sessionSummary = session.summary as SessionSummaryMeta | undefined;
