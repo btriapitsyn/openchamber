@@ -13,7 +13,7 @@ import { useOptionalThemeSystem } from '@/contexts/useThemeSystem';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionMessageRecords } from '@/sync/sync-context';
-import { getSyncChildStores, getSyncDirectory } from '@/sync/sync-refs';
+import { getSyncChildStores } from '@/sync/sync-refs';
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionActivity } from '@/hooks/useSessionActivity';
 import { opencodeClient } from '@/lib/opencode/client';
@@ -1689,7 +1689,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         return readTaskSessionIdFromOutput(taskOutputString);
     }, [isTaskTool, metadata, parsedTaskMetadata.sessionId, partMetadata, taskOutputString]);
 
-    const childSessionMessages = useSessionMessageRecords(taskSessionId ?? '');
+    const childSessionMessages = useSessionMessageRecords(taskSessionId ?? '', currentDirectory);
 
     const metadataTaskSummaryEntries = React.useMemo<TaskToolSummaryEntry[]>(() => {
         if (!isTaskTool) {
@@ -1896,7 +1896,12 @@ const ToolPart: React.FC<ToolPartProps> = ({
 
         const fetchSessionMessages = async (isInitialFetch: boolean) => {
             try {
-                const messages = await opencodeClient.getSessionMessages(taskSessionId, resolveFetchLimit(isInitialFetch));
+                const scopedClient = opencodeClient.getScopedSdkClient(currentDirectory);
+                const response = await scopedClient.session.messages({
+                    sessionID: taskSessionId,
+                    limit: resolveFetchLimit(isInitialFetch),
+                });
+                const messages = response.data ?? [];
                 if (cancelled || !Array.isArray(messages) || messages.length === 0) {
                     return;
                 }
@@ -1911,8 +1916,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
                 taskPollNoChangeCountRef.current = 0;
                 // Inject fetched subagent messages into sync child store
                 const childStores = getSyncChildStores();
-                const dir = getSyncDirectory();
-                childStores.update(dir, (prev) => {
+                childStores.update(currentDirectory, (prev) => {
                     const records = messages as SessionMessageWithParts[];
                     const partPatch: Record<string, import('@opencode-ai/sdk/v2').Part[]> = { ...prev.part };
                     for (const rec of records) {
@@ -1942,6 +1946,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         childSessionActivity.phase,
         childSessionHasInFlightTools,
         childSessionTaskSummaryEntries.length,
+        currentDirectory,
         isActive,
         isTaskTool,
         taskChildPollingStopped,

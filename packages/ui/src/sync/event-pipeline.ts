@@ -44,6 +44,7 @@ export type EventPipelineInput = {
 export function createEventPipeline(input: EventPipelineInput) {
   const { sdk, onEvent, onReconnect } = input
   const abort = new AbortController()
+  let hasConnected = false
 
   // Queue state
   let queue: QueuedEvent[] = []
@@ -153,6 +154,12 @@ export function createEventPipeline(input: EventPipelineInput) {
           },
         })
 
+        if (hasConnected) {
+          onReconnect?.()
+        } else {
+          hasConnected = true
+        }
+
         let yielded = Date.now()
         resetHeartbeat()
 
@@ -198,7 +205,6 @@ export function createEventPipeline(input: EventPipelineInput) {
 
       if (abort.signal.aborted) return
       await wait(RECONNECT_DELAY_MS)
-      onReconnect?.()
     }
   })().finally(flush)
 

@@ -13,6 +13,7 @@ import { retry } from "./retry"
 import { updateStreamingState } from "./streaming"
 import { setActionRefs } from "./session-actions"
 import { setSyncRefs } from "./sync-refs"
+import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import { autoRespondsPermission, normalizeDirectory } from "@/stores/utils/permissionAutoAccept"
@@ -86,6 +87,10 @@ export function useAllSessionStatuses(): Record<string, SessionStatus> {
 let bootingRoot = false
 let bootedAt = 0
 const BOOT_DEBOUNCE_MS = 1500
+const RECONNECT_MESSAGE_LIMIT = 200
+const RECONNECT_SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
+
+const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 // Module-level refs for notification viewed check.
 // Used to determine if user is currently viewing the session when a notification arrives.
@@ -105,6 +110,145 @@ function isViewedInCurrentSession(directory: string, sessionId?: string): boolea
 
 function isRecentBoot() {
   return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
+}
+
+function setGlobalSessionStatuses(nextStatuses: Record<string, SessionStatus>) {
+  const current = useGlobalSessionStatusStore.getState().statuses
+  let changed = false
+  const merged = { ...current }
+
+  for (const [sessionId, status] of Object.entries(nextStatuses)) {
+    if (!status || merged[sessionId] === status) continue
+    merged[sessionId] = status
+    changed = true
+  }
+
+  if (changed) {
+    useGlobalSessionStatusStore.setState({ statuses: merged })
+  }
+}
+
+function getReconnectCandidateSessionIds(state: State) {
+  const ids = new Set<string>()
+
+  for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
+    if (status && status.type !== "idle") ids.add(sessionId)
+  }
+
+  for (const [sessionId, messages] of Object.entries(state.message ?? {})) {
+    const lastMessage = messages[messages.length - 1]
+    if (
+      lastMessage
+      && lastMessage.role === "assistant"
+      && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
+    ) {
+      ids.add(sessionId)
+    }
+  }
+
+  return Array.from(ids)
+}
+
+function toSessionStatus(status: Awaited<ReturnType<typeof opencodeClient.getSessionStatus>>[string]): SessionStatus | undefined {
+  if (!status) return undefined
+  if (status.type === "idle" || status.type === "busy") {
+    return { type: status.type }
+  }
+  if (
+    status.type === "retry"
+    && typeof status.attempt === "number"
+    && typeof status.message === "string"
+    && typeof status.next === "number"
+  ) {
+    return {
+      type: "retry",
+      attempt: status.attempt,
+      message: status.message,
+      next: status.next,
+    }
+  }
+  return undefined
+}
+
+async function resyncDirectoryAfterReconnect(directory: string, store: StoreApi<DirectoryStore>) {
+  const current = store.getState()
+  const candidateSessionIds = getReconnectCandidateSessionIds(current)
+  if (candidateSessionIds.length === 0) return
+
+  const nextStatuses = await opencodeClient.getSessionStatusForDirectory(directory)
+  const relevantStatuses: Record<string, SessionStatus> = {}
+
+  for (const sessionId of candidateSessionIds) {
+    const nextStatus = toSessionStatus(nextStatuses[sessionId])
+    if (nextStatus) {
+      relevantStatuses[sessionId] = nextStatus
+    }
+  }
+
+  if (Object.keys(relevantStatuses).length > 0) {
+    store.setState((state: DirectoryStore) => ({
+      session_status: { ...state.session_status, ...relevantStatuses },
+    }))
+    setGlobalSessionStatuses(relevantStatuses)
+  }
+
+  const scopedClient = opencodeClient.getScopedSdkClient(directory)
+  await Promise.all(candidateSessionIds.map(async (sessionId) => {
+    const [sessionResponse, messageResponse] = await Promise.all([
+      scopedClient.session.get({ sessionID: sessionId }).catch(() => null),
+      scopedClient.session.messages({ sessionID: sessionId, limit: RECONNECT_MESSAGE_LIMIT }).catch(() => null),
+    ])
+    const session = sessionResponse?.data
+    const records = messageResponse?.data
+    if (!session || !records) return
+
+    const nextSession = stripSessionDiffSnapshots(session)
+    const nextMessages = records
+      .filter((record) => !!record?.info?.id)
+      .map((record) => stripMessageDiffSnapshots(record.info))
+      .sort((a, b) => cmp(a.id, b.id))
+    const nextMessageIds = new Set(nextMessages.map((message) => message.id))
+
+    store.setState((state: DirectoryStore) => {
+      const sessions = [...state.session]
+      const sessionIndex = sessions.findIndex((item) => item.id === nextSession.id)
+      let sessionChanged = false
+      let sessionTotal = state.sessionTotal
+
+      if (sessionIndex >= 0) {
+        if (sessions[sessionIndex] !== nextSession) {
+          sessions[sessionIndex] = nextSession
+          sessionChanged = true
+        }
+      } else {
+        sessions.push(nextSession)
+        sessions.sort((a, b) => cmp(a.id, b.id))
+        if (!nextSession.parentID) sessionTotal += 1
+        sessionChanged = true
+      }
+
+      const nextPartState = { ...state.part }
+      const previousMessages = state.message[sessionId] ?? []
+      for (const message of previousMessages) {
+        if (!nextMessageIds.has(message.id)) {
+          delete nextPartState[message.id]
+        }
+      }
+      for (const record of records) {
+        const messageId = record?.info?.id
+        if (!messageId) continue
+        nextPartState[messageId] = (record.parts ?? [])
+          .filter((part) => !!part?.id && !RECONNECT_SKIP_PARTS.has(part.type))
+          .sort((a, b) => cmp(a.id, b.id))
+      }
+
+      return {
+        ...(sessionChanged ? { session: sessions, sessionTotal } : {}),
+        message: { ...state.message, [sessionId]: nextMessages },
+        part: nextPartState,
+      }
+    })
+  }))
 }
 
 function handleEvent(
@@ -381,53 +525,26 @@ export function SyncProvider(props: {
   // Event pipeline — created once per mount. No class, no start/stop.
   // Abort controller owned by the pipeline closure. Cleanup aborts + flushes.
   useEffect(() => {
+    const reconnectResyncing = new Set<string>()
+
     const { cleanup } = createEventPipeline({
       sdk: props.sdk,
       onEvent: (directory, payload) => {
         handleEvent(directory, payload, childStores)
       },
       onReconnect: () => {
-        // After SSE reconnects (visibility restore / heartbeat timeout),
-        // re-fetch authoritative state for directories with active sessions.
         for (const [dir, store] of childStores.children) {
-          const state = store.getState()
-          // Find sessions that were not idle when we last heard from them.
-          const activeSessionIds: string[] = []
-          for (const [sid, status] of Object.entries(state.session_status ?? {})) {
-            if (status && (status as SessionStatus).type !== "idle") {
-              activeSessionIds.push(sid)
-            }
-          }
-          if (activeSessionIds.length === 0) continue
+          if (reconnectResyncing.has(dir)) continue
+          if (getReconnectCandidateSessionIds(store.getState()).length === 0) continue
 
-          void props.sdk.session.list({
-            directory: dir,
-            roots: true,
-            limit: 50,
-          }).then((result) => {
-            if ((result as { error?: unknown }).error) return
-            const sessions = (result.data ?? [])
-              .filter((s) => s?.id)
-              .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-            const current = store.getState()
-            store.setState({ session: sessions, sessionTotal: sessions.length })
-            // Sync global status for sidebar
-            const currentGlobal = useGlobalSessionStatusStore.getState().statuses
-            const updated: Record<string, SessionStatus> = { ...currentGlobal }
-            let changed = false
-            for (const s of sessions) {
-              const newStatus = current.session_status?.[s.id]
-              if (newStatus && newStatus !== updated[s.id]) {
-                updated[s.id] = newStatus
-                changed = true
-              }
-            }
-            if (changed) {
-              useGlobalSessionStatusStore.setState({ statuses: updated })
-            }
-          }).catch(() => {
-            // Transient failure during resync — SSE will catch up
-          })
+          reconnectResyncing.add(dir)
+          void resyncDirectoryAfterReconnect(dir, store)
+            .catch(() => {
+              // Transient failure during resync — next SSE event or reconnect will catch up.
+            })
+            .finally(() => {
+              reconnectResyncing.delete(dir)
+            })
         }
       },
     })
@@ -654,7 +771,8 @@ export function useSessionMessageRecords(sessionID: string, directory?: string) 
 
 /**
  * Determines if a session is actively working.
- * Checks session_status AND incomplete assistant messages as fallback.
+ * Checks session_status and only falls back to incomplete assistant messages
+ * when authoritative status is missing.
  * Returns false when permissions are pending (permission indicator takes priority).
  */
 export function useIsSessionWorking(sessionID: string, directory?: string): boolean {
@@ -667,7 +785,8 @@ export function useIsSessionWorking(sessionID: string, directory?: string): bool
     if (permissions.length > 0) return false
 
     // Check session_status
-    const statusWorking = status !== undefined && status.type !== "idle"
+    const hasAuthoritativeStatus = status !== undefined
+    const statusWorking = hasAuthoritativeStatus && status.type !== "idle"
 
     // Check for incomplete assistant message (fallback if status event delayed)
     let hasPendingAssistant = false
@@ -679,7 +798,8 @@ export function useIsSessionWorking(sessionID: string, directory?: string): bool
       }
     }
 
-    return statusWorking || hasPendingAssistant
+    if (hasAuthoritativeStatus) return statusWorking
+    return hasPendingAssistant
   }, [status, permissions, messages])
 }
 
