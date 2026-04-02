@@ -108,10 +108,16 @@ function isRecentBoot() {
 }
 
 function handleEvent(
-  directory: string,
+  rawDirectory: string,
   payload: Event,
   childStores: ChildStoreManager,
 ) {
+  // Normalize directory path: SSE events from OpenCode use native OS separators
+  // (backslashes on Windows) and may differ in drive-letter case.
+  // Child stores are keyed with forward slashes and uppercase drive letters.
+  const directory = rawDirectory && rawDirectory !== "global"
+    ? rawDirectory.replace(/\\/g, "/").replace(/^([a-z]):/, (_, l: string) => l.toUpperCase() + ":")
+    : rawDirectory
   // Global events
   if (directory === "global" || !directory) {
     const recent = isRecentBoot()
