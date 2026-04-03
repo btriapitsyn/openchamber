@@ -14,8 +14,79 @@ import { Binary } from "./binary"
 import type { GlobalState, State } from "./types"
 import { dropSessionCaches } from "./session-cache"
 import { stripSessionDiffSnapshots } from "./sanitize"
+import { isFinalToolStatus } from "../lib/toolStatus"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
+
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+const readTimestamp = (value: unknown): number | undefined => {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined
+}
+
+const mergeToolPartState = (existingPart: Part, incomingPart: Part): Part => {
+  const existing = existingPart as Record<string, unknown>
+  const incoming = incomingPart as Record<string, unknown>
+  const existingState = isRecord(existing.state) ? existing.state : undefined
+  const incomingState = isRecord(incoming.state) ? incoming.state : undefined
+
+  if (!existingState || !incomingState) {
+    return incomingPart
+  }
+
+  const existingStatus = existingState.status
+  const incomingStatus = incomingState.status
+  const existingIsTerminal = typeof existingStatus === "string" && isFinalToolStatus(existingStatus)
+  const incomingIsTerminal = typeof incomingStatus === "string" && isFinalToolStatus(incomingStatus)
+
+  const mergedState: Record<string, unknown> = {
+    ...existingState,
+    ...incomingState,
+  }
+
+  if (existingIsTerminal && !incomingIsTerminal) {
+    mergedState.status = existingStatus
+  }
+
+  const existingTime = isRecord(existingState.time) ? existingState.time : undefined
+  const incomingTime = isRecord(incomingState.time) ? incomingState.time : undefined
+  const startCandidates = [readTimestamp(existingTime?.start), readTimestamp(incomingTime?.start)]
+    .filter((value): value is number => typeof value === "number")
+  const endCandidates = [readTimestamp(existingTime?.end), readTimestamp(incomingTime?.end)]
+    .filter((value): value is number => typeof value === "number")
+
+  if (startCandidates.length > 0 || endCandidates.length > 0) {
+    const mergedTime: Record<string, number> = {}
+    if (startCandidates.length > 0) {
+      mergedTime.start = Math.min(...startCandidates)
+    }
+    if (endCandidates.length > 0) {
+      mergedTime.end = Math.max(...endCandidates)
+    }
+    mergedState.time = mergedTime
+  }
+
+  if (isRecord(existingState.metadata) || isRecord(incomingState.metadata)) {
+    mergedState.metadata = {
+      ...(isRecord(existingState.metadata) ? existingState.metadata : {}),
+      ...(isRecord(incomingState.metadata) ? incomingState.metadata : {}),
+    }
+  }
+
+  if (isRecord(existingState.input) || isRecord(incomingState.input)) {
+    mergedState.input = {
+      ...(isRecord(existingState.input) ? existingState.input : {}),
+      ...(isRecord(incomingState.input) ? incomingState.input : {}),
+    }
+  }
+
+  return {
+    ...incoming,
+    state: mergedState,
+  } as Part
+}
 
 // ---------------------------------------------------------------------------
 // Global events
@@ -188,7 +259,12 @@ export function applyDirectoryEvent(
       const next = [...parts]
       const result = Binary.search(next, part.id, (p) => p.id)
       if (result.found) {
-        next[result.index] = part
+        const existingPart = next[result.index]
+        if (existingPart.type === "tool" && part.type === "tool") {
+          next[result.index] = mergeToolPartState(existingPart, part)
+        } else {
+          next[result.index] = part
+        }
       } else {
         // Replace optimistic part (no sessionID) with server part of same type.
         // Gate: only scan if the first part lacks sessionID (optimistic parts are
