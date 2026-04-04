@@ -1,7 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import fs from 'node:fs';
 import net from 'node:net';
-import path from 'node:path';
 
 export const createOpenCodeLifecycleRuntime = (deps) => {
   const {
@@ -18,7 +16,7 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     ensureLocalOpenCodeServerPassword,
     buildWslExecArgs,
     resolveWslExecutablePath,
-    opencodeShimInterpreter,
+    resolveManagedOpenCodeLaunchSpec,
     setOpenCodePort,
     setDetectedOpenCodeApiPrefix,
     setupProxy,
@@ -196,26 +194,13 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     }
 
     if (process.platform === 'win32' && !state.useWslForOpencode) {
-      const interpreter = opencodeShimInterpreter(binary);
-      if (interpreter) {
-        args.unshift(binary);
-        binary = interpreter;
-      } else {
-        try {
-          const shimContent = fs.readFileSync(binary, 'utf8');
-          const jsMatch = shimContent.match(/node_modules[\\/]opencode[^\s"']*/);
-          if (jsMatch) {
-            const candidate = path.resolve(path.dirname(binary), jsMatch[0]);
-            if (fs.existsSync(candidate)) {
-              const realInterp = opencodeShimInterpreter(candidate);
-              if (realInterp) {
-                args.unshift(candidate);
-                binary = realInterp;
-              }
-            }
-          }
-        } catch {
+      const launchSpec = resolveManagedOpenCodeLaunchSpec(binary);
+      if (launchSpec?.binary) {
+        if (launchSpec.wrapperType) {
+          console.log(`Launching OpenCode via ${launchSpec.wrapperType}: ${launchSpec.binary}`);
         }
+        binary = launchSpec.binary;
+        args = [...(Array.isArray(launchSpec.args) ? launchSpec.args : []), ...args];
       }
     }
 
