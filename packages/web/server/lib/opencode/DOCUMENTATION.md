@@ -112,6 +112,7 @@ This module provides OpenCode server integration utilities for the web server ru
   - `refreshOpenCodeAfterConfigChange(reason, options?)`
   - `bootstrapOpenCodeAtStartup()`
   - `startHealthMonitoring(healthCheckIntervalMs)`
+  - `waitForPortRelease(port, timeoutMs, hostname?)`
   - `killProcessOnPort(port)`
 
 ## Public exports (env-runtime.js)

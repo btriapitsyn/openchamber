@@ -748,6 +748,7 @@ const bootstrapOpenCodeAtStartup = async (...args) => {
   });
 };
 const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
+const waitForPortRelease = (...args) => openCodeLifecycleRuntime.waitForPortRelease(...args);
 
 const fetchAgentsSnapshot = (...args) => serverUtilsRuntime.fetchAgentsSnapshot(...args);
 const fetchProvidersSnapshot = (...args) => serverUtilsRuntime.fetchProvidersSnapshot(...args);
@@ -777,6 +778,7 @@ const gracefulShutdownRuntime = createGracefulShutdownRuntime({
     openCodeProcess = value;
   },
   killProcessOnPort,
+  waitForPortRelease,
   getServer: () => server,
   getUiAuthController: () => uiAuthController,
   setUiAuthController: (value) => {
