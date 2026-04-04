@@ -15,27 +15,20 @@
         "label": "main",
         "create": false,
         "title": "OpenChamber",
-        "transparent": true,
         "width": 1280,
         "height": 800,
         "resizable": true,
         "fullscreen": false,
-        "decorations": true,
-        "hiddenTitle": true,
-        "titleBarStyle": "Overlay",
-        "trafficLightPosition": {
-          "x": 17,
-          "y": 26
-        },
-        "dragDropEnabled": false,
+        "decorations": false,
+        "transparent": true,
+        "dragDropEnabled": true,
         "visible": false
       }
     ],
     "security": {
       "csp": null
     },
-    "withGlobalTauri": true,
-    "macOSPrivateApi": true
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
