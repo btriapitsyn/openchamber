@@ -10,10 +10,9 @@ export type RecoveryVariant =
 export type DesktopRecoveryConfig = {
   title: string;
   description: string;
-  iconKey: 'local' | 'remote' | 'settings';
+  iconKey: 'local' | 'remote';
   showRetry: boolean;
   retryLabel?: string;
-  showOpenSettings: boolean;
   showUseLocal: boolean;
   showUseRemote: boolean;
   /** Label for the "use local" primary action button */
@@ -42,7 +41,6 @@ export function getDesktopRecoveryConfig(
         iconKey: 'local',
         showRetry: true,
         retryLabel: 'Retry Local',
-        showOpenSettings: true,
         showUseLocal: true,
         showUseRemote: true,
         useLocalLabel: 'Set Up Local',
@@ -53,9 +51,8 @@ export function getDesktopRecoveryConfig(
       return {
         title: 'No Default Connection',
         description: 'Your saved default connection could not be found. Choose how you want to connect.',
-        iconKey: 'settings',
+        iconKey: 'local',
         showRetry: false,
-        showOpenSettings: true,
         showUseLocal: true,
         showUseRemote: true,
         useLocalLabel: 'Use Local',
@@ -70,7 +67,6 @@ export function getDesktopRecoveryConfig(
         iconKey: 'remote',
         showRetry: true,
         retryLabel: 'Retry Connection',
-        showOpenSettings: true,
         showUseLocal: true,
         showUseRemote: true,
         useLocalLabel: 'Use Local',
@@ -85,7 +81,6 @@ export function getDesktopRecoveryConfig(
         description: `The server at "${host || 'unknown'}" is not running OpenChamber. Verify the address points to an OpenChamber server.`,
         iconKey: 'remote',
         showRetry: false,
-        showOpenSettings: true,
         showUseLocal: true,
         showUseRemote: true,
         useLocalLabel: 'Use Local',
@@ -97,9 +92,8 @@ export function getDesktopRecoveryConfig(
       return {
         title: 'No Default Connection',
         description: 'Your saved default connection could not be found. Choose how you want to connect.',
-        iconKey: 'settings',
+        iconKey: 'local',
         showRetry: false,
-        showOpenSettings: true,
         showUseLocal: true,
         showUseRemote: true,
         useLocalLabel: 'Use Local',

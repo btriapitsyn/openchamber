@@ -193,17 +193,6 @@ function App({ apis }: AppProps) {
   const appReadyDispatchedRef = React.useRef(false);
   const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), []);
   const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible;
-  const [desktopBootBypassToSettings, setDesktopBootBypassToSettings] = React.useState(false);
-
-  // When the settings dialog opened via the recovery/chooser bypass closes,
-  // reload to re-evaluate boot state from the backend instead of returning
-  // to the stale in-memory bootView snapshot.
-  const isSettingsDialogOpen = useUIStore((s) => s.isSettingsDialogOpen);
-  React.useEffect(() => {
-    if (desktopBootBypassToSettings && !isSettingsDialogOpen) {
-      window.location.reload();
-    }
-  }, [desktopBootBypassToSettings, isSettingsDialogOpen]);
 
   React.useEffect(() => {
     setStreamPerfEnabled(showMemoryDebug);
@@ -606,9 +595,7 @@ function App({ apis }: AppProps) {
   // Desktop boot view routing.
   // When the boot outcome resolves to a non-main screen (chooser, recovery),
   // render OnboardingScreen with appropriate mode/variant.
-  // The bypass flag lets recovery/chooser escape into the main app shell
-  // (e.g. to open settings) without mutating boot config or reloading.
-  if (isDesktopRuntime && bootView && bootView.screen !== 'main' && !desktopBootBypassToSettings) {
+  if (isDesktopRuntime && bootView && bootView.screen !== 'main') {
     // First-launch chooser
     if (bootView.screen === 'chooser') {
       return (
@@ -644,13 +631,6 @@ function App({ apis }: AppProps) {
             enableCliPolling={recoveryVariant === 'local-unavailable'}
             onRecoveryRetry={handleDesktopBootDismiss}
             onChooseLocal={handleDesktopBootDismiss}
-            onOpenSettings={() => {
-              // Bypass the boot placeholder and open settings in-session.
-              // No reload, no mutation of defaultHostId.
-              useUIStore.getState().setSettingsPage('connection');
-              useUIStore.getState().setSettingsDialogOpen(true);
-              setDesktopBootBypassToSettings(true);
-            }}
           />
         </div>
       </ErrorBoundary>

@@ -14,8 +14,6 @@ type RecoveryScreenProps = {
   hostLabel?: string;
   /** Callback when user wants to retry */
   onRetry?: () => void;
-  /** Callback when user wants to open settings */
-  onOpenSettings?: () => void;
   /** Callback when user chooses local */
   onChooseLocal?: () => void;
   /** Callback when user chooses remote */
@@ -37,7 +35,6 @@ export function RecoveryScreen({
   hostUrl,
   hostLabel,
   onRetry,
-  onOpenSettings,
   onChooseLocal,
   onChooseRemote,
   showRemoteForm = false,
@@ -97,10 +94,6 @@ export function RecoveryScreen({
     }
   }, [variant, onChooseRemote]);
 
-  const handleRecoveryOpenSettings = React.useCallback(() => {
-    onOpenSettings?.();
-  }, [onOpenSettings]);
-
   // Recovery mode — show recovery component first; only switch to remote form on explicit user action
   if (showRemoteForm) {
     // For remote-wrong-service, do NOT auto-populate the known bad URL
@@ -133,7 +126,6 @@ export function RecoveryScreen({
       onRetry={handleRecoveryRetry}
       onUseLocal={handleRecoveryUseLocal}
       onUseRemote={handleRecoveryUseRemote}
-      onOpenSettings={handleRecoveryOpenSettings}
       isRetrying={isRetrying}
     />
   );

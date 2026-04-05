@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiRefreshLine, RiServerLine, RiMacbookLine, RiSettings3Line } from '@remixicon/react';
+import { RiRefreshLine, RiServerLine, RiMacbookLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { redactSensitiveUrl } from '@/lib/desktopHosts';
@@ -17,19 +17,16 @@ export type DesktopConnectionRecoveryProps = {
   onRetry?: () => void;
   onUseLocal?: () => void;
   onUseRemote?: () => void;
-  onOpenSettings?: () => void;
   isRetrying?: boolean;
 };
 
 /** Maps iconKey from config to actual icon component */
-function getRecoveryIcon(iconKey: 'local' | 'remote' | 'settings'): React.ReactNode {
+function getRecoveryIcon(iconKey: 'local' | 'remote'): React.ReactNode {
   switch (iconKey) {
     case 'local':
       return <RiMacbookLine className="h-8 w-8" />;
     case 'remote':
       return <RiServerLine className="h-8 w-8" />;
-    case 'settings':
-      return <RiSettings3Line className="h-8 w-8" />;
   }
 }
 
@@ -40,7 +37,6 @@ export function DesktopConnectionRecovery({
   onRetry,
   onUseLocal,
   onUseRemote,
-  onOpenSettings,
   isRetrying = false,
 }: DesktopConnectionRecoveryProps) {
   const config = getDesktopRecoveryConfig(variant, hostLabel, hostUrl);
@@ -115,18 +111,6 @@ export function DesktopConnectionRecovery({
               </Button>
             )}
           </div>
-
-          {config.showOpenSettings && onOpenSettings && (
-            <Button
-              variant="ghost"
-              onClick={onOpenSettings}
-              disabled={isRetrying}
-              className="w-full text-muted-foreground"
-            >
-              <RiSettings3Line className="h-4 w-4" />
-              Open Settings
-            </Button>
-          )}
         </div>
       </div>
     </div>

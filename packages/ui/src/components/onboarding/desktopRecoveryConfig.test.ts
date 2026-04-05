@@ -12,7 +12,6 @@ describe('getDesktopRecoveryConfig', () => {
     expect(config.iconKey).toBe('local');
     expect(config.showRetry).toBe(true);
     expect(config.retryLabel).toBe('Retry Local');
-    expect(config.showOpenSettings).toBe(true);
     expect(config.showUseLocal).toBe(true);
     expect(config.showUseRemote).toBe(true);
     // local-unavailable uses setup-oriented label since local needs installing
@@ -21,9 +20,9 @@ describe('getDesktopRecoveryConfig', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 2. remote-unreachable: both actions + retry + settings
+  // 2. remote-unreachable: both actions + retry
   // ---------------------------------------------------------------------------
-  test('remote-unreachable exposes both actions + retry + settings', () => {
+  test('remote-unreachable exposes both actions + retry', () => {
     const config = getDesktopRecoveryConfig(
       'remote-unreachable',
       'My Server',
@@ -34,7 +33,6 @@ describe('getDesktopRecoveryConfig', () => {
     expect(config.iconKey).toBe('remote');
     expect(config.showRetry).toBe(true);
     expect(config.retryLabel).toBe('Retry Connection');
-    expect(config.showOpenSettings).toBe(true);
     expect(config.showUseLocal).toBe(true);
     expect(config.showUseRemote).toBe(true);
     // remote variants keep standard "Use Local"
@@ -43,9 +41,9 @@ describe('getDesktopRecoveryConfig', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 3. remote-wrong-service: both actions + settings, NO retry
+  // 3. remote-wrong-service: both actions, NO retry
   // ---------------------------------------------------------------------------
-  test('remote-wrong-service exposes both actions + settings and no retry', () => {
+  test('remote-wrong-service exposes both actions and no retry', () => {
     const config = getDesktopRecoveryConfig(
       'remote-wrong-service',
       'Bad Host',
@@ -56,7 +54,6 @@ describe('getDesktopRecoveryConfig', () => {
     expect(config.iconKey).toBe('remote');
     expect(config.showRetry).toBe(false);
     expect(config.retryLabel).toBe(undefined);
-    expect(config.showOpenSettings).toBe(true);
     expect(config.showUseLocal).toBe(true);
     expect(config.showUseRemote).toBe(true);
     expect(config.useLocalLabel).toBe('Use Local');
@@ -64,16 +61,15 @@ describe('getDesktopRecoveryConfig', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // 4. missing-default-host: chooser-with-context (both actions + settings, no retry)
+  // 4. missing-default-host: chooser-with-context (both actions, no retry)
   // ---------------------------------------------------------------------------
   test('missing-default-host behaves like chooser-with-context', () => {
     const config = getDesktopRecoveryConfig('missing-default-host');
 
     expect(config.title).toBe('No Default Connection');
-    expect(config.iconKey).toBe('settings');
+    expect(config.iconKey).toBe('local');
     expect(config.showRetry).toBe(false);
     expect(config.retryLabel).toBe(undefined);
-    expect(config.showOpenSettings).toBe(true);
     expect(config.showUseLocal).toBe(true);
     expect(config.showUseRemote).toBe(true);
     expect(config.useLocalLabel).toBe('Use Local');
