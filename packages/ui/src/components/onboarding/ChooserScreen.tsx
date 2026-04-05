@@ -290,6 +290,7 @@ export function ChooserScreen({ onCliAvailable }: ChooserScreenProps) {
         {isDesktopApp && isTauriShell() && activeTab === 'remote' ? (
           <RemoteConnectionForm
             onBack={() => setActiveTab('local')}
+            showBackButton={false}
             onSwitchToLocal={() => setActiveTab('local')}
           />
         ) : (

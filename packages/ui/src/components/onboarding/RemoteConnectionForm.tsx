@@ -14,6 +14,8 @@ type ConnectionState = 'idle' | 'testing' | 'success' | 'error';
 
 export interface RemoteConnectionFormProps {
   onBack: () => void;
+  /** Optional: show the back button (default: true) */
+  showBackButton?: boolean;
   /** Optional: initial URL to pre-populate */
   initialUrl?: string;
   /** Optional: initial label to pre-populate */
@@ -49,6 +51,7 @@ function isBlockingStatus(status: ProbeStatus): boolean {
 
 export function RemoteConnectionForm({
   onBack,
+  showBackButton = true,
   initialUrl = '',
   initialLabel = '',
   isRecoveryMode = false,
@@ -158,11 +161,13 @@ export function RemoteConnectionForm({
   return (
     <div className="flex flex-col items-center justify-center h-full p-8">
       <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center">
-          <Button variant="ghost" onClick={onBack} className="p-0 text-muted-foreground hover:text-foreground">
-            &larr; Back
-          </Button>
-        </div>
+        {showBackButton && (
+          <div className="flex items-center">
+            <Button variant="ghost" onClick={onBack} className="p-0 text-muted-foreground hover:text-foreground">
+              &larr; Back
+            </Button>
+          </div>
+        )}
 
         <div className="space-y-2 text-center">
           <h1 className="typography-ui-header text-xl font-semibold text-foreground">
