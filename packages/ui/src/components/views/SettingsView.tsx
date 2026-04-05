@@ -49,6 +49,7 @@ import { ProvidersPage } from '@/components/sections/providers/ProvidersPage';
 import { UsageSidebar } from '@/components/sections/usage/UsageSidebar';
 import { UsagePage } from '@/components/sections/usage/UsagePage';
 import { GitPage } from '@/components/sections/git-identities/GitPage';
+import { ConnectionSettingsPage } from '@/components/sections/connection/ConnectionSettingsPage';
 import type { OpenChamberSection } from '@/components/sections/openchamber/types';
 import { OpenChamberPage } from '@/components/sections/openchamber/OpenChamberPage';
 import { McpIcon } from '@/components/icons/McpIcon';
@@ -88,6 +89,7 @@ const pageOrder: SettingsPageSlug[] = [
   'git',
   'projects',
   'remote-instances',
+  'connection',
   'agents',
   'commands',
   'mcp',
@@ -151,6 +153,8 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
     case 'voice':
       return RiMicLine;
     case 'tunnel':
+      return RiGlobalLine;
+    case 'connection':
       return RiGlobalLine;
     case 'home':
       return null;
@@ -436,6 +440,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <ProvidersPage />;
       case 'usage':
         return <UsagePage />;
+      case 'connection':
+        return <ConnectionSettingsPage />;
       case 'git':
         return <GitPage />;
       case 'appearance':
