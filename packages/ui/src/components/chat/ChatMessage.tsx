@@ -30,7 +30,7 @@ import type { TurnGroupingContext } from './lib/turns/types';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
-import { areOptionalRenderRelevantMessagesEqual, areRenderRelevantMessageInfoEqual, areRenderRelevantPartsEqual } from './message/renderCompare';
+import { areOptionalRenderRelevantMessagesEqual, areRelevantTurnGroupingContextsEqual, areRenderRelevantMessageInfoEqual, areRenderRelevantPartsEqual } from './message/renderCompare';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
@@ -1129,12 +1129,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
 };
 
 export default React.memo(ChatMessage, (prev, next) => {
+    const prevRole = deriveMessageRole(prev.message.info);
+
     return areRenderRelevantMessageInfoEqual(prev.message.info, next.message.info)
         && areRenderRelevantPartsEqual(prev.message.parts, next.message.parts)
         && areOptionalRenderRelevantMessagesEqual(prev.previousMessage, next.previousMessage)
         && areOptionalRenderRelevantMessagesEqual(prev.nextMessage, next.nextMessage)
         && prev.onContentChange === next.onContentChange
-        && prev.turnGroupingContext === next.turnGroupingContext
+        && areRelevantTurnGroupingContextsEqual(prev.turnGroupingContext, next.turnGroupingContext, prev.message.info.id, prevRole.isUser)
         && prev.assistantHeaderMessageId === next.assistantHeaderMessageId
         && prev.isInActiveTurn === next.isInActiveTurn
         && prev.activeStreamingPhase === next.activeStreamingPhase

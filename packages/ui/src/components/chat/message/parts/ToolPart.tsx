@@ -40,6 +40,7 @@ import { ToolRevealOnMount } from './ToolRevealOnMount';
 import { getToolIcon } from './toolPresentation';
 import { useDurationTickerNow } from './useDurationTicker';
 import { resolveFallbackTaskSessionId } from './resolveFallbackTaskSessionId';
+import { areRenderRelevantPartsEqual } from '../renderCompare';
 
 type ToolStateWithMetadata = ToolStateUnion & { metadata?: Record<string, unknown>; input?: Record<string, unknown>; output?: string; error?: string; time?: { start: number; end?: number } };
 
@@ -2472,4 +2473,12 @@ const ToolPart: React.FC<ToolPartProps> = ({
     );
 };
 
-export default ToolPart;
+export default React.memo(ToolPart, (prev, next) => {
+    return areRenderRelevantPartsEqual([prev.part], [next.part])
+        && prev.isExpanded === next.isExpanded
+        && prev.syntaxTheme === next.syntaxTheme
+        && prev.isMobile === next.isMobile
+        && prev.onContentChange === next.onContentChange
+        && prev.onShowPopup === next.onShowPopup
+        && prev.animateTailText === next.animateTailText;
+});

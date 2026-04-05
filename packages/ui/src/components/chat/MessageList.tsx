@@ -3,7 +3,7 @@ import type { Part } from '@opencode-ai/sdk/v2';
 import { measureElement as measureVirtualElement, type VirtualItem, useVirtualizer } from '@tanstack/react-virtual';
 
 import ChatMessage from './ChatMessage';
-import { areOptionalRenderRelevantMessagesEqual, areRenderRelevantMessagesEqual } from './message/renderCompare';
+import { areOptionalRenderRelevantMessagesEqual, areRelevantTurnGroupingContextsEqual, areRenderRelevantMessagesEqual } from './message/renderCompare';
 import TurnItem from './components/TurnItem';
 import type { AnimationHandlers, ContentChangeReason } from '@/hooks/useChatScrollManager';
 import { filterSyntheticParts } from '@/lib/messages/synthetic';
@@ -480,15 +480,7 @@ const MessageRow = React.memo<MessageRowProps>(({
         && prev.onUserAnimationConsumed === next.onUserAnimationConsumed
         && prev.onContentChange === next.onContentChange
         && prev.scrollToBottom === next.scrollToBottom
-        && prevTurn?.turnId === nextTurn?.turnId
-        && prevTurn?.isFirstAssistantInTurn === nextTurn?.isFirstAssistantInTurn
-        && prevTurn?.isLastAssistantInTurn === nextTurn?.isLastAssistantInTurn
-        && prevTurn?.activityOwnerMessageId === nextTurn?.activityOwnerMessageId
-        && prevTurn?.isWorking === nextTurn?.isWorking
-        && prevTurn?.isGroupExpanded === nextTurn?.isGroupExpanded
-        && prevTurn?.toggleGroup === nextTurn?.toggleGroup
-        && prevTurn?.activityGroupSegments === nextTurn?.activityGroupSegments
-        && prevTurn?.activityParts === nextTurn?.activityParts
+        && areRelevantTurnGroupingContextsEqual(prevTurn, nextTurn, prev.message.info.id, resolveMessageRole(prev.message) === 'user')
         && prev.assistantHeaderMessageId === next.assistantHeaderMessageId
         && prev.isInActiveTurn === next.isInActiveTurn
         && prev.activeStreamingPhase === next.activeStreamingPhase
