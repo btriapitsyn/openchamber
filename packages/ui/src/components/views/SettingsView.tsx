@@ -152,8 +152,6 @@ function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<{ class
       return RiMicLine;
     case 'tunnel':
       return RiGlobalLine;
-    case 'connection':
-      return RiGlobalLine;
     case 'home':
       return null;
     default:

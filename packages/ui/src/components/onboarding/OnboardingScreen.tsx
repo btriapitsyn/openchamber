@@ -11,8 +11,6 @@ type OnboardingScreenProps = {
   onBack?: () => void;
   /** Callback when CLI becomes available */
   onCliAvailable?: () => void;
-  /** When false, skip the /health polling that auto-reloads on CLI detection. */
-  enableCliPolling?: boolean;
   /** Screen mode to render */
   mode?: OnboardingScreenMode;
   /** Recovery variant (only used when mode is 'recovery') */
@@ -23,12 +21,13 @@ type OnboardingScreenProps = {
   recoveryHostLabel?: string;
   /** Callback when user enters local setup from recovery */
   onEnterLocalSetup?: () => void;
+  /** Callback when user wants to switch to remote (first-launch only) */
+  onChooseRemote?: () => void;
 };
 
 export function OnboardingScreen({
   onBack,
   onCliAvailable,
-  enableCliPolling = true,
   mode = 'first-launch',
   recoveryVariant = 'missing-default-host',
   recoveryHostUrl,
@@ -82,7 +81,6 @@ export function OnboardingScreen({
           }
         }}
         onCliAvailable={onCliAvailable}
-        enableCliPolling={enableCliPolling}
         isFromRecovery={recoveryEnteredLocalSetup}
         onSwitchToRemote={() => setShowRecoveryRemoteForm(true)}
       />
@@ -93,7 +91,6 @@ export function OnboardingScreen({
   return (
     <ChooserScreen
       onCliAvailable={onCliAvailable}
-      enableCliPolling={enableCliPolling}
     />
   );
 }

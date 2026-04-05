@@ -604,8 +604,6 @@ function App({ apis }: AppProps) {
             <OnboardingScreen
               mode="first-launch"
               onCliAvailable={handleDesktopBootDismiss}
-              enableCliPolling={false}
-              onChooseLocal={handleDesktopBootDismiss}
               onChooseRemote={() => {
                 // Switch to remote tab - handled internally by OnboardingScreen
               }}
@@ -628,9 +626,6 @@ function App({ apis }: AppProps) {
             recoveryHostUrl={hostUrl}
             recoveryHostLabel={undefined}
             onCliAvailable={handleDesktopBootDismiss}
-            enableCliPolling={recoveryVariant === 'local-unavailable'}
-            onRecoveryRetry={handleDesktopBootDismiss}
-            onChooseLocal={handleDesktopBootDismiss}
           />
         </div>
       </ErrorBoundary>
