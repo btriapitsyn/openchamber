@@ -14,8 +14,6 @@ type RecoveryScreenProps = {
   hostLabel?: string;
   /** Callback when user wants to retry */
   onRetry?: () => void;
-  /** Callback when user chooses local */
-  onChooseLocal?: () => void;
   /** Callback when user chooses remote */
   onChooseRemote?: () => void;
   /** Whether to show the remote connection form */
@@ -35,7 +33,6 @@ export function RecoveryScreen({
   hostUrl,
   hostLabel,
   onRetry,
-  onChooseLocal,
   onChooseRemote,
   showRemoteForm = false,
   onCloseRemoteForm,
