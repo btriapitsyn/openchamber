@@ -6768,6 +6768,7 @@ function setupProxy(app) {
   const hopByHopResponseHeaders = new Set([
     'connection',
     'content-length',
+    'content-encoding',
     'transfer-encoding',
     'keep-alive',
     'te',

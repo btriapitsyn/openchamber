@@ -608,18 +608,13 @@ async function performConfigRefresh(options: {
       ]),
     );
 
-    if (scopes.includes("all") && mode === "projects") {
-      useConfigStore.setState({ directoryScoped: {} });
-    }
-
+    // Providers and agents are now global - load once
     const sdkRefreshTasks: Promise<void>[] = [];
-    for (const directory of directoriesToRefresh) {
-      if (refreshProviders) {
-        sdkRefreshTasks.push(configStore.loadProviders({ directory }).then(() => undefined));
-      }
-      if (refreshSdkAgents) {
-        sdkRefreshTasks.push(configStore.loadAgents({ directory }).then(() => undefined));
-      }
+    if (refreshProviders) {
+      sdkRefreshTasks.push(configStore.loadProviders().then(() => undefined));
+    }
+    if (refreshSdkAgents) {
+      sdkRefreshTasks.push(configStore.loadAgents().then(() => undefined));
     }
 
     const uiRefreshTasks: Promise<void>[] = [];
