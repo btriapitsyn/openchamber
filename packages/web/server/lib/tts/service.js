@@ -78,19 +78,24 @@ class TTSService {
       model = 'gpt-4o-mini-tts',
       speed = 1.0,
       instructions,
-      apiKey
+      apiKey,
+      baseURL,
     } = options;
 
-    // Use provided API key or fall back to configured key
+    // Use provided API key / baseURL or fall back to configured key
     let client;
-    if (apiKey) {
-      client = new OpenAI({ apiKey });
+    if (baseURL || apiKey) {
+      const clientOpts = {};
+      if (apiKey) clientOpts.apiKey = apiKey;
+      if (!apiKey) clientOpts.apiKey = 'not-required';
+      if (baseURL) clientOpts.baseURL = baseURL;
+      client = new OpenAI(clientOpts);
     } else {
       client = this._getClient();
     }
 
     if (!client) {
-      throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY environment variable, configure OpenAI in OpenCode, or provide an API key in settings.');
+      throw new Error('TTS service not available. Configure OpenAI in OpenCode, provide an API key, or set a custom server URL in settings.');
     }
 
     if (!text.trim()) {
@@ -98,21 +103,25 @@ class TTSService {
     }
 
     try {
-      console.log('[TTSService] Generating speech with voice:', voice, 'model:', model);
-      const response = await client.audio.speech.create({
-        model,
-        voice,
-        input: text,
-        speed,
-        ...(instructions && { instructions }),
-        response_format: 'mp3',
-      });
+      // OpenAI-compatible servers (custom baseURL) may not support `instructions`
+      // or `response_format`, but do support `speed`. Send the safe subset.
+      const speechParams = baseURL
+        ? { model, voice, input: text, speed }
+        : {
+            model,
+            voice,
+            input: text,
+            speed,
+            ...(instructions && { instructions }),
+            response_format: 'mp3',
+          };
 
-      // Convert the response to a web stream
-      const stream = response.body;
-      
+      console.log('[TTSService] Generating speech — model:', model, 'voice:', voice, 'baseURL:', baseURL ?? '(openai)');
+      const response = await client.audio.speech.create(speechParams);
+
+      const arrayBuffer = await response.arrayBuffer();
       return {
-        stream,
+        buffer: Buffer.from(arrayBuffer),
         contentType: 'audio/mpeg',
       };
     } catch (error) {

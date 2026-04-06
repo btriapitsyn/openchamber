@@ -85,8 +85,14 @@ export interface UseServerTTSReturn {
 export interface SpeakOptions {
   /** Voice to use (defaults to coral) */
   voice?: string;
+  /** Model to use (defaults to gpt-4o-mini-tts) */
+  model?: string;
   /** Speech speed (0.25 to 4.0, defaults to 1.0) */
   speed?: number;
+  /** Speech pitch shift (0.5 to 2.0, mapped to cents; 1.0 = no shift) */
+  pitch?: number;
+  /** Playback volume (0 to 1, defaults to 1.0) */
+  volume?: number;
   /** Optional instructions for the voice */
   instructions?: string;
   /** Summarize long text before speaking (defaults to true) */
@@ -97,6 +103,8 @@ export interface SpeakOptions {
   modelId?: string;
   /** Character threshold for summarization (defaults to 200) */
   threshold?: number;
+  /** Custom base URL for OpenAI-compatible server */
+  baseURL?: string;
   /** Callback when playback starts */
   onStart?: () => void;
   /** Callback when playback ends */
@@ -130,6 +138,7 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
   const summarizeCharacterThreshold = useConfigStore((state) => state.summarizeCharacterThreshold);
   const summarizeMaxLength = useConfigStore((state) => state.summarizeMaxLength);
   const openaiApiKey = useConfigStore((state) => state.openaiApiKey);
+  const openaiCompatibleUrl = useConfigStore((state) => state.openaiCompatibleUrl);
   const settingsZenModel = useConfigStore((state) => state.settingsZenModel);
 
   // Check if server TTS is available
@@ -140,7 +149,8 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
     }
 
     const hasClientKey = Boolean(openaiApiKey && openaiApiKey.trim().length > 0);
-    if (hasClientKey) {
+    const hasCustomUrl = Boolean(openaiCompatibleUrl && openaiCompatibleUrl.trim().length > 0);
+    if (hasClientKey || hasCustomUrl) {
       setIsAvailable(true);
       return true;
     }
@@ -153,7 +163,7 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       setIsAvailable(false);
       return false;
     }
-  }, [enabled, openaiApiKey]);
+  }, [enabled, openaiApiKey, openaiCompatibleUrl]);
 
   // Check availability on mount and when API key changes
   useEffect(() => {
@@ -250,6 +260,7 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
         body: JSON.stringify({
           text: text.trim(),
           voice,
+          model: options?.model || undefined,
           speed: options?.speed || 0.9,
           instructions: options?.instructions,
           summarize: options?.summarize ?? true, // Summarize by default for voice output
@@ -262,6 +273,8 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
           maxLength: summarizeMaxLength ?? 500,
           // Send API key from settings if available
           apiKey: openaiApiKey || undefined,
+          // Send custom base URL for OpenAI-compatible servers
+          baseURL: options?.baseURL || undefined,
           ...(settingsZenModel ? { zenModel: settingsZenModel } : {}),
         }),
         signal: abortControllerRef.current.signal,
@@ -283,7 +296,20 @@ export function useServerTTS(options: UseServerTTSOptions = {}): UseServerTTSRet
       // Create source node
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(ctx.destination);
+
+      // Apply pitch shift via detune (cents): 1200 cents = 1 octave
+      const pitch = options?.pitch ?? 1.0;
+      if (pitch !== 1.0) {
+        source.detune.value = (pitch - 1.0) * 1200;
+      }
+
+      // Apply volume via GainNode
+      const volume = options?.volume ?? 1.0;
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volume;
+
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
       audioSourceRef.current = source;
       
       // Set up event handlers

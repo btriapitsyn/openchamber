@@ -18,7 +18,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { browserVoiceService } from '@/lib/voice/browserVoiceService';
 import { audioStreamService } from '@/lib/voice/audioStreamService';
 import { cn } from '@/lib/utils';
-
 const LANGUAGE_OPTIONS = [
     { value: 'en-US', label: 'English' },
     { value: 'es-ES', label: 'Español' },
@@ -71,6 +70,12 @@ export const VoiceSettings: React.FC = () => {
     const setOpenaiVoice = useConfigStore((state) => state.setOpenaiVoice);
     const openaiApiKey = useConfigStore((state) => state.openaiApiKey);
     const setOpenaiApiKey = useConfigStore((state) => state.setOpenaiApiKey);
+    const openaiCompatibleUrl = useConfigStore((state) => state.openaiCompatibleUrl);
+    const setOpenaiCompatibleUrl = useConfigStore((state) => state.setOpenaiCompatibleUrl);
+    const openaiCompatibleVoice = useConfigStore((state) => state.openaiCompatibleVoice);
+    const setOpenaiCompatibleVoice = useConfigStore((state) => state.setOpenaiCompatibleVoice);
+    const openaiCompatibleTtsModel = useConfigStore((state) => state.openaiCompatibleTtsModel);
+    const setOpenaiCompatibleTtsModel = useConfigStore((state) => state.setOpenaiCompatibleTtsModel);
     const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
     // STT settings
     const sttProvider = useConfigStore((state) => state.sttProvider);
@@ -105,6 +110,9 @@ export const VoiceSettings: React.FC = () => {
     const [isOpenAIAvailable, setIsOpenAIAvailable] = useState(false);
     const [isOpenAIPreviewPlaying, setIsOpenAIPreviewPlaying] = useState(false);
     const [openaiPreviewAudio, setOpenaiPreviewAudio] = useState<HTMLAudioElement | null>(null);
+
+    const [isCompatiblePreviewPlaying, setIsCompatiblePreviewPlaying] = useState(false);
+    const [compatiblePreviewAudio, setCompatiblePreviewAudio] = useState<HTMLAudioElement | null>(null);
 
     const [browserVoices, setBrowserVoices] = useState<SpeechSynthesisVoice[]>([]);
     const [isBrowserPreviewPlaying, setIsBrowserPreviewPlaying] = useState(false);
@@ -182,7 +190,7 @@ export const VoiceSettings: React.FC = () => {
     }, [isBrowserPreviewPlaying]);
 
     useEffect(() => {
-        if (!voiceModeEnabled || voiceProvider !== 'openai') {
+        if (!voiceModeEnabled || (voiceProvider !== 'openai' && voiceProvider !== 'openai-compatible')) {
             setIsOpenAIAvailable(openaiApiKey.trim().length > 0);
             return;
         }
@@ -339,6 +347,67 @@ export const VoiceSettings: React.FC = () => {
         };
     }, [openaiPreviewAudio]);
 
+    const previewCompatibleVoice = useCallback(async () => {
+        if (compatiblePreviewAudio) {
+            compatiblePreviewAudio.pause();
+            compatiblePreviewAudio.currentTime = 0;
+            setCompatiblePreviewAudio(null);
+            setIsCompatiblePreviewPlaying(false);
+            return;
+        }
+
+        if (!openaiCompatibleUrl.trim()) return;
+
+        setIsCompatiblePreviewPlaying(true);
+        try {
+            const response = await fetch('/api/tts/speak', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: `Hello! This is a preview of the custom TTS server.`,
+                    voice: openaiCompatibleVoice,
+                    model: openaiCompatibleTtsModel || undefined,
+                    speed: speechRate,
+                    baseURL: openaiCompatibleUrl,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+                throw new Error(errorData.error || `HTTP ${response.status}`);
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+
+            audio.onended = () => {
+                URL.revokeObjectURL(url);
+                setCompatiblePreviewAudio(null);
+                setIsCompatiblePreviewPlaying(false);
+            };
+
+            audio.onerror = () => {
+                URL.revokeObjectURL(url);
+                setCompatiblePreviewAudio(null);
+                setIsCompatiblePreviewPlaying(false);
+            };
+
+            setCompatiblePreviewAudio(audio);
+            await audio.play();
+        } catch {
+            setIsCompatiblePreviewPlaying(false);
+        }
+    }, [openaiCompatibleUrl, openaiCompatibleVoice, openaiCompatibleTtsModel, speechRate, compatiblePreviewAudio]);
+
+    useEffect(() => {
+        return () => {
+            if (compatiblePreviewAudio) {
+                compatiblePreviewAudio.pause();
+            }
+        };
+    }, [compatiblePreviewAudio]);
+
     const sliderClass = "flex-1 min-w-0 h-1.5 bg-[var(--interactive-border)] rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[var(--primary-base)] [&::-moz-range-thumb]:border-0 disabled:opacity-50";
 
     return (
@@ -380,6 +449,7 @@ export const VoiceSettings: React.FC = () => {
                                                 <ul className="space-y-1">
                                                     <li><strong>Browser:</strong> Free, offline, limited mobile support.</li>
                                                     <li><strong>OpenAI:</strong> High quality, mobile ready, needs API key.</li>
+                                                    <li><strong>Custom:</strong> OpenAI-compatible server (e.g. Kokoro).</li>
                                                     <li><strong>Say:</strong> macOS native. Fast, free, offline.</li>
                                                 </ul>
                                             </TooltipContent>
@@ -411,6 +481,19 @@ export const VoiceSettings: React.FC = () => {
                                             )}
                                         >
                                             OpenAI
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="xs"
+                                            onClick={() => setVoiceProvider('openai-compatible')}
+                                            className={cn(
+                                                '!font-normal',
+                                                voiceProvider === 'openai-compatible'
+                                                    ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                                                    : 'text-foreground'
+                                            )}
+                                        >
+                                            Custom
                                         </Button>
                                         {isSayAvailable && (
                                             <Button
@@ -462,6 +545,70 @@ export const VoiceSettings: React.FC = () => {
                                 </div>
                             )}
 
+                            {/* OpenAI-compatible custom server */}
+                            {voiceProvider === 'openai-compatible' && (
+                                <div className="py-1.5 space-y-2">
+                                    <div>
+                                        <span className={cn("typography-ui-label text-foreground", !openaiCompatibleUrl.trim() && "text-[var(--status-error)]")}>
+                                            Server URL
+                                        </span>
+                                        <span className="typography-meta ml-2 text-muted-foreground">
+                                            Base URL of the OpenAI-compatible TTS server
+                                        </span>
+                                        <div className="relative mt-1.5 max-w-xs">
+                                            <input
+                                                type="text"
+                                                value={openaiCompatibleUrl}
+                                                onChange={(e) => setOpenaiCompatibleUrl(e.target.value)}
+                                                placeholder="http://localhost:8880/v1"
+                                                className="w-full h-7 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/70"
+                                            />
+                                            {openaiCompatibleUrl && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setOpenaiCompatibleUrl('')}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                                >
+                                                    <RiCloseLine className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span className="typography-ui-label text-foreground">Model</span>
+                                        <div className="relative mt-1.5 max-w-xs">
+                                            <input
+                                                type="text"
+                                                value={openaiCompatibleTtsModel}
+                                                onChange={(e) => setOpenaiCompatibleTtsModel(e.target.value)}
+                                                placeholder="speaches-ai/Kokoro-82M-v1.0-ONNX"
+                                                className="w-full h-7 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/70"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <span className="typography-ui-label text-foreground">Voice</span>
+                                        <span className="typography-meta ml-2 text-muted-foreground">
+                                            Voice identifier supported by the server
+                                        </span>
+                                        <div className="flex items-center gap-2 mt-1.5">
+                                            <div className="relative max-w-xs flex-1">
+                                                <input
+                                                    type="text"
+                                                    value={openaiCompatibleVoice}
+                                                    onChange={(e) => setOpenaiCompatibleVoice(e.target.value)}
+                                                    placeholder="af_sky"
+                                                    className="w-full h-7 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/70"
+                                                />
+                                            </div>
+                                            <Button size="xs" variant="ghost" onClick={previewCompatibleVoice} title="Preview" disabled={!openaiCompatibleUrl.trim()}>
+                                                {isCompatiblePreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Voice Selection */}
                             <div className="flex items-center gap-8 py-1.5">
                                 <span className="typography-ui-label text-foreground sm:w-56 shrink-0">Voice</span>
@@ -482,6 +629,10 @@ export const VoiceSettings: React.FC = () => {
                                                 {isOpenAIPreviewPlaying ? <RiStopLine className="w-3.5 h-3.5" /> : <RiPlayLine className="w-3.5 h-3.5" />}
                                             </Button>
                                         </>
+                                    )}
+
+                                    {voiceProvider === 'openai-compatible' && (
+                                        <span className="typography-meta text-muted-foreground">Configured above</span>
                                     )}
 
                                     {voiceProvider === 'say' && isSayAvailable && sayVoices.length > 0 && (

@@ -42,9 +42,9 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
   // Server-side TTS endpoint - streams audio from OpenAI TTS API
   app.post('/api/tts/speak', async (req, res) => {
     try {
-      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, summarize = false, providerId, modelId, threshold = 200, maxLength = 500, apiKey } = req.body || {};
+      const { text, voice = 'nova', model = 'gpt-4o-mini-tts', speed = 0.9, instructions, summarize = false, providerId, modelId, threshold = 200, maxLength = 500, apiKey, baseURL } = req.body || {};
 
-      console.log('[TTS] Request received:', { voice, model, speed, textLength: text?.length, hasApiKey: !!apiKey });
+      console.log('[TTS] Request received:', { voice, model, speed, textLength: text?.length, hasApiKey: !!apiKey, hasBaseURL: !!baseURL });
 
       if (!text || typeof text !== 'string' || !text.trim()) {
         return res.status(400).json({ error: 'Text is required' });
@@ -53,13 +53,14 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
       // Dynamically import the TTS service (ESM)
       const { ttsService } = await getTtsModule();
 
-      // Check availability - either server-configured or client-provided API key
+      // Check availability - server-configured key, client-provided key, or custom server URL
       const hasServerKey = ttsService.isAvailable();
       const hasClientKey = apiKey && typeof apiKey === 'string' && apiKey.trim().length > 0;
+      const hasCustomBaseURL = baseURL && typeof baseURL === 'string' && baseURL.trim().length > 0;
       
-      if (!hasServerKey && !hasClientKey) {
+      if (!hasServerKey && !hasClientKey && !hasCustomBaseURL) {
         return res.status(503).json({ 
-          error: 'TTS service not available. Please configure OpenAI in OpenCode or provide an API key in settings.' 
+          error: 'TTS service not available. Please configure OpenAI in OpenCode, provide an API key, or set a custom server URL in settings.' 
         });
       }
 
@@ -87,44 +88,24 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
         model,
         speed,
         instructions,
-        apiKey: hasClientKey ? apiKey.trim() : undefined
+        apiKey: hasClientKey ? apiKey.trim() : undefined,
+        baseURL: hasCustomBaseURL ? baseURL.trim() : undefined,
       });
 
-      // Set headers for audio streaming
-      // Note: Don't set Transfer-Encoding manually - Express handles it automatically
       res.setHeader('Content-Type', result.contentType);
       res.setHeader('Cache-Control', 'no-cache');
-
-      // Collect the full audio buffer and send it
-      // This avoids chunked encoding issues with proxies
-      const reader = result.stream.getReader();
-      const chunks = [];
-      
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(Buffer.from(value));
-        }
-        const audioBuffer = Buffer.concat(chunks);
-        res.setHeader('Content-Length', audioBuffer.length);
-        res.send(audioBuffer);
-      } catch (streamError) {
-        console.error('[TTS] Stream error:', streamError);
+      res.setHeader('Content-Length', result.buffer.length);
+      res.send(result.buffer);
+      } catch (error) {
+        console.error('[TTS] Error:', error);
         if (!res.headersSent) {
-          res.status(500).json({ error: 'Stream error' });
-        } else {
-          res.end();
+          const { model: m, voice: v, baseURL: b } = req.body || {};
+          res.status(500).json({ 
+            error: error instanceof Error ? error.message : 'TTS generation failed',
+            detail: { model: m, voice: v, hasBaseURL: !!b },
+          });
         }
       }
-    } catch (error) {
-      console.error('[TTS] Error:', error);
-      if (!res.headersSent) {
-        res.status(500).json({ 
-          error: error instanceof Error ? error.message : 'TTS generation failed' 
-        });
-      }
-    }
   });
 
   app.post('/api/tts/summarize', async (req, res) => {

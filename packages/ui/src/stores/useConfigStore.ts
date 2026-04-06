@@ -466,9 +466,9 @@ interface ConfigStore {
     settingsAutoCreateWorktree: boolean;
     settingsGitmojiEnabled: boolean;
     settingsZenModel: string | undefined;
-    // Voice provider preference ('browser', 'openai', or 'say' for macOS)
-    voiceProvider: 'browser' | 'openai' | 'say';
-    setVoiceProvider: (provider: 'browser' | 'openai' | 'say') => void;
+    // Voice provider preference ('browser', 'openai', 'openai-compatible', or 'say' for macOS)
+    voiceProvider: 'browser' | 'openai' | 'openai-compatible' | 'say';
+    setVoiceProvider: (provider: 'browser' | 'openai' | 'openai-compatible' | 'say') => void;
     // TTS settings
     speechRate: number;
     speechPitch: number;
@@ -479,6 +479,7 @@ interface ConfigStore {
     openaiApiKey: string;
     openaiCompatibleUrl: string;
     openaiCompatibleVoice: string;
+    openaiCompatibleTtsModel: string;
     // STT (speech-to-text) settings
     sttProvider: 'browser' | 'server';
     sttServerUrl: string;
@@ -502,6 +503,7 @@ interface ConfigStore {
     setOpenaiApiKey: (apiKey: string) => void;
     setOpenaiCompatibleUrl: (url: string) => void;
     setOpenaiCompatibleVoice: (voice: string) => void;
+    setOpenaiCompatibleTtsModel: (model: string) => void;
     setSttProvider: (provider: 'browser' | 'server') => void;
     setSttServerUrl: (url: string) => void;
     setSttModel: (model: string) => void;
@@ -585,7 +587,7 @@ export const useConfigStore = create<ConfigStore>()(
                 voiceProvider: (() => {
                     if (typeof window !== 'undefined') {
                         const saved = localStorage.getItem('voiceProvider');
-                        if (saved === 'openai' || saved === 'browser' || saved === 'say') return saved;
+                        if (saved === 'openai' || saved === 'browser' || saved === 'say' || saved === 'openai-compatible') return saved;
                     }
                     return 'browser';
                 })(),
@@ -667,6 +669,14 @@ export const useConfigStore = create<ConfigStore>()(
                         if (saved) return saved;
                     }
                     return 'af_sky';
+                })(),
+                // OpenAI-compatible custom server TTS model
+                openaiCompatibleTtsModel: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('openaiCompatibleTtsModel');
+                        if (saved && saved !== 'speaches-ai/Kokoro-82M-v1.0-ONNX') return saved;
+                    }
+                    return 'kokoro';
                 })(),
                 // STT provider: 'browser' (Web Speech API) or 'server' (OpenAI-compat)
                 sttProvider: (() => {
@@ -1685,7 +1695,7 @@ export const useConfigStore = create<ConfigStore>()(
                     });
                 },
 
-                setVoiceProvider: (provider: 'browser' | 'openai' | 'say') => {
+                setVoiceProvider: (provider: 'browser' | 'openai' | 'openai-compatible' | 'say') => {
                     set({ voiceProvider: provider });
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('voiceProvider', provider);
@@ -1755,6 +1765,13 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ openaiCompatibleVoice: voice });
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('openaiCompatibleVoice', voice);
+                    }
+                },
+
+                setOpenaiCompatibleTtsModel: (model: string) => {
+                    set({ openaiCompatibleTtsModel: model });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('openaiCompatibleTtsModel', model);
                     }
                 },
 
