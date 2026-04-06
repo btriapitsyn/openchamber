@@ -581,8 +581,9 @@ const serverUtilsRuntime = createServerUtilsRuntime({
   process,
   openCodeReadyGraceMs: OPEN_CODE_READY_GRACE_MS,
   longRequestTimeoutMs: LONG_REQUEST_TIMEOUT_MS,
-  getRuntime: () => ({
+   getRuntime: () => ({
     openCodePort,
+    openCodeBaseUrl,
     openCodeNotReadySince,
     isOpenCodeReady,
     isRestartingOpenCode,
