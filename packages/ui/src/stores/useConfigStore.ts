@@ -476,6 +476,15 @@ interface ConfigStore {
     browserVoice: string;
     openaiVoice: string;
     openaiApiKey: string;
+    openaiCompatibleUrl: string;
+    openaiCompatibleVoice: string;
+    // STT (speech-to-text) settings
+    sttProvider: 'browser' | 'server';
+    sttServerUrl: string;
+    sttModel: string;
+    sttLanguage: string;
+    sttSilenceThresholdDb: number;
+    sttSilenceHoldMs: number;
     showMessageTTSButtons: boolean;
     voiceModeEnabled: boolean;
     // Summarization settings
@@ -490,6 +499,14 @@ interface ConfigStore {
     setBrowserVoice: (voice: string) => void;
     setOpenaiVoice: (voice: string) => void;
     setOpenaiApiKey: (apiKey: string) => void;
+    setOpenaiCompatibleUrl: (url: string) => void;
+    setOpenaiCompatibleVoice: (voice: string) => void;
+    setSttProvider: (provider: 'browser' | 'server') => void;
+    setSttServerUrl: (url: string) => void;
+    setSttModel: (model: string) => void;
+    setSttLanguage: (lang: string) => void;
+    setSttSilenceThresholdDb: (db: number) => void;
+    setSttSilenceHoldMs: (ms: number) => void;
     setShowMessageTTSButtons: (show: boolean) => void;
     setVoiceModeEnabled: (enabled: boolean) => void;
     setSummarizeMessageTTS: (enabled: boolean) => void;
@@ -633,6 +650,71 @@ export const useConfigStore = create<ConfigStore>()(
                         if (saved) return saved;
                     }
                     return '';
+                })(),
+                // OpenAI-compatible custom server URL
+                openaiCompatibleUrl: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('openaiCompatibleUrl');
+                        if (saved) return saved;
+                    }
+                    return '';
+                })(),
+                // OpenAI-compatible custom server voice
+                openaiCompatibleVoice: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('openaiCompatibleVoice');
+                        if (saved) return saved;
+                    }
+                    return 'af_sky';
+                })(),
+                // STT provider: 'browser' (Web Speech API) or 'server' (OpenAI-compat)
+                sttProvider: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sttProvider');
+                        if (saved === 'browser' || saved === 'server') return saved;
+                    }
+                    return 'browser' as const;
+                })(),
+                sttServerUrl: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sttServerUrl');
+                        if (saved) return saved;
+                    }
+                    return 'http://localhost:8001/v1';
+                })(),
+                sttModel: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sttModel');
+                        if (saved) return saved;
+                    }
+                    return 'deepdml/faster-whisper-large-v3-turbo-ct2';
+                })(),
+                sttLanguage: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sttLanguage');
+                        if (saved !== null) return saved;
+                    }
+                    return '';
+                })(),
+                sttSilenceThresholdDb: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sttSilenceThresholdDb');
+                        if (saved) {
+                            const parsed = parseFloat(saved);
+                            if (!isNaN(parsed)) return parsed;
+                        }
+                    }
+                    return -45;
+                })(),
+                sttSilenceHoldMs: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('sttSilenceHoldMs');
+                        if (saved) {
+                            const parsed = parseInt(saved, 10);
+                            if (!isNaN(parsed)) return parsed;
+                        }
+                    }
+                    return 1500;
                 })(),
                 // Show TTS buttons on messages - disabled by default until user enables it
                 showMessageTTSButtons: (() => {
@@ -1658,6 +1740,62 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ openaiApiKey: apiKey });
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('openaiApiKey', apiKey);
+                    }
+                },
+
+                setOpenaiCompatibleUrl: (url: string) => {
+                    set({ openaiCompatibleUrl: url });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('openaiCompatibleUrl', url);
+                    }
+                },
+
+                setOpenaiCompatibleVoice: (voice: string) => {
+                    set({ openaiCompatibleVoice: voice });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('openaiCompatibleVoice', voice);
+                    }
+                },
+
+                setSttProvider: (provider: 'browser' | 'server') => {
+                    set({ sttProvider: provider });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sttProvider', provider);
+                    }
+                },
+
+                setSttServerUrl: (url: string) => {
+                    set({ sttServerUrl: url });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sttServerUrl', url);
+                    }
+                },
+
+                setSttModel: (model: string) => {
+                    set({ sttModel: model });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sttModel', model);
+                    }
+                },
+
+                setSttLanguage: (lang: string) => {
+                    set({ sttLanguage: lang });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sttLanguage', lang);
+                    }
+                },
+
+                setSttSilenceThresholdDb: (db: number) => {
+                    set({ sttSilenceThresholdDb: db });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sttSilenceThresholdDb', String(db));
+                    }
+                },
+
+                setSttSilenceHoldMs: (ms: number) => {
+                    set({ sttSilenceHoldMs: ms });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('sttSilenceHoldMs', String(ms));
                     }
                 },
 

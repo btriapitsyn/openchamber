@@ -1,3 +1,5 @@
+import express from 'express';
+
 export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
   let ttsModulePromise = null;
   const getTtsModule = async () => {
@@ -222,4 +224,54 @@ export function registerTtsRoutes(app, { resolveZenModel, sayTTSCapability }) {
       });
     }
   });
+
+  // Server-side STT: receive raw audio, proxy to OpenAI-compatible transcription endpoint
+  app.post(
+    '/api/stt/transcribe',
+    express.raw({ type: (req) => (req.headers['content-type'] || '').startsWith('audio/'), limit: '20mb' }),
+    async (req, res) => {
+      try {
+        const { transcribeAudio } = await import('./stt.js');
+
+        const mimeType = (req.headers['content-type'] || 'audio/webm').split(',')[0].trim();
+        const baseURL = req.headers['x-base-url'];
+        const model = req.headers['x-model'] || 'deepdml/faster-whisper-large-v3-turbo-ct2';
+        const language = req.headers['x-language'] || undefined;
+
+        if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+          return res.status(400).json({ error: 'Audio data is required' });
+        }
+
+        if (!baseURL) {
+          return res.status(400).json({ error: 'X-Base-URL header is required' });
+        }
+
+        console.log('[STT] Transcribing audio:', {
+          bytes: req.body.length,
+          mimeType,
+          model,
+          baseURL,
+          language,
+        });
+
+        const transcript = await transcribeAudio({
+          audioBuffer: req.body,
+          mimeType,
+          model,
+          baseURL,
+          language,
+        });
+
+        console.log('[STT] Transcript:', transcript?.slice(0, 120));
+        res.json({ transcript: transcript ?? '' });
+      } catch (error) {
+        console.error('[STT] Error:', error);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: error instanceof Error ? error.message : 'Transcription failed',
+          });
+        }
+      }
+    }
+  );
 }
