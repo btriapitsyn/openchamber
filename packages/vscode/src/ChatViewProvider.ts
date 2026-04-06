@@ -23,6 +23,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
   private _sseStreams = new Map<string, AbortController>();
   private readonly _webviewDevServerUrl: string | null;
 
+  // Message delivery confirmation and retry
+  private readonly _pendingMessages = new Set<string>();
+  private readonly _messageTimeouts = new Map<string, NodeJS.Timeout>();
+  private readonly _MESSAGE_TIMEOUT = 5000; // 5 seconds
+  private readonly _MAX_RETRIES = 3;
+
   constructor(
     private readonly _context: vscode.ExtensionContext,
     private readonly _extensionUri: vscode.Uri,
@@ -46,11 +52,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
     // Send theme payload (including optional Shiki theme JSON) after the webview is set up.
     void this.updateTheme(vscode.window.activeColorTheme.kind);
-    
+
     // Send cached connection status and API URL (may have been set before webview was resolved)
     this._sendCachedState();
 
-    webviewView.webview.onDidReceiveMessage(async (message: BridgeRequest) => {
+    webviewView.webview.onDidReceiveMessage(async (message: BridgeRequest & { _msgId?: string }) => {
+      // Handle message confirmation
+      if (message._msgId) {
+        this._confirmMessage(message._msgId);
+      }
+
       if (message.type === 'restartApi') {
         await this._openCodeManager?.restart();
         return;
@@ -58,13 +69,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
       if (message.type === 'api:sse:start') {
         const response = await this._startSseProxy(message);
-        webviewView.webview.postMessage(response);
+        void this._sendMessageWithRetry(response);
         return;
       }
 
       if (message.type === 'api:sse:stop') {
         const response = await this._stopSseProxy(message);
-        webviewView.webview.postMessage(response);
+        void this._sendMessageWithRetry(response);
         return;
       }
 
@@ -72,7 +83,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         manager: this._openCodeManager,
         context: this._context,
       });
-      webviewView.webview.postMessage(response);
+      void this._sendMessageWithRetry(response);
 
       if (message.type === 'api:config/settings:save' && response.success) {
         void vscode.commands.executeCommand('openchamber.internal.settingsSynced', response.data);
@@ -190,11 +201,75 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  // Message delivery confirmation
+  private _confirmMessage(messageId: string) {
+    this._pendingMessages.delete(messageId);
+
+    const timeout = this._messageTimeouts.get(messageId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this._messageTimeouts.delete(messageId);
+    }
+  }
+
+  // Send message with retry mechanism
+  private async _sendMessageWithRetry(
+    response: BridgeResponse,
+    retryCount: number = 0
+  ): Promise<boolean> {
+    if (!this._view) {
+      return false;
+    }
+
+    // Generate unique message ID
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    try {
+      // Send message with ID
+      this._view.webview.postMessage({
+        ...response,
+        _msgId: messageId,
+      });
+
+      // Track as pending
+      this._pendingMessages.add(messageId);
+
+      // Set timeout for confirmation
+      const timeout = setTimeout(() => {
+        if (this._pendingMessages.has(messageId)) {
+          console.warn(`[Message Retry] Message ${messageId} not confirmed, retrying...`);
+
+          // Retry if under max attempts
+          if (retryCount < this._MAX_RETRIES) {
+            void this._sendMessageWithRetry(response, retryCount + 1);
+          } else {
+            console.error(`[Message Retry] Message ${messageId} failed after ${this._MAX_RETRIES} retries`);
+            this._pendingMessages.delete(messageId);
+          }
+        }
+      }, this._MESSAGE_TIMEOUT);
+
+      this._messageTimeouts.set(messageId, timeout);
+      return true;
+
+    } catch (error) {
+      console.error(`[Message Retry] Failed to send message:`, error);
+
+      // Retry immediately on error
+      if (retryCount < this._MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 100 * (retryCount + 1))); // Brief delay
+        return this._sendMessageWithRetry(response, retryCount + 1);
+      }
+
+      return false;
+    }
+  }
+
   private _sendCachedState() {
     if (!this._view) {
       return;
     }
-    
+
     this._view.webview.postMessage({
       type: 'connectionStatus',
       status: this._cachedStatus,
