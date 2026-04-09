@@ -355,6 +355,9 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
     const params = {
       threadId: proc.threadId,
       input,
+      // Enable reasoning summary streaming so the UI can display thinking traces.
+      // Values: 'auto' | 'concise' | 'detailed' | 'none'
+      summary: 'auto',
     };
 
     if (options.model) {
@@ -530,6 +533,9 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
   // -------------------------------------------------------------------
 
   function handleSubprocessNotification(proc, method, params) {
+    // Log every notification from the Codex subprocess for debugging
+    console.info(`[codex-appserver:${proc.sessionId}] notification: ${method}`, JSON.stringify(params, null, 2)?.slice(0, 500));
+
     switch (method) {
       case 'turn/started':
         proc.activeTurnId = params?.turnId || proc.activeTurnId;
@@ -601,19 +607,57 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
         });
         break;
 
+      case 'codex/event/reasoning_content_delta':
+        // Alternative Codex-specific reasoning format: delta is in params.msg.delta
+        handleContentDelta(proc, 'item/reasoning/summaryTextDelta', {
+          ...(params?.msg || {}),
+          // Flatten msg fields so handleContentDelta can find the delta
+          delta: params?.msg?.delta,
+          textDelta: params?.msg?.delta,
+          itemId: params?.msg?.item_id || params?.msg?.itemId || params?.id || 'default',
+        });
+        break;
+
+      case 'codex/event/agent_reasoning':
+        // Agent-level reasoning progress — treat as reasoning delta
+        if (params?.msg?.text) {
+          handleContentDelta(proc, 'item/reasoning/textDelta', {
+            delta: params.msg.text,
+            textDelta: params.msg.text,
+            itemId: params?.id || 'default',
+          });
+        }
+        break;
+
       case 'item/requestApproval/decision':
       case 'item/tool/requestUserInput/answered':
         // Acknowledgement notifications — no action needed
         break;
 
       default:
-        // Unknown notification — ignore
+        // Log unhandled notifications to help identify missing event types
+        if (method && !method.startsWith('item/requestApproval') && !method.startsWith('item/tool/')) {
+          console.debug(`[codex-appserver:${proc.sessionId}] unhandled notification: ${method}`);
+        }
         break;
     }
   }
 
   function handleContentDelta(proc, method, params) {
-    const delta = params?.delta || params?.text || params?.textDelta || '';
+    // Extract delta text — Codex sends it under different fields depending on
+    // the notification type.  Match the same fallback chain as t3code:
+    //   event.textDelta → payload.delta → payload.text → payload.content.text
+    const delta = params?.textDelta || params?.delta || params?.text
+      || (typeof params?.content === 'object' && params.content !== null ? params.content.text : undefined)
+      || '';
+
+    console.info(`[codex-appserver:${proc.sessionId}] handleContentDelta method=${method} deltaLen=${delta?.length || 0} hasActiveMessage=${!!proc.activeMessage} partType=${
+      method === 'item/commandExecution/outputDelta' ? 'tool-output'
+      : method === 'item/fileChange/outputDelta' ? 'file-diff'
+      : (method === 'item/reasoning/textDelta' || method === 'item/reasoning/summaryTextDelta') ? 'reasoning'
+      : 'text'
+    }`);
+
     if (!delta) {
       return;
     }
@@ -641,16 +685,68 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
     const newText = currentText + delta;
     proc.activeMessage.textBuffers.set(partId, newText);
 
+    // Map internal part types to the UI's expected part schema.
+    // 'tool-output' and 'file-diff' should become tool parts so the UI renders
+    // them inside collapsible tool components rather than as plain assistant text.
+    let emitPart;
+    if (partType === 'tool-output' || partType === 'file-diff') {
+      const toolName = partType === 'tool-output' ? 'bash' : 'edit';
+      // Track the start time for this tool part (first delta only)
+      if (!proc.activeMessage.toolStartTimes) {
+        proc.activeMessage.toolStartTimes = new Map();
+      }
+      if (!proc.activeMessage.toolStartTimes.has(partId)) {
+        proc.activeMessage.toolStartTimes.set(partId, Date.now());
+      }
+      emitPart = {
+        id: partId,
+        sessionID: proc.sessionId,
+        messageID: proc.activeMessage.record.info.id,
+        type: 'tool',
+        callID: partId,
+        tool: toolName,
+        state: {
+          status: 'running',
+          output: newText,
+          input: partType === 'tool-output'
+            ? { command: params?.command || '' }
+            : { file_path: params?.filePath || '' },
+          time: { start: proc.activeMessage.toolStartTimes.get(partId) },
+        },
+      };
+    } else if (partType === 'reasoning') {
+      // Track start time for reasoning parts (needed by the UI to show duration
+      // and determine when reasoning is complete)
+      if (!proc.activeMessage.toolStartTimes) {
+        proc.activeMessage.toolStartTimes = new Map();
+      }
+      if (!proc.activeMessage.toolStartTimes.has(partId)) {
+        proc.activeMessage.toolStartTimes.set(partId, Date.now());
+      }
+      emitPart = {
+        id: partId,
+        sessionID: proc.sessionId,
+        messageID: proc.activeMessage.record.info.id,
+        type: 'reasoning',
+        text: newText,
+        time: { start: proc.activeMessage.toolStartTimes.get(partId) },
+      };
+    } else {
+      emitPart = {
+        id: partId,
+        sessionID: proc.sessionId,
+        messageID: proc.activeMessage.record.info.id,
+        type: 'text',
+        text: newText,
+      };
+    }
+
+    console.info(`[codex-appserver:${proc.sessionId}] emitPart id=${emitPart.id} type=${emitPart.type} textLen=${(emitPart.text || emitPart.state?.output || '').length}`);
+
     emitEvent(proc.directory, {
       type: 'message.part.updated',
       properties: {
-        part: {
-          id: partId,
-          sessionID: proc.sessionId,
-          messageID: proc.activeMessage.record.info.id,
-          type: 'text',
-          text: newText,
-        },
+        part: emitPart,
         directory: proc.directory,
       },
     });
@@ -662,8 +758,77 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
   }
 
   function handleItemCompleted(proc, params) {
-    // Item completed — could be an agent_message, command_execution, file_change, etc.
-    // The turn/completed handler will finalize everything.
+    if (!proc.activeMessage) return;
+
+    const itemId = params?.itemId || params?.id || 'default';
+    const itemType = params?.type || params?.itemType || '';
+    const now = Date.now();
+
+    console.info(`[codex-appserver:${proc.sessionId}] itemCompleted itemId=${itemId} itemType=${itemType}`);
+
+    // Finalize tool parts (command_execution, file_change) with completed status
+    let partType = null;
+    if (itemType === 'command_execution') {
+      partType = 'tool-output';
+    } else if (itemType === 'file_change') {
+      partType = 'file-diff';
+    } else if (itemType === 'reasoning') {
+      partType = 'reasoning';
+    }
+
+    if (partType === 'tool-output' || partType === 'file-diff') {
+      const partId = `${proc.activeMessage.record.info.id}_${partType}_${itemId}`;
+      const output = proc.activeMessage.textBuffers.get(partId) || '';
+      const startTime = proc.activeMessage.toolStartTimes?.get(partId) || now;
+      const toolName = partType === 'tool-output' ? 'bash' : 'edit';
+
+      emitEvent(proc.directory, {
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            id: partId,
+            sessionID: proc.sessionId,
+            messageID: proc.activeMessage.record.info.id,
+            type: 'tool',
+            callID: partId,
+            tool: toolName,
+            state: {
+              status: 'completed',
+              output,
+              input: partType === 'tool-output'
+                ? { command: params?.command || '' }
+                : { file_path: params?.filePath || '' },
+              title: toolName === 'bash' ? 'Command' : 'File change',
+              metadata: {},
+              time: { start: startTime, end: now },
+            },
+          },
+          directory: proc.directory,
+        },
+      });
+    } else if (partType === 'reasoning') {
+      // Finalize reasoning part with end time so the UI knows reasoning is complete
+      const partId = `${proc.activeMessage.record.info.id}_reasoning_${itemId}`;
+      const text = proc.activeMessage.textBuffers.get(partId) || '';
+      const startTime = proc.activeMessage.toolStartTimes?.get(partId) || now;
+
+      if (text) {
+        emitEvent(proc.directory, {
+          type: 'message.part.updated',
+          properties: {
+            part: {
+              id: partId,
+              sessionID: proc.sessionId,
+              messageID: proc.activeMessage.record.info.id,
+              type: 'reasoning',
+              text,
+              time: { start: startTime, end: now },
+            },
+            directory: proc.directory,
+          },
+        });
+      }
+    }
   }
 
   function handleTurnCompleted(proc, params) {
@@ -672,6 +837,7 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
 
     // Finalize the active message
     const finalText = assembleFinalText(proc);
+    const finalParts = assembleFinalParts(proc);
 
     emitEvent(proc.directory, {
       type: 'session.status',
@@ -692,7 +858,7 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
     });
 
     if (onTurnCompleted) {
-      onTurnCompleted(proc.sessionId, finalText, params);
+      onTurnCompleted(proc.sessionId, finalText, params, finalParts);
     }
 
     proc.activeMessage = null;
@@ -740,6 +906,39 @@ export function createCodexAppServerAdapter({ crypto, emitEvent, onTurnCompleted
       }
     }
     return textParts.join('\n\n');
+  }
+
+  /**
+   * Assemble all final parts (text + reasoning) from the active message buffers.
+   * Returns an array of { type, text, time? } objects for persistence.
+   */
+  function assembleFinalParts(proc) {
+    if (!proc.activeMessage) {
+      return [];
+    }
+    const msgId = proc.activeMessage.record.info.id;
+    const parts = [];
+    const now = Date.now();
+
+    for (const [key, value] of proc.activeMessage.textBuffers) {
+      if (!value) continue;
+
+      if (key.startsWith(`${msgId}_reasoning_`)) {
+        const startTime = proc.activeMessage.toolStartTimes?.get(key) || now;
+        parts.push({
+          type: 'reasoning',
+          text: value,
+          time: { start: startTime, end: now },
+        });
+      } else if (key.startsWith(`${msgId}_text_`)) {
+        parts.push({
+          type: 'text',
+          text: value,
+        });
+      }
+      // tool-output and file-diff are not persisted as message parts
+    }
+    return parts;
   }
 
   // -------------------------------------------------------------------

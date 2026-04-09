@@ -558,12 +558,9 @@ export const createCodexBackendRuntime = (dependencies) => {
 
   const toCodexInput = async (parts = []) => {
     const textChunks = [];
-    const images = [];
-    const cleanupDirs = [];
-
-    const cleanup = async () => {
-      await Promise.all(cleanupDirs.map((dir) => fsPromises.rm(dir, { recursive: true, force: true }).catch(() => undefined)));
-    };
+    // Store image data URLs directly — the Codex app-server accepts data: URLs
+    // in the turn/start input as { type: 'image', url: 'data:...' }.
+    const imageUrls = [];
 
     for (const part of parts) {
       if (!part || typeof part !== 'object') {
@@ -583,29 +580,25 @@ export const createCodexBackendRuntime = (dependencies) => {
       const mime = typeof part.mime === 'string' ? part.mime : 'application/octet-stream';
       const url = typeof part.url === 'string' ? part.url : '';
 
+      // Handle file:// images — read the file and convert to a data URL
       if (url.startsWith('file://') && mime.startsWith('image/')) {
         try {
-          images.push(fileURLToPath(url));
+          const filePath = fileURLToPath(url);
+          const fileBuffer = await fsPromises.readFile(filePath);
+          const base64 = fileBuffer.toString('base64');
+          imageUrls.push(`data:${mime};base64,${base64}`);
           continue;
-        } catch {
+        } catch (err) {
+          console.warn(`[codex-backend] Failed to read file URL image: ${url}`, err);
         }
       }
 
+      // Handle data: URL images — pass through directly
       const dataUrl = parseDataUrl(url);
       if (dataUrl) {
         if (dataUrl.mime.startsWith('image/')) {
-          const tempDir = await fsPromises.mkdtemp(path.join(os.tmpdir(), 'openchamber-codex-image-'));
-          cleanupDirs.push(tempDir);
-          const extension = (() => {
-            const subtype = dataUrl.mime.split('/')[1];
-            if (subtype && /^[a-z0-9.+-]+$/i.test(subtype)) {
-              return subtype.replace(/\+.*/, '');
-            }
-            return 'bin';
-          })();
-          const filePath = path.join(tempDir, `${createId(crypto)}.${extension}`);
-          await fsPromises.writeFile(filePath, dataUrl.buffer);
-          images.push(filePath);
+          // Pass the original data URL string directly to Codex
+          imageUrls.push(url);
           continue;
         }
 
@@ -621,14 +614,18 @@ export const createCodexBackendRuntime = (dependencies) => {
           const content = await fsPromises.readFile(filePath, 'utf8');
           textChunks.push(formatAttachedText(filename, content));
           continue;
-        } catch {
+        } catch (err) {
+          console.warn(`[codex-backend] Failed to read text file attachment: ${url}`, err);
         }
       }
 
       textChunks.push(`Attached file: ${filename} (${mime})`);
     }
 
-    if (images.length === 0) {
+    // No temp files needed — cleanup is a no-op
+    const cleanup = async () => {};
+
+    if (imageUrls.length === 0) {
       return {
         input: textChunks.join('\n\n'),
         cleanup,
@@ -638,7 +635,7 @@ export const createCodexBackendRuntime = (dependencies) => {
     return {
       input: [
         ...(textChunks.length > 0 ? [{ type: 'text', text: textChunks.join('\n\n') }] : []),
-        ...images.map((imagePath) => ({ type: 'local_image', path: imagePath })),
+        ...imageUrls.map((dataUrlStr) => ({ type: 'image', url: dataUrlStr })),
       ],
       cleanup,
     };
@@ -648,7 +645,7 @@ export const createCodexBackendRuntime = (dependencies) => {
   const appServer = createCodexAppServerAdapter({
     crypto,
     emitEvent,
-    onTurnCompleted: async (sessionId, finalText, turnParams) => {
+    onTurnCompleted: async (sessionId, finalText, turnParams, finalParts) => {
       // Clear the run controller so the session is no longer marked as running
       runControllers.delete(sessionId);
 
@@ -669,18 +666,49 @@ export const createCodexBackendRuntime = (dependencies) => {
         // pushed message.part.updated events to the UI in real time.
         // We only need to persist the final record to disk.
         if (finalText != null) {
-          const assistantText = typeof finalText === 'string' && finalText.trim().length > 0
-            ? finalText
-            : 'Done.';
+          const messageId = createSortableId('msg', crypto);
+
+          // Build parts array from the structured finalParts (text + reasoning)
+          // so that reasoning traces survive a page refresh.
+          const recordParts = [];
+          if (Array.isArray(finalParts) && finalParts.length > 0) {
+            for (const fp of finalParts) {
+              if (fp.type === 'reasoning' && fp.text) {
+                recordParts.push({
+                  id: createId(crypto),
+                  sessionID: entry.session.id,
+                  messageID: messageId,
+                  type: 'reasoning',
+                  text: fp.text,
+                  time: fp.time || { start: Date.now(), end: Date.now() },
+                });
+              } else if (fp.type === 'text' && fp.text) {
+                recordParts.push(buildTextPart(entry.session.id, messageId, fp.text));
+              }
+            }
+          }
+
+          // Fallback: if no structured parts, create a single text part
+          if (recordParts.length === 0) {
+            const assistantText = typeof finalText === 'string' && finalText.trim().length > 0
+              ? finalText
+              : 'Done.';
+            recordParts.push(buildTextPart(entry.session.id, messageId, assistantText));
+          }
+
           const assistantRecord = buildMessageRecord({
             sessionId: entry.session.id,
             role: 'assistant',
-            parts: [buildTextPart(entry.session.id, createSortableId('msg', crypto), assistantText)],
+            parts: recordParts,
             modelId: entry.modelId,
             mode: entry.mode,
             effort: entry.effort,
           });
-          assistantRecord.parts[0].messageID = assistantRecord.info.id;
+
+          // Ensure all parts reference the record's message ID
+          for (const part of assistantRecord.parts) {
+            part.messageID = assistantRecord.info.id;
+          }
 
           entry = appendRecord(entry, assistantRecord);
           await saveEntry(entry);
@@ -949,10 +977,15 @@ export const createCodexBackendRuntime = (dependencies) => {
         for (const item of codexInput) {
           if (item.type === 'text') {
             turnInput.push({ type: 'text', text: item.text, text_elements: [] });
-          } else if (item.type === 'local_image') {
-            turnInput.push({ type: 'image', url: `file://${item.path}` });
+          } else if (item.type === 'image') {
+            turnInput.push({ type: 'image', url: item.url });
           }
         }
+      }
+
+      // Validate that we have non-empty input to send
+      if (turnInput.length === 0) {
+        throw new Error('Cannot start turn with empty input — message had no text or processable attachments');
       }
 
       // Start the turn — events will stream via the adapter's notification handler
