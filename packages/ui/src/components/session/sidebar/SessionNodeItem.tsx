@@ -30,7 +30,6 @@ import {
   RiPushpinLine,
   RiShare2Line,
   RiShieldLine,
-  RiQuestionLine,
   RiUnpinLine,
   RiGitBranchLine,
 } from '@remixicon/react';

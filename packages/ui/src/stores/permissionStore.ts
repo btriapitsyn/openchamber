@@ -3,7 +3,6 @@ import { devtools, persist, createJSONStorage } from "zustand/middleware";
 import { getSafeStorage } from "./utils/safeStorage";
 import type { Session } from "@opencode-ai/sdk/v2/client";
 import {
-    autoRespondsPermission,
     getPermissionLevel,
     isAutoAcceptingLevel,
     normalizeDirectory,
