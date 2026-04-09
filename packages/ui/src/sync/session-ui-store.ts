@@ -91,16 +91,15 @@ function routeMessage(params: {
     const storeCommand = storeCommands.find((c) => c.name === cmdName)
 
     if ((syncCommand || storeCommand) && storeCommand?.executionMode !== 'prompt-text') {
-      const dir = opencodeClient.getDirectory() || undefined
-      return sdk.session.command({
-        sessionID: params.sessionId,
-        directory: dir,
+      return opencodeClient.sendCommand({
+        id: params.sessionId,
+        providerID: params.providerID,
+        modelID: params.modelID,
         command: cmdName,
         arguments: tail.join(" "),
         agent: params.agent,
-        model: `${params.providerID}/${params.modelID}`,
         variant: params.variant,
-        parts: params.files,
+        files: params.files,
       }).then(() => {})
     }
   }
