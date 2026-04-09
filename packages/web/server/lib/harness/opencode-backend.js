@@ -39,6 +39,31 @@ export const createOpenCodeBackendRuntime = (dependencies) => {
     return response.data;
   };
 
+  const prompt = async (input = {}) => {
+    const directory = typeof input?.directory === 'string' && input.directory.trim().length > 0
+      ? input.directory.trim()
+      : undefined;
+    const sessionID = typeof input?.sessionID === 'string' ? input.sessionID : '';
+    if (!sessionID) {
+      throw new Error('Session ID is required');
+    }
+
+    const client = createClient(directory);
+    const response = await client.session.prompt({
+      sessionID,
+      ...(input?.messageID ? { messageID: input.messageID } : {}),
+      ...(input?.model ? { model: input.model } : {}),
+      ...(input?.agent ? { agent: input.agent } : {}),
+      ...(input?.variant ? { variant: input.variant } : {}),
+      ...(input?.format ? { format: input.format } : {}),
+      ...(Array.isArray(input?.parts) ? { parts: input.parts } : {}),
+    }, {
+      throwOnError: true,
+    });
+
+    return response.data;
+  };
+
   const promptAsync = async (input = {}) => {
     const directory = typeof input?.directory === 'string' && input.directory.trim().length > 0
       ? input.directory.trim()
@@ -257,6 +282,7 @@ export const createOpenCodeBackendRuntime = (dependencies) => {
 
   return {
     createSession,
+    prompt,
     promptAsync,
     command,
     abortSession,

@@ -443,6 +443,40 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     }
   });
 
+  app.post('/api/openchamber/harness/session/:sessionId/prompt', async (req, res) => {
+    try {
+      const sessionId = typeof req.params?.sessionId === 'string' ? req.params.sessionId : '';
+      const binding = await getBoundBackend(sessionId);
+      if (!binding) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      if (!backendRegistry.isBackendSelectable(binding.backendId)) {
+        return sendUnsupportedBackend(res, binding.backendId);
+      }
+      const runtime = getBackendRuntime(binding.backendId);
+      if (!runtime?.prompt) {
+        return sendUnsupportedBackend(res, binding.backendId);
+      }
+
+      const payload = await runtime.prompt({
+        sessionID: binding.backendSessionId,
+        directory: typeof req.body?.directory === 'string' ? req.body.directory : binding.directory,
+        messageID: typeof req.body?.messageID === 'string' ? req.body.messageID : undefined,
+        model: req.body?.model,
+        agent: typeof req.body?.agent === 'string' ? req.body.agent : undefined,
+        variant: typeof req.body?.variant === 'string' ? req.body.variant : undefined,
+        format: req.body?.format,
+        parts: Array.isArray(req.body?.parts) ? req.body.parts : undefined,
+      });
+
+      return res.status(200).json(payload ?? {});
+    } catch (error) {
+      console.error('Failed to prompt harness session:', error);
+      const message = error?.body?.error || error?.message || 'Failed to prompt session';
+      return res.status(400).json({ error: message });
+    }
+  });
+
   app.post('/api/openchamber/harness/session/:sessionId/command', async (req, res) => {
     try {
       const sessionId = typeof req.params?.sessionId === 'string' ? req.params.sessionId : '';
