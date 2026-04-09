@@ -83,6 +83,25 @@ export const createSessionBindingsRuntime = ({
     return bindings.get(sessionId) || null;
   };
 
+  const getEffectiveBinding = async (sessionId) => {
+    await ensureLoaded();
+    const existing = bindings.get(sessionId);
+    if (existing) {
+      return existing;
+    }
+    if (typeof sessionId !== 'string' || sessionId.trim().length === 0) {
+      return null;
+    }
+    return {
+      sessionId: sessionId.trim(),
+      backendId: defaultBackendId,
+      backendSessionId: sessionId.trim(),
+      directory: null,
+      createdAt: 0,
+      updatedAt: 0,
+    };
+  };
+
   const getBindingSync = (sessionId) => bindings.get(sessionId) || null;
 
   const getEffectiveBindingSync = (sessionId) => {
@@ -161,6 +180,7 @@ export const createSessionBindingsRuntime = ({
   return {
     ensureLoaded,
     getBinding,
+    getEffectiveBinding,
     getBindingSync,
     getEffectiveBindingSync,
     upsertBinding,

@@ -47,7 +47,10 @@ export interface BackendModeSelectorSurface {
 
 export interface BackendModelSelectorSurface {
   label: string;
-  source: 'providers';
+  source: 'providers' | 'backend';
+  options?: BackendControlSurfaceOption[];
+  providerId?: string;
+  defaultOptionId?: string | null;
 }
 
 export interface BackendEffortSelectorSurface {

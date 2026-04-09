@@ -86,12 +86,12 @@ export async function handleProxyBridgeMessage(
             {
               id: 'codex',
               label: 'Codex',
-              available: false,
-              comingSoon: true,
+              available: true,
+              comingSoon: false,
               capabilities: {
-                chat: false,
-                sessions: false,
-                models: false,
+                chat: true,
+                sessions: true,
+                models: true,
                 agents: false,
                 providers: false,
                 commands: false,

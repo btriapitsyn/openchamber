@@ -16,6 +16,7 @@ export const createServerUtilsRuntime = (dependencies) => {
     backendRegistry,
     sessionBindingsRuntime,
     openCodeBackendRuntime,
+    codexBackendRuntime,
     readSettingsFromDiskMigrated,
     getOpenCodePort,
     setOpenCodePortState,
@@ -159,6 +160,7 @@ export const createServerUtilsRuntime = (dependencies) => {
       backendRegistry,
       sessionBindingsRuntime,
       openCodeBackendRuntime,
+      codexBackendRuntime,
       readSettingsFromDiskMigrated,
     });
   };

@@ -68,6 +68,7 @@ import { createGracefulShutdownRuntime } from './lib/opencode/shutdown-runtime.j
 import { createBackendRegistry, DEFAULT_BACKEND_ID } from './lib/harness/backends.js';
 import { createSessionBindingsRuntime } from './lib/harness/session-bindings.js';
 import { createOpenCodeBackendRuntime } from './lib/harness/opencode-backend.js';
+import { createCodexBackendRuntime } from './lib/harness/codex-backend.js';
 import webPush from 'web-push';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -184,6 +185,7 @@ const OPENCHAMBER_DATA_DIR = process.env.OPENCHAMBER_DATA_DIR
   : path.join(os.homedir(), '.config', 'openchamber');
 const SETTINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'settings.json');
 const SESSION_BINDINGS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'session-bindings.json');
+const CODEX_SESSIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'codex-sessions.json');
 const PUSH_SUBSCRIPTIONS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'push-subscriptions.json');
 const CLOUDFLARE_MANAGED_REMOTE_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-managed-remote-tunnels.json');
 const CLOUDFLARE_LEGACY_NAMED_TUNNELS_FILE_PATH = path.join(OPENCHAMBER_DATA_DIR, 'cloudflare-named-tunnels.json');
@@ -276,6 +278,8 @@ const sessionBindingsRuntime = createSessionBindingsRuntime({
   bindingsFilePath: SESSION_BINDINGS_FILE_PATH,
   defaultBackendId: DEFAULT_BACKEND_ID,
 });
+
+await sessionBindingsRuntime.ensureLoaded();
 
 const requestSecurityRuntime = createRequestSecurityRuntime({
   readSettingsFromDiskMigrated,
@@ -490,6 +494,12 @@ const openCodeBackendRuntime = createOpenCodeBackendRuntime({
   getOpenCodeAuthHeaders,
 });
 
+const codexBackendRuntime = createCodexBackendRuntime({
+  crypto,
+  fsPromises,
+  sessionsFilePath: CODEX_SESSIONS_FILE_PATH,
+});
+
 const ENV_CONFIGURED_API_PREFIX = normalizeApiPrefix(
   process.env.OPENCODE_API_PREFIX || process.env.OPENCHAMBER_API_PREFIX || ''
 );
@@ -628,6 +638,7 @@ const serverUtilsRuntime = createServerUtilsRuntime({
   backendRegistry,
   sessionBindingsRuntime,
   openCodeBackendRuntime,
+  codexBackendRuntime,
   readSettingsFromDiskMigrated,
   getOpenCodePort: () => openCodePort,
   setOpenCodePortState: (value) => {
@@ -950,6 +961,7 @@ async function main(options = {}) {
     getCachedZenModels,
     backendRegistry,
     openCodeBackendRuntime,
+    codexBackendRuntime,
     sessionBindingsRuntime,
   });
   uiAuthController = bootstrapResult.uiAuthController;

@@ -14,6 +14,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     getCachedZenModels,
     backendRegistry,
     openCodeBackendRuntime,
+    codexBackendRuntime,
     sessionBindingsRuntime,
   } = dependencies;
 
@@ -342,22 +343,32 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
     });
   };
 
-  const getBoundBackend = (sessionId) => sessionBindingsRuntime.getEffectiveBindingSync(sessionId);
+  const getBoundBackend = async (sessionId) => sessionBindingsRuntime.getEffectiveBinding(sessionId);
+  const getBackendRuntime = (backendId) => {
+    if (backendId === 'opencode') {
+      return openCodeBackendRuntime;
+    }
+    if (backendId === 'codex') {
+      return codexBackendRuntime;
+    }
+    return null;
+  };
 
   app.get('/api/openchamber/harness/control-surface', async (req, res) => {
     try {
       const sessionId = typeof req.query?.sessionId === 'string' ? req.query.sessionId.trim() : '';
-      const binding = sessionId ? getBoundBackend(sessionId) : null;
+      const binding = sessionId ? await getBoundBackend(sessionId) : null;
       const backendId = binding?.backendId || await getRequestedBackendId(req);
 
       if (!backendRegistry.isBackendSelectable(backendId)) {
         return sendUnsupportedBackend(res, backendId);
       }
-      if (backendId !== 'opencode') {
+      const runtime = getBackendRuntime(backendId);
+      if (!runtime?.getControlSurface) {
         return sendUnsupportedBackend(res, backendId);
       }
 
-      const payload = await openCodeBackendRuntime.getControlSurface({
+      const payload = await runtime.getControlSurface({
         directory: binding?.directory
           || (typeof req.query?.directory === 'string' ? req.query.directory : undefined),
         providerId: typeof req.query?.providerId === 'string' ? req.query.providerId : undefined,
@@ -378,12 +389,12 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
       if (!backendRegistry.isBackendSelectable(backendId)) {
         return sendUnsupportedBackend(res, backendId);
       }
-
-      if (backendId !== 'opencode') {
+      const runtime = getBackendRuntime(backendId);
+      if (!runtime?.createSession) {
         return sendUnsupportedBackend(res, backendId);
       }
 
-      const payload = await openCodeBackendRuntime.createSession({
+      const payload = await runtime.createSession({
         directory: typeof req.body?.directory === 'string' ? req.body.directory : undefined,
         title: typeof req.body?.title === 'string' ? req.body.title : undefined,
         parentID: typeof req.body?.parentID === 'string' ? req.body.parentID : undefined,
@@ -409,18 +420,19 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
   app.post('/api/openchamber/harness/session/:sessionId/message', async (req, res) => {
     try {
       const sessionId = typeof req.params?.sessionId === 'string' ? req.params.sessionId : '';
-      const binding = getBoundBackend(sessionId);
+      const binding = await getBoundBackend(sessionId);
       if (!binding) {
         return res.status(404).json({ error: 'Session not found' });
       }
       if (!backendRegistry.isBackendSelectable(binding.backendId)) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
-      if (binding.backendId !== 'opencode') {
+      const runtime = getBackendRuntime(binding.backendId);
+      if (!runtime?.promptAsync) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
 
-      await openCodeBackendRuntime.promptAsync({
+      await runtime.promptAsync({
         sessionID: binding.backendSessionId,
         directory: typeof req.body?.directory === 'string' ? req.body.directory : binding.directory,
         messageID: typeof req.body?.messageID === 'string' ? req.body.messageID : undefined,
@@ -442,18 +454,19 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
   app.post('/api/openchamber/harness/session/:sessionId/command', async (req, res) => {
     try {
       const sessionId = typeof req.params?.sessionId === 'string' ? req.params.sessionId : '';
-      const binding = getBoundBackend(sessionId);
+      const binding = await getBoundBackend(sessionId);
       if (!binding) {
         return res.status(404).json({ error: 'Session not found' });
       }
       if (!backendRegistry.isBackendSelectable(binding.backendId)) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
-      if (binding.backendId !== 'opencode') {
+      const runtime = getBackendRuntime(binding.backendId);
+      if (!runtime?.command) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
 
-      const payload = await openCodeBackendRuntime.command({
+      const payload = await runtime.command({
         sessionID: binding.backendSessionId,
         directory: typeof req.body?.directory === 'string' ? req.body.directory : binding.directory,
         messageID: typeof req.body?.messageID === 'string' ? req.body.messageID : undefined,
@@ -476,18 +489,19 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
   app.post('/api/openchamber/harness/session/:sessionId/abort', async (req, res) => {
     try {
       const sessionId = typeof req.params?.sessionId === 'string' ? req.params.sessionId : '';
-      const binding = getBoundBackend(sessionId);
+      const binding = await getBoundBackend(sessionId);
       if (!binding) {
         return res.status(404).json({ error: 'Session not found' });
       }
       if (!backendRegistry.isBackendSelectable(binding.backendId)) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
-      if (binding.backendId !== 'opencode') {
+      const runtime = getBackendRuntime(binding.backendId);
+      if (!runtime?.abortSession) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
 
-      const ok = await openCodeBackendRuntime.abortSession({
+      const ok = await runtime.abortSession({
         sessionID: binding.backendSessionId,
         directory: typeof req.body?.directory === 'string' ? req.body.directory : binding.directory,
       });
@@ -503,18 +517,19 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
   app.post('/api/openchamber/harness/session/:sessionId/update', async (req, res) => {
     try {
       const sessionId = typeof req.params?.sessionId === 'string' ? req.params.sessionId : '';
-      const binding = getBoundBackend(sessionId);
+      const binding = await getBoundBackend(sessionId);
       if (!binding) {
         return res.status(404).json({ error: 'Session not found' });
       }
       if (!backendRegistry.isBackendSelectable(binding.backendId)) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
-      if (binding.backendId !== 'opencode') {
+      const runtime = getBackendRuntime(binding.backendId);
+      if (!runtime?.updateSession) {
         return sendUnsupportedBackend(res, binding.backendId);
       }
 
-      const payload = await openCodeBackendRuntime.updateSession({
+      const payload = await runtime.updateSession({
         sessionID: binding.backendSessionId,
         directory: typeof req.body?.directory === 'string' ? req.body.directory : binding.directory,
         title: typeof req.body?.title === 'string' ? req.body.title : undefined,

@@ -25,6 +25,7 @@ import {
 } from '@remixicon/react';
 import type { EditPermissionMode } from '@/stores/types/sessionTypes';
 import type { ModelMetadata } from '@/types';
+import type { Provider } from '@opencode-ai/sdk/v2';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -50,7 +51,7 @@ import { useContextStore } from '@/stores/contextStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
-import { useDirectorySync, useSessionMessages } from '@/sync/sync-context';
+import { useDirectorySync, useSession, useSessionMessages } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { useUIStore } from '@/stores/useUIStore';
 import { useModelLists } from '@/hooks/useModelLists';
@@ -61,7 +62,7 @@ import type { MobileControlsPanel } from './mobileControlsUtils';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type IconComponent = ComponentType<any>;
 
-type ProviderModel = Record<string, unknown> & { id?: string; name?: string };
+type ProviderModel = Provider["models"][string];
 
 type PermissionAction = 'allow' | 'ask' | 'deny';
 type PermissionRule = { permission: string; pattern: string; action: PermissionAction };
@@ -305,10 +306,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const setProvider = useConfigStore((state) => state.setProvider);
     const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
     const setModel = useConfigStore((state) => state.setModel);
+    const setVirtualProviders = useConfigStore((state) => state.setVirtualProviders);
     const setCurrentVariant = useConfigStore((state) => state.setCurrentVariant);
     const getCurrentModelVariants = useConfigStore((state) => state.getCurrentModelVariants);
     const setAgent = useConfigStore((state) => state.setAgent);
-    const getCurrentProvider = useConfigStore((state) => state.getCurrentProvider);
+    const setCurrentAgentName = useConfigStore((state) => state.setCurrentAgentName);
     const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
     const getCurrentAgent = useConfigStore((state) => state.getCurrentAgent);
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
@@ -340,6 +342,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const sessionSavedAgentName = useSelectionStore((state) =>
         currentSessionId ? state.sessionAgentSelections.get(currentSessionId) ?? null : null
     );
+    const sessionSavedBackendId = useSelectionStore((state) =>
+        currentSessionId ? state.sessionBackendSelections.get(currentSessionId) ?? null : null
+    );
+    const currentSession = useSession(currentSessionId ?? undefined, currentSessionDirectory ?? undefined);
 
     const stickySessionAgentRef = React.useRef<string | null>(null);
     React.useEffect(() => {
@@ -389,8 +395,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     // Only use mobile panels on actual mobile devices, VSCode uses desktop dropdowns
     const isCompact = isMobile;
     const [localMobilePanel, setLocalMobilePanel] = React.useState<MobileControlsPanel>(null);
+    const authoritativeSessionBackendId =
+        (currentSession as { backendId?: string | null } | undefined)?.backendId
+        ?? backendControlSurface?.backendId
+        ?? null;
     const currentBackendId = currentSessionId
-        ? (getSessionBackendSelection(currentSessionId) || defaultBackendId || 'opencode')
+        ? (authoritativeSessionBackendId || sessionSavedBackendId || getSessionBackendSelection(currentSessionId) || defaultBackendId || 'opencode')
         : (draftBackendId || lastUsedBackendId || defaultBackendId || 'opencode');
     const currentBackend = React.useMemo(
         () => availableBackends.find((backend) => backend.id === currentBackendId) || null,
@@ -477,6 +487,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     }, [currentBackendId, currentModelId, currentProviderId, currentSessionId, currentSessionDirectory]);
 
     React.useEffect(() => {
+        if (!currentSessionId || !authoritativeSessionBackendId) {
+            return;
+        }
+        if (sessionSavedBackendId === authoritativeSessionBackendId) {
+            return;
+        }
+        saveSessionBackendSelection(currentSessionId, authoritativeSessionBackendId);
+    }, [authoritativeSessionBackendId, currentSessionId, saveSessionBackendSelection, sessionSavedBackendId]);
+
+    React.useEffect(() => {
         if (activeMobilePanel === 'model') {
             setExpandedMobileProviders(() => {
                 const initial = new Set<string>();
@@ -546,6 +566,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const primarySelectorLabel = backendModeSelector?.label ?? 'Agent';
     const modelSelectorLabel = backendModelSelector?.label ?? 'Model';
     const effortSelectorLabel = backendEffortSelector?.label ?? 'Thinking';
+    const backendModelProviderId = backendModelSelector?.providerId || currentBackendId || 'backend';
     const backendModeItems = React.useMemo<BackendControlSurfaceOption[]>(() => {
         if (backendModeSelector?.items?.length) {
             return backendModeSelector.items;
@@ -557,6 +578,102 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             ...(agent.color ? { color: agent.color } : {}),
         }));
     }, [backendModeSelector, selectableDesktopAgents]);
+    const backendModelOptions = React.useMemo<ProviderModel[]>(() => {
+        if (backendModelSelector?.source !== 'backend' || !backendModelSelector.options?.length) {
+            return [];
+        }
+
+        const variants = backendEffortSelector?.options?.length
+            ? Object.fromEntries(backendEffortSelector.options.map((option) => [option.id, {}]))
+            : undefined;
+
+        return backendModelSelector.options.map((option) => ({
+            id: option.id,
+            providerID: backendModelProviderId,
+            api: {
+                id: currentBackendId || 'backend',
+                url: '',
+                npm: '',
+            },
+            name: option.label,
+            family: undefined,
+            capabilities: {
+                temperature: false,
+                reasoning: Boolean(variants),
+                attachment: true,
+                toolcall: false,
+                input: {
+                    text: true,
+                    audio: false,
+                    image: true,
+                    video: false,
+                    pdf: true,
+                },
+                output: {
+                    text: true,
+                    audio: false,
+                    image: false,
+                    video: false,
+                    pdf: false,
+                },
+                interleaved: false,
+            },
+            cost: {
+                input: 0,
+                output: 0,
+                cache: {
+                    read: 0,
+                    write: 0,
+                },
+            },
+            limit: {
+                context: 0,
+                output: 0,
+            },
+            status: 'active',
+            options: {},
+            headers: {},
+            release_date: '',
+            ...(variants ? { variants } : {}),
+        }));
+    }, [backendEffortSelector, backendModelProviderId, backendModelSelector, currentBackendId]);
+    const usesBackendModelCatalog = backendModelSelector?.source === 'backend' && backendModelOptions.length > 0;
+    const effectiveProviders = React.useMemo(() => {
+        if (!usesBackendModelCatalog) {
+            return providers;
+        }
+
+        return [{
+            id: backendModelProviderId,
+            name: currentBackend?.label || currentBackendId || 'Backend',
+            models: backendModelOptions,
+        }];
+    }, [backendModelOptions, backendModelProviderId, currentBackend, currentBackendId, providers, usesBackendModelCatalog]);
+
+    React.useEffect(() => {
+        if (!usesBackendModelCatalog) {
+            setVirtualProviders([]);
+            return;
+        }
+
+        setVirtualProviders([
+            {
+                id: backendModelProviderId,
+                name: currentBackend?.label || currentBackendId || 'Backend',
+                source: 'api',
+                env: [],
+                options: {},
+                models: backendModelOptions,
+            },
+        ]);
+    }, [
+        backendModelOptions,
+        backendModelProviderId,
+        currentBackend,
+        currentBackendId,
+        setVirtualProviders,
+        usesBackendModelCatalog,
+    ]);
 
     const sortedAndFilteredAgents = React.useMemo(() => {
         const sorted = [...backendModeItems].sort((a, b) => a.label.localeCompare(b.label));
@@ -610,11 +727,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return <RiQuestionLine className={combinedClassName} style={iconStyle} />;
     }, [editToggleIconClass]);
 
-    const currentProvider = getCurrentProvider();
+    const currentProvider = React.useMemo(() => {
+        if (!currentProviderId) {
+            return null;
+        }
+        return effectiveProviders.find((provider) => String(provider.id) === currentProviderId) || null;
+    }, [currentProviderId, effectiveProviders]);
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
 
     const visibleProviders = React.useMemo(() => {
-        return providers
+        return effectiveProviders
             .map((provider) => {
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
                 const visibleModels = providerModels.filter((model: ProviderModel) => {
@@ -626,7 +748,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return { ...provider, models: visibleModels };
             })
             .filter((provider) => provider.models.length > 0);
-    }, [providers, hiddenModels]);
+    }, [effectiveProviders, hiddenModels]);
 
     const currentMetadata =
         currentProviderId && currentModelId ? getModelMetadata(currentProviderId, currentModelId) : undefined;
@@ -699,7 +821,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 return 'model-missing';
             }
 
-            const provider = providers.find(p => p.id === providerId);
+            const provider = effectiveProviders.find(p => p.id === providerId);
             if (!provider) {
                 return 'provider-missing';
             }
@@ -728,7 +850,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
             return 'applied';
         },
-        [providers, currentProviderId, currentModelId, setProvider, setModel, currentSessionId, saveAgentModelForSession, saveSessionModelSelection],
+        [effectiveProviders, currentProviderId, currentModelId, setProvider, setModel, currentSessionId, saveAgentModelForSession, saveSessionModelSelection],
     );
 
     React.useEffect(() => {
@@ -737,7 +859,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-        if (!contextHydrated || providers.length === 0 || !hasCurrentSessionMessagesEntry || !latestLoadedUserChoice?.providerID || !latestLoadedUserChoice.modelID) {
+        if (!contextHydrated || effectiveProviders.length === 0 || !hasCurrentSessionMessagesEntry || !latestLoadedUserChoice?.providerID || !latestLoadedUserChoice.modelID) {
             return;
         }
 
@@ -784,7 +906,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         currentSessionId,
         currentAgentName,
         contextHydrated,
-        providers,
+        effectiveProviders,
         hasCurrentSessionMessagesEntry,
         latestLoadedUserChoice,
         setAgent,
@@ -800,7 +922,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-        if (!contextHydrated || providers.length === 0 || agents.length === 0) {
+        if (!contextHydrated || effectiveProviders.length === 0 || agents.length === 0) {
             return;
         }
 
@@ -933,8 +1055,58 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         tryApplyModelSelection,
         saveSessionAgentSelection,
         contextHydrated,
-        providers,
+        effectiveProviders,
         sync,
+    ]);
+
+    React.useEffect(() => {
+        if (backendModelSelector?.source !== 'backend' || backendModelOptions.length === 0) {
+            return;
+        }
+
+        const desiredProviderId = backendModelProviderId;
+        const desiredModelId = backendModelOptions.some((model) => model.id === currentModelId)
+            ? currentModelId
+            : (backendModelSelector.defaultOptionId || String(backendModelOptions[0]?.id || ''));
+
+        if (currentProviderId !== desiredProviderId) {
+            setProvider(desiredProviderId);
+        }
+
+        if (desiredModelId && currentModelId !== desiredModelId) {
+            setModel(desiredModelId);
+        }
+    }, [
+        backendModelOptions,
+        backendModelProviderId,
+        backendModelSelector,
+        currentModelId,
+        currentProviderId,
+        setModel,
+        setProvider,
+    ]);
+
+    React.useEffect(() => {
+        if (primarySelectorKind !== 'mode' || backendModeItems.length === 0) {
+            return;
+        }
+
+        const desiredModeId = backendModeItems.some((item) => item.id === uiAgentName)
+            ? uiAgentName
+            : defaultAgentName;
+
+        if (!desiredModeId || currentAgentName === desiredModeId) {
+            return;
+        }
+
+        setCurrentAgentName(desiredModeId);
+    }, [
+        backendModeItems,
+        currentAgentName,
+        defaultAgentName,
+        primarySelectorKind,
+        setCurrentAgentName,
+        uiAgentName,
     ]);
 
     React.useEffect(() => {
@@ -1111,12 +1283,39 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     ]);
 
     const handlePrimarySelectorChange = React.useCallback((itemId: string) => {
-        if (primarySelectorKind === 'agent') {
-            handleAgentChange(itemId);
+        if (primarySelectorKind === 'mode') {
+            setCurrentAgentName(itemId);
+            addRecentAgent(itemId);
+            setAgentMenuOpen(false);
+
+            if (currentSessionId) {
+                saveSessionAgentSelection(currentSessionId, itemId);
+            }
+            if (isCompact) {
+                closeMobilePanel();
+                const callback = onAgentPanelSelection || onMobilePanelSelection;
+                if (callback) {
+                    requestAnimationFrame(() => {
+                        callback();
+                    });
+                }
+            }
             return;
         }
-        console.warn('[ModelControls] Unsupported primary selector kind:', primarySelectorKind, itemId);
-    }, [handleAgentChange, primarySelectorKind]);
+        handleAgentChange(itemId);
+    }, [
+        addRecentAgent,
+        closeMobilePanel,
+        currentSessionId,
+        handleAgentChange,
+        isCompact,
+        onAgentPanelSelection,
+        onMobilePanelSelection,
+        primarySelectorKind,
+        saveSessionAgentSelection,
+        setAgentMenuOpen,
+        setCurrentAgentName,
+    ]);
 
     const handleBackendChange = React.useCallback((backendId: string) => {
         const descriptor = availableBackends.find((backend) => backend.id === backendId);
@@ -1185,7 +1384,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     };
 
     const getProviderDisplayName = () => {
-        const provider = providers.find(p => p.id === currentProviderId);
+        const provider = effectiveProviders.find(p => p.id === currentProviderId);
         return provider?.name || currentProviderId;
     };
 
@@ -1620,6 +1819,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (!isCompact) return null;
 
         const normalizedQuery = mobileModelQuery.trim();
+        const visibleProviderIds = new Set(visibleProviders.map((provider) => String(provider.id)));
+        const mobileFavorites = usesBackendModelCatalog
+            ? favoriteModelsList.filter(({ providerID }) => visibleProviderIds.has(providerID))
+            : favoriteModelsList;
+        const mobileRecents = usesBackendModelCatalog
+            ? recentModelsList.filter(({ providerID }) => visibleProviderIds.has(providerID))
+            : recentModelsList;
         const filteredProviders = visibleProviders
             .map((provider) => {
                 const providerModels = Array.isArray(provider.models) ? provider.models : [];
@@ -1673,14 +1879,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     )}
 
                     {/* Favorites Section for Mobile */}
-                    {!mobileModelQuery && favoriteModelsList.length > 0 && (
+                    {!mobileModelQuery && mobileFavorites.length > 0 && (
                         <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 <RiStarFill className="h-3 w-3 inline-block mr-1.5 text-primary" />
                                 Favorites
                             </div>
                             <div className="flex flex-col border-t border-border/30">
-                                {favoriteModelsList.map(({ model, providerID, modelID }) => {
+                                {mobileFavorites.map(({ model, providerID, modelID }) => {
                                     const isSelected = providerID === currentProviderId && modelID === currentModelId;
                                     const metadata = getModelMetadata(providerID, modelID);
 
@@ -1719,14 +1925,14 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     )}
 
                     {/* Recent Section for Mobile */}
-                    {!mobileModelQuery && recentModelsList.length > 0 && (
+                    {!mobileModelQuery && mobileRecents.length > 0 && (
                         <div className="rounded-xl border border-border/40 bg-[var(--surface-elevated)] overflow-hidden">
                             <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                 <RiTimeLine className="h-3 w-3 inline-block mr-1.5" />
                                 Recent
                             </div>
                             <div className="flex flex-col border-t border-border/30">
-                                {recentModelsList.map(({ model, providerID, modelID }) => {
+                                {mobileRecents.map(({ model, providerID, modelID }) => {
                                     const isSelected = providerID === currentProviderId && modelID === currentModelId;
                                     const metadata = getModelMetadata(providerID, modelID);
 
@@ -2265,18 +2471,25 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const renderModelSelector = () => {
         const normalizedDesktopQuery = desktopModelQuery.trim();
         const forceExpandProviders = normalizedDesktopQuery.length > 0;
+        const visibleProviderIds = new Set(visibleProviders.map((provider) => String(provider.id)));
 
         // Filter favorites
-        const filteredFavorites = favoriteModelsList.filter(({ model, providerID }) => {
-            const provider = providers.find(p => p.id === providerID);
+        const filteredFavorites = usesBackendModelCatalog
+            ? favoriteModelsList.filter(({ providerID }) => visibleProviderIds.has(providerID))
+            : favoriteModelsList;
+        const searchableFavorites = filteredFavorites.filter(({ model, providerID }) => {
+            const provider = effectiveProviders.find(p => p.id === providerID);
             const providerName = provider?.name || providerID;
             const modelName = getModelDisplayName(model);
             return filterByQuery(modelName, providerName, desktopModelQuery);
         });
 
         // Filter recents
-        const filteredRecents = recentModelsList.filter(({ model, providerID }) => {
-            const provider = providers.find(p => p.id === providerID);
+        const filteredRecents = usesBackendModelCatalog
+            ? recentModelsList.filter(({ providerID }) => visibleProviderIds.has(providerID))
+            : recentModelsList;
+        const searchableRecents = filteredRecents.filter(({ model, providerID }) => {
+            const provider = effectiveProviders.find(p => p.id === providerID);
             const providerName = provider?.name || providerID;
             const modelName = getModelDisplayName(model);
             return filterByQuery(modelName, providerName, desktopModelQuery);
@@ -2307,18 +2520,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         });
 
         const hasResults =
-            filteredFavorites.length > 0 ||
-            filteredRecents.length > 0 ||
+            searchableFavorites.length > 0 ||
+            searchableRecents.length > 0 ||
             filteredProviders.length > 0;
 
         // Build flat list for keyboard navigation
         type FlatModelItem = { model: ProviderModel; providerID: string; modelID: string; section: string };
         const flatModelList: FlatModelItem[] = [];
 
-        filteredFavorites.forEach(({ model, providerID, modelID }) => {
+        searchableFavorites.forEach(({ model, providerID, modelID }) => {
             flatModelList.push({ model, providerID, modelID, section: 'fav' });
         });
-        filteredRecents.forEach(({ model, providerID, modelID }) => {
+        searchableRecents.forEach(({ model, providerID, modelID }) => {
             flatModelList.push({ model, providerID, modelID, section: 'recent' });
         });
         providerSections.forEach(({ provider, visibleModels }) => {
@@ -2478,25 +2691,29 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                 className="overlay-scrollbar-target--no-gutter"
                             >
                                 <div className="p-1">
-                                    <div
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={openAddProviderSettings}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' || e.key === ' ') {
-                                                e.preventDefault();
-                                                openAddProviderSettings();
-                                            }
-                                        }}
-                                        className="typography-meta group flex items-center gap-1 rounded-md px-2 py-1.5 cursor-pointer hover:bg-interactive-hover/50"
-                                    >
-                                        <span className="flex h-4 w-4 items-center justify-center text-muted-foreground">
-                                            <RiAddLine className="h-4 w-4 -mr-0.5" />
-                                        </span>
-                                        <span className="font-medium text-foreground">Add new provider</span>
-                                    </div>
+                                    {!usesBackendModelCatalog && (
+                                        <>
+                                            <div
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={openAddProviderSettings}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') {
+                                                        e.preventDefault();
+                                                        openAddProviderSettings();
+                                                    }
+                                                }}
+                                                className="typography-meta group flex items-center gap-1 rounded-md px-2 py-1.5 cursor-pointer hover:bg-interactive-hover/50"
+                                            >
+                                                <span className="flex h-4 w-4 items-center justify-center text-muted-foreground">
+                                                    <RiAddLine className="h-4 w-4 -mr-0.5" />
+                                                </span>
+                                                <span className="font-medium text-foreground">Add new provider</span>
+                                            </div>
 
-                                    <DropdownMenuSeparator />
+                                            <DropdownMenuSeparator />
+                                        </>
+                                    )}
 
                                     {!hasResults && (
                                         <div className="px-2 py-4 text-center typography-meta text-muted-foreground">
@@ -2505,7 +2722,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     )}
 
                                     {/* Favorites Section */}
-                                    {filteredFavorites.length > 0 && (
+                                    {searchableFavorites.length > 0 && (
                                         <div>
                                             <DropdownMenuLabel
                                                 className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 border-b border-border/30"
@@ -2513,7 +2730,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                                 <RiStarFill className="h-4 w-4 text-primary" />
                                                 Favorites
                                             </DropdownMenuLabel>
-                                            {filteredFavorites.map(({ model, providerID, modelID }) => {
+                                            {searchableFavorites.map(({ model, providerID, modelID }) => {
                                                 const idx = currentFlatIndex++;
                                                 return renderModelRow(model, providerID, modelID, 'fav', idx, modelSelectedIndex === idx);
                                             })}
@@ -2521,16 +2738,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     )}
 
                                     {/* Recents Section */}
-                                    {filteredRecents.length > 0 && (
+                                    {searchableRecents.length > 0 && (
                                         <div>
-                                            {filteredFavorites.length > 0 && <DropdownMenuSeparator />}
+                                            {searchableFavorites.length > 0 && <DropdownMenuSeparator />}
                                             <DropdownMenuLabel
                                                 className="typography-micro font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2 -mx-1 px-3 py-1.5 border-b border-border/30"
                                             >
                                                 <RiTimeLine className="h-4 w-4" />
                                                 Recent
                                             </DropdownMenuLabel>
-                                            {filteredRecents.map(({ model, providerID, modelID }) => {
+                                            {searchableRecents.map(({ model, providerID, modelID }) => {
                                                 const idx = currentFlatIndex++;
                                                 return renderModelRow(model, providerID, modelID, 'recent', idx, modelSelectedIndex === idx);
                                             })}
@@ -2538,7 +2755,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                                     )}
 
                                     {/* Separator before providers */}
-                                    {(filteredFavorites.length > 0 || filteredRecents.length > 0) && filteredProviders.length > 0 && (
+                                    {(searchableFavorites.length > 0 || searchableRecents.length > 0) && filteredProviders.length > 0 && (
                                         <DropdownMenuSeparator />
                                     )}
 

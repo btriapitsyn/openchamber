@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { GridLoader } from '@/components/ui/grid-loader';
+import { OpenCodeIcon } from '@/components/ui/OpenCodeIcon';
 import {
   RiAddLine,
   RiArrowDownSLine,
@@ -34,11 +35,14 @@ import {
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
+import { useProviderLogo } from '@/hooks/useProviderLogo';
 import { useGlobalSessionStatus, useSession, useSessionPermissions } from '@/sync/sync-context';
+import { useSelectionStore } from '@/sync/selection-store';
 import { useViewportStore } from '@/sync/viewport-store';
 import { DraggableSessionRow } from './sessionFolderDnd';
 import type { SessionNode, SessionSummaryMeta } from './types';
 import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, renderHighlightedText, resolveSessionDiffStats } from './utils';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 
@@ -46,6 +50,26 @@ const ATTENTION_DIAMOND_INDICES = new Set([1, 3, 4, 5, 7]);
 
 const getAttentionDiamondDelay = (index: number): string => {
   return index === 4 ? '0ms' : '130ms';
+};
+
+const formatBackendLabel = (backendId: string | null | undefined): string | null => {
+  if (typeof backendId !== 'string' || backendId.trim().length === 0) {
+    return null;
+  }
+
+  const normalized = backendId.trim().toLowerCase();
+  if (normalized === 'opencode') {
+    return 'OpenCode';
+  }
+  if (normalized === 'codex') {
+    return 'Codex';
+  }
+
+  return normalized
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 };
 
 type Folder = { id: string; name: string; sessionIds: string[] };
@@ -222,6 +246,23 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   );
   const sessionStatus = useGlobalSessionStatus(session.id);
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
+  const sessionAgentSelection = useSelectionStore(
+    React.useCallback((state) => state.sessionAgentSelections.get(session.id) ?? null, [session.id]),
+  );
+  const sessionAgentModelSelection = useSelectionStore(
+    React.useCallback((state) => {
+      if (!sessionAgentSelection) {
+        return null;
+      }
+      return state.sessionAgentModelSelections.get(session.id)?.get(sessionAgentSelection) ?? null;
+    }, [session.id, sessionAgentSelection]),
+  );
+  const sessionModelSelection = useSelectionStore(
+    React.useCallback((state) => state.sessionModelSelections.get(session.id) ?? null, [session.id]),
+  );
+  const sessionBackendSelection = useSelectionStore(
+    React.useCallback((state) => state.sessionBackendSelections.get(session.id) ?? null, [session.id]),
+  );
   const directoryState = sessionDirectory ? directoryStatus.get(sessionDirectory) : null;
   const isMissingDirectory = directoryState === 'missing';
   const isActive = currentSessionId === session.id;
@@ -238,6 +279,50 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
+  const providerBadgeId = sessionAgentModelSelection?.providerId
+    ?? sessionModelSelection?.providerId
+    ?? null;
+  const providerBadgeName = useConfigStore(
+    React.useCallback((state) => {
+      if (!providerBadgeId) {
+        return null;
+      }
+      const providers = [...state.providers, ...state.virtualProviders];
+      return providers.find((provider) => provider.id === providerBadgeId)?.name ?? null;
+    }, [providerBadgeId]),
+  );
+  const backendBadgeId = (resolvedSession as Session & { backendId?: string | null }).backendId
+    ?? sessionBackendSelection
+    ?? null;
+  const backendBadgeLabel = formatBackendLabel(backendBadgeId);
+  const providerBadgeLabel = providerBadgeName
+    ?? (providerBadgeId && providerBadgeId.trim().length > 0 ? providerBadgeId : null);
+  const sessionRuntimeLabel = providerBadgeLabel ?? backendBadgeLabel;
+  const tooltipRuntimeLabel = providerBadgeLabel && backendBadgeLabel && providerBadgeLabel !== backendBadgeLabel
+    ? `${providerBadgeLabel} via ${backendBadgeLabel}`
+    : sessionRuntimeLabel;
+  const runtimeLogoId = backendBadgeId ?? providerBadgeId ?? undefined;
+  const { src: runtimeLogoSrc, onError: handleRuntimeLogoError, hasLogo: hasRuntimeLogo } = useProviderLogo(runtimeLogoId);
+  const shouldUseOpenCodeIcon = backendBadgeId === 'opencode';
+  const shouldShowRuntimeLogo = shouldUseOpenCodeIcon || (hasRuntimeLogo && runtimeLogoSrc);
+  const runtimeMark = shouldShowRuntimeLogo ? (
+    <span
+      className="mr-2 mt-0.5 inline-flex h-4 w-4 flex-shrink-0 self-start items-center justify-center rounded-sm text-foreground/90"
+      title={tooltipRuntimeLabel ?? undefined}
+      aria-hidden="true"
+    >
+      {shouldUseOpenCodeIcon ? (
+        <OpenCodeIcon width={14} height={14} className="text-foreground/90" />
+      ) : runtimeLogoSrc ? (
+        <img
+          src={runtimeLogoSrc}
+          alt=""
+          className="h-3.5 w-3.5 object-contain brightness-0 invert opacity-90"
+          onError={handleRuntimeLogoError}
+        />
+      ) : null}
+    </span>
+  ) : null;
 
   if (editingId === session.id) {
     return (
@@ -245,6 +330,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         key={session.id}
         className={cn('group relative flex items-center rounded-sm px-1.5 py-1', depth > 0 && 'pl-[20px]')}
       >
+        {runtimeMark}
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <form
             className="flex w-full items-center gap-2"
@@ -480,6 +566,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         >
           {minimalLeadingStatusMarker}
           {subsessionChevron}
+          {runtimeMark}
           <div className="flex min-w-0 flex-1 items-center">
             {isMinimalMode ? (
               <Tooltip>
@@ -550,6 +637,9 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                       {secondaryMeta?.projectLabel ? <div className="min-w-0 truncate">{secondaryMeta.projectLabel}</div> : null}
                       <div className="flex-shrink-0">{sessionUpdatedLabel}</div>
                     </div>
+                    {tooltipRuntimeLabel ? (
+                      <div className="text-left text-muted-foreground">{tooltipRuntimeLabel}</div>
+                    ) : null}
                     {secondaryMeta?.branchLabel || sessionDiffStats ? (
                       <div className={cn('flex items-center gap-3 text-left text-muted-foreground', secondaryMeta?.branchLabel ? 'justify-between' : 'justify-start')}>
                         {secondaryMeta?.branchLabel ? (
