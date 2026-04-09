@@ -87,10 +87,10 @@ function routeMessage(params: {
     const syncCommands = dirState?.command ?? []
     const storeCommands = useCommandsStore.getState().commands
 
-    const isCommand = syncCommands.find((c) => c.name === cmdName)
-      || storeCommands.find((c) => c.name === cmdName)
+    const syncCommand = syncCommands.find((c) => c.name === cmdName)
+    const storeCommand = storeCommands.find((c) => c.name === cmdName)
 
-    if (isCommand) {
+    if ((syncCommand || storeCommand) && storeCommand?.executionMode !== 'prompt-text') {
       const dir = opencodeClient.getDirectory() || undefined
       return sdk.session.command({
         sessionID: params.sessionId,

@@ -60,11 +60,26 @@ export interface BackendEffortSelectorSurface {
   defaultOptionId?: string | null;
 }
 
+export interface BackendCommandSurfaceItem {
+  name: string;
+  description?: string;
+  agent?: string;
+  model?: string;
+  template?: string;
+  executionMode?: 'session-command' | 'prompt-text';
+}
+
+export interface BackendCommandSelectorSurface {
+  source: 'config' | 'backend';
+  items: BackendCommandSurfaceItem[];
+}
+
 export interface BackendControlSurface {
   backendId: string;
   modeSelector?: BackendModeSelectorSurface | null;
   modelSelector?: BackendModelSelectorSurface | null;
   effortSelector?: BackendEffortSelectorSurface | null;
+  commandSelector?: BackendCommandSelectorSurface | null;
 }
 
 export interface ApiError {

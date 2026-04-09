@@ -48,6 +48,89 @@ const EFFORT_OPTIONS = Object.freeze([
   { id: 'xhigh', label: 'XHigh' },
 ]);
 
+const COMMAND_OPTIONS = Object.freeze([
+  {
+    name: 'compact',
+    description: 'Summarize the visible conversation to free tokens.',
+  },
+]);
+
+const resolveCodexHomeDir = () => {
+  const explicit = [
+    process.env.OPENCHAMBER_CODEX_HOME,
+    process.env.CODEX_HOME,
+  ]
+    .filter((value) => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  if (explicit.length > 0) {
+    return explicit[0];
+  }
+
+  return path.join(os.homedir(), '.codex');
+};
+
+const parsePromptFrontmatter = (content) => {
+  if (typeof content !== 'string' || !content.startsWith('---\n')) {
+    return { metadata: {}, body: content };
+  }
+
+  const endIndex = content.indexOf('\n---\n', 4);
+  if (endIndex === -1) {
+    return { metadata: {}, body: content };
+  }
+
+  const frontmatter = content.slice(4, endIndex);
+  const body = content.slice(endIndex + 5);
+  const metadata = {};
+
+  for (const rawLine of frontmatter.split('\n')) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
+
+    const colonIndex = line.indexOf(':');
+    if (colonIndex === -1) {
+      continue;
+    }
+
+    const key = line.slice(0, colonIndex).trim().toLowerCase();
+    let value = line.slice(colonIndex + 1).trim();
+    if (!value) {
+      continue;
+    }
+
+    if (
+      (value.startsWith('"') && value.endsWith('"'))
+      || (value.startsWith('\'') && value.endsWith('\''))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    metadata[key] = value;
+  }
+
+  return { metadata, body };
+};
+
+const buildPromptDescription = (description, argumentHint) => {
+  const trimmedDescription = typeof description === 'string' ? description.trim() : '';
+  const trimmedArgumentHint = typeof argumentHint === 'string' ? argumentHint.trim() : '';
+
+  if (trimmedDescription && trimmedArgumentHint) {
+    return `${trimmedDescription} Args: ${trimmedArgumentHint}`;
+  }
+  if (trimmedDescription) {
+    return trimmedDescription;
+  }
+  if (trimmedArgumentHint) {
+    return `Args: ${trimmedArgumentHint}`;
+  }
+  return undefined;
+};
+
 const textDecoder = new TextDecoder();
 
 const createId = (crypto) => `${Date.now().toString(16).padStart(12, '0')}${crypto.randomBytes(4).toString('hex')}`;
@@ -332,6 +415,47 @@ export const createCodexBackendRuntime = (dependencies) => {
     }
 
     loaded = true;
+  };
+
+  const loadCustomPromptCommands = async () => {
+    const promptsDir = path.join(resolveCodexHomeDir(), 'prompts');
+
+    let entries;
+    try {
+      entries = await fsPromises.readdir(promptsDir, { withFileTypes: true });
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    }
+
+    const promptFiles = entries
+      .filter((entry) => entry?.isFile?.() && entry.name.toLowerCase().endsWith('.md'))
+      .sort((left, right) => left.name.localeCompare(right.name));
+
+    const commands = await Promise.all(promptFiles.map(async (entry) => {
+      const absolutePath = path.join(promptsDir, entry.name);
+      try {
+        const raw = await fsPromises.readFile(absolutePath, 'utf8');
+        const { metadata, body } = parsePromptFrontmatter(raw);
+        const stem = entry.name.replace(/\.md$/i, '').trim();
+        if (!stem) {
+          return null;
+        }
+
+        return {
+          name: `prompts:${stem}`,
+          description: buildPromptDescription(metadata.description, metadata['argument-hint']),
+          template: body.trim(),
+          executionMode: 'prompt-text',
+        };
+      } catch {
+        return null;
+      }
+    }));
+
+    return commands.filter(Boolean);
   };
 
   const persist = async () => {
@@ -952,31 +1076,45 @@ export const createCodexBackendRuntime = (dependencies) => {
     };
   };
 
-  const getControlSurface = async () => ({
-    backendId: 'codex',
-    modeSelector: {
-      kind: 'mode',
-      label: 'Mode',
-      items: Object.values(MODE_DEFINITIONS).map((mode) => ({
-        id: mode.id,
-        label: mode.label,
-        description: mode.description,
-      })),
-    },
-    modelSelector: {
-      label: 'Model',
-      source: 'backend',
-      providerId: 'codex',
-      defaultOptionId: DEFAULT_MODEL_ID,
-      options: MODEL_OPTIONS.map((option) => ({ ...option })),
-    },
-    effortSelector: {
-      label: 'Thinking',
-      source: 'backend',
-      defaultOptionId: DEFAULT_EFFORT_ID,
-      options: EFFORT_OPTIONS.map((option) => ({ ...option })),
-    },
-  });
+  const getControlSurface = async () => {
+    const customPromptCommands = await loadCustomPromptCommands();
+
+    return {
+      backendId: 'codex',
+      modeSelector: {
+        kind: 'mode',
+        label: 'Mode',
+        items: Object.values(MODE_DEFINITIONS).map((mode) => ({
+          id: mode.id,
+          label: mode.label,
+          description: mode.description,
+        })),
+      },
+      modelSelector: {
+        label: 'Model',
+        source: 'backend',
+        providerId: 'codex',
+        defaultOptionId: DEFAULT_MODEL_ID,
+        options: MODEL_OPTIONS.map((option) => ({ ...option })),
+      },
+      effortSelector: {
+        label: 'Thinking',
+        source: 'backend',
+        defaultOptionId: DEFAULT_EFFORT_ID,
+        options: EFFORT_OPTIONS.map((option) => ({ ...option })),
+      },
+      commandSelector: {
+        source: 'backend',
+        items: [
+          ...COMMAND_OPTIONS.map((command) => ({
+            ...command,
+            executionMode: 'prompt-text',
+          })),
+          ...customPromptCommands,
+        ],
+      },
+    };
+  };
 
   return {
     ensureLoaded,

@@ -163,9 +163,10 @@ export const createOpenCodeBackendRuntime = (dependencies) => {
       : undefined;
 
     const client = createClient(directory);
-    const [agentsResponse, providersResponse] = await Promise.all([
+    const [agentsResponse, providersResponse, commandsResponse] = await Promise.all([
       client.app.agents(directory ? { directory } : undefined, { throwOnError: true }),
       client.config.providers(directory ? { directory } : undefined, { throwOnError: true }),
+      client.command.list(directory ? { directory } : undefined, { throwOnError: true }),
     ]);
 
     const rawAgents = Array.isArray(agentsResponse.data) ? agentsResponse.data : [];
@@ -208,6 +209,7 @@ export const createOpenCodeBackendRuntime = (dependencies) => {
     const variants = model?.variants && typeof model.variants === 'object'
       ? Object.keys(model.variants)
       : [];
+    const rawCommands = Array.isArray(commandsResponse.data) ? commandsResponse.data : [];
 
     return {
       backendId: 'opencode',
@@ -228,6 +230,27 @@ export const createOpenCodeBackendRuntime = (dependencies) => {
           id: variant,
           label: variant.charAt(0).toUpperCase() + variant.slice(1),
         })),
+      },
+      commandSelector: {
+        source: 'config',
+        items: rawCommands
+          .filter((command) => command && typeof command.name === 'string' && command.name.trim().length > 0)
+          .map((command) => ({
+            name: command.name.trim(),
+            ...(typeof command.description === 'string' && command.description.trim().length > 0
+              ? { description: command.description.trim() }
+              : {}),
+            ...(typeof command.agent === 'string' && command.agent.trim().length > 0
+              ? { agent: command.agent.trim() }
+              : {}),
+            ...(typeof command.model === 'string' && command.model.trim().length > 0
+              ? { model: command.model.trim() }
+              : {}),
+            ...(typeof command.template === 'string' && command.template.trim().length > 0
+              ? { template: command.template }
+              : {}),
+            executionMode: 'session-command',
+          })),
       },
     };
   };

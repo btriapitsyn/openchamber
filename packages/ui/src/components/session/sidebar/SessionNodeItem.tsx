@@ -305,14 +305,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const { src: runtimeLogoSrc, onError: handleRuntimeLogoError, hasLogo: hasRuntimeLogo } = useProviderLogo(runtimeLogoId);
   const shouldUseOpenCodeIcon = backendBadgeId === 'opencode';
   const shouldShowRuntimeLogo = shouldUseOpenCodeIcon || (hasRuntimeLogo && runtimeLogoSrc);
-  const runtimeMark = shouldShowRuntimeLogo ? (
+  const runtimeMetaLogo = shouldShowRuntimeLogo ? (
     <span
-      className="mr-2 mt-0.5 inline-flex h-4 w-4 flex-shrink-0 self-start items-center justify-center rounded-sm text-foreground/90"
+      className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-sm text-foreground/90"
       title={tooltipRuntimeLabel ?? undefined}
       aria-hidden="true"
     >
       {shouldUseOpenCodeIcon ? (
-        <OpenCodeIcon width={14} height={14} className="text-foreground/90" />
+        <OpenCodeIcon width={12} height={12} className="text-foreground/90" />
       ) : runtimeLogoSrc ? (
         <img
           src={runtimeLogoSrc}
@@ -330,7 +330,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         key={session.id}
         className={cn('group relative flex items-center rounded-sm px-1.5 py-1', depth > 0 && 'pl-[20px]')}
       >
-        {runtimeMark}
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <form
             className="flex w-full items-center gap-2"
@@ -363,11 +362,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           {!isMinimalMode ? (
             <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
               <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                {runtimeMetaLogo}
                 {hasChildren ? <span className="inline-flex items-center justify-center flex-shrink-0">{isExpanded ? <RiArrowDownSLine className="h-3 w-3" /> : <RiArrowRightSLine className="h-3 w-3" />}</span> : null}
                 <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
-                {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-status-error/65">/-{sessionDiffStats.deletions}</span></span> : null}
+                {(hasSecondaryProjectLabel || hasSecondaryBranchLabel) ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
                 {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
+                {hasSecondaryProjectLabel && hasSecondaryBranchLabel ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
                 {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><RiGitBranchLine className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
+                {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-status-error/65">/-{sessionDiffStats.deletions}</span></span> : null}
               </div>
             </div>
           ) : null}
@@ -566,7 +568,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         >
           {minimalLeadingStatusMarker}
           {subsessionChevron}
-          {runtimeMark}
           <div className="flex min-w-0 flex-1 items-center">
             {isMinimalMode ? (
               <Tooltip>
@@ -590,16 +591,22 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                     <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-1')}>
                       {isPinnedSession ? <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" /> : null}
                       <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive ? 'text-primary' : 'text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
-                      {mobileVariant ? <span className="ml-2 flex-shrink-0 text-[0.72rem] text-muted-foreground/75">{sessionCompactUpdatedLabel}</span> : null}
+                      {mobileVariant ? (
+                        <span className="ml-2 inline-flex flex-shrink-0 items-center gap-1 text-[0.72rem] text-muted-foreground/75">
+                          {runtimeMetaLogo}
+                          <span>{sessionCompactUpdatedLabel}</span>
+                        </span>
+                      ) : null}
                       {!mobileVariant ? (
                         <div className="relative ml-1 flex h-4 min-w-4 flex-shrink-0 items-center justify-end">
                           <span className={cn(
-                            'whitespace-nowrap text-right text-[0.72rem] text-muted-foreground/75 transition-opacity duration-150',
+                            'inline-flex items-center gap-1 whitespace-nowrap text-right text-[0.72rem] text-muted-foreground/75 transition-opacity duration-150',
                             isMenuOpen
                               ? 'opacity-0'
                               : hideOnHoverClass,
                           )}>
-                            {sessionCompactUpdatedLabel}
+                            {runtimeMetaLogo}
+                            <span>{sessionCompactUpdatedLabel}</span>
                           </span>
                           <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange}>
                             <DropdownMenuTrigger asChild>
@@ -685,10 +692,13 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 {!isMinimalMode ? (
                   <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
                     <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                      {runtimeMetaLogo}
                       <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
-                      {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/65">-{sessionDiffStats.deletions}</span></span> : null}
+                      {(hasSecondaryProjectLabel || hasSecondaryBranchLabel) ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
                       {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
+                      {hasSecondaryProjectLabel && hasSecondaryBranchLabel ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
                       {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><RiGitBranchLine className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
+                      {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/65">-{sessionDiffStats.deletions}</span></span> : null}
                     </div>
                   </div>
                 ) : null}

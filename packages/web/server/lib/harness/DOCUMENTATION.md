@@ -93,6 +93,7 @@ Instead, each backend returns a canonical control surface:
 - `modeSelector`
 - `modelSelector`
 - `effortSelector`
+- `commandSelector`
 
 That surface lets the UI render the right controls without hardcoding backend-specific
 UI semantics.
@@ -176,6 +177,7 @@ Implement `getControlSurface()` so the UI can render:
 - primary selector: `agent` or `mode`
 - backend-native model catalog or provider-driven models
 - backend-native effort options
+- backend-native slash commands
 
 The UI should not need backend-specific if/else logic beyond interpreting the
 canonical control-surface schema.
@@ -221,6 +223,26 @@ Two valid sources:
 If the backend cannot support a specific effort/model combination, prefer surfacing
 the backend's own validation error unless the SDK exposes authoritative compatibility
 metadata.
+
+### `commandSelector`
+
+Two valid sources:
+
+- `source: "config"`
+  - backend supports OpenCode-style editable command config
+- `source: "backend"`
+  - backend exposes its own native slash-command catalog
+
+Each command item may declare an `executionMode`:
+
+- `session-command`
+  - dispatch through the backend-native command route
+- `prompt-text`
+  - send the slash command text as a normal prompt to the backend
+
+For Codex specifically, backend-native reusable slash entries come from deprecated
+custom prompts. Those live as top-level Markdown files under `~/.codex/prompts`
+and are exposed as `/prompts:<name>`.
 
 ## Validation checklist
 
