@@ -1121,7 +1121,12 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   });
 
   const sectionsForSidebarRender = React.useMemo(() => {
-    if (!isVSCode || hasSessionSearchQuery || recentSessionIds.size === 0) {
+    if (
+      !isVSCode
+      || showOnlyMainWorkspace
+      || hasSessionSearchQuery
+      || recentSessionIds.size === 0
+    ) {
       return sectionsForRender;
     }
 
@@ -1152,7 +1157,13 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         sessions: filterNodes(group.sessions),
       })),
     }));
-  }, [isVSCode, hasSessionSearchQuery, recentSessionIds, sectionsForRender]);
+  }, [
+    isVSCode,
+    showOnlyMainWorkspace,
+    hasSessionSearchQuery,
+    recentSessionIds,
+    sectionsForRender,
+  ]);
 
   const prLookupKeys = React.useMemo(() => {
     const keys = new Set<string>();
@@ -1262,6 +1273,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       renderContext: 'project' | 'recent' = 'project',
     ): React.ReactNode => (
       <SessionNodeItem
+        key={node.session.id}
         node={node}
         depth={depth}
         groupDirectory={groupDirectory}

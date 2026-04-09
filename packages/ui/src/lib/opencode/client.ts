@@ -131,6 +131,10 @@ const getDesktopFilesApi = (): FilesAPI | null => {
   return null;
 };
 
+const isDirectoryNotFoundError = (error: unknown): boolean => {
+  return error instanceof Error && /directory not found/i.test(error.message);
+};
+
 class OpencodeService {
   private client: OpencodeClient;
   private baseUrl: string;
@@ -1529,7 +1533,9 @@ class OpencodeService {
         });
         return entries;
       } catch (error) {
-        console.error('Failed to list directory contents:', error);
+        if (!isDirectoryNotFoundError(error)) {
+          console.error('Failed to list directory contents:', error);
+        }
         throw error;
       }
     }
@@ -1562,7 +1568,9 @@ class OpencodeService {
       });
       return entries;
     } catch (error) {
-      console.error('Failed to list directory contents:', error);
+      if (!isDirectoryNotFoundError(error)) {
+        console.error('Failed to list directory contents:', error);
+      }
       throw error;
     }
     })();
