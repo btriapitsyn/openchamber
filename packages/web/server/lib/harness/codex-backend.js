@@ -900,8 +900,15 @@ export const createCodexBackendRuntime = (dependencies) => {
     runControllers.set(entry.session.id, true);
     setBusyStatus(entry.session.id, nextEntry.session.directory, { type: 'busy' });
 
-    // Resolve mode-specific thread options
+    // Resolve mode-specific thread options, with optional sandbox override
     const modeConfig = MODE_DEFINITIONS[mode] || MODE_DEFINITIONS[DEFAULT_MODE_ID];
+    const sandboxOverride = input.sandboxOverride;
+    const effectiveSandbox = sandboxOverride === 'danger-full-access'
+      ? 'danger-full-access'
+      : modeConfig.threadOptions.sandboxMode;
+    const effectiveApprovalPolicy = sandboxOverride === 'danger-full-access'
+      ? 'never'
+      : modeConfig.threadOptions.approvalPolicy;
 
     const { input: codexInput, cleanup } = await toCodexInput(input.parts);
 
@@ -909,8 +916,8 @@ export const createCodexBackendRuntime = (dependencies) => {
       // Get or create app-server process
       await appServer.getOrCreateProcess(entry.session.id, nextEntry.session.directory, {
         model: modelId || DEFAULT_MODEL_ID,
-        approvalPolicy: modeConfig.threadOptions.approvalPolicy,
-        sandbox: modeConfig.threadOptions.sandboxMode,
+        approvalPolicy: effectiveApprovalPolicy,
+        sandbox: effectiveSandbox,
         threadId: nextEntry.threadId,
       });
 

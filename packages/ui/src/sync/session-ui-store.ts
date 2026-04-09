@@ -47,10 +47,20 @@ import {
 import { useInputStore, type SyntheticContextPart } from "./input-store"
 import { useSelectionStore } from "./selection-store"
 import { useViewportStore } from "./viewport-store"
+import { usePermissionStore } from "@/stores/permissionStore"
 
 export type { AttachedFile }
 
 // ---------------------------------------------------------------------------
+/**
+ * Resolve sandbox override based on the session's permission level.
+ * Returns 'danger-full-access' when full-access is active, undefined otherwise.
+ */
+function resolveSandboxOverride(sessionId: string): string | undefined {
+  const level = usePermissionStore.getState().getSessionPermissionLevel(sessionId)
+  return level === 'full-access' ? 'danger-full-access' : undefined
+}
+
 // Send routing — shell mode, slash commands, or normal prompt
 // ---------------------------------------------------------------------------
 
@@ -64,6 +74,7 @@ function routeMessage(params: {
   inputMode?: "normal" | "shell"
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
   additionalParts?: Array<{ text: string; synthetic?: boolean; files?: Array<{ type: "file"; mime: string; url: string; filename: string }> }>
+  sandboxOverride?: string
 }): Promise<void> {
   const sdk = opencodeClient.getSdkClient()
 
@@ -122,6 +133,7 @@ function routeMessage(params: {
       files: params.files,
       additionalParts: params.additionalParts,
       messageId: messageID,
+      sandboxOverride: params.sandboxOverride,
     }).then(() => {}),
   })
 }
@@ -786,6 +798,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
             filename: a.filename,
           })),
         })),
+        sandboxOverride: resolveSandboxOverride(created.id),
       })
       return
     }
@@ -861,6 +874,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
           filename: a.filename,
         })),
       })),
+      sandboxOverride: currentSessionId ? resolveSandboxOverride(currentSessionId) : undefined,
     })
   },
 

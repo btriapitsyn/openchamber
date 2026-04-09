@@ -670,6 +670,7 @@ class OpencodeService {
       schema: Record<string, unknown>;
       retryCount?: number;
     };
+    sandboxOverride?: string;
   }): Promise<string> {
     // Generate a temporary client-side ID for optimistic UI
     // This ID won't be sent to the server - server will generate its own
@@ -774,6 +775,7 @@ class OpencodeService {
           ...(params.variant ? { variant: params.variant } : {}),
           ...(params.messageId ? { messageID: params.messageId } : {}),
           ...(params.format ? { format: params.format } : {}),
+          ...(params.sandboxOverride ? { sandboxOverride: params.sandboxOverride } : {}),
           parts,
         }),
       });

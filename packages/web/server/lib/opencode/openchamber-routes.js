@@ -433,6 +433,7 @@ export const registerOpenChamberRoutes = (app, dependencies) => {
         variant: typeof req.body?.variant === 'string' ? req.body.variant : undefined,
         format: req.body?.format,
         parts: Array.isArray(req.body?.parts) ? req.body.parts : undefined,
+        sandboxOverride: typeof req.body?.sandboxOverride === 'string' ? req.body.sandboxOverride : undefined,
       });
 
       return res.status(204).end();
