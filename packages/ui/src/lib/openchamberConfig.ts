@@ -164,17 +164,11 @@ const mkdirp = async (path: string): Promise<boolean> => {
 };
 
 const readTextFile = async (path: string): Promise<string | null> => {
-  const runtimeFiles = getRuntimeFilesAPI();
-  if (runtimeFiles?.readFile) {
-    try {
-      const result = await runtimeFiles.readFile(path);
-      const content = typeof result?.content === 'string' ? result.content : '';
-      return content;
-    } catch {
-      return null;
-    }
-  }
-
+  // Always use the direct fetch path with allowMissing=true so the server returns
+  // 204 (not 404) for missing config files, avoiding noisy browser console errors.
+  // The runtime files API (runtimeFiles.readFile) does not support allowMissing and
+  // would trigger a 404 that shows as a red error in the console even though we
+  // catch it here.
   try {
     const response = await fetch(`${getBaseUrl()}/fs/read?path=${encodeURIComponent(path)}&allowMissing=true`);
     if (!response.ok) {
