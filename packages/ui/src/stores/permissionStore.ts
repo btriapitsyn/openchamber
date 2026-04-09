@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { devtools, persist, createJSONStorage } from "zustand/middleware";
+import { getSafeStorage } from "./utils/safeStorage";
 import type { Session } from "@opencode-ai/sdk/v2/client";
 import {
     autoRespondsPermission,
@@ -7,7 +8,6 @@ import {
     sessionAcceptKey,
     type PermissionAutoAcceptMap,
 } from "./utils/permissionAutoAccept";
-import { getSafeStorage } from "./utils/safeStorage";
 import { getAllSyncSessions } from "@/sync/sync-refs";
 import { opencodeClient } from "@/lib/opencode/client";
 import { useSessionUIStore } from "@/sync/session-ui-store";

@@ -19,6 +19,7 @@ import { SortableTabsStrip, type SortableTabsStripItem } from '@/components/ui/s
 import { RiArrowLeftSLine, RiChat4Line, RiChatNewLine, RiCheckLine, RiCloseLine, RiCommandLine, RiFileTextLine, RiFolder6Line, RiGitBranchLine, RiGithubFill, RiLayoutLeftLine, RiLayoutRightLine, RiPlayListAddLine, RiRefreshLine, RiServerLine, RiStackLine, RiTerminalBoxLine, RiTimerLine, type RemixiconComponentType } from '@remixicon/react';
 import { DiffIcon } from '@/components/icons/DiffIcon';
 import { useUIStore, type MainTab } from '@/stores/useUIStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSession, useSessionMessagesResolved } from '@/sync/sync-context';
@@ -638,27 +639,39 @@ export const Header: React.FC<HeaderProps> = ({
   rightDrawerOpen,
   desktopRightSidebarActionsHost = null,
 }) => {
-  const setSessionSwitcherOpen = useUIStore((state) => state.setSessionSwitcherOpen);
-  const toggleSidebar = useUIStore((state) => state.toggleSidebar);
-  const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
-  const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
-  const toggleBottomTerminal = useUIStore((state) => state.toggleBottomTerminal);
-  const toggleRightSidebar = useUIStore((state) => state.toggleRightSidebar);
-  const openContextOverview = useUIStore((state) => state.openContextOverview);
-  const openContextPlan = useUIStore((state) => state.openContextPlan);
-  const closeContextPanel = useUIStore((state) => state.closeContextPanel);
-  const contextPanelByDirectory = useUIStore((state) => state.contextPanelByDirectory);
-  const activeMainTab = useUIStore((state) => state.activeMainTab);
-  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
-  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
+  const {
+    setSessionSwitcherOpen, toggleSidebar, isSidebarOpen,
+    isRightSidebarOpen, toggleBottomTerminal, toggleRightSidebar,
+    openContextOverview, openContextPlan, closeContextPanel,
+    contextPanelByDirectory, activeMainTab, setActiveMainTab,
+    shortcutOverrides,
+  } = useUIStore(useShallow((state) => ({
+    setSessionSwitcherOpen: state.setSessionSwitcherOpen,
+    toggleSidebar: state.toggleSidebar,
+    isSidebarOpen: state.isSidebarOpen,
+    isRightSidebarOpen: state.isRightSidebarOpen,
+    toggleBottomTerminal: state.toggleBottomTerminal,
+    toggleRightSidebar: state.toggleRightSidebar,
+    openContextOverview: state.openContextOverview,
+    openContextPlan: state.openContextPlan,
+    closeContextPanel: state.closeContextPanel,
+    contextPanelByDirectory: state.contextPanelByDirectory,
+    activeMainTab: state.activeMainTab,
+    setActiveMainTab: state.setActiveMainTab,
+    shortcutOverrides: state.shortcutOverrides,
+  })));
 
   const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
   const runtimeApis = useRuntimeAPIs();
 
-  const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
-  const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
-  const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
-  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const {
+    getContextUsage, openNewSessionDraft, isNewSessionDraftOpen, currentSessionId,
+  } = useSessionUIStore(useShallow((state) => ({
+    getContextUsage: state.getContextUsage,
+    openNewSessionDraft: state.openNewSessionDraft,
+    isNewSessionDraftOpen: Boolean(state.newSessionDraft?.open),
+    currentSessionId: state.currentSessionId,
+  })));
   const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
   const currentSyncedSession = useSession(currentSessionId ?? null);
   const globalActiveSessions = useGlobalSessionsStore((state) => state.activeSessions);
@@ -681,18 +694,27 @@ export const Header: React.FC<HeaderProps> = ({
     const pathSegments = activeProject.path.split(/[\\/]/).filter(Boolean);
     return pathSegments[pathSegments.length - 1] ?? null;
   }, [activeProject]);
-  const quotaResults = useQuotaStore((state) => state.results);
-  const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
-  const isQuotaLoading = useQuotaStore((state) => state.isLoading);
-  const quotaLastUpdated = useQuotaStore((state) => state.lastUpdated);
-  const quotaDisplayMode = useQuotaStore((state) => state.displayMode);
-  const dropdownProviderIds = useQuotaStore((state) => state.dropdownProviderIds);
-  const loadQuotaSettings = useQuotaStore((state) => state.loadSettings);
-  const setQuotaDisplayMode = useQuotaStore((state) => state.setDisplayMode);
+  const {
+    quotaResults, fetchAllQuotas, isQuotaLoading, quotaLastUpdated,
+    quotaDisplayMode, dropdownProviderIds, loadQuotaSettings, setQuotaDisplayMode,
+  } = useQuotaStore(useShallow((state) => ({
+    quotaResults: state.results,
+    fetchAllQuotas: state.fetchAllQuotas,
+    isQuotaLoading: state.isLoading,
+    quotaLastUpdated: state.lastUpdated,
+    quotaDisplayMode: state.displayMode,
+    dropdownProviderIds: state.dropdownProviderIds,
+    loadQuotaSettings: state.loadSettings,
+    setQuotaDisplayMode: state.setDisplayMode,
+  })));
 
   const { isMobile } = useDeviceInfo();
-  const githubAuthStatus = useGitHubAuthStore((state) => state.status);
-  const setGitHubAuthStatus = useGitHubAuthStore((state) => state.setStatus);
+  const { githubAuthStatus, setGitHubAuthStatus } = useGitHubAuthStore(
+    useShallow((state) => ({
+      githubAuthStatus: state.status,
+      setGitHubAuthStatus: state.setStatus,
+    })),
+  );
 
   const headerRef = React.useRef<HTMLElement | null>(null);
 
