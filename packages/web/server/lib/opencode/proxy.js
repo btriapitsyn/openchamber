@@ -643,6 +643,49 @@ export const registerOpenCodeProxy = (app, deps) => {
     }
   });
 
+  // Body parser helper — the global JSON parser skips /api routes that are
+  // normally proxied to OpenCode, so we parse inline for our intercepted routes.
+  const parseJsonBody = (req) => new Promise((resolve) => {
+    if (req.body && typeof req.body === 'object') {
+      return resolve(req.body);
+    }
+    let data = '';
+    req.on('data', (chunk) => { data += chunk; });
+    req.on('end', () => {
+      try { resolve(JSON.parse(data)); } catch { resolve({}); }
+    });
+  });
+
+  app.post('/api/session/:sessionId/revert', async (req, res, next) => {
+    try {
+      const sessionId = typeof req.params?.sessionId === 'string' ? req.params.sessionId : '';
+      if (!sessionId) {
+        return next();
+      }
+
+      const binding = await sessionBindingsRuntime.getEffectiveBinding(sessionId);
+      if (!binding || binding.backendId !== 'codex') {
+        return next(); // let OpenCode handle non-Codex sessions
+      }
+
+      const runtime = getBackendRuntime(binding.backendId);
+      if (!runtime?.revertSession) {
+        return next();
+      }
+
+      const body = await parseJsonBody(req);
+      const result = await runtime.revertSession({
+        sessionID: binding.backendSessionId,
+        messageID: body.messageID || body.partID,
+      });
+
+      return res.json(result);
+    } catch (error) {
+      console.error('[proxy] Failed to revert session:', error?.message ?? error);
+      return res.status(400).json({ error: error?.message || 'Revert failed' });
+    }
+  });
+
   const RESERVED_SESSION_PATHS = new Set([
     '/api/session',
     '/api/session/status',
@@ -763,6 +806,157 @@ export const registerOpenCodeProxy = (app, deps) => {
       writeJsonResponse(res, response, normalizedPayload);
     } catch (error) {
       console.error('[proxy] Failed to route session request:', error?.message ?? error);
+      next();
+    }
+  });
+
+  // --- Permission / Question routing for non-OpenCode backends ---
+  // These handlers intercept permission and question replies that belong to
+  // the Codex backend (or any future backend that manages its own
+  // approval/question flow) before they fall through to the generic OpenCode
+  // proxy.
+
+  // Merge permission list from all backends.
+  app.get('/api/permission', async (req, res, next) => {
+    try {
+      const codexRt = backendRegistry.getRuntime('codex');
+      const codexPermissions = codexRt?.listPendingPermissions?.() ?? [];
+      if (codexPermissions.length === 0) {
+        return next(); // nothing to merge, let OpenCode handle it
+      }
+
+      // Fetch OpenCode permissions via upstream proxy
+      let opencodePermissions = [];
+      try {
+        const target = resolveProxyTarget();
+        if (target) {
+          const authHeaders = getOpenCodeAuthHeaders();
+          const url = new URL('/permission', target);
+          if (req.query.directory) {
+            url.searchParams.set('directory', String(req.query.directory));
+          }
+          const upstream = await fetch(url.toString(), {
+            headers: {
+              accept: 'application/json',
+              ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
+            },
+          });
+          if (upstream.ok) {
+            opencodePermissions = await upstream.json();
+            if (!Array.isArray(opencodePermissions)) {
+              opencodePermissions = opencodePermissions?.data ?? [];
+            }
+          }
+        }
+      } catch {
+        // OpenCode may not be available — that's fine
+      }
+
+      const merged = [...(Array.isArray(opencodePermissions) ? opencodePermissions : []), ...codexPermissions];
+      return res.json(merged);
+    } catch (error) {
+      console.error('[proxy] permission list merge error:', error?.message ?? error);
+      next();
+    }
+  });
+
+  // Merge question list from all backends.
+  app.get('/api/question', async (req, res, next) => {
+    try {
+      const codexRt = backendRegistry.getRuntime('codex');
+      const codexQuestions = codexRt?.listPendingQuestions?.() ?? [];
+      if (codexQuestions.length === 0) {
+        return next();
+      }
+
+      let opencodeQuestions = [];
+      try {
+        const target = resolveProxyTarget();
+        if (target) {
+          const authHeaders = getOpenCodeAuthHeaders();
+          const url = new URL('/question', target);
+          if (req.query.directory) {
+            url.searchParams.set('directory', String(req.query.directory));
+          }
+          const upstream = await fetch(url.toString(), {
+            headers: {
+              accept: 'application/json',
+              ...(authHeaders.Authorization ? { Authorization: authHeaders.Authorization } : {}),
+            },
+          });
+          if (upstream.ok) {
+            opencodeQuestions = await upstream.json();
+            if (!Array.isArray(opencodeQuestions)) {
+              opencodeQuestions = opencodeQuestions?.data ?? [];
+            }
+          }
+        }
+      } catch {
+        // OpenCode may not be available
+      }
+
+      const merged = [...(Array.isArray(opencodeQuestions) ? opencodeQuestions : []), ...codexQuestions];
+      return res.json(merged);
+    } catch (error) {
+      console.error('[proxy] question list merge error:', error?.message ?? error);
+      next();
+    }
+  });
+
+  app.post('/api/permission/:requestID/reply', async (req, res, next) => {
+    try {
+      const requestID = req.params.requestID;
+      if (!requestID) {
+        return next();
+      }
+      const codexRt = backendRegistry.getRuntime('codex');
+      if (codexRt?.hasPermissionRequest?.(requestID)) {
+        const body = await parseJsonBody(req);
+        const reply = body.reply || 'reject';
+        const ok = codexRt.replyToPermission(requestID, reply);
+        return res.json(ok);
+      }
+      next();
+    } catch (error) {
+      console.error('[proxy] permission reply routing error:', error?.message ?? error);
+      next();
+    }
+  });
+
+  app.post('/api/question/:requestID/reply', async (req, res, next) => {
+    try {
+      const requestID = req.params.requestID;
+      if (!requestID) {
+        return next();
+      }
+      const codexRt = backendRegistry.getRuntime('codex');
+      if (codexRt?.hasQuestionRequest?.(requestID)) {
+        const body = await parseJsonBody(req);
+        const answers = body.answers || [];
+        const ok = codexRt.replyToQuestion(requestID, answers);
+        return res.json(ok);
+      }
+      next();
+    } catch (error) {
+      console.error('[proxy] question reply routing error:', error?.message ?? error);
+      next();
+    }
+  });
+
+  app.post('/api/question/:requestID/reject', async (req, res, next) => {
+    try {
+      const requestID = req.params.requestID;
+      if (!requestID) {
+        return next();
+      }
+      const codexRt = backendRegistry.getRuntime('codex');
+      if (codexRt?.hasQuestionRequest?.(requestID)) {
+        const ok = codexRt.rejectQuestion(requestID);
+        return res.json(ok);
+      }
+      next();
+    } catch (error) {
+      console.error('[proxy] question reject routing error:', error?.message ?? error);
       next();
     }
   });

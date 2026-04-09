@@ -2,8 +2,7 @@ import { fileURLToPath } from 'url';
 import os from 'os';
 import path from 'path';
 import { Buffer } from 'buffer';
-import { existsSync } from 'fs';
-import { Codex } from '@openai/codex-sdk';
+import { createCodexAppServerAdapter } from './codex-appserver.js';
 
 const DEFAULT_MODE_ID = 'build';
 const DEFAULT_MODEL_ID = 'gpt-5.4';
@@ -317,45 +316,6 @@ const deriveSessionTitleFromParts = (parts = []) => {
   }
 
   return normalized.length > 80 ? `${normalized.slice(0, 77).trimEnd()}...` : normalized;
-};
-
-const resolveCodexExecutablePath = () => {
-  const explicitCandidates = [
-    process.env.OPENCHAMBER_CODEX_PATH,
-    process.env.CODEX_PATH,
-    process.env.CODEX_BIN,
-  ]
-    .filter((value) => typeof value === 'string')
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  for (const candidate of explicitCandidates) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  const pathEntries = (process.env.PATH || '')
-    .split(path.delimiter)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
-  const pathCandidates = pathEntries.map((entry) => path.join(entry, process.platform === 'win32' ? 'codex.cmd' : 'codex'));
-  const commonCandidates = process.platform === 'win32'
-    ? []
-    : [
-        '/opt/homebrew/bin/codex',
-        '/usr/local/bin/codex',
-        '/usr/bin/codex',
-      ];
-
-  for (const candidate of [...pathCandidates, ...commonCandidates]) {
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  return undefined;
 };
 
 export const createCodexBackendRuntime = (dependencies) => {
@@ -684,42 +644,55 @@ export const createCodexBackendRuntime = (dependencies) => {
     };
   };
 
-  const createThreadOptions = (entry, overrides = {}) => {
-    const modeId = typeof overrides.mode === 'string' && MODE_DEFINITIONS[overrides.mode]
-      ? overrides.mode
-      : entry.mode;
-    const modeConfig = MODE_DEFINITIONS[modeId] || MODE_DEFINITIONS[DEFAULT_MODE_ID];
-    const modelId = typeof overrides.modelId === 'string' && overrides.modelId.trim().length > 0
-      ? overrides.modelId.trim()
-      : entry.modelId;
-    const effort = typeof overrides.effort === 'string' && overrides.effort.trim().length > 0
-      ? overrides.effort.trim()
-      : entry.effort;
+  // --- Codex app-server adapter (replaces SDK) ---
+  const appServer = createCodexAppServerAdapter({
+    crypto,
+    emitEvent,
+    onTurnCompleted: async (sessionId, finalText, turnParams) => {
+      // Clear the run controller so the session is no longer marked as running
+      runControllers.delete(sessionId);
 
-    return {
-      modeId,
-      modelId: modelId || DEFAULT_MODEL_ID,
-      effort: effort || DEFAULT_EFFORT_ID,
-      threadOptions: {
-        model: modelId || DEFAULT_MODEL_ID,
-        modelReasoningEffort: effort || DEFAULT_EFFORT_ID,
-        workingDirectory: entry.session.directory || undefined,
-        skipGitRepoCheck: true,
-        ...((effort || DEFAULT_EFFORT_ID) === 'minimal'
-          ? {
-              webSearchMode: 'disabled',
-              webSearchEnabled: false,
-            }
-          : {}),
-        ...modeConfig.threadOptions,
-      },
-    };
-  };
+      try {
+        let entry = await getEntry(sessionId);
+        if (!entry) {
+          return;
+        }
 
-  const codexExecutablePath = resolveCodexExecutablePath();
-  const createClient = () => new Codex(codexExecutablePath ? {
-    codexPathOverride: codexExecutablePath,
-  } : undefined);
+        // Persist the thread ID so we can resume after restart
+        const threadId = appServer.getThreadId(sessionId);
+        if (threadId && entry.threadId !== threadId) {
+          entry = updateThreadMetadata(entry, { threadId });
+        }
+
+        // Only persist an assistant record if we got content.
+        // Do NOT emit record events here — the streaming deltas already
+        // pushed message.part.updated events to the UI in real time.
+        // We only need to persist the final record to disk.
+        if (finalText != null) {
+          const assistantText = typeof finalText === 'string' && finalText.trim().length > 0
+            ? finalText
+            : 'Done.';
+          const assistantRecord = buildMessageRecord({
+            sessionId: entry.session.id,
+            role: 'assistant',
+            parts: [buildTextPart(entry.session.id, createSortableId('msg', crypto), assistantText)],
+            modelId: entry.modelId,
+            mode: entry.mode,
+            effort: entry.effort,
+          });
+          assistantRecord.parts[0].messageID = assistantRecord.info.id;
+
+          entry = appendRecord(entry, assistantRecord);
+          await saveEntry(entry);
+        }
+      } catch (err) {
+        console.error(`[codex-backend] onTurnCompleted error for ${sessionId}:`, err);
+      }
+    },
+    onTurnError: (sessionId, error) => {
+      // Handled by the appserver adapter's onExit / error events
+    },
+  });
 
   const emitRecordEvents = (directory, record) => {
     emitEvent(directory, {
@@ -742,13 +715,26 @@ export const createCodexBackendRuntime = (dependencies) => {
   };
 
   const emitSessionUpdate = (type, session) => {
-    emitEvent(session.directory, {
+    // Session lifecycle events (created, updated, deleted) are broadcast to
+    // ALL SSE clients so the sidebar picks them up regardless of which
+    // directory the client is connected to.
+    const eventPayload = {
+      id: createId(crypto),
+      directory: normalizeDirectory(session.directory) || 'global',
       type,
       properties: {
         info: session,
         directory: session.directory,
       },
-    });
+    };
+    const encoded = `data: ${JSON.stringify(eventPayload)}\n\n`;
+
+    for (const client of eventClients) {
+      try {
+        client.res.write(encoded);
+      } catch {
+      }
+    }
   };
 
   const setBusyStatus = (sessionId, directory, status) => {
@@ -910,61 +896,72 @@ export const createCodexBackendRuntime = (dependencies) => {
     emitRecordEvents(nextEntry.session.directory, userRecord);
     emitSessionUpdate('session.updated', nextEntry.session);
 
-    const abortController = new AbortController();
-    runControllers.set(entry.session.id, abortController);
+    // Mark session as running
+    runControllers.set(entry.session.id, true);
     setBusyStatus(entry.session.id, nextEntry.session.directory, { type: 'busy' });
 
-    const codex = createClient();
-    const { threadOptions } = createThreadOptions(nextEntry, { mode, modelId, effort });
-    const thread = nextEntry.threadId
-      ? codex.resumeThread(nextEntry.threadId, threadOptions)
-      : codex.startThread(threadOptions);
+    // Resolve mode-specific thread options
+    const modeConfig = MODE_DEFINITIONS[mode] || MODE_DEFINITIONS[DEFAULT_MODE_ID];
 
     const { input: codexInput, cleanup } = await toCodexInput(input.parts);
 
     try {
-      const result = await thread.run(codexInput, {
-        signal: abortController.signal,
-        ...(input.format?.type === 'json_schema' ? { outputSchema: input.format.schema } : {}),
+      // Get or create app-server process
+      await appServer.getOrCreateProcess(entry.session.id, nextEntry.session.directory, {
+        model: modelId || DEFAULT_MODEL_ID,
+        approvalPolicy: modeConfig.threadOptions.approvalPolicy,
+        sandbox: modeConfig.threadOptions.sandboxMode,
+        threadId: nextEntry.threadId,
       });
 
-      let persistedEntry = await getEntry(entry.session.id);
-      if (!persistedEntry) {
-        throw new Error('Session disappeared during run');
+      // Persist the thread ID immediately so it survives restarts
+      const threadId = appServer.getThreadId(entry.session.id);
+      if (threadId && nextEntry.threadId !== threadId) {
+        nextEntry = updateThreadMetadata(nextEntry, { threadId });
+        await saveEntry(nextEntry);
       }
 
-      persistedEntry = updateThreadMetadata(persistedEntry, {
-        threadId: thread.id,
-        mode,
-        modelId,
-        effort,
-      });
-
-      const assistantText = typeof result.finalResponse === 'string' && result.finalResponse.trim().length > 0
-        ? result.finalResponse
-        : 'Done.';
+      // Build the assistant placeholder record for streaming
       const assistantRecord = buildMessageRecord({
-        sessionId: persistedEntry.session.id,
+        sessionId: entry.session.id,
         role: 'assistant',
-        parts: [buildTextPart(persistedEntry.session.id, createSortableId('msg', crypto), assistantText)],
+        parts: [],
         modelId,
         mode,
         effort,
         parentMessageId: userRecord.info.id,
       });
-      assistantRecord.parts[0].messageID = assistantRecord.info.id;
 
-      persistedEntry = appendRecord(persistedEntry, assistantRecord);
-      await saveEntry(persistedEntry);
-      emitRecordEvents(persistedEntry.session.directory, assistantRecord);
-      emitSessionUpdate('session.updated', persistedEntry.session);
-      setBusyStatus(persistedEntry.session.id, persistedEntry.session.directory, { type: 'idle' });
+      // Build codex-compatible input array
+      const turnInput = [];
+      if (typeof codexInput === 'string') {
+        if (codexInput.trim()) {
+          turnInput.push({ type: 'text', text: codexInput, text_elements: [] });
+        }
+      } else if (Array.isArray(codexInput)) {
+        for (const item of codexInput) {
+          if (item.type === 'text') {
+            turnInput.push({ type: 'text', text: item.text, text_elements: [] });
+          } else if (item.type === 'local_image') {
+            turnInput.push({ type: 'image', url: `file://${item.path}` });
+          }
+        }
+      }
+
+      // Start the turn — events will stream via the adapter's notification handler
+      await appServer.startTurn(entry.session.id, turnInput, assistantRecord, {
+        model: modelId || DEFAULT_MODEL_ID,
+        effort: effort || DEFAULT_EFFORT_ID,
+        mode,
+      });
+
+      // Update stored threadId if the adapter now has one
+      // (The onTurnCompleted callback handles persisting the assistant record)
+
       return { ok: true };
     } catch (error) {
-      if (abortController.signal.aborted) {
-        setBusyStatus(entry.session.id, nextEntry.session.directory, { type: 'idle' });
-        return { ok: false, aborted: true };
-      }
+      runControllers.delete(entry.session.id);
+      setBusyStatus(entry.session.id, nextEntry.session.directory, { type: 'idle' });
 
       emitEvent(nextEntry.session.directory, {
         type: 'session.error',
@@ -978,19 +975,20 @@ export const createCodexBackendRuntime = (dependencies) => {
       });
       throw error;
     } finally {
-      runControllers.delete(entry.session.id);
       await cleanup();
     }
   };
 
   const abortSession = async (input = {}) => {
     const sessionId = typeof input.sessionID === 'string' ? input.sessionID : '';
-    const controller = runControllers.get(sessionId);
-    if (!controller) {
-      return true;
-    }
-    controller.abort();
     runControllers.delete(sessionId);
+
+    try {
+      await appServer.abort(sessionId);
+    } catch {
+      // best effort
+    }
+
     const entry = await getEntry(sessionId);
     if (entry) {
       setBusyStatus(sessionId, entry.session.directory, { type: 'idle' });
@@ -1031,6 +1029,9 @@ export const createCodexBackendRuntime = (dependencies) => {
       return false;
     }
 
+    // Shut down the app-server process if one exists
+    await appServer.shutdownSession(sessionId).catch(() => {});
+
     sessions.delete(sessionId);
     await persist();
     emitEvent(entry.session.directory, {
@@ -1041,6 +1042,52 @@ export const createCodexBackendRuntime = (dependencies) => {
       },
     });
     return true;
+  };
+
+  const revertSession = async (input = {}) => {
+    const sessionId = typeof input.sessionID === 'string' ? input.sessionID : '';
+    const messageId = typeof input.messageID === 'string' ? input.messageID : '';
+    const entry = await getEntry(sessionId);
+    if (!entry) {
+      throw new Error('Session not found');
+    }
+
+    // Find how many turns to roll back.
+    // Each user+assistant pair is one turn. We count how many user messages
+    // exist at or after the revert point.
+    const records = entry.records || [];
+    const userMessagesAfter = records.filter(
+      (r) => r.info?.role === 'user' && r.info?.id >= messageId,
+    );
+    const numTurns = userMessagesAfter.length;
+
+    if (numTurns > 0) {
+      // Roll back the Codex thread
+      await appServer.rollbackTurns(sessionId, numTurns).catch((err) => {
+        console.warn(`[codex-backend] thread/rollback failed: ${err?.message}`);
+      });
+    }
+
+    // Remove records at and after the revert point from local persistence.
+    // Do NOT set a revert marker — the records are permanently removed,
+    // so new messages should display normally without being filtered.
+    const keptRecords = records.filter((r) => r.info?.id < messageId);
+    const nextEntry = {
+      ...entry,
+      records: keptRecords,
+      session: {
+        ...entry.session,
+        time: {
+          ...entry.session.time,
+          updated: Date.now(),
+        },
+      },
+    };
+    // Ensure revert marker is cleared
+    delete nextEntry.session.revert;
+    await saveEntry(nextEntry);
+    emitSessionUpdate('session.updated', nextEntry.session);
+    return { ...nextEntry.session };
   };
 
   const getStatusSnapshot = async (input = {}) => {
@@ -1116,6 +1163,16 @@ export const createCodexBackendRuntime = (dependencies) => {
     };
   };
 
+  // --- Permission / Question delegation to app-server adapter ---
+  const hasPermissionRequest = (requestId) => appServer.hasPermissionRequest(requestId);
+  const hasQuestionRequest = (requestId) => appServer.hasQuestionRequest(requestId);
+  const replyToPermission = (requestId, reply) => appServer.replyToPermission(requestId, reply);
+  const replyToQuestion = (requestId, answers) => appServer.replyToQuestion(requestId, answers);
+  const rejectQuestion = (requestId) => appServer.rejectQuestion(requestId);
+  const listPendingPermissions = (sessionId) => appServer.listPendingPermissions(sessionId);
+  const listPendingQuestions = (sessionId) => appServer.listPendingQuestions(sessionId);
+  const shutdownAll = () => appServer.shutdownAll();
+
   return {
     ensureLoaded,
     listSessions,
@@ -1126,9 +1183,19 @@ export const createCodexBackendRuntime = (dependencies) => {
     promptAsync,
     abortSession,
     updateSession,
+    revertSession,
     deleteSession,
     getStatusSnapshot,
     addEventClient,
     getControlSurface,
+    // Permission/question support
+    hasPermissionRequest,
+    hasQuestionRequest,
+    replyToPermission,
+    replyToQuestion,
+    rejectQuestion,
+    listPendingPermissions,
+    listPendingQuestions,
+    shutdownAll,
   };
 };
