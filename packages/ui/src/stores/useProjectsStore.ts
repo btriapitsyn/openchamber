@@ -472,6 +472,9 @@ export const useProjectsStore = create<ProjectsStore>()(
 
       set({ projects: nextProjects, activeProjectId: id });
       persistProjects(nextProjects, id);
+
+      opencodeClient.setDirectory(target.path);
+      useDirectoryStore.getState().setDirectory(target.path, { showOverlay: false });
     },
 
     renameProject: (id: string, label: string) => {
@@ -691,6 +694,16 @@ export const useProjectsStore = create<ProjectsStore>()(
 
   }), { name: 'projects-store' })
 );
+
+if (!vscodeWorkspace && typeof window !== 'undefined' && initialActiveProjectId) {
+  const initialActiveProject = effectiveInitialProjects.find((project) => project.id === initialActiveProjectId) ?? null;
+  if (initialActiveProject) {
+    const currentDirectory = useDirectoryStore.getState().currentDirectory;
+    if (currentDirectory !== initialActiveProject.path) {
+      useDirectoryStore.getState().setDirectory(initialActiveProject.path, { showOverlay: false });
+    }
+  }
+}
 
 if (typeof window !== 'undefined') {
   window.addEventListener('openchamber:settings-synced', (event: Event) => {
