@@ -30,13 +30,14 @@ import {
   RiPushpinLine,
   RiShare2Line,
   RiShieldLine,
+  RiQuestionLine,
   RiUnpinLine,
   RiGitBranchLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { useProviderLogo } from '@/hooks/useProviderLogo';
-import { useGlobalSessionStatus, useSession, useSessionPermissions } from '@/sync/sync-context';
+import { useGlobalSessionStatus, useSession, useSessionPermissions, useSessionQuestions } from '@/sync/sync-context';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useViewportStore } from '@/sync/viewport-store';
 import { DraggableSessionRow } from './sessionFolderDnd';
@@ -246,6 +247,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   );
   const sessionStatus = useGlobalSessionStatus(session.id);
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
+  const sessionQuestions = useSessionQuestions(session.id, sessionDirectory ?? undefined);
   const sessionAgentSelection = useSelectionStore(
     React.useCallback((state) => state.sessionAgentSelections.get(session.id) ?? null, [session.id]),
   );
@@ -381,10 +383,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const statusType = sessionStatus?.type ?? 'idle';
   const isStreaming = statusType === 'busy' || statusType === 'retry';
   const pendingPermissionCount = sessionPermissions.length;
+  const pendingQuestionCount = sessionQuestions.length;
+  const isWaitingForInput = isStreaming && (pendingPermissionCount > 0 || pendingQuestionCount > 0);
   const showUnreadStatus = !isStreaming && needsAttention && !isActive;
   const showStatusMarker = isStreaming || showUnreadStatus;
   const statusMarkerContent = isStreaming
-    ? <GridLoader size="xs" className="text-primary" />
+    ? (isWaitingForInput
+        ? <GridLoader size="xs" className="text-[var(--status-warning)]" />
+        : <GridLoader size="xs" className="text-primary" />)
     : (
         <span className="grid grid-cols-3 gap-[1px] text-[var(--status-info)]" aria-label="Unread updates" title="Unread updates">
           {Array.from({ length: 9 }, (_, i) => (
@@ -396,11 +402,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           ))}
         </span>
       );
-  const inlineStatusMarker = !isMinimalMode && showStatusMarker ? (
-    <span className="inline-flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
-      {statusMarkerContent}
-    </span>
-  ) : null;
   const minimalLeadingStatusMarker = isMinimalMode && showStatusMarker ? (
     <span
       className={cn(
@@ -408,6 +409,11 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         hasChildren ? 'opacity-100 group-hover:opacity-0 group-focus-within:opacity-0' : '',
       )}
     >
+      {statusMarkerContent}
+    </span>
+  ) : null;
+  const normalLeadingStatusMarker = !isMinimalMode && showStatusMarker ? (
+    <span className="pointer-events-none absolute left-[-12px] top-[7px] inline-flex h-3.5 w-3.5 items-center justify-center">
       {statusMarkerContent}
     </span>
   ) : null;
@@ -567,6 +573,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           className={cn('group relative flex items-center rounded-sm px-1.5 py-1', isMissingDirectory ? 'opacity-75' : '', depth > 0 && 'pl-[20px]')}
         >
           {minimalLeadingStatusMarker}
+          {normalLeadingStatusMarker}
           {subsessionChevron}
           <div className="flex min-w-0 flex-1 items-center">
             {isMinimalMode ? (
@@ -671,14 +678,15 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                   handleSessionDoubleClick();
                 }}
                 className={cn(
-                  'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+                  'flex min-w-0 flex-1 cursor-pointer items-start gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
                   mobileVariant
                     ? (isVSCode ? revealPaddingClass : 'pr-7')
                     : revealPaddingClass
                 )}
               >
-                <div className={cn('flex w-full items-center min-w-0 flex-1 overflow-hidden', isMinimalMode ? 'gap-1' : 'gap-1')}>
-                    {inlineStatusMarker}
+                {/* Content column */}
+                <div className="flex min-w-0 flex-1 flex-col gap-0 overflow-hidden">
+                  <div className="flex w-full items-center min-w-0 flex-1 overflow-hidden gap-1">
                     {isPinnedSession ? <RiPushpinLine className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" /> : null}
                     <div className={cn('block min-w-0 flex-1 truncate typography-ui-label font-normal', isActive ? 'text-primary' : 'text-foreground')}>{renderHighlightedText(sessionTitle, normalizedSessionSearchQuery)}</div>
                     {pendingPermissionCount > 0 ? (
@@ -688,20 +696,21 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                       </span>
                     ) : null}
                   </div>
- 
-                {!isMinimalMode ? (
-                  <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
-                    <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                      {runtimeMetaLogo}
-                      <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
-                      {(hasSecondaryProjectLabel || hasSecondaryBranchLabel) ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
-                      {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
-                      {hasSecondaryProjectLabel && hasSecondaryBranchLabel ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
-                      {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><RiGitBranchLine className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
-                      {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/65">-{sessionDiffStats.deletions}</span></span> : null}
+
+                  {!isMinimalMode ? (
+                    <div className="flex items-center justify-between gap-3 text-muted-foreground/60 min-w-0 overflow-hidden leading-tight" style={{ fontSize: 'calc(var(--text-ui-label) * 0.85)' }}>
+                      <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+                        {runtimeMetaLogo}
+                        <span className="flex-shrink-0">{sessionUpdatedLabel}</span>
+                        {(hasSecondaryProjectLabel || hasSecondaryBranchLabel) ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
+                        {hasSecondaryProjectLabel ? <span className="truncate">{secondaryMeta?.projectLabel}</span> : null}
+                        {hasSecondaryProjectLabel && hasSecondaryBranchLabel ? <span className="flex-shrink-0 text-muted-foreground/45">•</span> : null}
+                        {hasSecondaryBranchLabel ? <span className="inline-flex min-w-0 items-center gap-0.5"><RiGitBranchLine className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" /><span className="truncate">{secondaryMeta?.branchLabel}</span></span> : null}
+                        {sessionDiffStats ? <span className="flex flex-shrink-0 items-center gap-0 text-[0.92em]"><span className="text-status-success/80">+{sessionDiffStats.additions}</span><span className="text-muted-foreground/60">/</span><span className="text-status-error/65">-{sessionDiffStats.deletions}</span></span> : null}
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </button>
             )}
           </div>
