@@ -339,6 +339,7 @@ let isExternalOpenCode = false;
 let exitOnShutdown = true;
 let uiAuthController = null;
 let activeTunnelController = null;
+let globalWatcherStartPromise = null;
 const tunnelProviderRegistry = createTunnelProviderRegistry([
   createCloudflareTunnelProvider(),
 ]);
@@ -406,7 +407,19 @@ const {
 
 const ENV_SKIP_OPENCODE_START = process.env.OPENCODE_SKIP_START === 'true' ||
                                     process.env.OPENCHAMBER_SKIP_OPENCODE_START === 'true';
-const ENV_DESKTOP_NOTIFY = process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true';
+const ENV_DESKTOP_NOTIFY = (() => {
+  if (process.env.OPENCHAMBER_DESKTOP_NOTIFY === 'true') {
+    return true;
+  }
+
+  if (process.env.OPENCHAMBER_RUNTIME === 'desktop') {
+    return true;
+  }
+
+  const argv0 = typeof process.argv?.[0] === 'string' ? process.argv[0] : '';
+  const argv1 = typeof process.argv?.[1] === 'string' ? process.argv[1] : '';
+  return /openchamber-server/i.test(argv0) || /openchamber-server/i.test(argv1);
+})();
 const ENV_CONFIGURED_OPENCODE_WSL_DISTRO =
   typeof process.env.OPENCODE_WSL_DISTRO === 'string' && process.env.OPENCODE_WSL_DISTRO.trim().length > 0
     ? process.env.OPENCODE_WSL_DISTRO.trim()
@@ -583,6 +596,7 @@ const serverUtilsRuntime = createServerUtilsRuntime({
   longRequestTimeoutMs: LONG_REQUEST_TIMEOUT_MS,
   getRuntime: () => ({
     openCodePort,
+    openCodeBaseUrl,
     openCodeNotReadySince,
     isOpenCodeReady,
     isRestartingOpenCode,
@@ -739,13 +753,29 @@ const waitForOpenCodeReady = (...args) => openCodeLifecycleRuntime.waitForOpenCo
 const waitForAgentPresence = (...args) => openCodeLifecycleRuntime.waitForAgentPresence(...args);
 const refreshOpenCodeAfterConfigChange = (...args) => openCodeLifecycleRuntime.refreshOpenCodeAfterConfigChange(...args);
 const startHealthMonitoring = () => openCodeLifecycleRuntime.startHealthMonitoring(HEALTH_CHECK_INTERVAL);
+const ensureGlobalWatcherStarted = async () => {
+  if (globalWatcherStartPromise) {
+    return globalWatcherStartPromise;
+  }
+
+  globalWatcherStartPromise = openCodeWatcherRuntime.start().catch((error) => {
+    globalWatcherStartPromise = null;
+    throw error;
+  });
+
+  return globalWatcherStartPromise;
+};
 const bootstrapOpenCodeAtStartup = async (...args) => {
   await openCodeLifecycleRuntime.bootstrapOpenCodeAtStartup(...args);
   scheduleOpenCodeApiDetection();
-  startHealthMonitoring();
-  void openCodeWatcherRuntime.start().catch((error) => {
-    console.warn(`Global event watcher startup failed: ${error?.message || error}`);
-  });
+  if (openCodeLifecycleState.openCodeProcess && !openCodeLifecycleState.isExternalOpenCode) {
+    startHealthMonitoring();
+  }
+  if (ENV_DESKTOP_NOTIFY) {
+    void ensureGlobalWatcherStarted().catch((error) => {
+      console.warn(`Global event watcher startup failed: ${error?.message || error}`);
+    });
+  }
 };
 const killProcessOnPort = (...args) => openCodeLifecycleRuntime.killProcessOnPort(...args);
 
@@ -862,6 +892,7 @@ async function main(options = {}) {
       opencodeWslDistro: resolvedWslDistro || null,
       nodeBinaryResolved: resolvedNodeBinary || null,
       bunBinaryResolved: resolvedBunBinary || null,
+      desktopNotifyEnabled: ENV_DESKTOP_NOTIFY,
       planModeExperimentalEnabled: PLAN_MODE_EXPERIMENT_ENABLED,
     }),
     uiPassword,
@@ -871,6 +902,7 @@ async function main(options = {}) {
     resolveZenModel,
     sayTTSCapability,
     ensurePushInitialized,
+    ensureGlobalWatcherStarted,
     getOrCreateVapidKeys,
     getUiSessionTokenFromRequest,
     writeSettingsToDisk,
@@ -878,6 +910,8 @@ async function main(options = {}) {
     removePushSubscription,
     updateUiVisibility,
     isUiVisible,
+    getUiNotificationClients: () => uiNotificationClients,
+    writeSseEvent,
     sessionRuntime,
     setPushInitialized,
     fs,
