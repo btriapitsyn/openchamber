@@ -133,6 +133,18 @@ export function applyDirectoryEvent(
       return true
     }
 
+    case "session.idle": {
+      const props = event.properties as { sessionID: string }
+      draft.session_status[props.sessionID] = { type: "idle" }
+      return true
+    }
+
+    case "session.error": {
+      const props = event.properties as { sessionID: string }
+      draft.session_status[props.sessionID] = { type: "idle" }
+      return true
+    }
+
     case "message.updated": {
       const info = (event.properties as { info: Message }).info
       const messages = draft.message[info.sessionID]

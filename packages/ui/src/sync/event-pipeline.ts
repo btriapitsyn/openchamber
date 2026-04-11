@@ -34,12 +34,53 @@ const HEARTBEAT_TIMEOUT_MS = 15_000
 // Pipeline factory
 // ---------------------------------------------------------------------------
 
-export function createEventPipeline(input: {
+export type EventPipelineInput = {
   sdk: OpencodeClient
   onEvent: (directory: string, payload: Event) => void
-}) {
-  const { sdk, onEvent } = input
+  /** Called after SSE reconnects (visibility restore or heartbeat timeout). */
+  onReconnect?: () => void
+}
+
+const normalizeEventType = (payload: Event): Event => {
+  const type = (payload as { type?: unknown }).type
+  if (typeof type !== "string") {
+    return payload
+  }
+
+  const match = /^(.*)\.(\d+)$/.exec(type)
+  if (!match || !match[1]) {
+    return payload
+  }
+
+  return {
+    ...payload,
+    type: match[1] as Event["type"],
+  } as unknown as Event
+}
+
+function resolveEventDirectory(event: unknown, payload: Event): string {
+  const directDirectory =
+    typeof event === "object" && event !== null && typeof (event as { directory?: unknown }).directory === "string"
+      ? (event as { directory: string }).directory
+      : null
+
+  if (directDirectory && directDirectory.length > 0) {
+    return directDirectory
+  }
+
+  const properties =
+    typeof payload.properties === "object" && payload.properties !== null
+      ? (payload.properties as Record<string, unknown>)
+      : null
+  const propertyDirectory = typeof properties?.directory === "string" ? properties.directory : null
+
+  return propertyDirectory && propertyDirectory.length > 0 ? propertyDirectory : "global"
+}
+
+export function createEventPipeline(input: EventPipelineInput) {
+  const { sdk, onEvent, onReconnect } = input
   const abort = new AbortController()
+  let hasConnected = false
 
   // Queue state
   let queue: QueuedEvent[] = []
@@ -149,6 +190,12 @@ export function createEventPipeline(input: {
           },
         })
 
+        if (hasConnected) {
+          onReconnect?.()
+        } else {
+          hasConnected = true
+        }
+
         let yielded = Date.now()
         resetHeartbeat()
 
@@ -156,25 +203,26 @@ export function createEventPipeline(input: {
         for await (const event of events.stream) {
           resetHeartbeat()
           streamErrorLogged = false
-          const directory = (event as { directory?: string }).directory ?? "global"
           const payload = (event as { payload?: Event }).payload ?? (event as unknown as Event)
           if (!payload || typeof payload !== "object" || typeof (payload as { type?: unknown }).type !== "string") {
             continue
           }
-          const k = key(directory, payload)
+          const normalizedPayload = normalizeEventType(payload)
+          const directory = resolveEventDirectory(event, normalizedPayload)
+          const k = key(directory, normalizedPayload)
           if (k) {
             const i = coalesced.get(k)
             if (i !== undefined) {
-              queue[i] = { directory, payload }
-              if (payload.type === "message.part.updated") {
-                const part = (payload.properties as { part: { messageID: string; id: string } }).part
+              queue[i] = { directory, payload: normalizedPayload }
+              if (normalizedPayload.type === "message.part.updated") {
+                const part = (normalizedPayload.properties as { part: { messageID: string; id: string } }).part
                 staleDeltas.add(deltaKey(directory, part.messageID, part.id))
               }
               continue
             }
             coalesced.set(k, queue.length)
           }
-          queue.push({ directory, payload })
+          queue.push({ directory, payload: normalizedPayload })
           schedule()
 
           if (Date.now() - yielded < STREAM_YIELD_MS) continue
@@ -197,21 +245,32 @@ export function createEventPipeline(input: {
     }
   })().finally(flush)
 
-  // Visibility handler — flush immediately when tab becomes visible
+  // Visibility handler — abort SSE on heartbeat timeout so the loop reconnects.
+  // The reconnect triggers onReconnect above, which lets consumers resync state.
   const onVisibility = () => {
     if (typeof document === "undefined") return
     if (document.visibilityState !== "visible") return
     if (Date.now() - lastEventAt < HEARTBEAT_TIMEOUT_MS) return
     attempt?.abort()
   }
+
+  // pageshow handler — fires on back-forward cache restore (common on mobile PWA).
+  // bfcache restores the page without a fresh load, so SSE state may be stale.
+  const onPageShow = (event: PageTransitionEvent) => {
+    if (!event.persisted) return
+    attempt?.abort()
+  }
+
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", onVisibility)
+    window.addEventListener("pageshow", onPageShow)
   }
 
   // Cleanup — abort SSE, flush remaining events, remove listeners
   const cleanup = () => {
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", onVisibility)
+      window.removeEventListener("pageshow", onPageShow)
     }
     abort.abort()
     flush()

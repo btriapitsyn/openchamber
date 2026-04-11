@@ -19,8 +19,6 @@ import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
-import { useGitHubPrBackgroundTracking } from '@/hooks/useGitHubPrBackgroundTracking';
-import { GitPollingProvider } from '@/hooks/useGitPolling';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { hasModifier } from '@/lib/utils';
 import { isDesktopLocalOriginActive, isDesktopShell } from '@/lib/desktop';
@@ -40,12 +38,12 @@ import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { VoiceProvider } from '@/components/voice';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 const CLI_MISSING_ERROR_REGEX =
   /ENOENT|spawn\s+opencode|Unable\s+to\s+locate\s+the\s+opencode\s+CLI|OpenCode\s+CLI\s+not\s+found|opencode(\.exe)?\s+not\s+found|opencode(\.exe)?:\s*command\s+not\s+found|not\s+recognized\s+as\s+an\s+internal\s+or\s+external\s+command|env:\s*['"]?(node|bun)['"]?:\s*No\s+such\s+file\s+or\s+directory|(node|bun):\s*No\s+such\s+file\s+or\s+directory/i;
-const CLI_ONBOARDING_HEALTH_POLL_MS = 1500;
 
 const AboutDialogWrapper: React.FC = () => {
   const isAboutDialogOpen = useUIStore((s) => s.isAboutDialogOpen);
@@ -142,12 +140,9 @@ const SyncOptimisticBridge: React.FC = () => {
   return null;
 };
 
-function SyncAppEffects({ apis, embeddedBackgroundWorkEnabled }: {
-  apis: RuntimeAPIs;
+function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
   embeddedBackgroundWorkEnabled: boolean;
 }) {
-  const githubApi = embeddedBackgroundWorkEnabled ? apis.github : undefined;
-  useGitHubPrBackgroundTracking(githubApi, apis.git);
   usePwaManifestSync();
   useSessionAutoCleanup(embeddedBackgroundWorkEnabled);
   useQueuedMessageAutoSend(embeddedBackgroundWorkEnabled);
@@ -176,9 +171,11 @@ function App({ apis }: AppProps) {
   const [showCliOnboarding, setShowCliOnboarding] = React.useState(false);
   const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(true);
   const isDesktopRuntime = React.useMemo(() => isDesktopShell(), []);
+  const setPlanModeEnabled = useFeatureFlagsStore((state) => state.setPlanModeEnabled);
   const appReadyDispatchedRef = React.useRef(false);
   const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), []);
   const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible;
+  const recentDesktopNotificationTagsRef = React.useRef<Map<string, number>>(new Map());
 
   React.useEffect(() => {
     setStreamPerfEnabled(showMemoryDebug);
@@ -255,6 +252,28 @@ function App({ apis }: AppProps) {
 
     return () => clearTimeout(fallbackTimer);
   }, [isInitialized]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const run = async () => {
+      const res = await fetch('/health', { method: 'GET' }).catch(() => null);
+      if (!res || !res.ok || cancelled) return;
+      const data = (await res.json().catch(() => null)) as null | {
+        planModeExperimentalEnabled?: unknown;
+      };
+      if (!data || cancelled) return;
+      const raw = data.planModeExperimentalEnabled;
+      const enabled = raw === true || raw === 1 || raw === '1' || raw === 'true';
+      setPlanModeEnabled(enabled);
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setPlanModeEnabled]);
 
   React.useEffect(() => {
     const init = async () => {
@@ -352,6 +371,68 @@ function App({ apis }: AppProps) {
       }
     };
   }, [embeddedSessionChat]);
+
+  React.useEffect(() => {
+    if (embeddedSessionChat || !isDesktopRuntime || typeof window === 'undefined' || typeof EventSource === 'undefined') {
+      return;
+    }
+
+    const source = new EventSource('/api/notifications/stream');
+
+    const handleMessage = (event: MessageEvent<string>) => {
+      type DesktopNotificationEvent = {
+        type?: string;
+        properties?: {
+          title?: string;
+          body?: string;
+          tag?: string;
+          desktopStdoutActive?: boolean;
+        };
+      };
+
+      let payload: DesktopNotificationEvent;
+
+      try {
+        payload = JSON.parse(event.data) as DesktopNotificationEvent;
+      } catch {
+        return;
+      }
+
+      if (payload?.type !== 'openchamber:notification') {
+        return;
+      }
+
+      if (payload.properties?.desktopStdoutActive === true) {
+        return;
+      }
+
+      const tag = typeof payload.properties?.tag === 'string' ? payload.properties.tag : '';
+      if (tag) {
+        const now = Date.now();
+        const lastSeenAt = recentDesktopNotificationTagsRef.current.get(tag) ?? 0;
+        if (now - lastSeenAt < 5000) {
+          return;
+        }
+        recentDesktopNotificationTagsRef.current.set(tag, now);
+      }
+
+      void apis.notifications.notifyAgentCompletion({
+        title: payload.properties?.title,
+        body: payload.properties?.body,
+        tag: tag || undefined,
+      });
+    };
+
+    source.addEventListener('message', handleMessage as EventListener);
+    source.onerror = () => {
+      // Let EventSource reconnect automatically.
+    };
+
+    return () => {
+      source.removeEventListener('message', handleMessage as EventListener);
+      source.close();
+    };
+  }, [apis.notifications, embeddedSessionChat, isDesktopRuntime]);
 
   React.useEffect(() => {
     if (!embeddedSessionChat?.directory || isVSCodeRuntime) {
@@ -480,13 +561,9 @@ function App({ apis }: AppProps) {
     };
 
     void run();
-    const interval = window.setInterval(() => {
-      void run();
-    }, CLI_ONBOARDING_HEALTH_POLL_MS);
 
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
     };
   }, [embeddedSessionChat]);
 
@@ -498,7 +575,7 @@ function App({ apis }: AppProps) {
   if (showCliOnboarding) {
     return (
       <ErrorBoundary>
-        <div className="h-full text-foreground bg-transparent">
+        <div className="h-full text-foreground bg-background">
           <OnboardingScreen onCliAvailable={handleCliAvailable} />
         </div>
       </ErrorBoundary>
@@ -513,7 +590,7 @@ function App({ apis }: AppProps) {
             <TooltipProvider delayDuration={700} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">
                 <EmbeddedSessionSelectionGate embeddedSessionChat={embeddedSessionChat} isVSCodeRuntime={isVSCodeRuntime} />
-                <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                 <ChatView />
                 <Toaster />
               </div>
@@ -538,7 +615,7 @@ function App({ apis }: AppProps) {
           <RuntimeAPIProvider apis={apis}>
             <TooltipProvider delayDuration={700} skipDelayDuration={150}>
               <div className="h-full text-foreground bg-background">
-                <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                 <AgentManagerView />
                 <Toaster />
               </div>
@@ -556,7 +633,7 @@ function App({ apis }: AppProps) {
             <FireworksProvider>
               <TooltipProvider delayDuration={700} skipDelayDuration={150}>
                 <div className="h-full text-foreground bg-background">
-                  <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                  <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                   <VSCodeLayout />
                   <Toaster />
                 </div>
@@ -572,24 +649,22 @@ function App({ apis }: AppProps) {
     <ErrorBoundary>
       <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
         <RuntimeAPIProvider apis={apis}>
-          <GitPollingProvider>
-            <FireworksProvider>
-              <VoiceProvider>
-                <TooltipProvider delayDuration={700} skipDelayDuration={150}>
-                  <div className={isDesktopRuntime ? 'h-full text-foreground bg-transparent' : 'h-full text-foreground bg-background'}>
-                    <SyncAppEffects apis={apis} embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
-                    <MainLayout />
-                    <Toaster />
-                    <ConfigUpdateOverlay />
-                    <AboutDialogWrapper />
-                    {showMemoryDebug && (
-                      <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
-                    )}
-                  </div>
-                </TooltipProvider>
-              </VoiceProvider>
-            </FireworksProvider>
-          </GitPollingProvider>
+          <FireworksProvider>
+            <VoiceProvider>
+              <TooltipProvider delayDuration={700} skipDelayDuration={150}>
+                <div className="h-full text-foreground bg-background">
+                  <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
+                  <MainLayout />
+                  <Toaster />
+                  <ConfigUpdateOverlay />
+                  <AboutDialogWrapper />
+                  {showMemoryDebug && (
+                    <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                  )}
+                </div>
+              </TooltipProvider>
+            </VoiceProvider>
+          </FireworksProvider>
         </RuntimeAPIProvider>
       </SyncProvider>
     </ErrorBoundary>

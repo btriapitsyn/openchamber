@@ -26,8 +26,8 @@ export const RightSidebarTabs: React.FC = () => {
   ], []);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
-      <div className="h-9 bg-transparent pt-1 px-2">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar">
+      <div className="h-9 bg-sidebar pt-1 px-2">
         <SortableTabsStrip
           items={tabItems}
           activeId={rightSidebarTab}
