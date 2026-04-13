@@ -116,6 +116,10 @@ export function createEventPipeline(input: EventPipelineInput) {
 
   // Coalesce key — same-type events for the same entity replace earlier ones.
   // Keys are scoped to a single directory's queue, so directory is implicit.
+  // message.part.delta is a special case: consecutive deltas for the same
+  // (messageID, partID, field) are accumulated (string-concatenated) rather
+  // than replaced, because the reducer is a pure append and merging is
+  // semantically identical to applying each delta individually.
   const key = (payload: Event): string | undefined => {
     if (payload.type === "session.status") {
       const props = payload.properties as { sessionID: string }
@@ -127,6 +131,10 @@ export function createEventPipeline(input: EventPipelineInput) {
     if (payload.type === "message.part.updated") {
       const part = (payload.properties as { part: { messageID: string; id: string } }).part
       return `message.part.updated:${part.messageID}:${part.id}`
+    }
+    if (payload.type === "message.part.delta") {
+      const props = payload.properties as { messageID: string; partID: string; field: string }
+      return `message.part.delta:${props.messageID}:${props.partID}:${props.field}`
     }
     return undefined
   }
@@ -246,10 +254,25 @@ export function createEventPipeline(input: EventPipelineInput) {
           if (k) {
             const i = d.coalesced.get(k)
             if (i !== undefined) {
-              d.queue[i] = normalizedPayload
-              if (normalizedPayload.type === "message.part.updated") {
-                const part = (normalizedPayload.properties as { part: { messageID: string; id: string } }).part
-                d.staleDeltas.add(deltaKey(part.messageID, part.id))
+              if (normalizedPayload.type === "message.part.delta") {
+                // Accumulate delta strings — append to the already-queued event
+                // rather than replacing it. The reducer is a pure string append so
+                // this is semantically identical to applying each delta separately.
+                const prev = d.queue[i] as unknown as { properties: { delta: string } }
+                const inc = normalizedPayload.properties as { delta: string }
+                d.queue[i] = {
+                  ...normalizedPayload,
+                  properties: {
+                    ...(normalizedPayload.properties as object),
+                    delta: prev.properties.delta + inc.delta,
+                  },
+                } as unknown as Event
+              } else {
+                d.queue[i] = normalizedPayload
+                if (normalizedPayload.type === "message.part.updated") {
+                  const part = (normalizedPayload.properties as { part: { messageID: string; id: string } }).part
+                  d.staleDeltas.add(deltaKey(part.messageID, part.id))
+                }
               }
               continue
             }
