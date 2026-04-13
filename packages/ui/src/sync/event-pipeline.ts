@@ -85,7 +85,6 @@ type DirectoryQueue = {
   queue: Event[]
   buffer: Event[]
   coalesced: Map<string, number>
-  staleDeltas: Set<string>
   timer: ReturnType<typeof setTimeout> | undefined
   last: number
 }
@@ -105,15 +104,12 @@ export function createEventPipeline(input: EventPipelineInput) {
       queue: [],
       buffer: [],
       coalesced: new Map(),
-      staleDeltas: new Set(),
       timer: undefined,
       last: 0,
     }
     directories.set(directory, d)
     return d
   }
-
-  const deltaKey = (messageID: string, partID: string) => `${messageID}:${partID}`
 
   // Coalesce key — same-type events for the same entity replace earlier ones.
   // Keys are scoped to a single directory's queue, so directory is implicit.
@@ -140,7 +136,7 @@ export function createEventPipeline(input: EventPipelineInput) {
     return undefined
   }
 
-  // Flush one directory — swap queue, dispatch events, skip stale deltas.
+  // Flush one directory — swap queue, dispatch events.
   // React 18 auto-batching still collapses the setState calls inside a single
   // directory's flush into one render pass.
   const flushDir = (directory: string) => {
@@ -153,20 +149,14 @@ export function createEventPipeline(input: EventPipelineInput) {
     if (d.queue.length === 0) return
 
     const events = d.queue
-    const skip = d.staleDeltas.size > 0 ? new Set(d.staleDeltas) : undefined
     d.queue = d.buffer
     d.buffer = events
     d.queue.length = 0
     d.coalesced.clear()
-    d.staleDeltas.clear()
 
     d.last = Date.now()
     syncDebug.pipeline.flush(events.length)
     for (const payload of events) {
-      if (skip && payload.type === "message.part.delta") {
-        const props = payload.properties as { messageID: string; partID: string }
-        if (skip.has(deltaKey(props.messageID, props.partID))) continue
-      }
       onEvent(directory, payload)
     }
 
@@ -271,10 +261,6 @@ export function createEventPipeline(input: EventPipelineInput) {
                 } as unknown as Event
               } else {
                 d.queue[i] = normalizedPayload
-                if (normalizedPayload.type === "message.part.updated") {
-                  const part = (normalizedPayload.properties as { part: { messageID: string; id: string } }).part
-                  d.staleDeltas.add(deltaKey(part.messageID, part.id))
-                }
               }
               syncDebug.pipeline.coalesced(normalizedPayload.type, k)
               continue

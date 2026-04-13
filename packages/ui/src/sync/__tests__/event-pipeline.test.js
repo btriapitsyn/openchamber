@@ -582,53 +582,6 @@ describe('createEventPipeline — delta coalescing (Option C)', () => {
     expect(byDir['dir-b']).toBe('from-b');
   });
 
-  it('skips accumulated deltas when message.part.updated is coalesced (staleDeltas)', async () => {
-    // Sequence: delta1, delta2, update#1, update#2
-    // update#2 coalesces onto update#1, which triggers staleDeltas for part-1.
-    // Flush should emit only the final update (no delta).
-    const received = await runPipelineWithEvents([
-      {
-        directory: 'dir-a',
-        payload: {
-          type: 'message.part.delta',
-          properties: { messageID: 'msg-1', partID: 'part-1', field: 'text', delta: 'A' },
-        },
-      },
-      {
-        directory: 'dir-a',
-        payload: {
-          type: 'message.part.delta',
-          properties: { messageID: 'msg-1', partID: 'part-1', field: 'text', delta: 'B' },
-        },
-      },
-      {
-        directory: 'dir-a',
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            part: { id: 'part-1', type: 'text', messageID: 'msg-1', text: 'AB-first' },
-          },
-        },
-      },
-      {
-        directory: 'dir-a',
-        payload: {
-          type: 'message.part.updated',
-          properties: {
-            part: { id: 'part-1', type: 'text', messageID: 'msg-1', text: 'ABC-final' },
-          },
-        },
-      },
-    ]);
-
-    const types = received.map((r) => r.payload.type);
-    expect(types).toContain('message.part.updated');
-    expect(types).not.toContain('message.part.delta');
-
-    const finalUpdate = received.find((r) => r.payload.type === 'message.part.updated');
-    expect(finalUpdate.payload.properties.part.text).toBe('ABC-final');
-  });
-
   it('does not touch non-delta events (session.status still replaced, not concatenated)', async () => {
     const received = await runPipelineWithEvents([
       {
