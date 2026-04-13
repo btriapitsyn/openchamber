@@ -1955,6 +1955,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
     const childSessionActivity = useSessionActivity(taskSessionId, currentDirectory);
     const [taskChildSeenActive, setTaskChildSeenActive] = React.useState(false);
     const [taskChildPollingStopped, setTaskChildPollingStopped] = React.useState(false);
+    const [taskPendingFinalFetch, setTaskPendingFinalFetch] = React.useState(false);
 
     const taskPollNoChangeCountRef = React.useRef(0);
     const taskPollLastSignatureRef = React.useRef<string>('');
@@ -1963,6 +1964,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
     React.useEffect(() => {
         setTaskChildSeenActive(false);
         setTaskChildPollingStopped(false);
+        setTaskPendingFinalFetch(false);
         taskPollNoChangeCountRef.current = 0;
         taskPollLastSignatureRef.current = '';
         taskFinalFetchDoneRef.current = false;
@@ -1998,6 +2000,9 @@ const ToolPart: React.FC<ToolPartProps> = ({
             if (taskChildPollingStopped) {
                 setTaskChildPollingStopped(false);
             }
+            if (taskPendingFinalFetch) {
+                setTaskPendingFinalFetch(false);
+            }
             return;
         }
 
@@ -2024,47 +2029,19 @@ const ToolPart: React.FC<ToolPartProps> = ({
         }
 
         // Final-fetch path: child went idle before parent saw it active, or we have no
-        // entries yet. Schedule a one-shot delayed fetch to capture any results that
-        // arrived after the child session went idle, then mark polling as stopped.
+        // entries yet. First stop polling after the settle grace period. A separate
+        // effect performs the final fetch once polling has fully stopped, avoiding
+        // races with any in-flight polling response.
         if (!taskChildPollingStopped && !taskFinalFetchDoneRef.current) {
             if (typeof window === 'undefined') {
+                setTaskPendingFinalFetch(true);
                 setTaskChildPollingStopped(true);
-                taskFinalFetchDoneRef.current = true;
                 return;
             }
 
-            const capturedSessionId = taskSessionId;
             const timer = window.setTimeout(() => {
-                taskFinalFetchDoneRef.current = true;
+                setTaskPendingFinalFetch(true);
                 setTaskChildPollingStopped(true);
-
-                // Perform one final fetch to capture any results that arrived
-                // after the child session went idle.
-                if (capturedSessionId) {
-                    const scopedClient = opencodeClient.getScopedSdkClient(currentDirectory);
-                    void scopedClient.session.messages({
-                        sessionID: capturedSessionId,
-                        limit: TASK_TOOL_INITIAL_FETCH_LIMIT,
-                    }).then((response) => {
-                        const messages = response.data ?? [];
-                        if (Array.isArray(messages) && messages.length > 0) {
-                            const childStores = getSyncChildStores();
-                            childStores.update(currentDirectory, (prev) => {
-                                const records = messages as SessionMessageWithParts[];
-                                const partPatch: Record<string, import('@opencode-ai/sdk/v2').Part[]> = { ...prev.part };
-                                for (const rec of records) {
-                                    partPatch[rec.info.id] = rec.parts;
-                                }
-                                return {
-                                    message: { ...prev.message, [capturedSessionId]: records.map((r) => r.info) as import('@opencode-ai/sdk/v2').Message[] },
-                                    part: partPatch,
-                                };
-                            });
-                        }
-                    }).catch(() => {
-                        // Ignore final-fetch errors — polling was already stopping.
-                    });
-                }
             }, TASK_TOOL_SETTLE_GRACE_MS);
 
             return () => {
@@ -2079,8 +2056,70 @@ const ToolPart: React.FC<ToolPartProps> = ({
         activeLatched,
         isFinalized,
         isTaskTool,
+        taskPendingFinalFetch,
         taskChildPollingStopped,
         taskChildSeenActive,
+        taskSessionId,
+    ]);
+
+    React.useEffect(() => {
+        if (!isTaskTool || !taskSessionId || !taskChildPollingStopped || !taskPendingFinalFetch || taskFinalFetchDoneRef.current) {
+            return;
+        }
+
+        let cancelled = false;
+        const capturedSessionId = taskSessionId;
+
+        const runFinalFetch = async () => {
+            try {
+                const scopedClient = opencodeClient.getScopedSdkClient(currentDirectory);
+                const response = await scopedClient.session.messages({
+                    sessionID: capturedSessionId,
+                    limit: TASK_TOOL_INITIAL_FETCH_LIMIT,
+                });
+
+                if (cancelled) {
+                    return;
+                }
+
+                const messages = response.data ?? [];
+                if (Array.isArray(messages) && messages.length > 0) {
+                    const childStores = getSyncChildStores();
+                    childStores.update(currentDirectory, (prev) => {
+                        const records = messages as SessionMessageWithParts[];
+                        const partPatch: Record<string, import('@opencode-ai/sdk/v2').Part[]> = { ...prev.part };
+                        for (const rec of records) {
+                            partPatch[rec.info.id] = rec.parts;
+                        }
+                        return {
+                            message: { ...prev.message, [capturedSessionId]: records.map((r) => r.info) as import('@opencode-ai/sdk/v2').Message[] },
+                            part: partPatch,
+                        };
+                    });
+                }
+
+                taskFinalFetchDoneRef.current = true;
+                setTaskPendingFinalFetch(false);
+            } catch {
+                if (cancelled) {
+                    return;
+                }
+
+                setTaskPendingFinalFetch(false);
+                setTaskChildPollingStopped(false);
+            }
+        };
+
+        void runFinalFetch();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        currentDirectory,
+        isTaskTool,
+        taskChildPollingStopped,
+        taskPendingFinalFetch,
         taskSessionId,
     ]);
 
@@ -2126,7 +2165,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         const shouldPoll =
             !taskChildPollingStopped
             && (childSessionHasInFlightTools || childSessionActive || childSessionTaskSummaryEntries.length === 0);
-        const shouldFetchSnapshot = childSessionTaskSummaryEntries.length === 0 || shouldPoll;
+        const shouldFetchSnapshot = !taskPendingFinalFetch && (childSessionTaskSummaryEntries.length === 0 || shouldPoll);
         if (!shouldFetchSnapshot) {
             return;
         }
@@ -2226,6 +2265,7 @@ const ToolPart: React.FC<ToolPartProps> = ({
         currentDirectory,
         isActive,
         isTaskTool,
+        taskPendingFinalFetch,
         taskChildPollingStopped,
         taskSessionId,
     ]);
