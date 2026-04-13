@@ -137,6 +137,7 @@ export type DesktopSettings = {
   recentModels?: Array<{ providerID: string; modelID: string }>;
   diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
   diffViewMode?: 'single' | 'stacked';
+  gitChangesViewMode?: 'flat' | 'tree';
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
 
