@@ -140,8 +140,10 @@ export function applyDirectoryEvent(
     }
 
     case "session.error": {
-      const props = event.properties as { sessionID: string }
-      draft.session_status[props.sessionID] = { type: "idle" }
+      const props = event.properties as { sessionID: string; error?: { message?: string; code?: string } }
+      // Store as error status so consumers can distinguish from normal idle.
+      // Uses extended type since the SDK SessionStatus union only has idle/retry/busy.
+      ;(draft.session_status as Record<string, { type: string; error?: { message?: string; code?: string } }>)[props.sessionID] = { type: "error", error: props.error }
       return true
     }
 
