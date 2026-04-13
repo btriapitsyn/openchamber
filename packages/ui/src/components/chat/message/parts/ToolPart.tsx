@@ -1058,8 +1058,7 @@ const TaskToolSummary: React.FC<{
     input?: Record<string, unknown>;
     animateTailText?: boolean;
     isActive?: boolean;
-    childSessionError?: boolean;
-}> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false, childSessionError = false }) => {
+}> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false }) => {
     const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
     const displayEntries = entries;
@@ -1085,7 +1084,7 @@ const TaskToolSummary: React.FC<{
         return (
             <div className="relative pr-2 pb-2 pt-2 space-y-2 pl-[1.4375rem]">
                 <div className="typography-meta text-muted-foreground/70">
-                    {isActive ? 'Waiting for subagent activity...' : childSessionError ? 'Subagent session ended with an error.' : 'No subagent session id on task metadata.'}
+                    {isActive ? 'Waiting for subagent activity...' : 'No subagent session id on task metadata.'}
                 </div>
             </div>
         );
@@ -2510,7 +2509,6 @@ const ToolPart: React.FC<ToolPartProps> = ({
                     input={input}
                     animateTailText={animateTailText}
                     isActive={isActive}
-                    childSessionError={childSessionActivity.isError}
                 />
             ) : null}
 

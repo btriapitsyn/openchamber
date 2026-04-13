@@ -2,17 +2,14 @@ import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionStatus, useSessionMessages, useSessionPermissions } from '@/sync/sync-context';
 
-// Mirrors OpenCode SessionStatus: busy|retry|idle, plus local "error" phase
-// for child sessions that terminated with an error (distinct from normal idle).
-export type SessionActivityPhase = 'idle' | 'busy' | 'retry' | 'error';
+// Mirrors OpenCode SessionStatus: busy|retry|idle.
+export type SessionActivityPhase = 'idle' | 'busy' | 'retry';
 
 export interface SessionActivityResult {
   phase: SessionActivityPhase;
   isWorking: boolean;
   isBusy: boolean;
   isCooldown: boolean;
-  /** True when the session terminated with an error (not normal idle). */
-  isError: boolean;
 }
 
 const IDLE_RESULT: SessionActivityResult = {
@@ -20,7 +17,6 @@ const IDLE_RESULT: SessionActivityResult = {
   isWorking: false,
   isBusy: false,
   isCooldown: false,
-  isError: false,
 };
 
 /**
@@ -40,13 +36,7 @@ export function useSessionActivity(sessionId: string | null | undefined, directo
     // Permissions pending → idle (permission indicator takes priority)
     if (permissions.length > 0) return IDLE_RESULT;
 
-     const phase: SessionActivityPhase = (status?.type ?? 'idle') as SessionActivityPhase;
-
-    // When the session terminated with an error, report it as an error phase.
-    // This is distinct from normal idle — the child session did not complete successfully.
-    if (phase === 'error') {
-      return { phase: 'error', isWorking: false, isBusy: false, isCooldown: false, isError: true };
-    }
+    const phase: SessionActivityPhase = (status?.type ?? 'idle') as SessionActivityPhase;
 
     // Only trust the trailing assistant message as a transient fallback while
     // waiting for session.status/message.updated to settle.
@@ -70,7 +60,6 @@ export function useSessionActivity(sessionId: string | null | undefined, directo
       isWorking: true,
       isBusy: phase === 'busy' || (!statusWorking && hasPendingAssistant),
       isCooldown: false,
-      isError: false,
     };
   }, [sessionId, status, messages, permissions]);
 }
