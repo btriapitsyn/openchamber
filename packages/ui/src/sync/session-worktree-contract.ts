@@ -60,6 +60,12 @@ export type WorktreeCanonicalizationResult = {
   attentionReason?: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect' | null;
 };
 
+export type SessionWorktreeCanonicalizationOptions = {
+  existingAttachment?: SessionWorktreeAttachment | null;
+  fallbackDirectory?: string | null;
+  worktreeSource?: SessionWorktreeAttachment['worktreeSource'];
+};
+
 // ---------------------------------------------------------------------------
 // Path helpers
 // ---------------------------------------------------------------------------
@@ -80,6 +86,52 @@ export function isWithinWorktreeRoot(candidate: string | null, worktreeRoot: str
   const c = normalizePath(candidate);
   const r = normalizePath(worktreeRoot);
   return c === r || c.startsWith(r + '/');
+}
+
+export function getAttachedSessionDirectory(
+  attachment: SessionWorktreeAttachment | null | undefined,
+  fallbackDirectory?: string | null,
+): string | null {
+  if (attachment) {
+    if (!attachment.degraded && attachment.cwd) {
+      return normalizePath(attachment.cwd);
+    }
+    if (attachment.worktreeRoot) {
+      return normalizePath(attachment.worktreeRoot);
+    }
+    if (attachment.cwd) {
+      return normalizePath(attachment.cwd);
+    }
+  }
+
+  if (fallbackDirectory) {
+    return normalizePath(fallbackDirectory);
+  }
+
+  return null;
+}
+
+export function buildAttachmentFromCanonicalization(
+  canonical: WorktreeCanonicalizationResult,
+  options: SessionWorktreeCanonicalizationOptions = {},
+): SessionWorktreeAttachment {
+  const existingAttachment = options.existingAttachment ?? null;
+  const fallbackDirectory = options.fallbackDirectory ?? null;
+  const preferredDirectory = canonical.degraded
+    ? canonical.worktreeRoot ?? canonical.cwd ?? fallbackDirectory
+    : canonical.cwd ?? canonical.worktreeRoot ?? fallbackDirectory;
+
+  return {
+    worktreeRoot: canonical.worktreeRoot ?? fallbackDirectory,
+    cwd: preferredDirectory,
+    branch: canonical.branch ?? existingAttachment?.branch ?? null,
+    headState: canonical.headState,
+    worktreeStatus: canonical.worktreeStatus,
+    worktreeSource: options.worktreeSource ?? existingAttachment?.worktreeSource ?? null,
+    legacy: canonical.legacy,
+    degraded: canonical.degraded,
+    attentionReason: canonical.attentionReason ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------

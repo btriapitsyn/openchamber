@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { useSessionWorktreeStore } from './session-worktree-store';
+import { useSessionUIStore } from './session-ui-store';
 
 /**
  * Unit tests for session worktree routing through the authoritative store.
@@ -21,6 +22,37 @@ describe('session-worktree-store worktree routing', () => {
     for (const sessionId of attachments.keys()) {
       store.clearAttachment(sessionId);
     }
+    useSessionUIStore.setState({ currentSessionId: null, worktreeMetadata: new Map() });
+  });
+
+  test('getDirectoryForSession prefers authoritative attachment cwd over sync fallback', () => {
+    useSessionWorktreeStore.getState().setAttachment('session-dir', {
+      worktreeRoot: '/repo/worktrees/feat-a',
+      cwd: '/repo/worktrees/feat-a/src',
+      branch: 'feat-a',
+      headState: 'branch',
+      worktreeStatus: 'ready',
+      worktreeSource: 'existing',
+      legacy: false,
+      degraded: false,
+    });
+
+    expect(useSessionUIStore.getState().getDirectoryForSession('session-dir')).toBe('/repo/worktrees/feat-a/src');
+  });
+
+  test('getDirectoryForSession falls back to authoritative worktreeRoot when attachment is degraded', () => {
+    useSessionWorktreeStore.getState().setAttachment('session-dir', {
+      worktreeRoot: '/repo/worktrees/feat-a',
+      cwd: '/tmp/outside',
+      branch: 'feat-a',
+      headState: 'branch',
+      worktreeStatus: 'invalid',
+      worktreeSource: 'existing',
+      legacy: false,
+      degraded: true,
+    });
+
+    expect(useSessionUIStore.getState().getDirectoryForSession('session-dir')).toBe('/repo/worktrees/feat-a');
   });
 
   test('setCurrentSession uses canonical cwd when valid', () => {

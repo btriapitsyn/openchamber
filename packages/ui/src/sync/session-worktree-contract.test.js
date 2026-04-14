@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  buildAttachmentFromCanonicalization,
+  getAttachedSessionDirectory,
   resolveSessionWorktreeState,
   formatSessionWorktreeBadge,
   getSessionWorktreeRepairActions,
@@ -25,6 +27,103 @@ describe('isWithinWorktreeRoot', () => {
     expect(isWithinWorktreeRoot(null, '/repo')).toBe(false);
     expect(isWithinWorktreeRoot('/repo', null)).toBe(false);
     expect(isWithinWorktreeRoot('', '/repo')).toBe(false);
+  });
+});
+
+describe('getAttachedSessionDirectory', () => {
+  test('prefers canonical cwd when attachment is healthy', () => {
+    expect(getAttachedSessionDirectory({
+      worktreeRoot: '/repo/worktrees/feat-a',
+      cwd: '/repo/worktrees/feat-a/src',
+      branch: 'feat-a',
+      headState: 'branch',
+      worktreeStatus: 'ready',
+      worktreeSource: 'existing',
+      legacy: false,
+      degraded: false,
+    }, '/repo')).toBe('/repo/worktrees/feat-a/src');
+  });
+
+  test('falls back to worktree root when attachment is degraded', () => {
+    expect(getAttachedSessionDirectory({
+      worktreeRoot: '/repo/worktrees/feat-a',
+      cwd: '/tmp/outside',
+      branch: 'feat-a',
+      headState: 'branch',
+      worktreeStatus: 'invalid',
+      worktreeSource: 'existing',
+      legacy: false,
+      degraded: true,
+    }, '/repo')).toBe('/repo/worktrees/feat-a');
+  });
+
+  test('uses fallback when no attachment exists', () => {
+    expect(getAttachedSessionDirectory(null, '/repo')).toBe('/repo');
+  });
+});
+
+describe('buildAttachmentFromCanonicalization', () => {
+  test('builds a canonical attachment for a healthy current-worktree session', () => {
+    const result = buildAttachmentFromCanonicalization({
+      worktreeRoot: '/repo',
+      cwd: '/repo/src',
+      branch: 'main',
+      headState: 'branch',
+      worktreeStatus: 'ready',
+      legacy: false,
+      degraded: false,
+    }, {
+      fallbackDirectory: '/repo/src',
+    });
+
+    expect(result.worktreeRoot).toBe('/repo');
+    expect(result.cwd).toBe('/repo/src');
+    expect(result.branch).toBe('main');
+    expect(result.legacy).toBe(false);
+  });
+
+  test('preserves worktreeSource while recovering a legacy session', () => {
+    const result = buildAttachmentFromCanonicalization({
+      worktreeRoot: '/repo/worktrees/feat-a',
+      cwd: '/repo/worktrees/feat-a',
+      branch: 'feat-a',
+      headState: 'branch',
+      worktreeStatus: 'ready',
+      legacy: false,
+      degraded: false,
+    }, {
+      existingAttachment: {
+        worktreeRoot: null,
+        cwd: '/repo/worktrees/feat-a',
+        branch: null,
+        headState: 'detached',
+        worktreeStatus: 'invalid',
+        worktreeSource: 'created-for-session',
+        legacy: true,
+        degraded: true,
+      },
+      fallbackDirectory: '/repo/worktrees/feat-a',
+    });
+
+    expect(result.worktreeSource).toBe('created-for-session');
+    expect(result.legacy).toBe(false);
+  });
+
+  test('uses worktree root as cwd when canonicalization is degraded', () => {
+    const result = buildAttachmentFromCanonicalization({
+      worktreeRoot: '/repo/worktrees/feat-a',
+      cwd: '/tmp/outside',
+      branch: 'feat-a',
+      headState: 'branch',
+      worktreeStatus: 'invalid',
+      legacy: true,
+      degraded: true,
+    }, {
+      fallbackDirectory: '/repo/worktrees/feat-a',
+    });
+
+    expect(result.cwd).toBe('/repo/worktrees/feat-a');
+    expect(result.degraded).toBe(true);
   });
 });
 
