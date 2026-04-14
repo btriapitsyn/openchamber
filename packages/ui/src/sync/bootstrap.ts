@@ -4,6 +4,14 @@ import type { GlobalState, State } from "./types"
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
+const requestSignature = (items: Array<{ id: string }> | undefined): string => {
+  if (!items || items.length === 0) return ""
+  return items
+    .map((item) => item.id)
+    .sort(cmp)
+    .join("|")
+}
+
 function groupBySession<T extends { id: string; sessionID: string }>(input: T[]) {
   return input.reduce<Record<string, T[]>>((acc, item) => {
     if (!item?.id || !item.sessionID) return acc
@@ -129,15 +137,15 @@ export async function bootstrapDirectory(input: {
         set({ vcs: x.data ?? current.vcs })
       }),
     ),
-    retry(() =>
-      sdk.question.list(directory ? { directory } : undefined).then((x) => {
+    retry(async () => {
+      const before = getState()
+      const beforeSignatures = new Map(
+        Object.entries(before.question ?? {}).map(([sessionID, questions]) => [sessionID, requestSignature(questions)]),
+      )
+      const x = await sdk.question.list(directory ? { directory } : undefined)
         const grouped = groupBySession(
           (x.data ?? []).filter((q): q is QuestionRequest => !!q?.id && !!q.sessionID),
         )
-        // Merge: only overwrite sessions that the API response covers.
-        // Sessions present in current state but absent from the API response
-        // are left untouched — they may hold SSE-delivered data that hasn't
-        // arrived via HTTP yet or belongs to a different directory.
         const current = getState()
         const merged = { ...current.question }
         for (const [sessionID, questions] of Object.entries(grouped)) {
@@ -145,18 +153,24 @@ export async function bootstrapDirectory(input: {
             .filter((q) => !!q?.id)
             .sort((a, b) => cmp(a.id, b.id))
         }
+        for (const sessionID of beforeSignatures.keys()) {
+          if (grouped[sessionID]) continue
+          const beforeSignature = beforeSignatures.get(sessionID) ?? ""
+          const currentSignature = requestSignature(current.question[sessionID])
+          if (currentSignature !== beforeSignature) continue
+          delete merged[sessionID]
+        }
         set({ question: merged })
-      }),
-    ),
-    retry(() =>
-      sdk.permission.list().then((x) => {
+    }),
+    retry(async () => {
+      const before = getState()
+      const beforeSignatures = new Map(
+        Object.entries(before.permission ?? {}).map(([sessionID, permissions]) => [sessionID, requestSignature(permissions)]),
+      )
+      const x = await sdk.permission.list(directory ? { directory } : undefined)
         const grouped = groupBySession(
           (x.data ?? []).filter((perm): perm is PermissionRequest => !!perm?.id && !!perm?.sessionID),
         )
-        // Merge: only overwrite sessions that the API response covers.
-        // Permissions cleared on the server (empty array for that session)
-        // are still authoritative — server explicitly says "no pending permissions".
-        // Sessions absent from the response are left untouched.
         const current = getState()
         const merged = { ...current.permission }
         for (const [sessionID, perms] of Object.entries(grouped)) {
@@ -164,9 +178,15 @@ export async function bootstrapDirectory(input: {
             .filter((p) => !!p?.id)
             .sort((a, b) => cmp(a.id, b.id))
         }
+        for (const sessionID of beforeSignatures.keys()) {
+          if (grouped[sessionID]) continue
+          const beforeSignature = beforeSignatures.get(sessionID) ?? ""
+          const currentSignature = requestSignature(current.permission[sessionID])
+          if (currentSignature !== beforeSignature) continue
+          delete merged[sessionID]
+        }
         set({ permission: merged })
-      }),
-    ),
+    }),
   ])
 
   const errors = results
