@@ -48,6 +48,8 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDetectedWorktreeMetadata } from '@/hooks/useDetectedWorktreeRoot';
+import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
+import { getSessionWorktreeRepairActions } from '@/sync/session-worktree-contract';
 import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 
 import { GitHeader } from './git/GitHeader';
@@ -272,6 +274,12 @@ export const GitView: React.FC = () => {
 
   const isGitRepo = useIsGitRepo(currentDirectory ?? null);
   const status = useGitStatus(currentDirectory ?? null);
+
+  // Authoritative session↔worktree attachment for repair action display
+  const worktreeAttachment = useSessionWorktreeStore((s) =>
+    currentSessionId ? s.getAttachment(currentSessionId) : undefined
+  );
+  const repairActions = worktreeAttachment ? getSessionWorktreeRepairActions(worktreeAttachment) : [];
 
   const worktreeMetadata = useDetectedWorktreeMetadata(currentDirectory, storeWorktreeMetadata, status?.current ?? undefined);
   const branches = useGitBranches(currentDirectory ?? null);
@@ -1936,6 +1944,11 @@ export const GitView: React.FC = () => {
         <p className="typography-meta mt-1 text-muted-foreground">
           Choose a different directory or initialize Git to use this workspace.
         </p>
+        {repairActions.includes('open-without-worktree-features') ? (
+          <p className="typography-meta mt-2 text-muted-foreground">
+            Worktree features are unavailable for this session.
+          </p>
+        ) : null}
       </div>
     );
   }
