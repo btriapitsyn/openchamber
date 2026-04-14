@@ -721,6 +721,9 @@ async function resyncDirectoryAfterReconnect(
 
   // Re-fetch pending questions on reconnect — they may have been asked
   // during the SSE disconnection window and will not arrive via SSE events.
+  // Merge: only overwrite sessions that the API response covers.
+  // Sessions present in current state but absent from the API response
+  // are left untouched — they may hold SSE-delivered data.
   try {
     const pendingQuestions = await opencodeClient.listPendingQuestions({ directories: [directory] })
     const grouped: Record<string, QuestionRequest[]> = {}
@@ -735,17 +738,11 @@ async function resyncDirectoryAfterReconnect(
       grouped[sessionId].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     }
     store.setState((state: DirectoryStore) => {
-      const nextQuestion = { ...state.question }
-      // Preserve questions for sessions that were not part of this directory's reconnect
-      for (const sessionId of Object.keys(nextQuestion)) {
-        if (!grouped[sessionId]) {
-          nextQuestion[sessionId] = []
-        }
-      }
+      const merged = { ...state.question }
       for (const [sessionId, questions] of Object.entries(grouped)) {
-        nextQuestion[sessionId] = questions
+        merged[sessionId] = questions
       }
-      return { question: nextQuestion }
+      return { question: merged }
     })
   } catch {
     // Non-fatal: question resync best-effort

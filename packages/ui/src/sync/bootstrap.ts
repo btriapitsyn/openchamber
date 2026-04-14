@@ -130,41 +130,41 @@ export async function bootstrapDirectory(input: {
       }),
     ),
     retry(() =>
-      sdk.permission.list().then((x) => {
-        const grouped = groupBySession(
-          (x.data ?? []).filter((perm): perm is PermissionRequest => !!perm?.id && !!perm.sessionID),
-        )
-        const permission: Record<string, PermissionRequest[]> = {}
-        // Clear sessions no longer having permissions
-        const current = getState()
-        for (const sessionID of Object.keys(current.permission ?? {})) {
-          if (!grouped[sessionID]) permission[sessionID] = []
-        }
-        // Set grouped permissions sorted by id
-        for (const [sessionID, perms] of Object.entries(grouped)) {
-          permission[sessionID] = perms
-            .filter((p) => !!p?.id)
-            .sort((a, b) => cmp(a.id, b.id))
-        }
-        set({ permission })
-      }),
-    ),
-    retry(() =>
-      sdk.question.list().then((x) => {
+      sdk.question.list(directory ? { directory } : undefined).then((x) => {
         const grouped = groupBySession(
           (x.data ?? []).filter((q): q is QuestionRequest => !!q?.id && !!q.sessionID),
         )
-        const question: Record<string, QuestionRequest[]> = {}
+        // Merge: only overwrite sessions that the API response covers.
+        // Sessions present in current state but absent from the API response
+        // are left untouched — they may hold SSE-delivered data that hasn't
+        // arrived via HTTP yet or belongs to a different directory.
         const current = getState()
-        for (const sessionID of Object.keys(current.question ?? {})) {
-          if (!grouped[sessionID]) question[sessionID] = []
-        }
+        const merged = { ...current.question }
         for (const [sessionID, questions] of Object.entries(grouped)) {
-          question[sessionID] = questions
+          merged[sessionID] = questions
             .filter((q) => !!q?.id)
             .sort((a, b) => cmp(a.id, b.id))
         }
-        set({ question })
+        set({ question: merged })
+      }),
+    ),
+    retry(() =>
+      sdk.permission.list().then((x) => {
+        const grouped = groupBySession(
+          (x.data ?? []).filter((perm): perm is PermissionRequest => !!perm?.id && !!perm?.sessionID),
+        )
+        // Merge: only overwrite sessions that the API response covers.
+        // Permissions cleared on the server (empty array for that session)
+        // are still authoritative — server explicitly says "no pending permissions".
+        // Sessions absent from the response are left untouched.
+        const current = getState()
+        const merged = { ...current.permission }
+        for (const [sessionID, perms] of Object.entries(grouped)) {
+          merged[sessionID] = perms
+            .filter((p) => !!p?.id)
+            .sort((a, b) => cmp(a.id, b.id))
+        }
+        set({ permission: merged })
       }),
     ),
   ])
