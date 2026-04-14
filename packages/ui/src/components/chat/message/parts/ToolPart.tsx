@@ -1526,7 +1526,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
             );
         };
 
-        // Question tool: show parsed Q&A summary
+        // Question tool: show parsed Q&A summary or question content from input
         if (part.tool === 'question') {
             if (state.status === 'completed' && hasStringOutput) {
                 const parsedQA = parseQuestionOutput(outputString);
@@ -1557,6 +1557,35 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
                             {state.error}
                         </div>
                     </div>
+                );
+            }
+
+            // Show question content from input whenever available, whether the tool is
+            // pending/running or completed without parseable output. This ensures question
+            // text persists across refreshes even if the QuestionCard store data is lost.
+            const questionInput = input as { questions?: Array<{ question?: string; header?: string; options?: Array<{ label: string; description: string }>; multiple?: boolean }> } | undefined;
+            if (questionInput?.questions && Array.isArray(questionInput.questions) && questionInput.questions.length > 0) {
+                return renderScrollableBlock(
+                    <div className="space-y-2">
+                        {questionInput.questions.map((q, index) => (
+                            <div key={index} className="space-y-0.5">
+                                {q.header ? (
+                                    <div className="typography-micro text-muted-foreground">{q.header}</div>
+                                ) : null}
+                                <div className="typography-meta text-foreground">{q.question}</div>
+                                {Array.isArray(q.options) && q.options.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {q.options.map((opt) => (
+                                            <span key={opt.label} className="typography-micro px-1.5 py-0.5 rounded bg-muted/30 border border-border/30 text-muted-foreground">
+                                                {opt.label}
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ))}
+                    </div>,
+                    { maxHeightClass: 'max-h-[40vh]' }
                 );
             }
 
