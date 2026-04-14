@@ -23,10 +23,6 @@ use std::{
     time::Duration,
 };
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
-#[cfg(target_os = "macos")]
-use window_vibrancy::{
-    apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial,
-};
 
 /// Disable pinch-to-zoom / magnification gestures on macOS to avoid accidental
 /// zoom and the continuous gesture event processing overhead.
@@ -2899,92 +2895,12 @@ fn read_desktop_theme_override() -> Option<tauri::Theme> {
     parse_theme_override(theme_mode, theme_variant)
 }
 
-fn read_desktop_vibrancy_enabled() -> bool {
-    let raw = fs::read_to_string(settings_file_path()).ok();
-    let parsed = raw
-        .as_deref()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok());
-    parsed
-        .as_ref()
-        .and_then(|v| v.get("desktopVibrancy"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true) // enabled by default
-}
-
-fn write_desktop_vibrancy_to_disk(enabled: bool) -> Result<()> {
-    let _guard = SETTINGS_FILE_MUTEX.lock().expect("settings file mutex");
-    let path = settings_file_path();
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut root: serde_json::Value = if let Ok(raw) = fs::read_to_string(&path) {
-        serde_json::from_str(&raw).unwrap_or(serde_json::json!({}))
-    } else {
-        serde_json::json!({})
-    };
-    if !root.is_object() {
-        root = serde_json::json!({});
-    }
-    root["desktopVibrancy"] = serde_json::Value::Bool(enabled);
-    fs::write(&path, serde_json::to_string_pretty(&root)?)?;
-    Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn apply_macos_window_vibrancy(window: &tauri::WebviewWindow) {
-    if !read_desktop_vibrancy_enabled() {
-        let _ = clear_vibrancy(window);
-        return;
-    }
-
-    if let Err(error) = apply_vibrancy(
-        window,
-        NSVisualEffectMaterial::Sidebar,
-        None,
-        None,
-    ) {
-        log::warn!("[desktop:vibrancy] Failed to apply macOS vibrancy: {error}");
-    }
-}
-
-#[cfg(not(target_os = "macos"))]
-fn apply_macos_window_vibrancy(_window: &tauri::WebviewWindow) {}
-
-#[tauri::command]
-fn desktop_set_vibrancy(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    write_desktop_vibrancy_to_disk(enabled).map_err(|e| e.to_string())?;
-
-    #[cfg(target_os = "macos")]
-    {
-        for window in app.webview_windows().values() {
-            if enabled {
-                if let Err(error) = apply_vibrancy(
-                    window,
-                    NSVisualEffectMaterial::Sidebar,
-                    None,
-                    None,
-                ) {
-                    log::warn!("[desktop:vibrancy] Failed to apply vibrancy: {error}");
-                }
-            } else {
-                let _ = clear_vibrancy(window);
-            }
-        }
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    let _ = app;
-
-    Ok(())
-}
-
 /// Apply platform-specific window builder configuration.
 fn apply_platform_window_config<M: Manager<tauri::Wry>>(
     builder: WebviewWindowBuilder<'_, tauri::Wry, M>,
 ) -> WebviewWindowBuilder<'_, tauri::Wry, M> {
     #[cfg(target_os = "macos")]
     let builder = builder
-        .transparent(read_desktop_vibrancy_enabled())
         .hidden_title(true)
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition {
@@ -3186,7 +3102,6 @@ fn create_window(
 
     let window = builder.build()?;
     let _ = window.set_theme(read_desktop_theme_override());
-    apply_macos_window_vibrancy(&window);
     disable_pinch_zoom(&window);
 
     if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
@@ -3239,7 +3154,6 @@ fn create_startup_window(app: &tauri::AppHandle, restore_geometry: bool) -> Resu
 
     let window = builder.build()?;
     let _ = window.set_theme(read_desktop_theme_override());
-    apply_macos_window_vibrancy(&window);
     disable_pinch_zoom(&window);
 
     if let Some(state) = restored_state.as_ref().filter(|_| apply_restored_state) {
@@ -3760,7 +3674,6 @@ fn main() {
             desktop_hosts_set,
             desktop_host_probe,
             desktop_set_window_theme,
-            desktop_set_vibrancy,
             remote_ssh::desktop_ssh_instances_get,
             remote_ssh::desktop_ssh_instances_set,
             remote_ssh::desktop_ssh_import_hosts,
