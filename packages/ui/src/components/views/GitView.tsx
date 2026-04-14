@@ -281,6 +281,12 @@ export const GitView: React.FC = () => {
   );
   const repairActions = worktreeAttachment ? getSessionWorktreeRepairActions(worktreeAttachment) : [];
 
+  // When an authoritative attachment exists, derive worktree-related fields from it
+  // rather than from the live detected worktree metadata.
+  const authoritativeProjectRoot = worktreeAttachment && !worktreeAttachment.degraded && !worktreeAttachment.legacy
+    ? worktreeAttachment.worktreeRoot ?? undefined
+    : undefined;
+
   const worktreeMetadata = useDetectedWorktreeMetadata(currentDirectory, storeWorktreeMetadata, status?.current ?? undefined);
   const branches = useGitBranches(currentDirectory ?? null);
   const log = useGitLog(currentDirectory ?? null);
@@ -382,7 +388,7 @@ export const GitView: React.FC = () => {
   const [rootBranchHint, setRootBranchHint] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const projectRoot = worktreeMetadata?.projectDirectory;
+    const projectRoot = authoritativeProjectRoot || worktreeMetadata?.projectDirectory;
     if (!projectRoot) {
       setRootBranchHint(null);
       return;
@@ -404,7 +410,7 @@ export const GitView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [worktreeMetadata?.projectDirectory]);
+  }, [authoritativeProjectRoot, worktreeMetadata?.projectDirectory]);
 
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
@@ -456,7 +462,7 @@ export const GitView: React.FC = () => {
     });
   }, []);
 
-  const repoRootForIntegrate = worktreeMetadata?.projectDirectory || null;
+  const repoRootForIntegrate = authoritativeProjectRoot || worktreeMetadata?.projectDirectory || null;
   const sourceBranchForIntegrate = status?.current || null;
   const shouldShowIntegrateCommits = React.useMemo(() => {
     // For PR worktrees from forks we set upstream to a non-origin remote (e.g. pr-<owner>-<repo>).

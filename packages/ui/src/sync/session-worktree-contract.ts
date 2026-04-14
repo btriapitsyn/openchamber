@@ -218,6 +218,29 @@ export function formatSessionWorktreeBadge(attachment: SessionWorktreeAttachment
   return 'No branch';
 }
 
+/**
+ * Derive the display branch label for a session.
+ * Priority: authoritative attachment branch → live git branch → legacy metadata → catalog lookup.
+ */
+export function getAttachmentBranchLabel(input: {
+  attachment: SessionWorktreeAttachment | null | undefined;
+  liveGitBranch: string | null;
+  legacyMetadataBranch: string | null;
+  catalogBranch: string | null;
+}): string | null {
+  const { attachment, liveGitBranch, legacyMetadataBranch, catalogBranch } = input;
+
+  // If attachment exists and has a branch, that is the session's true branch.
+  // Even if live git shows something else (e.g. another session changed the shared directory),
+  // the attachment is the source of truth.
+  if (attachment && !attachment.degraded && !attachment.legacy) {
+    return attachment.branch?.trim() || null;
+  }
+
+  // Fall back to live git, then legacy, then catalog
+  return liveGitBranch || legacyMetadataBranch || catalogBranch;
+}
+
 // ---------------------------------------------------------------------------
 // Repair actions
 // ---------------------------------------------------------------------------

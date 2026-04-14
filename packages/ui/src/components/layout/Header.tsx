@@ -22,7 +22,7 @@ import { useUIStore, type MainTab } from '@/stores/useUIStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
-import { formatSessionWorktreeBadge } from '@/sync/session-worktree-contract';
+import { formatSessionWorktreeBadge, getAttachmentBranchLabel } from '@/sync/session-worktree-contract';
 import { useSession, useSessionMessagesResolved } from '@/sync/sync-context';
 import { getAllSyncSessions } from '@/sync/sync-refs';
 import { useProjectsStore } from '@/stores/useProjectsStore';
@@ -1083,7 +1083,12 @@ export const Header: React.FC<HeaderProps> = ({
   });
 
   const gitBranchForDirectory = useGitBranchLabel(openDirectory || null);
-  const currentBranchLabel = gitBranchForDirectory || currentSessionWorktreeBranch || catalogWorktreeBranch;
+  const currentBranchLabel = getAttachmentBranchLabel({
+    attachment: worktreeAttachment,
+    liveGitBranch: gitBranchForDirectory,
+    legacyMetadataBranch: currentSessionWorktreeBranch,
+    catalogBranch: catalogWorktreeBranch,
+  });
 
   const currentSessionTitle = React.useMemo(() => {
     if (!currentSessionId) {

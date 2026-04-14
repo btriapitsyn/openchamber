@@ -8,6 +8,7 @@ import {
   getMutationBlockingReasons,
   isWithinWorktreeRoot,
   buildSessionTargetOptions,
+  getAttachmentBranchLabel,
 } from './session-worktree-contract';
 
 describe('isWithinWorktreeRoot', () => {
@@ -613,5 +614,89 @@ describe('getMutationBlockingReasons', () => {
     });
     expect(reasons).toHaveLength(1);
     expect(reasons[0]).toEqual({ reason: 'attention', attentionReason: 'cherry-pick' });
+  });
+});
+
+describe('getAttachmentBranchLabel', () => {
+  const createAttachment = (branch, degraded, legacy) => ({
+    worktreeRoot: '/repo/worktrees/feat-a',
+    cwd: '/repo/worktrees/feat-a',
+    branch,
+    headState: 'branch',
+    worktreeStatus: 'ready',
+    worktreeSource: 'existing',
+    degraded,
+    legacy,
+    attentionReason: null,
+  });
+
+  test('returns attachment branch when available and not degraded', () => {
+    const result = getAttachmentBranchLabel({
+      attachment: createAttachment('feature-x', false, false),
+      liveGitBranch: 'main',
+      legacyMetadataBranch: 'develop',
+      catalogBranch: 'staging',
+    });
+    expect(result).toBe('feature-x');
+  });
+
+  test('falls back to live git when attachment is degraded', () => {
+    const result = getAttachmentBranchLabel({
+      attachment: createAttachment('feature-x', true, false),
+      liveGitBranch: 'main',
+      legacyMetadataBranch: 'develop',
+      catalogBranch: 'staging',
+    });
+    expect(result).toBe('main');
+  });
+
+  test('falls back to live git when attachment is legacy', () => {
+    const result = getAttachmentBranchLabel({
+      attachment: createAttachment(null, false, true),
+      liveGitBranch: 'main',
+      legacyMetadataBranch: 'develop',
+      catalogBranch: 'staging',
+    });
+    expect(result).toBe('main');
+  });
+
+  test('falls back to live git when no attachment', () => {
+    const result = getAttachmentBranchLabel({
+      attachment: null,
+      liveGitBranch: 'main',
+      legacyMetadataBranch: 'develop',
+      catalogBranch: 'staging',
+    });
+    expect(result).toBe('main');
+  });
+
+  test('falls through all sources when needed', () => {
+    const result = getAttachmentBranchLabel({
+      attachment: null,
+      liveGitBranch: null,
+      legacyMetadataBranch: null,
+      catalogBranch: 'staging',
+    });
+    expect(result).toBe('staging');
+  });
+
+  test('trims attachment branch whitespace', () => {
+    const result = getAttachmentBranchLabel({
+      attachment: createAttachment('  feature-x  ', false, false),
+      liveGitBranch: 'main',
+      legacyMetadataBranch: null,
+      catalogBranch: null,
+    });
+    expect(result).toBe('feature-x');
+  });
+
+  test('returns null when attachment branch is empty and no fallbacks', () => {
+    const result = getAttachmentBranchLabel({
+      attachment: createAttachment('', false, false),
+      liveGitBranch: null,
+      legacyMetadataBranch: null,
+      catalogBranch: null,
+    });
+    expect(result).toBe(null);
   });
 });
