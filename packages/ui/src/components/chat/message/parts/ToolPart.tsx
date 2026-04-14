@@ -161,6 +161,7 @@ const TASK_TOOL_ACTIVE_FETCH_LIMIT = 160;
 const TASK_TOOL_IDLE_FETCH_LIMIT = 80;
 const TASK_TOOL_NO_CHANGE_BACKOFF_AFTER_POLLS = 3;
 const TASK_TOOL_SETTLE_GRACE_MS = 2500;
+const TASK_TOOL_FALLBACK_RETRY_MS = 3000;
 const GIT_REFRESH_MUTATING_TOOLS = new Set([
     'bash',
     'edit',
@@ -1971,17 +1972,38 @@ const ToolPart: React.FC<ToolPartProps> = ({
         setTaskFallbackRetried(false);
     }, [taskSessionId]);
 
-    // Track whether fallback resolution has failed at least once, so the
-    // next attempt widens the time window (3s → 8s).
+    // Widen fallback resolution window only after a real retry boundary.
     React.useEffect(() => {
-        if (explicitTaskSessionId != null || taskSessionId != null || isFinalized) {
-            // Resolved or finalized — no need for retry widening.
+        if (!isTaskTool || taskFallbackRetried || explicitTaskSessionId != null || taskSessionId != null || isFinalized) {
             return;
         }
-        // Fallback resolution is unresolved for a non-finalized task —
-        // widen the window for next resolution attempt.
-        setTaskFallbackRetried(true);
-    }, [explicitTaskSessionId, taskSessionId, isFinalized]);
+
+        const sinceStart =
+            typeof taskSessionResolutionStart === 'number'
+                ? Date.now() - taskSessionResolutionStart
+                : 0;
+        const delay = Math.max(0, TASK_TOOL_FALLBACK_RETRY_MS - sinceStart);
+
+        if (typeof window === 'undefined') {
+            setTaskFallbackRetried(true);
+            return;
+        }
+
+        const timer = window.setTimeout(() => {
+            setTaskFallbackRetried(true);
+        }, delay);
+
+        return () => {
+            window.clearTimeout(timer);
+        };
+    }, [
+        explicitTaskSessionId,
+        isFinalized,
+        isTaskTool,
+        taskFallbackRetried,
+        taskSessionId,
+        taskSessionResolutionStart,
+    ]);
 
     React.useEffect(() => {
         if (!isTaskTool || !taskSessionId) {
