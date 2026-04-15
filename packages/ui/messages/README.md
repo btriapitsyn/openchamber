@@ -92,19 +92,24 @@ Use `{param}` syntax in JSON:
 }
 ```
 
-**`packages/ui/src/lib/i18n/runtime.ts`** — update the type, array, and labels:
+> **Note:** `Locale` type and `AVAILABLE_LOCALES` are derived from Paraglide's generated runtime at build time. You do **not** need to update them manually.
+
+### 2. Add the display label
+
+In `packages/ui/src/lib/i18n/runtime.ts`, add the native name to `LOCALE_LABELS`:
 ```ts
-export type Locale = 'en' | 'zh-CN' | 'zh-TW' | 'vi' | 'ja' | 'ko';
-
-export const AVAILABLE_LOCALES: readonly Locale[] = ['en', 'zh-CN', 'zh-TW', 'vi', 'ja', 'ko'] as const;
-
-export const LOCALE_LABELS: Record<Locale, string> = {
-  // ...existing entries...
-  ko: '한국어',
-};
+// Add to existing LOCALE_LABELS:
+ko: '한국어',
 ```
 
-### 2. Create the translation file
+### 3. Add locale normalization (if needed)
+
+In `packages/ui/src/lib/i18n/runtime.ts`, add a mapping rule in `normalizeLocale()` **only if** the browser may send locale variants that need mapping (e.g. `ko-KR` → `ko`, `zh-Hans-CN` → `zh-CN`). Most single-code locales don't need this:
+```ts
+if (lower.startsWith('ko')) return 'ko';
+```
+
+### 4. Create the translation file
 
 Copy `messages/en.json` as the starting point:
 ```sh
@@ -113,23 +118,16 @@ cp packages/ui/messages/en.json packages/ui/messages/ko.json
 
 Translate all values in the new file. Keep keys identical to `en.json`.
 
-### 3. Add locale normalization (if needed)
-
-In `runtime.ts`, add mapping rules in `normalizeLocale()`:
-```ts
-if (lower.startsWith('ko')) return 'ko';
-```
-
-### 4. Compile and verify
+### 5. Compile and verify
 
 ```sh
 bun run type-check   # compiles paraglide + regenerates compat layer
 bun run build        # full build verification
 ```
 
-### 5. Done
+### 6. Done
 
-The language switcher in **Settings → Appearance** will automatically show the new language.
+The language switcher in **Settings → Appearance** will automatically show the new language. `Locale` type and `AVAILABLE_LOCALES` are derived at build time from `project.inlang/settings.json`.
 
 ## Naming conventions
 
