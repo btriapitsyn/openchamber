@@ -23,13 +23,26 @@ export type Locale = (typeof generatedLocales)[number];
 /** Available locales, derived from Paraglide's generated runtime. */
 export const AVAILABLE_LOCALES = generatedLocales as readonly Locale[];
 
-export const LOCALE_LABELS: Record<Locale, string> = {
-  en: 'English',
+/**
+ * Native-language labels for each locale.
+ *
+ * Auto-generated via Intl.DisplayNames. To override a label (e.g. use
+ * "简体中文" instead of the default "中文（中国大陆）"), add an entry
+ * to LOCALE_LABEL_OVERRIDES below.
+ */
+const LOCALE_LABEL_OVERRIDES: Partial<Record<Locale, string>> = {
   'zh-CN': '简体中文',
   'zh-TW': '繁體中文',
-  vi: 'Tiếng Việt',
-  ja: '日本語',
 };
+
+export const LOCALE_LABELS: Record<Locale, string> = Object.fromEntries(
+  AVAILABLE_LOCALES.map((loc) => [
+    loc,
+    LOCALE_LABEL_OVERRIDES[loc] ??
+      new Intl.DisplayNames([loc], { type: 'language' }).of(loc) ??
+      loc,
+  ]),
+) as Record<Locale, string>;
 
 /** Re-export Paraglide's getLocale — returns the current active locale. */
 export { getLocale };
