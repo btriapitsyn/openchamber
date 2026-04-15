@@ -19,6 +19,9 @@ export const parseServeCliOptions = ({
     : undefined;
   const envTunnelToken = env.OPENCHAMBER_TUNNEL_TOKEN || undefined;
   const envTunnelHostname = env.OPENCHAMBER_TUNNEL_HOSTNAME || undefined;
+  const envTunnelReservedDomain = env.OPENCHAMBER_TUNNEL_RESERVED_DOMAIN || undefined;
+  const envTunnelEdgeId = env.OPENCHAMBER_TUNNEL_EDGE_ID || undefined;
+  const envTunnelEndpointId = env.OPENCHAMBER_TUNNEL_ENDPOINT_ID || undefined;
 
   const options = {
     port: defaultPort,
@@ -30,6 +33,9 @@ export const parseServeCliOptions = ({
     tunnelConfigPath: envTunnelConfig,
     tunnelToken: envTunnelToken,
     tunnelHostname: envTunnelHostname,
+    tunnelReservedDomain: envTunnelReservedDomain,
+    tunnelEdgeId: envTunnelEdgeId,
+    tunnelEndpointId: envTunnelEndpointId,
   };
 
   const consumeValue = (currentIndex, inlineValue) => {
@@ -112,6 +118,27 @@ export const parseServeCliOptions = ({
       const { value, nextIndex } = consumeValue(i, inlineValue);
       i = nextIndex;
       options.tunnelHostname = typeof value === 'string' ? value : options.tunnelHostname;
+      continue;
+    }
+
+    if (optionName === 'tunnel-reserved-domain') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.tunnelReservedDomain = typeof value === 'string' ? value : options.tunnelReservedDomain;
+      continue;
+    }
+
+    if (optionName === 'tunnel-edge-id') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.tunnelEdgeId = typeof value === 'string' ? value : options.tunnelEdgeId;
+      continue;
+    }
+
+    if (optionName === 'tunnel-endpoint-id') {
+      const { value, nextIndex } = consumeValue(i, inlineValue);
+      i = nextIndex;
+      options.tunnelEndpointId = typeof value === 'string' ? value : options.tunnelEndpointId;
       continue;
     }
 

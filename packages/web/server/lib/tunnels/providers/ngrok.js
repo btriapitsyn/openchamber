@@ -216,6 +216,37 @@ function summarizeChecks(checks) {
   };
 }
 
+function mapNgrokStartupError(error) {
+  if (error instanceof TunnelServiceError) {
+    return error;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes('ngrok is not installed')
+    || normalized.includes('command not found')
+    || normalized.includes('enoent')
+  ) {
+    return new TunnelServiceError('missing_dependency', message);
+  }
+
+  if (
+    normalized.includes('auth token is required')
+    || normalized.includes('invalid authtoken')
+    || normalized.includes('authentication failed')
+    || normalized.includes('unauthorized')
+    || normalized.includes('forbidden')
+    || normalized.includes('requires reserveddomain')
+    || normalized.includes('requires edgeid')
+  ) {
+    return new TunnelServiceError('validation_error', message);
+  }
+
+  return new TunnelServiceError('startup_failed', message);
+}
+
 function describeMode(mode, checks) {
   const summary = summarizeChecks(checks);
   return {
@@ -370,38 +401,42 @@ export function createNgrokTunnelProvider() {
         throw new TunnelServiceError('validation_error', 'Ngrok auth token is required. Provide token/authToken, set NGROK_AUTHTOKEN, or configure ngrok authtoken.');
       }
 
-      if (request.mode === TUNNEL_MODE_NGROK_RESERVED) {
-        if (resolvedInputs.endpointConflict) {
-          throw new TunnelServiceError('validation_error', resolvedInputs.endpointDetail || 'Multiple endpoints found in ngrok config. Provide endpointId or reservedDomain.');
+      try {
+        if (request.mode === TUNNEL_MODE_NGROK_RESERVED) {
+          if (resolvedInputs.endpointConflict) {
+            throw new TunnelServiceError('validation_error', resolvedInputs.endpointDetail || 'Multiple endpoints found in ngrok config. Provide endpointId or reservedDomain.');
+          }
+          if (!resolvedInputs.reservedDomain) {
+            throw new TunnelServiceError('validation_error', 'Reserved mode requires reservedDomain or a selectable endpoint in ngrok config.');
+          }
+          return startNgrokReservedTunnel({
+            authToken: resolvedInputs.token,
+            originUrl: context.originUrl,
+            reservedDomain: resolvedInputs.reservedDomain,
+          });
         }
-        if (!resolvedInputs.reservedDomain) {
-          throw new TunnelServiceError('validation_error', 'Reserved mode requires reservedDomain or a selectable endpoint in ngrok config.');
+
+        if (request.mode === TUNNEL_MODE_NGROK_EDGE) {
+          if (resolvedInputs.endpointConflict) {
+            throw new TunnelServiceError('validation_error', resolvedInputs.endpointDetail || 'Multiple endpoints found in ngrok config. Provide endpointId or edgeId.');
+          }
+          if (!resolvedInputs.edgeId) {
+            throw new TunnelServiceError('validation_error', 'Edge mode requires edgeId or a selectable endpoint in ngrok config.');
+          }
+          return startNgrokEdgeTunnel({
+            authToken: resolvedInputs.token,
+            originUrl: context.originUrl,
+            edgeId: resolvedInputs.edgeId,
+          });
         }
-        return startNgrokReservedTunnel({
+
+        return startNgrokEphemeralTunnel({
           authToken: resolvedInputs.token,
           originUrl: context.originUrl,
-          reservedDomain: resolvedInputs.reservedDomain,
         });
+      } catch (error) {
+        throw mapNgrokStartupError(error);
       }
-
-      if (request.mode === TUNNEL_MODE_NGROK_EDGE) {
-        if (resolvedInputs.endpointConflict) {
-          throw new TunnelServiceError('validation_error', resolvedInputs.endpointDetail || 'Multiple endpoints found in ngrok config. Provide endpointId or edgeId.');
-        }
-        if (!resolvedInputs.edgeId) {
-          throw new TunnelServiceError('validation_error', 'Edge mode requires edgeId or a selectable endpoint in ngrok config.');
-        }
-        return startNgrokEdgeTunnel({
-          authToken: resolvedInputs.token,
-          originUrl: context.originUrl,
-          edgeId: resolvedInputs.edgeId,
-        });
-      }
-
-      return startNgrokEphemeralTunnel({
-        authToken: resolvedInputs.token,
-        originUrl: context.originUrl,
-      });
     },
     stop: (controller) => {
       controller?.stop?.();

@@ -541,7 +541,7 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.tunnelMode === 'string') {
     const mode = candidate.tunnelMode.trim().toLowerCase();
-    if (mode === 'quick' || mode === 'managed-remote' || mode === 'managed-local') {
+    if (mode === 'quick' || mode === 'managed-remote' || mode === 'managed-local' || mode === 'ephemeral' || mode === 'reserved' || mode === 'edge') {
       result.tunnelMode = mode;
     }
   }

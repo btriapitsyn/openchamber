@@ -790,7 +790,10 @@ async function main(options = {}) {
     || options.tunnelConfigPath === null
     || typeof options.tunnelConfigPath === 'string'
     || typeof options.tunnelToken === 'string'
-    || typeof options.tunnelHostname === 'string';
+    || typeof options.tunnelHostname === 'string'
+    || typeof options.tunnelReservedDomain === 'string'
+    || typeof options.tunnelEdgeId === 'string'
+    || typeof options.tunnelEndpointId === 'string';
   const startupTunnelRequest = shouldUseCanonicalTunnelConfig
     ? normalizeTunnelStartRequest({
         provider: normalizeTunnelProvider(options.tunnelProvider),
@@ -798,6 +801,9 @@ async function main(options = {}) {
         configPath: normalizeOptionalPath(options.tunnelConfigPath),
         token: typeof options.tunnelToken === 'string' ? options.tunnelToken.trim() : '',
         hostname: normalizeManagedRemoteTunnelHostname(options.tunnelHostname),
+        reservedDomain: typeof options.tunnelReservedDomain === 'string' ? options.tunnelReservedDomain.trim().toLowerCase() : '',
+        edgeId: typeof options.tunnelEdgeId === 'string' ? options.tunnelEdgeId.trim() : '',
+        endpointId: typeof options.tunnelEndpointId === 'string' ? options.tunnelEndpointId.trim() : '',
       })
     : (tryCfTunnel
       ? {

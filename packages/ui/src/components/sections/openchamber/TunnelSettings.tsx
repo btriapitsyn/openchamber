@@ -39,8 +39,8 @@ type TunnelState =
   | 'error';
 
 type TtlOption = { value: string; label: string; ms: number | null };
-type TunnelMode = 'quick' | 'managed-remote' | 'managed-local';
-type ApiTunnelMode = TunnelMode;
+type TunnelMode = 'quick' | 'managed-remote' | 'managed-local' | 'ephemeral' | 'reserved' | 'edge';
+type ApiTunnelMode = string;
 
 interface ManagedRemoteTunnelPreset {
   id: string;
@@ -66,10 +66,16 @@ const SESSION_TTL_OPTIONS: TtlOption[] = [
 const MANAGED_REMOTE_TUNNEL_DOC_URL = 'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/';
 const MANAGED_LOCAL_TUNNEL_DOC_URL = 'https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/local-management/configuration-file/';
 
-const TUNNEL_MODE_OPTIONS: Array<{ value: TunnelMode; label: string; tooltip: string }> = [
+const CLOUDFLARE_TUNNEL_MODE_OPTIONS: Array<{ value: TunnelMode; label: string; tooltip: string }> = [
   { value: 'quick', label: 'Quick', tooltip: 'Quick Tunnel is best effort and Cloudflare does not guarantee uptime.' },
   { value: 'managed-remote', label: 'Managed Remote', tooltip: 'Managed Remote uses your Cloudflare account and hostname for long-lived access.' },
   { value: 'managed-local', label: 'Managed Local', tooltip: 'Managed Local uses your local cloudflared configuration file.' },
+];
+
+const NGROK_TUNNEL_MODE_OPTIONS: Array<{ value: TunnelMode; label: string; tooltip: string }> = [
+  { value: 'ephemeral', label: 'Ephemeral', tooltip: 'Ephemeral ngrok tunnel with an auto-assigned public URL.' },
+  { value: 'reserved', label: 'Reserved', tooltip: 'Reserved ngrok tunnel for a reserved domain.' },
+  { value: 'edge', label: 'Edge', tooltip: 'Edge ngrok tunnel for a configured edge URL.' },
 ];
 
 const MANAGED_LOCAL_CONFIG_ALLOWED_EXTENSIONS = ['.yml', '.yaml', '.json'];
@@ -111,6 +117,8 @@ interface TunnelStatusResponse {
   providerMetadata?: {
     configPath?: string | null;
     resolvedHostname?: string | null;
+    edgeId?: string | null;
+    reservedDomain?: string | null;
   };
   activeSessions?: TunnelSessionRecord[];
   localPort?: number;
@@ -138,7 +146,7 @@ interface TunnelStartResponse {
 }
 
 interface TunnelProviderModeDescriptor {
-  key: TunnelMode;
+  key: string;
   label: string;
 }
 
@@ -167,16 +175,38 @@ const ProviderOptionLabel: React.FC<{ provider: string }> = ({ provider }) => {
 };
 
 const toUiTunnelMode = (mode: string | null | undefined): TunnelMode => {
-  if (mode === 'quick') {
+  if (typeof mode !== 'string') {
     return 'quick';
   }
-  if (mode === 'managed-remote') {
-    return 'managed-remote';
-  }
-  if (mode === 'managed-local') {
-    return 'managed-local';
+  const trimmed = mode.trim().toLowerCase();
+  if (trimmed === 'quick' || trimmed === 'managed-remote' || trimmed === 'managed-local' || trimmed === 'ephemeral' || trimmed === 'reserved' || trimmed === 'edge') {
+    return trimmed;
   }
   return 'quick';
+};
+
+const fallbackModesForProvider = (provider: string) => {
+  if (provider === 'ngrok') {
+    return NGROK_TUNNEL_MODE_OPTIONS;
+  }
+  return CLOUDFLARE_TUNNEL_MODE_OPTIONS;
+};
+
+const modeOptionsForProvider = (provider: string, capabilities: TunnelProviderCapability[]) => {
+  const capability = capabilities.find((entry) => entry.provider === provider);
+  const fallback = fallbackModesForProvider(provider);
+  const modes = Array.isArray(capability?.modes) ? capability.modes : [];
+  if (modes.length === 0) {
+    return fallback;
+  }
+  return modes.map((modeEntry) => {
+    const fromFallback = fallback.find((entry) => entry.value === modeEntry.key);
+    return {
+      value: modeEntry.key,
+      label: modeEntry.label || fromFallback?.label || modeEntry.key,
+      tooltip: fromFallback?.tooltip || `${modeEntry.label || modeEntry.key} tunnel mode.`,
+    };
+  });
 };
 
 const ttlOptionValue = (options: TtlOption[], ttlMs: number | null, fallback: string) => {
@@ -270,6 +300,11 @@ export const TunnelSettings: React.FC = () => {
   const [providerCapabilities, setProviderCapabilities] = React.useState<TunnelProviderCapability[]>([]);
   const [tunnelMode, setTunnelMode] = React.useState<TunnelMode>('quick');
   const [managedLocalConfigPath, setManagedLocalConfigPath] = React.useState<string | null>(null);
+  const [ngrokToken, setNgrokToken] = React.useState('');
+  const [ngrokConfigPath, setNgrokConfigPath] = React.useState<string | null>(null);
+  const [ngrokReservedDomain, setNgrokReservedDomain] = React.useState('');
+  const [ngrokEdgeId, setNgrokEdgeId] = React.useState('');
+  const [ngrokEndpointId, setNgrokEndpointId] = React.useState('');
   const [managedRemoteTunnelPresets, setManagedRemoteTunnelPresets] = React.useState<ManagedRemoteTunnelPreset[]>([]);
   const [expandedManagedRemoteTunnels, setExpandedManagedRemoteTunnels] = React.useState<Record<string, boolean>>({});
   const [selectedPresetId, setSelectedPresetId] = React.useState<string>('');
@@ -358,6 +393,14 @@ export const TunnelSettings: React.FC = () => {
     }
     return null;
   }, [localPort]);
+  const currentModeOptions = React.useMemo(
+    () => modeOptionsForProvider(tunnelProvider, providerCapabilities),
+    [providerCapabilities, tunnelProvider]
+  );
+  const supportedModes = React.useMemo(
+    () => new Set(currentModeOptions.map((entry) => entry.value)),
+    [currentModeOptions]
+  );
   const openExternal = React.useCallback(async (url: string) => {
     await openExternalUrl(url);
   }, []);
@@ -388,10 +431,15 @@ export const TunnelSettings: React.FC = () => {
           ? settingsData.tunnelSessionTtlMs
           : 8 * 60 * 60 * 1000;
 
-      const loadedMode: TunnelMode = toUiTunnelMode(statusData.mode ?? settingsData?.tunnelMode);
+      const loadedModeCandidate: TunnelMode = toUiTunnelMode(statusData.mode ?? settingsData?.tunnelMode);
       const loadedProvider = typeof settingsData?.tunnelProvider === 'string' && settingsData.tunnelProvider.trim().length > 0
         ? settingsData.tunnelProvider.trim().toLowerCase()
         : 'cloudflare';
+      const loadedProviderCapabilities = Array.isArray(providersData?.providers) ? providersData.providers : [];
+      const loadedModeOptions = modeOptionsForProvider(loadedProvider, loadedProviderCapabilities);
+      const loadedMode = loadedModeOptions.some((entry) => entry.value === loadedModeCandidate)
+        ? loadedModeCandidate
+        : toUiTunnelMode(loadedModeOptions[0]?.value || 'quick');
       const loadedManagedLocalConfigPath = typeof settingsData?.managedLocalTunnelConfigPath === 'string'
         ? settingsData.managedLocalTunnelConfigPath.trim() || null
         : null;
@@ -415,7 +463,7 @@ export const TunnelSettings: React.FC = () => {
       setBootstrapTtlMs(loadedBootstrapTtl);
       setSessionTtlMs(loadedSessionTtl);
       setTunnelProvider(loadedProvider);
-      setProviderCapabilities(Array.isArray(providersData?.providers) ? providersData.providers : []);
+      setProviderCapabilities(loadedProviderCapabilities);
       setTunnelMode(loadedMode);
       setManagedLocalConfigPath(loadedManagedLocalConfigPath);
       setManagedRemoteTunnelPresets(presets);
@@ -428,6 +476,10 @@ export const TunnelSettings: React.FC = () => {
       );
       setSavedTokenPresetIds(new Set(Array.isArray(statusData.managedRemoteTunnelTokenPresetIds) ? statusData.managedRemoteTunnelTokenPresetIds : []));
       setLocalPort(typeof statusData.localPort === 'number' ? statusData.localPort : null);
+      if (loadedProvider === 'ngrok') {
+        setNgrokReservedDomain(typeof statusData.providerMetadata?.reservedDomain === 'string' ? statusData.providerMetadata.reservedDomain : '');
+        setNgrokEdgeId(typeof statusData.providerMetadata?.edgeId === 'string' ? statusData.providerMetadata.edgeId : '');
+      }
 
       if (statusData.active && statusData.url) {
         setTunnelInfo({
@@ -453,6 +505,14 @@ export const TunnelSettings: React.FC = () => {
     void checkAvailabilityAndStatus(controller.signal);
     return () => controller.abort();
   }, [checkAvailabilityAndStatus]);
+
+  React.useEffect(() => {
+    if (supportedModes.has(tunnelMode)) {
+      return;
+    }
+    const fallbackMode = toUiTunnelMode(currentModeOptions[0]?.value || 'quick');
+    setTunnelMode(fallbackMode);
+  }, [currentModeOptions, supportedModes, tunnelMode]);
 
   React.useEffect(() => {
     if (!tunnelInfo?.connectUrl) {
@@ -616,8 +676,12 @@ export const TunnelSettings: React.FC = () => {
   const handleProviderChange = React.useCallback(async (provider: string) => {
     setManagedRemoteValidationError(null);
     setErrorMessage(null);
-    await saveTunnelSettings({ tunnelProvider: provider });
-  }, [saveTunnelSettings]);
+    const nextModeOptions = modeOptionsForProvider(provider, providerCapabilities);
+    const nextMode = nextModeOptions.some((entry) => entry.value === tunnelMode)
+      ? tunnelMode
+      : toUiTunnelMode(nextModeOptions[0]?.value || 'quick');
+    await saveTunnelSettings({ tunnelProvider: provider, tunnelMode: nextMode });
+  }, [providerCapabilities, saveTunnelSettings, tunnelMode]);
 
   const handleBrowseManagedLocalConfig = React.useCallback(async () => {
     const result = await requestFileAccess({
@@ -680,7 +744,10 @@ export const TunnelSettings: React.FC = () => {
     setErrorMessage(null);
     setManagedRemoteValidationError(null);
 
-    if (tunnelMode === 'managed-local' && managedLocalConfigPath && !hasAllowedManagedLocalConfigExtension(managedLocalConfigPath)) {
+    const isCloudflareProvider = tunnelProvider === 'cloudflare';
+    const isNgrokProvider = tunnelProvider === 'ngrok';
+
+    if (isCloudflareProvider && tunnelMode === 'managed-local' && managedLocalConfigPath && !hasAllowedManagedLocalConfigExtension(managedLocalConfigPath)) {
       setErrorMessage(MANAGED_LOCAL_CONFIG_EXTENSION_ERROR);
       toast.error(MANAGED_LOCAL_CONFIG_EXTENSION_ERROR);
       return;
@@ -691,8 +758,13 @@ export const TunnelSettings: React.FC = () => {
     try {
       let managedRemoteTunnelHostname = '';
       let managedRemoteTunnelToken = '';
+      const ngrokTokenValue = ngrokToken.trim();
+      const ngrokReservedDomainValue = ngrokReservedDomain.trim().toLowerCase();
+      const ngrokEdgeIdValue = ngrokEdgeId.trim();
+      const ngrokEndpointIdValue = ngrokEndpointId.trim();
+      const ngrokConfigPathValue = ngrokConfigPath?.trim() || '';
 
-      if (tunnelMode === 'managed-remote') {
+      if (isCloudflareProvider && tunnelMode === 'managed-remote') {
         if (!selectedPreset) {
           setState('idle');
           setManagedRemoteValidationError('Select or add a managed remote tunnel first');
@@ -715,19 +787,24 @@ export const TunnelSettings: React.FC = () => {
         body: JSON.stringify({
           provider: tunnelProvider,
           mode: tunnelMode,
-          ...(tunnelMode === 'managed-remote' && selectedPreset ? {
+          ...(isCloudflareProvider && tunnelMode === 'managed-remote' && selectedPreset ? {
             managedRemoteTunnelPresetId: selectedPreset.id,
             managedRemoteTunnelPresetName: selectedPreset.name,
           } : {}),
-          ...(tunnelMode === 'managed-remote' && managedRemoteTunnelHostname ? { managedRemoteTunnelHostname } : {}),
-          ...(tunnelMode === 'managed-remote' && managedRemoteTunnelToken ? { managedRemoteTunnelToken } : {}),
-          ...(tunnelMode === 'managed-local' && managedLocalConfigPath ? { configPath: managedLocalConfigPath } : {}),
+          ...(isCloudflareProvider && tunnelMode === 'managed-remote' && managedRemoteTunnelHostname ? { managedRemoteTunnelHostname } : {}),
+          ...(isCloudflareProvider && tunnelMode === 'managed-remote' && managedRemoteTunnelToken ? { managedRemoteTunnelToken } : {}),
+          ...(isCloudflareProvider && tunnelMode === 'managed-local' && managedLocalConfigPath ? { configPath: managedLocalConfigPath } : {}),
+          ...(isNgrokProvider && ngrokTokenValue ? { token: ngrokTokenValue, authTokenSource: 'explicit' } : {}),
+          ...(isNgrokProvider && ngrokConfigPathValue ? { configPath: ngrokConfigPathValue } : {}),
+          ...(isNgrokProvider && ngrokReservedDomainValue ? { reservedDomain: ngrokReservedDomainValue } : {}),
+          ...(isNgrokProvider && ngrokEdgeIdValue ? { edgeId: ngrokEdgeIdValue } : {}),
+          ...(isNgrokProvider && ngrokEndpointIdValue ? { endpointId: ngrokEndpointIdValue } : {}),
         }),
       });
       const data = (await res.json()) as TunnelStartResponse;
 
       if (!res.ok || !data.ok) {
-        if (tunnelMode === 'managed-remote' && typeof data.error === 'string' && data.error.includes('Managed remote tunnel token is required')) {
+        if (isCloudflareProvider && tunnelMode === 'managed-remote' && typeof data.error === 'string' && data.error.includes('Managed remote tunnel token is required')) {
           setState('idle');
           setManagedRemoteValidationError('Managed remote tunnel token is required before starting');
           toast.error('Add a managed remote tunnel token before starting');
@@ -785,6 +862,11 @@ export const TunnelSettings: React.FC = () => {
     saveTunnelSettings,
     selectedPreset,
     sessionTokensByPresetId,
+    ngrokConfigPath,
+    ngrokEdgeId,
+    ngrokEndpointId,
+    ngrokReservedDomain,
+    ngrokToken,
     tunnelProvider,
     tunnelMode,
     managedLocalConfigPath,
@@ -980,6 +1062,8 @@ export const TunnelSettings: React.FC = () => {
   }, [managedRemoteTunnelPresets, saveTunnelSettings, selectedPresetId, sessionTokensByPresetId]);
 
   const primaryCtaClass = 'gap-2 border-[var(--primary-base)] bg-[var(--primary-base)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] hover:text-[var(--primary-foreground)]';
+  const isCloudflareSelected = tunnelProvider === 'cloudflare';
+  const isNgrokSelected = tunnelProvider === 'ngrok';
 
   if (state === 'checking') {
     return (
@@ -994,7 +1078,7 @@ export const TunnelSettings: React.FC = () => {
       <div>
         <h3 className="typography-ui-header font-semibold text-foreground">Remote Tunnel</h3>
         <p className="typography-meta mt-0 text-muted-foreground/70">
-          Configure secure remote access with quick links or your own managed remote Cloudflare tunnel.
+          Configure secure remote access with provider-backed tunnel links.
         </p>
         <p className="typography-meta mt-0 text-muted-foreground/60">
           Secure Tunnel access is enforced server-side.
@@ -1015,15 +1099,34 @@ export const TunnelSettings: React.FC = () => {
               {renderedSessionRecords.map((record) => {
                 const isQuick = record.mode === 'quick';
                 const isManagedRemote = record.mode === 'managed-remote';
+                const isNgrokEphemeral = record.mode === 'ephemeral';
+                const isNgrokReserved = record.mode === 'reserved';
+                const isNgrokEdge = record.mode === 'edge';
                 const modeBadgeClass = isQuick
                   ? 'border-[var(--status-warning-border)] bg-[var(--status-warning-background)] text-[var(--status-warning)]'
                   : isManagedRemote
                     ? 'border-[var(--status-info-border)] bg-[var(--status-info-background)] text-[var(--status-info)]'
+                    : (isNgrokEphemeral || isNgrokReserved || isNgrokEdge)
+                      ? 'border-[var(--status-info-border)] bg-[var(--status-info-background)] text-[var(--status-info)]'
                     : 'border-[var(--status-success-border)] bg-[var(--status-success-background)] text-[var(--status-success)]';
                 const statusDotClass = record.isActive
-                  ? (isQuick ? 'text-[var(--status-warning)]' : isManagedRemote ? 'text-[var(--status-info)]' : 'text-[var(--status-success)]')
+                  ? (isQuick
+                    ? 'text-[var(--status-warning)]'
+                    : (isManagedRemote || isNgrokEphemeral || isNgrokReserved || isNgrokEdge)
+                      ? 'text-[var(--status-info)]'
+                      : 'text-[var(--status-success)]')
                   : 'text-muted-foreground/50';
-                const modeLabel = isQuick ? 'QUICK' : isManagedRemote ? 'REMOTE' : 'LOCAL';
+                const modeLabel = isQuick
+                  ? 'QUICK'
+                  : isManagedRemote
+                    ? 'REMOTE'
+                    : isNgrokEphemeral
+                      ? 'EPHEMERAL'
+                      : isNgrokReserved
+                        ? 'RESERVED'
+                        : isNgrokEdge
+                          ? 'EDGE'
+                          : 'LOCAL';
 
                 return (
                   <div
@@ -1055,10 +1158,10 @@ export const TunnelSettings: React.FC = () => {
           <div className="flex items-start gap-2 rounded-lg border border-[var(--status-warning)]/30 bg-[var(--status-warning)]/5 p-3">
             <RiErrorWarningLine className="mt-0.5 size-4 shrink-0 text-[var(--status-warning)]" />
             <div className="space-y-1">
-              <p className="typography-meta font-medium text-foreground">cloudflared not found</p>
+              <p className="typography-meta font-medium text-foreground">{isNgrokSelected ? 'ngrok not found' : 'cloudflared not found'}</p>
               <p className="typography-meta text-muted-foreground/70">Install it to enable remote tunnel access:</p>
               <code className="typography-code block rounded bg-muted/50 px-2 py-1 text-xs text-foreground">
-                brew install cloudflared
+                {isNgrokSelected ? 'brew install ngrok/ngrok/ngrok' : 'brew install cloudflared'}
               </code>
             </div>
           </div>
@@ -1100,7 +1203,7 @@ export const TunnelSettings: React.FC = () => {
             <div className="space-y-1.5">
               <p className="typography-ui-label text-foreground">Tunnel type</p>
               <div className="flex flex-wrap items-center gap-1">
-                {TUNNEL_MODE_OPTIONS.map((option) => (
+                {currentModeOptions.map((option) => (
                   <Tooltip key={option.value} delayDuration={700}>
                     <TooltipTrigger asChild>
                       <Button
@@ -1113,7 +1216,7 @@ export const TunnelSettings: React.FC = () => {
                             : 'text-foreground'
                         )}
                         onClick={() => {
-                          void handleModeChange(option.value);
+                          void handleModeChange(toUiTunnelMode(option.value));
                         }}
                         disabled={isSavingMode || state === 'starting' || state === 'stopping'}
                       >
@@ -1171,7 +1274,7 @@ export const TunnelSettings: React.FC = () => {
             </div>
           </div>
 
-          {tunnelMode === 'quick' && (
+          {tunnelMode === 'quick' && isCloudflareSelected && (
             <div className="rounded-lg border border-[var(--status-warning)]/35 bg-[var(--status-warning)]/10 p-3">
               <div className="flex items-start gap-2">
                 <RiErrorWarningLine className="mt-0.5 size-4 shrink-0 text-[var(--status-warning)]" />
@@ -1187,7 +1290,7 @@ export const TunnelSettings: React.FC = () => {
             </div>
           )}
 
-          {tunnelMode === 'managed-remote' && (
+          {tunnelMode === 'managed-remote' && isCloudflareSelected && (
             <div className="space-y-2 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-3">
               {typeof suggestedConnectorPort === 'number' && (
                 <div className="rounded-md border border-[var(--status-info-border)] bg-[var(--status-info-background)]/35 px-2 py-1.5">
@@ -1398,7 +1501,7 @@ export const TunnelSettings: React.FC = () => {
             </div>
           )}
 
-          {tunnelMode === 'managed-local' && (
+          {tunnelMode === 'managed-local' && isCloudflareSelected && (
             <div className="space-y-2 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-3">
               <div className="space-y-1.5">
                 <p className="typography-ui-label text-foreground">Configuration file</p>
@@ -1463,6 +1566,52 @@ export const TunnelSettings: React.FC = () => {
             </div>
           )}
 
+          {isNgrokSelected && (tunnelMode === 'ephemeral' || tunnelMode === 'reserved' || tunnelMode === 'edge') && (
+            <div className="space-y-2 rounded-lg border border-[var(--interactive-border)] bg-[var(--surface-elevated)] p-3">
+              <p className="typography-ui-label text-foreground">ngrok options</p>
+              <Input
+                type="password"
+                value={ngrokToken}
+                onChange={(event) => setNgrokToken(event.target.value)}
+                placeholder="Auth token (optional if NGROK_AUTHTOKEN/config is set)"
+                className="h-7"
+                disabled={state === 'starting' || state === 'stopping' || isSavingMode}
+              />
+              <Input
+                value={ngrokConfigPath || ''}
+                onChange={(event) => setNgrokConfigPath(event.target.value.trim() || null)}
+                placeholder="Config path (optional, e.g. ~/.config/ngrok/ngrok.yml)"
+                className="h-7"
+                disabled={state === 'starting' || state === 'stopping' || isSavingMode}
+              />
+              <Input
+                value={ngrokEndpointId}
+                onChange={(event) => setNgrokEndpointId(event.target.value)}
+                placeholder="Endpoint id (optional, for config endpoint selection)"
+                className="h-7"
+                disabled={state === 'starting' || state === 'stopping' || isSavingMode}
+              />
+              {tunnelMode === 'reserved' && (
+                <Input
+                  value={ngrokReservedDomain}
+                  onChange={(event) => setNgrokReservedDomain(event.target.value)}
+                  placeholder="Reserved domain (optional if endpoint/config resolves it)"
+                  className="h-7"
+                  disabled={state === 'starting' || state === 'stopping' || isSavingMode}
+                />
+              )}
+              {tunnelMode === 'edge' && (
+                <Input
+                  value={ngrokEdgeId}
+                  onChange={(event) => setNgrokEdgeId(event.target.value)}
+                  placeholder="Edge id/url (optional if endpoint/config resolves it)"
+                  className="h-7"
+                  disabled={state === 'starting' || state === 'stopping' || isSavingMode}
+                />
+              )}
+            </div>
+          )}
+
           {!isSelectedModeTunnelReady && (
             <div className="space-y-6">
               <div className="rounded-lg border border-[var(--status-info-border)] bg-[var(--status-info-background)] p-3">
@@ -1510,7 +1659,7 @@ export const TunnelSettings: React.FC = () => {
                 </div>
               </div>
 
-              {tunnelMode === 'managed-remote' && (
+              {tunnelMode === 'managed-remote' && isCloudflareSelected && (
                 <div className="space-y-1.5">
                   <p className="typography-ui-label text-foreground">Managed remote tunnel to connect</p>
                   <Select

@@ -59,7 +59,9 @@ export const createServerStartupRuntime = (dependencies) => {
             ? 'Quick Tunnel'
             : (startupTunnelRequest.mode === TUNNEL_MODE_MANAGED_LOCAL
               ? 'Managed Local Tunnel'
-              : (startupTunnelRequest.mode === TUNNEL_MODE_MANAGED_REMOTE ? 'Managed Remote Tunnel' : 'Tunnel'));
+              : (startupTunnelRequest.mode === TUNNEL_MODE_MANAGED_REMOTE
+                ? 'Managed Remote Tunnel'
+                : `${startupTunnelRequest.mode} tunnel`));
           console.log(`\nInitializing ${startupModeLabel} for provider '${startupTunnelRequest.provider}'...`);
           try {
             const { publicUrl, mode } = await startTunnelWithNormalizedRequest({
@@ -69,6 +71,10 @@ export const createServerStartupRuntime = (dependencies) => {
               hostname: startupTunnelRequest.hostname,
               token: startupTunnelRequest.token,
               configPath: startupTunnelRequest.configPath,
+              reservedDomain: startupTunnelRequest.reservedDomain,
+              edgeId: startupTunnelRequest.edgeId,
+              endpointId: startupTunnelRequest.endpointId,
+              authTokenSource: startupTunnelRequest.authTokenSource,
               selectedPresetId: '',
               selectedPresetName: '',
             });

@@ -30,13 +30,37 @@ export const createTunnelRoutesRuntime = (dependencies) => {
     setActiveTunnelController,
   } = dependencies;
 
+  const supportsProviderMode = (providerId, mode) => {
+    if (typeof providerId !== 'string' || providerId.length === 0) {
+      return false;
+    }
+    if (typeof mode !== 'string' || mode.length === 0) {
+      return false;
+    }
+    const provider = tunnelProviderRegistry.get(providerId);
+    if (!provider) {
+      return false;
+    }
+    const declaredModes = Array.isArray(provider.capabilities?.modes) ? provider.capabilities.modes : [];
+    return declaredModes.some((entry) => entry?.key === mode);
+  };
+
+  const parseRequestedProvider = (value) => {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      return null;
+    }
+    const providerId = value.trim().toLowerCase();
+    if (!tunnelProviderRegistry.get(providerId)) {
+      throw new TunnelServiceError('provider_unsupported', `Unsupported tunnel provider: ${providerId}`);
+    }
+    return providerId;
+  };
+
   const resolveActiveNormalizedTunnelMode = () => {
     const mode = tunnelService.resolveActiveMode();
-    if (mode === TUNNEL_MODE_MANAGED_LOCAL) {
-      return TUNNEL_MODE_MANAGED_LOCAL;
-    }
-    if (mode === TUNNEL_MODE_MANAGED_REMOTE) {
-      return TUNNEL_MODE_MANAGED_REMOTE;
+    const provider = tunnelService.resolveActiveProvider();
+    if (typeof mode === 'string' && isSupportedTunnelMode(mode) && supportsProviderMode(provider, mode)) {
+      return mode;
     }
     return TUNNEL_MODE_QUICK;
   };
@@ -53,15 +77,17 @@ export const createTunnelRoutesRuntime = (dependencies) => {
   };
 
   const resolvePreferredTunnelProvider = async (reqBody = null) => {
-    if (typeof reqBody?.provider === 'string' && reqBody.provider.trim().length > 0) {
-      return normalizeTunnelProvider(reqBody.provider);
+    const explicitProvider = parseRequestedProvider(reqBody?.provider);
+    if (explicitProvider) {
+      return explicitProvider;
     }
     const activeProvider = tunnelService.resolveActiveProvider();
     if (activeProvider) {
-      return normalizeTunnelProvider(activeProvider);
+      return activeProvider;
     }
     const settings = await readSettingsFromDiskMigrated();
-    return normalizeTunnelProvider(settings?.tunnelProvider);
+    const fromSettings = parseRequestedProvider(settings?.tunnelProvider);
+    return fromSettings || normalizeTunnelProvider(settings?.tunnelProvider);
   };
 
   const startTunnelWithNormalizedRequest = async ({
@@ -71,6 +97,10 @@ export const createTunnelRoutesRuntime = (dependencies) => {
     hostname,
     token,
     configPath,
+    reservedDomain,
+    edgeId,
+    endpointId,
+    authTokenSource,
     selectedPresetId,
     selectedPresetName,
   }) => {
@@ -95,6 +125,10 @@ export const createTunnelRoutesRuntime = (dependencies) => {
       configPath,
       token,
       hostname,
+      reservedDomain,
+      edgeId,
+      endpointId,
+      authTokenSource,
     });
 
     console.log(`Tunnel active (${result.provider}): ${result.publicUrl}`);
@@ -212,9 +246,7 @@ export const createTunnelRoutesRuntime = (dependencies) => {
   const registerRoutes = (app) => {
     app.get('/api/openchamber/tunnel/check', async (req, res) => {
       try {
-        const requestedProvider = typeof req?.query?.provider === 'string' && req.query.provider.trim().length > 0
-          ? normalizeTunnelProvider(req.query.provider)
-          : await resolvePreferredTunnelProvider();
+        const requestedProvider = parseRequestedProvider(req?.query?.provider) || await resolvePreferredTunnelProvider();
         const result = await tunnelService.checkAvailability(requestedProvider);
         res.json({
           available: result.available,
@@ -222,6 +254,9 @@ export const createTunnelRoutesRuntime = (dependencies) => {
           version: result.version || null,
         });
       } catch (error) {
+        if (error instanceof TunnelServiceError) {
+          return res.status(422).json({ available: false, provider: null, version: null, error: error.message, code: error.code });
+        }
         console.warn('Tunnel dependency check failed:', error);
         res.json({ available: false, provider: null, version: null });
       }
@@ -232,9 +267,7 @@ export const createTunnelRoutesRuntime = (dependencies) => {
         const params = req.query || {};
         const body = req.body || {};
 
-        const providerId = typeof params.provider === 'string' && params.provider.trim().length > 0
-          ? normalizeTunnelProvider(params.provider)
-          : await resolvePreferredTunnelProvider();
+        const providerId = parseRequestedProvider(params.provider) || await resolvePreferredTunnelProvider();
         const modeFilter = typeof params.mode === 'string' && params.mode.trim().length > 0
           ? params.mode.trim().toLowerCase()
           : null;
@@ -260,6 +293,21 @@ export const createTunnelRoutesRuntime = (dependencies) => {
         const requestToken = typeof body.token === 'string'
           ? body.token.trim()
           : '';
+        const requestAuthToken = typeof body.authToken === 'string'
+          ? body.authToken.trim()
+          : '';
+        const reservedDomain = typeof (params.reservedDomain ?? body.reservedDomain) === 'string'
+          ? (params.reservedDomain ?? body.reservedDomain).trim().toLowerCase()
+          : '';
+        const edgeId = typeof (params.edgeId ?? body.edgeId) === 'string'
+          ? (params.edgeId ?? body.edgeId).trim()
+          : '';
+        const endpointId = typeof (params.endpointId ?? body.endpointId) === 'string'
+          ? (params.endpointId ?? body.endpointId).trim()
+          : '';
+        const authTokenSource = typeof body.authTokenSource === 'string'
+          ? body.authTokenSource.trim().toLowerCase()
+          : '';
         const requestTokenProvided = body.managedRemoteTunnelTokenProvided === true
           || body.tunnelTokenProvided === true
           || body.tokenProvided === true;
@@ -282,17 +330,31 @@ export const createTunnelRoutesRuntime = (dependencies) => {
           : '';
         const runtimeHostname = getRuntimeManagedRemoteTunnelHostname();
         const runtimeToken = getRuntimeManagedRemoteTunnelToken();
-        const token = requestToken
-          || requestTunnelToken
-          || requestManagedRemoteToken
-          || ((runtimeHostname && hostname && runtimeHostname === hostname) ? runtimeToken : '')
-          || configManagedRemoteToken
-          || storedManagedRemoteToken;
+        const token = providerId === TUNNEL_PROVIDER_CLOUDFLARE
+          ? (
+            requestToken
+            || requestAuthToken
+            || requestTunnelToken
+            || requestManagedRemoteToken
+            || ((runtimeHostname && hostname && runtimeHostname === hostname) ? runtimeToken : '')
+            || configManagedRemoteToken
+            || storedManagedRemoteToken
+          )
+          : (
+            requestToken
+            || requestAuthToken
+            || requestTunnelToken
+            || requestManagedRemoteToken
+          );
 
         const doctorRequest = {
           mode: modeFilter,
           hostname,
           token,
+          reservedDomain,
+          edgeId,
+          endpointId,
+          authTokenSource,
           tokenProvided: requestTokenProvided,
           hostnameProvided: requestHostnameProvided,
           configPath: requestConfigPath,
@@ -449,6 +511,9 @@ export const createTunnelRoutesRuntime = (dependencies) => {
           }
         }
         const provider = normalizeTunnelProvider(_req?.body?.provider ?? settings?.tunnelProvider);
+        if (!tunnelProviderRegistry.get(provider)) {
+          return res.status(422).json({ ok: false, error: `Unsupported tunnel provider: ${provider}`, code: 'provider_unsupported' });
+        }
         const modeInput = _req?.body?.mode ?? settings?.tunnelMode;
         const intent = typeof _req?.body?.intent === 'string' ? _req.body.intent.trim().toLowerCase() : undefined;
         const mode = typeof modeInput === 'string'
@@ -456,6 +521,9 @@ export const createTunnelRoutesRuntime = (dependencies) => {
           : normalizeTunnelMode(modeInput);
         if (typeof _req?.body?.mode === 'string' && _req.body.mode.trim().length > 0 && !isSupportedTunnelMode(mode)) {
           return res.status(422).json({ ok: false, error: `Unsupported tunnel mode: ${mode}`, code: 'mode_unsupported' });
+        }
+        if (typeof _req?.body?.mode === 'string' && _req.body.mode.trim().length > 0 && !supportsProviderMode(provider, mode)) {
+          return res.status(422).json({ ok: false, error: `Provider '${provider}' does not support mode '${mode}'`, code: 'mode_unsupported' });
         }
         const selectedPresetId = typeof _req?.body?.managedRemoteTunnelPresetId === 'string' ? _req.body.managedRemoteTunnelPresetId.trim() : '';
         const selectedPresetName = typeof _req?.body?.managedRemoteTunnelPresetName === 'string' ? _req.body.managedRemoteTunnelPresetName.trim() : '';
@@ -469,18 +537,33 @@ export const createTunnelRoutesRuntime = (dependencies) => {
         const requestManagedRemoteToken = typeof _req?.body?.managedRemoteTunnelToken === 'string' ? _req.body.managedRemoteTunnelToken.trim() : '';
         const requestTunnelToken = typeof _req?.body?.tunnelToken === 'string' ? _req.body.tunnelToken.trim() : '';
         const requestToken = typeof _req?.body?.token === 'string' ? _req.body.token.trim() : '';
+        const requestAuthToken = typeof _req?.body?.authToken === 'string' ? _req.body.authToken.trim() : '';
+        const reservedDomain = typeof _req?.body?.reservedDomain === 'string' ? _req.body.reservedDomain.trim().toLowerCase() : '';
+        const edgeId = typeof _req?.body?.edgeId === 'string' ? _req.body.edgeId.trim() : '';
+        const endpointId = typeof _req?.body?.endpointId === 'string' ? _req.body.endpointId.trim() : '';
+        const authTokenSource = typeof _req?.body?.authTokenSource === 'string' ? _req.body.authTokenSource.trim().toLowerCase() : '';
         const storedManagedRemoteToken = typeof settings?.managedRemoteTunnelToken === 'string' ? settings.managedRemoteTunnelToken.trim() : '';
         const configManagedRemoteToken = provider === TUNNEL_PROVIDER_CLOUDFLARE
           ? await resolveManagedRemoteTunnelToken({ presetId: selectedPresetId, hostname })
           : '';
         const runtimeHostname = getRuntimeManagedRemoteTunnelHostname();
         const runtimeToken = getRuntimeManagedRemoteTunnelToken();
-        const token = requestToken
-          || requestTunnelToken
-          || requestManagedRemoteToken
-          || ((runtimeHostname && hostname && runtimeHostname === hostname) ? runtimeToken : '')
-          || configManagedRemoteToken
-          || storedManagedRemoteToken;
+        const token = provider === TUNNEL_PROVIDER_CLOUDFLARE
+          ? (
+            requestToken
+            || requestAuthToken
+            || requestTunnelToken
+            || requestManagedRemoteToken
+            || ((runtimeHostname && hostname && runtimeHostname === hostname) ? runtimeToken : '')
+            || configManagedRemoteToken
+            || storedManagedRemoteToken
+          )
+          : (
+            requestToken
+            || requestAuthToken
+            || requestTunnelToken
+            || requestManagedRemoteToken
+          );
         const requestConnectTtlMs = typeof _req?.body?.connectTtlMs === 'number' && Number.isFinite(_req.body.connectTtlMs)
           ? normalizeTunnelBootstrapTtlMs(_req.body.connectTtlMs)
           : undefined;
@@ -504,6 +587,10 @@ export const createTunnelRoutesRuntime = (dependencies) => {
           hostname,
           token,
           configPath: requestConfigPath,
+          reservedDomain,
+          edgeId,
+          endpointId,
+          authTokenSource,
           selectedPresetId,
           selectedPresetName,
         });
