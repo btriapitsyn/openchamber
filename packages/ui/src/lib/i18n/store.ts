@@ -58,7 +58,7 @@ export function initializeLocale(): Locale {
   // Read persisted locale from useUIStore's localStorage
   let persistedLocale: Locale | undefined;
   try {
-    const stored = localStorage.getItem('openchamber-ui-store');
+    const stored = localStorage.getItem('ui-store');
     if (stored) {
       const parsed = JSON.parse(stored);
       if (parsed?.state?.locale) {
