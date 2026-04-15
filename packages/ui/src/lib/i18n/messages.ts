@@ -470,6 +470,34 @@ export const gitAiHighlightsTitle = compatMessage(generated.git_ai_highlights_ti
 export const gitAppendHighlightsToCommitMessage = compatMessage(generated.git_append_highlights_to_commit_message)
 export const gitBranch = compatMessage(generated.git_branch)
 export const gitBranchActionsUnavailable = compatMessage(generated.git_branch_actions_unavailable)
+export const gitBranchBranchToMergeIntoTarget = compatMessage(generated.git_branch_branch_to_merge_into_target)
+export const gitBranchBranchToRebaseOnto = compatMessage(generated.git_branch_branch_to_rebase_onto)
+export const gitBranchBringChangesDescription = compatMessage(generated.git_branch_bring_changes_description)
+export const gitBranchClose = compatMessage(generated.git_branch_close)
+export const gitBranchCurrentBranch = compatMessage(generated.git_branch_current_branch)
+export const gitBranchDone = compatMessage(generated.git_branch_done)
+export const gitBranchLocalBranches = compatMessage(generated.git_branch_local_branches)
+export const gitBranchMerge = compatMessage(generated.git_branch_merge)
+export const gitBranchMergeDescription = compatMessage(generated.git_branch_merge_description)
+export const gitBranchMergeRebase = compatMessage(generated.git_branch_merge_rebase)
+export const gitBranchMergingInProgress = compatMessage(generated.git_branch_merging_in_progress)
+export const gitBranchNoBranchesFound = compatMessage(generated.git_branch_no_branches_found)
+export const gitBranchOperation = compatMessage(generated.git_branch_operation)
+export const gitBranchOperationCompleted = compatMessage(generated.git_branch_operation_completed)
+export const gitBranchOperationDescription = compatMessage(generated.git_branch_operation_description)
+export const gitBranchOperationFailed = compatMessage(generated.git_branch_operation_failed)
+export const gitBranchRebase = compatMessage(generated.git_branch_rebase)
+export const gitBranchRebaseDescription = compatMessage(generated.git_branch_rebase_description)
+export const gitBranchRebasingInProgress = compatMessage(generated.git_branch_rebasing_in_progress)
+export const gitBranchRemoteBranches = compatMessage(generated.git_branch_remote_branches)
+export const gitBranchReset = compatMessage(generated.git_branch_reset)
+export const gitBranchSearchBranches = compatMessage(generated.git_branch_search_branches)
+export const gitBranchSelectABranch = compatMessage(generated.git_branch_select_a_branch)
+export const gitBranchThisWillMergeSourceIntoTarget = compatMessage(generated.git_branch_this_will_merge_source_into_target)
+export const gitBranchThisWillRebaseTargetOntoSource = compatMessage(generated.git_branch_this_will_rebase_target_onto_source)
+export const gitBranchTooltipMergeOrRebase = compatMessage(generated.git_branch_tooltip_merge_or_rebase)
+export const gitBranchUpdateBranch = compatMessage(generated.git_branch_update_branch)
+export const gitBranchUpdateBranchDialogTitle = compatMessage(generated.git_branch_update_branch_dialog_title)
 export const gitCancel = compatMessage(generated.git_cancel)
 export const gitChanges = compatMessage(generated.git_changes)
 export const gitChangesDiscardAll = compatMessage(generated.git_changes_discard_all)
@@ -635,6 +663,16 @@ export const gitStashNamePlaceholder = compatMessage(generated.git_stash_name_pl
 export const gitStashSuccess = compatMessage(generated.git_stash_success)
 export const gitStashUncommittedChanges = compatMessage(generated.git_stash_uncommitted_changes)
 export const gitStashWill = compatMessage(generated.git_stash_will)
+export const gitSyncFetch = compatMessage(generated.git_sync_fetch)
+export const gitSyncFetchFromRemote = compatMessage(generated.git_sync_fetch_from_remote)
+export const gitSyncPull = compatMessage(generated.git_sync_pull)
+export const gitSyncPullChanges = compatMessage(generated.git_sync_pull_changes)
+export const gitSyncPullChangesBehind = compatMessage(generated.git_sync_pull_changes_behind)
+export const gitSyncPush = compatMessage(generated.git_sync_push)
+export const gitSyncPushChanges = compatMessage(generated.git_sync_push_changes)
+export const gitSyncPushChangesAhead = compatMessage(generated.git_sync_push_changes_ahead)
+export const gitSyncRemove = compatMessage(generated.git_sync_remove)
+export const gitSyncRemoveRemote = compatMessage(generated.git_sync_remove_remote)
 export const gitSystemBadge = compatMessage(generated.git_system_badge)
 export const gitTabPr = compatMessage(generated.git_tab_pr)
 export const gitTabUpdate = compatMessage(generated.git_tab_update)
@@ -2364,6 +2402,34 @@ export const m = {
   gitAppendHighlightsToCommitMessage,
   gitBranch,
   gitBranchActionsUnavailable,
+  gitBranchBranchToMergeIntoTarget,
+  gitBranchBranchToRebaseOnto,
+  gitBranchBringChangesDescription,
+  gitBranchClose,
+  gitBranchCurrentBranch,
+  gitBranchDone,
+  gitBranchLocalBranches,
+  gitBranchMerge,
+  gitBranchMergeDescription,
+  gitBranchMergeRebase,
+  gitBranchMergingInProgress,
+  gitBranchNoBranchesFound,
+  gitBranchOperation,
+  gitBranchOperationCompleted,
+  gitBranchOperationDescription,
+  gitBranchOperationFailed,
+  gitBranchRebase,
+  gitBranchRebaseDescription,
+  gitBranchRebasingInProgress,
+  gitBranchRemoteBranches,
+  gitBranchReset,
+  gitBranchSearchBranches,
+  gitBranchSelectABranch,
+  gitBranchThisWillMergeSourceIntoTarget,
+  gitBranchThisWillRebaseTargetOntoSource,
+  gitBranchTooltipMergeOrRebase,
+  gitBranchUpdateBranch,
+  gitBranchUpdateBranchDialogTitle,
   gitCancel,
   gitChanges,
   gitChangesDiscardAll,
@@ -2529,6 +2595,16 @@ export const m = {
   gitStashSuccess,
   gitStashUncommittedChanges,
   gitStashWill,
+  gitSyncFetch,
+  gitSyncFetchFromRemote,
+  gitSyncPull,
+  gitSyncPullChanges,
+  gitSyncPullChangesBehind,
+  gitSyncPush,
+  gitSyncPushChanges,
+  gitSyncPushChangesAhead,
+  gitSyncRemove,
+  gitSyncRemoveRemote,
   gitSystemBadge,
   gitTabPr,
   gitTabUpdate,
