@@ -128,24 +128,34 @@ export const authTrustDevice = compatMessage(generated.auth_trust_device)
 export const authVerifySession = compatMessage(generated.auth_verify_session)
 export const chatAddAttachment = compatMessage(generated.chat_add_attachment)
 export const chatAddProject = compatMessage(generated.chat_add_project)
+export const chatAddToChat = compatMessage(generated.chat_add_to_chat)
+export const chatAddToCurrentChat = compatMessage(generated.chat_add_to_current_chat)
 export const chatApproveAlways = compatMessage(generated.chat_approve_always)
 export const chatApproveOnce = compatMessage(generated.chat_approve_once)
+export const chatAssistant = compatMessage(generated.chat_assistant)
 export const chatAttachFiles = compatMessage(generated.chat_attach_files)
 export const chatAttachmentsTooLarge = compatMessage(generated.chat_attachments_too_large)
 export const chatControls = compatMessage(generated.chat_controls)
 export const chatConversationTimeline = compatMessage(generated.chat_conversation_timeline)
+export const chatCopyMessage = compatMessage(generated.chat_copy_message)
 export const chatCopyOutput = compatMessage(generated.chat_copy_output)
 export const chatCopySource = compatMessage(generated.chat_copy_source)
+export const chatCreateNewSessionWithSelection = compatMessage(generated.chat_create_new_session_with_selection)
+export const chatDelegatedTask = compatMessage(generated.chat_delegated_task)
 export const chatDenyPermission = compatMessage(generated.chat_deny_permission)
 export const chatDownloadSvg = compatMessage(generated.chat_download_svg)
 export const chatDownloadTable = compatMessage(generated.chat_download_table)
 export const chatEditProjects = compatMessage(generated.chat_edit_projects)
 export const chatFailedDownloadDiagram = compatMessage(generated.chat_failed_download_diagram)
 export const chatFailedGenerateImage = compatMessage(generated.chat_failed_generate_image)
+export const chatFailedToGenerateImage = compatMessage(generated.chat_failed_to_generate_image)
 export const chatFailedToSendAttachments = compatMessage(generated.chat_failed_to_send_attachments)
 export const chatFailedTogglePermissionAutoAccept = compatMessage(generated.chat_failed_toggle_permission_auto_accept)
 export const chatFocusMode = compatMessage(generated.chat_focus_mode)
+export const chatForkFromHere = compatMessage(generated.chat_fork_from_here)
 export const chatForkFromMessage = compatMessage(generated.chat_fork_from_message)
+export const chatHideOutput = compatMessage(generated.chat_hide_output)
+export const chatHidePrompt = compatMessage(generated.chat_hide_prompt)
 export const chatImageSaved = compatMessage(generated.chat_image_saved)
 export const chatInputPlaceholder = compatMessage(generated.chat_input_placeholder)
 export const chatLinkGithubIssue = compatMessage(generated.chat_link_github_issue)
@@ -153,19 +163,40 @@ export const chatLinkGithubPr = compatMessage(generated.chat_link_github_pr)
 export const chatModelAgentSettings = compatMessage(generated.chat_model_agent_settings)
 export const chatMoreEffortOptions = compatMessage(generated.chat_more_effort_options)
 export const chatMoreModels = compatMessage(generated.chat_more_models)
+export const chatNewSessionMenu = compatMessage(generated.chat_new_session_menu)
 export const chatNoAgentsFound = compatMessage(generated.chat_no_agents_found)
 export const chatNoMessagesFound = compatMessage(generated.chat_no_messages_found)
 export const chatNoMessagesInSession = compatMessage(generated.chat_no_messages_in_session)
 export const chatOpenSessionFirst = compatMessage(generated.chat_open_session_first)
+export const chatOpenSubtaskSession = compatMessage(generated.chat_open_subtask_session)
 export const chatOpencodeNotReachable = compatMessage(generated.chat_opencode_not_reachable)
+export const chatParent = compatMessage(generated.chat_parent)
+export const chatPermissionAllowOnce = compatMessage(generated.chat_permission_allow_once)
+export const chatPermissionAlwaysAllow = compatMessage(generated.chat_permission_always_allow)
 export const chatPermissionAutoAcceptDisable = compatMessage(generated.chat_permission_auto_accept_disable)
 export const chatPermissionAutoAcceptEnable = compatMessage(generated.chat_permission_auto_accept_enable)
 export const chatPermissionAutoAcceptOff = compatMessage(generated.chat_permission_auto_accept_off)
 export const chatPermissionAutoAcceptOn = compatMessage(generated.chat_permission_auto_accept_on)
+export const chatPermissionBody = compatMessage(generated.chat_permission_body)
+export const chatPermissionDeny = compatMessage(generated.chat_permission_deny)
+export const chatPermissionFromSubagent = compatMessage(generated.chat_permission_from_subagent)
+export const chatPermissionHeaders = compatMessage(generated.chat_permission_headers)
+export const chatPermissionPatterns = compatMessage(generated.chat_permission_patterns)
+export const chatPermissionReplaceAll = compatMessage(generated.chat_permission_replace_all)
+export const chatPermissionRequest = compatMessage(generated.chat_permission_request)
+export const chatPermissionRequired = compatMessage(generated.chat_permission_required)
+export const chatPermissionResponseFormat = compatMessage(generated.chat_permission_response_format)
+export const chatPermissionTimeout = compatMessage(generated.chat_permission_timeout)
+export const chatPermissionWorkingDirectory = compatMessage(generated.chat_permission_working_directory)
 export const chatQueueMessage = compatMessage(generated.chat_queue_message)
+export const chatQuotaLimitRetrying = compatMessage(generated.chat_quota_limit_retrying)
+export const chatReadAloud = compatMessage(generated.chat_read_aloud)
 export const chatRemoveFromQueue = compatMessage(generated.chat_remove_from_queue)
 export const chatRemoveImage = compatMessage(generated.chat_remove_image)
 export const chatResetToDefault = compatMessage(generated.chat_reset_to_default)
+export const chatReturnTo = compatMessage(generated.chat_return_to)
+export const chatReturnToParentSession = compatMessage(generated.chat_return_to_parent_session)
+export const chatRevertFromHere = compatMessage(generated.chat_revert_from_here)
 export const chatRevertToMessage = compatMessage(generated.chat_revert_to_message)
 export const chatScrollToBottom = compatMessage(generated.chat_scroll_to_bottom)
 export const chatSearchAgents = compatMessage(generated.chat_search_agents)
@@ -173,9 +204,15 @@ export const chatSearchMessages = compatMessage(generated.chat_search_messages)
 export const chatSearchModels = compatMessage(generated.chat_search_models)
 export const chatSearchProviders = compatMessage(generated.chat_search_providers)
 export const chatSendMessage = compatMessage(generated.chat_send_message)
+export const chatShellCommand = compatMessage(generated.chat_shell_command)
+export const chatShowOutput = compatMessage(generated.chat_show_output)
+export const chatShowPrompt = compatMessage(generated.chat_show_prompt)
 export const chatStartNewChat = compatMessage(generated.chat_start_new_chat)
+export const chatStopSpeaking = compatMessage(generated.chat_stop_speaking)
 export const chatThinking = compatMessage(generated.chat_thinking)
 export const chatTimelineDescription = compatMessage(generated.chat_timeline_description)
+export const chatToolExecutedByUser = compatMessage(generated.chat_tool_executed_by_user)
+export const chatYou = compatMessage(generated.chat_you)
 export const chatYourAnswer = compatMessage(generated.chat_your_answer)
 export const cmdActions = compatMessage(generated.cmd_actions)
 export const cmdArgumentsHint = compatMessage(generated.cmd_arguments_hint)
@@ -1497,6 +1534,16 @@ export const srToastArchived = compatMessage(generated.sr_toast_archived)
 export const srToastDeleteFailed = compatMessage(generated.sr_toast_delete_failed)
 export const srToastDeleted = compatMessage(generated.sr_toast_deleted)
 export const srToastNoneEligible = compatMessage(generated.sr_toast_none_eligible)
+export const statusAborted = compatMessage(generated.status_aborted)
+export const statusCancelled = compatMessage(generated.status_cancelled)
+export const statusCompleted = compatMessage(generated.status_completed)
+export const statusHighPriority = compatMessage(generated.status_high_priority)
+export const statusInProgress = compatMessage(generated.status_in_progress)
+export const statusLowPriority = compatMessage(generated.status_low_priority)
+export const statusMediumPriority = compatMessage(generated.status_medium_priority)
+export const statusPending = compatMessage(generated.status_pending)
+export const statusTasks = compatMessage(generated.status_tasks)
+export const statusTasksSummary = compatMessage(generated.status_tasks_summary)
 export const terminalNewSession = compatMessage(generated.terminal_new_session)
 export const terminalTitle = compatMessage(generated.terminal_title)
 export const toastCopyFailed = compatMessage(generated.toast_copy_failed)
@@ -1516,6 +1563,29 @@ export const toastPasskeyAdded = compatMessage(generated.toast_passkey_added)
 export const toastPasskeyCanceled = compatMessage(generated.toast_passkey_canceled)
 export const toastUpdateFailed = compatMessage(generated.toast_update_failed)
 export const toastUpdateFailedApp = compatMessage(generated.toast_update_failed_app)
+export const toolAction = compatMessage(generated.tool_action)
+export const toolAgentTypeLabel = compatMessage(generated.tool_agent_type_label)
+export const toolCloseImagePreview = compatMessage(generated.tool_close_image_preview)
+export const toolCommand = compatMessage(generated.tool_command)
+export const toolDetails = compatMessage(generated.tool_details)
+export const toolFailedLoadDiagram = compatMessage(generated.tool_failed_load_diagram)
+export const toolFailedReadDiagram = compatMessage(generated.tool_failed_read_diagram)
+export const toolFailedToLoadDiagram = compatMessage(generated.tool_failed_to_load_diagram)
+export const toolFailedToReadDiagram = compatMessage(generated.tool_failed_to_read_diagram)
+export const toolImagePreview = compatMessage(generated.tool_image_preview)
+export const toolInput = compatMessage(generated.tool_input)
+export const toolInstructionsLabel = compatMessage(generated.tool_instructions_label)
+export const toolInvalidMermaidPath = compatMessage(generated.tool_invalid_mermaid_path)
+export const toolLoadingDiagram = compatMessage(generated.tool_loading_diagram)
+export const toolMissingMermaidUrl = compatMessage(generated.tool_missing_mermaid_url)
+export const toolNextImage = compatMessage(generated.tool_next_image)
+export const toolPreviousImage = compatMessage(generated.tool_previous_image)
+export const toolRetry = compatMessage(generated.tool_retry)
+export const toolTaskDetails = compatMessage(generated.tool_task_details)
+export const toolTaskLabel = compatMessage(generated.tool_task_label)
+export const toolUnableRenderMermaid = compatMessage(generated.tool_unable_render_mermaid)
+export const toolUnableToRenderDiagram = compatMessage(generated.tool_unable_to_render_diagram)
+export const toolUnsupportedMermaidProtocol = compatMessage(generated.tool_unsupported_mermaid_protocol)
 export const tunnelBrowseConfig = compatMessage(generated.tunnel_browse_config)
 export const tunnelClearConfig = compatMessage(generated.tunnel_clear_config)
 export const tunnelCloudflaredNotFound = compatMessage(generated.tunnel_cloudflared_not_found)
@@ -1878,24 +1948,34 @@ export const m = {
   authVerifySession,
   chatAddAttachment,
   chatAddProject,
+  chatAddToChat,
+  chatAddToCurrentChat,
   chatApproveAlways,
   chatApproveOnce,
+  chatAssistant,
   chatAttachFiles,
   chatAttachmentsTooLarge,
   chatControls,
   chatConversationTimeline,
+  chatCopyMessage,
   chatCopyOutput,
   chatCopySource,
+  chatCreateNewSessionWithSelection,
+  chatDelegatedTask,
   chatDenyPermission,
   chatDownloadSvg,
   chatDownloadTable,
   chatEditProjects,
   chatFailedDownloadDiagram,
   chatFailedGenerateImage,
+  chatFailedToGenerateImage,
   chatFailedToSendAttachments,
   chatFailedTogglePermissionAutoAccept,
   chatFocusMode,
+  chatForkFromHere,
   chatForkFromMessage,
+  chatHideOutput,
+  chatHidePrompt,
   chatImageSaved,
   chatInputPlaceholder,
   chatLinkGithubIssue,
@@ -1903,19 +1983,40 @@ export const m = {
   chatModelAgentSettings,
   chatMoreEffortOptions,
   chatMoreModels,
+  chatNewSessionMenu,
   chatNoAgentsFound,
   chatNoMessagesFound,
   chatNoMessagesInSession,
   chatOpenSessionFirst,
+  chatOpenSubtaskSession,
   chatOpencodeNotReachable,
+  chatParent,
+  chatPermissionAllowOnce,
+  chatPermissionAlwaysAllow,
   chatPermissionAutoAcceptDisable,
   chatPermissionAutoAcceptEnable,
   chatPermissionAutoAcceptOff,
   chatPermissionAutoAcceptOn,
+  chatPermissionBody,
+  chatPermissionDeny,
+  chatPermissionFromSubagent,
+  chatPermissionHeaders,
+  chatPermissionPatterns,
+  chatPermissionReplaceAll,
+  chatPermissionRequest,
+  chatPermissionRequired,
+  chatPermissionResponseFormat,
+  chatPermissionTimeout,
+  chatPermissionWorkingDirectory,
   chatQueueMessage,
+  chatQuotaLimitRetrying,
+  chatReadAloud,
   chatRemoveFromQueue,
   chatRemoveImage,
   chatResetToDefault,
+  chatReturnTo,
+  chatReturnToParentSession,
+  chatRevertFromHere,
   chatRevertToMessage,
   chatScrollToBottom,
   chatSearchAgents,
@@ -1923,9 +2024,15 @@ export const m = {
   chatSearchModels,
   chatSearchProviders,
   chatSendMessage,
+  chatShellCommand,
+  chatShowOutput,
+  chatShowPrompt,
   chatStartNewChat,
+  chatStopSpeaking,
   chatThinking,
   chatTimelineDescription,
+  chatToolExecutedByUser,
+  chatYou,
   chatYourAnswer,
   cmdActions,
   cmdArgumentsHint,
@@ -3247,6 +3354,16 @@ export const m = {
   srToastDeleteFailed,
   srToastDeleted,
   srToastNoneEligible,
+  statusAborted,
+  statusCancelled,
+  statusCompleted,
+  statusHighPriority,
+  statusInProgress,
+  statusLowPriority,
+  statusMediumPriority,
+  statusPending,
+  statusTasks,
+  statusTasksSummary,
   terminalNewSession,
   terminalTitle,
   toastCopyFailed,
@@ -3266,6 +3383,29 @@ export const m = {
   toastPasskeyCanceled,
   toastUpdateFailed,
   toastUpdateFailedApp,
+  toolAction,
+  toolAgentTypeLabel,
+  toolCloseImagePreview,
+  toolCommand,
+  toolDetails,
+  toolFailedLoadDiagram,
+  toolFailedReadDiagram,
+  toolFailedToLoadDiagram,
+  toolFailedToReadDiagram,
+  toolImagePreview,
+  toolInput,
+  toolInstructionsLabel,
+  toolInvalidMermaidPath,
+  toolLoadingDiagram,
+  toolMissingMermaidUrl,
+  toolNextImage,
+  toolPreviousImage,
+  toolRetry,
+  toolTaskDetails,
+  toolTaskLabel,
+  toolUnableRenderMermaid,
+  toolUnableToRenderDiagram,
+  toolUnsupportedMermaidProtocol,
   tunnelBrowseConfig,
   tunnelClearConfig,
   tunnelCloudflaredNotFound,

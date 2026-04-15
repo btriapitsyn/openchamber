@@ -21,7 +21,7 @@ import { useUIStore } from "@/stores/useUIStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 import { isVSCodeRuntime } from "@/lib/desktop";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { actionStop } from '@/lib/i18n/messages';
+import { actionStop, statusInProgress, statusPending, statusCompleted, statusCancelled, statusAborted, statusHighPriority, statusMediumPriority, statusLowPriority, statusTasks, statusTasksSummary } from '@/lib/i18n/messages';
 
 const statusConfig: Record<TodoStatus, { textClassName: string }> = {
   in_progress: {
@@ -51,16 +51,16 @@ const priorityIcon: Record<TodoPriority, React.ReactNode> = {
 };
 
 const statusLabel: Record<TodoStatus, string> = {
-  in_progress: "In progress",
-  pending: "Pending",
-  completed: "Completed",
-  cancelled: "Cancelled",
+  in_progress: statusInProgress(),
+  pending: statusPending(),
+  completed: statusCompleted(),
+  cancelled: statusCancelled(),
 };
 
 const priorityLabel: Record<TodoPriority, string> = {
-  high: "High priority",
-  medium: "Medium priority",
-  low: "Low priority",
+  high: statusHighPriority(),
+  medium: statusMediumPriority(),
+  low: statusLowPriority(),
 };
 
 interface TodoItemRowProps {
@@ -247,7 +247,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
         <span className="typography-ui-label">Tasks</span>
       )}
       <span className="typography-meta">
-        {statusSummary.active} active · {statusSummary.left} left
+          {statusSummary.active} active · {statusSummary.left} left
       </span>
       {isExpanded ? (
         <RiArrowUpSLine className="h-3.5 w-3.5" />
@@ -267,11 +267,11 @@ export const StatusRow: React.FC<StatusRowProps> = ({
       <div className="flex items-center justify-between py-0.5 gap-2 h-[1.2rem]">
         {/* Left: Abort status or Working placeholder */}
         <div className="flex-1 flex items-center overflow-hidden min-w-0">
-          {showAssistantStatus && showAbortStatus ? (
+           {showAssistantStatus && showAbortStatus ? (
             <div className="flex h-full items-center text-[var(--status-error)] pl-0.5">
               <span className="flex items-center gap-1.5 typography-ui-label">
                 <RiCloseCircleLine size={16} aria-hidden="true" />
-                Aborted
+                {statusAborted()}
               </span>
             </div>
           ) : showAssistantStatus && shouldRenderPlaceholder ? (

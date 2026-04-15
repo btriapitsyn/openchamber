@@ -31,7 +31,7 @@ import { isVSCodeRuntime } from '@/lib/desktop';
 import { toPng } from 'html-to-image';
 import { toast } from '@/components/ui';
 import { formatTimestampForDisplay } from './timeFormat';
-import { actionCopy, chatCopyOutput, chatRevertToMessage, chatForkFromMessage, chatImageSaved, chatFailedGenerateImage } from '@/lib/i18n/messages';
+import { actionCopy, chatCopyMessage, chatCopyOutput, chatRevertToMessage, chatForkFromMessage, chatImageSaved, chatFailedToGenerateImage, m } from '@/lib/i18n/messages';
 import { ToolRevealOnMount } from './parts/ToolRevealOnMount';
 import { StaticToolRow } from './parts/ProgressiveGroup';
 import { isExpandableTool, isStandaloneTool } from './parts/toolRenderUtils';
@@ -90,7 +90,7 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
     return (
         <div className="mt-2">
             <div className="flex items-center gap-2 flex-wrap">
-                <span className="typography-meta font-semibold text-foreground">Delegated task</span>
+                <span className="typography-meta font-semibold text-foreground">{m.chatDelegatedTask()}</span>
                 {command ? (
                     <span className="inline-flex h-5 items-center rounded px-1.5 text-[11px] leading-none bg-foreground/5 text-muted-foreground">
                         /{command}
@@ -121,7 +121,7 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
                         className="typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                         onClick={() => setExpanded((value) => !value)}
                     >
-                        {expanded ? 'Hide prompt' : 'Show prompt'}
+                        {expanded ? m.chatHidePrompt() : m.chatShowPrompt()}
                     </button>
                     {expanded ? (
                         <pre className="typography-meta mt-1.5 overflow-x-auto whitespace-pre-wrap break-words text-foreground/85">
@@ -140,7 +140,7 @@ const UserSubtaskPart: React.FC<{ part: SubtaskPartLike }> = ({ part }) => {
                             void setCurrentSession(taskSessionID);
                         }}
                     >
-                        Open subtask session
+                        {m.chatOpenSubtaskSession()}
                     </button>
                 </div>
             ) : null}
@@ -190,7 +190,7 @@ const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) 
     return (
         <div className="mt-2">
             <div className="flex items-center gap-2 flex-wrap">
-                <span className="typography-meta font-semibold text-foreground">Shell command</span>
+                <span className="typography-meta font-semibold text-foreground">{m.chatShellCommand()}</span>
                 {status ? (
                     <span className={cn(
                         'inline-flex h-5 items-center rounded px-1.5 text-[11px] leading-none',
@@ -217,7 +217,7 @@ const UserShellActionPart: React.FC<{ part: ShellActionPartLike }> = ({ part }) 
                             className="typography-meta text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
                             onClick={() => setExpanded((value) => !value)}
                         >
-                            {expanded ? 'Hide output' : 'Show output'}
+                            {expanded ? m.chatHideOutput() : m.chatShowOutput()}
                         </button>
                         <button
                             type="button"
@@ -443,8 +443,8 @@ const UserMessageBody: React.FC<{
                             >
                                 <RiArrowGoBackLine className="h-3 w-3" />
                             </Button>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>Revert from here</TooltipContent>
+                         </TooltipTrigger>
+                         <TooltipContent sideOffset={6}>{m.chatRevertFromHere()}</TooltipContent>
                     </Tooltip>
                 )}
                 {onFork && (
@@ -464,8 +464,8 @@ const UserMessageBody: React.FC<{
                             >
                                 <RiGitBranchLine className="h-3 w-3" />
                             </Button>
-                        </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>Fork from here</TooltipContent>
+                         </TooltipTrigger>
+                         <TooltipContent sideOffset={6}>{m.chatForkFromHere()}</TooltipContent>
                     </Tooltip>
                 )}
                 {canCopyMessage && hasCopyableText && (
@@ -477,7 +477,7 @@ const UserMessageBody: React.FC<{
                                 size="icon"
                                 data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
                                 className="h-6 w-6 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50"
-                                aria-label="Copy message text"
+                                aria-label={isMessageCopied ? actionCopy() : chatCopyMessage()}
                                 onPointerDown={(event) => event.stopPropagation()}
                                 onClick={handleCopyButtonClick}
                                 onFocus={() => setCopyHintVisible(true)}
@@ -714,11 +714,11 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
     const readAloudTooltip = React.useMemo(() => {
         if (isTTSPlaying) {
-            return 'Stop speaking';
+          return m.chatStopSpeaking();
         }
         const providerLabel = voiceProvider === 'browser' ? 'Browser' : voiceProvider === 'openai' ? 'OpenAI' : voiceProvider === 'openai-compatible' ? 'Custom' : 'Say';
-        return `Read aloud (${providerLabel} voice)`;
-    }, [isTTSPlaying, voiceProvider]);
+        return m.chatReadAloud({ provider: providerLabel });
+      }, [isTTSPlaying, voiceProvider]);
 
 
     const hasTools = toolParts.length > 0;
@@ -1033,10 +1033,10 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                 }
 
                 toast.success(chatImageSaved());
-            } catch (error) {
-                console.error('Failed to generate image:', error);
-                toast.error(chatFailedGenerateImage());
-            } finally {
+    } catch (error) {
+        console.error('Failed to generate image:', error);
+        toast.error(chatFailedToGenerateImage());
+      } finally {
                 if (wrapper && wrapper.parentNode) {
                     wrapper.parentNode.removeChild(wrapper);
                 }
