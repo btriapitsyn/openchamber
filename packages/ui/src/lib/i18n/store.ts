@@ -71,7 +71,8 @@ export function initializeLocale(): Locale {
 
   const initialLocale = detectInitialLocale(persistedLocale);
 
-  // Set both Paraglide's internal state and our Zustand store
+  // Set both Paraglide's internal state and our Zustand store.
+  // runtime.setLocale already passes { reload: false } to Paraglide.
   paraglideSetLocale(initialLocale);
   useI18nStore.setState({ locale: initialLocale });
 

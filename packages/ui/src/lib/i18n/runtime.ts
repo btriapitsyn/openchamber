@@ -37,7 +37,9 @@ export { getLocale };
  * by itself. The `useI18nStore` handles the React update.
  */
 export function setLocale(locale: Locale): void {
-  paraglideSetLocale(locale);
+  // Pass reload: false — we handle re-renders via I18nProvider's key={locale}
+  // mechanism. A full page reload would lose all React state unnecessarily.
+  paraglideSetLocale(locale, { reload: false });
 }
 
 /**
