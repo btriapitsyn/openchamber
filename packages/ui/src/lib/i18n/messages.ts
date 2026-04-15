@@ -288,11 +288,16 @@ export const commonPreview = compatMessage(generated.common_preview)
 export const commonReset = compatMessage(generated.common_reset)
 export const commonSave = compatMessage(generated.common_save)
 export const commonSearch = compatMessage(generated.common_search)
+export const contextPanelClose = compatMessage(generated.context_panel_close)
 export const contextPanelClosePanel = compatMessage(generated.context_panel_close_panel)
 export const contextPanelCloseTab = compatMessage(generated.context_panel_close_tab)
+export const contextPanelCollapse = compatMessage(generated.context_panel_collapse)
 export const contextPanelCollapsePanel = compatMessage(generated.context_panel_collapse_panel)
+export const contextPanelExpand = compatMessage(generated.context_panel_expand)
 export const contextPanelExpandPanel = compatMessage(generated.context_panel_expand_panel)
+export const contextPanelResize = compatMessage(generated.context_panel_resize)
 export const contextPanelResizePanel = compatMessage(generated.context_panel_resize_panel)
+export const contextPanelSessionChat = compatMessage(generated.context_panel_session_chat)
 export const contextPanelTabChat = compatMessage(generated.context_panel_tab_chat)
 export const contextPanelTabContext = compatMessage(generated.context_panel_tab_context)
 export const contextPanelTabDiff = compatMessage(generated.context_panel_tab_diff)
@@ -1081,25 +1086,35 @@ export const projUploadIcon = compatMessage(generated.proj_upload_icon)
 export const projUploading = compatMessage(generated.proj_uploading)
 export const projWorktree = compatMessage(generated.proj_worktree)
 export const projectActionAddNewAction = compatMessage(generated.project_action_add_new_action)
+export const projectActionChoose = compatMessage(generated.project_action_choose)
 export const projectActionChooseProjectAction = compatMessage(generated.project_action_choose_project_action)
+export const projectActionChooseProjectActionAria = compatMessage(generated.project_action_choose_project_action_aria)
 export const projectActionFallback = compatMessage(generated.project_action_fallback)
+export const projectActionFallbackLabel = compatMessage(generated.project_action_fallback_label)
 export const projectEditCancel = compatMessage(generated.project_edit_cancel)
 export const projectEditClear = compatMessage(generated.project_edit_clear)
 export const projectEditColorLabel = compatMessage(generated.project_edit_color_label)
 export const projectEditCustomIconAlreadySet = compatMessage(generated.project_edit_custom_icon_already_set)
 export const projectEditDiscoverFavicon = compatMessage(generated.project_edit_discover_favicon)
 export const projectEditDiscovering = compatMessage(generated.project_edit_discovering)
+export const projectEditFailedDiscoverIcon = compatMessage(generated.project_edit_failed_discover_icon)
+export const projectEditFailedRemoveIcon = compatMessage(generated.project_edit_failed_remove_icon)
 export const projectEditFailedToDiscoverIcon = compatMessage(generated.project_edit_failed_to_discover_icon)
 export const projectEditFailedToRemoveIcon = compatMessage(generated.project_edit_failed_to_remove_icon)
 export const projectEditFailedToUploadIcon = compatMessage(generated.project_edit_failed_to_upload_icon)
+export const projectEditFailedUploadIcon = compatMessage(generated.project_edit_failed_upload_icon)
+export const projectEditIconAlreadySet = compatMessage(generated.project_edit_icon_already_set)
 export const projectEditIconBackgroundAria = compatMessage(generated.project_edit_icon_background_aria)
 export const projectEditIconBackgroundPlaceholder = compatMessage(generated.project_edit_icon_background_placeholder)
+export const projectEditIconBgColor = compatMessage(generated.project_edit_icon_bg_color)
 export const projectEditIconDiscovered = compatMessage(generated.project_edit_icon_discovered)
 export const projectEditIconLabel = compatMessage(generated.project_edit_icon_label)
 export const projectEditIconRemoved = compatMessage(generated.project_edit_icon_removed)
 export const projectEditIconUpdated = compatMessage(generated.project_edit_icon_updated)
+export const projectEditLabelNone = compatMessage(generated.project_edit_label_none)
 export const projectEditNameLabel = compatMessage(generated.project_edit_name_label)
 export const projectEditNamePlaceholder = compatMessage(generated.project_edit_name_placeholder)
+export const projectEditPlaceholderName = compatMessage(generated.project_edit_placeholder_name)
 export const projectEditPreviewLabel = compatMessage(generated.project_edit_preview_label)
 export const projectEditRemoveProjectIcon = compatMessage(generated.project_edit_remove_project_icon)
 export const projectEditRemoving = compatMessage(generated.project_edit_removing)
@@ -1506,6 +1521,7 @@ export const sidebarHeaderNewSession = compatMessage(generated.sidebar_header_ne
 export const sidebarHeaderProjectNotes = compatMessage(generated.sidebar_header_project_notes)
 export const sidebarHeaderSearchPlaceholder = compatMessage(generated.sidebar_header_search_placeholder)
 export const sidebarHeaderSearchSessions = compatMessage(generated.sidebar_header_search_sessions)
+export const sidebarHeaderSessionDisplayMode = compatMessage(generated.sidebar_header_session_display_mode)
 export const sidebarMcp = compatMessage(generated.sidebar_mcp)
 export const sidebarMcpDesc = compatMessage(generated.sidebar_mcp_desc)
 export const sidebarProjectsNoSessions = compatMessage(generated.sidebar_projects_no_sessions)
@@ -2166,11 +2182,16 @@ export const m = {
   commonReset,
   commonSave,
   commonSearch,
+  contextPanelClose,
   contextPanelClosePanel,
   contextPanelCloseTab,
+  contextPanelCollapse,
   contextPanelCollapsePanel,
+  contextPanelExpand,
   contextPanelExpandPanel,
+  contextPanelResize,
   contextPanelResizePanel,
+  contextPanelSessionChat,
   contextPanelTabChat,
   contextPanelTabContext,
   contextPanelTabDiff,
@@ -2959,25 +2980,35 @@ export const m = {
   projUploading,
   projWorktree,
   projectActionAddNewAction,
+  projectActionChoose,
   projectActionChooseProjectAction,
+  projectActionChooseProjectActionAria,
   projectActionFallback,
+  projectActionFallbackLabel,
   projectEditCancel,
   projectEditClear,
   projectEditColorLabel,
   projectEditCustomIconAlreadySet,
   projectEditDiscoverFavicon,
   projectEditDiscovering,
+  projectEditFailedDiscoverIcon,
+  projectEditFailedRemoveIcon,
   projectEditFailedToDiscoverIcon,
   projectEditFailedToRemoveIcon,
   projectEditFailedToUploadIcon,
+  projectEditFailedUploadIcon,
+  projectEditIconAlreadySet,
   projectEditIconBackgroundAria,
   projectEditIconBackgroundPlaceholder,
+  projectEditIconBgColor,
   projectEditIconDiscovered,
   projectEditIconLabel,
   projectEditIconRemoved,
   projectEditIconUpdated,
+  projectEditLabelNone,
   projectEditNameLabel,
   projectEditNamePlaceholder,
+  projectEditPlaceholderName,
   projectEditPreviewLabel,
   projectEditRemoveProjectIcon,
   projectEditRemoving,
@@ -3384,6 +3415,7 @@ export const m = {
   sidebarHeaderProjectNotes,
   sidebarHeaderSearchPlaceholder,
   sidebarHeaderSearchSessions,
+  sidebarHeaderSessionDisplayMode,
   sidebarMcp,
   sidebarMcpDesc,
   sidebarProjectsNoSessions,

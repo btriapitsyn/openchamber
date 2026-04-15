@@ -25,6 +25,9 @@ import {
   projActionFailedToRunAction,
   projActionStop,
   projActionRun,
+  projectActionFallback,
+  projectActionChooseProjectAction,
+  projectActionAddNewAction,
 } from '@/lib/i18n/messages';
 import { cn } from '@/lib/utils';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -169,7 +172,7 @@ const extractBestUrl = (value: string): string | null => {
 const formatActionButtonLabel = (value: string): string => {
   const trimmed = value.trim();
   if (!trimmed) {
-    return 'Action';
+    return projectActionFallback();
   }
 
   const words = trimmed.split(/\s+/).filter(Boolean);
@@ -720,7 +723,7 @@ export const ProjectActionsButton = ({
         <DropdownMenuContent align="end" className="w-52 max-h-[70vh] overflow-y-auto">
           <DropdownMenuItem className="flex items-center gap-2" onClick={openProjectActionsSettings}>
             <RiAddLine className="h-4 w-4" />
-            <span className="typography-ui-label text-foreground">Add new action</span>
+            <span className="typography-ui-label text-foreground">{projectActionAddNewAction()}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {actions.map((entry) => {
@@ -793,7 +796,7 @@ export const ProjectActionsButton = ({
               'border-l border-[var(--interactive-border)] text-muted-foreground',
               'hover:bg-interactive-hover hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
             )}
-            aria-label="Choose project action"
+            aria-label={projectActionChooseProjectAction()}
           >
             <RiArrowDownSLine className="h-4 w-4" />
           </button>
@@ -801,7 +804,7 @@ export const ProjectActionsButton = ({
         <DropdownMenuContent align="center" className="w-52 max-h-[70vh] overflow-y-auto" style={{ translate: '-30px 0' }}>
           <DropdownMenuItem className="flex items-center gap-2" onClick={openProjectActionsSettings}>
             <RiAddLine className="h-4 w-4" />
-            <span className="typography-ui-label text-foreground">Add new action</span>
+            <span className="typography-ui-label text-foreground">{projectActionAddNewAction()}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           {actions.map((entry) => {

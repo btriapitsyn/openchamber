@@ -1874,5 +1874,22 @@
   "sidebar_footer_settings": "Settings",
   "sidebar_footer_shortcuts": "Shortcuts",
   "sidebar_footer_about": "About OpenChamber",
-  "sidebar_footer_update": "Update"
+  "sidebar_footer_update": "Update",
+  "sidebar_header_session_display_mode": "Session display mode",
+  "project_edit_failed_upload_icon": "Failed to upload project icon",
+  "project_edit_failed_remove_icon": "Failed to remove project icon",
+  "project_edit_failed_discover_icon": "Failed to discover project icon",
+  "project_edit_icon_already_set": "Custom icon already set for this project",
+  "project_edit_placeholder_name": "Project name",
+  "project_edit_label_none": "None",
+  "project_edit_icon_bg_color": "Project icon background color",
+  "context_panel_collapse": "Collapse panel",
+  "context_panel_expand": "Expand panel",
+  "context_panel_close": "Close panel",
+  "context_panel_resize": "Resize context panel",
+  "context_panel_session_chat": "Session chat {id}",
+  "project_action_fallback_label": "Action",
+  "project_action_choose": "Choose project action",
+  "project_action_add_new_action": "Add new action",
+  "project_action_choose_project_action_aria": "Choose project action"
 }
