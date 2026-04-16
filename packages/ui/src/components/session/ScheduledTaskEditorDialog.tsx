@@ -12,6 +12,8 @@ import { toast } from '@/components/ui';
 import { RiAddLine, RiCloseLine, RiCalendarLine, RiArrowLeftSLine, RiArrowRightSLine, RiArrowDownSLine } from '@remixicon/react';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { AgentSelector } from '@/components/sections/commands/AgentSelector';
+import { CommandAutocomplete, type CommandAutocompleteHandle } from '@/components/chat/CommandAutocomplete';
+import { FileMentionAutocomplete, type FileMentionHandle } from '@/components/chat/FileMentionAutocomplete';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useUIStore } from '@/stores/useUIStore';
 import type { ScheduledTask } from '@/lib/scheduledTasksApi';
@@ -595,11 +597,18 @@ export function ScheduledTaskEditorDialog(props: {
   );
   const [saving, setSaving] = React.useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = React.useState(false);
+  const [showFileMention, setShowFileMention] = React.useState(false);
+  const [mentionQuery, setMentionQuery] = React.useState('');
+  const [showCommandAutocomplete, setShowCommandAutocomplete] = React.useState(false);
+  const [commandQuery, setCommandQuery] = React.useState('');
   const [calendarMonth, setCalendarMonth] = React.useState<Date>(() => {
     const initialDate = parseISODateToLocal(task?.schedule?.date || '') || new Date();
     return new Date(initialDate.getFullYear(), initialDate.getMonth(), 1);
   });
   const datePickerRef = React.useRef<HTMLDivElement>(null);
+  const promptTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+  const mentionRef = React.useRef<FileMentionHandle>(null);
+  const commandRef = React.useRef<CommandAutocompleteHandle>(null);
   const locale = React.useMemo(() => {
     if (typeof navigator !== 'undefined' && navigator.language) {
       return navigator.language;
@@ -657,6 +666,10 @@ export function ScheduledTaskEditorDialog(props: {
     const sourceDate = parseISODateToLocal(task?.schedule?.date || '') || new Date();
     setCalendarMonth(new Date(sourceDate.getFullYear(), sourceDate.getMonth(), 1));
     setIsDatePickerOpen(false);
+    setShowCommandAutocomplete(false);
+    setShowFileMention(false);
+    setCommandQuery('');
+    setMentionQuery('');
   }, [open, task, currentProviderID, currentModelID, currentVariant, currentAgentName]);
 
   React.useEffect(() => {
@@ -791,6 +804,141 @@ export function ScheduledTaskEditorDialog(props: {
       },
     }));
   }, []);
+
+  const updateAutocompleteState = React.useCallback((value: string, cursorPosition: number) => {
+    if (value.startsWith('/')) {
+      const firstSpace = value.indexOf(' ');
+      const firstNewline = value.indexOf('\n');
+      const commandEnd = Math.min(
+        firstSpace === -1 ? value.length : firstSpace,
+        firstNewline === -1 ? value.length : firstNewline,
+      );
+
+      if (cursorPosition <= commandEnd && firstSpace === -1) {
+        setCommandQuery(value.substring(1, commandEnd));
+        setShowCommandAutocomplete(true);
+        setShowFileMention(false);
+        return;
+      }
+    }
+
+    setShowCommandAutocomplete(false);
+
+    const textBeforeCursor = value.substring(0, cursorPosition);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+    if (lastAtSymbol !== -1) {
+      const charBefore = lastAtSymbol > 0 ? textBeforeCursor[lastAtSymbol - 1] : null;
+      const textAfterAt = textBeforeCursor.substring(lastAtSymbol + 1);
+      const isWordBoundary = !charBefore || /\s/.test(charBefore);
+      if (isWordBoundary && !textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
+        setMentionQuery(textAfterAt);
+        setShowFileMention(true);
+      } else {
+        setShowFileMention(false);
+      }
+      return;
+    }
+
+    setShowFileMention(false);
+  }, []);
+
+  const setPromptValue = React.useCallback((value: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      execution: {
+        ...prev.execution,
+        prompt: value,
+      },
+    }));
+  }, []);
+
+  const handleFileSelect = React.useCallback((file: { name: string; path: string; relativePath?: string }) => {
+    const promptValue = draft.execution.prompt;
+    const textarea = promptTextareaRef.current;
+    const cursorPosition = textarea?.selectionStart ?? promptValue.length;
+    const textBeforeCursor = promptValue.substring(0, cursorPosition);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+    const mentionPath = (file.relativePath && file.relativePath.trim().length > 0)
+      ? file.relativePath.trim()
+      : (file.path || file.name);
+
+    const startIndex = lastAtSymbol !== -1 ? lastAtSymbol : cursorPosition;
+    const nextPrompt = `${promptValue.substring(0, startIndex)}@${mentionPath} ${promptValue.substring(cursorPosition)}`;
+    const nextCursor = startIndex + mentionPath.length + 2;
+
+    setPromptValue(nextPrompt);
+    setShowFileMention(false);
+    setMentionQuery('');
+
+    requestAnimationFrame(() => {
+      const currentTextarea = promptTextareaRef.current;
+      if (currentTextarea) {
+        currentTextarea.selectionStart = nextCursor;
+        currentTextarea.selectionEnd = nextCursor;
+        currentTextarea.focus();
+      }
+      updateAutocompleteState(nextPrompt, nextCursor);
+    });
+  }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
+
+  const handleAgentSelect = React.useCallback((agentName: string) => {
+    const promptValue = draft.execution.prompt;
+    const textarea = promptTextareaRef.current;
+    const cursorPosition = textarea?.selectionStart ?? promptValue.length;
+    const textBeforeCursor = promptValue.substring(0, cursorPosition);
+    const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+    const startIndex = lastAtSymbol !== -1 ? lastAtSymbol : cursorPosition;
+    const nextPrompt = `${promptValue.substring(0, startIndex)}@${agentName} ${promptValue.substring(cursorPosition)}`;
+    const nextCursor = startIndex + agentName.length + 2;
+
+    setPromptValue(nextPrompt);
+    setShowFileMention(false);
+    setMentionQuery('');
+
+    requestAnimationFrame(() => {
+      const currentTextarea = promptTextareaRef.current;
+      if (currentTextarea) {
+        currentTextarea.selectionStart = nextCursor;
+        currentTextarea.selectionEnd = nextCursor;
+        currentTextarea.focus();
+      }
+      updateAutocompleteState(nextPrompt, nextCursor);
+    });
+  }, [draft.execution.prompt, setPromptValue, updateAutocompleteState]);
+
+  const handleCommandSelect = React.useCallback((command: { name: string }) => {
+    const nextPrompt = `/${command.name} `;
+    setPromptValue(nextPrompt);
+    setShowCommandAutocomplete(false);
+    setCommandQuery('');
+
+    requestAnimationFrame(() => {
+      const currentTextarea = promptTextareaRef.current;
+      if (currentTextarea) {
+        currentTextarea.focus();
+        currentTextarea.selectionStart = currentTextarea.value.length;
+        currentTextarea.selectionEnd = currentTextarea.value.length;
+      }
+      updateAutocompleteState(nextPrompt, nextPrompt.length);
+    });
+  }, [setPromptValue, updateAutocompleteState]);
+
+  const handlePromptKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showCommandAutocomplete && commandRef.current) {
+      if (event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Escape' || event.key === 'Tab') {
+        event.preventDefault();
+        commandRef.current.handleKeyDown(event.key);
+        return;
+      }
+    }
+
+    if (showFileMention && mentionRef.current) {
+      if (event.key === 'Enter' || event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Escape' || event.key === 'Tab') {
+        event.preventDefault();
+        mentionRef.current.handleKeyDown(event.key);
+      }
+    }
+  }, [showCommandAutocomplete, showFileMention]);
 
   const handleSubmit = React.useCallback(async () => {
     const validationError = validateDraft(draft);
@@ -1172,20 +1320,56 @@ export function ScheduledTaskEditorDialog(props: {
 
           <div className="flex flex-col gap-1">
             <FieldLabel htmlFor="sched-prompt" required>Prompt</FieldLabel>
-            <Textarea
-              id="sched-prompt"
-              value={draft.execution.prompt}
-              onChange={(event) => setDraft((prev) => ({
-                ...prev,
-                execution: {
-                  ...prev.execution,
-                  prompt: event.target.value,
-                },
-              }))}
-              rows={8}
-              placeholder="Summarize open tasks and propose next actions"
-              className="typography-meta min-h-[120px] max-h-[300px] resize-none overflow-y-auto"
-            />
+            <div className="relative">
+              <Textarea
+                id="sched-prompt"
+                ref={promptTextareaRef}
+                value={draft.execution.prompt}
+                onChange={(event) => {
+                  const nextPrompt = event.target.value;
+                  setPromptValue(nextPrompt);
+                  const cursorPosition = event.target.selectionStart ?? nextPrompt.length;
+                  updateAutocompleteState(nextPrompt, cursorPosition);
+                }}
+                onKeyDown={handlePromptKeyDown}
+                rows={8}
+                placeholder="Summarize open tasks and propose next actions"
+                className="typography-meta min-h-[120px] max-h-[300px] resize-none overflow-y-auto"
+              />
+
+              {showCommandAutocomplete ? (
+                <CommandAutocomplete
+                  ref={commandRef}
+                  searchQuery={commandQuery}
+                  onCommandSelect={handleCommandSelect}
+                  onClose={() => setShowCommandAutocomplete(false)}
+                  style={{
+                    left: 0,
+                    top: 'auto',
+                    bottom: 'calc(100% + 6px)',
+                    marginBottom: 0,
+                    maxWidth: '100%',
+                  }}
+                />
+              ) : null}
+
+              {showFileMention ? (
+                <FileMentionAutocomplete
+                  ref={mentionRef}
+                  searchQuery={mentionQuery}
+                  onFileSelect={handleFileSelect}
+                  onAgentSelect={handleAgentSelect}
+                  onClose={() => setShowFileMention(false)}
+                  style={{
+                    left: 0,
+                    top: 'auto',
+                    bottom: 'calc(100% + 6px)',
+                    marginBottom: 0,
+                    maxWidth: '100%',
+                  }}
+                />
+              ) : null}
+            </div>
           </div>
     </div>
   );

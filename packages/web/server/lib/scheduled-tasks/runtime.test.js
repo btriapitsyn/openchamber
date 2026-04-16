@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { computeNextRunAt, formatScheduledSessionTitle } from './runtime.js';
+import { computeNextRunAt, formatScheduledSessionTitle, parseScheduledCommandPrompt } from './runtime.js';
 
 describe('scheduled-tasks runtime helpers', () => {
   it('computes next daily run in timezone', () => {
@@ -84,5 +84,17 @@ describe('scheduled-tasks runtime helpers', () => {
     }, Date.UTC(2025, 2, 10, 7, 5, 0));
 
     expect(title).toBe('Morning Sync 2025-03-10 07:05');
+  });
+
+  it('parses slash command prompt for scheduled command mode', () => {
+    expect(parseScheduledCommandPrompt('/review src/components')).toEqual({
+      command: 'review',
+      arguments: 'src/components',
+    });
+  });
+
+  it('returns null when prompt is not a slash command', () => {
+    expect(parseScheduledCommandPrompt('Summarize open issues')).toBeNull();
+    expect(parseScheduledCommandPrompt('/')).toBeNull();
   });
 });

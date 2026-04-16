@@ -69,6 +69,29 @@ const safeErrorMessage = (error, maxLength = 2_000) => {
   return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed;
 };
 
+export const parseScheduledCommandPrompt = (prompt) => {
+  if (typeof prompt !== 'string') {
+    return null;
+  }
+
+  const trimmed = prompt.trim();
+  if (!trimmed.startsWith('/')) {
+    return null;
+  }
+
+  const firstLine = trimmed.split(/\r?\n/, 1)[0] || '';
+  const [head, ...tail] = firstLine.split(/\s+/);
+  const commandName = (head || '').slice(1).trim();
+  if (!commandName) {
+    return null;
+  }
+
+  return {
+    command: commandName,
+    arguments: tail.join(' ').trim(),
+  };
+};
+
 export const computeNextRunAt = (task, nowMs = Date.now()) => {
   if (!task?.enabled) {
     return null;
@@ -393,6 +416,57 @@ export const createScheduledTasksRuntime = (deps) => {
     ],
   });
 
+  const runPromptAsync = async ({ baseUrl, authHeaders, sessionID, projectPath, task }) => {
+    const promptUrl = new URL(`${baseUrl}/session/${encodeURIComponent(sessionID)}/prompt_async`);
+    promptUrl.searchParams.set('directory', projectPath);
+    const response = await fetch(promptUrl.toString(), {
+      method: 'POST',
+      headers: {
+        ...authHeaders,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify(buildPromptAsyncPayload(task)),
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      throw new Error(`prompt_async failed (${response.status})${body ? `: ${body}` : ''}`);
+    }
+  };
+
+  const runScheduledCommandIfApplicable = async ({ client, projectPath, sessionID, task }) => {
+    const parsed = parseScheduledCommandPrompt(task?.execution?.prompt);
+    if (!parsed) {
+      return false;
+    }
+
+    let commands = [];
+    try {
+      const response = await client.command.list({ directory: projectPath });
+      commands = Array.isArray(response?.data) ? response.data : [];
+    } catch {
+      return false;
+    }
+
+    const hasMatchingCommand = commands.some((command) => command?.name === parsed.command);
+    if (!hasMatchingCommand) {
+      return false;
+    }
+
+    await client.session.command({
+      sessionID,
+      directory: projectPath,
+      command: parsed.command,
+      arguments: parsed.arguments,
+      ...(task.execution.agent ? { agent: task.execution.agent } : {}),
+      model: `${task.execution.providerID}/${task.execution.modelID}`,
+      ...(task.execution.variant ? { variant: task.execution.variant } : {}),
+    });
+
+    return true;
+  };
+
   const runTaskWithWatchdog = async (projectID, task, reason) => {
     const startedAt = Date.now();
     const title = formatScheduledSessionTitle(task, startedAt);
@@ -432,21 +506,20 @@ export const createScheduledTasksRuntime = (deps) => {
     } catch {
     }
 
-    const promptUrl = new URL(`${baseUrl}/session/${encodeURIComponent(sessionID)}/prompt_async`);
-    promptUrl.searchParams.set('directory', projectPath);
-    const response = await fetch(promptUrl.toString(), {
-      method: 'POST',
-      headers: {
-        ...authHeaders,
-        'content-type': 'application/json',
-        accept: 'application/json',
-      },
-      body: JSON.stringify(buildPromptAsyncPayload(task)),
+    const executedAsCommand = await runScheduledCommandIfApplicable({
+      client,
+      projectPath,
+      sessionID,
+      task,
     });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new Error(`prompt_async failed (${response.status})${body ? `: ${body}` : ''}`);
+    if (!executedAsCommand) {
+      await runPromptAsync({
+        baseUrl,
+        authHeaders,
+        sessionID,
+        projectPath,
+        task,
+      });
     }
 
     const finishedAt = Date.now();
