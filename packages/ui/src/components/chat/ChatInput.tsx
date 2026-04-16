@@ -68,6 +68,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { usePermissionStore } from '@/stores/permissionStore';
 import { chatAttachFiles, chatAddAttachment, chatLinkGithubIssue, chatLinkGithubPr, chatModelAgentSettings, chatPermissionAutoAcceptDisable, chatPermissionAutoAcceptEnable, chatPermissionAutoAcceptOn, chatPermissionAutoAcceptOff, chatFocusMode, chatSendMessage, chatQueueMessage, chatOpenSessionFirst, chatFailedTogglePermissionAutoAccept, chatAttachmentsTooLarge, chatFailedToSendAttachments, sidebarCommands, actionStop } from '@/lib/i18n/messages';
+import { m } from '@/lib/i18n/messages';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -463,7 +464,7 @@ const FocusModeButton = React.memo(function FocusModeButton(props: FocusModeButt
                         event.preventDefault();
                     }}
                     onClick={onToggle}
-                    aria-label="Toggle focus mode"
+                    aria-label={m.ciToggleFocusMode()}
                     aria-pressed={isExpandedInput}
                 >
                     <RiFullscreenLine className={cn(iconSizeClass)} />
@@ -3178,7 +3179,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 borderColor: currentTheme?.colors?.interactive?.border,
                             }}
                         >
-                            <span className="text-xs font-medium text-muted-foreground">Review comments:</span>
+                            <span className="text-xs font-medium text-muted-foreground">{m.ciReviewComments()}</span>
                             <span className="text-xs font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
                                 {draftCount}
                             </span>
@@ -3217,7 +3218,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
                                     className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors"
-                                    aria-label="Open issue in browser"
+                                    aria-label={m.ciOpenIssueInBrowser()}
                                 >
                                     <RiExternalLinkLine className="h-4 w-4 text-muted-foreground" />
                                 </a>
@@ -3227,7 +3228,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         setLinkedIssue(null);
                                     }}
                                     className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
-                                    aria-label="Remove linked issue"
+                                    aria-label={m.ciRemoveLinkedIssue()}
                                 >
                                     <RiCloseLine className="h-4 w-4 text-muted-foreground" />
                                 </span>
@@ -3268,7 +3269,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     rel="noopener noreferrer"
                                     onClick={(e) => e.stopPropagation()}
                                     className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors"
-                                    aria-label="Open pull request in browser"
+                                    aria-label={m.ciOpenPullRequestInBrowser()}
                                 >
                                     <RiExternalLinkLine className="h-4 w-4 text-muted-foreground" />
                                 </a>
@@ -3278,7 +3279,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                         setLinkedPr(null);
                                     }}
                                     className="flex items-center justify-center h-6 w-6 hover:bg-[var(--interactive-hover)] rounded-full transition-colors cursor-pointer"
-                                    aria-label="Remove linked pull request"
+                                    aria-label={m.ciRemoveLinkedPullRequest()}
                                 >
                                     <RiCloseLine className="h-4 w-4 text-muted-foreground" />
                                 </span>
@@ -3324,13 +3325,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     className="h-7 min-w-0 w-fit max-w-[48vw] sm:max-w-[20rem] border-transparent bg-transparent px-1.5 hover:bg-transparent data-[state=open]:bg-transparent"
                                 >
                                     <SelectValue>
-                                        {selectedDraftBranchLabel ?? 'Branch'}
+                                        {selectedDraftBranchLabel ?? m.ciBranch()}
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent fitContent>
                                     {projectRootBranchOption ? (
                                         <SelectGroup>
-                                            <SelectLabel>Project root</SelectLabel>
+                                            <SelectLabel>{m.ciProjectRoot()}</SelectLabel>
                                             <SelectItem key={projectRootBranchOption.value} value={projectRootBranchOption.value} className="max-w-[24rem] truncate">
                                                 {projectRootBranchOption.label}
                                             </SelectItem>
@@ -3339,14 +3340,14 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                     {projectRootBranchOption ? <SelectSeparator /> : null}
                                     <SelectGroup>
                                         <div className="flex items-center justify-between px-2 py-1.5">
-                                            <span className="text-muted-foreground typography-meta">Worktrees</span>
+                                            <span className="text-muted-foreground typography-meta">{m.ciWorktrees()}</span>
                                             <button
                                                 type="button"
                                                 className="text-muted-foreground typography-meta hover:text-foreground cursor-pointer"
                                                 onPointerDown={(e) => { e.stopPropagation(); }}
                                                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); void createWorktreeDraft(); }}
                                             >
-                                                + New
+                                                {m.ciNew()}
                                             </button>
                                         </div>
                                         {worktreeBranchOptions.map((option) => (
@@ -3401,7 +3402,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                             <RiAttachment2 className={cn(iconSizeClass, 'text-current')} />
                                         </button>
                                     </div>
-                                    <p className="mt-2 typography-ui-label text-muted-foreground">Drop files here to attach</p>
+                                    <p className="mt-2 typography-ui-label text-muted-foreground">{m.ciDropFilesHereToAttach()}</p>
                                 </div>
                         </div>
                     )}
@@ -3526,9 +3527,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             onSelect={updateAutocompleteOverlayPosition}
                             placeholder={currentSessionId || newSessionDraftOpen
                                 ? inputMode === 'shell'
-                                    ? "Enter shell command..."
-                                    : "@ for files/agents; / for commands; ! for shell"
-                                : "Select or create a session to start chatting"}
+                                    ? m.ciEnterShellCommand()
+                                    : m.ciInputHelpText()
+                                : m.ciSelectOrCreateSession()}
                             disabled={!currentSessionId && !newSessionDraftOpen}
                             autoCorrect={isMobile ? "on" : "off"}
                             autoCapitalize={isMobile ? "sentences" : "off"}

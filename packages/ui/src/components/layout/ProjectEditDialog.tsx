@@ -35,6 +35,7 @@ import {
   projectEditNamePlaceholder,
   projectEditIconBackgroundPlaceholder,
 } from '@/lib/i18n/messages';
+import { m } from '@/lib/i18n/messages';
 
 interface ProjectEditDialogProps {
   open: boolean;
@@ -253,14 +254,14 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader className="min-w-0">
-          <DialogTitle>Edit project</DialogTitle>
+          <DialogTitle>{m.lyEditProject()}</DialogTitle>
         </DialogHeader>
 
         <div className="min-w-0 space-y-5 py-1">
           {/* Name */}
           <div className="min-w-0 space-y-1.5">
             <label className="typography-ui-label font-medium text-foreground">
-              Name
+              {m.lyName()}
             </label>
             <Input
               value={name}
@@ -282,7 +283,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
           {/* Color */}
           <div className="min-w-0 space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
-              Color
+              {m.lyColor()}
             </label>
             <div className="flex gap-2 flex-wrap">
               {/* No color option */}
@@ -320,7 +321,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
           {/* Icon */}
           <div className="min-w-0 space-y-2">
             <label className="typography-ui-label font-medium text-foreground">
-              Icon
+              {m.lyIcon()}
             </label>
             <input
               ref={fileInputRef}
@@ -373,7 +374,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
             </div>
             {effectiveHasImageIcon && iconPreviewUrl && (
               <div className="flex items-center gap-2 pt-1">
-                <span className="typography-meta text-muted-foreground">Preview</span>
+                <span className="typography-meta text-muted-foreground">{m.lyPreview()}</span>
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border/60 bg-[var(--surface-elevated)] p-1">
                   <span
                     className="inline-flex h-4 w-4 items-center justify-center overflow-hidden rounded-[2px]"
@@ -417,7 +418,7 @@ export const ProjectEditDialog: React.FC<ProjectEditDialogProps> = ({
           {effectiveHasImageIcon && (
             <div className="min-w-0 space-y-2">
               <label className="typography-ui-label font-medium text-foreground">
-                Icon Background
+                {m.lyIconBackground()}
               </label>
               <div className="flex flex-wrap items-center gap-2">
                 <input

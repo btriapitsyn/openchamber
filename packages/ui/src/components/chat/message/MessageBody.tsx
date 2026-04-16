@@ -494,7 +494,7 @@ const UserMessageBody: React.FC<{
                                 )}
                             </Button>
                         </TooltipTrigger>
-                        <TooltipContent sideOffset={6}>Copy message</TooltipContent>
+                        <TooltipContent sideOffset={6}>{m.mbCopyMessage()}</TooltipContent>
                     </Tooltip>
                 )}
             </div>
@@ -1353,9 +1353,9 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                                   'h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
                                   !hasCopyableText && 'opacity-50'
                               )}
-                              disabled={!hasCopyableText}
-                              aria-label="Copy message text"
-                              aria-hidden={!hasCopyableText}
+                               disabled={!hasCopyableText}
+                               aria-label={m.mbCopyMessageText()}
+                               aria-hidden={!hasCopyableText}
                               onPointerDown={(event) => event.stopPropagation()}
                               onClick={handleCopyButtonClick}
                               onFocus={() => {
@@ -1376,7 +1376,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                               )}
                           </Button>
                        </TooltipTrigger>
-                       <TooltipContent sideOffset={6}>Copy answer</TooltipContent>
+                        <TooltipContent sideOffset={6}>{m.mbCopyAnswer()}</TooltipContent>
                    </Tooltip>
                )}
                <Tooltip delayDuration={1000}>
@@ -1400,7 +1400,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             )}
                         </Button>
                     </TooltipTrigger>
-                    <TooltipContent sideOffset={6}>{isSharing ? 'Saving image...' : 'Save as image'}</TooltipContent>
+                     <TooltipContent sideOffset={6}>{isSharing ? m.mbSavingImage() : m.mbSaveAsImage()}</TooltipContent>
                 </Tooltip>
                <Tooltip delayDuration={1000}>
                    <TooltipTrigger asChild>
@@ -1415,7 +1415,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                            <RiChatNewLine className="h-4 w-4" />
                        </Button>
                    </TooltipTrigger>
-                   <TooltipContent sideOffset={6}>Start new session from this answer</TooltipContent>
+                    <TooltipContent sideOffset={6}>{m.mbStartNewSessionFromAnswer()}</TooltipContent>
                </Tooltip>
               <Tooltip delayDuration={1000}>
                   <TooltipTrigger asChild>
@@ -1430,7 +1430,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                           <ArrowsMerge className="h-4 w-4" />
                       </Button>
                   </TooltipTrigger>
-                  <TooltipContent sideOffset={6}>Start new multi-run from this answer</TooltipContent>
+                   <TooltipContent sideOffset={6}>{m.mbStartNewMultiRunFromAnswer()}</TooltipContent>
               </Tooltip>
 
               {showMessageTTSButtons && hasCopyableText && (
@@ -1444,7 +1444,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                                  'h-8 w-8 bg-transparent hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
                                  isTTSPlaying ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'
                              )}
-                             aria-label={isTTSPlaying ? 'Stop speaking' : 'Read aloud'}
+                              aria-label={isTTSPlaying ? m.mbStopSpeaking() : m.mbReadAloud()}
                              onPointerDown={(event) => event.stopPropagation()}
                              onClick={handleTTSClick}
                          >
@@ -1509,7 +1509,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                             {footerTimestamp ? (
                                 <span
                                     className={footerTimestampClassName}
-                                    aria-label={`Message time: ${footerTimestamp}`}
+                                     aria-label={m.mbMessageTime({ timestamp: footerTimestamp })}
                                 >
                                     <RiTimeLine className="h-3.5 w-3.5" />
                                     {footerTimestamp}

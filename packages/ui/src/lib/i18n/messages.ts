@@ -146,6 +146,71 @@ export const agentsSidebarTitle = compatMessage(generated.agents_sidebar_title)
 export const authEnterPassword = compatMessage(generated.auth_enter_password)
 export const authTrustDevice = compatMessage(generated.auth_trust_device)
 export const authVerifySession = compatMessage(generated.auth_verify_session)
+export const bpBranchDeleted = compatMessage(generated.bp_branch_deleted)
+export const bpBranchNotMerged = compatMessage(generated.bp_branch_not_merged)
+export const bpBranchRenamed = compatMessage(generated.bp_branch_renamed)
+export const bpCancelDelete = compatMessage(generated.bp_cancel_delete)
+export const bpCancelRename = compatMessage(generated.bp_cancel_rename)
+export const bpConfirmAgainToForceDelete = compatMessage(generated.bp_confirm_again_to_force_delete)
+export const bpConfirmDelete = compatMessage(generated.bp_confirm_delete)
+export const bpConfirmRename = compatMessage(generated.bp_confirm_rename)
+export const bpCreateWorktree = compatMessage(generated.bp_create_worktree)
+export const bpCreateWorktreeFailed = compatMessage(generated.bp_create_worktree_failed)
+export const bpDelete = compatMessage(generated.bp_delete)
+export const bpDeleteCurrentBranch = compatMessage(generated.bp_delete_current_branch)
+export const bpDeleteDisabledForRootBranch = compatMessage(generated.bp_delete_disabled_for_root_branch)
+export const bpDeleteFailed = compatMessage(generated.bp_delete_failed)
+export const bpDeleteQuestion = compatMessage(generated.bp_delete_question)
+export const bpDeleteWorktree = compatMessage(generated.bp_delete_worktree)
+export const bpDeleteWorktreeRootBranchProtected = compatMessage(generated.bp_delete_worktree_root_branch_protected)
+export const bpFailedToCreateWorktree = compatMessage(generated.bp_failed_to_create_worktree)
+export const bpFailedToDeleteBranch = compatMessage(generated.bp_failed_to_delete_branch)
+export const bpFailedToLoad = compatMessage(generated.bp_failed_to_load)
+export const bpFailedToRenameBranch = compatMessage(generated.bp_failed_to_rename_branch)
+export const bpForceDeleteQuestion = compatMessage(generated.bp_force_delete_question)
+export const bpLoadingBranches = compatMessage(generated.bp_loading_branches)
+export const bpLocalBranchesForProject = compatMessage(generated.bp_local_branches_for_project)
+export const bpManageBranches = compatMessage(generated.bp_manage_branches)
+export const bpNoBranchesFound = compatMessage(generated.bp_no_branches_found)
+export const bpNoMatchingBranches = compatMessage(generated.bp_no_matching_branches)
+export const bpNoProjectSelected = compatMessage(generated.bp_no_project_selected)
+export const bpRename = compatMessage(generated.bp_rename)
+export const bpRenameBranch = compatMessage(generated.bp_rename_branch)
+export const bpRenameDisabledForRootBranch = compatMessage(generated.bp_rename_disabled_for_root_branch)
+export const bpRenameFailed = compatMessage(generated.bp_rename_failed)
+export const bpSearchBranches = compatMessage(generated.bp_search_branches)
+export const bpSelectAProject = compatMessage(generated.bp_select_a_project)
+export const bpWorktree = compatMessage(generated.bp_worktree)
+export const bpWorktreeAlreadyExists = compatMessage(generated.bp_worktree_already_exists)
+export const bpWorktreeCreated = compatMessage(generated.bp_worktree_created)
+export const bsAhead = compatMessage(generated.bs_ahead)
+export const bsBehind = compatMessage(generated.bs_behind)
+export const bsCreateNewBranch = compatMessage(generated.bs_create_new_branch)
+export const bsEmptyNoBranchesFound = compatMessage(generated.bs_empty_no_branches_found)
+export const bsEmptyNoLocalBranches = compatMessage(generated.bs_empty_no_local_branches)
+export const bsEmptyNoRemoteBranches = compatMessage(generated.bs_empty_no_remote_branches)
+export const bsHeadingLocalBranches = compatMessage(generated.bs_heading_local_branches)
+export const bsHeadingRemoteBranches = compatMessage(generated.bs_heading_remote_branches)
+export const bsLabelCurrent = compatMessage(generated.bs_label_current)
+export const bsPlaceholderNewBranchName = compatMessage(generated.bs_placeholder_new_branch_name)
+export const bsPlaceholderSearchBranches = compatMessage(generated.bs_placeholder_search_branches)
+export const bsPushBranchTo = compatMessage(generated.bs_push_branch_to)
+export const bsTooltipCurrentBranch = compatMessage(generated.bs_tooltip_current_branch)
+export const cdArchive = compatMessage(generated.cd_archive)
+export const cdArchiveSession = compatMessage(generated.cd_archive_session)
+export const cdArchiveSessionSingle = compatMessage(generated.cd_archive_session_single)
+export const cdArchiveSessionWithDescendants = compatMessage(generated.cd_archive_session_with_descendants)
+export const cdCancel = compatMessage(generated.cd_cancel)
+export const cdDelete = compatMessage(generated.cd_delete)
+export const cdDeleteFolder = compatMessage(generated.cd_delete_folder)
+export const cdDeleteFolderSingle = compatMessage(generated.cd_delete_folder_single)
+export const cdDeleteFolderWithContent = compatMessage(generated.cd_delete_folder_with_content)
+export const cdDeleteSession = compatMessage(generated.cd_delete_session)
+export const cdDeleteSessionSingle = compatMessage(generated.cd_delete_session_single)
+export const cdDeleteSessionWithDescendants = compatMessage(generated.cd_delete_session_with_descendants)
+export const cdNeverAsk = compatMessage(generated.cd_never_ask)
+export const cdUntitledSession = compatMessage(generated.cd_untitled_session)
+export const cebErrorDetails = compatMessage(generated.ceb_error_details)
 export const chatAddAttachment = compatMessage(generated.chat_add_attachment)
 export const chatAddProject = compatMessage(generated.chat_add_project)
 export const chatAddToChat = compatMessage(generated.chat_add_to_chat)
@@ -234,6 +299,20 @@ export const chatTimelineDescription = compatMessage(generated.chat_timeline_des
 export const chatToolExecutedByUser = compatMessage(generated.chat_tool_executed_by_user)
 export const chatYou = compatMessage(generated.chat_you)
 export const chatYourAnswer = compatMessage(generated.chat_your_answer)
+export const ciBranch = compatMessage(generated.ci_branch)
+export const ciDropFilesHereToAttach = compatMessage(generated.ci_drop_files_here_to_attach)
+export const ciEnterShellCommand = compatMessage(generated.ci_enter_shell_command)
+export const ciInputHelpText = compatMessage(generated.ci_input_help_text)
+export const ciNew = compatMessage(generated.ci_new)
+export const ciOpenIssueInBrowser = compatMessage(generated.ci_open_issue_in_browser)
+export const ciOpenPullRequestInBrowser = compatMessage(generated.ci_open_pull_request_in_browser)
+export const ciProjectRoot = compatMessage(generated.ci_project_root)
+export const ciRemoveLinkedIssue = compatMessage(generated.ci_remove_linked_issue)
+export const ciRemoveLinkedPullRequest = compatMessage(generated.ci_remove_linked_pull_request)
+export const ciReviewComments = compatMessage(generated.ci_review_comments)
+export const ciSelectOrCreateSession = compatMessage(generated.ci_select_or_create_session)
+export const ciToggleFocusMode = compatMessage(generated.ci_toggle_focus_mode)
+export const ciWorktrees = compatMessage(generated.ci_worktrees)
 export const cmdActions = compatMessage(generated.cmd_actions)
 export const cmdArgumentsHint = compatMessage(generated.cmd_arguments_hint)
 export const cmdBuiltinNoDelete = compatMessage(generated.cmd_builtin_no_delete)
@@ -346,6 +425,12 @@ export const contextPanelTabContext = compatMessage(generated.context_panel_tab_
 export const contextPanelTabDiff = compatMessage(generated.context_panel_tab_diff)
 export const contextPanelTabFiles = compatMessage(generated.context_panel_tab_files)
 export const contextPanelTabPlan = compatMessage(generated.context_panel_tab_plan)
+export const crCopiedFile = compatMessage(generated.cr_copied_file)
+export const crDeletedFile = compatMessage(generated.cr_deleted_file)
+export const crModifiedFile = compatMessage(generated.cr_modified_file)
+export const crNewFile = compatMessage(generated.cr_new_file)
+export const crRenamedFile = compatMessage(generated.cr_renamed_file)
+export const crUntrackedFile = compatMessage(generated.cr_untracked_file)
 export const ctxAssistant = compatMessage(generated.ctx_assistant)
 export const ctxCacheRead = compatMessage(generated.ctx_cache_read)
 export const ctxCacheWrite = compatMessage(generated.ctx_cache_write)
@@ -378,6 +463,22 @@ export const ctxUsed = compatMessage(generated.ctx_used)
 export const ctxUsedTokens = compatMessage(generated.ctx_used_tokens)
 export const ctxUsedTokensShort = compatMessage(generated.ctx_used_tokens_short)
 export const ctxUser = compatMessage(generated.ctx_user)
+export const daTabCycleNavigateSelect = compatMessage(generated.da_tab_cycle_navigate_select)
+export const deAddProject = compatMessage(generated.de_add_project)
+export const deAddProjectDirectory = compatMessage(generated.de_add_project_directory)
+export const deAdding = compatMessage(generated.de_adding)
+export const deCancel = compatMessage(generated.de_cancel)
+export const deChooseFolderToAddAsProject = compatMessage(generated.de_choose_folder_to_add_as_project)
+export const deDesktopCouldNotGrantFileAccess = compatMessage(generated.de_desktop_could_not_grant_file_access)
+export const deDesktopDeniedDirectoryAccess = compatMessage(generated.de_desktop_denied_directory_access)
+export const deEnterPathOrSelectFromTree = compatMessage(generated.de_enter_path_or_select_from_tree)
+export const deFailedToAddProject = compatMessage(generated.de_failed_to_add_project)
+export const deFailedToOpenDirectory = compatMessage(generated.de_failed_to_open_directory)
+export const deFailedToSelectDirectory = compatMessage(generated.de_failed_to_select_directory)
+export const deSelectValidDirectoryPath = compatMessage(generated.de_select_valid_directory_path)
+export const deShowHidden = compatMessage(generated.de_show_hidden)
+export const deUnableToAccessDirectory = compatMessage(generated.de_unable_to_access_directory)
+export const deUnknownErrorOccurred = compatMessage(generated.de_unknown_error_occurred)
 export const defaultsDefaultAgent = compatMessage(generated.defaults_default_agent)
 export const defaultsDefaultModel = compatMessage(generated.defaults_default_model)
 export const defaultsDefaultThinking = compatMessage(generated.defaults_default_thinking)
@@ -393,6 +494,61 @@ export const defaultsShowDeletionDialogAria = compatMessage(generated.defaults_s
 export const defaultsThinkingPlaceholder = compatMessage(generated.defaults_thinking_placeholder)
 export const defaultsTitle = compatMessage(generated.defaults_title)
 export const defaultsWillStartWith = compatMessage(generated.defaults_will_start_with)
+export const dhActionConnect = compatMessage(generated.dh_action_connect)
+export const dhActionDelete = compatMessage(generated.dh_action_delete)
+export const dhActionEdit = compatMessage(generated.dh_action_edit)
+export const dhAddInstance = compatMessage(generated.dh_add_instance)
+export const dhAriaLabelInstanceStatus = compatMessage(generated.dh_aria_label_instance_status)
+export const dhButtonAdd = compatMessage(generated.dh_button_add)
+export const dhButtonAddInstance = compatMessage(generated.dh_button_add_instance)
+export const dhButtonCancel = compatMessage(generated.dh_button_cancel)
+export const dhButtonRefresh = compatMessage(generated.dh_button_refresh)
+export const dhButtonRemoteSsh = compatMessage(generated.dh_button_remote_ssh)
+export const dhButtonRetry = compatMessage(generated.dh_button_retry)
+export const dhButtonSave = compatMessage(generated.dh_button_save)
+export const dhButtonSwitchInstance = compatMessage(generated.dh_button_switch_instance)
+export const dhButtonSwitchToLocal = compatMessage(generated.dh_button_switch_to_local)
+export const dhDefaultSshUnavailable = compatMessage(generated.dh_default_ssh_unavailable)
+export const dhDialogDescription = compatMessage(generated.dh_dialog_description)
+export const dhDialogTitleInstance = compatMessage(generated.dh_dialog_title_instance)
+export const dhEditInstance = compatMessage(generated.dh_edit_instance)
+export const dhLabelCurrent = compatMessage(generated.dh_label_current)
+export const dhLabelCurrentDefault = compatMessage(generated.dh_label_current_default)
+export const dhLabelSsh = compatMessage(generated.dh_label_ssh)
+export const dhLimitedMode = compatMessage(generated.dh_limited_mode)
+export const dhLoading = compatMessage(generated.dh_loading)
+export const dhNeedSshInstances = compatMessage(generated.dh_need_ssh_instances)
+export const dhPhaseCheckingAuth = compatMessage(generated.dh_phase_checking_auth)
+export const dhPhaseConnectingSsh = compatMessage(generated.dh_phase_connecting_ssh)
+export const dhPhaseDetectingServer = compatMessage(generated.dh_phase_detecting_server)
+export const dhPhaseError = compatMessage(generated.dh_phase_error)
+export const dhPhaseForwardingPorts = compatMessage(generated.dh_phase_forwarding_ports)
+export const dhPhaseIdle = compatMessage(generated.dh_phase_idle)
+export const dhPhaseInstalling = compatMessage(generated.dh_phase_installing)
+export const dhPhaseProbingRemote = compatMessage(generated.dh_phase_probing_remote)
+export const dhPhaseReady = compatMessage(generated.dh_phase_ready)
+export const dhPhaseReconnecting = compatMessage(generated.dh_phase_reconnecting)
+export const dhPhaseResolvingConfig = compatMessage(generated.dh_phase_resolving_config)
+export const dhPhaseStartingServer = compatMessage(generated.dh_phase_starting_server)
+export const dhPhaseUpdating = compatMessage(generated.dh_phase_updating)
+export const dhPingLatency = compatMessage(generated.dh_ping_latency)
+export const dhPlaceholderLabel = compatMessage(generated.dh_placeholder_label)
+export const dhPlaceholderLabelOptional = compatMessage(generated.dh_placeholder_label_optional)
+export const dhPlaceholderUrl = compatMessage(generated.dh_placeholder_url)
+export const dhSshConnectFailed = compatMessage(generated.dh_ssh_connect_failed)
+export const dhSshConnecting = compatMessage(generated.dh_ssh_connecting)
+export const dhSshDialogTitle = compatMessage(generated.dh_ssh_dialog_title)
+export const dhStatusAuthRequired = compatMessage(generated.dh_status_auth_required)
+export const dhStatusConnected = compatMessage(generated.dh_status_connected)
+export const dhStatusUnknown = compatMessage(generated.dh_status_unknown)
+export const dhStatusUnreachable = compatMessage(generated.dh_status_unreachable)
+export const dhStatusWrongService = compatMessage(generated.dh_status_wrong_service)
+export const dhTooltipDefault = compatMessage(generated.dh_tooltip_default)
+export const dhTooltipDefaultInstance = compatMessage(generated.dh_tooltip_default_instance)
+export const dhTooltipInstance = compatMessage(generated.dh_tooltip_instance)
+export const dhTooltipInstanceUnreachable = compatMessage(generated.dh_tooltip_instance_unreachable)
+export const dhTooltipOpenInNewWindow = compatMessage(generated.dh_tooltip_open_in_new_window)
+export const dhTooltipSetAsDefault = compatMessage(generated.dh_tooltip_set_as_default)
 export const diffAllFiles = compatMessage(generated.diff_all_files)
 export const diffBinaryContentCannotBeViewed = compatMessage(generated.diff_binary_content_cannot_be_viewed)
 export const diffCopiedFile = compatMessage(generated.diff_copied_file)
@@ -426,6 +582,18 @@ export const diffStackAllFiles = compatMessage(generated.diff_stack_all_files)
 export const diffUntrackedFile = compatMessage(generated.diff_untracked_file)
 export const diffViewMode = compatMessage(generated.diff_view_mode)
 export const diffWorkingTreeClean = compatMessage(generated.diff_working_tree_clean)
+export const dtBrowse = compatMessage(generated.dt_browse)
+export const dtCancel = compatMessage(generated.dt_cancel)
+export const dtCreateDirectory = compatMessage(generated.dt_create_directory)
+export const dtCreateNewDirectory = compatMessage(generated.dt_create_new_directory)
+export const dtLoading = compatMessage(generated.dt_loading)
+export const dtLocatingHomeDirectory = compatMessage(generated.dt_locating_home_directory)
+export const dtNewDirectory = compatMessage(generated.dt_new_directory)
+export const dtNoDirectoriesFound = compatMessage(generated.dt_no_directories_found)
+export const dtPinDirectory = compatMessage(generated.dt_pin_directory)
+export const dtPinned = compatMessage(generated.dt_pinned)
+export const dtSelectWorkingDirectory = compatMessage(generated.dt_select_working_directory)
+export const dtUnpinDirectory = compatMessage(generated.dt_unpin_directory)
 export const emptyNoMessages = compatMessage(generated.empty_no_messages)
 export const emptyNoSessions = compatMessage(generated.empty_no_sessions)
 export const emptyStartConversation = compatMessage(generated.empty_start_conversation)
@@ -434,6 +602,8 @@ export const errSomethingWrong = compatMessage(generated.err_something_wrong)
 export const errTryAgain = compatMessage(generated.err_try_again)
 export const errUnexpectedDesc = compatMessage(generated.err_unexpected_desc)
 export const errUnknown = compatMessage(generated.err_unknown)
+export const faAttachFiles = compatMessage(generated.fa_attach_files)
+export const faRemoveImage = compatMessage(generated.fa_remove_image)
 export const fileTreeClearSearch = compatMessage(generated.file_tree_clear_search)
 export const fileTreeCopyFailed = compatMessage(generated.file_tree_copy_failed)
 export const fileTreeCopyPath = compatMessage(generated.file_tree_copy_path)
@@ -502,6 +672,64 @@ export const filesSwitchToTextView = compatMessage(generated.files_switch_to_tex
 export const filesSwitchToTreeView = compatMessage(generated.files_switch_to_tree_view)
 export const filesUnsavedChanges = compatMessage(generated.files_unsaved_changes)
 export const filesUnsavedChangesDesc = compatMessage(generated.files_unsaved_changes_desc)
+export const ghGitIdentity = compatMessage(generated.gh_git_identity)
+export const ghHistory = compatMessage(generated.gh_history)
+export const ghNoIdentity = compatMessage(generated.gh_no_identity)
+export const giBranchAlreadyCheckedOut = compatMessage(generated.gi_branch_already_checked_out)
+export const giCancel = compatMessage(generated.gi_cancel)
+export const giConnectGitHub = compatMessage(generated.gi_connect_git_hub)
+export const giConnectToGitHub = compatMessage(generated.gi_connect_to_git_hub)
+export const giFailedToLoadData = compatMessage(generated.gi_failed_to_load_data)
+export const giGithubNotConnected = compatMessage(generated.gi_github_not_connected)
+export const giIncludeDiff = compatMessage(generated.gi_include_diff)
+export const giIncludeDiffAriaLabel = compatMessage(generated.gi_include_diff_aria_label)
+export const giIssue = compatMessage(generated.gi_issue)
+export const giIssues = compatMessage(generated.gi_issues)
+export const giLinkIssuesOrPrs = compatMessage(generated.gi_link_issues_or_prs)
+export const giLoadMore = compatMessage(generated.gi_load_more)
+export const giNoIssuesFound = compatMessage(generated.gi_no_issues_found)
+export const giNoPrsFound = compatMessage(generated.gi_no_prs_found)
+export const giPr = compatMessage(generated.gi_pr)
+export const giPullRequests = compatMessage(generated.gi_pull_requests)
+export const giSearchIssuesPlaceholder = compatMessage(generated.gi_search_issues_placeholder)
+export const giSearchPrsPlaceholder = compatMessage(generated.gi_search_prs_placeholder)
+export const giSelect = compatMessage(generated.gi_select)
+export const giSelectFromGitHub = compatMessage(generated.gi_select_from_git_hub)
+export const giValidationFailed = compatMessage(generated.gi_validation_failed)
+export const gipActions = compatMessage(generated.gip_actions)
+export const gipCreateInWorktree = compatMessage(generated.gip_create_in_worktree)
+export const gipFailedToCreateSession = compatMessage(generated.gip_failed_to_create_session)
+export const gipFailedToCreateWorktreeSession = compatMessage(generated.gip_failed_to_create_worktree_session)
+export const gipFailedToLoadIssueDetails = compatMessage(generated.gip_failed_to_load_issue_details)
+export const gipFailedToLoadMoreIssues = compatMessage(generated.gip_failed_to_load_more_issues)
+export const gipFailedToSendIssueContext = compatMessage(generated.gip_failed_to_send_issue_context)
+export const gipFailedToStartSession = compatMessage(generated.gip_failed_to_start_session)
+export const gipGithubNotConnected = compatMessage(generated.gip_github_not_connected)
+export const gipGithubNotConnectedMessage = compatMessage(generated.gip_github_not_connected_message)
+export const gipGithubRuntimeApiUnavailable = compatMessage(generated.gip_github_runtime_api_unavailable)
+export const gipIssueNotFound = compatMessage(generated.gip_issue_not_found)
+export const gipLinkGithubIssue = compatMessage(generated.gip_link_github_issue)
+export const gipLoadMore = compatMessage(generated.gip_load_more)
+export const gipLoading = compatMessage(generated.gip_loading)
+export const gipLoadingIssues = compatMessage(generated.gip_loading_issues)
+export const gipNewSessionDescription = compatMessage(generated.gip_new_session_description)
+export const gipNewSessionFromGithubIssue = compatMessage(generated.gip_new_session_from_github_issue)
+export const gipNoActiveProject = compatMessage(generated.gip_no_active_project)
+export const gipNoActiveProjectSelected = compatMessage(generated.gip_no_active_project_selected)
+export const gipNoIssuesFound = compatMessage(generated.gip_no_issues_found)
+export const gipNoModelSelected = compatMessage(generated.gip_no_model_selected)
+export const gipNoOpenIssuesFound = compatMessage(generated.gip_no_open_issues_found)
+export const gipOpenInGithub = compatMessage(generated.gip_open_in_github)
+export const gipOpenRepo = compatMessage(generated.gip_open_repo)
+export const gipOpenSettings = compatMessage(generated.gip_open_settings)
+export const gipRefresh = compatMessage(generated.gip_refresh)
+export const gipRepoNotResolvable = compatMessage(generated.gip_repo_not_resolvable)
+export const gipRepoNotResolvableDescription = compatMessage(generated.gip_repo_not_resolvable_description)
+export const gipSearchPlaceholder = compatMessage(generated.gip_search_placeholder)
+export const gipSelectIssueToLinkDescription = compatMessage(generated.gip_select_issue_to_link_description)
+export const gipSessionCreatedFromIssue = compatMessage(generated.gip_session_created_from_issue)
+export const gipToggleWorktree = compatMessage(generated.gip_toggle_worktree)
+export const gipUseIssueNumber = compatMessage(generated.gip_use_issue_number)
 export const gitAIHighlightsDescription = compatMessage(generated.git_a_i_highlights_description)
 export const gitAIHighlightsLoading = compatMessage(generated.git_a_i_highlights_loading)
 export const gitAIHighlightsNoHighlights = compatMessage(generated.git_a_i_highlights_no_highlights)
@@ -849,6 +1077,49 @@ export const githubToastSwitched = compatMessage(generated.github_toast_switched
 export const githubTooltip = compatMessage(generated.github_tooltip)
 export const githubUnknownUser = compatMessage(generated.github_unknown_user)
 export const githubWaiting = compatMessage(generated.github_waiting)
+export const gppDialogDescription = compatMessage(generated.gpp_dialog_description)
+export const gppDialogTitle = compatMessage(generated.gpp_dialog_title)
+export const gppFailedToLoadMorePrs = compatMessage(generated.gpp_failed_to_load_more_prs)
+export const gppFailedToLoadPrDetails = compatMessage(generated.gpp_failed_to_load_pr_details)
+export const gppGithubApiUnavailable = compatMessage(generated.gpp_github_api_unavailable)
+export const gppGithubApiUnavailablePeriod = compatMessage(generated.gpp_github_api_unavailable_period)
+export const gppGithubNotConnected = compatMessage(generated.gpp_github_not_connected)
+export const gppGithubNotConnectedMessage = compatMessage(generated.gpp_github_not_connected_message)
+export const gppIncludeDiffLabel = compatMessage(generated.gpp_include_diff_label)
+export const gppIncludeDiffText = compatMessage(generated.gpp_include_diff_text)
+export const gppLoadMore = compatMessage(generated.gpp_load_more)
+export const gppLoading = compatMessage(generated.gpp_loading)
+export const gppLoadingPrs = compatMessage(generated.gpp_loading_prs)
+export const gppNoActiveProject = compatMessage(generated.gpp_no_active_project)
+export const gppNoActiveProjectSelected = compatMessage(generated.gpp_no_active_project_selected)
+export const gppNoOpenPrsFound = compatMessage(generated.gpp_no_open_prs_found)
+export const gppNoPrsFound = compatMessage(generated.gpp_no_prs_found)
+export const gppOpenInGithub = compatMessage(generated.gpp_open_in_github)
+export const gppOpenSettings = compatMessage(generated.gpp_open_settings)
+export const gppPrNotFound = compatMessage(generated.gpp_pr_not_found)
+export const gppRepoNotResolvable = compatMessage(generated.gpp_repo_not_resolvable)
+export const gppRepoNotResolvableDescription = compatMessage(generated.gpp_repo_not_resolvable_description)
+export const gppSearchPlaceholder = compatMessage(generated.gpp_search_placeholder)
+export const gppUsePrNumber = compatMessage(generated.gpp_use_pr_number)
+export const hcrCopySha = compatMessage(generated.hcr_copy_sha)
+export const hcrLoadingFiles = compatMessage(generated.hcr_loading_files)
+export const hcrNoFiles = compatMessage(generated.hcr_no_files)
+export const headerCurrentInstance = compatMessage(generated.header_current_instance)
+export const headerGithub = compatMessage(generated.header_github)
+export const headerGithubAccounts = compatMessage(generated.header_github_accounts)
+export const headerGithubAvatar = compatMessage(generated.header_github_avatar)
+export const headerGithubAvatarNoLogin = compatMessage(generated.header_github_avatar_no_login)
+export const headerGithubConnected = compatMessage(generated.header_github_connected)
+export const headerGithubConnectedNoLogin = compatMessage(generated.header_github_connected_no_login)
+export const headerNextTab = compatMessage(generated.header_next_tab)
+export const headerNoRateLimitsAvailable = compatMessage(generated.header_no_rate_limits_available)
+export const headerNoRateLimitsReported = compatMessage(generated.header_no_rate_limits_reported)
+export const headerOpenInstanceUsageMcp = compatMessage(generated.header_open_instance_usage_mcp)
+export const headerOpenServicesUsageMcp = compatMessage(generated.header_open_services_usage_mcp)
+export const headerOther = compatMessage(generated.header_other)
+export const headerRateLimits = compatMessage(generated.header_rate_limits)
+export const headerRefreshRateLimits = compatMessage(generated.header_refresh_rate_limits)
+export const headerServices = compatMessage(generated.header_services)
 export const headingChatMode = compatMessage(generated.heading_chat_mode)
 export const headingPlanMode = compatMessage(generated.heading_plan_mode)
 export const helpAbortRun = compatMessage(generated.help_abort_run)
@@ -880,6 +1151,8 @@ export const helpTipThemeCycling = compatMessage(generated.help_tip_theme_cyclin
 export const helpTogglePlanContext = compatMessage(generated.help_toggle_plan_context)
 export const helpToggleServicesMenu = compatMessage(generated.help_toggle_services_menu)
 export const helpToggleSessionSidebar = compatMessage(generated.help_toggle_session_sidebar)
+export const hsHeadingHistory = compatMessage(generated.hs_heading_history)
+export const hsNoCommitsFound = compatMessage(generated.hs_no_commits_found)
 export const jsonCollapseAll = compatMessage(generated.json_collapse_all)
 export const jsonEmptyContent = compatMessage(generated.json_empty_content)
 export const jsonExpandAll = compatMessage(generated.json_expand_all)
@@ -889,6 +1162,33 @@ export const keyboardConflictBrowserDefaults = compatMessage(generated.keyboard_
 export const keyboardPressKeys = compatMessage(generated.keyboard_press_keys)
 export const keyboardShortcutConflict = compatMessage(generated.keyboard_shortcut_conflict)
 export const keyboardShortcutsTitle = compatMessage(generated.keyboard_shortcuts_title)
+export const lyBackToSessions = compatMessage(generated.ly_back_to_sessions)
+export const lyChat = compatMessage(generated.ly_chat)
+export const lyCloseTerminalPanel = compatMessage(generated.ly_close_terminal_panel)
+export const lyColor = compatMessage(generated.ly_color)
+export const lyEditProject = compatMessage(generated.ly_edit_project)
+export const lyExpandTerminalPanel = compatMessage(generated.ly_expand_terminal_panel)
+export const lyIcon = compatMessage(generated.ly_icon)
+export const lyIconBackground = compatMessage(generated.ly_icon_background)
+export const lyLastUpdated = compatMessage(generated.ly_last_updated)
+export const lyName = compatMessage(generated.ly_name)
+export const lyNewSession = compatMessage(generated.ly_new_session)
+export const lyNoRateLimitsAvailable = compatMessage(generated.ly_no_rate_limits_available)
+export const lyNoRateLimitsReported = compatMessage(generated.ly_no_rate_limits_reported)
+export const lyOpenAgentManager = compatMessage(generated.ly_open_agent_manager)
+export const lyPreview = compatMessage(generated.ly_preview)
+export const lyRateLimits = compatMessage(generated.ly_rate_limits)
+export const lyRefreshRateLimits = compatMessage(generated.ly_refresh_rate_limits)
+export const lyRemaining = compatMessage(generated.ly_remaining)
+export const lyResizeSessionsSidebar = compatMessage(generated.ly_resize_sessions_sidebar)
+export const lyResizeTerminalPanel = compatMessage(generated.ly_resize_terminal_panel)
+export const lyRestoreTerminalPanelHeight = compatMessage(generated.ly_restore_terminal_panel_height)
+export const lySession = compatMessage(generated.ly_session)
+export const lySessions = compatMessage(generated.ly_sessions)
+export const lySettings = compatMessage(generated.ly_settings)
+export const lyShowRemainingQuota = compatMessage(generated.ly_show_remaining_quota)
+export const lyShowUsedQuota = compatMessage(generated.ly_show_used_quota)
+export const lyUsed = compatMessage(generated.ly_used)
 export const magicPromptCherryPick = compatMessage(generated.magic_prompt_cherry_pick)
 export const magicPromptCherryPickDesc = compatMessage(generated.magic_prompt_cherry_pick_desc)
 export const magicPromptCommitGeneration = compatMessage(generated.magic_prompt_commit_generation)
@@ -926,6 +1226,72 @@ export const magicPromptsSelect = compatMessage(generated.magic_prompts_select)
 export const magicPromptsTitle = compatMessage(generated.magic_prompts_title)
 export const magicPromptsVisibleEmpty = compatMessage(generated.magic_prompts_visible_empty)
 export const mainLayoutCloseDrawer = compatMessage(generated.main_layout_close_drawer)
+export const mbCopyAnswer = compatMessage(generated.mb_copy_answer)
+export const mbCopyMessage = compatMessage(generated.mb_copy_message)
+export const mbCopyMessageText = compatMessage(generated.mb_copy_message_text)
+export const mbMessageTime = compatMessage(generated.mb_message_time)
+export const mbReadAloud = compatMessage(generated.mb_read_aloud)
+export const mbSaveAsImage = compatMessage(generated.mb_save_as_image)
+export const mbSavingImage = compatMessage(generated.mb_saving_image)
+export const mbStartNewMultiRunFromAnswer = compatMessage(generated.mb_start_new_multi_run_from_answer)
+export const mbStartNewSessionFromAnswer = compatMessage(generated.mb_start_new_session_from_answer)
+export const mbStopSpeaking = compatMessage(generated.mb_stop_speaking)
+export const mcAddNewProvider = compatMessage(generated.mc_add_new_provider)
+export const mcAddToFavorites = compatMessage(generated.mc_add_to_favorites)
+export const mcAll = compatMessage(generated.mc_all)
+export const mcAllow = compatMessage(generated.mc_allow)
+export const mcAsk = compatMessage(generated.mc_ask)
+export const mcAudio = compatMessage(generated.mc_audio)
+export const mcBash = compatMessage(generated.mc_bash)
+export const mcCacheRead = compatMessage(generated.mc_cache_read)
+export const mcCacheWrite = compatMessage(generated.mc_cache_write)
+export const mcCapabilities = compatMessage(generated.mc_capabilities)
+export const mcClearSearch = compatMessage(generated.mc_clear_search)
+export const mcCollapseProvider = compatMessage(generated.mc_collapse_provider)
+export const mcContext = compatMessage(generated.mc_context)
+export const mcCostPerMTokens = compatMessage(generated.mc_cost_per_m_tokens)
+export const mcCurrent = compatMessage(generated.mc_current)
+export const mcCustom = compatMessage(generated.mc_custom)
+export const mcCustomPrompt = compatMessage(generated.mc_custom_prompt)
+export const mcDefault = compatMessage(generated.mc_default)
+export const mcDeny = compatMessage(generated.mc_deny)
+export const mcEdit = compatMessage(generated.mc_edit)
+export const mcExpandProvider = compatMessage(generated.mc_expand_provider)
+export const mcFavorite = compatMessage(generated.mc_favorite)
+export const mcFavorites = compatMessage(generated.mc_favorites)
+export const mcImage = compatMessage(generated.mc_image)
+export const mcInput = compatMessage(generated.mc_input)
+export const mcKnowledge = compatMessage(generated.mc_knowledge)
+export const mcLimits = compatMessage(generated.mc_limits)
+export const mcMetadata = compatMessage(generated.mc_metadata)
+export const mcModalities = compatMessage(generated.mc_modalities)
+export const mcMode = compatMessage(generated.mc_mode)
+export const mcModel = compatMessage(generated.mc_model)
+export const mcModelMetadataUnavailable = compatMessage(generated.mc_model_metadata_unavailable)
+export const mcNoAgentSelected = compatMessage(generated.mc_no_agent_selected)
+export const mcNoModelsFound = compatMessage(generated.mc_no_models_found)
+export const mcNoProvidersModelsMatchSearch = compatMessage(generated.mc_no_providers_models_match_search)
+export const mcNotSelected = compatMessage(generated.mc_not_selected)
+export const mcOutput = compatMessage(generated.mc_output)
+export const mcPdf = compatMessage(generated.mc_pdf)
+export const mcPermissions = compatMessage(generated.mc_permissions)
+export const mcPrimary = compatMessage(generated.mc_primary)
+export const mcProvider = compatMessage(generated.mc_provider)
+export const mcReasoning = compatMessage(generated.mc_reasoning)
+export const mcRecent = compatMessage(generated.mc_recent)
+export const mcRelease = compatMessage(generated.mc_release)
+export const mcRemoveFromFavorites = compatMessage(generated.mc_remove_from_favorites)
+export const mcSelectAgent = compatMessage(generated.mc_select_agent)
+export const mcSelectModel = compatMessage(generated.mc_select_model)
+export const mcSubagent = compatMessage(generated.mc_subagent)
+export const mcTemperature = compatMessage(generated.mc_temperature)
+export const mcText = compatMessage(generated.mc_text)
+export const mcThinkingLabel = compatMessage(generated.mc_thinking_label)
+export const mcToolCalling = compatMessage(generated.mc_tool_calling)
+export const mcTopP = compatMessage(generated.mc_top_p)
+export const mcUnfavorite = compatMessage(generated.mc_unfavorite)
+export const mcVideo = compatMessage(generated.mc_video)
+export const mcWebFetch = compatMessage(generated.mc_web_fetch)
 export const mcpAddVariable = compatMessage(generated.mcp_add_variable)
 export const mcpCancel = compatMessage(generated.mcp_cancel)
 export const mcpCommand = compatMessage(generated.mcp_command)
@@ -992,6 +1358,48 @@ export const mcpValue = compatMessage(generated.mcp_value)
 export const mcpValuePlaceholder = compatMessage(generated.mcp_value_placeholder)
 export const mcpValuesPlaintext = compatMessage(generated.mcp_values_plaintext)
 export const mcpWorking = compatMessage(generated.mcp_working)
+export const mrAddCommand = compatMessage(generated.mr_add_command)
+export const mrAddModel = compatMessage(generated.mr_add_model)
+export const mrAddProjectFirst = compatMessage(generated.mr_add_project_first)
+export const mrAgent = compatMessage(generated.mr_agent)
+export const mrAgentInfo = compatMessage(generated.mr_agent_info)
+export const mrAttach = compatMessage(generated.mr_attach)
+export const mrAttachTooltip = compatMessage(generated.mr_attach_tooltip)
+export const mrBaseBranch = compatMessage(generated.mr_base_branch)
+export const mrBaseBranchInfo = compatMessage(generated.mr_base_branch_info)
+export const mrCancel = compatMessage(generated.mr_cancel)
+export const mrCloseEsc = compatMessage(generated.mr_close_esc)
+export const mrCreating = compatMessage(generated.mr_creating)
+export const mrDefault = compatMessage(generated.mr_default)
+export const mrFavorites = compatMessage(generated.mr_favorites)
+export const mrGroupName = compatMessage(generated.mr_group_name)
+export const mrGroupNameInfo = compatMessage(generated.mr_group_name_info)
+export const mrGroupNamePlaceholder = compatMessage(generated.mr_group_name_placeholder)
+export const mrKeyboardHints = compatMessage(generated.mr_keyboard_hints)
+export const mrLoading = compatMessage(generated.mr_loading)
+export const mrLoadingBranches = compatMessage(generated.mr_loading_branches)
+export const mrLocalBranches = compatMessage(generated.mr_local_branches)
+export const mrModels = compatMessage(generated.mr_models)
+export const mrModelsInfo = compatMessage(generated.mr_models_info)
+export const mrNewMultiRun = compatMessage(generated.mr_new_multi_run)
+export const mrNoBranchesFound = compatMessage(generated.mr_no_branches_found)
+export const mrNoModelsFound = compatMessage(generated.mr_no_models_found)
+export const mrNotGitRepository = compatMessage(generated.mr_not_git_repository)
+export const mrProject = compatMessage(generated.mr_project)
+export const mrPrompt = compatMessage(generated.mr_prompt)
+export const mrPromptPlaceholder = compatMessage(generated.mr_prompt_placeholder)
+export const mrRecent = compatMessage(generated.mr_recent)
+export const mrRemoteBranches = compatMessage(generated.mr_remote_branches)
+export const mrRemoveCommand = compatMessage(generated.mr_remove_command)
+export const mrSearchModels = compatMessage(generated.mr_search_models)
+export const mrSelectAgent = compatMessage(generated.mr_select_agent)
+export const mrSelectModelsRange = compatMessage(generated.mr_select_models_range)
+export const mrSelectProject = compatMessage(generated.mr_select_project)
+export const mrSelectSourceBranch = compatMessage(generated.mr_select_source_branch)
+export const mrSetupCommandPlaceholder = compatMessage(generated.mr_setup_command_placeholder)
+export const mrSetupCommands = compatMessage(generated.mr_setup_commands)
+export const mrStartModels = compatMessage(generated.mr_start_models)
+export const mrThinking = compatMessage(generated.mr_thinking)
 export const notifAgentCompletion = compatMessage(generated.notif_agent_completion)
 export const notifAgentCompletionAria = compatMessage(generated.notif_agent_completion_aria)
 export const notifAgentErrors = compatMessage(generated.notif_agent_errors)
@@ -1068,6 +1476,77 @@ export const notifVariables = compatMessage(generated.notif_variables)
 export const notifVscodeHint = compatMessage(generated.notif_vscode_hint)
 export const notifWhileFocused = compatMessage(generated.notif_while_focused)
 export const notifWhileFocusedAria = compatMessage(generated.notif_while_focused_aria)
+export const oabChooseApp = compatMessage(generated.oab_choose_app)
+export const oabCopiedToClipboard = compatMessage(generated.oab_copied_to_clipboard)
+export const oabCopyPath = compatMessage(generated.oab_copy_path)
+export const oabRefreshApps = compatMessage(generated.oab_refresh_apps)
+export const obAlreadyInstalled = compatMessage(generated.ob_already_installed)
+export const obApply = compatMessage(generated.ob_apply)
+export const obBack = compatMessage(generated.ob_back)
+export const obBinaryPathHelper = compatMessage(generated.ob_binary_path_helper)
+export const obBrowse = compatMessage(generated.ob_browse)
+export const obCheckAndContinue = compatMessage(generated.ob_check_and_continue)
+export const obCheckButtonHelper = compatMessage(generated.ob_check_button_helper)
+export const obChecking = compatMessage(generated.ob_checking)
+export const obChooseDifferentServer = compatMessage(generated.ob_choose_different_server)
+export const obCliNotReady = compatMessage(generated.ob_cli_not_ready)
+export const obConnectAndRestart = compatMessage(generated.ob_connect_and_restart)
+export const obConnectRemote = compatMessage(generated.ob_connect_remote)
+export const obConnectToDifferentServer = compatMessage(generated.ob_connect_to_different_server)
+export const obConnectToRemoteServer = compatMessage(generated.ob_connect_to_remote_server)
+export const obConnectedSuccessfully = compatMessage(generated.ob_connected_successfully)
+export const obConnectionFailed = compatMessage(generated.ob_connection_failed)
+export const obConnectionTestFailed = compatMessage(generated.ob_connection_test_failed)
+export const obCopiedToClipboard = compatMessage(generated.ob_copied_to_clipboard)
+export const obCopyToClipboard = compatMessage(generated.ob_copy_to_clipboard)
+export const obDetectionFailed = compatMessage(generated.ob_detection_failed)
+export const obFailedToSaveConnection = compatMessage(generated.ob_failed_to_save_connection)
+export const obIncompatibleServer = compatMessage(generated.ob_incompatible_server)
+export const obIncompatibleServerDescription = compatMessage(generated.ob_incompatible_server_description)
+export const obInstallCliToContinue = compatMessage(generated.ob_install_cli_to_continue)
+export const obLocalInstall = compatMessage(generated.ob_local_install)
+export const obLocalUnavailableDescription = compatMessage(generated.ob_local_unavailable_description)
+export const obLocalUnavailableTitle = compatMessage(generated.ob_local_unavailable_title)
+export const obNoDefaultConnection = compatMessage(generated.ob_no_default_connection)
+export const obNoDefaultConnectionDescription = compatMessage(generated.ob_no_default_connection_description)
+export const obPathHint1 = compatMessage(generated.ob_path_hint1)
+export const obPathHint2 = compatMessage(generated.ob_path_hint2)
+export const obPathHint3 = compatMessage(generated.ob_path_hint3)
+export const obPreferRemoteServer = compatMessage(generated.ob_prefer_remote_server)
+export const obRemoteServerDescription = compatMessage(generated.ob_remote_server_description)
+export const obRemoteServerUnreachableDescription = compatMessage(generated.ob_remote_server_unreachable_description)
+export const obRemoteServerUnreachableTitle = compatMessage(generated.ob_remote_server_unreachable_title)
+export const obRetryConnection = compatMessage(generated.ob_retry_connection)
+export const obRetryLocal = compatMessage(generated.ob_retry_local)
+export const obRetrying = compatMessage(generated.ob_retrying)
+export const obSelectOpencodeBinary = compatMessage(generated.ob_select_opencode_binary)
+export const obServerAddress = compatMessage(generated.ob_server_address)
+export const obServerAddressPlaceholder = compatMessage(generated.ob_server_address_placeholder)
+export const obServerNameOptional = compatMessage(generated.ob_server_name_optional)
+export const obServerNamePlaceholder = compatMessage(generated.ob_server_name_placeholder)
+export const obServerRequiresAuth = compatMessage(generated.ob_server_requires_auth)
+export const obServerRequiresAuthShort = compatMessage(generated.ob_server_requires_auth_short)
+export const obServerUnreachable = compatMessage(generated.ob_server_unreachable)
+export const obSetUpLocal = compatMessage(generated.ob_set_up_local)
+export const obSettingUpOpenCode = compatMessage(generated.ob_setting_up_open_code)
+export const obSuggestionsUnreachable = compatMessage(generated.ob_suggestions_unreachable)
+export const obSuggestionsWrongService = compatMessage(generated.ob_suggestions_wrong_service)
+export const obTestConnection = compatMessage(generated.ob_test_connection)
+export const obTesting = compatMessage(generated.ob_testing)
+export const obUseLocalInstead = compatMessage(generated.ob_use_local_instead)
+export const obUseRemote = compatMessage(generated.ob_use_remote)
+export const obViewDocumentation = compatMessage(generated.ob_view_documentation)
+export const obViewWindowsDocumentation = compatMessage(generated.ob_view_windows_documentation)
+export const obWelcomeDescription = compatMessage(generated.ob_welcome_description)
+export const obWelcomeTitle = compatMessage(generated.ob_welcome_title)
+export const obWhatWouldYouLikeToDo = compatMessage(generated.ob_what_would_you_like_to_do)
+export const obWindowsHint1 = compatMessage(generated.ob_windows_hint1)
+export const obWindowsHint2 = compatMessage(generated.ob_windows_hint2)
+export const obWindowsSetupStep1 = compatMessage(generated.ob_windows_setup_step1)
+export const obWindowsSetupStep2 = compatMessage(generated.ob_windows_setup_step2)
+export const obWindowsSetupStep3 = compatMessage(generated.ob_windows_setup_step3)
+export const obWindowsSetupTitle = compatMessage(generated.ob_windows_setup_title)
+export const obWrongService = compatMessage(generated.ob_wrong_service)
 export const ocCliBinaryPath = compatMessage(generated.oc_cli_binary_path)
 export const ocCliBrowse = compatMessage(generated.oc_cli_browse)
 export const ocCliBrowseAria = compatMessage(generated.oc_cli_browse_aria)
@@ -1140,6 +1619,27 @@ export const passkeyTitle = compatMessage(generated.passkey_title)
 export const passkeyToastAdded = compatMessage(generated.passkey_toast_added)
 export const passkeyToastCanceled = compatMessage(generated.passkey_toast_canceled)
 export const passkeyToastRemoved = compatMessage(generated.passkey_toast_removed)
+export const pcAction = compatMessage(generated.pc_action)
+export const pcDetails = compatMessage(generated.pc_details)
+export const pnAddATodo = compatMessage(generated.pn_add_a_todo)
+export const pnAddTodo = compatMessage(generated.pn_add_todo)
+export const pnCaptureContextRemindersOrLinks = compatMessage(generated.pn_capture_context_reminders_or_links)
+export const pnClearCompleted = compatMessage(generated.pn_clear_completed)
+export const pnFailedToLoadProjectNotes = compatMessage(generated.pn_failed_to_load_project_notes)
+export const pnFailedToSaveProjectNotes = compatMessage(generated.pn_failed_to_save_project_notes)
+export const pnItemCount = compatMessage(generated.pn_item_count)
+export const pnNoActiveSessionSelected = compatMessage(generated.pn_no_active_session_selected)
+export const pnNoTodosYet = compatMessage(generated.pn_no_todos_yet)
+export const pnQuickNotes = compatMessage(generated.pn_quick_notes)
+export const pnSelectProjectToAddNotesAndTodos = compatMessage(generated.pn_select_project_to_add_notes_and_todos)
+export const pnSendToCurrentSession = compatMessage(generated.pn_send_to_current_session)
+export const pnSendToNewSession = compatMessage(generated.pn_send_to_new_session)
+export const pnSendToNewWorktreeSession = compatMessage(generated.pn_send_to_new_worktree_session)
+export const pnTodo = compatMessage(generated.pn_todo)
+export const pnTodoSentToCurrentSession = compatMessage(generated.pn_todo_sent_to_current_session)
+export const pnTodoSentToNewSession = compatMessage(generated.pn_todo_sent_to_new_session)
+export const pnTodoSentToNewWorktreeSession = compatMessage(generated.pn_todo_sent_to_new_worktree_session)
+export const pnWorktreeActionsOnlyAvailableForGitRepos = compatMessage(generated.pn_worktree_actions_only_available_for_git_repos)
 export const prAdd = compatMessage(generated.pr_add)
 export const prAdditionalContextGuide = compatMessage(generated.pr_additional_context_guide)
 export const prAdditionalContextLabel = compatMessage(generated.pr_additional_context_label)
@@ -1405,6 +1905,18 @@ export const providersCheckConfig = compatMessage(generated.providers_check_conf
 export const providersConnectAria = compatMessage(generated.providers_connect_aria)
 export const providersNotFound = compatMessage(generated.providers_not_found)
 export const providersTitle = compatMessage(generated.providers_title)
+export const qcDismiss = compatMessage(generated.qc_dismiss)
+export const qcFromSubagent = compatMessage(generated.qc_from_subagent)
+export const qcInputNeeded = compatMessage(generated.qc_input_needed)
+export const qcNext = compatMessage(generated.qc_next)
+export const qcNoAnswer = compatMessage(generated.qc_no_answer)
+export const qcOther = compatMessage(generated.qc_other)
+export const qcQuestion = compatMessage(generated.qc_question)
+export const qcRecommended = compatMessage(generated.qc_recommended)
+export const qcSelectMultiple = compatMessage(generated.qc_select_multiple)
+export const qcSubmit = compatMessage(generated.qc_submit)
+export const qcSummary = compatMessage(generated.qc_summary)
+export const qcYourAnswer = compatMessage(generated.qc_your_answer)
 export const riSshInstancesActionCancelConnection = compatMessage(generated.ri_ssh_instances_action_cancel_connection)
 export const riSshInstancesActionConnect = compatMessage(generated.ri_ssh_instances_action_connect)
 export const riSshInstancesActionConnecting = compatMessage(generated.ri_ssh_instances_action_connecting)
@@ -1591,6 +2103,8 @@ export const riSshInstancesTypeRemote = compatMessage(generated.ri_ssh_instances
 export const riSshInstancesTypeRemoteBadge = compatMessage(generated.ri_ssh_instances_type_remote_badge)
 export const riSshInstancesValueHint = compatMessage(generated.ri_ssh_instances_value_hint)
 export const rightSidebarResizePanel = compatMessage(generated.right_sidebar_resize_panel)
+export const sasShowFewerSessions = compatMessage(generated.sas_show_fewer_sessions)
+export const sasShowMoreSessions = compatMessage(generated.sas_show_more_sessions)
 export const scAddCatalog = compatMessage(generated.sc_add_catalog)
 export const scAddCatalogAction = compatMessage(generated.sc_add_catalog_action)
 export const scAddCatalogDesc = compatMessage(generated.sc_add_catalog_desc)
@@ -1677,6 +2191,49 @@ export const scToastScanFailed = compatMessage(generated.sc_toast_scan_failed)
 export const scToastSelectAtLeastOne = compatMessage(generated.sc_toast_select_at_least_one)
 export const scToastSkillsFound = compatMessage(generated.sc_toast_skills_found)
 export const scToastSourceRequired = compatMessage(generated.sc_toast_source_required)
+export const sdArchivedOrDeletedSessions = compatMessage(generated.sd_archived_or_deleted_sessions)
+export const sdArchivedWorktreesAndRemovedRemoteBranches = compatMessage(generated.sd_archived_worktrees_and_removed_remote_branches)
+export const sdAttachedWorktreeArchived = compatMessage(generated.sd_attached_worktree_archived)
+export const sdAttachedWorktreesArchived = compatMessage(generated.sd_attached_worktrees_archived)
+export const sdCancel = compatMessage(generated.sd_cancel)
+export const sdDeleteLocalBranch = compatMessage(generated.sd_delete_local_branch)
+export const sdDeleteRemoteBranch = compatMessage(generated.sd_delete_remote_branch)
+export const sdDeleteSession = compatMessage(generated.sd_delete_session)
+export const sdDeleteSessions = compatMessage(generated.sd_delete_sessions)
+export const sdDeleteWorktree = compatMessage(generated.sd_delete_worktree)
+export const sdDeletedSessions = compatMessage(generated.sd_deleted_sessions)
+export const sdDeleting = compatMessage(generated.sd_deleting)
+export const sdDesktopCouldNotGrantFileAccess = compatMessage(generated.sd_desktop_could_not_grant_file_access)
+export const sdFailedToAddProject = compatMessage(generated.sd_failed_to_add_project)
+export const sdFailedToArchiveOrDeleteSessions = compatMessage(generated.sd_failed_to_archive_or_delete_sessions)
+export const sdFailedToArchiveSession = compatMessage(generated.sd_failed_to_archive_session)
+export const sdFailedToDeleteSession = compatMessage(generated.sd_failed_to_delete_session)
+export const sdFailedToDeleteSessions = compatMessage(generated.sd_failed_to_delete_sessions)
+export const sdFailedToOpenDirectory = compatMessage(generated.sd_failed_to_open_directory)
+export const sdFailedToRemoveWorktree = compatMessage(generated.sd_failed_to_remove_worktree)
+export const sdFailedToSelectDirectory = compatMessage(generated.sd_failed_to_select_directory)
+export const sdLinkedSession = compatMessage(generated.sd_linked_session)
+export const sdLinkedSessions = compatMessage(generated.sd_linked_sessions)
+export const sdNeverAsk = compatMessage(generated.sd_never_ask)
+export const sdOk = compatMessage(generated.sd_ok)
+export const sdPleaseSelectAValidDirectoryPath = compatMessage(generated.sd_please_select_a_valid_directory_path)
+export const sdPleaseTryAgain = compatMessage(generated.sd_please_try_again)
+export const sdRemoteBranchInfoUnavailable = compatMessage(generated.sd_remote_branch_info_unavailable)
+export const sdRemovedAllSessionsFromDate = compatMessage(generated.sd_removed_all_sessions_from_date)
+export const sdSessionArchived = compatMessage(generated.sd_session_archived)
+export const sdSessionDeleted = compatMessage(generated.sd_session_deleted)
+export const sdSessionsCouldNotBeArchivedOrDeleted = compatMessage(generated.sd_sessions_could_not_be_archived_or_deleted)
+export const sdSessionsCouldNotBeDeleted = compatMessage(generated.sd_sessions_could_not_be_deleted)
+export const sdThisPermanentlyRemovesSessions = compatMessage(generated.sd_this_permanently_removes_sessions)
+export const sdThisRemovesTheSelectedWorktree = compatMessage(generated.sd_this_removes_the_selected_worktree)
+export const sdThisRemovesWorktreeAndArchivesSessions = compatMessage(generated.sd_this_removes_worktree_and_archives_sessions)
+export const sdUncommittedChangesWillBeDiscarded = compatMessage(generated.sd_uncommitted_changes_will_be_discarded)
+export const sdUntitledSession = compatMessage(generated.sd_untitled_session)
+export const sdWorktree = compatMessage(generated.sd_worktree)
+export const sdWorktreeAndRemoteBranchRemoved = compatMessage(generated.sd_worktree_and_remote_branch_removed)
+export const sdWorktreeDirectoriesStayIntact = compatMessage(generated.sd_worktree_directories_stay_intact)
+export const sdWorktreePathUnavailable = compatMessage(generated.sd_worktree_path_unavailable)
+export const sdWorktreeRemoved = compatMessage(generated.sd_worktree_removed)
 export const selectorAddToFavorites = compatMessage(generated.selector_add_to_favorites)
 export const selectorCurrent = compatMessage(generated.selector_current)
 export const selectorFavorite = compatMessage(generated.selector_favorite)
@@ -1755,6 +2312,46 @@ export const settingsSkillsCatalog = compatMessage(generated.settings_skills_cat
 export const settingsSwitchProjectAria = compatMessage(generated.settings_switch_project_aria)
 export const settingsTitle = compatMessage(generated.settings_title)
 export const settingsUsagePage = compatMessage(generated.settings_usage_page)
+export const sfdSession = compatMessage(generated.sfd_session)
+export const sfiDeleteFolder = compatMessage(generated.sfi_delete_folder)
+export const sfiEmptyFolder = compatMessage(generated.sfi_empty_folder)
+export const sfiFolderName = compatMessage(generated.sfi_folder_name)
+export const sfiNewSession = compatMessage(generated.sfi_new_session)
+export const sfiNewSessionIn = compatMessage(generated.sfi_new_session_in)
+export const sfiNewSubFolder = compatMessage(generated.sfi_new_sub_folder)
+export const sfiNewSubFolderIn = compatMessage(generated.sfi_new_sub_folder_in)
+export const sfiRenameFolder = compatMessage(generated.sfi_rename_folder)
+export const sgChecksPassed = compatMessage(generated.sg_checks_passed)
+export const sgClosed = compatMessage(generated.sg_closed)
+export const sgCollapse = compatMessage(generated.sg_collapse)
+export const sgConflictsOrBlocked = compatMessage(generated.sg_conflicts_or_blocked)
+export const sgDelete = compatMessage(generated.sg_delete)
+export const sgDeleteArchivedSessions = compatMessage(generated.sg_delete_archived_sessions)
+export const sgDeleteArchivedSessionsIn = compatMessage(generated.sg_delete_archived_sessions_in)
+export const sgDeleteWorktree = compatMessage(generated.sg_delete_worktree)
+export const sgDraftPr = compatMessage(generated.sg_draft_pr)
+export const sgExpand = compatMessage(generated.sg_expand)
+export const sgFailing = compatMessage(generated.sg_failing)
+export const sgMergeBlocked = compatMessage(generated.sg_merge_blocked)
+export const sgMergeConflicts = compatMessage(generated.sg_merge_conflicts)
+export const sgMergeState = compatMessage(generated.sg_merge_state)
+export const sgMergeable = compatMessage(generated.sg_mergeable)
+export const sgMerged = compatMessage(generated.sg_merged)
+export const sgNewDraftSession = compatMessage(generated.sg_new_draft_session)
+export const sgNewDraftSessionIn = compatMessage(generated.sg_new_draft_session_in)
+export const sgNoArchivedSessionsYet = compatMessage(generated.sg_no_archived_sessions_yet)
+export const sgNoSessionsInThisWorkspaceYet = compatMessage(generated.sg_no_sessions_in_this_workspace_yet)
+export const sgPending = compatMessage(generated.sg_pending)
+export const sgPrOpen = compatMessage(generated.sg_pr_open)
+export const sgReadyToMerge = compatMessage(generated.sg_ready_to_merge)
+export const sgShowFewerSessions = compatMessage(generated.sg_show_fewer_sessions)
+export const sgShowMoreSessions = compatMessage(generated.sg_show_more_sessions)
+export const siCloseProject = compatMessage(generated.si_close_project)
+export const siNewDraftSession = compatMessage(generated.si_new_draft_session)
+export const siNewSession = compatMessage(generated.si_new_session)
+export const siNewWorktree = compatMessage(generated.si_new_worktree)
+export const siProjectMenu = compatMessage(generated.si_project_menu)
+export const siRename = compatMessage(generated.si_rename)
 export const sidebarActivityShowFewer = compatMessage(generated.sidebar_activity_show_fewer)
 export const sidebarActivityShowMore = compatMessage(generated.sidebar_activity_show_more)
 export const sidebarAgents = compatMessage(generated.sidebar_agents)
@@ -1877,11 +2474,53 @@ export const skUserSkills = compatMessage(generated.sk_user_skills)
 export const skillsContentPlaceholder = compatMessage(generated.skills_content_placeholder)
 export const skillsFilePlaceholder = compatMessage(generated.skills_file_placeholder)
 export const skillsNamePlaceholder = compatMessage(generated.skills_name_placeholder)
+export const sniArchive = compatMessage(generated.sni_archive)
+export const sniBeta = compatMessage(generated.sni_beta)
+export const sniCollapseSubsessions = compatMessage(generated.sni_collapse_subsessions)
+export const sniCopied = compatMessage(generated.sni_copied)
+export const sniCopyLink = compatMessage(generated.sni_copy_link)
+export const sniDelete = compatMessage(generated.sni_delete)
+export const sniExpandSubsessions = compatMessage(generated.sni_expand_subsessions)
+export const sniMoveToFolder = compatMessage(generated.sni_move_to_folder)
+export const sniNewFolder = compatMessage(generated.sni_new_folder)
+export const sniNoFoldersYet = compatMessage(generated.sni_no_folders_yet)
+export const sniOpenInSidePanel = compatMessage(generated.sni_open_in_side_panel)
+export const sniPermissionRequired = compatMessage(generated.sni_permission_required)
+export const sniPinSession = compatMessage(generated.sni_pin_session)
+export const sniPinnedSession = compatMessage(generated.sni_pinned_session)
+export const sniRemoveFromFolder = compatMessage(generated.sni_remove_from_folder)
+export const sniRename = compatMessage(generated.sni_rename)
+export const sniRenameSession = compatMessage(generated.sni_rename_session)
+export const sniSessionMenu = compatMessage(generated.sni_session_menu)
+export const sniShare = compatMessage(generated.sni_share)
+export const sniUnpinSession = compatMessage(generated.sni_unpin_session)
+export const sniUnshare = compatMessage(generated.sni_unshare)
+export const srActionStop = compatMessage(generated.sr_action_stop)
+export const srStatusAborted = compatMessage(generated.sr_status_aborted)
+export const srStatusCancelled = compatMessage(generated.sr_status_cancelled)
+export const srStatusCompleted = compatMessage(generated.sr_status_completed)
+export const srStatusHighPriority = compatMessage(generated.sr_status_high_priority)
+export const srStatusInProgress = compatMessage(generated.sr_status_in_progress)
+export const srStatusLowPriority = compatMessage(generated.sr_status_low_priority)
+export const srStatusMediumPriority = compatMessage(generated.sr_status_medium_priority)
+export const srStatusPending = compatMessage(generated.sr_status_pending)
+export const srTasks = compatMessage(generated.sr_tasks)
 export const srToastArchiveFailed = compatMessage(generated.sr_toast_archive_failed)
 export const srToastArchived = compatMessage(generated.sr_toast_archived)
 export const srToastDeleteFailed = compatMessage(generated.sr_toast_delete_failed)
 export const srToastDeleted = compatMessage(generated.sr_toast_deleted)
 export const srToastNoneEligible = compatMessage(generated.sr_toast_none_eligible)
+export const ssCreateYourFirstSessionToStartCoding = compatMessage(generated.ss_create_your_first_session_to_start_coding)
+export const ssFailedToAddProject = compatMessage(generated.ss_failed_to_add_project)
+export const ssFailedToCheckForUpdates = compatMessage(generated.ss_failed_to_check_for_updates)
+export const ssFailedToSelectDirectory = compatMessage(generated.ss_failed_to_select_directory)
+export const ssNewFolder = compatMessage(generated.ss_new_folder)
+export const ssNoMatchingSessions = compatMessage(generated.ss_no_matching_sessions)
+export const ssNoSessionsYet = compatMessage(generated.ss_no_sessions_yet)
+export const ssPleaseSelectAValidDirectory = compatMessage(generated.ss_please_select_a_valid_directory)
+export const ssRecent = compatMessage(generated.ss_recent)
+export const ssTryADifferentTitleBranchFolderOrPath = compatMessage(generated.ss_try_a_different_title_branch_folder_or_path)
+export const ssYouAreOnTheLatestVersion = compatMessage(generated.ss_you_are_on_the_latest_version)
 export const statusAborted = compatMessage(generated.status_aborted)
 export const statusCancelled = compatMessage(generated.status_cancelled)
 export const statusCompleted = compatMessage(generated.status_completed)
@@ -1892,6 +2531,31 @@ export const statusMediumPriority = compatMessage(generated.status_medium_priori
 export const statusPending = compatMessage(generated.status_pending)
 export const statusTasks = compatMessage(generated.status_tasks)
 export const statusTasksSummary = compatMessage(generated.status_tasks_summary)
+export const suHourAgo = compatMessage(generated.su_hour_ago)
+export const suJustNow = compatMessage(generated.su_just_now)
+export const suMinAgo = compatMessage(generated.su_min_ago)
+export const suProjectRoot = compatMessage(generated.su_project_root)
+export const suToday = compatMessage(generated.su_today)
+export const suUnassigned = compatMessage(generated.su_unassigned)
+export const suYesterday = compatMessage(generated.su_yesterday)
+export const tdActions = compatMessage(generated.td_actions)
+export const tdClickToScroll = compatMessage(generated.td_click_to_scroll)
+export const tdConversationTimeline = compatMessage(generated.td_conversation_timeline)
+export const tdCreateSessionFromHere = compatMessage(generated.td_create_session_from_here)
+export const tdDAgo = compatMessage(generated.td_d_ago)
+export const tdForkFromHere = compatMessage(generated.td_fork_from_here)
+export const tdHAgo = compatMessage(generated.td_h_ago)
+export const tdJustNow = compatMessage(generated.td_just_now)
+export const tdLatest = compatMessage(generated.td_latest)
+export const tdMAgo = compatMessage(generated.td_m_ago)
+export const tdNoMessagesFound = compatMessage(generated.td_no_messages_found)
+export const tdNoMessagesInSession = compatMessage(generated.td_no_messages_in_session)
+export const tdNoTextContent = compatMessage(generated.td_no_text_content)
+export const tdPreviousTurn = compatMessage(generated.td_previous_turn)
+export const tdRevertFromHere = compatMessage(generated.td_revert_from_here)
+export const tdSearchMessages = compatMessage(generated.td_search_messages)
+export const tdTimelineDescription = compatMessage(generated.td_timeline_description)
+export const tdUndoToPoint = compatMessage(generated.td_undo_to_point)
 export const terminalNewSession = compatMessage(generated.terminal_new_session)
 export const terminalTitle = compatMessage(generated.terminal_title)
 export const toastCopyFailed = compatMessage(generated.toast_copy_failed)
@@ -1931,6 +2595,20 @@ export const toolTaskDetails = compatMessage(generated.tool_task_details)
 export const toolTaskLabel = compatMessage(generated.tool_task_label)
 export const toolUnableToRenderDiagram = compatMessage(generated.tool_unable_to_render_diagram)
 export const toolUnsupportedMermaidProtocol = compatMessage(generated.tool_unsupported_mermaid_protocol)
+export const tpAwaitingResponse = compatMessage(generated.tp_awaiting_response)
+export const tpNoOutputProduced = compatMessage(generated.tp_no_output_produced)
+export const tpOutput = compatMessage(generated.tp_output)
+export const trCancelled = compatMessage(generated.tr_cancelled)
+export const trCancelledLabel = compatMessage(generated.tr_cancelled_label)
+export const trCompleted = compatMessage(generated.tr_completed)
+export const trCompletedLabel = compatMessage(generated.tr_completed_label)
+export const trFoundFiles = compatMessage(generated.tr_found_files)
+export const trFoundMatches = compatMessage(generated.tr_found_matches)
+export const trInProgress = compatMessage(generated.tr_in_progress)
+export const trInProgressLabel = compatMessage(generated.tr_in_progress_label)
+export const trPending = compatMessage(generated.tr_pending)
+export const trPendingLabel = compatMessage(generated.tr_pending_label)
+export const trTotal = compatMessage(generated.tr_total)
 export const tunnelBrowseConfig = compatMessage(generated.tunnel_browse_config)
 export const tunnelClearConfig = compatMessage(generated.tunnel_clear_config)
 export const tunnelCloudflaredNotFound = compatMessage(generated.tunnel_cloudflared_not_found)
@@ -2210,6 +2888,9 @@ export const vsTerminalFontSize = compatMessage(generated.vs_terminal_font_size)
 export const vsTerminalQuickKeys = compatMessage(generated.vs_terminal_quick_keys)
 export const vsTerminalQuickKeysTooltip = compatMessage(generated.vs_terminal_quick_keys_tooltip)
 export const vsUserMessageRendering = compatMessage(generated.vs_user_message_rendering)
+export const vsiConversationModeActive = compatMessage(generated.vsi_conversation_mode_active)
+export const wbdBranchName = compatMessage(generated.wbd_branch_name)
+export const wbdRenameBranch = compatMessage(generated.wbd_rename_branch)
 export const worktreeAddCommand = compatMessage(generated.worktree_add_command)
 export const worktreeBadgeOpencode = compatMessage(generated.worktree_badge_opencode)
 export const worktreeDeleteNamed = compatMessage(generated.worktree_delete_named)
@@ -2224,6 +2905,33 @@ export const worktreeSelectProject = compatMessage(generated.worktree_select_pro
 export const worktreeSetupPlaceholder = compatMessage(generated.worktree_setup_placeholder)
 export const worktreeSetupTitle = compatMessage(generated.worktree_setup_title)
 export const worktreeSetupTooltip = compatMessage(generated.worktree_setup_tooltip)
+export const wtBootstrappingInBackground = compatMessage(generated.wt_bootstrapping_in_background)
+export const wtBranchNameRequired = compatMessage(generated.wt_branch_name_required)
+export const wtChooseBranch = compatMessage(generated.wt_choose_branch)
+export const wtCreateWorktree = compatMessage(generated.wt_create_worktree)
+export const wtCreating = compatMessage(generated.wt_creating)
+export const wtExistingBranch = compatMessage(generated.wt_existing_branch)
+export const wtFailedToCreateWorktree = compatMessage(generated.wt_failed_to_create_worktree)
+export const wtFailedToLoadIssueComments = compatMessage(generated.wt_failed_to_load_issue_comments)
+export const wtFailedToLoadIssueContext = compatMessage(generated.wt_failed_to_load_issue_context)
+export const wtFailedToLoadPrContext = compatMessage(generated.wt_failed_to_load_pr_context)
+export const wtFailedToSendGithubContext = compatMessage(generated.wt_failed_to_send_github_context)
+export const wtFetchBranches = compatMessage(generated.wt_fetch_branches)
+export const wtFrom = compatMessage(generated.wt_from)
+export const wtLoadingBranches = compatMessage(generated.wt_loading_branches)
+export const wtMatchingBranches = compatMessage(generated.wt_matching_branches)
+export const wtNewBranch = compatMessage(generated.wt_new_branch)
+export const wtNoActiveProject = compatMessage(generated.wt_no_active_project)
+export const wtNoBranchesFound = compatMessage(generated.wt_no_branches_found)
+export const wtNoMatchingBranches = compatMessage(generated.wt_no_matching_branches)
+export const wtNoModelSelected = compatMessage(generated.wt_no_model_selected)
+export const wtSelectBranch = compatMessage(generated.wt_select_branch)
+export const wtSelectSourceBranch = compatMessage(generated.wt_select_source_branch)
+export const wtSessionCreatedFromIssue = compatMessage(generated.wt_session_created_from_issue)
+export const wtSessionCreatedFromPr = compatMessage(generated.wt_session_created_from_pr)
+export const wtTitle = compatMessage(generated.wt_title)
+export const wtWorktreeCreated = compatMessage(generated.wt_worktree_created)
+export const wtWorktreeDirectoryRequired = compatMessage(generated.wt_worktree_directory_required)
 
 export const m = {
   aboutAgent,
@@ -2342,6 +3050,71 @@ export const m = {
   authEnterPassword,
   authTrustDevice,
   authVerifySession,
+  bpBranchDeleted,
+  bpBranchNotMerged,
+  bpBranchRenamed,
+  bpCancelDelete,
+  bpCancelRename,
+  bpConfirmAgainToForceDelete,
+  bpConfirmDelete,
+  bpConfirmRename,
+  bpCreateWorktree,
+  bpCreateWorktreeFailed,
+  bpDelete,
+  bpDeleteCurrentBranch,
+  bpDeleteDisabledForRootBranch,
+  bpDeleteFailed,
+  bpDeleteQuestion,
+  bpDeleteWorktree,
+  bpDeleteWorktreeRootBranchProtected,
+  bpFailedToCreateWorktree,
+  bpFailedToDeleteBranch,
+  bpFailedToLoad,
+  bpFailedToRenameBranch,
+  bpForceDeleteQuestion,
+  bpLoadingBranches,
+  bpLocalBranchesForProject,
+  bpManageBranches,
+  bpNoBranchesFound,
+  bpNoMatchingBranches,
+  bpNoProjectSelected,
+  bpRename,
+  bpRenameBranch,
+  bpRenameDisabledForRootBranch,
+  bpRenameFailed,
+  bpSearchBranches,
+  bpSelectAProject,
+  bpWorktree,
+  bpWorktreeAlreadyExists,
+  bpWorktreeCreated,
+  bsAhead,
+  bsBehind,
+  bsCreateNewBranch,
+  bsEmptyNoBranchesFound,
+  bsEmptyNoLocalBranches,
+  bsEmptyNoRemoteBranches,
+  bsHeadingLocalBranches,
+  bsHeadingRemoteBranches,
+  bsLabelCurrent,
+  bsPlaceholderNewBranchName,
+  bsPlaceholderSearchBranches,
+  bsPushBranchTo,
+  bsTooltipCurrentBranch,
+  cdArchive,
+  cdArchiveSession,
+  cdArchiveSessionSingle,
+  cdArchiveSessionWithDescendants,
+  cdCancel,
+  cdDelete,
+  cdDeleteFolder,
+  cdDeleteFolderSingle,
+  cdDeleteFolderWithContent,
+  cdDeleteSession,
+  cdDeleteSessionSingle,
+  cdDeleteSessionWithDescendants,
+  cdNeverAsk,
+  cdUntitledSession,
+  cebErrorDetails,
   chatAddAttachment,
   chatAddProject,
   chatAddToChat,
@@ -2430,6 +3203,20 @@ export const m = {
   chatToolExecutedByUser,
   chatYou,
   chatYourAnswer,
+  ciBranch,
+  ciDropFilesHereToAttach,
+  ciEnterShellCommand,
+  ciInputHelpText,
+  ciNew,
+  ciOpenIssueInBrowser,
+  ciOpenPullRequestInBrowser,
+  ciProjectRoot,
+  ciRemoveLinkedIssue,
+  ciRemoveLinkedPullRequest,
+  ciReviewComments,
+  ciSelectOrCreateSession,
+  ciToggleFocusMode,
+  ciWorktrees,
   cmdActions,
   cmdArgumentsHint,
   cmdBuiltinNoDelete,
@@ -2542,6 +3329,12 @@ export const m = {
   contextPanelTabDiff,
   contextPanelTabFiles,
   contextPanelTabPlan,
+  crCopiedFile,
+  crDeletedFile,
+  crModifiedFile,
+  crNewFile,
+  crRenamedFile,
+  crUntrackedFile,
   ctxAssistant,
   ctxCacheRead,
   ctxCacheWrite,
@@ -2574,6 +3367,22 @@ export const m = {
   ctxUsedTokens,
   ctxUsedTokensShort,
   ctxUser,
+  daTabCycleNavigateSelect,
+  deAddProject,
+  deAddProjectDirectory,
+  deAdding,
+  deCancel,
+  deChooseFolderToAddAsProject,
+  deDesktopCouldNotGrantFileAccess,
+  deDesktopDeniedDirectoryAccess,
+  deEnterPathOrSelectFromTree,
+  deFailedToAddProject,
+  deFailedToOpenDirectory,
+  deFailedToSelectDirectory,
+  deSelectValidDirectoryPath,
+  deShowHidden,
+  deUnableToAccessDirectory,
+  deUnknownErrorOccurred,
   defaultsDefaultAgent,
   defaultsDefaultModel,
   defaultsDefaultThinking,
@@ -2589,6 +3398,61 @@ export const m = {
   defaultsThinkingPlaceholder,
   defaultsTitle,
   defaultsWillStartWith,
+  dhActionConnect,
+  dhActionDelete,
+  dhActionEdit,
+  dhAddInstance,
+  dhAriaLabelInstanceStatus,
+  dhButtonAdd,
+  dhButtonAddInstance,
+  dhButtonCancel,
+  dhButtonRefresh,
+  dhButtonRemoteSsh,
+  dhButtonRetry,
+  dhButtonSave,
+  dhButtonSwitchInstance,
+  dhButtonSwitchToLocal,
+  dhDefaultSshUnavailable,
+  dhDialogDescription,
+  dhDialogTitleInstance,
+  dhEditInstance,
+  dhLabelCurrent,
+  dhLabelCurrentDefault,
+  dhLabelSsh,
+  dhLimitedMode,
+  dhLoading,
+  dhNeedSshInstances,
+  dhPhaseCheckingAuth,
+  dhPhaseConnectingSsh,
+  dhPhaseDetectingServer,
+  dhPhaseError,
+  dhPhaseForwardingPorts,
+  dhPhaseIdle,
+  dhPhaseInstalling,
+  dhPhaseProbingRemote,
+  dhPhaseReady,
+  dhPhaseReconnecting,
+  dhPhaseResolvingConfig,
+  dhPhaseStartingServer,
+  dhPhaseUpdating,
+  dhPingLatency,
+  dhPlaceholderLabel,
+  dhPlaceholderLabelOptional,
+  dhPlaceholderUrl,
+  dhSshConnectFailed,
+  dhSshConnecting,
+  dhSshDialogTitle,
+  dhStatusAuthRequired,
+  dhStatusConnected,
+  dhStatusUnknown,
+  dhStatusUnreachable,
+  dhStatusWrongService,
+  dhTooltipDefault,
+  dhTooltipDefaultInstance,
+  dhTooltipInstance,
+  dhTooltipInstanceUnreachable,
+  dhTooltipOpenInNewWindow,
+  dhTooltipSetAsDefault,
   diffAllFiles,
   diffBinaryContentCannotBeViewed,
   diffCopiedFile,
@@ -2622,6 +3486,18 @@ export const m = {
   diffUntrackedFile,
   diffViewMode,
   diffWorkingTreeClean,
+  dtBrowse,
+  dtCancel,
+  dtCreateDirectory,
+  dtCreateNewDirectory,
+  dtLoading,
+  dtLocatingHomeDirectory,
+  dtNewDirectory,
+  dtNoDirectoriesFound,
+  dtPinDirectory,
+  dtPinned,
+  dtSelectWorkingDirectory,
+  dtUnpinDirectory,
   emptyNoMessages,
   emptyNoSessions,
   emptyStartConversation,
@@ -2630,6 +3506,8 @@ export const m = {
   errTryAgain,
   errUnexpectedDesc,
   errUnknown,
+  faAttachFiles,
+  faRemoveImage,
   fileTreeClearSearch,
   fileTreeCopyFailed,
   fileTreeCopyPath,
@@ -2698,6 +3576,64 @@ export const m = {
   filesSwitchToTreeView,
   filesUnsavedChanges,
   filesUnsavedChangesDesc,
+  ghGitIdentity,
+  ghHistory,
+  ghNoIdentity,
+  giBranchAlreadyCheckedOut,
+  giCancel,
+  giConnectGitHub,
+  giConnectToGitHub,
+  giFailedToLoadData,
+  giGithubNotConnected,
+  giIncludeDiff,
+  giIncludeDiffAriaLabel,
+  giIssue,
+  giIssues,
+  giLinkIssuesOrPrs,
+  giLoadMore,
+  giNoIssuesFound,
+  giNoPrsFound,
+  giPr,
+  giPullRequests,
+  giSearchIssuesPlaceholder,
+  giSearchPrsPlaceholder,
+  giSelect,
+  giSelectFromGitHub,
+  giValidationFailed,
+  gipActions,
+  gipCreateInWorktree,
+  gipFailedToCreateSession,
+  gipFailedToCreateWorktreeSession,
+  gipFailedToLoadIssueDetails,
+  gipFailedToLoadMoreIssues,
+  gipFailedToSendIssueContext,
+  gipFailedToStartSession,
+  gipGithubNotConnected,
+  gipGithubNotConnectedMessage,
+  gipGithubRuntimeApiUnavailable,
+  gipIssueNotFound,
+  gipLinkGithubIssue,
+  gipLoadMore,
+  gipLoading,
+  gipLoadingIssues,
+  gipNewSessionDescription,
+  gipNewSessionFromGithubIssue,
+  gipNoActiveProject,
+  gipNoActiveProjectSelected,
+  gipNoIssuesFound,
+  gipNoModelSelected,
+  gipNoOpenIssuesFound,
+  gipOpenInGithub,
+  gipOpenRepo,
+  gipOpenSettings,
+  gipRefresh,
+  gipRepoNotResolvable,
+  gipRepoNotResolvableDescription,
+  gipSearchPlaceholder,
+  gipSelectIssueToLinkDescription,
+  gipSessionCreatedFromIssue,
+  gipToggleWorktree,
+  gipUseIssueNumber,
   gitAIHighlightsDescription,
   gitAIHighlightsLoading,
   gitAIHighlightsNoHighlights,
@@ -3045,6 +3981,49 @@ export const m = {
   githubTooltip,
   githubUnknownUser,
   githubWaiting,
+  gppDialogDescription,
+  gppDialogTitle,
+  gppFailedToLoadMorePrs,
+  gppFailedToLoadPrDetails,
+  gppGithubApiUnavailable,
+  gppGithubApiUnavailablePeriod,
+  gppGithubNotConnected,
+  gppGithubNotConnectedMessage,
+  gppIncludeDiffLabel,
+  gppIncludeDiffText,
+  gppLoadMore,
+  gppLoading,
+  gppLoadingPrs,
+  gppNoActiveProject,
+  gppNoActiveProjectSelected,
+  gppNoOpenPrsFound,
+  gppNoPrsFound,
+  gppOpenInGithub,
+  gppOpenSettings,
+  gppPrNotFound,
+  gppRepoNotResolvable,
+  gppRepoNotResolvableDescription,
+  gppSearchPlaceholder,
+  gppUsePrNumber,
+  hcrCopySha,
+  hcrLoadingFiles,
+  hcrNoFiles,
+  headerCurrentInstance,
+  headerGithub,
+  headerGithubAccounts,
+  headerGithubAvatar,
+  headerGithubAvatarNoLogin,
+  headerGithubConnected,
+  headerGithubConnectedNoLogin,
+  headerNextTab,
+  headerNoRateLimitsAvailable,
+  headerNoRateLimitsReported,
+  headerOpenInstanceUsageMcp,
+  headerOpenServicesUsageMcp,
+  headerOther,
+  headerRateLimits,
+  headerRefreshRateLimits,
+  headerServices,
   headingChatMode,
   headingPlanMode,
   helpAbortRun,
@@ -3076,6 +4055,8 @@ export const m = {
   helpTogglePlanContext,
   helpToggleServicesMenu,
   helpToggleSessionSidebar,
+  hsHeadingHistory,
+  hsNoCommitsFound,
   jsonCollapseAll,
   jsonEmptyContent,
   jsonExpandAll,
@@ -3085,6 +4066,33 @@ export const m = {
   keyboardPressKeys,
   keyboardShortcutConflict,
   keyboardShortcutsTitle,
+  lyBackToSessions,
+  lyChat,
+  lyCloseTerminalPanel,
+  lyColor,
+  lyEditProject,
+  lyExpandTerminalPanel,
+  lyIcon,
+  lyIconBackground,
+  lyLastUpdated,
+  lyName,
+  lyNewSession,
+  lyNoRateLimitsAvailable,
+  lyNoRateLimitsReported,
+  lyOpenAgentManager,
+  lyPreview,
+  lyRateLimits,
+  lyRefreshRateLimits,
+  lyRemaining,
+  lyResizeSessionsSidebar,
+  lyResizeTerminalPanel,
+  lyRestoreTerminalPanelHeight,
+  lySession,
+  lySessions,
+  lySettings,
+  lyShowRemainingQuota,
+  lyShowUsedQuota,
+  lyUsed,
   magicPromptCherryPick,
   magicPromptCherryPickDesc,
   magicPromptCommitGeneration,
@@ -3122,6 +4130,72 @@ export const m = {
   magicPromptsTitle,
   magicPromptsVisibleEmpty,
   mainLayoutCloseDrawer,
+  mbCopyAnswer,
+  mbCopyMessage,
+  mbCopyMessageText,
+  mbMessageTime,
+  mbReadAloud,
+  mbSaveAsImage,
+  mbSavingImage,
+  mbStartNewMultiRunFromAnswer,
+  mbStartNewSessionFromAnswer,
+  mbStopSpeaking,
+  mcAddNewProvider,
+  mcAddToFavorites,
+  mcAll,
+  mcAllow,
+  mcAsk,
+  mcAudio,
+  mcBash,
+  mcCacheRead,
+  mcCacheWrite,
+  mcCapabilities,
+  mcClearSearch,
+  mcCollapseProvider,
+  mcContext,
+  mcCostPerMTokens,
+  mcCurrent,
+  mcCustom,
+  mcCustomPrompt,
+  mcDefault,
+  mcDeny,
+  mcEdit,
+  mcExpandProvider,
+  mcFavorite,
+  mcFavorites,
+  mcImage,
+  mcInput,
+  mcKnowledge,
+  mcLimits,
+  mcMetadata,
+  mcModalities,
+  mcMode,
+  mcModel,
+  mcModelMetadataUnavailable,
+  mcNoAgentSelected,
+  mcNoModelsFound,
+  mcNoProvidersModelsMatchSearch,
+  mcNotSelected,
+  mcOutput,
+  mcPdf,
+  mcPermissions,
+  mcPrimary,
+  mcProvider,
+  mcReasoning,
+  mcRecent,
+  mcRelease,
+  mcRemoveFromFavorites,
+  mcSelectAgent,
+  mcSelectModel,
+  mcSubagent,
+  mcTemperature,
+  mcText,
+  mcThinkingLabel,
+  mcToolCalling,
+  mcTopP,
+  mcUnfavorite,
+  mcVideo,
+  mcWebFetch,
   mcpAddVariable,
   mcpCancel,
   mcpCommand,
@@ -3188,6 +4262,48 @@ export const m = {
   mcpValuePlaceholder,
   mcpValuesPlaintext,
   mcpWorking,
+  mrAddCommand,
+  mrAddModel,
+  mrAddProjectFirst,
+  mrAgent,
+  mrAgentInfo,
+  mrAttach,
+  mrAttachTooltip,
+  mrBaseBranch,
+  mrBaseBranchInfo,
+  mrCancel,
+  mrCloseEsc,
+  mrCreating,
+  mrDefault,
+  mrFavorites,
+  mrGroupName,
+  mrGroupNameInfo,
+  mrGroupNamePlaceholder,
+  mrKeyboardHints,
+  mrLoading,
+  mrLoadingBranches,
+  mrLocalBranches,
+  mrModels,
+  mrModelsInfo,
+  mrNewMultiRun,
+  mrNoBranchesFound,
+  mrNoModelsFound,
+  mrNotGitRepository,
+  mrProject,
+  mrPrompt,
+  mrPromptPlaceholder,
+  mrRecent,
+  mrRemoteBranches,
+  mrRemoveCommand,
+  mrSearchModels,
+  mrSelectAgent,
+  mrSelectModelsRange,
+  mrSelectProject,
+  mrSelectSourceBranch,
+  mrSetupCommandPlaceholder,
+  mrSetupCommands,
+  mrStartModels,
+  mrThinking,
   notifAgentCompletion,
   notifAgentCompletionAria,
   notifAgentErrors,
@@ -3264,6 +4380,77 @@ export const m = {
   notifVscodeHint,
   notifWhileFocused,
   notifWhileFocusedAria,
+  oabChooseApp,
+  oabCopiedToClipboard,
+  oabCopyPath,
+  oabRefreshApps,
+  obAlreadyInstalled,
+  obApply,
+  obBack,
+  obBinaryPathHelper,
+  obBrowse,
+  obCheckAndContinue,
+  obCheckButtonHelper,
+  obChecking,
+  obChooseDifferentServer,
+  obCliNotReady,
+  obConnectAndRestart,
+  obConnectRemote,
+  obConnectToDifferentServer,
+  obConnectToRemoteServer,
+  obConnectedSuccessfully,
+  obConnectionFailed,
+  obConnectionTestFailed,
+  obCopiedToClipboard,
+  obCopyToClipboard,
+  obDetectionFailed,
+  obFailedToSaveConnection,
+  obIncompatibleServer,
+  obIncompatibleServerDescription,
+  obInstallCliToContinue,
+  obLocalInstall,
+  obLocalUnavailableDescription,
+  obLocalUnavailableTitle,
+  obNoDefaultConnection,
+  obNoDefaultConnectionDescription,
+  obPathHint1,
+  obPathHint2,
+  obPathHint3,
+  obPreferRemoteServer,
+  obRemoteServerDescription,
+  obRemoteServerUnreachableDescription,
+  obRemoteServerUnreachableTitle,
+  obRetryConnection,
+  obRetryLocal,
+  obRetrying,
+  obSelectOpencodeBinary,
+  obServerAddress,
+  obServerAddressPlaceholder,
+  obServerNameOptional,
+  obServerNamePlaceholder,
+  obServerRequiresAuth,
+  obServerRequiresAuthShort,
+  obServerUnreachable,
+  obSetUpLocal,
+  obSettingUpOpenCode,
+  obSuggestionsUnreachable,
+  obSuggestionsWrongService,
+  obTestConnection,
+  obTesting,
+  obUseLocalInstead,
+  obUseRemote,
+  obViewDocumentation,
+  obViewWindowsDocumentation,
+  obWelcomeDescription,
+  obWelcomeTitle,
+  obWhatWouldYouLikeToDo,
+  obWindowsHint1,
+  obWindowsHint2,
+  obWindowsSetupStep1,
+  obWindowsSetupStep2,
+  obWindowsSetupStep3,
+  obWindowsSetupTitle,
+  obWrongService,
   ocCliBinaryPath,
   ocCliBrowse,
   ocCliBrowseAria,
@@ -3336,6 +4523,27 @@ export const m = {
   passkeyToastAdded,
   passkeyToastCanceled,
   passkeyToastRemoved,
+  pcAction,
+  pcDetails,
+  pnAddATodo,
+  pnAddTodo,
+  pnCaptureContextRemindersOrLinks,
+  pnClearCompleted,
+  pnFailedToLoadProjectNotes,
+  pnFailedToSaveProjectNotes,
+  pnItemCount,
+  pnNoActiveSessionSelected,
+  pnNoTodosYet,
+  pnQuickNotes,
+  pnSelectProjectToAddNotesAndTodos,
+  pnSendToCurrentSession,
+  pnSendToNewSession,
+  pnSendToNewWorktreeSession,
+  pnTodo,
+  pnTodoSentToCurrentSession,
+  pnTodoSentToNewSession,
+  pnTodoSentToNewWorktreeSession,
+  pnWorktreeActionsOnlyAvailableForGitRepos,
   prAdd,
   prAdditionalContextGuide,
   prAdditionalContextLabel,
@@ -3601,6 +4809,18 @@ export const m = {
   providersConnectAria,
   providersNotFound,
   providersTitle,
+  qcDismiss,
+  qcFromSubagent,
+  qcInputNeeded,
+  qcNext,
+  qcNoAnswer,
+  qcOther,
+  qcQuestion,
+  qcRecommended,
+  qcSelectMultiple,
+  qcSubmit,
+  qcSummary,
+  qcYourAnswer,
   riSshInstancesActionCancelConnection,
   riSshInstancesActionConnect,
   riSshInstancesActionConnecting,
@@ -3787,6 +5007,8 @@ export const m = {
   riSshInstancesTypeRemoteBadge,
   riSshInstancesValueHint,
   rightSidebarResizePanel,
+  sasShowFewerSessions,
+  sasShowMoreSessions,
   scAddCatalog,
   scAddCatalogAction,
   scAddCatalogDesc,
@@ -3873,6 +5095,49 @@ export const m = {
   scToastSelectAtLeastOne,
   scToastSkillsFound,
   scToastSourceRequired,
+  sdArchivedOrDeletedSessions,
+  sdArchivedWorktreesAndRemovedRemoteBranches,
+  sdAttachedWorktreeArchived,
+  sdAttachedWorktreesArchived,
+  sdCancel,
+  sdDeleteLocalBranch,
+  sdDeleteRemoteBranch,
+  sdDeleteSession,
+  sdDeleteSessions,
+  sdDeleteWorktree,
+  sdDeletedSessions,
+  sdDeleting,
+  sdDesktopCouldNotGrantFileAccess,
+  sdFailedToAddProject,
+  sdFailedToArchiveOrDeleteSessions,
+  sdFailedToArchiveSession,
+  sdFailedToDeleteSession,
+  sdFailedToDeleteSessions,
+  sdFailedToOpenDirectory,
+  sdFailedToRemoveWorktree,
+  sdFailedToSelectDirectory,
+  sdLinkedSession,
+  sdLinkedSessions,
+  sdNeverAsk,
+  sdOk,
+  sdPleaseSelectAValidDirectoryPath,
+  sdPleaseTryAgain,
+  sdRemoteBranchInfoUnavailable,
+  sdRemovedAllSessionsFromDate,
+  sdSessionArchived,
+  sdSessionDeleted,
+  sdSessionsCouldNotBeArchivedOrDeleted,
+  sdSessionsCouldNotBeDeleted,
+  sdThisPermanentlyRemovesSessions,
+  sdThisRemovesTheSelectedWorktree,
+  sdThisRemovesWorktreeAndArchivesSessions,
+  sdUncommittedChangesWillBeDiscarded,
+  sdUntitledSession,
+  sdWorktree,
+  sdWorktreeAndRemoteBranchRemoved,
+  sdWorktreeDirectoriesStayIntact,
+  sdWorktreePathUnavailable,
+  sdWorktreeRemoved,
   selectorAddToFavorites,
   selectorCurrent,
   selectorFavorite,
@@ -3951,6 +5216,46 @@ export const m = {
   settingsSwitchProjectAria,
   settingsTitle,
   settingsUsagePage,
+  sfdSession,
+  sfiDeleteFolder,
+  sfiEmptyFolder,
+  sfiFolderName,
+  sfiNewSession,
+  sfiNewSessionIn,
+  sfiNewSubFolder,
+  sfiNewSubFolderIn,
+  sfiRenameFolder,
+  sgChecksPassed,
+  sgClosed,
+  sgCollapse,
+  sgConflictsOrBlocked,
+  sgDelete,
+  sgDeleteArchivedSessions,
+  sgDeleteArchivedSessionsIn,
+  sgDeleteWorktree,
+  sgDraftPr,
+  sgExpand,
+  sgFailing,
+  sgMergeBlocked,
+  sgMergeConflicts,
+  sgMergeState,
+  sgMergeable,
+  sgMerged,
+  sgNewDraftSession,
+  sgNewDraftSessionIn,
+  sgNoArchivedSessionsYet,
+  sgNoSessionsInThisWorkspaceYet,
+  sgPending,
+  sgPrOpen,
+  sgReadyToMerge,
+  sgShowFewerSessions,
+  sgShowMoreSessions,
+  siCloseProject,
+  siNewDraftSession,
+  siNewSession,
+  siNewWorktree,
+  siProjectMenu,
+  siRename,
   sidebarActivityShowFewer,
   sidebarActivityShowMore,
   sidebarAgents,
@@ -4073,11 +5378,53 @@ export const m = {
   skillsContentPlaceholder,
   skillsFilePlaceholder,
   skillsNamePlaceholder,
+  sniArchive,
+  sniBeta,
+  sniCollapseSubsessions,
+  sniCopied,
+  sniCopyLink,
+  sniDelete,
+  sniExpandSubsessions,
+  sniMoveToFolder,
+  sniNewFolder,
+  sniNoFoldersYet,
+  sniOpenInSidePanel,
+  sniPermissionRequired,
+  sniPinSession,
+  sniPinnedSession,
+  sniRemoveFromFolder,
+  sniRename,
+  sniRenameSession,
+  sniSessionMenu,
+  sniShare,
+  sniUnpinSession,
+  sniUnshare,
+  srActionStop,
+  srStatusAborted,
+  srStatusCancelled,
+  srStatusCompleted,
+  srStatusHighPriority,
+  srStatusInProgress,
+  srStatusLowPriority,
+  srStatusMediumPriority,
+  srStatusPending,
+  srTasks,
   srToastArchiveFailed,
   srToastArchived,
   srToastDeleteFailed,
   srToastDeleted,
   srToastNoneEligible,
+  ssCreateYourFirstSessionToStartCoding,
+  ssFailedToAddProject,
+  ssFailedToCheckForUpdates,
+  ssFailedToSelectDirectory,
+  ssNewFolder,
+  ssNoMatchingSessions,
+  ssNoSessionsYet,
+  ssPleaseSelectAValidDirectory,
+  ssRecent,
+  ssTryADifferentTitleBranchFolderOrPath,
+  ssYouAreOnTheLatestVersion,
   statusAborted,
   statusCancelled,
   statusCompleted,
@@ -4088,6 +5435,31 @@ export const m = {
   statusPending,
   statusTasks,
   statusTasksSummary,
+  suHourAgo,
+  suJustNow,
+  suMinAgo,
+  suProjectRoot,
+  suToday,
+  suUnassigned,
+  suYesterday,
+  tdActions,
+  tdClickToScroll,
+  tdConversationTimeline,
+  tdCreateSessionFromHere,
+  tdDAgo,
+  tdForkFromHere,
+  tdHAgo,
+  tdJustNow,
+  tdLatest,
+  tdMAgo,
+  tdNoMessagesFound,
+  tdNoMessagesInSession,
+  tdNoTextContent,
+  tdPreviousTurn,
+  tdRevertFromHere,
+  tdSearchMessages,
+  tdTimelineDescription,
+  tdUndoToPoint,
   terminalNewSession,
   terminalTitle,
   toastCopyFailed,
@@ -4127,6 +5499,20 @@ export const m = {
   toolTaskLabel,
   toolUnableToRenderDiagram,
   toolUnsupportedMermaidProtocol,
+  tpAwaitingResponse,
+  tpNoOutputProduced,
+  tpOutput,
+  trCancelled,
+  trCancelledLabel,
+  trCompleted,
+  trCompletedLabel,
+  trFoundFiles,
+  trFoundMatches,
+  trInProgress,
+  trInProgressLabel,
+  trPending,
+  trPendingLabel,
+  trTotal,
   tunnelBrowseConfig,
   tunnelClearConfig,
   tunnelCloudflaredNotFound,
@@ -4406,6 +5792,9 @@ export const m = {
   vsTerminalQuickKeys,
   vsTerminalQuickKeysTooltip,
   vsUserMessageRendering,
+  vsiConversationModeActive,
+  wbdBranchName,
+  wbdRenameBranch,
   worktreeAddCommand,
   worktreeBadgeOpencode,
   worktreeDeleteNamed,
@@ -4420,4 +5809,31 @@ export const m = {
   worktreeSetupPlaceholder,
   worktreeSetupTitle,
   worktreeSetupTooltip,
+  wtBootstrappingInBackground,
+  wtBranchNameRequired,
+  wtChooseBranch,
+  wtCreateWorktree,
+  wtCreating,
+  wtExistingBranch,
+  wtFailedToCreateWorktree,
+  wtFailedToLoadIssueComments,
+  wtFailedToLoadIssueContext,
+  wtFailedToLoadPrContext,
+  wtFailedToSendGithubContext,
+  wtFetchBranches,
+  wtFrom,
+  wtLoadingBranches,
+  wtMatchingBranches,
+  wtNewBranch,
+  wtNoActiveProject,
+  wtNoBranchesFound,
+  wtNoMatchingBranches,
+  wtNoModelSelected,
+  wtSelectBranch,
+  wtSelectSourceBranch,
+  wtSessionCreatedFromIssue,
+  wtSessionCreatedFromPr,
+  wtTitle,
+  wtWorktreeCreated,
+  wtWorktreeDirectoryRequired,
 }

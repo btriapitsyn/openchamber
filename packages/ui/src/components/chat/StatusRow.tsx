@@ -21,7 +21,7 @@ import { useUIStore } from "@/stores/useUIStore";
 import { WorkingPlaceholder } from "./message/parts/WorkingPlaceholder";
 import { isVSCodeRuntime } from "@/lib/desktop";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { actionStop, statusInProgress, statusPending, statusCompleted, statusCancelled, statusAborted, statusHighPriority, statusMediumPriority, statusLowPriority } from '@/lib/i18n/messages';
+import { m } from '@/lib/i18n/messages';
 
 const statusConfig: Record<TodoStatus, { textClassName: string }> = {
   in_progress: {
@@ -51,16 +51,16 @@ const priorityIcon: Record<TodoPriority, React.ReactNode> = {
 };
 
 const statusLabel: Record<TodoStatus, string> = {
-  in_progress: statusInProgress(),
-  pending: statusPending(),
-  completed: statusCompleted(),
-  cancelled: statusCancelled(),
+  in_progress: m.srStatusInProgress(),
+  pending: m.srStatusPending(),
+  completed: m.srStatusCompleted(),
+  cancelled: m.srStatusCancelled(),
 };
 
 const priorityLabel: Record<TodoPriority, string> = {
-  high: statusHighPriority(),
-  medium: statusMediumPriority(),
-  low: statusLowPriority(),
+  high: m.srStatusHighPriority(),
+  medium: m.srStatusMediumPriority(),
+  low: m.srStatusLowPriority(),
 };
 
 interface TodoItemRowProps {
@@ -225,7 +225,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
       type="button"
       onClick={onAbort}
       className="flex items-center justify-center h-[1.2rem] w-[1.2rem] text-[var(--status-error)] transition-opacity hover:opacity-80 focus-visible:outline-none flex-shrink-0"
-      aria-label={actionStop()}
+      aria-label={m.srActionStop()}
     >
       <RiCloseCircleLine size={18} aria-hidden="true" />
     </button>
@@ -244,7 +244,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
           {activeTodo.content}
         </span>
       ) : (
-        <span className="typography-ui-label">Tasks</span>
+        <span className="typography-ui-label">{m.srTasks()}</span>
       )}
       <span className="typography-meta">
           {statusSummary.active} active · {statusSummary.left} left
@@ -271,7 +271,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
             <div className="flex h-full items-center text-[var(--status-error)] pl-0.5">
               <span className="flex items-center gap-1.5 typography-ui-label">
                 <RiCloseCircleLine size={16} aria-hidden="true" />
-                {statusAborted()}
+                 {m.srStatusAborted()}
               </span>
             </div>
           ) : showAssistantStatus && shouldRenderPlaceholder ? (
@@ -306,7 +306,7 @@ export const StatusRow: React.FC<StatusRowProps> = ({
             >
               {/* Header */}
               <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-                <span className="typography-ui-label text-muted-foreground">Tasks</span>
+                <span className="typography-ui-label text-muted-foreground">{m.srTasks()}</span>
                 <span className="typography-meta text-muted-foreground">
                   {progress.completed}/{progress.total}
                 </span>

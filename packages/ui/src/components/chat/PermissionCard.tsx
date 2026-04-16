@@ -292,7 +292,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
         )}
         {genericContent && (
           <div className="mb-2">
-            <div className="typography-meta text-muted-foreground mb-1">Action:</div>
+            <div className="typography-meta text-muted-foreground mb-1">{m.pcAction()}:</div>
             <ScrollableOverlay outerClassName="max-h-32" className="p-0">
               <pre className="typography-meta font-mono px-2 py-1 bg-muted/30 rounded whitespace-pre-wrap break-all">
                 {String(genericContent)}
@@ -303,7 +303,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
         {}
         {Object.keys(permission.metadata).length > 0 && !genericContent && !description && (
           <div>
-            <div className="typography-meta text-muted-foreground mb-1">Details:</div>
+            <div className="typography-meta text-muted-foreground mb-1">{m.pcDetails()}:</div>
             <ScrollableOverlay outerClassName="max-h-32" className="p-0">
               <pre className="typography-meta font-mono px-2 py-1 bg-muted/30 rounded whitespace-pre-wrap break-all">
                 {JSON.stringify(permission.metadata, null, 2)}
