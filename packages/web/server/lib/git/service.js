@@ -2745,7 +2745,7 @@ export async function canonicalizeWorktreeState(directory) {
       worktreeRoot: null,
       cwd: null,
       branch: null,
-      headState: 'not-a-repo',
+      headState: 'detached',
       worktreeStatus: 'not-a-repo',
       legacy: false,
       degraded: false,
@@ -2759,7 +2759,7 @@ export async function canonicalizeWorktreeState(directory) {
       worktreeRoot: null,
       cwd: null,
       branch: null,
-      headState: 'not-a-repo',
+      headState: 'detached',
       worktreeStatus: 'not-a-repo',
       legacy: false,
       degraded: false,
@@ -2769,7 +2769,6 @@ export async function canonicalizeWorktreeState(directory) {
 
   const cwd = await canonicalPath(directoryPath);
   const git = await createGit(directoryPath);
-  const legacy = await isLinkedWorktree(directoryPath);
 
   let worktreeRoot = null;
   let worktreeStatus = 'ready';
@@ -2815,7 +2814,6 @@ export async function canonicalizeWorktreeState(directory) {
       if (rebaseMerge || rebaseApply) {
         attentionReason = 'rebase';
       } else if (status.conflicted && status.conflicted.length > 0) {
-        // Conflicted but no MERGE_HEAD or rebase dir — likely cherry-pick or revert
         const cherryPickHead = await fsp.stat(path.join(directoryPath, '.git', 'CHERRY_PICK_HEAD')).then(() => true).catch(() => false);
         const revertHead = await fsp.stat(path.join(directoryPath, '.git', 'REVERT_HEAD')).then(() => true).catch(() => false);
         if (cherryPickHead) attentionReason = 'cherry-pick';
@@ -2832,7 +2830,7 @@ export async function canonicalizeWorktreeState(directory) {
     branch,
     headState,
     worktreeStatus,
-    legacy,
+    legacy: false,
     degraded: false,
     attentionReason,
   };

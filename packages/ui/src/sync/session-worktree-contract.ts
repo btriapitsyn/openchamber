@@ -1,46 +1,13 @@
 import type { WorktreeMetadata } from '@/types/worktree';
+import type { SessionWorktreeAttachment } from '@/stores/types/sessionTypes';
 
-/**
- * Shared session ↔ worktree attachment type.
- * This is the Phase 1 authoritative contract for session worktree state.
- * Stored in session-worktree-store.ts, consumed by all UI and sync logic.
- */
-export type SessionWorktreeAttachment = {
-  worktreeRoot: string | null;
-  /** Effective runtime directory for the session. May differ from worktreeRoot for subdirectory sessions. */
-  cwd: string | null;
-  /** Latest known branch name, null if unborn or detached. */
-  branch: string | null;
-  /** Git HEAD state classification. */
-  headState: 'branch' | 'detached' | 'unborn';
-  /** Operational status of the attached worktree. */
-  worktreeStatus: 'ready' | 'missing' | 'invalid' | 'not-a-repo';
-  /** How this worktree was attached to the session. */
-  worktreeSource: 'existing' | 'created-for-session' | null;
-  /** True when the session predates the worktree-attachment model and has no stored canonical attachment. */
-  legacy: boolean;
-  /** True when cwd resolved outside worktreeRoot or other degraded conditions. */
-  degraded: boolean;
-  /** Optional reason when the worktree is in an attention-required state. */
-  attentionReason?: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'bisect' | null;
-};
-
-/** Input for resolving session worktree state. */
 export type ResolveSessionWorktreeStateInput = {
   sessionDirectory: string | null;
   metadata: WorktreeMetadata | null;
-  /** True when runtime has confirmed cwd exists on disk. */
   cwdExists?: boolean;
-  /** Runtime-provided canonicalization result used for legacy recovery. */
   runtimeResolution?: SessionWorktreeAttachment | null;
 };
 
-/** Result of canonicalizing session worktree state. */
-export type SessionWorktreeStateResolved = SessionWorktreeAttachment & {
-  /** Computed: whether the cwd fell back to worktreeRoot. */
-};
-
-/** Result of validating a directory against a worktree root. */
 export type WorktreeDirectoryValidation = {
   valid: boolean;
   insideWorktreeRoot: boolean;
@@ -48,7 +15,6 @@ export type WorktreeDirectoryValidation = {
   resolvedCwd: string | null;
 };
 
-/** Result of canonicalizing a directory to worktree state (runtime-backed). */
 export type WorktreeCanonicalizationResult = {
   worktreeRoot: string | null;
   cwd: string | null;
@@ -66,10 +32,6 @@ export type SessionWorktreeCanonicalizationOptions = {
   worktreeSource?: SessionWorktreeAttachment['worktreeSource'];
 };
 
-// ---------------------------------------------------------------------------
-// Path helpers
-// ---------------------------------------------------------------------------
-
 const normalizePath = (value: string): string => {
   if (!value) return '';
   const replaced = value.replace(/\\/g, '/');
@@ -77,10 +39,6 @@ const normalizePath = (value: string): string => {
   return replaced.replace(/\/+$/, '') || replaced;
 };
 
-/**
- * Returns true if `candidate` is inside (or equal to) `worktreeRoot`.
- * Uses path prefix comparison after normalization.
- */
 export function isWithinWorktreeRoot(candidate: string | null, worktreeRoot: string | null): boolean {
   if (!candidate || !worktreeRoot) return false;
   const c = normalizePath(candidate);
@@ -134,25 +92,11 @@ export function buildAttachmentFromCanonicalization(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Core canonicalization
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve canonical session worktree state from directory + metadata.
- *
- * Rules:
- * - If runtimeResolution is provided, prefer it (legacy recovery path).
- * - If cwd is valid and inside worktreeRoot, keep it.
- * - Otherwise fall back to worktreeRoot and mark degraded.
- * - If no metadata is available, mark legacy with invalid status.
- */
 export function resolveSessionWorktreeState(
   input: ResolveSessionWorktreeStateInput
 ): SessionWorktreeAttachment {
   const { sessionDirectory, metadata, cwdExists = true, runtimeResolution } = input;
 
-  // Prefer runtime resolution for legacy recovery
   if (runtimeResolution) {
     return {
       worktreeRoot: runtimeResolution.worktreeRoot ?? metadata?.path ?? sessionDirectory ?? null,
@@ -167,7 +111,6 @@ export function resolveSessionWorktreeState(
     };
   }
 
-  // No metadata — mark legacy and invalid
   if (!metadata) {
     return {
       worktreeRoot: sessionDirectory ?? null,
@@ -185,7 +128,6 @@ export function resolveSessionWorktreeState(
   const worktreeRoot = metadata.worktreeRoot ?? metadata.path;
   const cwd = sessionDirectory ?? worktreeRoot;
 
-  // Determine if cwd is valid
   const cwdValid = cwdExists && (cwd === worktreeRoot || isWithinWorktreeRoot(cwd, worktreeRoot));
 
   return {
@@ -201,11 +143,6 @@ export function resolveSessionWorktreeState(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Badge formatting
-// ---------------------------------------------------------------------------
-
-/** Format a human-readable badge label from an attachment. */
 export function formatSessionWorktreeBadge(attachment: SessionWorktreeAttachment): string {
   if (attachment.legacy) return 'Legacy session';
   if (attachment.worktreeStatus === 'missing') return 'Worktree missing';
@@ -218,14 +155,8 @@ export function formatSessionWorktreeBadge(attachment: SessionWorktreeAttachment
   return 'No branch';
 }
 
-// ---------------------------------------------------------------------------
-// Repair actions
-// ---------------------------------------------------------------------------
-
-/** Phase 1 repair action IDs. */
 export type SessionWorktreeRepairAction = 'locate' | 'open-without-worktree-features';
 
-/** Return available repair actions for a degraded/missing session. */
 export function getSessionWorktreeRepairActions(
   attachment: SessionWorktreeAttachment
 ): SessionWorktreeRepairAction[] {
@@ -235,20 +166,17 @@ export function getSessionWorktreeRepairActions(
   return [];
 }
 
-/** Reasons why a worktree mutation should be blocked. */
 export type MutationBlockingReason =
   | { reason: 'dirty'; dirtyFiles?: number }
   | { reason: 'attention'; attentionReason: NonNullable<SessionWorktreeAttachment['attentionReason']> }
   | { reason: 'missing' }
   | { reason: 'invalid' };
 
-/** Git status shape needed for dirty-tree detection. */
 export type GitStatusForBlocking = {
   isClean: boolean;
   files?: unknown[];
 };
 
-/** Return blocking reasons that should prevent branch mutations. */
 export function getMutationBlockingReasons(
   attachment: SessionWorktreeAttachment | null | undefined,
   gitStatus?: GitStatusForBlocking | null
@@ -270,26 +198,13 @@ export function getMutationBlockingReasons(
   return reasons;
 }
 
-// ---------------------------------------------------------------------------
-// Session target option builder
-// ---------------------------------------------------------------------------
-
-/** A labeled session target option for the new-session draft UI. */
 export type SessionTargetOption = {
   value: string;
   label: string;
   kind: 'root' | 'worktree';
-  /** True when this worktree is in pending bootstrap state. */
   pending?: boolean;
 };
 
-/** Build labeled target options for the new-session draft selector.
- *
- * Distinguishes:
- * - root: the project root / primary worktree
- * - worktree: an isolated secondary worktree
- * - pending: a worktree that is being bootstrapped (marked with pending=true)
- */
 export function buildSessionTargetOptions(input: {
   projectRoot: string;
   rootBranch: string;

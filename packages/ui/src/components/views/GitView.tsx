@@ -1056,18 +1056,26 @@ export const GitView: React.FC = () => {
     }
   }, [currentDirectory, selectedPaths, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom]);
 
+  const formatBlockingReason = (reason: ReturnType<typeof getMutationBlockingReasons>[number]): string => {
+    if (reason.reason === 'dirty') {
+      const count = typeof reason.dirtyFiles === 'number' ? reason.dirtyFiles : null;
+      return count != null ? `${count} uncommitted file${count === 1 ? '' : 's'}` : 'uncommitted changes';
+    }
+    if (reason.reason === 'attention') {
+      return `${reason.attentionReason} in progress`;
+    }
+    if (reason.reason === 'missing') {
+      return 'worktree is missing';
+    }
+    return 'worktree is invalid';
+  };
+
   const handleCreateBranch = async (branchName: string, remote?: GitRemote) => {
     if (!currentDirectory || !status) return;
 
     const blockingReasons = getMutationBlockingReasons(worktreeAttachment ?? null, status);
     if (blockingReasons.length > 0) {
-      const reason = blockingReasons[0];
-      const reasonLabel = reason.reason === 'attention'
-        ? `${reason.attentionReason} in progress`
-        : reason.reason === 'missing'
-        ? 'worktree is missing'
-        : 'worktree is invalid';
-      toast.error(`Cannot create branch: ${reasonLabel}`);
+      toast.error(`Cannot create branch: ${formatBlockingReason(blockingReasons[0])}`);
       return;
     }
 
@@ -1121,13 +1129,7 @@ export const GitView: React.FC = () => {
 
     const blockingReasons = getMutationBlockingReasons(worktreeAttachment ?? null, status);
     if (blockingReasons.length > 0) {
-      const reason = blockingReasons[0];
-      const reasonLabel = reason.reason === 'attention'
-        ? `${reason.attentionReason} in progress`
-        : reason.reason === 'missing'
-        ? 'worktree is missing'
-        : 'worktree is invalid';
-      toast.error(`Cannot rename branch: ${reasonLabel}`);
+      toast.error(`Cannot rename branch: ${formatBlockingReason(blockingReasons[0])}`);
       return;
     }
 
@@ -1149,13 +1151,7 @@ export const GitView: React.FC = () => {
     // Block mutation if worktree is in an attention-required state
     const blockingReasons = getMutationBlockingReasons(worktreeAttachment ?? null, status);
     if (blockingReasons.length > 0) {
-      const reason = blockingReasons[0];
-      const reasonLabel = reason.reason === 'attention'
-        ? `${reason.attentionReason} in progress`
-        : reason.reason === 'missing'
-        ? 'worktree is missing'
-        : 'worktree is invalid';
-      toast.error(`Cannot checkout: ${reasonLabel}`);
+      toast.error(`Cannot checkout: ${formatBlockingReason(blockingReasons[0])}`);
       return;
     }
 

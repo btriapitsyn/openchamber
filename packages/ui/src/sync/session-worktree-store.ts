@@ -1,10 +1,3 @@
-/**
- * SessionWorktreeStore — authoritative shared-sync holder for session↔worktree attachments.
- *
- * This is NOT session-ui-store (which is ephemeral UI state).
- * This store holds the Phase 1 canonical worktree attachment per session,
- * used across bootstrap, reload, and runtime boundaries.
- */
 import { create } from 'zustand';
 import type { SessionWorktreeAttachment } from '@/stores/types/sessionTypes';
 

@@ -2991,7 +2991,6 @@ export async function canonicalizeWorktreeState(
   }
 
   const cwd = await canonicalizePath(directoryPath);
-  const legacy = await isLinkedWorktree(directoryPath);
 
   let worktreeRoot: string | null = null;
   let worktreeStatus: 'ready' | 'missing' | 'invalid' = 'ready';
@@ -3056,7 +3055,7 @@ export async function canonicalizeWorktreeState(
     branch,
     headState,
     worktreeStatus,
-    legacy,
+    legacy: false,
     degraded: false,
     attentionReason,
   };

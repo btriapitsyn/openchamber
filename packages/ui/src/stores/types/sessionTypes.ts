@@ -2,10 +2,6 @@ import type { Session, Message, Part } from "@opencode-ai/sdk/v2";
 import type { PermissionRequest, PermissionResponse } from "@/types/permission";
 import type { QuestionRequest } from "@/types/question";
 
-// ---------------------------------------------------------------------------
-// Session ↔ Worktree attachment (Phase 1 canonical contract)
-// ---------------------------------------------------------------------------
-
 export type SessionWorktreeAttachment = {
   worktreeRoot: string | null;
   cwd: string | null;
