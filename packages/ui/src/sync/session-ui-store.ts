@@ -28,7 +28,6 @@ import { flattenAssistantTextParts } from "@/lib/messages/messageText"
 import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
-import { canonicalizeWorktreeState } from "@/lib/gitApi"
 import type { ProjectEntry } from "@/lib/api/types"
 import {
   getSyncSessions,
@@ -52,7 +51,7 @@ import { useInputStore, type SyntheticContextPart } from "./input-store"
 import { useSelectionStore } from "./selection-store"
 import { useViewportStore } from "./viewport-store"
 import { useSessionWorktreeStore } from "./session-worktree-store"
-import { buildAttachmentFromCanonicalization, getAttachedSessionDirectory } from "./session-worktree-contract"
+import { getAttachedSessionDirectory } from "./session-worktree-contract"
 
 export type { AttachedFile }
 
@@ -352,25 +351,6 @@ const getAttachmentForSession = (sessionId: string | null | undefined): SessionW
   return useSessionWorktreeStore.getState().getAttachment(sessionId)
 }
 
-const recoverSessionAttachment = async (
-  sessionId: string,
-  directory: string,
-  existingAttachment?: SessionWorktreeAttachment,
-): Promise<SessionWorktreeAttachment | null> => {
-  try {
-    const canonical = await canonicalizeWorktreeState(directory)
-    const attachment = buildAttachmentFromCanonicalization(canonical, {
-      existingAttachment,
-      fallbackDirectory: directory,
-    })
-    useSessionWorktreeStore.getState().setAttachment(sessionId, attachment)
-    return attachment
-  } catch (error) {
-    console.warn("Failed to canonicalize session worktree state:", error)
-    return null
-  }
-}
-
 const resolveSessionDirectory = (
   sessionId: string | null | undefined,
   getWtMeta: (id: string) => WorktreeMetadata | undefined,
@@ -426,7 +406,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     const previousSessionId = get().currentSessionId
     const directoryState = useDirectoryStore.getState()
-    const existingAttachment = getAttachmentForSession(id)
 
     const sessionDir = resolveSessionDirectory(
       id,
@@ -462,21 +441,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     if (id) {
       markSessionViewed(id)
       setActiveSession(resolvedDir ?? "", id)
-
-      if (resolvedDir && (!existingAttachment || existingAttachment.legacy)) {
-        void recoverSessionAttachment(id, resolvedDir, existingAttachment).then((attachment) => {
-          const canonicalDirectory = getAttachedSessionDirectory(attachment, resolvedDir)
-          if (!canonicalDirectory) return
-          const currentDirectory = normalizePath(useDirectoryStore.getState().currentDirectory ?? null)
-          if (canonicalDirectory === currentDirectory) return
-          try {
-            useDirectoryStore.getState().setDirectory(canonicalDirectory, { showOverlay: false })
-            opencodeClient.setDirectory(canonicalDirectory)
-          } catch (error) {
-            console.warn("Failed to apply canonicalized session directory:", error)
-          }
-        })
-      }
     }
   },
 
@@ -933,11 +897,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       const dir = directoryOverride ?? opencodeClient.getDirectory()
       const session = await createSessionAction(title, dir, parentID ?? null)
       if (!session) return null
-
-      const sessionDirectory = normalizePath((session as { directory?: string }).directory ?? dir ?? null)
-      if (sessionDirectory) {
-        await recoverSessionAttachment(session.id, sessionDirectory)
-      }
 
       if (targetFolderId) {
         const scopeKey = directoryOverride || get().lastLoadedDirectory || session.directory
