@@ -22,7 +22,7 @@
   color: inherit;
 }
 .katex-error {
-  color: var(--destructive, #ef4444);
+  color: var(--destructive);
 }
 
 @custom-variant dark (&:is(.dark *));
