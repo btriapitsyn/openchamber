@@ -128,6 +128,7 @@ export const VSCodeLayout: React.FC = () => {
   const [hasInitializedOnce, setHasInitializedOnce] = React.useState<boolean>(() => configInitialized);
   const [isInitializing, setIsInitializing] = React.useState<boolean>(false);
   const lastBootstrapAttemptAt = React.useRef<number>(0);
+  const previousNewSessionDraftOpenRef = React.useRef(newSessionDraftOpen);
 
   // Navigate to chat when a session is selected
   React.useEffect(() => {
@@ -327,6 +328,9 @@ export const VSCodeLayout: React.FC = () => {
   const usesExpandedLayout = containerWidth >= EXPANDED_LAYOUT_THRESHOLD;
 
   React.useEffect(() => {
+    const draftJustOpened = !previousNewSessionDraftOpenRef.current && newSessionDraftOpen;
+    previousNewSessionDraftOpenRef.current = newSessionDraftOpen;
+
     if (viewMode !== 'sidebar') {
       return;
     }
@@ -336,7 +340,7 @@ export const VSCodeLayout: React.FC = () => {
     if (currentView !== 'sessions') {
       return;
     }
-    if (!newSessionDraftOpen) {
+    if (!draftJustOpened) {
       return;
     }
 
