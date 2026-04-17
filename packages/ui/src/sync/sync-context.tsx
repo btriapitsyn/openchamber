@@ -1318,6 +1318,7 @@ export function SyncProvider(props: {
         handleEvent(directory, payload, childStores, routingIndex)
       },
       onReconnect: () => {
+        useConfigStore.setState({ isConnected: true })
         for (const [dir, store] of childStores.children) {
           if (reconnectResyncing.has(dir)) continue
           if (getReconnectCandidateSessionIds(store.getState()).length === 0) continue
@@ -1331,6 +1332,9 @@ export function SyncProvider(props: {
               reconnectResyncing.delete(dir)
             })
         }
+      },
+      onDisconnect: () => {
+        useConfigStore.setState({ isConnected: false })
       },
     })
     return cleanup

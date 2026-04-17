@@ -54,6 +54,7 @@ export function createMessageStreamWsRuntime({
   getOpenCodeAuthHeaders,
   processForwardedEventPayload,
   wsClients,
+  triggerHealthCheck,
   fetchImpl = fetch,
 }) {
   const wsServer = new WebSocketServer({
@@ -136,6 +137,10 @@ export function createMessageStreamWsRuntime({
         if (!controller.signal.aborted) {
           sendMessageStreamWsFrame(socket, { type: 'error', message: 'Failed to connect to OpenCode event stream' });
           socket.close(1011, 'Failed to connect to OpenCode event stream');
+          // Trigger immediate health check so the server detects and
+          // restarts a dead OpenCode process without waiting for the next
+          // periodic interval (up to 15 s).
+          triggerHealthCheck?.();
         }
         return;
       }
@@ -146,6 +151,7 @@ export function createMessageStreamWsRuntime({
           message: `OpenCode event stream unavailable (${upstream.status})`,
         });
         socket.close(1011, 'OpenCode event stream unavailable');
+        triggerHealthCheck?.();
         return;
       }
 

@@ -1463,14 +1463,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 return;
             }
             else if (commandName === 'compact' && currentSessionId) {
-                const { opencodeClient } = await import('@/lib/opencode/client');
-                const sdk = opencodeClient.getSdkClient();
-                const configState = useConfigStore.getState();
-                await sdk.session.summarize({
-                    sessionID: currentSessionId,
-                    modelID: configState.currentModelId || '',
-                    providerID: configState.currentProviderId || '',
-                });
+                try {
+                    if (!useConfigStore.getState().isConnected) {
+                        throw new Error("Connection lost. Please wait for reconnection.");
+                    }
+                    const { opencodeClient } = await import('@/lib/opencode/client');
+                    const sdk = opencodeClient.getSdkClient();
+                    const configState = useConfigStore.getState();
+                    await sdk.session.summarize({
+                        sessionID: currentSessionId,
+                        modelID: configState.currentModelId || '',
+                        providerID: configState.currentProviderId || '',
+                    });
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Failed to compact session');
+                }
                 return;
             }
         }

@@ -22,6 +22,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       getOpenCodeAuthHeaders,
       processForwardedEventPayload,
       messageStreamWsClients,
+      triggerHealthCheck,
       terminalHeartbeatIntervalMs,
       terminalRebindWindowMs,
       terminalMaxRebindsPerWindow,
@@ -76,6 +77,7 @@ export const createStartupPipelineRuntime = (dependencies) => {
       getOpenCodeAuthHeaders,
       processForwardedEventPayload,
       wsClients: messageStreamWsClients,
+      triggerHealthCheck,
     });
 
     setupProxy(app);

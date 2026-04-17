@@ -33,6 +33,8 @@ export type EventPipelineInput = {
   routeDirectory?: (directory: string, payload: Event) => string
   /** Called after stream reconnects (visibility restore or heartbeat timeout). */
   onReconnect?: () => void
+  /** Called when the stream disconnects (heartbeat timeout, network error, or transport failure). */
+  onDisconnect?: () => void
   transport?: "auto" | "ws" | "sse"
 }
 
@@ -142,9 +144,10 @@ type DirectoryQueue = {
 }
 
 export function createEventPipeline(input: EventPipelineInput) {
-  const { sdk, onEvent, onReconnect, routeDirectory, transport = "auto" } = input
+  const { sdk, onEvent, onReconnect, onDisconnect, routeDirectory, transport = "auto" } = input
   const abort = new AbortController()
   let hasConnected = false
+  let disconnected = false
   let lastEventId: string | undefined
   let wsFallbackUntil = 0
 
@@ -242,6 +245,7 @@ export function createEventPipeline(input: EventPipelineInput) {
   let heartbeat: ReturnType<typeof setTimeout> | undefined
 
   const markConnected = () => {
+    disconnected = false
     if (hasConnected) {
       onReconnect?.()
       return
@@ -506,9 +510,19 @@ export function createEventPipeline(input: EventPipelineInput) {
         const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined
         if (currentTransport === "ws" && code === "WS_FALLBACK") {
           retryDelayMs = 0
-        } else if (!isAbortError(error) && !streamErrorLogged) {
-          streamErrorLogged = true
-          console.error("[event-pipeline] stream failed", error)
+        } else if (!isAbortError(error)) {
+          if (!streamErrorLogged) {
+            streamErrorLogged = true
+            console.error("[event-pipeline] stream failed", error)
+          }
+          // Notify consumer that the stream has disconnected, so it can
+          // update connection state (e.g. set isConnected = false).
+          // Guard: only fire once per disconnection cycle to avoid repeated
+          // setState calls on every failed retry attempt.
+          if (!disconnected) {
+            disconnected = true
+            onDisconnect?.()
+          }
         }
       } finally {
         abort.signal.removeEventListener("abort", onAbort)

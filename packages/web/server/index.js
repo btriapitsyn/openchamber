@@ -870,6 +870,7 @@ const waitForOpenCodeReady = (...args) => openCodeLifecycleRuntime.waitForOpenCo
 const waitForAgentPresence = (...args) => openCodeLifecycleRuntime.waitForAgentPresence(...args);
 const refreshOpenCodeAfterConfigChange = (...args) => openCodeLifecycleRuntime.refreshOpenCodeAfterConfigChange(...args);
 const startHealthMonitoring = () => openCodeLifecycleRuntime.startHealthMonitoring(HEALTH_CHECK_INTERVAL);
+const triggerHealthCheck = () => openCodeLifecycleRuntime.triggerHealthCheck();
 const scheduledTasksRuntime = createScheduledTasksRuntime({
   projectConfigRuntime,
   listProjects: async () => {
@@ -1155,6 +1156,7 @@ async function main(options = {}) {
     setupProxy,
     scheduleOpenCodeApiDetection,
     bootstrapOpenCodeAtStartup,
+    triggerHealthCheck,
     staticRoutesRuntime,
     process,
     crypto,
