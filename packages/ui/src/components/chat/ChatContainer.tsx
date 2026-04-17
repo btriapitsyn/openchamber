@@ -1,9 +1,11 @@
 import React from 'react';
-import { RiArrowLeftLine } from '@remixicon/react';
+import { RiArrowLeftLine, RiDownloadLine } from '@remixicon/react';
 import type { Message, Part, Session } from '@opencode-ai/sdk/v2';
 
 import { ChatInput } from './ChatInput';
 import { useUIStore } from '@/stores/useUIStore';
+import { toast } from '@/components/ui';
+import { formatSessionAsMarkdown, downloadAsMarkdown, buildExportFilename } from '@/lib/exportSession';
 import { Skeleton } from '@/components/ui/skeleton';
 import ChatEmptyState from './ChatEmptyState';
 import MessageList, { type MessageListHandle } from './MessageList';
@@ -405,6 +407,23 @@ export const ChatContainer: React.FC = () => {
     const isDesktopExpandedInput = isExpandedInput && !isMobile;
     const messageListRef = React.useRef<MessageListHandle | null>(null);
 
+    const currentSession = React.useMemo(
+        () => currentSessionId ? sessions.find((s) => s.id === currentSessionId) ?? null : null,
+        [currentSessionId, sessions],
+    );
+
+    const handleExportMarkdown = React.useCallback(() => {
+        if (!currentSessionId || sessionMessages.length === 0) {
+            toast.error('Nothing to export');
+            return;
+        }
+        const title = currentSession?.title ?? null;
+        const markdown = formatSessionAsMarkdown(sessionMessages, title);
+        const filename = buildExportFilename(title);
+        downloadAsMarkdown(markdown, filename);
+        toast.success('Session exported');
+    }, [currentSessionId, currentSession, sessionMessages]);
+
     const parentSession = React.useMemo(() => {
         if (!currentSessionId) return null;
         const current = sessions.find((session) => session.id === currentSessionId);
@@ -433,6 +452,20 @@ export const ChatContainer: React.FC = () => {
         >
             <RiArrowLeftLine className="h-4 w-4" />
             Parent
+        </Button>
+    ) : null;
+
+    const exportButton = !isMobile && sessionMessages.length > 0 ? (
+        <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={handleExportMarkdown}
+            className="absolute right-3 top-3 z-20 !font-normal text-muted-foreground hover:text-foreground"
+            aria-label="Export session as Markdown"
+            title="Export session as Markdown"
+        >
+            <RiDownloadLine className="h-4 w-4" />
         </Button>
     ) : null;
 
@@ -778,6 +811,7 @@ export const ChatContainer: React.FC = () => {
             style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
         >
             {returnToParentButton}
+            {exportButton}
             <ChatViewport
                 currentSessionId={currentSessionId}
                 isDesktopExpandedInput={isDesktopExpandedInput}
