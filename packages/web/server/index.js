@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import express from 'express';
+import compression from 'compression';
 import path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import fs from 'fs';
@@ -908,6 +909,13 @@ async function main(options = {}) {
   const app = express();
   const serverStartedAt = new Date().toISOString();
   app.set('trust proxy', true);
+  app.use(compression({
+    filter: (req, res) => {
+      if (req.path === '/api/event' || req.path === '/api/global/event') return false;
+      return compression.filter(req, res);
+    },
+    threshold: 1024,
+  }));
   expressApp = app;
   server = http.createServer(app);
 
