@@ -1106,6 +1106,8 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         && hasAnchoredActivitySegments
         && Boolean(toggleActivityGroup);
 
+    const shouldDeferSortedInlineText = isSortedRenderMode && !hasStopFinish;
+
 
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
@@ -1152,7 +1154,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
             if (part.type === 'text') {
                 const activity = activityByPart.get(part);
-                if (isSortedRenderMode && !hasStopFinish) {
+                if (shouldDeferSortedInlineText) {
                     i += 1;
                     continue;
                 }
@@ -1177,10 +1179,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
 
             if (part.type === 'reasoning') {
                 const activity = activityByPart.get(part);
-                if (isSortedRenderMode && !hasStopFinish) {
-                    i += 1;
-                    continue;
-                }
                 if (activity?.kind === 'reasoning') {
                     i += 1;
                     continue;
@@ -1293,7 +1291,6 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         chatRenderMode,
         collapsedPreviewCount,
         expandedTools,
-        hasStopFinish,
         isMobile,
         isActivityOwnerMessage,
         isSortedRenderMode,
@@ -1306,6 +1303,7 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
         shouldShowTool,
         streamPhase,
         showReasoningTraces,
+        shouldDeferSortedInlineText,
         syntaxTheme,
         toggleActivityGroup,
         turnGroupingContext,

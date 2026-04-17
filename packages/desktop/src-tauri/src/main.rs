@@ -3072,6 +3072,45 @@ fn desktop_read_file(path: String) -> Result<FileContent, String> {
     })
 }
 
+#[tauri::command]
+async fn desktop_save_markdown_file(
+    app: tauri::AppHandle,
+    default_file_name: String,
+    content: String,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let trimmed_file_name = default_file_name.trim();
+    if trimmed_file_name.is_empty() {
+        return Err("Default file name is required".to_string());
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("Markdown", &["md"])
+        .set_file_name(trimmed_file_name)
+        .save_file(move |file_path| {
+            let _ = tx.send(file_path);
+        });
+
+    let Some(file_path) = rx
+        .await
+        .map_err(|_| "Save dialog was closed unexpectedly".to_string())?
+    else {
+        return Ok(None);
+    };
+
+    let path = file_path
+        .into_path()
+        .map_err(|_| "Selected export path is not a local filesystem path".to_string())?;
+
+    std::fs::write(&path, content)
+        .map_err(|error| format!("Failed to save exported session: {error}"))?;
+
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
 #[derive(Serialize)]
 struct FileContent {
     mime: String,
@@ -3975,6 +4014,7 @@ fn main() {
             desktop_filter_installed_apps,
             desktop_get_installed_apps,
             desktop_fetch_app_icons,
+            desktop_save_markdown_file,
             desktop_hosts_get,
             desktop_hosts_set,
             desktop_host_probe,

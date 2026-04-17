@@ -20,6 +20,7 @@ import {
   RiCheckLine,
   RiCloseLine,
   RiDeleteBinLine,
+  RiDownloadLine,
   RiErrorWarningLine,
   RiFileCopyLine,
   RiFolderLine,
@@ -34,7 +35,10 @@ import {
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
-import { useGlobalSessionStatus, useSession, useSessionPermissions } from '@/sync/sync-context';
+import { toast } from '@/components/ui';
+import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, getExportRevealLabel, revealExportedMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
+import { buildSessionMessageRecordsSnapshot, useDirectoryStore, useGlobalSessionStatus, useSession, useSessionPermissions } from '@/sync/sync-context';
+import { useSync } from '@/sync/use-sync';
 import { useViewportStore } from '@/sync/viewport-store';
 import { DraggableSessionRow } from './sessionFolderDnd';
 import type { SessionNode, SessionSummaryMeta } from './types';
@@ -244,6 +248,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const isZombie = useViewportStore(
     React.useCallback((state) => Boolean(state.sessionMemoryState.get(session.id)?.isZombie), [session.id]),
   );
+  const directoryStore = useDirectoryStore(sessionDirectory ?? undefined);
+  const sync = useSync();
   const sessionStatus = useGlobalSessionStatus(session.id);
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
   const directoryState = sessionDirectory ? directoryStatus.get(sessionDirectory) : null;
@@ -262,6 +268,43 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
+  const handleExportSession = React.useCallback(async () => {
+    if (!sessionDirectory) {
+      toast.error('Nothing to export');
+      return;
+    }
+
+    await sync.syncSession(session.id);
+
+    const records = buildSessionMessageRecordsSnapshot(directoryStore.getState(), session.id).list;
+    if (records.length === 0) {
+      toast.error('Nothing to export');
+      return;
+    }
+
+    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null);
+    const filename = buildExportFilename(resolvedSession.title ?? null);
+    const savedPath = await saveAsMarkdownDesktop(markdown, filename);
+
+    if (savedPath) {
+      toast.success('Session exported', {
+        action: {
+          label: getExportRevealLabel(),
+          onClick: () => {
+            void revealExportedMarkdown(savedPath).then((revealed) => {
+              if (!revealed) {
+                toast.error('Failed to reveal path');
+              }
+            });
+          },
+        },
+      });
+      return;
+    }
+
+    downloadAsMarkdown(markdown, filename);
+    toast.success('Session exported');
+  }, [directoryStore, resolvedSession.title, session.id, sessionDirectory, sync]);
 
   if (editingId === session.id) {
     return (
@@ -432,6 +475,10 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           </DropdownMenuItem>
         </>
       )}
+      <DropdownMenuItem onClick={() => { void handleExportSession(); }} className="[&>svg]:mr-1">
+        <RiDownloadLine className="mr-1 h-4 w-4" />
+        Export Markdown
+      </DropdownMenuItem>
 
       {sessionDirectory && !archivedBucket ? (() => {
         const scopeFolders = getFoldersForScope(sessionDirectory);
