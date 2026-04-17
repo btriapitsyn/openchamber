@@ -18,35 +18,22 @@ pub use menu::*;
 pub use app_discovery::*;
 pub use commands::*;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use remote_ssh::DesktopSshManagerState;
-use serde::{Deserialize, Serialize};
 use std::env;
-use std::time::{SystemTime, UNIX_EPOCH};
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    path::{Path, PathBuf},
-};
-use std::{
-    net::{TcpListener, UdpSocket},
-    process::Command,
-    sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+use std::sync::{
+        atomic::{AtomicBool, AtomicU32},
         Mutex,
-    },
-    time::Duration,
-};
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+    };
+use tauri::Manager;
 
 // Import necessary items from modules
 use crate::sidecar::{SidecarState, spawn_local_server};
 use crate::window::{DesktopUiInjectionState, WindowFocusState, WindowGeometryDebounceState, open_new_window, create_startup_window};
 use crate::menu::{build_macos_menu, dispatch_menu_action, request_quit_with_confirmation};
 use crate::settings::{read_desktop_hosts_config_from_disk, same_server_url, LOCAL_HOST_ID, normalize_host_url};
-use crate::probe::{compute_local_startup_failure_boot_outcome, build_startup_failure_init_script, build_init_script, start_quit_risk_poller, wait_for_local_opencode_ready_with, resolve_boot_outcome};
+use crate::probe::{compute_local_startup_failure_boot_outcome, build_startup_failure_init_script, start_quit_risk_poller, wait_for_local_opencode_ready_with, resolve_boot_outcome};
 use crate::window::activate_main_window;
-use crate::commands::PendingUpdate;
 
 #[cfg(target_os = "macos")]
 use crate::menu::QUIT_RISK_POLL_INTERVAL;
@@ -629,11 +616,13 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     };
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     fn unique_settings_path(test_name: &str) -> PathBuf {
         let nanos = SystemTime::now()
