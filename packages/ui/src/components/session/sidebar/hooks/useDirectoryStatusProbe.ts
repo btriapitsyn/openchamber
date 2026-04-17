@@ -44,18 +44,29 @@ async function probeDirectory(directory: string): Promise<DirectoryStatusValue> 
   try {
     await opencodeClient.listLocalDirectory(directory);
     return 'exists';
-  } catch {
+  } catch (error) {
     const looksLikeSdkWorktree =
       directory.includes('/opencode/worktree/') ||
       directory.includes('/.opencode/data/worktree/') ||
       directory.includes('/.local/share/opencode/worktree/');
 
-    if (looksLikeSdkWorktree) {
-      const ok = await opencodeClient.probeDirectory(directory).catch(() => false);
-      if (ok) return 'exists';
+    const reachable = await opencodeClient.probeDirectory(directory).catch(() => false);
+    if (reachable) {
+      return 'exists';
     }
 
-    return 'missing';
+    const message = error instanceof Error ? error.message.toLowerCase() : '';
+    const definitelyMissing =
+      message.includes('enoent') ||
+      message.includes('not found') ||
+      message.includes('does not exist') ||
+      message.includes('no such file');
+
+    if (definitelyMissing || looksLikeSdkWorktree) {
+      return 'missing';
+    }
+
+    return 'unknown';
   }
 }
 
@@ -91,10 +102,18 @@ export const useDirectoryStatusProbe = ({
 
     for (const directory of directories) {
       const known = directoryStatusRef.current.get(directory);
-      if (known && known !== 'unknown') continue;
+      if (known === 'exists') continue;
+
+      const cachedAt = missingCache[directory];
+      if (known === 'missing') {
+        if (cachedAt && now - cachedAt < MISSING_REPROBE_MS) {
+          continue;
+        }
+        toProbe.push(directory);
+        continue;
+      }
 
       // Use cached "missing" status if fresh enough — skip the HTTP probe
-      const cachedAt = missingCache[directory];
       if (cachedAt && now - cachedAt < MISSING_REPROBE_MS) {
         preseeded.set(directory, 'missing');
         continue;
