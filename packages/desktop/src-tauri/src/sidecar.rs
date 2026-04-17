@@ -2,12 +2,11 @@
 
 use serde::Deserialize;
 use std::net::TcpListener;
-use std::process::Command;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::process::CommandEvent;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
 const SIDECAR_NAME: &str = "openchamber-server";

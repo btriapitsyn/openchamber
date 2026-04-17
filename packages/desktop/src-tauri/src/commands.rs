@@ -4,33 +4,24 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use tauri::{Emitter, Manager};
 use tauri_plugin_updater::UpdaterExt;
-use tauri_plugin_shell::ShellExt;
 
-use crate::settings::{DesktopHost, DesktopHostsConfig, DesktopHostsConfigInput};
+use crate::settings::{DesktopHostsConfig, DesktopHostsConfigInput};
 use crate::probe::{
-    DesktopBootOutcome, HostProbeResult, DIRECT_URL_HOST_ID, ENV_OVERRIDE_HOST_ID,
+    DesktopBootOutcome, HostProbeResult, DIRECT_URL_HOST_ID,
     parse_theme_override,
-    probe_host_with_timeout, read_desktop_settings_json, read_desktop_theme_override,
-    wait_for_local_opencode_ready_with,
     detect_desktop_lan_ipv4,
 };
 
-use crate::settings::{
-    same_server_url, build_health_url, normalize_host_url, sanitize_host_url_for_storage,
-    settings_file_path,
-};
+use crate::settings::same_server_url;
 use crate::window::{
-    DesktopUiInjectionState, WindowFocusState,
-    create_window, disable_pinch_zoom, is_window_state_visible,
-    open_new_window, schedule_window_state_persist, capture_window_state,
-    eval_in_all_windows, next_window_label,
+    DesktopUiInjectionState,
+    create_window,
+    open_new_window,
 };
 
-use crate::probe::build_init_script;
-use crate::sidecar::{SidecarNotifyPayload, SidecarState, build_local_url, normalize_server_url};
 
 const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
 const LOCAL_SIDECAR_HEALTH_TIMEOUT: Duration = Duration::from_secs(8);

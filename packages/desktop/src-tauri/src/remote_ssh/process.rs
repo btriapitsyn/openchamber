@@ -4,7 +4,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 pub use super::types::DesktopSshParsedCommand;

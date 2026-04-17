@@ -9,7 +9,6 @@ pub mod runner;
 
 // Re-export commonly used types
 pub use types::*;
-pub use config::build_display_label;
 pub use manager::DesktopSshManagerState;
 
 // Helper functions

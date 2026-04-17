@@ -1,7 +1,6 @@
 // macOS menu construction
 
 use tauri::{Emitter, Manager};
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 
 pub const MENU_ITEM_ABOUT_ID: &str = "menu_about";
 pub const MENU_ITEM_CHECK_FOR_UPDATES_ID: &str = "menu_check_for_updates";

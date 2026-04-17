@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     process::Child,
     sync::{Arc, Mutex},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 use super::now_millis;
 use tauri::{AppHandle, Emitter};
