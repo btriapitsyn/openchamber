@@ -965,16 +965,24 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         <section className="p-2 md:col-span-2">
                                             <h4 className="typography-ui-header font-medium text-foreground">Message Stream Transport</h4>
                                             <div className="mt-1 flex max-w-[24rem] flex-col gap-2">
-                                                <Select value={messageStreamTransport} onValueChange={(value) => handleMessageStreamTransportChange(value as 'auto' | 'ws' | 'sse')}>
-                                                    <SelectTrigger aria-label="Select message stream transport">
-                                                        <SelectValue placeholder="Select transport" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {MESSAGE_STREAM_TRANSPORT_OPTIONS.map((option) => (
-                                                            <SelectItem key={option.id} value={option.id}>{option.label}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <div className="flex flex-wrap items-center gap-1">
+                                                    {MESSAGE_STREAM_TRANSPORT_OPTIONS.map((option) => (
+                                                        <Button
+                                                            key={option.id}
+                                                            variant="outline"
+                                                            size="xs"
+                                                            className={cn(
+                                                                '!font-normal',
+                                                                messageStreamTransport === option.id
+                                                                    ? 'border-[var(--primary-base)] text-[var(--primary-base)] bg-[var(--primary-base)]/10 hover:text-[var(--primary-base)]'
+                                                                    : 'text-foreground'
+                                                            )}
+                                                            onClick={() => handleMessageStreamTransportChange(option.id)}
+                                                        >
+                                                            {option.label}
+                                                        </Button>
+                                                    ))}
+                                                </div>
                                                 <span className="typography-meta text-muted-foreground">
                                                     {MESSAGE_STREAM_TRANSPORT_OPTIONS.find((option) => option.id === messageStreamTransport)?.description}
                                                 </span>
