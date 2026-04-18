@@ -61,20 +61,9 @@ pub fn desktop_clear_cache(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
-/// Open a path in the default application or specified app.
-#[tauri::command]
-pub fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
-    let trimmed = path.trim();
-    if trimmed.is_empty() {
-        return Err("Path is required".to_string());
-    }
-
-    // Validate the path resolves to a real filesystem entry.
-    let canonical = std::path::Path::new(trimmed)
-        .canonicalize()
-        .map_err(|e| format!("Invalid path: {e}"))?;
-
-    // Block sensitive system paths.
+/// Validate a canonical path against blocked system and sensitive prefixes.
+/// Returns Ok(()) if the path is allowed, or Err with a denial message.
+fn validate_path_access(canonical: &std::path::Path) -> Result<(), String> {
     let path_str = canonical.to_string_lossy();
     let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
     let blocked_prefixes = [
@@ -85,7 +74,6 @@ pub fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String
         "/etc/pam.d",
         "/private/etc",
     ];
-    // Also check home-relative paths
     // Canonicalize the home directory to ensure it matches canonical paths on macOS
     let home_canonical = std::path::Path::new(&home)
         .canonicalize()
@@ -106,6 +94,23 @@ pub fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String
             return Err("Access denied for sensitive path".to_string());
         }
     }
+    Ok(())
+}
+
+/// Open a path in the default application or specified app.
+#[tauri::command]
+pub fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Path is required".to_string());
+    }
+
+    // Validate the path resolves to a real filesystem entry.
+    let canonical = std::path::Path::new(trimmed)
+        .canonicalize()
+        .map_err(|e| format!("Invalid path: {e}"))?;
+
+    validate_path_access(&canonical)?;
 
     #[cfg(target_os = "macos")]
     {
@@ -227,6 +232,9 @@ pub fn desktop_open_in_app(
     let canonical_project = std::path::Path::new(trimmed_project_path)
         .canonicalize()
         .map_err(|e| format!("Invalid project path: {e}"))?;
+
+    // Block sensitive system and home-relative paths.
+    validate_path_access(&canonical_project)?;
 
     // If a file path is provided, canonicalize it relative to the project root
     // and ensure it doesn't escape the project directory.
@@ -352,39 +360,7 @@ pub fn desktop_read_file(path: String) -> Result<FileContent, String> {
         .canonicalize()
         .map_err(|e| format!("Failed to resolve file path: {e}"))?;
 
-    // Block sensitive system paths.
-    let path_str = canonical.to_string_lossy();
-    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
-    let blocked_prefixes = [
-        "/etc/shadow",
-        "/etc/passwd",
-        "/etc/ssh",
-        "/etc/sudoers",
-        "/etc/pam.d",
-        "/private/etc",
-    ];
-    // Also check home-relative paths
-    // Canonicalize the home directory to ensure it matches canonical paths on macOS
-    let home_canonical = std::path::Path::new(&home)
-        .canonicalize()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or(home.clone());
-    let home_blocked = [
-        format!("{}/.ssh", home_canonical),
-        format!("{}/.gnupg", home_canonical),
-        format!("{}/.keychain", home_canonical),
-    ];
-
-    for prefix in &blocked_prefixes {
-        if path_str.starts_with(prefix) {
-            return Err("Access denied for system path".to_string());
-        }
-    }
-    for prefix in &home_blocked {
-        if path_str.starts_with(prefix) {
-            return Err("Access denied for sensitive path".to_string());
-        }
-    }
+    validate_path_access(&canonical)?;
 
     let metadata = std::fs::metadata(&canonical)
         .map_err(|e| format!("Failed to read file metadata: {e}"))?;
@@ -1020,6 +996,24 @@ mod tests {
         assert!(result.is_err(), "Should reject file path outside project");
         let err = result.unwrap_err();
         assert!(err.contains("escapes") || err.contains("Invalid"), "Error should mention escape or invalid: {}", err);
+    }
+
+    #[test]
+    fn open_in_app_rejects_blocked_system_paths() {
+        // desktop_open_in_app should reject project paths that match blocked prefixes
+        let cases = ["/etc/ssh", "/etc/sudoers"];
+        for path in cases {
+            if std::path::Path::new(path).exists() {
+                let result = desktop_open_in_app(
+                    path.to_string(),
+                    "finder".to_string(),
+                    "Finder".to_string(),
+                    None,
+                );
+                assert!(result.is_err(), "Should reject blocked system path: {}", path);
+                assert!(result.unwrap_err().contains("denied"), "Error should say 'denied' for {}", path);
+            }
+        }
     }
 
     #[test]

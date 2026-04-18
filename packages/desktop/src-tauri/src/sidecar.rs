@@ -18,6 +18,9 @@ pub(crate) const LOCAL_SIDECAR_HEALTH_POLL_INITIAL_INTERVAL: Duration = Duration
 pub(crate) const LOCAL_SIDECAR_HEALTH_POLL_MAX_INTERVAL: Duration = Duration::from_millis(1000);
 const DEFAULT_DESKTOP_PORT: u16 = 57123;
 
+/// Notify prefix constant (canonical location — used by sidecar and tests).
+pub(crate) const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
+
 #[derive(Default)]
 pub struct SidecarState {
     pub(crate) child: Mutex<Option<CommandChild>>,
@@ -314,7 +317,7 @@ pub async fn spawn_local_server(app: &tauri::AppHandle) -> crate::Result<String>
                 match event {
                     CommandEvent::Stdout(bytes) => {
                         let line = String::from_utf8_lossy(&bytes);
-                        if let Some(rest) = line.strip_prefix(crate::SIDECAR_NOTIFY_PREFIX) {
+                        if let Some(rest) = line.strip_prefix(SIDECAR_NOTIFY_PREFIX) {
                             if let Ok(parsed) =
                                 serde_json::from_str::<SidecarNotifyPayload>(rest.trim())
                             {

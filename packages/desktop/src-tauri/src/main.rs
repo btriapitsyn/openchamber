@@ -38,36 +38,14 @@ use crate::window::activate_main_window;
 #[cfg(target_os = "macos")]
 use crate::menu::QUIT_RISK_POLL_INTERVAL;
 
-// Notify prefix constant (canonical location)
-pub(crate) const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
-
 // Quit risk tracking atomic variables
 pub static QUIT_CONFIRMED: AtomicBool = AtomicBool::new(false);
 pub static QUIT_CONFIRMATION_PENDING: AtomicBool = AtomicBool::new(false);
-#[cfg(target_os = "macos")]
 pub static QUIT_RISK_POLLER_STARTED: AtomicBool = AtomicBool::new(false);
-#[cfg(target_os = "macos")]
 pub static QUIT_RISK_HAS_ACTIVE_TUNNEL: AtomicBool = AtomicBool::new(false);
-#[cfg(target_os = "macos")]
 pub static QUIT_RISK_HAS_ENABLED_SCHEDULED_TASKS: AtomicBool = AtomicBool::new(false);
-#[cfg(target_os = "macos")]
 pub static QUIT_RISK_HAS_RUNNING_SCHEDULED_TASKS: AtomicBool = AtomicBool::new(false);
-#[cfg(target_os = "macos")]
 pub static QUIT_RISK_ENABLED_SCHEDULED_TASKS_COUNT: AtomicU32 = AtomicU32::new(0);
-#[cfg(target_os = "macos")]
-pub static QUIT_RISK_RUNNING_SCHEDULED_TASKS_COUNT: AtomicU32 = AtomicU32::new(0);
-
-#[cfg(not(target_os = "macos"))]
-pub static QUIT_RISK_POLLER_STARTED: AtomicBool = AtomicBool::new(false);
-#[cfg(not(target_os = "macos"))]
-pub static QUIT_RISK_HAS_ACTIVE_TUNNEL: AtomicBool = AtomicBool::new(false);
-#[cfg(not(target_os = "macos"))]
-pub static QUIT_RISK_HAS_ENABLED_SCHEDULED_TASKS: AtomicBool = AtomicBool::new(false);
-#[cfg(not(target_os = "macos"))]
-pub static QUIT_RISK_HAS_RUNNING_SCHEDULED_TASKS: AtomicBool = AtomicBool::new(false);
-#[cfg(not(target_os = "macos"))]
-pub static QUIT_RISK_ENABLED_SCHEDULED_TASKS_COUNT: AtomicU32 = AtomicU32::new(0);
-#[cfg(not(target_os = "macos"))]
 pub static QUIT_RISK_RUNNING_SCHEDULED_TASKS_COUNT: AtomicU32 = AtomicU32::new(0);
 
 #[cfg(not(target_os = "macos"))]
