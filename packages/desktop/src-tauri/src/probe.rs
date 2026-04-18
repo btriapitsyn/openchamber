@@ -6,9 +6,6 @@ use crate::settings::{DesktopHostsConfig, LOCAL_HOST_ID};
 
 const STARTUP_REMOTE_PROBE_SOFT_TIMEOUT: Duration = Duration::from_secs(2);
 const STARTUP_REMOTE_PROBE_HARD_TIMEOUT: Duration = Duration::from_secs(10);
-const LOCAL_SIDECAR_HEALTH_TIMEOUT: Duration = Duration::from_secs(8);
-const LOCAL_SIDECAR_HEALTH_POLL_INITIAL_INTERVAL: Duration = Duration::from_millis(100);
-const LOCAL_SIDECAR_HEALTH_POLL_MAX_INTERVAL: Duration = Duration::from_millis(1000);
 
 /// Synthetic host ID used when the boot target is forced via
 /// `OPENCHAMBER_SERVER_URL` (no config-based host entry).

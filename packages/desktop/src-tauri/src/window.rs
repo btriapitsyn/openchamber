@@ -10,7 +10,6 @@ const MIN_WINDOW_WIDTH: u32 = 800;
 const MIN_WINDOW_HEIGHT: u32 = 520;
 const MIN_RESTORE_WINDOW_WIDTH: u32 = 900;
 const MIN_RESTORE_WINDOW_HEIGHT: u32 = 560;
-const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
 
 /// Global counter for generating unique window labels.
 static WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);

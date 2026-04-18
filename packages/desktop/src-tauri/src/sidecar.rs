@@ -13,9 +13,9 @@ const SIDECAR_NAME: &str = "openchamber-server";
 const HEALTH_TIMEOUT: Duration = Duration::from_secs(20);
 const HEALTH_POLL_INITIAL_INTERVAL: Duration = Duration::from_millis(250);
 const HEALTH_POLL_MAX_INTERVAL: Duration = Duration::from_millis(2000);
-const LOCAL_SIDECAR_HEALTH_TIMEOUT: Duration = Duration::from_secs(8);
-const LOCAL_SIDECAR_HEALTH_POLL_INITIAL_INTERVAL: Duration = Duration::from_millis(100);
-const LOCAL_SIDECAR_HEALTH_POLL_MAX_INTERVAL: Duration = Duration::from_millis(1000);
+pub(crate) const LOCAL_SIDECAR_HEALTH_TIMEOUT: Duration = Duration::from_secs(8);
+pub(crate) const LOCAL_SIDECAR_HEALTH_POLL_INITIAL_INTERVAL: Duration = Duration::from_millis(100);
+pub(crate) const LOCAL_SIDECAR_HEALTH_POLL_MAX_INTERVAL: Duration = Duration::from_millis(1000);
 const DEFAULT_DESKTOP_PORT: u16 = 57123;
 
 #[derive(Default)]
@@ -452,6 +452,6 @@ async fn wait_for_health_with(
 }
 
 /// Wait for health endpoint with default timeouts.
-async fn wait_for_health(url: &str) -> bool {
+pub(crate) async fn wait_for_health(url: &str) -> bool {
     wait_for_health_with(url, HEALTH_TIMEOUT, HEALTH_POLL_INITIAL_INTERVAL, HEALTH_POLL_MAX_INTERVAL).await
 }

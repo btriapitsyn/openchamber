@@ -40,6 +40,7 @@ pub const QUIT_RISK_POLL_INTERVAL: std::time::Duration = std::time::Duration::fr
 
 /// Dispatch menu action to UI.
 pub fn dispatch_menu_action<R: tauri::Runtime>(app: &tauri::AppHandle<R>, action: &str) {
+    let _ = app.emit("openchamber:menu-action", action);
     crate::eval_in_focused_window(app, &crate::format_menu_action_script(action));
 }
 

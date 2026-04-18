@@ -23,10 +23,6 @@ use crate::window::{
 };
 
 
-const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
-const LOCAL_SIDECAR_HEALTH_TIMEOUT: Duration = Duration::from_secs(8);
-const LOCAL_SIDECAR_HEALTH_POLL_INITIAL_INTERVAL: Duration = Duration::from_millis(100);
-const LOCAL_SIDECAR_HEALTH_POLL_MAX_INTERVAL: Duration = Duration::from_millis(1000);
 const CHANGELOG_URL: &str =
     "https://raw.githubusercontent.com/btriapitsyn/openchamber/main/CHANGELOG.md";
 const STARTUP_REMOTE_PROBE_SOFT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -80,15 +76,34 @@ pub fn desktop_open_path(path: String, app: Option<String>) -> Result<(), String
 
     // Block sensitive system paths.
     let path_str = canonical.to_string_lossy();
+    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
     let blocked_prefixes = [
         "/etc/shadow",
         "/etc/passwd",
         "/etc/ssh",
+        "/etc/sudoers",
+        "/etc/pam.d",
         "/private/etc",
+    ];
+    // Also check home-relative paths
+    // Canonicalize the home directory to ensure it matches canonical paths on macOS
+    let home_canonical = std::path::Path::new(&home)
+        .canonicalize()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or(home.clone());
+    let home_blocked = [
+        format!("{}/.ssh", home_canonical),
+        format!("{}/.gnupg", home_canonical),
+        format!("{}/.keychain", home_canonical),
     ];
     for prefix in &blocked_prefixes {
         if path_str.starts_with(prefix) {
             return Err("Access denied for system path".to_string());
+        }
+    }
+    for prefix in &home_blocked {
+        if path_str.starts_with(prefix) {
+            return Err("Access denied for sensitive path".to_string());
         }
     }
 
@@ -336,6 +351,40 @@ pub fn desktop_read_file(path: String) -> Result<FileContent, String> {
     let canonical = raw
         .canonicalize()
         .map_err(|e| format!("Failed to resolve file path: {e}"))?;
+
+    // Block sensitive system paths.
+    let path_str = canonical.to_string_lossy();
+    let home = std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).unwrap_or_default();
+    let blocked_prefixes = [
+        "/etc/shadow",
+        "/etc/passwd",
+        "/etc/ssh",
+        "/etc/sudoers",
+        "/etc/pam.d",
+        "/private/etc",
+    ];
+    // Also check home-relative paths
+    // Canonicalize the home directory to ensure it matches canonical paths on macOS
+    let home_canonical = std::path::Path::new(&home)
+        .canonicalize()
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or(home.clone());
+    let home_blocked = [
+        format!("{}/.ssh", home_canonical),
+        format!("{}/.gnupg", home_canonical),
+        format!("{}/.keychain", home_canonical),
+    ];
+
+    for prefix in &blocked_prefixes {
+        if path_str.starts_with(prefix) {
+            return Err("Access denied for system path".to_string());
+        }
+    }
+    for prefix in &home_blocked {
+        if path_str.starts_with(prefix) {
+            return Err("Access denied for sensitive path".to_string());
+        }
+    }
 
     let metadata = std::fs::metadata(&canonical)
         .map_err(|e| format!("Failed to read file metadata: {e}"))?;
@@ -1070,5 +1119,35 @@ mod tests {
         // /dev/null is a character device, not a regular file
         let result = desktop_read_file("/dev/null".to_string());
         assert!(result.is_err(), "Should reject device file");
+    }
+
+    #[test]
+    fn read_file_rejects_blocked_paths() {
+        // Set HOME to a temp directory to test home-relative blocking
+        let temp_home = tempfile::Builder::new()
+            .prefix("oc-test-home")
+            .tempdir()
+            .unwrap();
+        let home_path = temp_home.path().to_string_lossy().to_string();
+        std::env::set_var("HOME", &home_path);
+
+        // Create a .ssh directory in the temp HOME
+        let ssh_dir = temp_home.path().join(".ssh");
+        fs::create_dir_all(&ssh_dir).unwrap();
+        let blocked_file = ssh_dir.join("test.txt");
+        fs::write(&blocked_file, b"blocked content").unwrap();
+
+        // Should block files in .ssh directory
+        let result = desktop_read_file(blocked_file.to_string_lossy().to_string());
+        assert!(result.is_err(), "Should reject file in .ssh directory");
+        assert!(result.unwrap_err().contains("denied"), "Error should say 'denied'");
+
+        // Create a temp file in a normal directory (not in .ssh) to verify it's NOT blocked
+        let normal_file = temp_home.path().join("normal.txt");
+        fs::write(&normal_file, b"normal content").unwrap();
+
+        // Should allow files in normal directories
+        let result = desktop_read_file(normal_file.to_string_lossy().to_string());
+        assert!(result.is_ok(), "Should allow file in normal directory");
     }
 }

@@ -38,13 +38,8 @@ use crate::window::activate_main_window;
 #[cfg(target_os = "macos")]
 use crate::menu::QUIT_RISK_POLL_INTERVAL;
 
-// Timeout constants from sidecar/probe
-const LOCAL_SIDECAR_HEALTH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
-const LOCAL_SIDECAR_HEALTH_POLL_INITIAL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
-const LOCAL_SIDECAR_HEALTH_POLL_MAX_INTERVAL: std::time::Duration = std::time::Duration::from_millis(1000);
-
-// Notify prefix constant
-const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
+// Notify prefix constant (canonical location)
+pub(crate) const SIDECAR_NOTIFY_PREFIX: &str = "[OpenChamberDesktopNotify] ";
 
 // Quit risk tracking atomic variables
 pub static QUIT_CONFIRMED: AtomicBool = AtomicBool::new(false);
@@ -82,30 +77,6 @@ pub const QUIT_RISK_POLL_INTERVAL: std::time::Duration = std::time::Duration::fr
 /// This prevents a single panic from cascading into an app-wide crash.
 pub(crate) fn recover_mutex<'a, T>(result: Result<std::sync::MutexGuard<'a, T>, std::sync::PoisonError<std::sync::MutexGuard<'a, T>>>) -> std::sync::MutexGuard<'a, T> {
     result.unwrap_or_else(|e| e.into_inner())
-}
-
-/// Wait for health endpoint with default timeouts (for dev server).
-async fn wait_for_health(url: &str) -> bool {
-    let client = match reqwest::Client::builder().no_proxy().build() {
-        Ok(c) => c,
-        Err(_) => return false,
-    };
-    let timeout = std::time::Duration::from_secs(20);
-    let deadline = std::time::Instant::now() + timeout;
-    let health_url = format!("{}/health", url.trim_end_matches('/'));
-    let mut interval = std::time::Duration::from_millis(250);
-
-    while std::time::Instant::now() < deadline {
-        if let Ok(resp) = client.get(&health_url).send().await {
-            if resp.status().is_success() {
-                return true;
-            }
-        }
-        tokio::time::sleep(interval).await;
-        interval = (interval * 2).min(std::time::Duration::from_millis(2000));
-    }
-
-    false
 }
 
 fn main() {

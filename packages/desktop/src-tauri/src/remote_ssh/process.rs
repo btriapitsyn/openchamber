@@ -462,36 +462,6 @@ pub(crate) fn run_remote_command(
     Ok(stdout)
 }
 
-/// Direct variant of run_remote_command that takes parsed args instead of DesktopSshParsedCommand.
-/// This is used by the SshRunner trait to enable unit testing.
-pub(crate) fn run_remote_command_direct(
-    parsed_args: &[String],
-    control_path: &Path,
-    script: &str,
-    timeout_sec: u16,
-) -> Result<String> {
-    let args = vec![
-        "-o".to_string(),
-        "ControlMaster=no".to_string(),
-        "-o".to_string(),
-        format!("ControlPath={}", control_path.display()),
-        "-o".to_string(),
-        format!("ConnectTimeout={timeout_sec}"),
-        "-T".to_string(),
-    ];
-    let remote = format!("sh -lc {}", shell_quote(script));
-    let mut command = Command::new("ssh");
-    command.args(parsed_args).args(&args).arg(&remote);
-    let (code, stdout, stderr) = run_output(&mut command)?;
-    if code != 0 {
-        if stderr.trim().is_empty() {
-            return Err(anyhow!("Remote command failed"));
-        }
-        return Err(anyhow!(stderr.trim().to_string()));
-    }
-    Ok(stdout)
-}
-
 pub(crate) fn remote_command_exists(
     parsed: &DesktopSshParsedCommand,
     control_path: &Path,

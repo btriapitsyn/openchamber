@@ -5,7 +5,6 @@ pub mod config;
 pub mod process;
 pub mod remote;
 pub mod manager;
-pub mod runner;
 
 // Re-export commonly used types
 pub use types::*;
