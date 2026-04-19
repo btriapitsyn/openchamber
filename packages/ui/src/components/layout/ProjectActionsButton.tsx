@@ -657,9 +657,10 @@ export const ProjectActionsButton = ({
       <button
         type="button"
         className={cn(
-          'app-region-no-drag inline-flex h-7 shrink-0 items-center gap-2 self-center rounded-md border border-[var(--interactive-border)]',
+          'app-region-no-drag inline-flex h-7 shrink-0 items-center gap-2 self-center rounded-md',
           'bg-[var(--surface-elevated)] px-3 typography-ui-label font-medium text-foreground hover:bg-interactive-hover transition-colors',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+          'shadow-[0_0_0_1px_rgba(14,18,27,0.12),0_1px_2px_rgba(14,18,27,0.12),0_2px_4px_-1px_rgba(14,18,27,0.08)]',
           className
         )}
         onClick={openProjectActionsSettings}
@@ -745,8 +746,9 @@ export const ProjectActionsButton = ({
   return (
     <div
       className={cn(
-        'app-region-no-drag inline-flex shrink-0 items-center self-center rounded-md border border-[var(--interactive-border)]',
-        'bg-[var(--surface-elevated)] shadow-none overflow-hidden',
+        'app-region-no-drag inline-flex shrink-0 items-center self-center rounded-md',
+        'bg-[var(--surface-elevated)] overflow-hidden',
+        'shadow-[0_0_0_1px_rgba(14,18,27,0.12),0_1px_2px_rgba(14,18,27,0.12),0_2px_4px_-1px_rgba(14,18,27,0.08)]',
         compact ? 'h-9' : 'h-7',
         className
       )}
