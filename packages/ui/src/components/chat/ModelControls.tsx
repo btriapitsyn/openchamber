@@ -293,25 +293,23 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     onMobilePanelSelection,
     onAgentPanelSelection,
 }) => {
-    const {
-        providers,
-        currentProviderId,
-        currentModelId,
-        currentVariant,
-        currentAgentName,
-        settingsDefaultVariant,
-        settingsDefaultAgent,
-        setProvider,
-        setSelectedProvider,
-        setModel,
-        setCurrentVariant,
-        getCurrentModelVariants,
-        setAgent,
-        getCurrentProvider,
-        getModelMetadata,
-        getCurrentAgent,
-        getVisibleAgents,
-    } = useConfigStore();
+    const providers = useConfigStore((state) => state.providers);
+    const currentProviderId = useConfigStore((state) => state.currentProviderId);
+    const currentModelId = useConfigStore((state) => state.currentModelId);
+    const currentVariant = useConfigStore((state) => state.currentVariant);
+    const currentAgentName = useConfigStore((state) => state.currentAgentName);
+    const settingsDefaultVariant = useConfigStore((state) => state.settingsDefaultVariant);
+    const settingsDefaultAgent = useConfigStore((state) => state.settingsDefaultAgent);
+    const setProvider = useConfigStore((state) => state.setProvider);
+    const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
+    const setModel = useConfigStore((state) => state.setModel);
+    const setCurrentVariant = useConfigStore((state) => state.setCurrentVariant);
+    const getCurrentModelVariants = useConfigStore((state) => state.getCurrentModelVariants);
+    const setAgent = useConfigStore((state) => state.setAgent);
+    const getCurrentProvider = useConfigStore((state) => state.getCurrentProvider);
+    const getModelMetadata = useConfigStore((state) => state.getModelMetadata);
+    const getCurrentAgent = useConfigStore((state) => state.getCurrentAgent);
+    const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
 
     // Use visible agents (excludes hidden internal agents)
     const agents = getVisibleAgents();
@@ -321,15 +319,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const getDirectoryForSession = useSessionUIStore((s) => s.getDirectoryForSession);
     const sync = useSync();
 
-    const {
-        getSessionModelSelection,
-        saveSessionModelSelection,
-        saveSessionAgentSelection,
-        saveAgentModelForSession,
-        getAgentModelForSession,
-        saveAgentModelVariantForSession,
-        getAgentModelVariantForSession,
-    } = useSelectionStore();
+    const getSessionModelSelection = useSelectionStore((state) => state.getSessionModelSelection);
+    const saveSessionModelSelection = useSelectionStore((state) => state.saveSessionModelSelection);
+    const saveSessionAgentSelection = useSelectionStore((state) => state.saveSessionAgentSelection);
+    const saveAgentModelForSession = useSelectionStore((state) => state.saveAgentModelForSession);
+    const getAgentModelForSession = useSelectionStore((state) => state.getAgentModelForSession);
+    const saveAgentModelVariantForSession = useSelectionStore((state) => state.saveAgentModelVariantForSession);
+    const getAgentModelVariantForSession = useSelectionStore((state) => state.getAgentModelVariantForSession);
 
     const contextHydrated = useContextStore((state) => state.hasHydrated);
 
@@ -355,19 +351,17 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         ? (sessionSavedAgentName || stickySessionAgentName || currentAgentName)
         : currentAgentName;
 
-    const {
-        toggleFavoriteModel,
-        isFavoriteModel,
-        collapsedModelProviders,
-        toggleModelProviderCollapsed,
-        addRecentModel,
-        addRecentAgent,
-        addRecentEffort,
-        isModelSelectorOpen,
-        setModelSelectorOpen,
-        setSettingsDialogOpen,
-        setSettingsPage,
-    } = useUIStore();
+    const toggleFavoriteModel = useUIStore((state) => state.toggleFavoriteModel);
+    const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
+    const collapsedModelProviders = useUIStore((state) => state.collapsedModelProviders);
+    const toggleModelProviderCollapsed = useUIStore((state) => state.toggleModelProviderCollapsed);
+    const addRecentModel = useUIStore((state) => state.addRecentModel);
+    const addRecentAgent = useUIStore((state) => state.addRecentAgent);
+    const addRecentEffort = useUIStore((state) => state.addRecentEffort);
+    const isModelSelectorOpen = useUIStore((state) => state.isModelSelectorOpen);
+    const setModelSelectorOpen = useUIStore((state) => state.setModelSelectorOpen);
+    const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+    const setSettingsPage = useUIStore((state) => state.setSettingsPage);
     const hiddenModels = useUIStore((state) => state.hiddenModels);
     const collapsedProviderSet = React.useMemo(
         () => new Set(collapsedModelProviders.map((providerId) => providerId.trim()).filter(Boolean)),
@@ -587,7 +581,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const latestLoadedUserChoice = React.useMemo(() => {
         for (let i = currentSessionMessagesFromSync.length - 1; i >= 0; i -= 1) {
             const message = currentSessionMessagesFromSync[i] as typeof currentSessionMessagesFromSync[number] & {
-                model?: { providerID?: string; modelID?: string };
+                model?: { providerID?: string; modelID?: string; variant?: string };
                 variant?: string;
                 mode?: string;
             };
@@ -604,8 +598,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             const agent = typeof message.agent === 'string' && message.agent.trim().length > 0
                 ? message.agent
                 : (typeof message.mode === 'string' && message.mode.trim().length > 0 ? message.mode : undefined);
-            const variant = typeof message.variant === 'string' && message.variant.trim().length > 0
-                ? message.variant
+            // OpenCode 1.4.0 moved variant from top-level to model.variant.
+            // Prefer the new location, fall back to the legacy one for older servers.
+            const variantCandidate = message.model?.variant ?? message.variant;
+            const variant = typeof variantCandidate === 'string' && variantCandidate.trim().length > 0
+                ? variantCandidate
                 : undefined;
 
             return { id: message.id, agent, providerID, modelID, variant };

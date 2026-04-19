@@ -5,7 +5,12 @@
     "description": "A color scheme inspired by Japanese art and ink painting - dark variant",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": ["dark", "japanese", "ink", "elegant"]
+    "tags": [
+      "dark",
+      "japanese",
+      "ink",
+      "elegant"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +24,9 @@
     "surface": {
       "background": "#1F1F28",
       "foreground": "#DCD7BA",
-      "muted": "#23232d90",
+      "muted": "#23232d",
       "mutedForeground": "#7e7e77",
-      "elevated": "#2A2A3790",
+      "elevated": "#2A2A37",
       "elevatedForeground": "#DCD7BA",
       "overlay": "#16161DCC",
       "subtle": "#2f2f3d"
@@ -165,14 +170,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

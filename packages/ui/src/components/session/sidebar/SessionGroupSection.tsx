@@ -66,6 +66,7 @@ type Props = {
   setRenameFolderDraft: React.Dispatch<React.SetStateAction<string>>;
   setRenamingFolderId: React.Dispatch<React.SetStateAction<string | null>>;
   pinnedSessionIds: Set<string>;
+  sessionOrderIndex: Map<string, number>;
   prVisualStateByDirectoryBranch: Map<string, {
     visualState: 'draft' | 'open' | 'blocked' | 'merged' | 'closed';
     number: number;
@@ -130,11 +131,23 @@ export function SessionGroupSection(props: Props): React.ReactNode {
     setRenameFolderDraft,
     setRenamingFolderId,
     pinnedSessionIds,
+    sessionOrderIndex,
     prVisualStateByDirectoryBranch,
     onToggleCollapsedGroup,
     dragHandleProps,
     compactBodyPadding = false,
   } = props;
+
+  const compareSessionNodes = React.useCallback((a: SessionNode, b: SessionNode) => {
+    const aIndex = sessionOrderIndex.get(a.session.id);
+    const bIndex = sessionOrderIndex.get(b.session.id);
+    if (aIndex !== undefined || bIndex !== undefined) {
+      if (aIndex === undefined) return 1;
+      if (bIndex === undefined) return -1;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+    }
+    return compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds);
+  }, [pinnedSessionIds, sessionOrderIndex]);
 
   const searchData = hasSessionSearchQuery ? groupSearchDataByGroup.get(group) : null;
   const displayMode = useSessionDisplayStore((state) => state.displayMode);
@@ -144,7 +157,11 @@ export function SessionGroupSection(props: Props): React.ReactNode {
   const maxVisible = hideDirectoryControls ? 10 : 5;
   const groupMatchesSearch = hasSessionSearchQuery ? searchData?.groupMatches === true : false;
   const shouldFilterGroupContents = hasSessionSearchQuery;
-  const sourceGroupNodes = shouldFilterGroupContents ? (searchData?.filteredNodes ?? []) : group.sessions;
+  const sourceGroupNodes = React.useMemo(
+    () => [...(shouldFilterGroupContents ? (searchData?.filteredNodes ?? []) : group.sessions)]
+      .sort(compareSessionNodes),
+    [compareSessionNodes, group.sessions, searchData?.filteredNodes, shouldFilterGroupContents],
+  );
   const folderScopeKey = group.folderScopeKey ?? normalizePath(group.directory ?? null);
   const scopeFolders = folderScopeKey ? getFoldersForScope(folderScopeKey) : [];
 
@@ -163,25 +180,61 @@ export function SessionGroupSection(props: Props): React.ReactNode {
     const nodes = folder.sessionIds
       .map((sid) => nodeBySessionId.get(sid))
       .filter((n): n is SessionNode => Boolean(n))
-      .sort((a, b) => compareSessionsByPinnedAndTime(a.session, b.session, pinnedSessionIds));
+      .sort(compareSessionNodes);
     return { folder, nodes };
   });
 
-  const folderMapById = new Map(allFoldersForGroupBase.map((entry) => [entry.folder.id, entry]));
-  const shouldKeepFolder = (folderId: string): boolean => {
-    const entry = folderMapById.get(folderId);
-    if (!entry) return false;
-    if (!hasSessionSearchQuery) return true;
-    const folderMatches = entry.folder.name.toLowerCase().includes(normalizedSessionSearchQuery);
-    if (folderMatches || entry.nodes.length > 0) return true;
-    return allFoldersForGroupBase
-      .filter(({ folder }) => folder.parentId === folderId)
-      .some(({ folder }) => shouldKeepFolder(folder.id));
-  };
+  const allFoldersForGroup = React.useMemo(() => {
+    const folderMapById = new Map(allFoldersForGroupBase.map((entry) => [entry.folder.id, entry]));
+    const childFolderIdsByParentId = new Map<string, string[]>();
+    for (const { folder } of allFoldersForGroupBase) {
+      if (!folder.parentId) continue;
+      const existing = childFolderIdsByParentId.get(folder.parentId);
+      if (existing) {
+        existing.push(folder.id);
+      } else {
+        childFolderIdsByParentId.set(folder.parentId, [folder.id]);
+      }
+    }
 
-  const allFoldersForGroup = hasSessionSearchQuery
-    ? allFoldersForGroupBase.filter(({ folder }) => shouldKeepFolder(folder.id))
-    : allFoldersForGroupBase;
+    const keepByFolderId = new Map<string, boolean>();
+    const shouldKeepFolder = (folderId: string): boolean => {
+      const cached = keepByFolderId.get(folderId);
+      if (cached !== undefined) return cached;
+
+      const entry = folderMapById.get(folderId);
+      if (!entry) {
+        keepByFolderId.set(folderId, false);
+        return false;
+      }
+
+      const childFolderIds = childFolderIdsByParentId.get(folderId) ?? [];
+
+      // For archived buckets, hide folders with no sessions unless descendants have content.
+      if (group.isArchivedBucket && entry.nodes.length === 0) {
+        const hasContentInChildren = childFolderIds.some((childId) => shouldKeepFolder(childId));
+        keepByFolderId.set(folderId, hasContentInChildren);
+        return hasContentInChildren;
+      }
+
+      if (!hasSessionSearchQuery) {
+        keepByFolderId.set(folderId, true);
+        return true;
+      }
+
+      const folderMatches = entry.folder.name.toLowerCase().includes(normalizedSessionSearchQuery);
+      if (folderMatches || entry.nodes.length > 0) {
+        keepByFolderId.set(folderId, true);
+        return true;
+      }
+
+      const hasMatchingChildren = childFolderIds.some((childId) => shouldKeepFolder(childId));
+      keepByFolderId.set(folderId, hasMatchingChildren);
+      return hasMatchingChildren;
+    };
+
+    return allFoldersForGroupBase.filter(({ folder }) => shouldKeepFolder(folder.id));
+  }, [allFoldersForGroupBase, group.isArchivedBucket, hasSessionSearchQuery, normalizedSessionSearchQuery]);
 
   const sessionIdsInFolders = new Set(allFoldersForGroup.flatMap((f) => f.folder.sessionIds));
   const ungroupedSessions = sourceGroupNodes.filter((node) => !sessionIdsInFolders.has(node.session.id));
@@ -308,6 +361,8 @@ export function SessionGroupSection(props: Props): React.ReactNode {
             }}
             onDelete={() => {
               if (group.isArchivedBucket) {
+                // Delete sessions in the folder
+                // Empty folders are auto-hidden by useArchivedAutoFolders
                 sessionEvents.requestDelete({
                   sessions: folderSessionsForDelete,
                   mode: 'session',

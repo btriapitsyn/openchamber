@@ -5,7 +5,12 @@
     "description": "A pure monochromatic theme - light variant with shades of grey",
     "version": "1.0.0",
     "variant": "light",
-    "tags": ["light", "monochrome", "minimal", "grayscale"]
+    "tags": [
+      "light",
+      "monochrome",
+      "minimal",
+      "grayscale"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +24,9 @@
     "surface": {
       "background": "#FFFFFF",
       "foreground": "#1A1A1A",
-      "muted": "#F5F5F590",
+      "muted": "#F5F5F5",
       "mutedForeground": "#757575",
-      "elevated": "#FAFAFA90",
+      "elevated": "#FAFAFA",
       "elevatedForeground": "#1A1A1A",
       "overlay": "#00000020",
       "subtle": "#F0F0F0"
@@ -165,14 +170,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

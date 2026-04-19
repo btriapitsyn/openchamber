@@ -5,7 +5,10 @@
     "description": "Tokyonight",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#E1E2E7",
       "foreground": "#273153",
-      "muted": "#DEE0EA90",
+      "muted": "#DEE0EA",
       "mutedForeground": "#686e9b",
-      "elevated": "#dee0ee90",
+      "elevated": "#dee0ee",
       "elevatedForeground": "#273153",
       "overlay": "#1C254420",
       "subtle": "#dadce6"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

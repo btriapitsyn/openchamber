@@ -50,6 +50,7 @@ export type DesktopSettings = {
   homeDirectory?: string;
   // Optional absolute path to `opencode` binary.
   opencodeBinary?: string;
+  desktopLanAccessEnabled?: boolean;
   projects?: ProjectEntry[];
   activeProjectId?: string;
   approvedDirectories?: string[];
@@ -122,7 +123,10 @@ export type DesktopSettings = {
   showToolFileIcons?: boolean;
   showExpandedBashTools?: boolean;
   showExpandedEditTools?: boolean;
+  timeFormatPreference?: 'auto' | '12h' | '24h';
+  weekStartPreference?: 'auto' | 'sunday' | 'monday';
   chatRenderMode?: 'sorted' | 'live';
+  messageStreamTransport?: 'auto' | 'ws' | 'sse';
   activityRenderMode?: 'collapsed' | 'summary';
   mermaidRenderingMode?: 'svg' | 'ascii';
   userMessageRenderingMode?: 'markdown' | 'plain';
@@ -137,6 +141,7 @@ export type DesktopSettings = {
   recentModels?: Array<{ providerID: string; modelID: string }>;
   diffLayoutPreference?: 'dynamic' | 'inline' | 'side-by-side';
   diffViewMode?: 'single' | 'stacked';
+  gitChangesViewMode?: 'flat' | 'tree';
   directoryShowHidden?: boolean;
   filesViewShowGitignored?: boolean;
 
@@ -147,8 +152,6 @@ export type DesktopSettings = {
   skillCatalogs?: SkillCatalogConfig[];
   // Opt-in to send anonymous usage reports for update checks (default: true)
   reportUsage?: boolean;
-  // macOS window vibrancy effect (default: true)
-  desktopVibrancy?: boolean;
 };
 
 type TauriGlobal = {
@@ -242,6 +245,21 @@ export const isDesktopShell = (): boolean => {
     return true;
   }
   return isTauriShell();
+};
+
+export const startDesktopWindowDrag = async (): Promise<boolean> => {
+  if (!isDesktopShell() || !isTauriShell()) {
+    return false;
+  }
+
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window');
+    const appWindow = getCurrentWindow();
+    await appWindow.startDragging();
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export const isVSCodeRuntime = (): boolean => {
@@ -444,13 +462,36 @@ export const restartToApplyUpdate = async (): Promise<boolean> => {
     return false;
   }
 
+  return restartDesktopApp();
+};
+
+export const restartDesktopApp = async (): Promise<boolean> => {
+  if (!isTauriShell()) {
+    return false;
+  }
+
   try {
     const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
     await tauri?.core?.invoke?.('desktop_restart');
     return true;
   } catch (error) {
-    console.warn('Failed to restart for update (tauri)', error);
+    console.warn('Failed to restart desktop app (tauri)', error);
     return false;
+  }
+};
+
+export const getDesktopLanAddress = async (): Promise<string | null> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return null;
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_get_lan_address');
+    return typeof result === 'string' && result.trim().length > 0 ? result.trim() : null;
+  } catch (error) {
+    console.warn('Failed to get desktop LAN address (tauri)', error);
+    return null;
   }
 };
 
@@ -474,6 +515,32 @@ export const openDesktopPath = async (path: string, app?: string | null): Promis
   } catch (error) {
     console.warn('Failed to open path (tauri)', error);
     return false;
+  }
+};
+
+export const saveDesktopMarkdownFile = async (
+  defaultFileName: string,
+  content: string,
+): Promise<string | null> => {
+  if (!isTauriShell() || !isDesktopLocalOriginActive()) {
+    return null;
+  }
+
+  const trimmedFileName = defaultFileName?.trim();
+  if (!trimmedFileName) {
+    return null;
+  }
+
+  try {
+    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
+    const result = await tauri?.core?.invoke?.('desktop_save_markdown_file', {
+      defaultFileName: trimmedFileName,
+      content,
+    });
+    return typeof result === 'string' && result.trim().length > 0 ? result : null;
+  } catch (error) {
+    console.warn('Failed to save markdown file (tauri)', error);
+    return null;
   }
 };
 
@@ -636,21 +703,6 @@ export const clearDesktopCache = async (): Promise<boolean> => {
     return true;
   } catch (error) {
     console.warn('Failed to clear cache', error);
-    return false;
-  }
-};
-
-export const desktopSetVibrancy = async (enabled: boolean): Promise<boolean> => {
-  if (!isTauriShell()) {
-    return false;
-  }
-
-  try {
-    const tauri = (window as unknown as { __TAURI__?: TauriGlobal }).__TAURI__;
-    await tauri?.core?.invoke?.('desktop_set_vibrancy', { enabled });
-    return true;
-  } catch (error) {
-    console.warn('Failed to set vibrancy', error);
     return false;
   }
 };

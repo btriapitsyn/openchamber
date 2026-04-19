@@ -5,7 +5,10 @@
     "description": "Gruvbox",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [ "dark", "palette" ]
+    "tags": [
+      "dark",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#282828",
       "foreground": "#EBDBB2",
-      "muted": "#32302F90",
+      "muted": "#32302F",
       "mutedForeground": "#918574",
-      "elevated": "#25292b90",
+      "elevated": "#25292b",
       "elevatedForeground": "#EBDBB2",
       "overlay": "#FBF1C720",
       "subtle": "#3e3c3a"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

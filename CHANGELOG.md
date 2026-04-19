@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 
+## [1.9.6] - 2026-04-17
+
+- Reliability/Streaming: switched live message events to a WebSocket-first transport with SSE fallback, added response compression, and hardened proxy/compression handling so long runs stay smoother on slower or proxied networks (thanks to @geekifan, @jwcrystal).
+- Sessions/Scheduled Tasks: added scheduled task creation and management with locale-aware scheduling, so recurring prompts run at the right local time without manual re-entry.
+- Sessions/Worktrees: enforced session worktree isolation and tightened session-switch safety, reducing cross-worktree mix-ups when resuming chats or running Git actions (thanks to @jwcrystal).
+- Files: added a full Go to Line workflow (toolbar + shortcut + dialog) and a new Copy Relative Path action, making in-editor navigation and path sharing much faster (thanks to @coldbrow).
+- Files: file trees now auto-refresh when files change outside the app, so new, renamed, or updated files appear without manual reloads (thanks to @jwcrystal).
+- Chat/Export: added export session as Markdown and improved empty-state/export behavior, making conversation handoff and documentation cleaner (thanks to @coldbrow).
+- Chat/Requests: restored blocking request visibility in sub-sessions, scoped auto-approve to the active session tree, and reduced noisy auto-approved notifications during multi-session work.
+- Desktop: added quick open and a LAN access toggle, plus safer quit behavior around scheduled tasks for smoother local-network and day-to-day desktop workflows (thanks to @An-jinu).
+- Chat/Markdown: added LaTeX rendering support for clearer math and technical notation in messages (thanks to @ricautomation).
+- Settings/Skills: skills are now sorted within groups so larger skill lists are easier to scan (thanks to @roctom).
+
+
+## [1.9.5] - 2026-04-14
+
+- Security/Auth: added passkey sign-in for protected instances and new 1-week/30-day session expiration options, so teams can enforce stronger access controls with flexible login persistence (thanks to @daveotero, @pm0u).
+- Voice: added OpenAI-compatible custom server support for both text-to-speech and speech-to-text, including configurable TTS model/pitch/volume and stricter custom URL validation for safer setup (thanks to @ablepharus).
+- Chat/Tool Output: added an interactive tree viewer for structured outputs and fixed JSON quote rendering, making large payloads easier to inspect and copy accurately (thanks to @yaozhenghangma).
+- Chat/Reliability: fixed question-tool content disappearing after refresh and hardened subagent/session recovery paths, reducing silent failures and stuck task states (thanks to @jwcrystal).
+- Sync/Performance: optimized multi-session streaming with per-directory queues, event coalescing, and parts-gap recovery to keep live updates smoother under heavy activity (thanks to @jwcrystal).
+- Sessions/UI: kept active sessions visible in Recent, auto-expanded parent groups when opening subagent sessions, and hid empty archived/folder sections for cleaner navigation (thanks to @jwcrystal).
+- Git/UI: restored Git changes panel visibility and sidebar sync, so change review stays available and consistent while switching contexts (thanks to @jwcrystal).
+- Desktop/Startup: delivered a more guided first-launch and smart recovery flow, plus startup and remote-window interaction fixes to reduce early-session friction (thanks to @jwcrystal).
+- Usage: added Zhipu AI Coding Plan tracking and restored model-variant compatibility with older OpenCode runtimes for more reliable quota reporting and model selection (thanks to @cainiao1992, @Chi-square-test).
+
+## [1.9.4] - 2026-04-07
+
+- Settings/Magic Prompts: added a dedicated Magic Prompts page with editable templates for commit/PR generation, PR and issue reviews, failed-check/comment analysis, and merge/cherry-pick conflict resolution.
+- Chat/Performance: reduced streaming render churn across the app, so long responses stay smoother with less UI jitter during active runs.
+- Chat/Scrolling: fixed jumpy follow behavior and restored stable bottom-resume/live-compaction updates, so staying on the latest output is more reliable.
+- Reliability/Streaming: improved reconnect, retry, and directory-aware event routing to reduce stuck session/subagent states after transient disconnects (thanks to @jwcrystal, @daveotero).
+- Chat/Tool Output: LSP diagnostics now render directly in tool output, making inline error review faster while iterating (thanks to @yulia-ivashko).
+- Models: added defensive handling for missing model pricing/capability metadata so model controls fail less often with incomplete provider data (thanks to @Chi-square-test).
+- Desktop/Performance: removed costly window translucency and reduced duplicate notification triggers for a cooler, less noisy desktop experience.
+- Startup/Remote: restored remote provider startup behavior and tightened host/port detection to reduce false startup failures.
+- Usage: refreshed MiniMax CN coding-plan quota data for more accurate usage reporting (thanks to @nzlov).
+
 ## [1.9.3] - 2026-03-01
 
 - Security/Chat: user messages now escape raw HTML by default, so pasted markup is shown safely as text instead of being interpreted by the renderer (thanks to @kalac2232).

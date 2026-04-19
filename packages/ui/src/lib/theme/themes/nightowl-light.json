@@ -5,7 +5,10 @@
     "description": "Night Owl",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#FBFBFB",
       "foreground": "#403F53",
-      "muted": "#F0F0F090",
+      "muted": "#F0F0F0",
       "mutedForeground": "#747a7a",
-      "elevated": "#FFFFFF90",
+      "elevated": "#FFFFFF",
       "elevatedForeground": "#403F53",
       "overlay": "#1A1A1A20",
       "subtle": "#F0F0F0"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

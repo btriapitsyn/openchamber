@@ -5,7 +5,10 @@
     "description": "One Dark Pro",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [ "dark", "palette" ]
+    "tags": [
+      "dark",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#1E222A",
       "foreground": "#ABB2BF",
-      "muted": "#21263190",
+      "muted": "#212631",
       "mutedForeground": "#737a89",
-      "elevated": "#23283290",
+      "elevated": "#232832",
       "elevatedForeground": "#ABB2BF",
       "overlay": "#F6F7FB20",
       "subtle": "#2E3442"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

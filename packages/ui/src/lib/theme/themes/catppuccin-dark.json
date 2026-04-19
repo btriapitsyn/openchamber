@@ -5,7 +5,10 @@
     "description": "Catppuccin",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [ "dark", "palette" ]
+    "tags": [
+      "dark",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#1E1E2E",
       "foreground": "#CDD6F4",
-      "muted": "#2a273b90",
+      "muted": "#2a273b",
       "mutedForeground": "#969cb1",
-      "elevated": "#28284190",
+      "elevated": "#282841",
       "elevatedForeground": "#CDD6F4",
       "overlay": "#F4F2FF20",
       "subtle": "#2f2f50"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

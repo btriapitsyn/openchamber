@@ -56,21 +56,19 @@ export const MainLayout: React.FC = () => {
     const RIGHT_SIDEBAR_AUTO_OPEN_WIDTH = 1220;
     const BOTTOM_TERMINAL_AUTO_CLOSE_HEIGHT = 640;
     const BOTTOM_TERMINAL_AUTO_OPEN_HEIGHT = 700;
-    const {
-        isSidebarOpen,
-        isRightSidebarOpen,
-        isBottomTerminalOpen,
-        setRightSidebarOpen,
-        setBottomTerminalOpen,
-        activeMainTab,
-        setIsMobile,
-        isSessionSwitcherOpen,
-        isSettingsDialogOpen,
-        setSettingsDialogOpen,
-        isMultiRunLauncherOpen,
-        setMultiRunLauncherOpen,
-        multiRunLauncherPrefillPrompt,
-    } = useUIStore();
+    const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+    const isRightSidebarOpen = useUIStore((state) => state.isRightSidebarOpen);
+    const isBottomTerminalOpen = useUIStore((state) => state.isBottomTerminalOpen);
+    const setRightSidebarOpen = useUIStore((state) => state.setRightSidebarOpen);
+    const setBottomTerminalOpen = useUIStore((state) => state.setBottomTerminalOpen);
+    const activeMainTab = useUIStore((state) => state.activeMainTab);
+    const setIsMobile = useUIStore((state) => state.setIsMobile);
+    const isSessionSwitcherOpen = useUIStore((state) => state.isSessionSwitcherOpen);
+    const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
+    const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
+    const isMultiRunLauncherOpen = useUIStore((state) => state.isMultiRunLauncherOpen);
+    const setMultiRunLauncherOpen = useUIStore((state) => state.setMultiRunLauncherOpen);
+    const multiRunLauncherPrefillPrompt = useUIStore((state) => state.multiRunLauncherPrefillPrompt);
 
     const { isMobile } = useDeviceInfo();
     const isDesktopShellRuntime = React.useMemo(() => isDesktopShell(), []);
@@ -628,7 +626,7 @@ export const MainLayout: React.FC = () => {
                 className={cn(
                     'main-content-safe-area h-[100dvh]',
                     isMobile ? 'flex flex-col' : 'flex',
-                    isDesktopShellRuntime ? 'bg-transparent' : 'bg-background'
+                    'bg-background'
                 )}
             >
                 <CommandPalette />
@@ -727,7 +725,7 @@ export const MainLayout: React.FC = () => {
                             }
                         }}
                         className={cn(
-                            'fixed left-0 top-[var(--oc-header-height,56px)] z-50 h-[calc(100%-var(--oc-header-height,56px))] bg-transparent',
+                            'fixed left-0 top-[var(--oc-header-height,56px)] z-50 h-[calc(100%-var(--oc-header-height,56px))] bg-background',
                             'cursor-grab active:cursor-grabbing'
                         )}
                         aria-hidden={!mobileLeftDrawerOpen}
@@ -778,7 +776,7 @@ export const MainLayout: React.FC = () => {
                             }
                         }}
                         className={cn(
-                            'fixed right-0 top-[var(--oc-header-height,56px)] z-50 h-[calc(100%-var(--oc-header-height,56px))] bg-transparent',
+                            'fixed right-0 top-[var(--oc-header-height,56px)] z-50 h-[calc(100%-var(--oc-header-height,56px))] bg-background',
                             'cursor-grab active:cursor-grabbing'
                         )}
                         aria-hidden={!isRightSidebarOpen}
@@ -836,9 +834,7 @@ export const MainLayout: React.FC = () => {
                     <div className="flex flex-1 overflow-hidden relative">
                         <div className={cn(
                             'absolute inset-0 flex overflow-hidden',
-                            isDesktopShellRuntime
-                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
-                                : 'bg-sidebar'
+                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
                         )}>
                             {isSidebarOpen ? (
                                 <>
@@ -846,32 +842,28 @@ export const MainLayout: React.FC = () => {
                                         aria-hidden
                                         className={cn(
                                             'pointer-events-none absolute top-0 z-0',
-                                            isDesktopShellRuntime
-                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
-                                                : 'bg-sidebar'
+                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
                                         )}
                                         style={{
                                             left: `${visibleSidebarWidth}px`,
-                                            width: 'var(--radius-md)',
-                                            height: 'var(--radius-md)',
-                                            WebkitMaskImage: 'radial-gradient(circle at 100% 100%, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
-                                            maskImage: 'radial-gradient(circle at 100% 100%, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
+                                            width: '10px',
+                                            height: '10px',
+                                            WebkitMaskImage: 'radial-gradient(circle at 100% 100%, transparent calc(10px - 1px), black 10px)',
+                                            maskImage: 'radial-gradient(circle at 100% 100%, transparent calc(10px - 1px), black 10px)',
                                         }}
                                     />
                                     <div
                                         aria-hidden
                                         className={cn(
                                             'pointer-events-none absolute bottom-0 z-0',
-                                            isDesktopShellRuntime
-                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
-                                                : 'bg-sidebar'
+                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
                                         )}
                                         style={{
                                             left: `${visibleSidebarWidth}px`,
-                                            width: 'var(--radius-md)',
-                                            height: 'var(--radius-md)',
-                                            WebkitMaskImage: 'radial-gradient(circle at 100% 0%, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
-                                            maskImage: 'radial-gradient(circle at 100% 0%, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
+                                            width: '10px',
+                                            height: '10px',
+                                            WebkitMaskImage: 'radial-gradient(circle at 100% 0%, transparent calc(10px - 1px), black 10px)',
+                                            maskImage: 'radial-gradient(circle at 100% 0%, transparent calc(10px - 1px), black 10px)',
                                         }}
                                     />
                                 </>
@@ -882,32 +874,28 @@ export const MainLayout: React.FC = () => {
                                         aria-hidden
                                         className={cn(
                                             'pointer-events-none absolute top-0 z-0',
-                                            isDesktopShellRuntime
-                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
-                                                : 'bg-sidebar'
+                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
                                         )}
                                         style={{
                                             right: `${visibleRightSidebarWidth}px`,
-                                            width: 'var(--radius-md)',
-                                            height: 'var(--radius-md)',
-                                            WebkitMaskImage: 'radial-gradient(circle at 0 100%, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
-                                            maskImage: 'radial-gradient(circle at 0 100%, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
+                                            width: '10px',
+                                            height: '10px',
+                                            WebkitMaskImage: 'radial-gradient(circle at 0 100%, transparent calc(10px - 1px), black 10px)',
+                                            maskImage: 'radial-gradient(circle at 0 100%, transparent calc(10px - 1px), black 10px)',
                                         }}
                                     />
                                     <div
                                         aria-hidden
                                         className={cn(
                                             'pointer-events-none absolute bottom-0 z-0',
-                                            isDesktopShellRuntime
-                                                ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
-                                                : 'bg-sidebar'
+                                            isDesktopShellRuntime ? 'bg-sidebar' : 'bg-sidebar'
                                         )}
                                         style={{
                                             right: `${visibleRightSidebarWidth}px`,
-                                            width: 'var(--radius-md)',
-                                            height: 'var(--radius-md)',
-                                            WebkitMaskImage: 'radial-gradient(circle at 0 0, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
-                                            maskImage: 'radial-gradient(circle at 0 0, transparent calc(var(--radius-md) - 1px), black var(--radius-md))',
+                                            width: '10px',
+                                            height: '10px',
+                                            WebkitMaskImage: 'radial-gradient(circle at 0 0, transparent calc(10px - 1px), black 10px)',
+                                            maskImage: 'radial-gradient(circle at 0 0, transparent calc(10px - 1px), black 10px)',
                                         }}
                                     />
                                 </>
@@ -921,11 +909,9 @@ export const MainLayout: React.FC = () => {
                             </Sidebar>
                             <div className={cn(
                                 'relative flex flex-1 min-w-0 flex-col overflow-hidden',
-                                isDesktopShellRuntime
-                                    ? 'bg-[color:var(--sidebar-overlay-strong)] backdrop-blur supports-[backdrop-filter]:bg-[color:var(--sidebar-overlay-soft)]'
-                                    : 'bg-sidebar',
-                                isSidebarOpen && 'border-l border-border/50 rounded-tl-md rounded-bl-md',
-                                isRightSidebarOpen && 'border-r border-border/50 rounded-tr-md rounded-br-md'
+                                'bg-sidebar',
+                                isSidebarOpen && 'border-l border-border/50 rounded-tl-[10px] rounded-bl-[10px]',
+                                isRightSidebarOpen && 'border-r border-border/50 rounded-tr-[10px] rounded-br-[10px]'
                             )}>
                                 <Header desktopRightSidebarActionsHost={desktopRightSidebarActionsHost} />
                                 <div className={cn(
@@ -948,7 +934,7 @@ export const MainLayout: React.FC = () => {
                                     </div>
                                 </div>
                                 <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
-                                    <ErrorBoundary><TerminalView /></ErrorBoundary>
+                                    {isBottomTerminalOpen ? <ErrorBoundary><TerminalView /></ErrorBoundary> : null}
                                 </BottomTerminalDock>
                             </div>
                             <RightSidebar

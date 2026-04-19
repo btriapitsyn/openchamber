@@ -5,7 +5,12 @@
     "description": "A color scheme inspired by Japanese art and ink painting - light variant (Lotus)",
     "version": "1.0.0",
     "variant": "light",
-    "tags": ["light", "japanese", "lotus", "elegant"]
+    "tags": [
+      "light",
+      "japanese",
+      "lotus",
+      "elegant"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +24,9 @@
     "surface": {
       "background": "#F2ECBC",
       "foreground": "#545464",
-      "muted": "#E7DBA090",
+      "muted": "#E7DBA0",
       "mutedForeground": "#6c6c67",
-      "elevated": "#eae4bf90",
+      "elevated": "#eae4bf",
       "elevatedForeground": "#545464",
       "overlay": "#54546433",
       "subtle": "#f4fff0"
@@ -165,14 +170,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

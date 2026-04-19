@@ -5,7 +5,10 @@
     "description": "Vesper",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#FFFFFF",
       "foreground": "#101010",
-      "muted": "#F8F8F890",
+      "muted": "#F8F8F8",
       "mutedForeground": "#908d8d",
-      "elevated": "#F0F0F090",
+      "elevated": "#F0F0F0",
       "elevatedForeground": "#101010",
       "overlay": "#00000020",
       "subtle": "#f5f3f3"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

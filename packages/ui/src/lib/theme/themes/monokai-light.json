@@ -5,7 +5,10 @@
     "description": "Monokai",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#FDF8EC",
       "foreground": "#292318",
-      "muted": "#F8F2E690",
+      "muted": "#F8F2E6",
       "mutedForeground": "#887c6a",
-      "elevated": "#FBF5E890",
+      "elevated": "#FBF5E8",
       "elevatedForeground": "#292318",
       "overlay": "#1C150C20",
       "subtle": "#F7EFDD"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

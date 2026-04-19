@@ -131,8 +131,9 @@ export const OpenInAppButton = ({ directory, activeFilePath, className }: OpenIn
   return (
     <div
         className={cn(
-          'app-region-no-drag inline-flex h-7 items-center self-center rounded-md border border-[var(--interactive-border)]',
-          'bg-[var(--surface-elevated)] shadow-none overflow-hidden',
+          'app-region-no-drag inline-flex h-7 items-center self-center rounded-[9px] [corner-shape:squircle] supports-[corner-shape:squircle]:rounded-[50px]',
+          'bg-[var(--surface-elevated)] overflow-hidden',
+          'border border-border/60',
           className
         )}
     >

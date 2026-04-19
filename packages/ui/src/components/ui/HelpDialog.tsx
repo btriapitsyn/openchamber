@@ -14,6 +14,7 @@ import {
   RiBrainAi3Line,
   RiCloseCircleLine,
   RiCommandLine,
+  RiFileLine,
   RiGitBranchLine,
   RiLayoutLeftLine,
   RiLayoutRightLine,
@@ -52,7 +53,9 @@ const renderShortcut = (id: string, fallbackCombo: string, overrides: Record<str
 };
 
 export const HelpDialog: React.FC = () => {
-  const { isHelpDialogOpen, setHelpDialogOpen, shortcutOverrides } = useUIStore();
+  const isHelpDialogOpen = useUIStore((state) => state.isHelpDialogOpen);
+  const setHelpDialogOpen = useUIStore((state) => state.setHelpDialogOpen);
+  const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const mod = getModifierLabel();
 
   const shortcuts: ShortcutSection[] = [
@@ -63,6 +66,12 @@ export const HelpDialog: React.FC = () => {
           id: 'open_command_palette',
           description: "Open Command Palette",
           icon: RiCommandLine,
+          keys: '',
+        },
+        {
+          id: 'open_quick_open',
+          description: 'Quick open file',
+          icon: RiFileLine,
           keys: '',
         },
         {

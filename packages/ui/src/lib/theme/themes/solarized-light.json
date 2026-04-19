@@ -5,7 +5,10 @@
     "description": "Solarized",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#FDF6E3",
       "foreground": "#586E75",
-      "muted": "#F6EFDA90",
+      "muted": "#F6EFDA",
       "mutedForeground": "#7a8587",
-      "elevated": "#FAF3DC90",
+      "elevated": "#FAF3DC",
       "elevatedForeground": "#586E75",
       "overlay": "#07364220",
       "subtle": "#F6EFDA"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

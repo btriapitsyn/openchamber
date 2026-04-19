@@ -1,7 +1,5 @@
 import * as React from "react";
 import { motion, type MotionProps } from "motion/react";
-import * as Slot from "@radix-ui/react-slot";
-
 import { cn } from "@/lib/utils";
 
 type Variant = {
@@ -21,23 +19,19 @@ const variants = [
   {
     variant: "shine",
     component: ({ children, className, ...props }) => (
-        <motion.span
-          {...props}
-          className={cn(
-            "bg-[linear-gradient(110deg,color-mix(in_srgb,var(--surface-muted-foreground)_45%,transparent),35%,var(--surface-foreground),50%,color-mix(in_srgb,var(--surface-muted-foreground)_45%,transparent),75%,color-mix(in_srgb,var(--surface-muted-foreground)_45%,transparent))]",
-            "bg-[length:200%_100%] bg-clip-text text-transparent",
-            className
-          )}
-        initial={{ backgroundPosition: "200% 0" }}
-        animate={{ backgroundPosition: "-200% 0" }}
-        transition={{
-          repeat: Number.POSITIVE_INFINITY,
-          duration: 2,
-          ease: "linear",
-        }}
+      <span
+        {...props}
+        data-component="oc-text-shimmer"
+        data-active="true"
+        className={className}
       >
-        {children}
-      </motion.span>
+        <span data-slot="text-shimmer-char">
+          <span data-slot="text-shimmer-char-base">{children}</span>
+          <span data-slot="text-shimmer-char-shimmer" data-run="true" aria-hidden="true">
+            {children}
+          </span>
+        </span>
+      </span>
     ),
   },
   {
@@ -223,9 +217,5 @@ export function Text({ variant = "shine", className, ...props }: TextProps) {
 
   const Component = variantComponent || variants[FALLBACK_INDEX].component;
 
-  return (
-    <Slot.Root>
-      <Component {...props} className={className} />
-    </Slot.Root>
-  );
+  return <Component {...props} className={className} />;
 }

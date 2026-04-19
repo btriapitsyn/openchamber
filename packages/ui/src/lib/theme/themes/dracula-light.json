@@ -5,7 +5,10 @@
     "description": "Dracula",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#F8F8F2",
       "foreground": "#1F1F2F",
-      "muted": "#eff1eb90",
+      "muted": "#eff1eb",
       "mutedForeground": "#6c6c7a",
-      "elevated": "#eeeee590",
+      "elevated": "#eeeee5",
       "elevatedForeground": "#1F1F2F",
       "overlay": "#05040C20",
       "subtle": "#edeee7"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

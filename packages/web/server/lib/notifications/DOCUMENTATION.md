@@ -1,7 +1,7 @@
 # Notifications Module Documentation
 
 ## Purpose
-This module provides notification message preparation utilities for the web server runtime, including text truncation and optional message summarization for system notifications.
+This module provides notification message preparation utilities for the web server runtime, including text truncation, plain-text normalization, and optional message summarization for system notifications.
 
 ## Entrypoints and structure
 - `packages/web/server/lib/notifications/index.js`: public entrypoint imported by `packages/web/server/index.js`.
@@ -67,7 +67,7 @@ This module provides notification message preparation utilities for the web serv
   - `broadcastUiNotification(payload)`
 
 ### Template runtime API (template-runtime.js)
-- `createNotificationTemplateRuntime(dependencies)`: creates shared notification/template + zen helper runtime.
+- `createNotificationTemplateRuntime(dependencies)`: creates shared notification/template runtime and consumes shared text summarization from `packages/web/server/lib/text/summarization.js` in `notification` mode.
 - Returned API:
   - `resolveNotificationTemplate(template, variables)`
   - `shouldApplyResolvedTemplateMessage(template, resolved, variables)`
@@ -107,6 +107,7 @@ The `settings` parameter for `prepareNotificationLastMessage` supports:
 - Returns empty string for empty/null message.
 - Returns truncated original message if summarization disabled, message under threshold, or summarization fails.
 - Returns truncated summary if summarization succeeds and returns non-empty string.
+- Normalizes markdown-like formatting to plain text before truncation.
 - Always applies `maxLastMessageLength` truncation to final result.
 
 ## Notes for contributors

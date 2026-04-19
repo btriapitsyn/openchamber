@@ -1,7 +1,8 @@
 import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useSessions } from '@/sync/sync-context';
+import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
+import { getAttachedSessionDirectory } from '@/sync/session-worktree-contract';
+import { useSessionDirectory } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
-import type { Session } from '@opencode-ai/sdk/v2';
 
 /**
  * Hook that resolves the effective working directory for tabs (Git, Diff, Files, Terminal).
@@ -18,22 +19,23 @@ import type { Session } from '@opencode-ai/sdk/v2';
 export const useEffectiveDirectory = (): string | undefined => {
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
-    const sessions = useSessions();
+    const currentSessionDirectory = useSessionDirectory(currentSessionId);
+    const worktreeAttachment = useSessionWorktreeStore((s) => currentSessionId ? s.getAttachment(currentSessionId) : undefined);
     const worktreeMap = useSessionUIStore((s) => s.worktreeMetadata);
     const fallbackDirectory = useDirectoryStore((s) => s.currentDirectory);
 
     // If we have an active session, use its directory
     if (currentSessionId) {
+        const attachmentDirectory = getAttachedSessionDirectory(worktreeAttachment);
+        if (attachmentDirectory) {
+            return attachmentDirectory;
+        }
         const worktreeMetadata = worktreeMap.get(currentSessionId);
         if (worktreeMetadata?.path) {
             return worktreeMetadata.path;
         }
-
-        const currentSession = sessions.find((session) => session.id === currentSessionId);
-        type SessionWithDirectory = Session & { directory?: string };
-        const sessionDirectory = (currentSession as SessionWithDirectory | undefined)?.directory;
-        if (sessionDirectory) {
-            return sessionDirectory;
+        if (currentSessionDirectory) {
+            return currentSessionDirectory;
         }
     }
 

@@ -5,7 +5,10 @@
     "description": "Carbonfox",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#FFFFFF",
       "foreground": "#161616",
-      "muted": "#F4F4F490",
+      "muted": "#F4F4F4",
       "mutedForeground": "#868585",
-      "elevated": "#f4f4f790",
+      "elevated": "#f4f4f7",
       "elevatedForeground": "#161616",
       "overlay": "#00000020",
       "subtle": "#f2f2f8"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

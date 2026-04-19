@@ -3,7 +3,7 @@ import { RiArrowDownSLine, RiArrowRightSLine, RiEditLine, RiGitCommitLine, RiLoa
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { useGitStore, useGitStatus, useIsGitRepo, useGitFileCount } from '@/stores/useGitStore';
+import { useGitStore, useGitStatus, useIsGitRepo, useGitFileCount, useGitLoadingStatus } from '@/stores/useGitStore';
 import { cn } from '@/lib/utils';
 import type { GitStatus } from '@/lib/api/types';
 import {
@@ -27,6 +27,7 @@ import { PierreDiffViewer } from './PierreDiffViewer';
 import { useDeviceInfo } from '@/lib/device';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
+import { sessionEvents } from '@/lib/sessionEvents';
 
 // Minimum width for side-by-side diff view (px)
 const SIDE_BY_SIDE_MIN_WIDTH = 1100;
@@ -128,6 +129,9 @@ const toAbsolutePath = (directory: string, filePath: string): string => {
     return normalizedDirectory ? `${normalizedDirectory}/${trimmedFilePath}` : trimmedFilePath;
 };
 
+const normalizePath = (value?: string | null): string =>
+    (value || '').replace(/\\/g, '/').replace(/\/+$/, '');
+
 const getFirstChangedModifiedLine = (original: string, modified: string): number => {
     const originalLines = original.split('\n');
     const modifiedLines = modified.split('\n');
@@ -212,7 +216,7 @@ const FileSelector = React.memo<FileSelectorProps>(({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <button className="flex h-7 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
                     {selectedFileEntry ? (
                         <div className="flex min-w-0 items-center gap-3">
                             <FileTypeIcon filePath={selectedFileEntry.path} className="h-3.5 w-3.5 flex-shrink-0" />
@@ -284,28 +288,23 @@ const DiffViewModeSelector = React.memo<DiffViewModeSelectorProps>(({ mode, onMo
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <button className="flex h-8 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+                <button className="flex h-7 items-center gap-2 rounded-lg border border-input bg-transparent px-2 typography-ui-label text-foreground outline-none hover:bg-interactive-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
                     <span className="min-w-0 truncate typography-meta">
                         {currentOption.label}
                     </span>
                     <RiArrowDownSLine className="size-4 opacity-50" />
                 </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="min-w-[220px]">
+            <DropdownMenuContent className="min-w-[140px]">
                 <DropdownMenuRadioGroup
                     value={mode}
                     onValueChange={(value) => onModeChange(value as DiffTabViewMode)}
                 >
                     {DIFF_VIEW_MODE_OPTIONS.map((option) => (
                         <DropdownMenuRadioItem key={option.value} value={option.value}>
-                            <div className="flex flex-col gap-0.5">
-                                <span className="typography-meta text-foreground">
-                                    {option.label}
-                                </span>
-                                <span className="typography-micro text-muted-foreground">
-                                    {option.description}
-                                </span>
-                            </div>
+                            <span className="typography-meta text-foreground">
+                                {option.label}
+                            </span>
                         </DropdownMenuRadioItem>
                     ))}
                 </DropdownMenuRadioGroup>
@@ -578,7 +577,14 @@ const SingleDiffViewer = React.memo<SingleDiffViewerProps>(({
     }
 
     return (
-        <div className="absolute inset-0" style={{ contain: 'size layout' }}>
+        <ScrollableOverlay
+            outerClassName="absolute inset-0"
+            disableHorizontal={false}
+            observeMutations={false}
+            preventOverscroll
+            data-diff-virtual-root
+            data-diff-virtual-content
+        >
             <PierreDiffViewer
                 original={diff.original}
                 modified={diff.modified}
@@ -586,8 +592,9 @@ const SingleDiffViewer = React.memo<SingleDiffViewerProps>(({
                 fileName={filePath}
                 renderSideBySide={renderSideBySide}
                 wrapLines={wrapLines}
+                layout="inline"
             />
-        </div>
+        </ScrollableOverlay>
     );
 });
 
@@ -935,8 +942,9 @@ export const DiffView: React.FC<DiffViewProps> = ({
 
     const isGitRepo = useIsGitRepo(effectiveDirectory ?? null);
     const status = useGitStatus(effectiveDirectory ?? null);
-    const isLoadingStatus = useGitStore((state) => state.isLoadingStatus);
+    const isLoadingStatus = useGitLoadingStatus(effectiveDirectory ?? null);
     const setActiveDirectory = useGitStore((state) => state.setActiveDirectory);
+    const ensureStatus = useGitStore((state) => state.ensureStatus);
     const fetchStatus = useGitStore((state) => state.fetchStatus);
     const setDiff = useGitStore((state) => state.setDiff);
 	 
@@ -1109,16 +1117,26 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return getLayoutForFile(selectedFileEntry);
     }, [getLayoutForFile, selectedFileEntry]);
 
-    // Fetch git status on mount
+    // Ensure git status on mount
     React.useEffect(() => {
         if (effectiveDirectory) {
             setActiveDirectory(effectiveDirectory);
-            const dirState = useGitStore.getState().directories.get(effectiveDirectory);
-            if (!dirState?.status) {
-                fetchStatus(effectiveDirectory, git);
-            }
+            void ensureStatus(effectiveDirectory, git);
         }
-    }, [effectiveDirectory, setActiveDirectory, fetchStatus, git]);
+    }, [effectiveDirectory, setActiveDirectory, ensureStatus, git]);
+
+    React.useEffect(() => {
+        if (!effectiveDirectory) {
+            return;
+        }
+
+        return sessionEvents.onGitRefreshHint((hint) => {
+            if (normalizePath(hint.directory) !== normalizePath(effectiveDirectory)) {
+                return;
+            }
+            void fetchStatus(effectiveDirectory, git);
+        });
+    }, [effectiveDirectory, fetchStatus, git]);
 
     // Handle pending diff file from external navigation
     React.useEffect(() => {
@@ -1744,19 +1762,15 @@ export const useDiffFileCount = (): number => {
     const effectiveDirectory = useEffectiveDirectory();
 
     const setActiveDirectory = useGitStore((state) => state.setActiveDirectory);
-    const fetchStatus = useGitStore((state) => state.fetchStatus);
+    const ensureStatus = useGitStore((state) => state.ensureStatus);
     const fileCount = useGitFileCount(effectiveDirectory ?? null);
 
     React.useEffect(() => {
         if (effectiveDirectory) {
             setActiveDirectory(effectiveDirectory);
-
-            const dirState = useGitStore.getState().directories.get(effectiveDirectory);
-            if (!dirState?.status) {
-                fetchStatus(effectiveDirectory, git);
-            }
+            void ensureStatus(effectiveDirectory, git);
         }
-    }, [effectiveDirectory, setActiveDirectory, fetchStatus, git]);
+    }, [effectiveDirectory, setActiveDirectory, ensureStatus, git]);
 
     return fileCount;
 };

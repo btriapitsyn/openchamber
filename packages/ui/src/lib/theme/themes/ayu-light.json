@@ -5,7 +5,10 @@
     "description": "Ayu",
     "version": "1.0.0",
     "variant": "light",
-    "tags": [ "light", "palette" ]
+    "tags": [
+      "light",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#FDFAF4",
       "foreground": "#394049",
-      "muted": "#f7f3eb90",
+      "muted": "#f7f3eb",
       "mutedForeground": "#777e87",
-      "elevated": "#faf6ed90",
+      "elevated": "#faf6ed",
       "elevatedForeground": "#4F5964",
       "overlay": "#1B232B20",
       "subtle": "#FFF7E5"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

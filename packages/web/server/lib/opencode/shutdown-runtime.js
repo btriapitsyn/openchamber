@@ -8,15 +8,19 @@ export const createGracefulShutdownRuntime = (dependencies) => {
     syncToHmrState,
     openCodeWatcherRuntime,
     sessionRuntime,
+    scheduledTasksRuntime,
     getHealthCheckInterval,
     clearHealthCheckInterval,
     getTerminalRuntime,
     setTerminalRuntime,
+    getMessageStreamRuntime,
+    setMessageStreamRuntime,
     shouldSkipOpenCodeStop,
     getOpenCodePort,
     getOpenCodeProcess,
     setOpenCodeProcess,
     killProcessOnPort,
+    waitForPortRelease,
     getServer,
     getUiAuthController,
     setUiAuthController,
@@ -35,6 +39,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
 
     openCodeWatcherRuntime.stop();
     sessionRuntime.dispose();
+    scheduledTasksRuntime?.stop?.();
 
     const healthCheckInterval = getHealthCheckInterval();
     if (healthCheckInterval) {
@@ -51,6 +56,16 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       }
     }
 
+    const messageStreamRuntime = getMessageStreamRuntime();
+    if (messageStreamRuntime) {
+      try {
+        await messageStreamRuntime.close();
+      } catch {
+      } finally {
+        setMessageStreamRuntime(null);
+      }
+    }
+
     if (!shouldSkipOpenCodeStop()) {
       const portToKill = getOpenCodePort();
       const openCodeProcess = getOpenCodeProcess();
@@ -58,7 +73,7 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       if (openCodeProcess) {
         console.log('Stopping OpenCode process...');
         try {
-          openCodeProcess.close();
+          await openCodeProcess.close();
         } catch (error) {
           console.warn('Error closing OpenCode process:', error);
         }
@@ -66,6 +81,9 @@ export const createGracefulShutdownRuntime = (dependencies) => {
       }
 
       killProcessOnPort(portToKill);
+      if (!(await waitForPortRelease(portToKill, 5000))) {
+        console.warn(`Timed out waiting for OpenCode port ${portToKill} to be released during shutdown`);
+      }
     } else {
       console.log('Skipping OpenCode shutdown (external server)');
     }

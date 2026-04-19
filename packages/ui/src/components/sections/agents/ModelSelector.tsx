@@ -55,10 +55,13 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     allowedProviderIds,
     placeholder
 }) => {
-    const { providers, modelsMetadata } = useConfigStore();
+    const providers = useConfigStore((state) => state.providers);
+    const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
     const isMobile = useUIStore(state => state.isMobile);
     const hiddenModels = useUIStore(state => state.hiddenModels);
-    const { toggleFavoriteModel, isFavoriteModel, addRecentModel } = useUIStore();
+    const toggleFavoriteModel = useUIStore((state) => state.toggleFavoriteModel);
+    const isFavoriteModel = useUIStore((state) => state.isFavoriteModel);
+    const addRecentModel = useUIStore((state) => state.addRecentModel);
     const { favoriteModelsList, recentModelsList } = useModelLists();
     const { isMobile: deviceIsMobile } = useDeviceInfo();
     const isActuallyMobile = isMobile || deviceIsMobile;
@@ -512,7 +515,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
                     <DropdownMenuTrigger asChild>
                         <div className={cn(
-                            'border-input data-[placeholder]:text-muted-foreground flex items-center justify-between gap-2 rounded-lg border bg-transparent px-2 py-2 typography-ui-label whitespace-nowrap shadow-none outline-none hover:bg-interactive-hover data-[state=open]:bg-interactive-active h-6 w-fit',
+                            'border-input data-[placeholder]:text-muted-foreground flex items-center justify-between gap-2 rounded-lg border bg-transparent px-2 py-2 typography-ui-label whitespace-nowrap shadow-none outline-none hover:bg-interactive-hover data-[popup-open]:bg-interactive-active h-6 w-fit',
                             className
                         )}>
                             {providerId ? (

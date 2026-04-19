@@ -1,3 +1,31 @@
+## [1.9.6] - 2026-04-17
+
+- Reliability: improved startup shell detection to avoid false OpenCode discovery on POSIX login shells, reducing stuck startup edge cases in new workspaces (thanks to @geekifan).
+- Reliability/Streaming: moved to a WebSocket-first message stream with SSE fallback and added safer compression handling, improving stability on slower or proxied connections (thanks to @geekifan, @jwcrystal).
+- Sessions/Worktrees: enforced worktree isolation for session and Git flows, reducing cross-project context bleed when switching chats or branches (thanks to @jwcrystal).
+- Chat/Export: added export session as Markdown and improved empty-state/export behavior, making conversation handoff and notes easier (thanks to @coldbrow).
+- Chat/Markdown: added LaTeX rendering support for clearer math and technical notation in rendered messages (thanks to @ricautomation).
+
+## [1.9.5] - 2026-04-14
+
+- Chat/Tool Output: added an interactive tree viewer for structured outputs and fixed JSON quote rendering, making large payloads easier to inspect accurately (thanks to @yaozhenghangma).
+- Chat/Reliability: fixed question-tool content disappearing after refresh, so follow-up answers remain visible after panel reloads (thanks to @jwcrystal).
+- Sync/Performance: optimized multi-session streaming with per-directory queues, event coalescing, and parts-gap recovery for steadier live updates in busy workspaces (thanks to @jwcrystal).
+- Task/Reliability: hardened subagent session resolution and polling lifecycle handling to reduce silent task failures (thanks to @jwcrystal).
+- Sessions/UI: kept active sessions visible in Recent, auto-expanded parent groups for subagent sessions, and hid empty archived/folder sections for cleaner navigation (thanks to @jwcrystal).
+- Models: restored model-variant compatibility with newer OpenCode runtimes so variant selection behaves more reliably (thanks to @Chi-square-test).
+- Usage: added Zhipu AI Coding Plan tracking for broader quota visibility in the extension (thanks to @cainiao1992).
+
+## [1.9.4] - 2026-04-07
+
+- Reliability/Streaming: added loading timeouts, automatic SSE reconnect, and message retry behavior so temporary connection stalls recover more reliably (thanks to @jwcrystal).
+- Reliability/Windows: normalized workspace path handling in SSE event lookup to keep live session updates working more consistently on Windows (thanks to @widipa).
+- Sessions/Streaming: fixed directory-aware event routing and post-reconnect session resync so subagent/session status is less likely to get stuck after reconnects (thanks to @daveotero, @jwcrystal).
+- Chat/Performance: reduced streaming re-render fanout and status-row churn for smoother long responses in the editor panel.
+- Chat/Scrolling: fixed scroll jumps and stabilized follow-to-latest behavior so live output stays easier to track while generating.
+- Chat/Tool Output: LSP diagnostics now render directly in tool output, making code issue review faster during iterative runs (thanks to @yulia-ivashko).
+- Models: added defensive fallbacks for missing model cost/capability metadata so model controls stay stable with incomplete provider responses (thanks to @Chi-square-test).
+
 ## [1.9.3] - 2026-03-01
 
 - Security/Chat: user messages now escape raw HTML by default, so pasted markup is shown as text instead of being interpreted in chat (thanks to @kalac2232).

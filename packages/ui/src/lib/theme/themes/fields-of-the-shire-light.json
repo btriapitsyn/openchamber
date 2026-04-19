@@ -6,7 +6,12 @@
     "author": "OpenChamber",
     "version": "1.0.0",
     "variant": "light",
-    "tags": ["light", "warm", "earthy", "brand"]
+    "tags": [
+      "light",
+      "warm",
+      "earthy",
+      "brand"
+    ]
   },
   "colors": {
     "primary": {
@@ -20,9 +25,9 @@
     "surface": {
       "background": "#f9f5eb",
       "foreground": "#1a1612",
-      "muted": "#f4efe390",
+      "muted": "#f4efe3",
       "mutedForeground": "#5a5048",
-      "elevated": "#fcf9f090",
+      "elevated": "#fcf9f0",
       "elevatedForeground": "#1a1612",
       "overlay": "#1a161220",
       "subtle": "#efe8da"
@@ -166,14 +171,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

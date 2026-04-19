@@ -5,9 +5,9 @@ import { useShallow } from 'zustand/react/shallow';
 import { defaultCodeDark, defaultCodeLight } from '@/lib/codeTheme';
 import { MessageFreshnessDetector } from '@/lib/messageFreshness';
 import { useConfigStore } from '@/stores/useConfigStore';
+import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { useContextStore } from '@/stores/contextStore';
-import { useStreamingStore } from '@/sync/streaming';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import * as sessionActions from '@/sync/session-actions';
@@ -30,7 +30,6 @@ import type { TurnGroupingContext } from './lib/turns/types';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { FadeInOnReveal } from './message/FadeInOnReveal';
 import { streamPerfCount } from '@/stores/utils/streamDebug';
-import { areOptionalRenderRelevantMessagesEqual, areRenderRelevantMessageInfoEqual, areRenderRelevantPartsEqual } from './message/renderCompare';
 
 const ToolOutputDialog = React.lazy(() => import('./message/ToolOutputDialog'));
 
@@ -130,6 +129,7 @@ interface ChatMessageProps {
     turnGroupingContext?: TurnGroupingContext;
     assistantHeaderMessageId?: string;
     isInActiveTurn?: boolean;
+    activeStreamingPhase?: StreamPhase | null;
     animateUserOnMount?: boolean;
     onUserAnimationConsumed?: (messageId: string) => void;
 }
@@ -143,6 +143,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     turnGroupingContext,
     assistantHeaderMessageId,
     isInActiveTurn = false,
+    activeStreamingPhase = null,
     animateUserOnMount = false,
     onUserAnimationConsumed,
 }) => {
@@ -151,13 +152,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const messageContainerRef = React.useRef<HTMLDivElement | null>(null);
 
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
-    const streamState = useStreamingStore((s) => s.messageStreamStates.get(message.info.id));
-    const lifecyclePhase = isInActiveTurn ? (streamState?.phase ?? null) : null;
-
-    const msgSessionId = (message.info as { sessionID?: string }).sessionID ?? currentSessionId ?? null;
-    const streamingMsgForSession = useStreamingStore((s) => msgSessionId ? s.streamingMessageIds.get(msgSessionId) ?? null : null);
-    const isStreamingMessage = isInActiveTurn ? streamingMsgForSession === message.info.id : false;
-    const hasActiveStreamInSession = typeof streamingMsgForSession === 'string' && streamingMsgForSession.length > 0;
 
     const getAgentModelForSession = useSelectionStore((s) => s.getAgentModelForSession);
     const getSessionModelSelection = useSelectionStore((s) => s.getSessionModelSelection);
@@ -165,13 +159,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const forkFromMessage = sessionActions.forkFromMessage;
 
     streamPerfCount('ui.chat_message.render');
-    if (isStreamingMessage) {
+    if (isInActiveTurn) {
         streamPerfCount('ui.chat_message.render.streaming');
-    } else if (hasActiveStreamInSession) {
-        streamPerfCount('ui.chat_message.render.static_during_stream');
-        if (!isInActiveTurn) {
-            streamPerfCount('ui.chat_message.render.static_outside_active_turn_during_stream');
-        }
     }
 
     const providers = useConfigStore.getState().providers;
@@ -214,6 +203,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     const showStickyInlineHoverRow = isUser && !isMobile && stickyUserHeader && !useExternalUserActionsRow;
 
     const sessionId = message.info.sessionID;
+    const planModeEnabled = useFeatureFlagsStore((state) => state.planModeEnabled);
 
     // Keep non-active-turn rows detached from context-store churn.
     const { currentContextAgent, savedSessionAgentSelection } = useContextStore(
@@ -228,8 +218,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             return message.parts;
         }
 
-        return normalizeUserDisplayParts(message.parts);
-    }, [isUser, message.parts]);
+        return normalizeUserDisplayParts(message.parts, { planModeEnabled });
+    }, [isUser, message.parts, planModeEnabled]);
 
     const previousUserMetadata = React.useMemo(() => {
         if (isUser || !previousMessage) {
@@ -269,6 +259,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     }, [isUser, previousMessage]);
 
     const previousIsModeSwitchMessage = React.useMemo(() => {
+        if (!planModeEnabled) return false;
         if (isUser || !previousMessage) return false;
         const parts = Array.isArray(previousMessage.parts) ? previousMessage.parts : [];
         for (let i = 0; i < parts.length; i++) {
@@ -281,7 +272,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
             }
         }
         return false;
-    }, [isUser, previousMessage]);
+    }, [isUser, planModeEnabled, previousMessage]);
 
     const agentName = React.useMemo(() => {
         if (isUser) return undefined;
@@ -593,11 +584,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         if (isMessageCompleted) {
             return 'completed';
         }
-        if (lifecyclePhase) {
-            return lifecyclePhase;
+        if (isInActiveTurn) {
+            return activeStreamingPhase ?? 'streaming';
         }
-        return isStreamingMessage ? 'streaming' : 'completed';
-    }, [isMessageCompleted, lifecyclePhase, isStreamingMessage]);
+        return 'completed';
+    }, [activeStreamingPhase, isInActiveTurn, isMessageCompleted]);
 
     React.useEffect(() => {
         if (!isUser || !animateUserOnMount) {
@@ -999,7 +990,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                 respectReducedMotion
                             >
                                 <div className={cn('relative flex justify-end', !isMobile ? 'group/user-shell' : undefined)}>
-                                    <div className="max-w-[85%]">
+                                    <div className={cn('max-w-[85%]', showStickyInlineHoverRow ? 'pb-5' : undefined)}>
                                         <div
                                             style={{
                                                 backgroundColor: 'var(--chat-user-message-bg)',
@@ -1072,8 +1063,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                                             />
                                         ) : null}
                                     </div>
-                                    {showStickyInlineHoverRow ? <div aria-hidden="true" className="pointer-events-none absolute left-0 right-0 top-full h-11" /> : null}
-                                </div>
+                                 </div>
                             </FadeInOnReveal>
                         )
                     ) : (
@@ -1136,15 +1126,4 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     );
 };
 
-export default React.memo(ChatMessage, (prev, next) => {
-    return areRenderRelevantMessageInfoEqual(prev.message.info, next.message.info)
-        && areRenderRelevantPartsEqual(prev.message.parts, next.message.parts)
-        && areOptionalRenderRelevantMessagesEqual(prev.previousMessage, next.previousMessage)
-        && areOptionalRenderRelevantMessagesEqual(prev.nextMessage, next.nextMessage)
-        && prev.onContentChange === next.onContentChange
-        && prev.turnGroupingContext === next.turnGroupingContext
-        && prev.assistantHeaderMessageId === next.assistantHeaderMessageId
-        && prev.isInActiveTurn === next.isInActiveTurn
-        && prev.animateUserOnMount === next.animateUserOnMount
-        && prev.onUserAnimationConsumed === next.onUserAnimationConsumed;
-});
+export default ChatMessage;

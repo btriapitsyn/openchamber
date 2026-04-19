@@ -1,6 +1,5 @@
 import React from 'react';
 import { projectTurnRecords } from '../lib/turns/projectTurnRecords';
-import { stabilizeTurnProjection } from '../lib/turns/stabilizeTurnProjection';
 import type { ChatMessageEntry, TurnProjectionResult, TurnRecord } from '../lib/turns/types';
 import { streamPerfMeasure } from '@/stores/utils/streamDebug';
 
@@ -22,6 +21,14 @@ export const useTurnRecords = (
     const previousProjectionRef = React.useRef<TurnProjectionResult | null>(null);
     const staticTurnsRef = React.useRef<TurnRecord[]>([]);
     const streamingTurnRef = React.useRef<TurnRecord | undefined>(undefined);
+    const previousSessionKeyRef = React.useRef<string | undefined>(options.sessionKey);
+
+    if (previousSessionKeyRef.current !== options.sessionKey) {
+        previousSessionKeyRef.current = options.sessionKey;
+        previousProjectionRef.current = null;
+        staticTurnsRef.current = [];
+        streamingTurnRef.current = undefined;
+    }
 
     React.useEffect(() => {
         previousProjectionRef.current = null;
@@ -31,13 +38,12 @@ export const useTurnRecords = (
 
     const projection = React.useMemo(() => {
         return streamPerfMeasure('ui.turns.projection_ms', () => {
-            const rawProjection = projectTurnRecords(messages, {
+            const nextProjection = projectTurnRecords(messages, {
                 previousProjection: previousProjectionRef.current,
                 showTextJustificationActivity: options.showTextJustificationActivity,
             });
-            const stabilizedProjection = stabilizeTurnProjection(rawProjection, previousProjectionRef.current);
-            previousProjectionRef.current = stabilizedProjection;
-            return stabilizedProjection;
+            previousProjectionRef.current = nextProjection;
+            return nextProjection;
         });
     }, [messages, options.showTextJustificationActivity]);
 

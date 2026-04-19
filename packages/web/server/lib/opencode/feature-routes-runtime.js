@@ -2,9 +2,11 @@ import { registerFsRoutes } from '../fs/routes.js';
 import { registerQuotaRoutes } from '../quota/routes.js';
 import { registerGitHubRoutes } from '../github/routes.js';
 import { registerGitRoutes } from '../git/routes.js';
+import { registerMagicPromptRoutes } from '../magic-prompts/routes.js';
 import { registerConfigEntityRoutes } from './config-entity-routes.js';
 import { registerSettingsUtilityRoutes } from './core-routes.js';
 import { registerProjectIconRoutes } from './project-icon-routes.js';
+import { registerScheduledTaskRoutes } from '../scheduled-tasks/routes.js';
 import { registerSkillRoutes } from './skill-routes.js';
 import { registerOpenCodeRoutes } from './routes.js';
 
@@ -51,6 +53,10 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getOpenCodeAuthHeaders,
       getOpenCodePort,
       buildAugmentedPath,
+      projectConfigRuntime,
+      scheduledTasksRuntime,
+      getOpenChamberEventClients,
+      writeSseEvent,
     } = routeDependencies;
 
     const { getProviderSources, removeProviderConfig } = await import('./index.js');
@@ -88,6 +94,15 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       createFsSearchRuntime,
       spawn,
       resolveGitBinaryForSpawn,
+    });
+
+    registerScheduledTaskRoutes(app, {
+      readSettingsFromDiskMigrated,
+      sanitizeProjects,
+      projectConfigRuntime,
+      scheduledTasksRuntime,
+      getOpenChamberEventClients,
+      writeSseEvent,
     });
 
     const {
@@ -196,6 +211,11 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     registerQuotaRoutes(app, { getQuotaProviders });
     registerGitHubRoutes(app);
     registerGitRoutes(app);
+    registerMagicPromptRoutes(app, {
+      fsPromises,
+      path,
+      openchamberDataDir,
+    });
     registerFsRoutes(app, {
       os,
       path,

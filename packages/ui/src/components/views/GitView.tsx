@@ -13,6 +13,8 @@ import {
   useGitLog,
   useGitIdentity,
   useIsGitRepo,
+  useGitLoadingStatus,
+  useGitLoadingLog,
 } from '@/stores/useGitStore';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
@@ -46,6 +48,8 @@ import {
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
 import { useDetectedWorktreeMetadata } from '@/hooks/useDetectedWorktreeRoot';
+import { useSessionWorktreeStore } from '@/sync/session-worktree-store';
+import { getSessionWorktreeRepairActions, getMutationBlockingReasons } from '@/sync/session-worktree-contract';
 import { IntegrateCommitsSection } from './git/IntegrateCommitsSection';
 
 import { GitHeader } from './git/GitHeader';
@@ -62,6 +66,7 @@ import type { GitRemote } from '@/lib/gitApi';
 import { getRootBranch } from '@/lib/worktrees/worktreeStatus';
 import { cn } from '@/lib/utils';
 import { generateCommitMessage as generateSessionCommitMessage, getGitWorktreeBootstrapStatus } from '@/lib/gitApi';
+import { sessionEvents } from '@/lib/sessionEvents';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -270,14 +275,27 @@ export const GitView: React.FC = () => {
   const isGitRepo = useIsGitRepo(currentDirectory ?? null);
   const status = useGitStatus(currentDirectory ?? null);
 
+  // Authoritative session↔worktree attachment for repair action display
+  const worktreeAttachment = useSessionWorktreeStore((s) =>
+    currentSessionId ? s.getAttachment(currentSessionId) : undefined
+  );
+  const repairActions = worktreeAttachment ? getSessionWorktreeRepairActions(worktreeAttachment) : [];
+
+  // When an authoritative attachment exists, derive worktree-related fields from it
+  // rather than from the live detected worktree metadata.
+  const authoritativeProjectRoot = worktreeAttachment && !worktreeAttachment.degraded && !worktreeAttachment.legacy
+    ? worktreeAttachment.worktreeRoot ?? undefined
+    : undefined;
+
   const worktreeMetadata = useDetectedWorktreeMetadata(currentDirectory, storeWorktreeMetadata, status?.current ?? undefined);
   const branches = useGitBranches(currentDirectory ?? null);
   const log = useGitLog(currentDirectory ?? null);
   const currentIdentity = useGitIdentity(currentDirectory ?? null);
-  const isLoading = useGitStore((state) => state.isLoadingStatus);
-  const isLogLoading = useGitStore((state) => state.isLoadingLog);
+  const isLoading = useGitLoadingStatus(currentDirectory ?? null);
+  const isLogLoading = useGitLoadingLog(currentDirectory ?? null);
   const setActiveDirectory = useGitStore((state) => state.setActiveDirectory);
   const fetchAll = useGitStore((state) => state.fetchAll);
+  const ensureAll = useGitStore((state) => state.ensureAll);
   const fetchStatus = useGitStore((state) => state.fetchStatus);
   const fetchBranches = useGitStore((state) => state.fetchBranches);
   const fetchLog = useGitStore((state) => state.fetchLog);
@@ -370,7 +388,7 @@ export const GitView: React.FC = () => {
   const [rootBranchHint, setRootBranchHint] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    const projectRoot = worktreeMetadata?.projectDirectory;
+    const projectRoot = authoritativeProjectRoot || worktreeMetadata?.projectDirectory;
     if (!projectRoot) {
       setRootBranchHint(null);
       return;
@@ -392,7 +410,7 @@ export const GitView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [worktreeMetadata?.projectDirectory]);
+  }, [authoritativeProjectRoot, worktreeMetadata?.projectDirectory]);
 
   const [commitMessage, setCommitMessage] = React.useState(
     initialSnapshot?.commitMessage ?? ''
@@ -444,7 +462,7 @@ export const GitView: React.FC = () => {
     });
   }, []);
 
-  const repoRootForIntegrate = worktreeMetadata?.projectDirectory || null;
+  const repoRootForIntegrate = authoritativeProjectRoot || worktreeMetadata?.projectDirectory || null;
   const sourceBranchForIntegrate = status?.current || null;
   const shouldShowIntegrateCommits = React.useMemo(() => {
     // For PR worktrees from forks we set upstream to a non-origin remote (e.g. pr-<owner>-<repo>).
@@ -723,15 +741,22 @@ export const GitView: React.FC = () => {
   React.useEffect(() => {
     if (currentDirectory) {
       setActiveDirectory(currentDirectory);
-
-      const dirState = useGitStore.getState().directories.get(currentDirectory);
-      if (!dirState?.status) {
-        void fetchAll(currentDirectory, git, { force: true });
-      } else {
-        void fetchStatus(currentDirectory, git, { silent: true });
-      }
+      void ensureAll(currentDirectory, git);
     }
-  }, [currentDirectory, setActiveDirectory, fetchAll, fetchStatus, git]);
+  }, [currentDirectory, setActiveDirectory, ensureAll, git]);
+
+  React.useEffect(() => {
+    if (!currentDirectory) {
+      return;
+    }
+
+    return sessionEvents.onGitRefreshHint((hint) => {
+      if (normalizePath(hint.directory) !== normalizePath(currentDirectory)) {
+        return;
+      }
+      void fetchStatus(currentDirectory, git);
+    });
+  }, [currentDirectory, fetchStatus, git]);
 
   const refreshStatusAndBranches = React.useCallback(
     async (showErrors = true) => {
@@ -1031,8 +1056,29 @@ export const GitView: React.FC = () => {
     }
   }, [currentDirectory, selectedPaths, settingsGitmojiEnabled, gitmojiEmojis, scrollActionPanelToBottom]);
 
+  const formatBlockingReason = (reason: ReturnType<typeof getMutationBlockingReasons>[number]): string => {
+    if (reason.reason === 'dirty') {
+      const count = typeof reason.dirtyFiles === 'number' ? reason.dirtyFiles : null;
+      return count != null ? `${count} uncommitted file${count === 1 ? '' : 's'}` : 'uncommitted changes';
+    }
+    if (reason.reason === 'attention') {
+      return `${reason.attentionReason} in progress`;
+    }
+    if (reason.reason === 'missing') {
+      return 'worktree is missing';
+    }
+    return 'worktree is invalid';
+  };
+
   const handleCreateBranch = async (branchName: string, remote?: GitRemote) => {
     if (!currentDirectory || !status) return;
+
+    const blockingReasons = getMutationBlockingReasons(worktreeAttachment ?? null, status);
+    if (blockingReasons.length > 0) {
+      toast.error(`Cannot create branch: ${formatBlockingReason(blockingReasons[0])}`);
+      return;
+    }
+
     const checkoutBase = status.current ?? null;
     const remoteName = remote?.name ?? 'origin';
 
@@ -1081,6 +1127,12 @@ export const GitView: React.FC = () => {
   const handleRenameBranch = async (oldName: string, newName: string) => {
     if (!currentDirectory) return;
 
+    const blockingReasons = getMutationBlockingReasons(worktreeAttachment ?? null, status);
+    if (blockingReasons.length > 0) {
+      toast.error(`Cannot rename branch: ${formatBlockingReason(blockingReasons[0])}`);
+      return;
+    }
+
     try {
       await git.renameBranch(currentDirectory, oldName, newName);
       toast.success(`Renamed branch ${oldName} to ${newName}`);
@@ -1095,6 +1147,14 @@ export const GitView: React.FC = () => {
 
   const handleCheckoutBranch = async (branch: string) => {
     if (!currentDirectory) return;
+
+    // Block mutation if worktree is in an attention-required state
+    const blockingReasons = getMutationBlockingReasons(worktreeAttachment ?? null, status);
+    if (blockingReasons.length > 0) {
+      toast.error(`Cannot checkout: ${formatBlockingReason(blockingReasons[0])}`);
+      return;
+    }
+
     const normalized = branch.replace(/^remotes\//, '');
 
     if (status?.current === normalized) {
@@ -1925,12 +1985,17 @@ export const GitView: React.FC = () => {
         <p className="typography-meta mt-1 text-muted-foreground">
           Choose a different directory or initialize Git to use this workspace.
         </p>
+        {repairActions.includes('open-without-worktree-features') ? (
+          <p className="typography-meta mt-2 text-muted-foreground">
+            Worktree features are unavailable for this session.
+          </p>
+        ) : null}
       </div>
     );
   }
 
   return (
-    <div className={cn('flex h-full flex-col overflow-hidden', 'bg-transparent')} data-keyboard-avoid="true">
+    <div className={cn('flex h-full flex-col overflow-hidden', 'bg-sidebar')} data-keyboard-avoid="true">
       <GitHeader
         status={status}
         localBranches={localBranches}
@@ -1972,7 +2037,7 @@ export const GitView: React.FC = () => {
 
       <div className="flex-1 min-h-0 overflow-hidden">
         <div className="h-full min-h-0 flex flex-col">
-          <div className={cn('min-w-0 min-h-0 h-full flex flex-col', 'bg-transparent')}>
+          <div className={cn('min-w-0 min-h-0 h-full flex flex-col', 'bg-sidebar')}>
             <div className={cn(isMobile ? 'h-10 px-1.5' : 'h-8 px-2')}>
               <SortableTabsStrip
                 items={actionTabItems}

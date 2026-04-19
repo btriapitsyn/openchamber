@@ -25,9 +25,9 @@
     "surface": {
       "background": "#05080e",
       "foreground": "#ccd4dc",
-      "muted": "#12151b90",
+      "muted": "#12151b",
       "mutedForeground": "#8b949e",
-      "elevated": "#0c0f1690",
+      "elevated": "#0c0f16",
       "elevatedForeground": "#ccd4dc",
       "overlay": "#05080ecc",
       "subtle": "#181c22"
@@ -410,14 +410,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "spacing": {
       "xs": "0.25rem",

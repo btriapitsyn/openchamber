@@ -6,8 +6,6 @@ import {
   RiAiGenerate2,
   RiArrowDownSLine,
   RiArrowRightSLine,
-  RiCheckboxBlankLine,
-  RiCheckboxLine,
   RiCloseLine,
   RiEditLine,
   RiErrorWarningLine,
@@ -20,6 +18,7 @@ import {
   RiLoader4Line,
 } from '@remixicon/react';
 import { toast } from '@/components/ui';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -45,6 +44,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { generatePullRequestDescription } from '@/lib/gitApi';
+import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { openExternalUrl } from '@/lib/url';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useDeviceInfo } from '@/lib/device';
@@ -831,13 +831,8 @@ export const PullRequestSection: React.FC<{
         return;
       }
 
-      const visibleText = 'Review these PR failed checks and propose likely fixes. Do not implement until I confirm.';
-      const instructionsText = `Use the attached checks payload.
-- Summarize what is failing.
-- Prioritize check annotations/errors over generic status text.
-- Identify likely root cause(s).
-- Propose a minimal fix plan and verification steps.
-- No speculation: ask for missing info if needed.`;
+      const visibleText = await renderMagicPrompt('github.pr.checks.review.visible');
+      const instructionsText = await renderMagicPrompt('github.pr.checks.review.instructions');
       const failedAnnotations = failed.flatMap((run) => {
         const annotations = Array.isArray(run.annotations) ? run.annotations : [];
         return annotations.map((annotation) => ({
@@ -888,12 +883,8 @@ export const PullRequestSection: React.FC<{
         return;
       }
 
-      const visibleText = 'Review these PR comments and propose the required changes and next actions. Do not implement until I confirm.';
-      const instructionsText = `Use the attached comments payload.
-- Identify required vs optional changes.
-- Call out intent/implementation mismatch if present.
-- Propose a minimal plan and verification steps.
-- No speculation: ask for missing info if needed.`;
+      const visibleText = await renderMagicPrompt('github.pr.comments.review.visible');
+      const instructionsText = await renderMagicPrompt('github.pr.comments.review.instructions');
       const payloadText = `GitHub PR comments (JSON)\n${JSON.stringify({
         repo: context.repo ?? null,
         pr: context.pr ?? null,
@@ -908,7 +899,7 @@ export const PullRequestSection: React.FC<{
     }
   }, [directory, dispatchSyntheticPrompt, github, pr, resolveChatDispatchTarget, setActiveMainTab]);
 
-  const sendSingleCommentToChat = React.useCallback((comment: TimelineCommentItem) => {
+  const sendSingleCommentToChat = React.useCallback(async (comment: TimelineCommentItem) => {
     setCommentsDialogOpen(false);
     setActiveMainTab('chat');
 
@@ -917,12 +908,8 @@ export const PullRequestSection: React.FC<{
       return;
     }
 
-    const visibleText = 'Address this comment from PR and propose required changes. Do not implement until I confirm.';
-    const instructionsText = `Use the attached single-comment payload.
-- Explain what the reviewer is asking for.
-- Identify exact code areas likely impacted.
-- Propose a minimal implementation plan and verification steps.
-- Call out ambiguity and ask focused follow-up questions if needed.`;
+    const visibleText = await renderMagicPrompt('github.pr.comment.single.visible');
+    const instructionsText = await renderMagicPrompt('github.pr.comment.single.instructions');
     const payloadText = `GitHub PR comment (JSON)\n${JSON.stringify({
       repo: commentsDetails?.repo ?? null,
       pr: commentsDetails?.pr ?? pr ?? null,
@@ -1710,7 +1697,7 @@ export const PullRequestSection: React.FC<{
                   <Textarea
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
-                    className="min-h-[110px] bg-background/80"
+                    className="min-h-[110px]"
                     placeholder="What changed and why"
                     autoCorrect={hasTouchInput ? "on" : "off"}
                     autoCapitalize={hasTouchInput ? "sentences" : "off"}
@@ -1731,22 +1718,12 @@ export const PullRequestSection: React.FC<{
                     }
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setDraft((v) => !v);
-                    }}
-                    aria-label="Toggle draft PR"
-                    className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {draft ? (
-                      <RiCheckboxLine className="size-4 text-primary" />
-                    ) : (
-                      <RiCheckboxBlankLine className="size-4" />
-                    )}
-                  </button>
+                  <Checkbox
+                    size="sm"
+                    checked={draft}
+                    onChange={(next) => setDraft(next)}
+                    ariaLabel="Toggle draft PR"
+                  />
                   <span className="typography-ui-label text-foreground select-none">Draft</span>
                 </div>
 
@@ -1947,7 +1924,9 @@ export const PullRequestSection: React.FC<{
                                       variant="ghost"
                                       size="sm"
                                       className="h-6 px-0 has-[>svg]:px-0 sm:px-2 sm:has-[>svg]:px-2.5 text-[var(--status-success)] hover:bg-[var(--status-success-background)] hover:text-[var(--status-success)] justify-start"
-                                      onClick={() => sendSingleCommentToChat(comment)}
+                                      onClick={() => {
+                                        void sendSingleCommentToChat(comment);
+                                      }}
                                       aria-label="Send this comment to agent"
                                     >
                                       <RiAiGenerate2 className="size-3.5" />

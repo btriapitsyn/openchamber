@@ -13,6 +13,7 @@ import {
   RiMore2Fill,
   RiRefreshLine,
   RiSearchLine,
+  RiDownloadLine,
 } from '@remixicon/react';
 
 import { toast } from '@/components/ui';
@@ -44,7 +45,7 @@ import { useGitStatus } from '@/stores/useGitStore';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { copyTextToClipboard } from '@/lib/clipboard';
-import { cn } from '@/lib/utils';
+import { cn, getRevealLabel } from '@/lib/utils';
 import { opencodeClient } from '@/lib/opencode/client';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { getContextFileOpenFailureMessage, validateContextFileOpen } from '@/lib/contextFileOpenGuard';
@@ -132,6 +133,7 @@ interface FileRowProps {
     canDelete: boolean;
     canReveal: boolean;
   };
+  downloadFile?: (path: string) => Promise<void>;
   contextMenuPath: string | null;
   setContextMenuPath: (path: string | null) => void;
   onSelect: (node: FileNode) => void;
@@ -147,6 +149,7 @@ const FileRow: React.FC<FileRowProps> = ({
   status,
   badge,
   permissions,
+  downloadFile,
   contextMenuPath,
   setContextMenuPath,
   onSelect,
@@ -244,9 +247,17 @@ const FileRow: React.FC<FileRowProps> = ({
               }}>
                 <RiFileCopyLine className="mr-2 h-4 w-4" /> Copy Path
               </DropdownMenuItem>
+              {!isDir && downloadFile && (
+                <DropdownMenuItem onClick={(e) => {
+                  e.stopPropagation();
+                  void downloadFile(node.path);
+                }}>
+                  <RiDownloadLine className="mr-2 h-4 w-4" /> Save
+                </DropdownMenuItem>
+              )}
               {canReveal && (
                 <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRevealPath(node.path); }}>
-                  <RiFolderReceivedLine className="mr-2 h-4 w-4" /> Reveal in Finder
+                  <RiFolderReceivedLine className="mr-2 h-4 w-4" /> {getRevealLabel()}
                 </DropdownMenuItem>
               )}
               {isDir && (canCreateFile || canCreateFolder) && (
@@ -749,6 +760,7 @@ export const SidebarFilesTree: React.FC = () => {
             status={!isDir ? getFileStatus(node.path) : undefined}
             badge={isDir ? getFolderBadge(node.path) : undefined}
             permissions={{ canRename, canCreateFile, canCreateFolder, canDelete, canReveal }}
+            downloadFile={files.downloadFile}
             contextMenuPath={contextMenuPath}
             setContextMenuPath={setContextMenuPath}
             onSelect={handleOpenFile}
@@ -769,7 +781,7 @@ export const SidebarFilesTree: React.FC = () => {
   const hasTree = Boolean(root && childrenByDir[root]);
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-sidebar">
       <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
         <div className="relative min-w-0 flex-1">
           <RiSearchLine className="pointer-events-none absolute left-2 top-2 h-4 w-4 text-muted-foreground" />

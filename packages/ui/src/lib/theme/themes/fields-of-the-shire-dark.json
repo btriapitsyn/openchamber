@@ -6,7 +6,12 @@
     "author": "OpenChamber",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": ["dark", "warm", "earthy", "brand"]
+    "tags": [
+      "dark",
+      "warm",
+      "earthy",
+      "brand"
+    ]
   },
   "colors": {
     "primary": {
@@ -20,9 +25,9 @@
     "surface": {
       "background": "#1b1815",
       "foreground": "#ebe0d1",
-      "muted": "#23201c90",
+      "muted": "#23201c",
       "mutedForeground": "#83796f",
-      "elevated": "#2b262290",
+      "elevated": "#2b2622",
       "elevatedForeground": "#ebe0d1",
       "overlay": "#1b1815cc",
       "subtle": "#332d28"
@@ -127,8 +132,8 @@
     "markdown": {
       "heading1": "#c47a3a",
       "heading2": "#93a56b",
-        "heading3": "#ebe0d1",
-        "heading4": "#ebe0d1",
+      "heading3": "#ebe0d1",
+      "heading4": "#ebe0d1",
       "link": "#5a6d7a",
       "linkHover": "#93a56b",
       "inlineCode": "#93a56b",
@@ -166,14 +171,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",

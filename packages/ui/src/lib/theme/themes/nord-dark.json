@@ -5,7 +5,10 @@
     "description": "Nord",
     "version": "1.0.0",
     "variant": "dark",
-    "tags": [ "dark", "palette" ]
+    "tags": [
+      "dark",
+      "palette"
+    ]
   },
   "colors": {
     "primary": {
@@ -19,9 +22,9 @@
     "surface": {
       "background": "#1F2430",
       "foreground": "#E5E9F0",
-      "muted": "#22293890",
+      "muted": "#222938",
       "mutedForeground": "#7c828e",
-      "elevated": "#1C202A90",
+      "elevated": "#1C202A",
       "elevatedForeground": "#E5E9F0",
       "overlay": "#F8FAFC20",
       "subtle": "#272f40"
@@ -165,14 +168,6 @@
       "sans": "\"IBM Plex Mono\", monospace",
       "mono": "\"IBM Plex Mono\", monospace",
       "heading": "\"IBM Plex Mono\", monospace"
-    },
-    "radius": {
-      "none": "0",
-      "sm": "0.325rem",
-      "md": "0.75rem",
-      "lg": "1.125rem",
-      "xl": "1.5rem",
-      "full": "9999px"
     },
     "transitions": {
       "fast": "150ms ease",
