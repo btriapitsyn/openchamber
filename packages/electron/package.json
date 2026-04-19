@@ -50,6 +50,7 @@
       "buildResources": "resources/icons",
       "output": "dist"
     },
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "resources/icons/icon.icns",
