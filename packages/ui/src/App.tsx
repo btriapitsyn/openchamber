@@ -454,6 +454,20 @@ function App({ apis }: AppProps) {
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionId?: string }>).detail;
+      const sessionId = typeof detail?.sessionId === 'string' ? detail.sessionId.trim() : '';
+      if (!sessionId) return;
+      void useSessionUIStore.getState().setCurrentSession(sessionId);
+    };
+
+    window.addEventListener('openchamber:open-session', handler as EventListener);
+    return () => window.removeEventListener('openchamber:open-session', handler as EventListener);
+  }, []);
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
     if (!isInitialized || isSwitchingDirectory) return;
     if (appReadyDispatchedRef.current) return;
     appReadyDispatchedRef.current = true;

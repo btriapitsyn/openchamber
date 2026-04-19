@@ -432,8 +432,37 @@ const killStaleSidecarProcesses = () => {
   }
 };
 
-const maybeShowNativeNotification = ({ title, body, require_hidden: requireHidden }) => {
-  if (requireHidden && state.focusedWindowIds.size > 0) {
+const normalizeNotificationInput = (raw) => {
+  if (!raw || typeof raw !== 'object') return {};
+  // UI IPC path wraps in { payload: {...} }; sidecar stdout path is flat.
+  if (raw.payload && typeof raw.payload === 'object') {
+    return { ...raw, ...raw.payload };
+  }
+  return raw;
+};
+
+const isAnyWindowFocused = () =>
+  BrowserWindow.getAllWindows().some(
+    (window) => !window.isDestroyed() && window.isFocused(),
+  );
+
+const focusForegroundWindow = () => {
+  const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed());
+  if (windows.length === 0) return;
+  const target = state.mainWindow && !state.mainWindow.isDestroyed()
+    ? state.mainWindow
+    : windows.find((window) => window.isVisible()) || windows[0];
+  if (target.isMinimized()) target.restore();
+  if (!target.isVisible()) target.show();
+  target.focus();
+  if (process.platform === 'darwin') app.focus({ steal: true });
+};
+
+const maybeShowNativeNotification = (rawInput) => {
+  const payload = normalizeNotificationInput(rawInput);
+  const requireHidden = Boolean(payload.requireHidden ?? payload.require_hidden);
+
+  if (requireHidden && isAnyWindowFocused()) {
     return;
   }
 
@@ -441,11 +470,28 @@ const maybeShowNativeNotification = ({ title, body, require_hidden: requireHidde
     return;
   }
 
+  const title = typeof payload.title === 'string' && payload.title.trim()
+    ? payload.title.trim()
+    : 'OpenChamber';
+  const body = typeof payload.body === 'string' ? payload.body : '';
+  const sessionId = typeof payload.sessionId === 'string' && payload.sessionId.trim()
+    ? payload.sessionId.trim()
+    : null;
+
   const notification = new Notification({
-    title: typeof title === 'string' && title.trim() ? title.trim() : 'OpenChamber',
-    body: typeof body === 'string' ? body : '',
-    silent: process.platform !== 'darwin',
+    title,
+    body,
+    silent: false,
+    ...(process.platform === 'darwin' ? { sound: 'Glass' } : {}),
   });
+
+  notification.on('click', () => {
+    focusForegroundWindow();
+    if (sessionId) {
+      emitToAllWindows('openchamber:open-session', { sessionId });
+    }
+  });
+
   notification.show();
 };
 
