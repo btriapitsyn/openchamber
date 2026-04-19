@@ -13,7 +13,9 @@
     "electron-updater": "^6.8.3"
   },
   "devDependencies": {
-    "electron": "^41.2.1"
+    "@electron/rebuild": "^3.7.0",
+    "electron": "^41.2.1",
+    "electron-builder": "^26.0.0"
   },
   "desktopPrerequisites": [
     "Electron runtime dependencies installed via bun install",
@@ -25,7 +27,8 @@
     "build:web-assets": "node ./scripts/build-web-assets.mjs",
     "build": "bun -e \"process.exit(0)\"",
     "bundle:main": "bun ./scripts/bundle-main.mjs",
-    "package": "bun run build:web-assets && bun run bundle:main && electron-builder",
+    "rebuild:native": "node ./scripts/rebuild-native.mjs",
+    "package": "bun run build:web-assets && bun run bundle:main && bun run rebuild:native && electron-builder",
     "finalize:latest-yml": "node ./scripts/finalize-latest-yml.mjs",
     "type-check": "node --check ./main.mjs && node --check ./preload.mjs",
     "lint": "node -e \"process.exit(0)\""
@@ -48,6 +51,7 @@
       "output": "dist"
     },
     "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "npmRebuild": false,
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "resources/icons/icon.icns",
