@@ -1,8 +1,8 @@
 # Tauri → Electron auto-update cutover
 
-> Future-agent brief. The user does not know the technical details — they will
-> likely point you at this file and say "do the cutover". This document must be
-> self-contained. Do not assume context from the chat.
+> Self-contained playbook. The branch and conversation where this plan was
+> designed will not be around when the cutover happens — read this file top to
+> bottom and execute; do not assume prior context.
 
 ## What this is
 
@@ -340,10 +340,10 @@ back to a Tauri build, they must manually download. We don't support this.
   minisign pubkey embedded for updater verification. Don't modify; just
   reference for context.
 
-## Why the user asked for this document
+## Working protocol
 
-The user does not read/write YAML workflows, codesign, minisign, or Electron
-internals. They trust you to execute this correctly. Do not ask them to
-decide technical trade-offs mid-implementation — make the call, document it,
-proceed. Ask only if there's a real business decision (e.g. "cutover this
-release, or do a dry-run first?"). Default to dry-run first.
+Default to a dry-run (test tag like `vX.Y.Z-migration-test` on a workflow_dispatch
+run) before the real tag. Surface only business-level decisions —
+"cutover this release, or hold one more cycle?" — and make technical calls
+(minisign invocation flags, YAML layout, job dependency order) yourself,
+documenting each one in the PR description.
