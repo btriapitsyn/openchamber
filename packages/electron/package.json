@@ -21,11 +21,11 @@
   "scripts": {
     "dev": "node ./scripts/electron-dev.mjs",
     "build:sidecar": "node ./scripts/build-sidecar.mjs",
-    "build": "bun run build:sidecar && node --check ./main.mjs && node --check ./preload.mjs",
+    "build": "bun -e \"process.exit(0)\"",
     "bundle:main": "bun ./scripts/bundle-main.mjs",
     "package": "bun run build:sidecar && bun run bundle:main && electron-builder",
     "finalize:latest-yml": "node ./scripts/finalize-latest-yml.mjs",
-    "type-check": "node -e \"process.exit(0)\"",
+    "type-check": "node --check ./main.mjs && node --check ./preload.mjs",
     "lint": "node -e \"process.exit(0)\""
   },
   "build": {
