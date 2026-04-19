@@ -1,0 +1,1374 @@
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, session, shell } from 'electron';
+import contextMenu from 'electron-context-menu';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { spawn, spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import updaterPkg from 'electron-updater';
+import { ElectronSshManager } from './ssh-manager.mjs';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const isDev = process.env.OPENCHAMBER_ELECTRON_DEV === '1' || !app.isPackaged;
+
+const SIDECAR_NOTIFY_PREFIX = '[OpenChamberDesktopNotify] ';
+const DEFAULT_DESKTOP_PORT = 57123;
+const MIN_WINDOW_WIDTH = 800;
+const MIN_WINDOW_HEIGHT = 520;
+const MIN_RESTORE_WINDOW_WIDTH = 900;
+const MIN_RESTORE_WINDOW_HEIGHT = 560;
+const LOCAL_HOST_ID = 'local';
+const CHANGELOG_URL = 'https://raw.githubusercontent.com/btriapitsyn/openchamber/main/CHANGELOG.md';
+const UPDATE_METADATA_URL = 'https://github.com/btriapitsyn/openchamber/releases/latest/download/latest.json';
+const GITHUB_BUG_REPORT_URL = 'https://github.com/btriapitsyn/openchamber/issues/new?template=bug_report.yml';
+const GITHUB_FEATURE_REQUEST_URL = 'https://github.com/btriapitsyn/openchamber/issues/new?template=feature_request.yml';
+const DISCORD_INVITE_URL = 'https://discord.gg/ZYRSdnwwKA';
+const INSTALLED_APPS_CACHE_TTL_SECS = 60 * 60 * 24;
+const INSTALLED_APPS_CACHE_FILE = 'discovered-apps.json';
+
+const { autoUpdater } = updaterPkg;
+
+const state = {
+  sidecarChild: null,
+  sidecarUrl: null,
+  localOrigin: null,
+  initScript: null,
+  mainWindow: null,
+  quitRequested: false,
+  pendingUpdate: null,
+  unreachableHosts: new Set(),
+  windowCounter: 1,
+  focusedWindowIds: new Set(),
+  windowGeometryRevisions: new Map(),
+  sshStatuses: new Map(),
+  sshLogs: new Map(),
+};
+
+const settingsFilePath = () => {
+  if (typeof process.env.OPENCHAMBER_DATA_DIR === 'string' && process.env.OPENCHAMBER_DATA_DIR.trim()) {
+    return path.join(process.env.OPENCHAMBER_DATA_DIR.trim(), 'settings.json');
+  }
+  return path.join(os.homedir(), '.config', 'openchamber', 'settings.json');
+};
+
+const sshManager = new ElectronSshManager({
+  settingsFilePath: settingsFilePath(),
+  appVersion: app.getVersion(),
+  emit: (event, detail) => emitToAllWindows(event, detail),
+});
+
+const readJsonFile = (filePath) => {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return {};
+  }
+};
+
+const writeJsonFile = async (filePath, data) => {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  await fsp.writeFile(filePath, JSON.stringify(data, null, 2));
+};
+
+const readSettingsRoot = () => {
+  const root = readJsonFile(settingsFilePath());
+  return root && typeof root === 'object' && !Array.isArray(root) ? root : {};
+};
+
+const writeSettingsRoot = async (root) => writeJsonFile(settingsFilePath(), root);
+
+const normalizeHostUrl = (raw) => {
+  const trimmed = typeof raw === 'string' ? raw.trim() : '';
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
+const sanitizeHostUrlForStorage = (raw) => normalizeHostUrl(raw);
+
+const readDesktopHostsConfig = () => {
+  const root = readSettingsRoot();
+  const hostsRaw = Array.isArray(root.desktopHosts) ? root.desktopHosts : [];
+  const hosts = hostsRaw
+    .map((entry) => {
+      const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
+      const url = sanitizeHostUrlForStorage(entry?.url);
+      if (!id || id === LOCAL_HOST_ID || !url) return null;
+      const label = typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : url;
+      return { id, label, url };
+    })
+    .filter(Boolean);
+
+  return {
+    hosts,
+    defaultHostId: typeof root.desktopDefaultHostId === 'string' && root.desktopDefaultHostId.trim()
+      ? root.desktopDefaultHostId.trim()
+      : null,
+  };
+};
+
+const writeDesktopHostsConfig = async (config) => {
+  const root = readSettingsRoot();
+  root.desktopHosts = Array.isArray(config?.hosts)
+    ? config.hosts
+        .map((entry) => {
+          const id = typeof entry?.id === 'string' ? entry.id.trim() : '';
+          const url = sanitizeHostUrlForStorage(entry?.url);
+          if (!id || id === LOCAL_HOST_ID || !url) return null;
+          return {
+            id,
+            label: typeof entry?.label === 'string' && entry.label.trim() ? entry.label.trim() : url,
+            url,
+          };
+        })
+        .filter(Boolean)
+    : [];
+  root.desktopDefaultHostId = typeof config?.defaultHostId === 'string' && config.defaultHostId.trim()
+    ? config.defaultHostId.trim()
+    : null;
+  await writeSettingsRoot(root);
+};
+
+const readWindowState = () => {
+  const stateValue = readSettingsRoot().desktopWindowState;
+  return stateValue && typeof stateValue === 'object' ? stateValue : null;
+};
+
+const writeWindowState = async (browserWindow) => {
+  if (!browserWindow || browserWindow.isDestroyed()) return;
+  if (!state.mainWindow || browserWindow.id !== state.mainWindow.id) return;
+
+  const bounds = browserWindow.getBounds();
+  const root = readSettingsRoot();
+  root.desktopWindowState = {
+    x: bounds.x,
+    y: bounds.y,
+    width: Math.max(bounds.width, MIN_WINDOW_WIDTH),
+    height: Math.max(bounds.height, MIN_WINDOW_HEIGHT),
+    maximized: browserWindow.isMaximized(),
+    fullscreen: browserWindow.isFullScreen(),
+  };
+  await writeSettingsRoot(root);
+};
+
+const debounceWindowStatePersist = (browserWindow, immediate = false) => {
+  if (!browserWindow || browserWindow.isDestroyed()) return;
+  const key = String(browserWindow.id);
+  const revision = (state.windowGeometryRevisions.get(key) || 0) + 1;
+  state.windowGeometryRevisions.set(key, revision);
+
+  const persist = async () => {
+    if (state.windowGeometryRevisions.get(key) !== revision) return;
+    await writeWindowState(browserWindow);
+  };
+
+  if (immediate) {
+    void persist();
+    return;
+  }
+
+  setTimeout(() => {
+    void persist();
+  }, 300);
+};
+
+const buildHealthUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    parsed.pathname = `${parsed.pathname.replace(/\/$/, '') || ''}/health`;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
+const probeHostWithTimeout = async (url, timeoutMs) => {
+  const healthUrl = buildHealthUrl(url);
+  if (!healthUrl) {
+    throw new Error('Invalid URL');
+  }
+
+  const started = Date.now();
+  try {
+    const response = await fetch(healthUrl, { signal: AbortSignal.timeout(timeoutMs) });
+    const status = response.status;
+    return {
+      status: status >= 200 && status < 300 ? 'ok' : (status === 401 || status === 403 ? 'auth' : 'unreachable'),
+      latencyMs: Date.now() - started,
+    };
+  } catch {
+    return { status: 'unreachable', latencyMs: Date.now() - started };
+  }
+};
+
+const waitForHealth = async (url, timeoutMs = 20_000, initialPollMs = 250, maxPollMs = 2000) => {
+  const deadline = Date.now() + timeoutMs;
+  let pollMs = initialPollMs;
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(buildHealthUrl(url), { signal: AbortSignal.timeout(Math.min(pollMs * 4, 1500)) });
+      if (response.ok) {
+        return true;
+      }
+    } catch {
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    pollMs = Math.min(pollMs * 2, maxPollMs);
+  }
+  return false;
+};
+
+const pickUnusedPort = async () => {
+  const net = await import('node:net');
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
+};
+
+const buildLocalUrl = (port) => `http://127.0.0.1:${port}`;
+
+const resourceRoot = () => isDev ? path.join(__dirname, 'resources') : process.resourcesPath;
+const resolveWebDistDir = () => path.join(resourceRoot(), 'web-dist');
+const resolveSidecarPath = () => path.join(resourceRoot(), 'sidecar', process.platform === 'win32' ? 'openchamber-server.exe' : 'openchamber-server');
+
+const killStaleSidecarProcesses = () => {
+  const processName = process.platform === 'win32' ? 'openchamber-server.exe' : 'openchamber-server';
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/F', '/IM', processName], { stdio: 'ignore' });
+  } else {
+    spawnSync('pkill', ['-x', processName], { stdio: 'ignore' });
+  }
+};
+
+const maybeShowNativeNotification = ({ title, body, require_hidden: requireHidden }) => {
+  if (requireHidden && state.focusedWindowIds.size > 0) {
+    return;
+  }
+
+  if (!Notification.isSupported()) {
+    return;
+  }
+
+  const notification = new Notification({
+    title: typeof title === 'string' && title.trim() ? title.trim() : 'OpenChamber',
+    body: typeof body === 'string' ? body : '',
+    silent: process.platform !== 'darwin',
+  });
+  notification.show();
+};
+
+const mapUpdaterProgressEvent = (payload) => ({
+  event: payload.event,
+  data: payload.data,
+});
+
+const spawnLocalServer = async () => {
+  killStaleSidecarProcesses();
+
+  const settings = readSettingsRoot();
+  const storedPort = Number.isFinite(settings.desktopLocalPort) ? settings.desktopLocalPort : null;
+  const candidates = [storedPort, DEFAULT_DESKTOP_PORT, null].filter((value, index, array) => value !== undefined && array.indexOf(value) === index);
+
+  const homeDir = os.homedir();
+  const pathSegments = [
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+    '/usr/sbin',
+    '/sbin',
+    path.join(homeDir, '.opencode', 'bin'),
+    path.join(homeDir, '.local', 'bin'),
+    path.join(homeDir, '.bun', 'bin'),
+    path.join(homeDir, '.cargo', 'bin'),
+    path.join(homeDir, 'bin'),
+    ...(typeof process.env.PATH === 'string' ? process.env.PATH.split(':') : []),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const port = candidate || await pickUnusedPort();
+    const url = buildLocalUrl(port);
+
+    const child = spawn(resolveSidecarPath(), ['--port', String(port)], {
+      env: {
+        ...process.env,
+        OPENCHAMBER_HOST: '127.0.0.1',
+        OPENCHAMBER_DIST_DIR: resolveWebDistDir(),
+        OPENCHAMBER_RUNTIME: 'desktop',
+        OPENCHAMBER_DESKTOP_NOTIFY: 'true',
+        PATH: pathSegments.join(':'),
+        NO_PROXY: 'localhost,127.0.0.1',
+        no_proxy: 'localhost,127.0.0.1',
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    child.stdout?.on('data', (chunk) => {
+      const line = chunk.toString();
+      const prefixIndex = line.indexOf(SIDECAR_NOTIFY_PREFIX);
+      if (prefixIndex >= 0) {
+        try {
+          const payload = JSON.parse(line.slice(prefixIndex + SIDECAR_NOTIFY_PREFIX.length).trim());
+          maybeShowNativeNotification(payload);
+        } catch {
+        }
+      }
+    });
+
+    child.stderr?.on('data', (chunk) => {
+      process.stderr.write(chunk);
+    });
+
+    if (await waitForHealth(url, 8_000, 100)) {
+      state.sidecarChild = child;
+      state.sidecarUrl = url;
+      const root = readSettingsRoot();
+      root.desktopLocalPort = port;
+      await writeSettingsRoot(root);
+      return url;
+    }
+
+    child.kill('SIGTERM');
+  }
+
+  throw new Error('Failed to start local OpenChamber sidecar');
+};
+
+const killSidecar = () => {
+  if (state.sidecarUrl) {
+    void fetch(`${state.sidecarUrl.replace(/\/$/, '')}/api/system/shutdown`, {
+      method: 'POST',
+      signal: AbortSignal.timeout(1500),
+    }).catch(() => {});
+  }
+
+  if (state.sidecarChild && !state.sidecarChild.killed) {
+    try {
+      state.sidecarChild.kill('SIGTERM');
+    } catch {
+    }
+  }
+  state.sidecarChild = null;
+  state.sidecarUrl = null;
+};
+
+const macosMajorVersion = () => {
+  if (process.platform !== 'darwin') return 0;
+  const result = spawnSync('/usr/bin/sw_vers', ['-productVersion'], { encoding: 'utf8' });
+  const raw = (result.stdout || '').trim();
+  const [majorRaw, minorRaw] = raw.split('.');
+  const major = Number.parseInt(majorRaw || '0', 10);
+  const minor = Number.parseInt(minorRaw || '0', 10);
+  return major === 10 ? minor : major;
+};
+
+const buildInitScript = (localOrigin) => {
+  const home = JSON.stringify(os.homedir() || '');
+  const local = JSON.stringify(localOrigin || '');
+  const macVersion = macosMajorVersion();
+  return [
+    '(function(){',
+    `try{window.__OPENCHAMBER_HOME__=${home};window.__OPENCHAMBER_MACOS_MAJOR__=${macVersion};window.__OPENCHAMBER_LOCAL_ORIGIN__=${local};}catch(_e){}`,
+    '}())',
+  ].join('');
+};
+
+const buildStartupSplashHtml = () => {
+  const settings = readSettingsRoot();
+  const splashBgLight = typeof settings.splashBgLight === 'string' ? settings.splashBgLight.trim() : '#f5f5f4';
+  const splashFgLight = typeof settings.splashFgLight === 'string' ? settings.splashFgLight.trim() : '#1c1917';
+  const splashBgDark = typeof settings.splashBgDark === 'string' ? settings.splashBgDark.trim() : '#0c0a09';
+  const splashFgDark = typeof settings.splashFgDark === 'string' ? settings.splashFgDark.trim() : '#fafaf9';
+
+  return `<!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        font-family: "IBM Plex Sans", sans-serif;
+        display: grid;
+        place-items: center;
+        height: 100vh;
+        background: ${splashBgLight};
+        color: ${splashFgLight};
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: ${splashBgDark}; color: ${splashFgDark}; }
+      }
+      .mark {
+        font-size: 20px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        opacity: 0.88;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mark">OpenChamber</div>
+  </body>
+  </html>`;
+};
+
+const isBenignNavigationAbort = (error) => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  if (error.errno === -3) {
+    return true;
+  }
+
+  const message = typeof error.message === 'string' ? error.message : '';
+  return message.includes('ERR_ABORTED') || message.includes(' (-3) loading ');
+};
+
+const navigateWindow = async (browserWindow, url, { allowAbort = false } = {}) => {
+  try {
+    await browserWindow.loadURL(url);
+  } catch (error) {
+    if (allowAbort && isBenignNavigationAbort(error)) {
+      return;
+    }
+    throw error;
+  }
+};
+
+const emitToWindow = (browserWindow, event, detail) => {
+  if (!browserWindow || browserWindow.isDestroyed()) return;
+  browserWindow.webContents.send('openchamber:emit', { event, detail });
+};
+
+const emitToAllWindows = (event, detail) => {
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    emitToWindow(browserWindow, event, detail);
+  }
+};
+
+const dispatchDomEventToWindow = (browserWindow, event, detail) => {
+  if (!browserWindow || browserWindow.isDestroyed()) return;
+
+  const eventLiteral = JSON.stringify(event);
+  const script = detail === undefined
+    ? `window.dispatchEvent(new Event(${eventLiteral}));`
+    : `window.dispatchEvent(new CustomEvent(${eventLiteral}, { detail: ${JSON.stringify(detail)} }));`;
+
+  void browserWindow.webContents.executeJavaScript(script, true).catch(() => {});
+};
+
+const getMenuTargetWindow = () => {
+  const focused = BrowserWindow.getFocusedWindow();
+  if (focused && !focused.isDestroyed()) return focused;
+  if (state.mainWindow && !state.mainWindow.isDestroyed()) return state.mainWindow;
+  const [firstWindow] = BrowserWindow.getAllWindows();
+  return firstWindow && !firstWindow.isDestroyed() ? firstWindow : null;
+};
+
+const dispatchMenuAction = (action) => {
+  const target = getMenuTargetWindow();
+  emitToWindow(target, 'openchamber:menu-action', action);
+  dispatchDomEventToWindow(target, 'openchamber:menu-action', action);
+};
+
+const dispatchCheckForUpdates = () => {
+  emitToAllWindows('openchamber:check-for-updates');
+  for (const browserWindow of BrowserWindow.getAllWindows()) {
+    dispatchDomEventToWindow(browserWindow, 'openchamber:check-for-updates');
+  }
+};
+
+const nextWindowLabel = () => {
+  const value = state.windowCounter++;
+  return value === 1 ? 'main' : `main-${value}`;
+};
+
+const readThemeSource = () => {
+  const settings = readSettingsRoot();
+  if (settings.useSystemTheme === true) return 'system';
+  if (settings.themeMode === 'light' || settings.themeVariant === 'light') return 'light';
+  if (settings.themeMode === 'dark' || settings.themeVariant === 'dark') return 'dark';
+  return 'system';
+};
+
+const createBrowserWindow = ({ label, restoreGeometry, url }) => {
+  const saved = restoreGeometry ? readWindowState() : null;
+  const useSaved = saved && typeof saved.width === 'number' && typeof saved.height === 'number';
+  const desktopLocalOrigin = state.localOrigin || '';
+  const desktopHome = os.homedir() || '';
+  const desktopMacosMajor = String(macosMajorVersion());
+  const options = {
+    title: 'OpenChamber',
+    width: useSaved ? Math.max(saved.width, MIN_RESTORE_WINDOW_WIDTH) : 1280,
+    height: useSaved ? Math.max(saved.height, MIN_RESTORE_WINDOW_HEIGHT) : 800,
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
+    show: false,
+    backgroundColor: '#151313',
+    // Tauri used an overlay title bar with explicit traffic-light placement.
+    // Electron's hiddenInset adds its own extra inset, which leaves the controls
+    // visibly lower than the app header. Use a plain hidden title bar instead.
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 18 } : undefined,
+    webPreferences: {
+      additionalArguments: [
+        `--openchamber-local-origin=${desktopLocalOrigin}`,
+        `--openchamber-home=${desktopHome}`,
+        `--openchamber-macos-major=${desktopMacosMajor}`,
+      ],
+      preload: path.join(__dirname, 'preload.mjs'),
+      backgroundThrottling: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  };
+
+  const browserWindow = new BrowserWindow(options);
+  browserWindow.__ocLabel = label || nextWindowLabel();
+
+  if (useSaved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+    browserWindow.setPosition(saved.x, saved.y);
+  }
+
+  if (useSaved && saved.maximized) {
+    browserWindow.maximize();
+  }
+
+  browserWindow.on('focus', () => {
+    state.focusedWindowIds.add(browserWindow.id);
+  });
+  browserWindow.on('blur', () => {
+    state.focusedWindowIds.delete(browserWindow.id);
+  });
+  browserWindow.on('resize', () => {
+    emitToWindow(browserWindow, 'openchamber:window-resized');
+    debounceWindowStatePersist(browserWindow, false);
+  });
+  browserWindow.on('move', () => {
+    debounceWindowStatePersist(browserWindow, false);
+  });
+  browserWindow.on('close', (event) => {
+    if (process.platform === 'darwin' && !state.quitRequested) {
+      const remainingVisible = BrowserWindow.getAllWindows().filter(
+        (window) => !window.isDestroyed() && window.isVisible(),
+      ).length;
+
+      if (remainingVisible <= 1) {
+        debounceWindowStatePersist(browserWindow, true);
+        event.preventDefault();
+        browserWindow.hide();
+        return;
+      }
+    }
+
+    debounceWindowStatePersist(browserWindow, true);
+  });
+  browserWindow.on('closed', () => {
+    state.focusedWindowIds.delete(browserWindow.id);
+    if (state.mainWindow && browserWindow.id === state.mainWindow.id) {
+      state.mainWindow = null;
+    }
+    if (BrowserWindow.getAllWindows().length === 0) {
+      killSidecar();
+      if (process.platform !== 'darwin') {
+        app.quit();
+      }
+    }
+  });
+
+  browserWindow.webContents.on('did-finish-load', () => {
+    if (state.initScript) {
+      void browserWindow.webContents.executeJavaScript(state.initScript).catch(() => {});
+    }
+  });
+
+  browserWindow.once('ready-to-show', () => {
+    browserWindow.show();
+    browserWindow.focus();
+  });
+
+  if (url) {
+    void navigateWindow(browserWindow, url);
+  } else {
+    void navigateWindow(
+      browserWindow,
+      `data:text/html;charset=utf-8,${encodeURIComponent(buildStartupSplashHtml())}`,
+      { allowAbort: true },
+    );
+  }
+
+  return browserWindow;
+};
+
+const activateMainWindow = async (url, localOrigin) => {
+  state.localOrigin = localOrigin;
+  state.initScript = buildInitScript(localOrigin);
+
+  const mainWindow = state.mainWindow;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await navigateWindow(mainWindow, url, { allowAbort: true });
+    mainWindow.show();
+    mainWindow.focus();
+    return mainWindow;
+  }
+
+  state.mainWindow = createBrowserWindow({
+    label: 'main',
+    restoreGeometry: true,
+    url,
+  });
+  return state.mainWindow;
+};
+
+const createAdditionalWindow = async (url) => {
+  if (!state.localOrigin) {
+    return null;
+  }
+  const browserWindow = createBrowserWindow({
+    label: nextWindowLabel(),
+    restoreGeometry: false,
+    url,
+  });
+  return browserWindow;
+};
+
+const resolveInitialUrl = async () => {
+  const localUrl = isDev && await waitForHealth('http://127.0.0.1:3901', 5_000, 100)
+    ? 'http://127.0.0.1:3901'
+    : await spawnLocalServer();
+
+  const localUiUrl = isDev && await waitForHealth('http://127.0.0.1:5173', 8_000, 100)
+    ? 'http://127.0.0.1:5173'
+    : localUrl;
+
+  state.sidecarUrl = localUrl;
+
+  const localOrigin = new URL(localUiUrl).origin;
+  let initialUrl = localUiUrl;
+
+  const envTarget = normalizeHostUrl(process.env.OPENCHAMBER_SERVER_URL || '');
+  if (envTarget) {
+    initialUrl = envTarget;
+  } else {
+    const config = readDesktopHostsConfig();
+    if (config.defaultHostId && config.defaultHostId !== LOCAL_HOST_ID) {
+      const host = config.hosts.find((entry) => entry.id === config.defaultHostId);
+      if (host?.url) {
+        initialUrl = host.url;
+      }
+    }
+  }
+
+  if (initialUrl !== localUiUrl) {
+    const softProbe = await probeHostWithTimeout(initialUrl, 2_000);
+    const reachable = softProbe.status !== 'unreachable'
+      ? true
+      : (await probeHostWithTimeout(initialUrl, 10_000)).status !== 'unreachable';
+
+    if (!reachable) {
+      state.unreachableHosts.add(initialUrl);
+      initialUrl = localUiUrl;
+    }
+  }
+
+  return { initialUrl, localOrigin, localUiUrl };
+};
+
+const compareSemver = (left, right) => {
+  const a = String(left || '').replace(/^v/, '').split('.').map((value) => Number.parseInt(value || '0', 10));
+  const b = String(right || '').replace(/^v/, '').split('.').map((value) => Number.parseInt(value || '0', 10));
+  const length = Math.max(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (a[index] || 0) - (b[index] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+};
+
+const parseGithubRepo = () => {
+  return { owner: 'btriapitsyn', repo: 'openchamber' };
+};
+
+const setupAutoUpdater = () => {
+  if (!app.isPackaged) {
+    return;
+  }
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.allowPrerelease = false;
+  autoUpdater.fullChangelog = true;
+  autoUpdater.disableWebInstaller = false;
+  autoUpdater.logger = console;
+
+  const { owner, repo } = parseGithubRepo();
+  autoUpdater.setFeedURL({
+    provider: 'github',
+    owner,
+    repo,
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    emitToAllWindows('openchamber:update-progress', mapUpdaterProgressEvent({
+      event: 'Progress',
+      data: {
+        chunkLength: Math.max(0, Math.round(progress.bytesPerSecond || 0)),
+        downloaded: Math.round(progress.transferred || 0),
+        total: Math.round(progress.total || 0),
+      },
+    }));
+  });
+};
+
+const parseRelevantChangelogNotes = async (fromVersion, toVersion) => {
+  try {
+    const response = await fetch(CHANGELOG_URL, { signal: AbortSignal.timeout(10_000) });
+    if (!response.ok) return null;
+    const changelog = await response.text();
+    const sections = changelog.split(/^##\s+\[/m).slice(1);
+    const relevant = [];
+    for (const section of sections) {
+      const version = section.split(']')[0];
+      if (compareSemver(version, fromVersion) > 0 && compareSemver(version, toVersion) <= 0) {
+        relevant.push(`## [${section}`.trim());
+      }
+    }
+    return relevant.length > 0 ? relevant.join('\n\n') : null;
+  } catch {
+    return null;
+  }
+};
+
+const buildInstalledAppsCachePath = () => path.join(path.dirname(settingsFilePath()), INSTALLED_APPS_CACHE_FILE);
+
+const resolveAppBundlePath = (appName) => {
+  if (process.platform !== 'darwin') return null;
+  const bundleName = appName.endsWith('.app') ? appName : `${appName}.app`;
+  const candidates = [
+    `/Applications/${bundleName}`,
+    `/System/Applications/${bundleName}`,
+    `/System/Applications/Utilities/${bundleName}`,
+    path.join(os.homedir(), 'Applications', bundleName),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  const result = spawnSync('mdfind', ['-name', bundleName], { encoding: 'utf8' });
+  const first = (result.stdout || '').split('\n').map((line) => line.trim()).find(Boolean);
+  return first || null;
+};
+
+const isAppBundleInstalled = (appName) => Boolean(resolveAppBundlePath(appName));
+
+const iconToDataUrl = (iconPath, appName) => {
+  if (!iconPath || !fs.existsSync(iconPath)) return null;
+  const safeName = String(appName || 'app').replace(/[^a-z0-9]/gi, '_');
+  const tempPath = path.join(os.tmpdir(), `openchamber-icon-${safeName}-${Date.now()}.png`);
+  const result = spawnSync('sips', ['-s', 'format', 'png', '-Z', '32', iconPath, '--out', tempPath], { stdio: 'ignore' });
+  if (result.status !== 0 || !fs.existsSync(tempPath)) return null;
+  try {
+    const bytes = fs.readFileSync(tempPath);
+    return `data:image/png;base64,${bytes.toString('base64')}`;
+  } finally {
+    fs.rmSync(tempPath, { force: true });
+  }
+};
+
+const resolveAppIconPath = (appPath) => {
+  if (!appPath || !fs.existsSync(appPath)) return null;
+  const resourcesPath = path.join(appPath, 'Contents', 'Resources');
+  if (!fs.existsSync(resourcesPath)) return null;
+  const entries = fs.readdirSync(resourcesPath);
+  const icon = entries.find((entry) => entry.toLowerCase().endsWith('.icns'));
+  return icon ? path.join(resourcesPath, icon) : null;
+};
+
+const buildInstalledApps = (apps) => {
+  const seen = new Set();
+  return apps
+    .map((raw) => String(raw || '').trim())
+    .filter((raw) => raw && !seen.has(raw) && seen.add(raw))
+    .map((name) => {
+      const appPath = resolveAppBundlePath(name);
+      if (!appPath) return null;
+      return {
+        name,
+        iconDataUrl: iconToDataUrl(resolveAppIconPath(appPath), name),
+      };
+    })
+    .filter(Boolean);
+};
+
+const parseSshConfigImports = () => {
+  const sshConfigPath = path.join(os.homedir(), '.ssh', 'config');
+  if (!fs.existsSync(sshConfigPath)) return [];
+  const lines = fs.readFileSync(sshConfigPath, 'utf8').split(/\r?\n/);
+  const results = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || !trimmed.toLowerCase().startsWith('host ')) {
+      continue;
+    }
+    const hosts = trimmed.slice(5).trim().split(/\s+/).filter(Boolean);
+    for (const host of hosts) {
+      results.push({
+        host,
+        pattern: /[*?]/.test(host),
+        source: sshConfigPath,
+        sshCommand: `ssh ${host}`,
+      });
+    }
+  }
+  return results;
+};
+
+const readDesktopSshInstances = () => {
+  const root = readSettingsRoot();
+  return { instances: Array.isArray(root.desktopSshInstances) ? root.desktopSshInstances : [] };
+};
+
+const writeDesktopSshInstances = async (config) => {
+  const root = readSettingsRoot();
+  root.desktopSshInstances = Array.isArray(config?.instances) ? config.instances : [];
+  await writeSettingsRoot(root);
+  return { instances: root.desktopSshInstances };
+};
+
+const updateHostUrlForSshInstance = async (id, label, localUrl) => {
+  const config = readDesktopHostsConfig();
+  const nextHosts = config.hosts.filter((entry) => entry.id !== id);
+  nextHosts.push({ id, label, url: localUrl });
+  await writeDesktopHostsConfig({ hosts: nextHosts, defaultHostId: config.defaultHostId });
+};
+
+const handleInvoke = async (browserWindow, command, args = {}) => {
+  switch (command) {
+    case 'desktop_start_window_drag':
+      return null;
+
+    case 'desktop_is_window_fullscreen':
+      return Boolean(browserWindow?.isFullScreen());
+
+    case 'desktop_set_window_title':
+      if (browserWindow && typeof args.title === 'string') {
+        browserWindow.setTitle(args.title);
+      }
+      return null;
+
+    case 'desktop_get_app_version':
+      return app.getVersion();
+
+    case 'desktop_save_markdown_file': {
+      const defaultPath = typeof args.defaultFileName === 'string' ? args.defaultFileName.trim() : '';
+      if (!defaultPath) {
+        throw new Error('Default file name is required');
+      }
+
+      const content = typeof args.content === 'string' ? args.content : '';
+      const result = await dialog.showSaveDialog(browserWindow || undefined, {
+        defaultPath,
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return null;
+      }
+
+      await fsp.writeFile(result.filePath, content, 'utf8');
+      return result.filePath;
+    }
+
+    case 'desktop_read_file': {
+      const filePath = typeof args.path === 'string' ? args.path : '';
+      const stats = await fsp.stat(filePath);
+      if (stats.size > 50 * 1024 * 1024) {
+        throw new Error('File is too large. Maximum size is 50MB.');
+      }
+      const bytes = await fsp.readFile(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const mime = ({
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.webp': 'image/webp',
+        '.svg': 'image/svg+xml',
+        '.bmp': 'image/bmp',
+        '.ico': 'image/x-icon',
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain',
+        '.md': 'text/markdown',
+        '.json': 'application/json',
+        '.js': 'text/javascript',
+        '.ts': 'text/typescript',
+        '.tsx': 'text/typescript-jsx',
+        '.jsx': 'text/javascript-jsx',
+        '.html': 'text/html',
+        '.css': 'text/css',
+        '.py': 'text/x-python',
+      })[ext] || 'application/octet-stream';
+      return { mime, base64: bytes.toString('base64'), size: bytes.length };
+    }
+
+    case 'desktop_notify':
+      maybeShowNativeNotification(args);
+      return null;
+
+    case 'desktop_clear_cache':
+      await session.defaultSession.clearStorageData();
+      for (const browserWindow of BrowserWindow.getAllWindows()) {
+        browserWindow.webContents.reload();
+      }
+      return null;
+
+    case 'desktop_open_path': {
+      const targetPath = typeof args.path === 'string' ? args.path.trim() : '';
+      const appName = typeof args.app === 'string' ? args.app.trim() : '';
+      if (!targetPath) throw new Error('Path is required');
+      if (process.platform === 'darwin') {
+        const openArgs = appName ? ['-a', appName, targetPath] : [targetPath];
+        spawn('open', openArgs, { detached: true, stdio: 'ignore' }).unref();
+        return null;
+      }
+      await shell.openPath(targetPath);
+      return null;
+    }
+
+    case 'desktop_reveal_path': {
+      const targetPath = typeof args.path === 'string' ? args.path.trim() : '';
+      if (!targetPath) {
+        throw new Error('Path is required');
+      }
+
+      const stats = await fsp.stat(targetPath).catch(() => null);
+      if (stats?.isDirectory()) {
+        await shell.openPath(targetPath);
+        return null;
+      }
+
+      shell.showItemInFolder(targetPath);
+      return null;
+    }
+
+    case 'desktop_open_in_app': {
+      if (process.platform !== 'darwin') {
+        throw new Error('desktop_open_in_app is only supported on macOS');
+      }
+      const projectPath = typeof args.projectPath === 'string' ? args.projectPath.trim() : '';
+      const appName = typeof args.appName === 'string' ? args.appName.trim() : '';
+      const filePath = typeof args.filePath === 'string' && args.filePath.trim() ? args.filePath.trim() : null;
+      if (!projectPath || !appName) {
+        throw new Error('Project path and app name are required');
+      }
+      const openArgs = filePath
+        ? ['-a', appName, filePath]
+        : ['-a', appName, projectPath];
+      spawn('open', openArgs, { detached: true, stdio: 'ignore' }).unref();
+      return null;
+    }
+
+    case 'desktop_filter_installed_apps':
+      if (process.platform !== 'darwin') {
+        throw new Error('desktop_filter_installed_apps is only supported on macOS');
+      }
+      return Array.isArray(args.apps) ? args.apps.filter((appName) => isAppBundleInstalled(String(appName))) : [];
+
+    case 'desktop_fetch_app_icons':
+      if (process.platform !== 'darwin') {
+        throw new Error('desktop_fetch_app_icons is only supported on macOS');
+      }
+      return (Array.isArray(args.apps) ? args.apps : [])
+        .map((name) => {
+          const appPath = resolveAppBundlePath(String(name));
+          if (!appPath) return null;
+          const dataUrl = iconToDataUrl(resolveAppIconPath(appPath), String(name));
+          return dataUrl ? { app: String(name), dataUrl } : null;
+        })
+        .filter(Boolean);
+
+    case 'desktop_get_installed_apps': {
+      if (process.platform !== 'darwin') {
+        throw new Error('desktop_get_installed_apps is only supported on macOS');
+      }
+      const cachePath = buildInstalledAppsCachePath();
+      const now = Math.floor(Date.now() / 1000);
+      let cache = null;
+      try {
+        cache = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+      } catch {
+      }
+      const cachedApps = Array.isArray(cache?.apps) ? cache.apps : [];
+      const hasCache = Boolean(cache);
+      const isCacheStale = !cache || (now - Number(cache.updatedAt || 0)) > INSTALLED_APPS_CACHE_TTL_SECS;
+      const refresh = async () => {
+        const apps = buildInstalledApps(Array.isArray(args.apps) ? args.apps : []);
+        await fsp.mkdir(path.dirname(cachePath), { recursive: true });
+        await fsp.writeFile(cachePath, JSON.stringify({ updatedAt: now, apps }, null, 2));
+        emitToAllWindows('openchamber:installed-apps-updated', apps);
+      };
+      if (!hasCache || isCacheStale || args.force === true) {
+        void refresh();
+      }
+      return { apps: cachedApps, hasCache, isCacheStale };
+    }
+
+    case 'desktop_hosts_get':
+      return readDesktopHostsConfig();
+
+    case 'desktop_hosts_set':
+      await writeDesktopHostsConfig(args.config || {});
+      return null;
+
+    case 'desktop_host_probe':
+      return probeHostWithTimeout(String(args.url || ''), 2_000);
+
+    case 'desktop_set_window_theme': {
+      const mode = typeof args.themeMode === 'string' ? args.themeMode : '';
+      const variant = typeof args.themeVariant === 'string' ? args.themeVariant : '';
+      nativeTheme.themeSource = mode === 'dark' || variant === 'dark'
+        ? 'dark'
+        : (mode === 'light' || variant === 'light' ? 'light' : 'system');
+      return null;
+    }
+
+    case 'desktop_set_vibrancy': {
+      const enabled = false;
+      const root = readSettingsRoot();
+      root.desktopVibrancy = false;
+      await writeSettingsRoot(root);
+      return { enabled, requiresRestart: true };
+    }
+
+    case 'desktop_check_for_updates': {
+      const currentVersion = app.getVersion();
+      let payload = null;
+      try {
+        const response = await fetch(UPDATE_METADATA_URL, { signal: AbortSignal.timeout(10_000) });
+        payload = await response.json();
+      } catch {
+      }
+
+      let updateResult = null;
+      try {
+        updateResult = await autoUpdater.checkForUpdates();
+      } catch {
+      }
+
+      const updateInfo = updateResult?.updateInfo;
+      const nextVersion =
+        (typeof updateInfo?.version === 'string' && updateInfo.version) ||
+        (typeof payload?.version === 'string' && payload.version) ||
+        currentVersion;
+      const available = compareSemver(nextVersion, currentVersion) > 0;
+      const body =
+        (typeof payload?.notes === 'string' && payload.notes.trim() ? payload.notes : null) ||
+        (typeof updateInfo?.releaseNotes === 'string' && updateInfo.releaseNotes.trim() ? updateInfo.releaseNotes : null) ||
+        await parseRelevantChangelogNotes(currentVersion, nextVersion);
+      state.pendingUpdate = available ? { version: nextVersion, metadata: payload, electronUpdate: updateResult } : null;
+      return {
+        available,
+        currentVersion,
+        version: available ? nextVersion : null,
+        body: body || null,
+        date:
+          (typeof updateInfo?.releaseDate === 'string' && updateInfo.releaseDate) ||
+          (typeof payload?.pub_date === 'string' ? payload.pub_date : null),
+      };
+    }
+
+    case 'desktop_download_and_install_update':
+      if (!state.pendingUpdate) {
+        throw new Error('No pending update');
+      }
+      emitToAllWindows('openchamber:update-progress', mapUpdaterProgressEvent({
+        event: 'Started',
+        data: {
+          contentLength: null,
+        },
+      }));
+      if (!state.pendingUpdate.electronUpdate) {
+        throw new Error('Electron updater metadata is not available for this build');
+      }
+      await autoUpdater.downloadUpdate();
+      state.pendingUpdate.downloaded = true;
+      emitToAllWindows('openchamber:update-progress', mapUpdaterProgressEvent({
+        event: 'Finished',
+        data: {},
+      }));
+      return null;
+
+    case 'desktop_restart':
+      if (state.pendingUpdate?.downloaded && app.isPackaged) {
+        autoUpdater.quitAndInstall(false, true);
+        return null;
+      }
+      app.relaunch();
+      app.exit(0);
+      return null;
+
+    case 'desktop_new_window': {
+      const config = readDesktopHostsConfig();
+      const localUiUrl = state.sidecarUrl || state.localOrigin;
+      let targetUrl = localUiUrl;
+      if (config.defaultHostId && config.defaultHostId !== LOCAL_HOST_ID) {
+        const host = config.hosts.find((entry) => entry.id === config.defaultHostId);
+        if (host?.url && !state.unreachableHosts.has(host.url)) {
+          targetUrl = host.url;
+        }
+      }
+      await createAdditionalWindow(targetUrl);
+      return null;
+    }
+
+    case 'desktop_new_window_at_url': {
+      const targetUrl = normalizeHostUrl(String(args.url || ''));
+      if (!targetUrl) {
+        throw new Error('Invalid URL');
+      }
+      await createAdditionalWindow(targetUrl);
+      return null;
+    }
+
+    case 'desktop_ssh_instances_get':
+      return sshManager.readInstances();
+
+    case 'desktop_ssh_instances_set':
+      await sshManager.setInstances(args.config || {});
+      return null;
+
+    case 'desktop_ssh_import_hosts':
+      return await sshManager.importHosts();
+
+    case 'desktop_ssh_connect': {
+      const id = String(args.id || '').trim();
+      await sshManager.connect(id);
+      return null;
+    }
+
+    case 'desktop_ssh_disconnect': {
+      const id = String(args.id || '').trim();
+      await sshManager.disconnect(id);
+      return null;
+    }
+
+    case 'desktop_ssh_status': {
+      const id = String(args.id || '').trim();
+      return await sshManager.statusesWithDefaults(id || undefined);
+    }
+
+    case 'desktop_ssh_logs':
+      return sshManager.logsForInstance(String(args.id || '').trim(), Number(args.limit) || 200);
+
+    case 'desktop_ssh_logs_clear':
+      sshManager.clearLogsForInstance(String(args.id || '').trim());
+      return null;
+
+    default:
+      throw new Error(`Unknown desktop command: ${command}`);
+  }
+};
+
+const buildMacMenu = () => {
+  const dispatchAction = (action) => dispatchMenuAction(action);
+  const handleCopyAction = () => {
+    BrowserWindow.getFocusedWindow()?.webContents.copy();
+    dispatchAction('copy');
+  };
+
+  return Menu.buildFromTemplate([
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        {
+          label: 'Check for Updates',
+          click: () => dispatchCheckForUpdates(),
+        },
+        { type: 'separator' },
+        { label: 'Settings', accelerator: 'Cmd+,', click: () => dispatchAction('settings') },
+        { label: 'Command Palette', accelerator: 'Cmd+K', click: () => dispatchAction('command-palette') },
+        { label: 'Quick Open…', accelerator: 'Cmd+P', click: () => dispatchAction('quick-open') },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Window', accelerator: 'Cmd+Shift+Alt+N', click: () => void handleInvoke(null, 'desktop_new_window') },
+        { type: 'separator' },
+        { label: 'New Session', accelerator: 'Cmd+N', click: () => dispatchAction('new-session') },
+        { label: 'New Worktree', accelerator: 'Cmd+Shift+N', click: () => dispatchAction('new-worktree-session') },
+        { type: 'separator' },
+        { label: 'Add Workspace', click: () => dispatchAction('change-workspace') },
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { label: 'Copy', accelerator: 'Cmd+C', click: () => handleCopyAction() },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Git', accelerator: 'Cmd+G', click: () => dispatchAction('open-git-tab') },
+        { label: 'Diff', accelerator: 'Cmd+E', click: () => dispatchAction('open-diff-tab') },
+        { label: 'Files', click: () => dispatchAction('open-files-tab') },
+        { label: 'Terminal', accelerator: 'Cmd+T', click: () => dispatchAction('open-terminal-tab') },
+        { type: 'separator' },
+        { label: 'Light Theme', click: () => dispatchAction('theme-light') },
+        { label: 'Dark Theme', click: () => dispatchAction('theme-dark') },
+        { label: 'System Theme', click: () => dispatchAction('theme-system') },
+        { type: 'separator' },
+        { label: 'Toggle Session Sidebar', accelerator: 'Cmd+L', click: () => dispatchAction('toggle-sidebar') },
+        { label: 'Toggle Memory Debug', accelerator: 'Cmd+Shift+D', click: () => dispatchAction('toggle-memory-debug') },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'close' },
+      ],
+    },
+    {
+      label: 'Help',
+      submenu: [
+        { label: 'Keyboard Shortcuts', accelerator: 'Cmd+.', click: () => dispatchAction('help-dialog') },
+        { label: 'Show Diagnostics', accelerator: 'Cmd+Shift+L', click: () => dispatchAction('download-logs') },
+        { type: 'separator' },
+        { label: 'Clear Cache', click: () => void handleInvoke(null, 'desktop_clear_cache') },
+        { type: 'separator' },
+        { label: 'Report a Bug', click: () => shell.openExternal(GITHUB_BUG_REPORT_URL) },
+        { label: 'Request a Feature', click: () => shell.openExternal(GITHUB_FEATURE_REQUEST_URL) },
+        { type: 'separator' },
+        { label: 'Join Discord', click: () => shell.openExternal(DISCORD_INVITE_URL) },
+      ],
+    },
+  ]);
+};
+
+contextMenu({
+  showInspectElement: isDev,
+  showSaveImageAs: true,
+  showCopyImage: true,
+  showCopyLink: true,
+});
+
+ipcMain.handle('openchamber:invoke', async (event, command, args) => {
+  const browserWindow = BrowserWindow.fromWebContents(event.sender);
+  return handleInvoke(browserWindow, command, args);
+});
+
+ipcMain.handle('openchamber:dialog:open', async (event, options) => {
+  const browserWindow = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(browserWindow || undefined, {
+    title: typeof options?.title === 'string' ? options.title : undefined,
+    filters: Array.isArray(options?.filters)
+      ? options.filters
+          .filter((filter) => filter && typeof filter === 'object')
+          .map((filter) => ({
+            name: typeof filter.name === 'string' && filter.name.trim().length > 0 ? filter.name : 'Files',
+            extensions: Array.isArray(filter.extensions)
+              ? filter.extensions.filter((extension) => typeof extension === 'string' && extension.trim().length > 0)
+              : [],
+          }))
+      : undefined,
+    properties: [
+      options?.directory ? 'openDirectory' : 'openFile',
+      options?.multiple ? 'multiSelections' : null,
+      'createDirectory',
+    ].filter(Boolean),
+  });
+  if (result.canceled) return null;
+  if (options?.multiple) return result.filePaths;
+  return result.filePaths[0] || null;
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform === 'darwin' && !state.quitRequested) {
+    return;
+  }
+
+  killSidecar();
+  void sshManager.shutdownAll();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  state.quitRequested = true;
+});
+
+app.on('activate', async () => {
+  const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed());
+  if (windows.length > 0) {
+    const visibleWindow = windows.find((window) => window.isVisible());
+    const targetWindow = visibleWindow || state.mainWindow || windows[0];
+    if (!targetWindow.isVisible()) {
+      targetWindow.show();
+    }
+    targetWindow.focus();
+    return;
+  }
+
+  if (state.localOrigin) {
+    const config = readDesktopHostsConfig();
+    const localUiUrl = state.sidecarUrl || state.localOrigin;
+    const host = config.defaultHostId && config.defaultHostId !== LOCAL_HOST_ID
+      ? config.hosts.find((entry) => entry.id === config.defaultHostId)
+      : null;
+    const targetUrl = host?.url && !state.unreachableHosts.has(host.url) ? host.url : localUiUrl;
+    await createAdditionalWindow(targetUrl);
+  }
+});
+
+app.whenReady().then(async () => {
+  app.setName('OpenChamber');
+  nativeTheme.themeSource = readThemeSource();
+  setupAutoUpdater();
+
+  if (process.platform === 'darwin') {
+    Menu.setApplicationMenu(buildMacMenu());
+  }
+
+  const { initialUrl, localOrigin } = await resolveInitialUrl();
+  await activateMainWindow(initialUrl, localOrigin);
+}).catch((error) => {
+  console.error('[electron] startup failed:', error);
+  app.exit(1);
+});

@@ -1,0 +1,66 @@
+{
+  "name": "@openchamber/electron",
+  "version": "1.9.5",
+  "private": true,
+  "description": "Electron desktop runtime for OpenChamber",
+  "author": "OpenChamber",
+  "type": "module",
+  "main": "./dist-bundle/main.mjs",
+  "dependencies": {
+    "electron-context-menu": "^4.0.4",
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0"
+  },
+  "desktopPrerequisites": [
+    "Electron runtime dependencies installed via bun install",
+    "Bun available for sidecar compilation",
+    "macOS build tools installed for notarized packaging"
+  ],
+  "scripts": {
+    "dev": "node ./scripts/electron-dev.mjs",
+    "build:sidecar": "node ./scripts/build-sidecar.mjs",
+    "build": "bun run build:sidecar && node --check ./main.mjs && node --check ./preload.mjs",
+    "bundle:main": "bun ./scripts/bundle-main.mjs",
+    "package": "bun run build:sidecar && bun run bundle:main && electron-builder",
+    "finalize:latest-yml": "node ./scripts/finalize-latest-yml.mjs",
+    "type-check": "node -e \"process.exit(0)\"",
+    "lint": "node -e \"process.exit(0)\""
+  },
+  "build": {
+    "appId": "ai.opencode.openchamber.electron",
+    "productName": "OpenChamber",
+    "files": [
+      "dist-bundle/main.mjs",
+      "preload.mjs"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/web-dist",
+        "to": "web-dist"
+      },
+      {
+        "from": "resources/sidecar",
+        "to": "sidecar"
+      }
+    ],
+    "directories": {
+      "buildResources": "resources/icons",
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "resources/icons/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "btriapitsyn",
+      "repo": "openchamber"
+    }
+  }
+}
