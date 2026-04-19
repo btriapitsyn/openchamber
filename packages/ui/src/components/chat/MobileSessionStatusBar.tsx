@@ -1185,8 +1185,8 @@ function CollapsedView({
     <div
       className="w-full flex items-center justify-between px-2 py-1 border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first text-left overflow-hidden"
       style={{
-        borderTopLeftRadius: cornerRadius,
-        borderTopRightRadius: cornerRadius,
+        borderTopLeftRadius: 'var(--radius-lg)',
+        borderTopRightRadius: 'var(--radius-lg)',
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -1336,8 +1336,8 @@ function ExpandedView({
     <div
       className="w-full border-b border-[var(--interactive-border)] bg-[var(--surface-muted)] order-first overflow-hidden"
       style={{
-        borderTopLeftRadius: cornerRadius,
-        borderTopRightRadius: cornerRadius,
+        borderTopLeftRadius: 'var(--radius-lg)',
+        borderTopRightRadius: 'var(--radius-lg)',
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
