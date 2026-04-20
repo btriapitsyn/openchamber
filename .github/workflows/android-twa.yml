@@ -88,7 +88,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Generate signing key
-        if: github.event_name == 'workflow_dispatch' || github.repository == 'openchamber/openchamber'
+      if: "github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/android-apk'"
         run: |
           if [ ! -f packages/android-twa/android.keystore ]; then
             keytool -genkeypair -alias openchamber \
