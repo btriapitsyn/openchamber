@@ -560,7 +560,7 @@ jobs:
           # target Electron ABI before packaging, otherwise better-sqlite3/
           # node-pty/bun-pty crash on require inside the packaged app.
           bun run rebuild:native
-          ./node_modules/.bin/electron-builder --mac --arch ${{ matrix.arch }} --publish=never
+          ./node_modules/.bin/electron-builder --mac --${{ matrix.arch }} --publish=never
 
       - name: Verify signature + entitlements + notarization
         run: |
