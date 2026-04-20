@@ -496,7 +496,12 @@ jobs:
 
   build-desktop-electron-macos:
     needs: create-release
-    runs-on: macos-26
+    # Native runner per arch. Electron native modules (better-sqlite3,
+    # node-pty, bun-pty → librust_pty.dylib) cross-compile unreliably
+    # from arm64 to x64; running on the target arch keeps node-gyp +
+    # @electron/rebuild on the happy path and avoids cargo target-setup
+    # churn for the bun-pty rust crate.
+    runs-on: ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
       matrix:
@@ -504,9 +509,11 @@ jobs:
           - target: aarch64-apple-darwin
             arch: arm64
             platform: darwin-aarch64
+            runs-on: macos-14
           - target: x86_64-apple-darwin
             arch: x64
             platform: darwin-x86_64
+            runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
@@ -549,8 +556,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # rebuild-native.mjs reads this to target the right arch when
-          # cross-building (runner is arm64; x64 matrix needs the hint).
+          # Matches the native runner arch; @electron/rebuild reads this
+          # to pick the right Electron binary + node-gyp target.
           ELECTRON_BUILDER_ARCH: ${{ matrix.arch }}
         run: |
           bun run build:web-assets
