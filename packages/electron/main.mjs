@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme, Notification, session, shell } from 'electron';
 import contextMenu from 'electron-context-menu';
 import log from 'electron-log/main.js';
+import dgram from 'node:dgram';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
@@ -489,6 +490,45 @@ const isPortFree = async (port) => {
   });
 };
 
+// Return the LAN IPv4 of the interface that routes to the public internet.
+// UDP "connect" is a kernel-side route lookup — no packet actually goes out —
+// and it picks the same interface as a real outbound connection, which is what
+// a phone on the same Wi-Fi needs to reach us. Falls back to scanning
+// os.networkInterfaces() if the socket trick fails (e.g. no default route).
+const detectLanIPv4Address = async () => {
+  const ip = await new Promise((resolve) => {
+    const socket = dgram.createSocket('udp4');
+    const finish = (value) => {
+      try { socket.close(); } catch {}
+      resolve(value);
+    };
+    socket.once('error', () => finish(null));
+    try {
+      socket.connect(80, '8.8.8.8', (error) => {
+        if (error) return finish(null);
+        try {
+          const addr = socket.address();
+          finish(addr && typeof addr.address === 'string' ? addr.address : null);
+        } catch {
+          finish(null);
+        }
+      });
+    } catch {
+      finish(null);
+    }
+  });
+  if (ip && ip !== '0.0.0.0' && !ip.startsWith('127.')) return ip;
+
+  for (const entries of Object.values(os.networkInterfaces() || {})) {
+    for (const entry of entries || []) {
+      if (entry.family === 'IPv4' && !entry.internal && entry.address) {
+        return entry.address;
+      }
+    }
+  }
+  return null;
+};
+
 const buildLocalUrl = (port) => `http://127.0.0.1:${port}`;
 
 const resourceRoot = () => isDev ? path.join(__dirname, 'resources') : process.resourcesPath;
@@ -647,6 +687,11 @@ const spawnLocalServer = async () => {
 
   const settings = readSettingsRoot();
   const storedPort = Number.isFinite(settings.desktopLocalPort) ? settings.desktopLocalPort : null;
+  // When the user enables "Desktop Network Access" we bind on all interfaces
+  // so phones/tablets on the same Wi-Fi can reach the app. UI shows a clear
+  // warning and persists the flag via /api/config/settings.
+  const lanAccessEnabled = settings.desktopLanAccessEnabled === true;
+  const bindHost = lanAccessEnabled ? '0.0.0.0' : '127.0.0.1';
 
   // Probe before starting the server — main() in the server module sets up a
   // lot of global state before binding, and calling it twice after a listen
@@ -667,7 +712,7 @@ const spawnLocalServer = async () => {
   // OPENCHAMBER_RUNTIME at import time (top-level const), so these must be
   // set before the first import. After this point, the same env is used by
   // both the Electron main and the server running inside it.
-  process.env.OPENCHAMBER_HOST = '127.0.0.1';
+  process.env.OPENCHAMBER_HOST = bindHost;
   process.env.OPENCHAMBER_DIST_DIR = resolveWebDistDir();
   process.env.OPENCHAMBER_RUNTIME = 'desktop';
   process.env.OPENCHAMBER_DESKTOP_NOTIFY = 'true';
@@ -678,7 +723,7 @@ const spawnLocalServer = async () => {
 
   const handle = await startWebUiServer({
     port: chosenPort,
-    host: '127.0.0.1',
+    host: bindHost,
     attachSignals: false,
     exitOnShutdown: false,
     onDesktopNotification: (payload) => maybeShowNativeNotification(payload),
@@ -1736,6 +1781,9 @@ const handleInvoke = async (browserWindow, command, args = {}) => {
       app.relaunch();
       app.exit(0);
       return null;
+
+    case 'desktop_get_lan_address':
+      return await detectLanIPv4Address();
 
     case 'desktop_new_window': {
       const config = readDesktopHostsConfig();
