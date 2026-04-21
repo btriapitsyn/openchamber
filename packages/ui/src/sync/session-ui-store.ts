@@ -28,7 +28,7 @@ import { flattenAssistantTextParts } from "@/lib/messages/messageText"
 import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
-import type { ProjectEntry } from "@/lib/api/types"
+import { resolveProjectForSessionDirectory } from "@/lib/projectResolution"
 import {
   getSyncSessions,
   getAllSyncSessions,
@@ -187,6 +187,10 @@ export type SessionUIState = {
   markSessionPlanAvailable: (sessionId: string) => void
   isSessionPlanAvailable: (sessionId: string) => boolean
 
+  // Non-Git mode: dismissed signature hash per session, hides bar until new turn arrives
+  pendingChangesBarDismissed: Map<string, string>
+  dismissPendingChangesBar: (sessionId: string, signature: string | null) => void
+
   // Actions — UI state management
   setCurrentSession: (id: string | null, directoryHint?: string | null) => void
   openNewSessionDraft: (options?: Partial<NewSessionDraftState>) => void
@@ -292,59 +296,7 @@ const persistDraftTarget = (target: PersistedDraftTarget): void => {
   } catch { /* ignored */ }
 }
 
-const resolveProjectForDirectory = (projects: ProjectEntry[], directory: string | null): ProjectEntry | null => {
-  const nd = normalizePath(directory)
-  if (!nd) return null
-  let best: ProjectEntry | null = null
-  for (const p of projects) {
-    const pp = normalizePath(p.path)
-    if (!pp) continue
-    if (nd !== pp && !nd.startsWith(`${pp}/`)) continue
-    if (!best || pp.length > (normalizePath(best.path)?.length ?? 0)) best = p
-  }
-  return best
-}
-
-const resolveProjectFromWorktreeDirectory = (
-  projects: ProjectEntry[],
-  availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
-  directory: string | null,
-): ProjectEntry | null => {
-  const nd = normalizePath(directory)
-  if (!nd) return null
-  let matchedWorktree: WorktreeMetadata | null = null
-  let matchedProjectPath: string | null = null
-  let bestLen = -1
-  for (const [projectPath, worktrees] of availableWorktreesByProject.entries()) {
-    for (const wt of worktrees) {
-      const wp = normalizePath(wt.path)
-      if (!wp) continue
-      if (nd !== wp && !nd.startsWith(`${wp}/`)) continue
-      if (wp.length > bestLen) {
-        bestLen = wp.length
-        matchedWorktree = wt
-        matchedProjectPath = normalizePath(projectPath)
-      }
-    }
-  }
-  if (!matchedWorktree) return null
-  const candidates = [normalizePath(matchedWorktree.projectDirectory), matchedProjectPath].filter((v): v is string => Boolean(v))
-  for (const c of candidates) {
-    const exact = projects.find((p) => normalizePath(p.path) === c) ?? null
-    if (exact) return exact
-    const nested = resolveProjectForDirectory(projects, c)
-    if (nested) return nested
-  }
-  return null
-}
-
-const resolveDraftProjectForDirectory = (
-  projects: ProjectEntry[],
-  availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
-  directory: string | null,
-): ProjectEntry | null =>
-  resolveProjectFromWorktreeDirectory(projects, availableWorktreesByProject, directory) ??
-  resolveProjectForDirectory(projects, directory)
+const resolveDraftProjectForDirectory = resolveProjectForSessionDirectory
 
 const getAttachmentForSession = (sessionId: string | null | undefined): SessionWorktreeAttachment | undefined => {
   if (!sessionId) return undefined
@@ -395,6 +347,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   isLoading: false,
   lastLoadedDirectory: null,
   sessionPlanAvailable: new Map(),
+  pendingChangesBarDismissed: new Map(),
 
   // ---------------------------------------------------------------------------
   // setCurrentSession
@@ -702,6 +655,16 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
   getWorktreeMetadata: (sessionId) => get().worktreeMetadata.get(sessionId),
 
+  dismissPendingChangesBar: (sessionId, signature) => {
+    const map = new Map(get().pendingChangesBarDismissed);
+    if (signature === null) {
+      map.delete(sessionId);
+    } else {
+      map.set(sessionId, signature);
+    }
+    set({ pendingChangesBarDismissed: map });
+  },
+
   // ---------------------------------------------------------------------------
   // sendMessage — calls SDK, reads domain data from sync
   // ---------------------------------------------------------------------------
@@ -716,6 +679,14 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     variant?: string,
     inputMode?: "normal" | "shell",
   ) => {
+    // Clear non-Git changed-files bar on new user message for current session
+    const sid = get().currentSessionId;
+    if (sid) {
+      const map = new Map(get().pendingChangesBarDismissed);
+      map.delete(sid);
+      set({ pendingChangesBarDismissed: map });
+    }
+
     const draft = get().newSessionDraft
     const trimmedAgent = typeof agent === "string" && agent.trim().length > 0 ? agent.trim() : undefined
 
