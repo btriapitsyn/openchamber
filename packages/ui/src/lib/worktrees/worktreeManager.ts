@@ -345,7 +345,7 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
 
   clearWorktreeBootstrapState(worktree.path);
 
-  _worktreeListCache.delete(project.path);
+  _worktreeListCache.delete(normalizePath(project.path));
 
   const branchName = (worktree.branch || '').replace(/^refs\/heads\//, '').trim();
   if (deleteRemote && branchName) {
