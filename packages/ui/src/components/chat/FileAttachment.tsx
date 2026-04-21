@@ -1,7 +1,8 @@
 import React, { useRef, memo } from 'react';
 import { RiAttachment2, RiCloseLine, RiFileImageLine, RiFileLine, RiFilePdfLine, RiGithubLine, RiGitPullRequestLine } from '@remixicon/react';
-import { useInputStore } from '@/sync/input-store';
+import { useInputStore, DRAFT_INPUT_KEY } from '@/sync/input-store';
 import type { AttachedFile } from '@/sync/session-ui-store';
+import { usePaneSessionId } from '@/contexts/paneContextValue';
 import { useUIStore } from '@/stores/useUIStore';
 import { toast } from '@/components/ui';
 import { cn } from '@/lib/utils';
@@ -14,7 +15,13 @@ import type { ToolPopupContent } from './message/types';
 
 export const FileAttachmentButton = memo(() => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const addAttachedFile = useInputStore((state) => state.addAttachedFile);
+  const paneSessionId = usePaneSessionId();
+  const inputKeyForButton = paneSessionId ?? DRAFT_INPUT_KEY;
+  const addAttachedFileFor = useInputStore((state) => state.addAttachedFileFor);
+  const addAttachedFile = React.useCallback(
+    (file: File) => addAttachedFileFor(inputKeyForButton, file),
+    [addAttachedFileFor, inputKeyForButton],
+  );
   const isMobile = useUIStore((state) => state.isMobile);
   const isVSCodeRuntime = useIsVSCodeRuntime();
   const buttonSizeClass = isMobile ? 'h-9 w-9' : 'h-7 w-7';
@@ -255,23 +262,31 @@ const FileChip = memo(({ file, onRemove }: FileChipProps) => {
 
 FileChip.displayName = 'FileChip';
 
-export const AttachedFilesList = memo(() => {
-  const attachedFiles = useInputStore((state) => state.attachedFiles);
-  const removeAttachedFile = useInputStore((state) => state.removeAttachedFile);
+const EMPTY_FILES: AttachedFile[] = [];
 
-  const localFiles = attachedFiles.filter((file) => file.source !== 'server');
+export const AttachedFilesList = memo(() => {
+  const paneSessionId = usePaneSessionId();
+  const inputKey = paneSessionId ?? DRAFT_INPUT_KEY;
+  const attachedFiles = useInputStore((state) => state.attachedFilesByKey[inputKey] ?? EMPTY_FILES);
+  const removeAttachedFileFor = useInputStore((state) => state.removeAttachedFileFor);
+  const removeAttachedFile = React.useCallback(
+    (id: string) => removeAttachedFileFor(inputKey, id),
+    [removeAttachedFileFor, inputKey],
+  );
+
+  const localFiles = attachedFiles.filter((file: AttachedFile) => file.source !== 'server');
 
   if (localFiles.length === 0) return null;
 
-  const images = localFiles.filter((f) => f.mimeType.startsWith('image/'));
-  const otherFiles = localFiles.filter((f) => !f.mimeType.startsWith('image/'));
+  const images = localFiles.filter((f: AttachedFile) => f.mimeType.startsWith('image/'));
+  const otherFiles = localFiles.filter((f: AttachedFile) => !f.mimeType.startsWith('image/'));
 
   return (
     <div className="pb-4 w-full px-1 space-y-3">
       {/* Images row - inline with previews */}
       {images.length > 0 && (
         <div className="flex items-center gap-1.5 flex-wrap">
-          {images.map((file) => (
+          {images.map((file: AttachedFile) => (
             <ImagePreview
               key={file.id}
               file={file}
@@ -280,11 +295,11 @@ export const AttachedFilesList = memo(() => {
           ))}
         </div>
       )}
-      
+
       {/* Other files row - inline text-only */}
       {otherFiles.length > 0 && (
         <div className="flex items-center gap-x-3 gap-y-1 flex-wrap">
-          {otherFiles.map((file) => (
+          {otherFiles.map((file: AttachedFile) => (
             <FileChip
               key={file.id}
               file={file}

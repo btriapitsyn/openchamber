@@ -22,7 +22,9 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useMessageQueueStore, type QueuedMessage } from '@/stores/messageQueueStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
-import { useInputStore } from '@/sync/input-store';
+import { useInputStore, DRAFT_INPUT_KEY } from '@/sync/input-store';
+import { usePaneSessionId } from '@/contexts/paneContextValue';
+import { usePaneScopedConfig } from '@/hooks/usePaneScopedConfig';
 import type { AttachedFile } from '@/stores/types/sessionTypes';
 import * as sessionActions from '@/sync/session-actions';
 import { useUserMessageHistory } from '@/sync/sync-context';
@@ -708,21 +710,45 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const sendMessage = React.useRef((...args: any[]) =>
         Promise.resolve((useSessionUIStore.getState().sendMessage as (...a: unknown[]) => unknown)(...args)),
     ).current;
-    const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
+    const currentSessionId = usePaneSessionId();
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
+    // Input state key: real sessionId when a session is loaded, else the shared draft slot.
+    const inputKey = currentSessionId ?? DRAFT_INPUT_KEY;
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
     const availableWorktreesByProject = useSessionUIStore((s) => s.availableWorktreesByProject);
     const abortPromptSessionId = useSessionUIStore((s) => s.abortPromptSessionId);
     const clearAbortPrompt = useSessionUIStore((s) => s.clearAbortPrompt);
-    const attachedFiles = useInputStore((s) => s.attachedFiles);
-    const addAttachedFile = useInputStore((s) => s.addAttachedFile);
-    const clearAttachedFiles = useInputStore((s) => s.clearAttachedFiles);
+    const EMPTY_FILES_REF = React.useRef<AttachedFile[]>([]);
+    const attachedFiles = useInputStore((s) => s.attachedFilesByKey[inputKey] ?? EMPTY_FILES_REF.current);
+    const addAttachedFileFor = useInputStore((s) => s.addAttachedFileFor);
+    const clearAttachedFilesFor = useInputStore((s) => s.clearAttachedFilesFor);
+    const addAttachedFile = React.useCallback(
+        (file: File) => addAttachedFileFor(inputKey, file),
+        [addAttachedFileFor, inputKey],
+    );
+    const clearAttachedFiles = React.useCallback(
+        () => clearAttachedFilesFor(inputKey),
+        [clearAttachedFilesFor, inputKey],
+    );
     const saveSessionAgentSelection = useSelectionStore((s) => s.saveSessionAgentSelection);
-    const consumePendingInputText = useInputStore((s) => s.consumePendingInputText);
-    const setPendingInputText = useInputStore((s) => s.setPendingInputText);
-    const pendingInputText = useInputStore((s) => s.pendingInputText);
-    const consumePendingSyntheticParts = useInputStore((s) => s.consumePendingSyntheticParts);
+    const consumePendingInputTextFor = useInputStore((s) => s.consumePendingInputTextFor);
+    const setPendingInputTextFor = useInputStore((s) => s.setPendingInputTextFor);
+    const consumePendingInputText = React.useCallback(
+        () => consumePendingInputTextFor(inputKey),
+        [consumePendingInputTextFor, inputKey],
+    );
+    const setPendingInputText = React.useCallback(
+        (text: string | null, mode?: 'replace' | 'append' | 'append-inline') =>
+            setPendingInputTextFor(inputKey, text, mode),
+        [setPendingInputTextFor, inputKey],
+    );
+    const pendingInputText = useInputStore((s) => s.pendingInputTextByKey[inputKey]?.text ?? null);
+    const consumePendingSyntheticPartsFor = useInputStore((s) => s.consumePendingSyntheticPartsFor);
+    const consumePendingSyntheticParts = React.useCallback(
+        () => consumePendingSyntheticPartsFor(inputKey),
+        [consumePendingSyntheticPartsFor, inputKey],
+    );
     const acknowledgeSessionAbort = useSessionUIStore((s) => s.acknowledgeSessionAbort);
     const abortCurrentOperation = React.useCallback(
         (sessionIdOverride?: string) => sessionActions.abortCurrentOperation(sessionIdOverride ?? currentSessionId ?? ''),
@@ -733,10 +759,11 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const activeProjectId = useProjectsStore((state) => state.activeProjectId);
     const setActiveProjectIdOnly = useProjectsStore((state) => state.setActiveProjectIdOnly);
 
-    const currentProviderId = useConfigStore((state) => state.currentProviderId);
-    const currentModelId = useConfigStore((state) => state.currentModelId);
-    const currentVariant = useConfigStore((state) => state.currentVariant);
-    const currentAgentName = useConfigStore((state) => state.currentAgentName);
+    const paneConfig = usePaneScopedConfig();
+    const currentProviderId = paneConfig.providerId;
+    const currentModelId = paneConfig.modelId;
+    const currentVariant = paneConfig.variant;
+    const currentAgentName = paneConfig.agentName;
     const setAgent = useConfigStore((state) => state.setAgent);
     const getVisibleAgents = useConfigStore((state) => state.getVisibleAgents);
     const agents = getVisibleAgents();
@@ -1540,21 +1567,27 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             if (normalized.includes('payload too large') || normalized.includes('413') || normalized.includes('entity too large')) {
                 toast.error('Attachments are too large to send. Please try reducing the number or size of images.');
                 if (allAttachments.length > 0) {
-                    useInputStore.setState({ attachedFiles: allAttachments });
+                    useInputStore.setState((s) => ({
+                        attachedFilesByKey: { ...s.attachedFilesByKey, [inputKey]: allAttachments },
+                    }));
                 }
                 return;
             }
 
             if (isSoftNetworkError) {
                 if (allAttachments.length > 0) {
-                    useInputStore.setState({ attachedFiles: allAttachments });
+                    useInputStore.setState((s) => ({
+                        attachedFilesByKey: { ...s.attachedFilesByKey, [inputKey]: allAttachments },
+                    }));
                     toast.error('Failed to send attachments. Try fewer files or smaller images.');
                 }
                 return;
             }
 
             if (allAttachments.length > 0) {
-                useInputStore.setState({ attachedFiles: allAttachments });
+                useInputStore.setState((s) => ({
+                    attachedFilesByKey: { ...s.attachedFilesByKey, [inputKey]: allAttachments },
+                }));
             }
             toast.error(rawMessage || 'Message failed to send. Attachments restored.');
         });

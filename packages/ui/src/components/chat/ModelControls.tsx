@@ -48,6 +48,8 @@ import { cn, fuzzyMatch } from '@/lib/utils';
 import { useContextStore } from '@/stores/contextStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { usePaneSessionId, usePaneContext } from '@/contexts/paneContextValue';
+import { usePaneScopedConfig } from '@/hooks/usePaneScopedConfig';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useDirectorySync, useSessionMessages } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
@@ -294,10 +296,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     onAgentPanelSelection,
 }) => {
     const providers = useConfigStore((state) => state.providers);
-    const currentProviderId = useConfigStore((state) => state.currentProviderId);
-    const currentModelId = useConfigStore((state) => state.currentModelId);
-    const currentVariant = useConfigStore((state) => state.currentVariant);
-    const currentAgentName = useConfigStore((state) => state.currentAgentName);
+    const paneConfig = usePaneScopedConfig();
+    const currentProviderId = paneConfig.providerId;
+    const currentModelId = paneConfig.modelId;
+    const currentVariant = paneConfig.variant;
+    const currentAgentName = paneConfig.agentName;
     const settingsDefaultVariant = useConfigStore((state) => state.settingsDefaultVariant);
     const settingsDefaultAgent = useConfigStore((state) => state.settingsDefaultAgent);
     const setProvider = useConfigStore((state) => state.setProvider);
@@ -315,7 +318,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const agents = getVisibleAgents();
     const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
 
-    const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
+    const currentSessionId = usePaneSessionId();
+    // When rendered outside a pane (e.g. legacy call sites), treat as focused.
+    const isPaneFocused = usePaneContext()?.isFocused ?? true;
     const getDirectoryForSession = useSessionUIStore((s) => s.getDirectoryForSession);
     const sync = useSync();
 
@@ -525,7 +530,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         return <RiQuestionLine className={combinedClassName} style={iconStyle} />;
     }, [editToggleIconClass]);
 
-    const currentProvider = getCurrentProvider();
+    // Pane-scoped provider/model: non-focused pane's session may belong to a different
+    // directory, so we resolve provider by id across all known directory snapshots
+    // rather than relying on the global active provider.
+    const currentProvider = paneConfig.provider ?? getCurrentProvider();
     const models = Array.isArray(currentProvider?.models) ? currentProvider.models : [];
 
     const visibleProviders = React.useMemo(() => {
@@ -549,9 +557,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const inputModalityIcons = getModalityIcons(currentMetadata, 'input');
     const outputModalityIcons = getModalityIcons(currentMetadata, 'output');
 
-    // Compute from current model each render to avoid stale variants
-    // in draft/session transitions.
-    const availableVariants = getCurrentModelVariants();
+    // Derive variants from the pane's own model (not the global-focused one) so
+    // non-focused panes see variants for their session's model, not the focused pane's.
+    const availableVariants = React.useMemo<string[]>(() => {
+        const modelVariants = (paneConfig.model as { variants?: Record<string, unknown> } | undefined)?.variants;
+        if (modelVariants) return Object.keys(modelVariants);
+        return getCurrentModelVariants();
+    }, [paneConfig.model, getCurrentModelVariants]);
     const hasVariants = availableVariants.length > 0;
 
     const costRows = [
@@ -671,17 +683,20 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
-        if (latestLoadedUserChoice.agent && currentAgentName !== latestLoadedUserChoice.agent) {
-            setAgent(latestLoadedUserChoice.agent);
-        }
+        // Only the focused pane should mutate global agent/model state.
+        if (isPaneFocused) {
+            if (latestLoadedUserChoice.agent && currentAgentName !== latestLoadedUserChoice.agent) {
+                setAgent(latestLoadedUserChoice.agent);
+            }
 
-        const applyResult = tryApplyModelSelection(
-            latestLoadedUserChoice.providerID,
-            latestLoadedUserChoice.modelID,
-            latestLoadedUserChoice.agent || currentAgentName || undefined,
-        );
-        if (applyResult !== 'applied') {
-            return;
+            const applyResult = tryApplyModelSelection(
+                latestLoadedUserChoice.providerID,
+                latestLoadedUserChoice.modelID,
+                latestLoadedUserChoice.agent || currentAgentName || undefined,
+            );
+            if (applyResult !== 'applied') {
+                return;
+            }
         }
 
         if (latestLoadedUserChoice.agent) {
@@ -709,11 +724,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         saveSessionAgentSelection,
         saveAgentModelVariantForSession,
         saveSessionModelSelection,
+        isPaneFocused,
     ]);
 
     React.useEffect(() => {
         if (!currentSessionId) {
             latestLoadedUserChoiceRestoreRef.current = null;
+            return;
+        }
+
+        // Global config mutations must come from the focused pane only; otherwise
+        // non-focused panes would clobber each other through shared global state.
+        if (!isPaneFocused) {
             return;
         }
 
@@ -852,10 +874,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         contextHydrated,
         providers,
         sync,
+        isPaneFocused,
     ]);
 
     React.useEffect(() => {
         if (!contextHydrated) {
+            return;
+        }
+
+        // Only focused pane reacts to agent switches with global tryApplyModelSelection.
+        if (!isPaneFocused) {
             return;
         }
 
@@ -899,9 +927,12 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         };
 
         handleAgentSwitch();
-    }, [currentAgentName, currentSessionId, getAgentModelForSession, tryApplyModelSelection, agents, contextHydrated]);
+    }, [currentAgentName, currentSessionId, getAgentModelForSession, tryApplyModelSelection, agents, contextHydrated, isPaneFocused]);
 
     React.useEffect(() => {
+        // Non-focused pane must not write to global variant — focused pane owns it.
+        if (!isPaneFocused) return;
+
         if (!contextHydrated || !currentAgentName) {
             manualVariantSelectionRef.current = false;
             setCurrentVariant(undefined);
@@ -961,6 +992,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         getAgentModelVariantForSession,
         setCurrentVariant,
         settingsDefaultVariant,
+        isPaneFocused,
     ]);
 
     React.useEffect(() => {
@@ -1066,6 +1098,9 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
     const getCurrentModelDisplayName = () => {
         if (!currentProviderId || !currentModelId) return 'Not selected';
+        // Prefer pane-scoped model (covers non-focused panes whose session lives in a
+        // different directory than the one currently active).
+        if (paneConfig.model) return getModelDisplayName(paneConfig.model);
         if (models.length === 0) return 'Not selected';
         const currentModel = models.find((m: ProviderModel) => m.id === currentModelId);
         return getModelDisplayName(currentModel);

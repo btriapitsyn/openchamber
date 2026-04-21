@@ -1,8 +1,8 @@
 import React, { memo } from 'react';
 import { RiCloseLine, RiMessage2Line } from '@remixicon/react';
 import { useMessageQueueStore, type QueuedMessage } from '@/stores/messageQueueStore';
-import { useSessionUIStore } from '@/sync/session-ui-store';
-import { useInputStore } from '@/sync/input-store';
+import { useInputStore, DRAFT_INPUT_KEY } from '@/sync/input-store';
+import { usePaneSessionId } from '@/contexts/paneContextValue';
 
 interface QueuedMessageChipProps {
     message: QueuedMessage;
@@ -67,7 +67,8 @@ interface QueuedMessageChipsProps {
 const EMPTY_QUEUE: QueuedMessage[] = [];
 
 export const QueuedMessageChips = memo(({ onEditMessage }: QueuedMessageChipsProps) => {
-    const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+    const currentSessionId = usePaneSessionId();
+    const inputKey = currentSessionId ?? DRAFT_INPUT_KEY;
     const queuedMessages = useMessageQueueStore(
         React.useCallback(
             (state) => {
@@ -81,18 +82,23 @@ export const QueuedMessageChips = memo(({ onEditMessage }: QueuedMessageChipsPro
 
     const handleEdit = React.useCallback((message: QueuedMessage) => {
         if (!currentSessionId) return;
-        
+
         const popped = popToInput(currentSessionId, message.id);
         if (popped) {
             if (popped.attachments && popped.attachments.length > 0) {
-                const currentAttachments = useInputStore.getState().attachedFiles;
-                useInputStore.setState({ 
-                    attachedFiles: [...currentAttachments, ...popped.attachments] 
+                useInputStore.setState((s) => {
+                    const current = s.attachedFilesByKey[inputKey] ?? [];
+                    return {
+                        attachedFilesByKey: {
+                            ...s.attachedFilesByKey,
+                            [inputKey]: [...current, ...popped.attachments!],
+                        },
+                    };
                 });
             }
             onEditMessage(popped.content, popped.attachments);
         }
-    }, [currentSessionId, popToInput, onEditMessage]);
+    }, [currentSessionId, inputKey, popToInput, onEditMessage]);
 
     if (queuedMessages.length === 0 || !currentSessionId) {
         return null;

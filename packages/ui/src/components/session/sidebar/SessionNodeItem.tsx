@@ -31,6 +31,8 @@ import {
   RiShieldLine,
   RiUnpinLine,
   RiGitBranchLine,
+  RiLayoutLeftLine,
+  RiLayoutRightLine,
 } from '@remixicon/react';
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
@@ -45,6 +47,7 @@ import { formatSessionCompactDateLabel, formatSessionDateLabel, normalizePath, r
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useSessionUnseenCount } from '@/sync/notification-store';
 import { useSessionMultiSelectStore } from '@/stores/useSessionMultiSelectStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 
 type Folder = { id: string; name: string; sessionIds: string[] };
 
@@ -263,6 +266,8 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const session = node.session;
   const liveSession = useSession(session.id);
   const resolvedSession = liveSession ?? session;
+
+  const openSessionInPane = useSessionUIStore((state) => state.openSessionInPane);
 
   const selectionModeEnabled = useSessionMultiSelectStore((state) => state.enabled);
   const isRowSelected = useSessionMultiSelectStore(
@@ -533,6 +538,22 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         {isPinnedSession ? <RiUnpinLine className="mr-1 h-4 w-4" /> : <RiPushpinLine className="mr-1 h-4 w-4" />}
         {isPinnedSession ? 'Unpin session' : 'Pin session'}
       </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        onClick={() => openSessionInPane(session.id, 'left', sessionDirectory)}
+        className="[&>svg]:mr-1"
+      >
+        <RiLayoutLeftLine className="mr-1 h-4 w-4" />
+        Open on left
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        onClick={() => openSessionInPane(session.id, 'right', sessionDirectory)}
+        className="[&>svg]:mr-1"
+      >
+        <RiLayoutRightLine className="mr-1 h-4 w-4" />
+        Open on right
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
       {!resolvedSession.share ? (
         <DropdownMenuItem onClick={() => handleShareSession(resolvedSession)} className="[&>svg]:mr-1">
           <RiShare2Line className="mr-1 h-4 w-4" />

@@ -9,6 +9,9 @@ export type SelectionState = {
   sessionModelSelections: Map<string, { providerId: string; modelId: string }>
   sessionAgentSelections: Map<string, string>
   sessionAgentModelSelections: Map<string, Map<string, { providerId: string; modelId: string }>>
+  // Reactive variant storage — keyed by `${sessionId}|${agentName}|${providerId}|${modelId}`.
+  // Enables pane-scoped variant reads to re-render when a pane's variant changes.
+  sessionVariantByKey: Record<string, string | undefined>
   lastUsedProvider: { providerID: string; modelID: string } | null
 
   saveSessionModelSelection: (sessionId: string, providerId: string, modelId: string) => void
@@ -21,13 +24,14 @@ export type SelectionState = {
   getAgentModelVariantForSession: (sessionId: string, agentName: string, providerId: string, modelId: string) => string | undefined
 }
 
-// In-memory variant storage (not persisted)
-const agentModelVariantSelections = new Map<string, Map<string, Map<string, string>>>()
+const buildVariantKey = (sessionId: string, agentName: string, providerId: string, modelId: string) =>
+  `${sessionId}|${agentName}|${providerId}|${modelId}`
 
 export const useSelectionStore = create<SelectionState>()((set, get) => ({
   sessionModelSelections: new Map(),
   sessionAgentSelections: new Map(),
   sessionAgentModelSelections: new Map(),
+  sessionVariantByKey: {},
   lastUsedProvider: null,
 
   saveSessionModelSelection: (sessionId, providerId, modelId) =>
@@ -64,23 +68,15 @@ export const useSelectionStore = create<SelectionState>()((set, get) => ({
     get().sessionAgentModelSelections.get(sessionId)?.get(agentName) ?? null,
 
   saveAgentModelVariantForSession: (sessionId, agentName, providerId, modelId, variant) => {
-    if (!variant) return
-    const key = `${providerId}/${modelId}`
-    let agentMap = agentModelVariantSelections.get(sessionId)
-    if (!agentMap) {
-      agentMap = new Map()
-      agentModelVariantSelections.set(sessionId, agentMap)
-    }
-    let modelMap = agentMap.get(agentName)
-    if (!modelMap) {
-      modelMap = new Map()
-      agentMap.set(agentName, modelMap)
-    }
-    modelMap.set(key, variant)
+    const key = buildVariantKey(sessionId, agentName, providerId, modelId)
+    set((s) => {
+      if (s.sessionVariantByKey[key] === variant) return s
+      return { sessionVariantByKey: { ...s.sessionVariantByKey, [key]: variant } }
+    })
   },
 
   getAgentModelVariantForSession: (sessionId, agentName, providerId, modelId) => {
-    const key = `${providerId}/${modelId}`
-    return agentModelVariantSelections.get(sessionId)?.get(agentName)?.get(key)
+    const key = buildVariantKey(sessionId, agentName, providerId, modelId)
+    return get().sessionVariantByKey[key]
   },
 }))

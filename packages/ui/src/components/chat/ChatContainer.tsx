@@ -28,6 +28,7 @@ import {
 
 // New sync system imports
 import { useSessionUIStore } from '@/sync/session-ui-store';
+import { usePaneSessionId } from '@/contexts/paneContextValue';
 import { useViewportStore } from '@/sync/viewport-store';
 import { useStreamingStore } from '@/sync/streaming';
 import {
@@ -231,8 +232,9 @@ const HYDRATING_SKELETON_ITEMS: Array<{
 ];
 
 export const ChatContainer: React.FC = () => {
-    // Session UI state
-    const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
+    // Session UI state — read pane-bound sessionId; falls back to store currentSessionId
+    // when no PaneProvider wraps this tree (legacy non-split callers).
+    const currentSessionId = usePaneSessionId();
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
     const setCurrentSession = useSessionUIStore((s) => s.setCurrentSession);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);

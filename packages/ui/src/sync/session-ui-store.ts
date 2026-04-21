@@ -168,8 +168,13 @@ export type SessionHistoryMeta = {
   nextCursor?: string
 }
 
+export type PaneSide = "left" | "right"
+
 export type SessionUIState = {
   currentSessionId: string | null
+  leftPaneSessionId: string | null
+  rightPaneSessionId: string | null
+  focusedPane: PaneSide
   newSessionDraft: NewSessionDraftState
   abortPromptSessionId: string | null
   abortPromptExpiresAt: number | null
@@ -189,6 +194,9 @@ export type SessionUIState = {
 
   // Actions — UI state management
   setCurrentSession: (id: string | null, directoryHint?: string | null) => void
+  openSessionInPane: (id: string, pane: PaneSide, directoryHint?: string | null) => void
+  closePane: (pane: PaneSide) => void
+  setFocusedPane: (pane: PaneSide) => void
   openNewSessionDraft: (options?: Partial<NewSessionDraftState>) => void
   closeNewSessionDraft: () => void
   setNewSessionDraftTarget: (target: { projectId?: string | null; selectedProjectId?: string | null; directoryOverride?: string | null }, options?: { force?: boolean }) => void
@@ -318,6 +326,23 @@ const activateConfigForDirectory = async (directory: string | null | undefined):
   await useConfigStore.getState().activateDirectory(normalizePath(directory))
 }
 
+// Keep the header/project chip in sync with the active session's project. Resolves
+// the session's directory to a project (including worktree resolution) and sets
+// `activeProjectId` if it differs. Used by every pane-level session activation
+// (setCurrentSession / openSessionInPane / setFocusedPane) so the Header doesn't
+// get stuck showing a stale project after a focus switch.
+const syncActiveProjectForDirectory = (directory: string | null | undefined): void => {
+  const projectsState = useProjectsStore.getState()
+  const resolved = resolveProjectForSessionDirectory(
+    projectsState.projects,
+    useSessionUIStore.getState().availableWorktreesByProject,
+    normalizePath(directory ?? null),
+  )
+  if (resolved && resolved.id !== projectsState.activeProjectId) {
+    projectsState.setActiveProjectIdOnly(resolved.id)
+  }
+}
+
 const DEFAULT_DRAFT: NewSessionDraftState = {
   open: false,
   directoryOverride: null,
@@ -328,8 +353,18 @@ const DEFAULT_DRAFT: NewSessionDraftState = {
 // Store
 // ---------------------------------------------------------------------------
 
+// Compute currentSessionId from pane state — single source of truth.
+const deriveCurrentSessionId = (
+  leftId: string | null,
+  rightId: string | null,
+  focused: PaneSide,
+): string | null => (focused === "left" ? leftId : rightId)
+
 export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   currentSessionId: null,
+  leftPaneSessionId: null,
+  rightPaneSessionId: null,
+  focusedPane: "left",
   newSessionDraft: { ...DEFAULT_DRAFT },
   abortPromptSessionId: null,
   abortPromptExpiresAt: null,
@@ -345,7 +380,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   sessionPlanAvailable: new Map(),
 
   // ---------------------------------------------------------------------------
-  // setCurrentSession
+  // setCurrentSession — replaces the focused pane's session
   // ---------------------------------------------------------------------------
   setCurrentSession: (id, directoryHint?: string | null) => {
     if (id) {
@@ -382,13 +417,181 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       }
     }
 
-    set({ currentSessionId: id })
+    set((s) => {
+      // Update focused pane. Fallback to left if right is empty.
+      let focused: PaneSide = s.focusedPane
+      let left = s.leftPaneSessionId
+      let right = s.rightPaneSessionId
+      if (focused === "right" && right === null) {
+        focused = "left"
+      }
+      if (focused === "left") left = id
+      else right = id
+      return {
+        leftPaneSessionId: left,
+        rightPaneSessionId: right,
+        focusedPane: focused,
+        currentSessionId: deriveCurrentSessionId(left, right, focused),
+      }
+    })
 
-    // Mark session viewed in notification store + update active session ref
-    // Mark session viewed in notification store + update active session ref
     if (id) {
       markSessionViewed(id)
       setActiveSession(resolvedDir ?? "", id)
+      syncActiveProjectForDirectory(resolvedDir)
+    }
+  },
+
+  // ---------------------------------------------------------------------------
+  // openSessionInPane — open a session explicitly in left or right pane
+  // ---------------------------------------------------------------------------
+  openSessionInPane: (id, pane, directoryHint?: string | null) => {
+    get().closeNewSessionDraft()
+    const directoryState = useDirectoryStore.getState()
+    const sessionDir = resolveSessionDirectory(
+      id,
+      (sid) => get().worktreeMetadata.get(sid),
+    )
+    const fallbackDir = opencodeClient.getDirectory() ?? directoryState.currentDirectory ?? null
+    const resolvedDir = (directoryHint ? normalizePath(directoryHint) : null) ?? sessionDir ?? fallbackDir
+
+    try {
+      if (resolvedDir && directoryState.currentDirectory !== resolvedDir) {
+        directoryState.setDirectory(resolvedDir, { showOverlay: false })
+      }
+      opencodeClient.setDirectory(resolvedDir ?? undefined)
+    } catch (e) {
+      console.warn("Failed to set OpenCode directory for pane open:", e)
+    }
+
+    set((s) => {
+      let left = s.leftPaneSessionId
+      let right = s.rightPaneSessionId
+      if (pane === "left") {
+        left = id
+      } else {
+        // Right pane: if left is empty, promote to left instead of creating orphan split.
+        if (left === null) {
+          left = id
+          return {
+            leftPaneSessionId: left,
+            rightPaneSessionId: right,
+            focusedPane: "left" as PaneSide,
+            currentSessionId: deriveCurrentSessionId(left, right, "left"),
+          }
+        }
+        right = id
+      }
+      const focused: PaneSide = pane
+      return {
+        leftPaneSessionId: left,
+        rightPaneSessionId: right,
+        focusedPane: focused,
+        currentSessionId: deriveCurrentSessionId(left, right, focused),
+      }
+    })
+
+    markSessionViewed(id)
+    setActiveSession(resolvedDir ?? "", id)
+    syncActiveProjectForDirectory(resolvedDir)
+  },
+
+  // ---------------------------------------------------------------------------
+  // closePane — close a pane; if closing left while right exists, shift right to left
+  // ---------------------------------------------------------------------------
+  closePane: (pane) => {
+    // Drop the draft if it lives in the pane being closed.
+    if (get().newSessionDraft?.open && get().focusedPane === pane) {
+      get().closeNewSessionDraft()
+    }
+
+    set((s) => {
+      let left = s.leftPaneSessionId
+      let right = s.rightPaneSessionId
+      let focused: PaneSide = s.focusedPane
+
+      if (pane === "right") {
+        right = null
+        focused = "left"
+      } else {
+        // Closing left: if right exists, shift it into left slot; else both empty.
+        if (right !== null) {
+          left = right
+          right = null
+        } else {
+          left = null
+        }
+        focused = "left"
+      }
+
+      return {
+        leftPaneSessionId: left,
+        rightPaneSessionId: right,
+        focusedPane: focused,
+        currentSessionId: deriveCurrentSessionId(left, right, focused),
+      }
+    })
+  },
+
+  // ---------------------------------------------------------------------------
+  // setFocusedPane — switch which pane drives currentSessionId / right sidebar
+  // ---------------------------------------------------------------------------
+  setFocusedPane: (pane) => {
+    const state = get()
+    if (pane === "right" && state.rightPaneSessionId === null) return
+    if (pane === state.focusedPane) return
+
+    const nextFocusedSessionId = pane === "left" ? state.leftPaneSessionId : state.rightPaneSessionId
+    const directoryState = useDirectoryStore.getState()
+    const sessionDir = resolveSessionDirectory(
+      nextFocusedSessionId,
+      (sid) => state.worktreeMetadata.get(sid),
+    )
+    const fallbackDir = opencodeClient.getDirectory() ?? directoryState.currentDirectory ?? null
+    const resolvedDir = sessionDir ?? fallbackDir
+
+    try {
+      if (resolvedDir && directoryState.currentDirectory !== resolvedDir) {
+        directoryState.setDirectory(resolvedDir, { showOverlay: false })
+      }
+      opencodeClient.setDirectory(resolvedDir ?? undefined)
+    } catch (e) {
+      console.warn("Failed to set OpenCode directory for pane focus:", e)
+    }
+
+    set((s) => ({
+      focusedPane: pane,
+      currentSessionId: deriveCurrentSessionId(s.leftPaneSessionId, s.rightPaneSessionId, pane),
+    }))
+
+    if (nextFocusedSessionId) {
+      markSessionViewed(nextFocusedSessionId)
+      setActiveSession(resolvedDir ?? "", nextFocusedSessionId)
+      syncActiveProjectForDirectory(resolvedDir)
+
+      // Sync global config to the newly-focused pane's saved model/agent/variant
+      // so non-pane consumers (keyboard shortcuts, MultiRun, etc.) see the right values.
+      const selectionState = useSelectionStore.getState()
+      const savedAgent = selectionState.getSessionAgentSelection(nextFocusedSessionId)
+      const savedModel = selectionState.getSessionModelSelection(nextFocusedSessionId)
+      const configStore = useConfigStore.getState()
+      if (savedAgent && savedAgent !== configStore.currentAgentName) {
+        configStore.setAgent(savedAgent)
+      }
+      if (savedModel) {
+        if (savedModel.providerId !== configStore.currentProviderId) {
+          configStore.setProvider(savedModel.providerId)
+        }
+        if (savedModel.modelId !== useConfigStore.getState().currentModelId) {
+          configStore.setModel(savedModel.modelId)
+        }
+        const savedVariant = savedAgent
+          ? selectionState.getAgentModelVariantForSession(nextFocusedSessionId, savedAgent, savedModel.providerId, savedModel.modelId)
+          : undefined
+        if (savedVariant !== useConfigStore.getState().currentVariant) {
+          configStore.setCurrentVariant(savedVariant)
+        }
+      }
     }
   },
 
@@ -441,22 +644,29 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
 
     persistDraftTarget({ projectId: selectedProject?.id ?? null, directory })
 
-    set({
-      newSessionDraft: {
-        open: true,
-        selectedProjectId: selectedProject?.id ?? null,
-        directoryOverride: directory,
-        pendingWorktreeRequestId: options?.pendingWorktreeRequestId ?? null,
-        bootstrapPendingDirectory: normalizePath(options?.bootstrapPendingDirectory ?? null),
-        preserveDirectoryOverride: options?.preserveDirectoryOverride === true,
-        parentID: options?.parentID ?? null,
-        title: options?.title,
-        initialPrompt: options?.initialPrompt,
-        syntheticParts: options?.syntheticParts,
-        targetFolderId: options?.targetFolderId,
-      },
-      currentSessionId: null,
-      error: null,
+    set((s) => {
+      // Clear focused pane so the draft takes its slot; other pane keeps its session.
+      const left = s.focusedPane === "left" ? null : s.leftPaneSessionId
+      const right = s.focusedPane === "right" ? null : s.rightPaneSessionId
+      return {
+        newSessionDraft: {
+          open: true,
+          selectedProjectId: selectedProject?.id ?? null,
+          directoryOverride: directory,
+          pendingWorktreeRequestId: options?.pendingWorktreeRequestId ?? null,
+          bootstrapPendingDirectory: normalizePath(options?.bootstrapPendingDirectory ?? null),
+          preserveDirectoryOverride: options?.preserveDirectoryOverride === true,
+          parentID: options?.parentID ?? null,
+          title: options?.title,
+          initialPrompt: options?.initialPrompt,
+          syntheticParts: options?.syntheticParts,
+          targetFolderId: options?.targetFolderId,
+        },
+        leftPaneSessionId: left,
+        rightPaneSessionId: right,
+        currentSessionId: deriveCurrentSessionId(left, right, s.focusedPane),
+        error: null,
+      }
     })
 
     if (options?.initialPrompt) {

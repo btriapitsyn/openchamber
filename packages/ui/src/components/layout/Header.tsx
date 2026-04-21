@@ -637,6 +637,9 @@ export const Header: React.FC<HeaderProps> = ({
   const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
   const openNewSessionDraft = useSessionUIStore((state) => state.openNewSessionDraft);
   const isNewSessionDraftOpen = useSessionUIStore((state) => Boolean(state.newSessionDraft?.open));
+  // Split view: when right pane is open, session-level info (title + project + branch
+  // + diff) moves into each pane's PaneHeader to avoid duplication and tie info to its pane.
+  const isSplitActive = useSessionUIStore((state) => state.rightPaneSessionId !== null);
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
   const currentSyncedSession = useSession(currentSessionId ?? null);
@@ -1731,7 +1734,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="mr-2"
           />
         )}
-        {!isNewSessionDraftOpen ? (
+        {!isNewSessionDraftOpen && !isSplitActive ? (
           <div className="mr-3 min-w-0">
             <div className="truncate pl-1 typography-ui-label text-[14px] font-normal leading-tight text-foreground">
               {currentSessionTitle}

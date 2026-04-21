@@ -548,10 +548,7 @@ export async function revertToMessage(sessionId: string, messageId: string): Pro
 
   // Restore reverted message text to input
   if (messageText) {
-    useInputStore.setState({
-      pendingInputText: messageText,
-      pendingInputMode: "replace" as const,
-    })
+    useInputStore.getState().setPendingInputTextFor(sessionId, messageText, "replace")
   }
 
   // Call SDK and merge authoritative result into store
@@ -653,9 +650,6 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
 
   // Restore forked message text to input
   if (messageText) {
-    useInputStore.setState({
-      pendingInputText: messageText,
-      pendingInputMode: "replace" as const,
-    })
+    useInputStore.getState().setPendingInputTextFor(forkedSession.id, messageText, "replace")
   }
 }

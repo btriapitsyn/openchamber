@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
+import { usePaneContext } from '@/contexts/paneContextValue';
 import { RiArrowDownSLine, RiArrowRightSLine, RiExternalLinkLine } from '@remixicon/react';
 import { PatchDiff } from '@pierre/diffs/react';
 import { cn } from '@/lib/utils';
@@ -1060,8 +1061,9 @@ const TaskToolSummary: React.FC<{
     animateTailText?: boolean;
     isActive?: boolean;
 }> = ({ entries, isExpanded, isMobile, output, sessionId, onShowPopup, input, animateTailText = true, isActive = false }) => {
-    const setCurrentSession = useSessionUIStore((state) => state.setCurrentSession);
+    const openSessionInPane = useSessionUIStore((state) => state.openSessionInPane);
     const showToolFileIcons = useUIStore((state) => state.showToolFileIcons);
+    const paneContext = usePaneContext();
     const displayEntries = entries;
 
     const trimmedOutput = typeof output === 'string'
@@ -1072,9 +1074,10 @@ const TaskToolSummary: React.FC<{
 
     const handleOpenSession = (event: React.MouseEvent) => {
         event.stopPropagation();
-        if (sessionId) {
-            setCurrentSession(sessionId);
-        }
+        if (!sessionId) return;
+        // Open sub-session in the opposite pane so the parent task stays visible.
+        const targetPane = paneContext?.pane === 'right' ? 'left' : 'right';
+        openSessionInPane(sessionId, targetPane);
     };
 
     const agentType = typeof input?.subagent_type === 'string'
