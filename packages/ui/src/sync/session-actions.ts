@@ -54,6 +54,12 @@ function dir() {
   return _getDirectory() || undefined
 }
 
+function connectionLostError(): Error {
+  const reason = useConfigStore.getState().lastDisconnectReason
+  const suffix = reason ? ` (${reason})` : " (never connected)"
+  return new Error(`Connection lost${suffix}. Please wait for reconnection.`)
+}
+
 function getSessionDirectory(sessionId: string): string | undefined {
   return useSessionUIStore.getState().getDirectoryForSession(sessionId) || dir()
 }
@@ -327,7 +333,7 @@ export async function optimisticSend(input: {
   }
 
   if (!useConfigStore.getState().isConnected) {
-    throw new Error("Connection lost. Please wait for reconnection.")
+    throw connectionLostError()
   }
 
   const store = dirStore()
@@ -414,7 +420,7 @@ export async function respondToPermission(
   response: "once" | "always" | "reject",
 ): Promise<void> {
   if (!useConfigStore.getState().isConnected) {
-    throw new Error("Connection lost. Please wait for reconnection.")
+    throw connectionLostError()
   }
   const result = await getRequestReplyClient("permission", sessionId, requestId).permission.reply({
     requestID: requestId,
@@ -430,7 +436,7 @@ export async function dismissPermission(
   requestId: string,
 ): Promise<void> {
   if (!useConfigStore.getState().isConnected) {
-    throw new Error("Connection lost. Please wait for reconnection.")
+    throw connectionLostError()
   }
   const result = await getRequestReplyClient("permission", sessionId, requestId).permission.reply({
     requestID: requestId,
@@ -451,7 +457,7 @@ export async function respondToQuestion(
   answers: string[] | string[][],
 ): Promise<void> {
   if (!useConfigStore.getState().isConnected) {
-    throw new Error("Connection lost. Please wait for reconnection.")
+    throw connectionLostError()
   }
   const result = await getRequestReplyClient("question", sessionId, requestId).question.reply({
     requestID: requestId,
@@ -467,7 +473,7 @@ export async function rejectQuestion(
   requestId: string,
 ): Promise<void> {
   if (!useConfigStore.getState().isConnected) {
-    throw new Error("Connection lost. Please wait for reconnection.")
+    throw connectionLostError()
   }
   const result = await getRequestReplyClient("question", sessionId, requestId).question.reject({
     requestID: requestId,

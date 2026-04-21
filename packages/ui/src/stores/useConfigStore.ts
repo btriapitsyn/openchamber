@@ -468,6 +468,7 @@ interface ConfigStore {
     agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } };
     defaultProviders: { [key: string]: string };
     isConnected: boolean;
+    lastDisconnectReason: string | null;
     isInitialized: boolean;
     modelsMetadata: Map<string, ModelMetadata>;
     // OpenChamber settings-based defaults (take precedence over agent preferences)
@@ -588,6 +589,7 @@ export const useConfigStore = create<ConfigStore>()(
                 agentModelSelections: {},
                 defaultProviders: {},
                 isConnected: false,
+                lastDisconnectReason: null,
                 isInitialized: false,
                 modelsMetadata: new Map<string, ModelMetadata>(),
                 settingsDefaultModel: undefined,

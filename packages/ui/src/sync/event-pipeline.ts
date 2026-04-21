@@ -34,7 +34,7 @@ export type EventPipelineInput = {
   /** Called after stream reconnects (visibility restore or heartbeat timeout). */
   onReconnect?: () => void
   /** Called when the stream disconnects (heartbeat timeout, network error, or transport failure). */
-  onDisconnect?: () => void
+  onDisconnect?: (reason: string) => void
   transport?: "auto" | "ws" | "sse"
 }
 
@@ -429,6 +429,7 @@ export function createEventPipeline(input: EventPipelineInput) {
 
         if (frame.type === "error") {
           const error = new Error(frame.message || "Message stream WebSocket error")
+          ;(error as Error & { reason?: string }).reason = `ws_error_frame:${frame.message || "unknown"}`
           setFallbackCode(error)
           settleReject(error)
           try {
@@ -463,13 +464,16 @@ export function createEventPipeline(input: EventPipelineInput) {
         void 0
       }
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         if (signal.aborted) {
           settleResolve()
           return
         }
 
         const error = new Error("Global message stream WebSocket closed")
+        ;(error as Error & { reason?: string }).reason = opened
+          ? `ws_closed:code=${event?.code ?? "?"}`
+          : "ws_closed_before_ready"
         setFallbackCode(error)
         settleReject(error)
       }
@@ -521,7 +525,18 @@ export function createEventPipeline(input: EventPipelineInput) {
           // setState calls on every failed retry attempt.
           if (!disconnected) {
             disconnected = true
-            onDisconnect?.()
+            const taggedReason = typeof error === "object" && error !== null
+              ? (error as { reason?: unknown }).reason
+              : undefined
+            const message = typeof error === "object" && error !== null
+              ? (error as { message?: unknown }).message
+              : undefined
+            const reason = typeof taggedReason === "string" && taggedReason.length > 0
+              ? taggedReason
+              : typeof message === "string" && message.length > 0
+                ? `${currentTransport}_error:${message.slice(0, 80)}`
+                : `${currentTransport}_error:unknown`
+            onDisconnect?.(reason)
           }
         }
       } finally {

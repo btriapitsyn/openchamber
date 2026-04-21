@@ -1520,7 +1520,9 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             else if (commandName === 'compact' && currentSessionId) {
                 try {
                     if (!useConfigStore.getState().isConnected) {
-                        throw new Error("Connection lost. Please wait for reconnection.");
+                        const reason = useConfigStore.getState().lastDisconnectReason;
+                        const suffix = reason ? ` (${reason})` : " (never connected)";
+                        throw new Error(`Connection lost${suffix}. Please wait for reconnection.`);
                     }
                     const { opencodeClient } = await import('@/lib/opencode/client');
                     const sdk = opencodeClient.getSdkClient();
