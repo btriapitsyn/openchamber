@@ -53,10 +53,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/android-apk'
     env:
-      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-      TWA_HOST_NAME: ${{ secrets.TWA_HOST }}
-      TWA_DEFAULT_URL: ${{ secrets.TWA_DEFAULT_URL }}
+    KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'ci-temp-' }}
+    KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'ci-temp-' }}
+    TWA_HOST_NAME: ${{ secrets.TWA_HOST || 'openchamber.app' }}
+    TWA_DEFAULT_URL: ${{ secrets.TWA_DEFAULT_URL || 'https://openchamber.app' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -90,6 +90,13 @@ jobs:
       - name: Generate signing key
         run: |
           if [ ! -f packages/android-twa/android.keystore ]; then
+            # Ensure password meets keytool's 6-char minimum
+            if [ ${#KEYSTORE_PASSWORD} -lt 6 ]; then
+              KEYSTORE_PASSWORD="ci-temp-$(openssl rand -hex 6)"
+              KEY_PASSWORD="$KEYSTORE_PASSWORD"
+              echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+              echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+            fi
             keytool -genkeypair -alias openchamber \
               -keyalg RSA -keysize 2048 \
               -validity 10000 \
