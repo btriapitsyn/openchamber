@@ -53,10 +53,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/android-apk'
     env:
-    KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'ci-temp-' }}
-    KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'ci-temp-' }}
-    TWA_HOST_NAME: ${{ secrets.TWA_HOST || 'openchamber.app' }}
-    TWA_DEFAULT_URL: ${{ secrets.TWA_DEFAULT_URL || 'https://openchamber.app' }}
+      KEYSTORE_PASSWORD: "${{ secrets.KEYSTORE_PASSWORD || 'ci-temp-' }}"
+      KEY_PASSWORD: "${{ secrets.KEY_PASSWORD || 'ci-temp-' }}"
+      TWA_HOST_NAME: "${{ secrets.TWA_HOST || 'openchamber.app' }}"
+      TWA_DEFAULT_URL: "${{ secrets.TWA_DEFAULT_URL || 'https://openchamber.app' }}"
     steps:
       - uses: actions/checkout@v4
 
