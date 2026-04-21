@@ -28,7 +28,6 @@ import { flattenAssistantTextParts } from "@/lib/messages/messageText"
 import { EXECUTION_FORK_META_TEXT } from "@/lib/messages/executionMeta"
 import { waitForWorktreeBootstrap } from "@/lib/worktrees/worktreeBootstrap"
 import { waitForPendingDraftWorktreeRequest } from "@/lib/worktrees/pendingDraftWorktree"
-import type { ProjectEntry } from "@/lib/api/types"
 import {
   getSyncSessions,
   getAllSyncSessions,
@@ -292,10 +291,13 @@ const persistDraftTarget = (target: PersistedDraftTarget): void => {
   } catch { /* ignored */ }
 }
 
-const resolveProjectForDirectory = (projects: ProjectEntry[], directory: string | null): ProjectEntry | null => {
+const resolveProjectForDirectory = (
+  projects: import("@/lib/api/types").ProjectEntry[],
+  directory: string | null,
+): import("@/lib/api/types").ProjectEntry | null => {
   const nd = normalizePath(directory)
   if (!nd) return null
-  let best: ProjectEntry | null = null
+  let best: import("@/lib/api/types").ProjectEntry | null = null
   for (const p of projects) {
     const pp = normalizePath(p.path)
     if (!pp) continue
@@ -306,10 +308,10 @@ const resolveProjectForDirectory = (projects: ProjectEntry[], directory: string 
 }
 
 const resolveProjectFromWorktreeDirectory = (
-  projects: ProjectEntry[],
+  projects: import("@/lib/api/types").ProjectEntry[],
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
   directory: string | null,
-): ProjectEntry | null => {
+): import("@/lib/api/types").ProjectEntry | null => {
   const nd = normalizePath(directory)
   if (!nd) return null
   let matchedWorktree: WorktreeMetadata | null = null
@@ -339,10 +341,10 @@ const resolveProjectFromWorktreeDirectory = (
 }
 
 const resolveDraftProjectForDirectory = (
-  projects: ProjectEntry[],
+  projects: import("@/lib/api/types").ProjectEntry[],
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
   directory: string | null,
-): ProjectEntry | null =>
+): import("@/lib/api/types").ProjectEntry | null =>
   resolveProjectFromWorktreeDirectory(projects, availableWorktreesByProject, directory) ??
   resolveProjectForDirectory(projects, directory)
 
