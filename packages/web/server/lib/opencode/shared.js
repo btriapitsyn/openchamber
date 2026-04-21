@@ -125,6 +125,16 @@ function getConfigPaths(workingDirectory) {
   };
 }
 
+function getPrimaryUserConfigPath(userPaths) {
+  for (const userPath of userPaths) {
+    if (fs.existsSync(userPath)) {
+      return userPath;
+    }
+  }
+
+  return CONFIG_FILE;
+}
+
 function readConfigFile(filePath) {
   if (!filePath || !fs.existsSync(filePath)) {
     return {};
@@ -168,10 +178,8 @@ function mergeConfigs(base, override) {
 
 function readConfigLayers(workingDirectory) {
   const { userPaths, projectPath, customPath } = getConfigPaths(workingDirectory);
-  const userConfig = userPaths.reduce(
-    (config, userPath) => mergeConfigs(config, readConfigFile(userPath)),
-    {}
-  );
+  const userPath = getPrimaryUserConfigPath(userPaths);
+  const userConfig = readConfigFile(userPath);
   const projectConfig = readConfigFile(projectPath);
   const customConfig = readConfigFile(customPath);
   const mergedConfig = mergeConfigs(mergeConfigs(userConfig, projectConfig), customConfig);
@@ -181,7 +189,7 @@ function readConfigLayers(workingDirectory) {
     projectConfig,
     customConfig,
     mergedConfig,
-    paths: { userPath: CONFIG_FILE, projectPath, customPath }
+    paths: { userPath, projectPath, customPath }
   };
 }
 

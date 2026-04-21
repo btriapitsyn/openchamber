@@ -330,6 +330,16 @@ const getConfigPaths = (workingDirectory?: string) => ({
   customPath: CUSTOM_CONFIG_FILE
 });
 
+const getPrimaryUserConfigPath = (userPaths: string[]): string => {
+  for (const userPath of userPaths) {
+    if (fs.existsSync(userPath)) {
+      return userPath;
+    }
+  }
+
+  return CONFIG_FILE;
+};
+
 const readConfigFile = (filePath?: string | null): Record<string, unknown> => {
   if (!filePath || !fs.existsSync(filePath)) return {};
   const content = fs.readFileSync(filePath, 'utf8');
@@ -360,10 +370,8 @@ const mergeConfigs = (base: Record<string, unknown>, override: Record<string, un
 
 const readConfigLayers = (workingDirectory?: string) => {
   const { userPaths, projectPath, customPath } = getConfigPaths(workingDirectory);
-  const userConfig = userPaths.reduce(
-    (config, userPath) => mergeConfigs(config, readConfigFile(userPath)),
-    {} as Record<string, unknown>
-  );
+  const userPath = getPrimaryUserConfigPath(userPaths);
+  const userConfig = readConfigFile(userPath);
   const projectConfig = readConfigFile(projectPath);
   const customConfig = readConfigFile(customPath);
   const mergedConfig = mergeConfigs(mergeConfigs(userConfig, projectConfig), customConfig);
@@ -373,7 +381,7 @@ const readConfigLayers = (workingDirectory?: string) => {
     projectConfig,
     customConfig,
     mergedConfig,
-    paths: { userPath: CONFIG_FILE, projectPath, customPath }
+    paths: { userPath, projectPath, customPath }
   };
 };
 
