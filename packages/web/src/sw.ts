@@ -50,7 +50,7 @@ const OFFLINE_BODY = `<!DOCTYPE html>
 </div></body>
 </html>`;
 
-const offlineFallbackResponse = new Response(OFFLINE_BODY, {
+const offlineFallbackResponse = () => new Response(OFFLINE_BODY, {
   headers: { 'Content-Type': 'text/html; charset=utf-8' },
 });
 
@@ -60,7 +60,7 @@ const navHandler = new NetworkFirst({
   plugins: [
     new ExpirationPlugin({ maxEntries: 50, maxAgeSeconds: 7 * 24 * 60 * 60 }),
     {
-      handlerDidError: async () => offlineFallbackResponse,
+      handlerDidError: async () => offlineFallbackResponse(),
     },
   ],
 }) as unknown as RouteHandler;

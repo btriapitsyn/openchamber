@@ -53,8 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feat/android-apk'
     env:
-      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'openchamber123' }}
-      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'openchamber123' }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
       TWA_HOST_NAME: ${{ secrets.TWA_HOST }}
       TWA_DEFAULT_URL: ${{ secrets.TWA_DEFAULT_URL }}
     steps:

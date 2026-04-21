@@ -210,7 +210,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setSupportMultipleWindows(false);
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         settings.setDatabaseEnabled(true);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
@@ -249,7 +249,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String pageUrl) {
                 super.onPageFinished(view, pageUrl);
-                view.evaluateJavascript(getNotificationBridgeJs(), null);
+                String savedUrl = getSavedUrl();
+                if (savedUrl != null && pageUrl != null
+                        && Uri.parse(pageUrl).getHost() != null
+                        && Uri.parse(pageUrl).getHost().equals(Uri.parse(savedUrl).getHost())) {
+                    view.evaluateJavascript(getNotificationBridgeJs(), null);
+                }
             }
 
         @Override
@@ -407,16 +412,16 @@ public class MainActivity extends AppCompatActivity {
                     && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             geoCallback.invoke(geoOrigin, granted, false);
             geoCallback = null;
-        } else if (requestCode == 200) {
-            boolean granted = grantResults.length > 0
-                    && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-            String result = granted ? "granted" : "denied";
-            String cbId = pendingNotificationCallbackId;
-            pendingNotificationCallbackId = null;
-            if (cbId != null && webView != null) {
-                webView.evaluateJavascript(
-                        "window.Notification._onResult('" + cbId + "','" + result + "');", null);
-            }
+            } else if (requestCode == 200) {
+                boolean granted = grantResults.length > 0
+                        && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+                String result = granted ? "granted" : "denied";
+                String cbId = pendingNotificationCallbackId;
+                pendingNotificationCallbackId = null;
+                if (cbId != null && cbId.matches("[a-zA-Z0-9_]+") && webView != null) {
+                    webView.evaluateJavascript(
+                            "window.Notification._onResult('" + cbId + "','" + result + "');", null);
+                }
         } else if (requestCode == 300 && webPermissionRequest != null) {
             boolean allGranted = grantResults.length > 0;
             for (int r : grantResults) {
@@ -439,13 +444,15 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         // Only intercept for pre-API 33 (Settings flow). API 33+ uses onRequestPermissionsResult.
         if (Build.VERSION.SDK_INT < 33 && pendingNotificationCallbackId != null && webView != null) {
-            String cbId = pendingNotificationCallbackId;
-            pendingNotificationCallbackId = null;
-            boolean enabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
-            String result = enabled ? "granted" : "denied";
-            webView.evaluateJavascript(
-                    "window.Notification._onResult('" + cbId + "','" + result + "');", null);
-        }
+                    String cbId = pendingNotificationCallbackId;
+                    pendingNotificationCallbackId = null;
+                    if (cbId.matches("[a-zA-Z0-9_]+")) {
+                        boolean enabled = NotificationManagerCompat.from(this).areNotificationsEnabled();
+                        String result = enabled ? "granted" : "denied";
+                        webView.evaluateJavascript(
+                                "window.Notification._onResult('" + cbId + "','" + result + "');", null);
+                    }
+                }
         String currentUrl = getSavedUrl();
         if (currentUrl != null && webView != null && webView.getVisibility() == View.VISIBLE) {
             String loadedUrl = webView.getUrl();
@@ -532,18 +539,22 @@ public class MainActivity extends AppCompatActivity {
 
         @JavascriptInterface
         public void requestPermission(String callbackId) {
+            if (callbackId == null || !callbackId.matches("[a-zA-Z0-9_]+")) {
+                return;
+            }
+            final String safeCallbackId = callbackId;
             runOnUiThread(() -> {
                 if (NotificationManagerCompat.from(MainActivity.this).areNotificationsEnabled()) {
                     webView.evaluateJavascript(
-                            "window.Notification._onResult('" + callbackId + "','granted');", null);
+                            "window.Notification._onResult('" + safeCallbackId + "','granted');", null);
                     return;
                 }
                 if (pendingNotificationCallbackId != null) {
                     webView.evaluateJavascript(
-                            "window.Notification._onResult('" + callbackId + "','denied');", null);
+                            "window.Notification._onResult('" + safeCallbackId + "','denied');", null);
                     return;
                 }
-                pendingNotificationCallbackId = callbackId;
+                pendingNotificationCallbackId = safeCallbackId;
                 if (Build.VERSION.SDK_INT >= 33) {
                     SharedPreferences.Editor editor = getSharedPreferences(App.PREFS_NAME, MODE_PRIVATE).edit();
                     editor.putBoolean(PREFS_NOTIFICATION_ASKED, true);
