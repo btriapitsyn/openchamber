@@ -110,9 +110,9 @@ export const CommandsSidebar: React.FC<CommandsSidebarProps> = ({ onItemSelect }
   const { skills, loadSkills } = useSkillsStore();
 
   React.useEffect(() => {
-    loadCommands();
+    loadCommands({ backendId: selectedBackendId || defaultBackendId || null });
     loadSkills();
-  }, [loadCommands, loadSkills]);
+  }, [defaultBackendId, loadCommands, loadSkills, selectedBackendId]);
 
   const skillNames = React.useMemo(() => new Set(skills.map((skill) => skill.name)), [skills]);
   const commandOnlyItems = React.useMemo(

@@ -1,4 +1,4 @@
-const BACKEND_DESCRIPTORS = Object.freeze([
+export const BACKEND_DESCRIPTORS = Object.freeze([
   {
     id: 'opencode',
     label: 'OpenCode',

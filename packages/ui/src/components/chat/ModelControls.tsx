@@ -569,8 +569,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const backendModeSelector = backendControlSurface?.modeSelector ?? null;
     const backendModelSelector = backendControlSurface?.modelSelector ?? null;
     const backendEffortSelector = backendControlSurface?.effortSelector ?? null;
-    const primarySelectorKind = backendModeSelector?.kind ?? 'agent';
-    const primarySelectorLabel = backendModeSelector?.label ?? 'Agent';
+    const primarySelectorKind = backendModeSelector?.kind ?? (currentBackendId === 'opencode' ? 'agent' : 'mode');
+    const primarySelectorLabel = backendModeSelector?.label ?? (primarySelectorKind === 'agent' ? 'Agent' : 'Mode');
     const modelSelectorLabel = backendModelSelector?.label ?? 'Model';
     const effortSelectorLabel = backendEffortSelector?.label ?? 'Thinking';
     const backendModelProviderId = backendModelSelector?.providerId || currentBackendId || 'backend';
@@ -578,13 +578,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (backendModeSelector?.items?.length) {
             return backendModeSelector.items;
         }
+        if (primarySelectorKind !== 'agent') {
+            return [];
+        }
         return selectableDesktopAgents.map((agent) => ({
             id: agent.name,
             label: agent.name.charAt(0).toUpperCase() + agent.name.slice(1),
             ...(agent.description ? { description: agent.description } : {}),
             ...(agent.color ? { color: agent.color } : {}),
         }));
-    }, [backendModeSelector, selectableDesktopAgents]);
+    }, [backendModeSelector, primarySelectorKind, selectableDesktopAgents]);
     const backendModelOptions = React.useMemo<ProviderModel[]>(() => {
         if (backendModelSelector?.source !== 'backend' || !backendModelSelector.options?.length) {
             return [];
@@ -932,6 +935,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return;
         }
 
+        if (primarySelectorKind !== 'agent') {
+            return;
+        }
+
         if (!contextHydrated || effectiveProviders.length === 0 || agents.length === 0) {
             return;
         }
@@ -1054,6 +1061,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         applyFallbackAgent();
     }, [
         currentSessionId,
+        primarySelectorKind,
         hasCurrentSessionMessagesEntry,
         latestLoadedUserChoice,
         agents,

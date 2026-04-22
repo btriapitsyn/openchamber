@@ -1,5 +1,32 @@
 import type { BridgeContext, BridgeResponse } from './bridge';
 import { waitForApiUrl } from './opencode-ready';
+// @ts-expect-error Cross-package JS module has no local d.ts in vscode package.
+import * as sharedBackendsModule from '../../web/server/lib/harness/backends.js';
+
+type BackendDescriptor = {
+  id: string;
+  label: string;
+  available: boolean;
+  comingSoon?: boolean;
+  capabilities: {
+    chat: boolean;
+    sessions: boolean;
+    models: boolean;
+    agents: boolean;
+    providers: boolean;
+    commands: boolean;
+    config: boolean;
+    skills: boolean;
+  };
+};
+
+// Single source of truth from web backend registry module.
+const sharedBackends = sharedBackendsModule as {
+  BACKEND_DESCRIPTORS: readonly BackendDescriptor[];
+  DEFAULT_BACKEND_ID: string;
+};
+
+const { BACKEND_DESCRIPTORS, DEFAULT_BACKEND_ID } = sharedBackends;
 
 type BridgeMessageInput = {
   id: string;
@@ -63,91 +90,14 @@ export async function handleProxyBridgeMessage(
         const configuredDefaultBackend =
           typeof settings?.defaultBackend === 'string' && settings.defaultBackend.trim().length > 0
             ? settings.defaultBackend.trim()
-            : 'opencode';
+            : DEFAULT_BACKEND_ID;
+        const backends = BACKEND_DESCRIPTORS.map((descriptor) => ({
+          ...descriptor,
+          capabilities: { ...descriptor.capabilities },
+        }));
         const body = JSON.stringify({
           defaultBackend: configuredDefaultBackend,
-          backends: [
-            {
-              id: 'opencode',
-              label: 'OpenCode',
-              available: true,
-              comingSoon: false,
-              capabilities: {
-                chat: true,
-                sessions: true,
-                models: true,
-                agents: true,
-                providers: true,
-                commands: true,
-                config: true,
-                skills: true,
-              },
-            },
-            {
-              id: 'codex',
-              label: 'Codex',
-              available: true,
-              comingSoon: false,
-              capabilities: {
-                chat: true,
-                sessions: true,
-                models: true,
-                agents: false,
-                providers: false,
-                commands: false,
-                config: false,
-                skills: false,
-              },
-            },
-            {
-              id: 'claude',
-              label: 'Claude',
-              available: false,
-              comingSoon: true,
-              capabilities: {
-                chat: false,
-                sessions: false,
-                models: false,
-                agents: false,
-                providers: false,
-                commands: false,
-                config: false,
-                skills: false,
-              },
-            },
-            {
-              id: 'gemini',
-              label: 'Gemini',
-              available: false,
-              comingSoon: true,
-              capabilities: {
-                chat: false,
-                sessions: false,
-                models: false,
-                agents: false,
-                providers: false,
-                commands: false,
-                config: false,
-                skills: false,
-              },
-            },
-            {
-              id: 'cursor',
-              label: 'Cursor',
-              available: false,
-              comingSoon: true,
-              capabilities: {
-                chat: false,
-                sessions: false,
-                models: false,
-                agents: false,
-                providers: false,
-                commands: false,
-                config: false,
-                skills: false,
-              },
-            },
-          ],
+          backends,
         });
         const data: ApiProxyResponsePayload = {
           status: 200,

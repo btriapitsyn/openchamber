@@ -48,6 +48,7 @@ import { useInputStore, type SyntheticContextPart } from "./input-store"
 import { useSelectionStore } from "./selection-store"
 import { useViewportStore } from "./viewport-store"
 import { usePermissionStore } from "@/stores/permissionStore"
+import { useBackendsStore } from "@/stores/useBackendsStore"
 
 export type { AttachedFile }
 
@@ -77,8 +78,21 @@ function routeMessage(params: {
   sandboxOverride?: string
 }): Promise<void> {
   const sdk = opencodeClient.getSdkClient()
+  const explicitBackendId = useSelectionStore.getState().getSessionBackendSelection(params.sessionId)
+  const liveSession = getAllSyncSessions().find((session) => session.id === params.sessionId) as { backendId?: string | null } | undefined
+  const sessionBackendId =
+    (typeof explicitBackendId === 'string' && explicitBackendId.trim().length > 0
+      ? explicitBackendId.trim()
+      : '')
+    || (typeof liveSession?.backendId === 'string' && liveSession.backendId.trim().length > 0
+      ? liveSession.backendId.trim()
+      : '')
+    || 'opencode'
 
   if (params.inputMode === "shell") {
+    if (sessionBackendId !== 'opencode') {
+      return Promise.reject(new Error(`Shell mode is not supported for backend "${sessionBackendId}"`))
+    }
     const dir = opencodeClient.getDirectory() || undefined
     return sdk.session.shell({
       sessionID: params.sessionId,
@@ -891,7 +905,11 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       const session = await createSessionAction(title, dir, parentID ?? null, backendId ?? null)
       if (!session) return null
 
-      const resolvedBackendId = (session as { backendId?: string }).backendId ?? backendId ?? 'opencode'
+      const resolvedBackendId =
+        (session as { backendId?: string }).backendId
+        ?? backendId
+        ?? useBackendsStore.getState().defaultBackendId
+        ?? 'opencode'
       useSelectionStore.getState().saveSessionBackendSelection(session.id, resolvedBackendId)
 
       if (targetFolderId) {

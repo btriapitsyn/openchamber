@@ -11,6 +11,7 @@ import type { DirectoryStore } from "./child-store"
 import type { StoreApi } from "zustand"
 import { opencodeClient } from "@/lib/opencode/client"
 import { resolveGlobalSessionDirectory, useGlobalSessionsStore } from "@/stores/useGlobalSessionsStore"
+import { useBackendsStore } from "@/stores/useBackendsStore"
 import { registerSessionDirectory } from "./sync-refs"
 import { useSelectionStore } from "./selection-store"
 
@@ -120,7 +121,11 @@ export async function createSession(
     if (!session) return null
 
       const sessionDirectory = (session as { directory?: string }).directory ?? directoryOverride ?? null
-      const sessionBackendId = (session as { backendId?: string }).backendId ?? backendId ?? 'opencode'
+      const sessionBackendId =
+        (session as { backendId?: string }).backendId
+        ?? backendId
+        ?? useBackendsStore.getState().defaultBackendId
+        ?? 'opencode'
       // Pre-populate routing index so SSE events arriving before session.created
       // can be routed to the correct child store
       if (sessionDirectory) {

@@ -85,6 +85,8 @@ const VS_CODE_DROP_DATA_TYPES = [
 ];
 
 const FILE_URI_PREFIX = 'file://';
+const OPENCODE_PERMISSION_CYCLE: PermissionLevel[] = ['manual', 'auto-accept'];
+const CODEX_PERMISSION_CYCLE: PermissionLevel[] = ['manual', 'auto-accept', 'full-access'];
 
 const encodeFilePath = (filepath: string): string => {
     let normalized = filepath.replace(/\\/g, '/');
@@ -1475,17 +1477,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             else if (commandName === 'redo' && currentSessionId) {
                 await useSessionUIStore.getState().handleSlashRedo(currentSessionId);
                 scrollToBottom?.({ instant: true, force: true });
-                return;
-            }
-            else if (commandName === 'compact' && currentSessionId) {
-                const { opencodeClient } = await import('@/lib/opencode/client');
-                const sdk = opencodeClient.getSdkClient();
-                const configState = useConfigStore.getState();
-                await sdk.session.summarize({
-                    sessionID: currentSessionId,
-                    modelID: configState.currentModelId || '',
-                    providerID: configState.currentProviderId || '',
-                });
                 return;
             }
         }
@@ -3136,16 +3127,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return (session as { backendId?: string | null } | undefined)?.backendId === 'codex';
     }, [permissionScopeSessionId]);
 
-    const OPENCODE_CYCLE: PermissionLevel[] = ['manual', 'auto-accept'];
-    const CODEX_CYCLE: PermissionLevel[] = ['manual', 'auto-accept', 'full-access'];
-
     const handlePermissionLevelCycle = React.useCallback(() => {
         if (!permissionScopeSessionId) {
             toast.error('Open a session first');
             return;
         }
 
-        const cycle = isCodexSession ? CODEX_CYCLE : OPENCODE_CYCLE;
+        const cycle = isCodexSession ? CODEX_PERMISSION_CYCLE : OPENCODE_PERMISSION_CYCLE;
         const currentIndex = cycle.indexOf(permissionLevel);
         const nextLevel = cycle[(currentIndex + 1) % cycle.length];
         setSessionPermissionLevel(permissionScopeSessionId, nextLevel).catch(() => {

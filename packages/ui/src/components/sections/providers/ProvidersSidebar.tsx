@@ -65,6 +65,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
   const providers = useConfigStore((state) => state.providers);
   const selectedProviderId = useConfigStore((state) => state.selectedProviderId);
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
+  const loadProviders = useConfigStore((state) => state.loadProviders);
   const activeProjectId = useProjectsStore((s) => s.activeProjectId);
   const [sourcesByProvider, setSourcesByProvider] = React.useState<Record<string, ProviderSources>>({});
   const directory = React.useMemo(() => {
@@ -72,6 +73,10 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
     void activeProjectId;
     return getCurrentDirectory();
   }, [activeProjectId]);
+
+  React.useEffect(() => {
+    void loadProviders({ directory, backendId: selectedBackendId || defaultBackendId || null });
+  }, [defaultBackendId, directory, loadProviders, selectedBackendId]);
 
   React.useEffect(() => {
     if (providers.length === 0) {
