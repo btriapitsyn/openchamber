@@ -1551,4 +1551,141 @@ export function registerGitHubRoutes(app) {
       return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to download check logs' } });
     }
   });
+
+  // ================= GitHub Inbox APIs =================
+
+  app.get('/api/github/inbox', async (req, res) => {
+    try {
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ ok: false, error: { code: 'not_authenticated', message: 'GitHub not authenticated' } });
+      }
+
+      const me = await getGitHubUserSummary(octokit).catch(() => null);
+      if (!me) {
+        return res.status(401).json({ ok: false, error: { code: 'not_authenticated', message: 'Could not resolve user' } });
+      }
+
+      const { filterSnoozed } = await import('./snooze-store.js');
+      const { computeIsStale, formatInboxItemFromNotification, formatInboxItemFromPR } = await import('./inbox.js');
+
+      let rawItems = [];
+
+      // 1. Notifications
+      try {
+        const notifs = await octokit.rest.activity.listNotificationsForAuthenticatedUser({ per_page: 50 });
+        if (Array.isArray(notifs.data)) {
+          rawItems.push(...notifs.data.map(formatInboxItemFromNotification));
+        }
+      } catch (err) {
+        if (err.status !== 403 && err.status !== 404) {
+          console.warn('Failed to fetch notifications', err.message);
+        }
+      }
+
+      // 2. Open PRs for stale & ready to merge
+      try {
+        const openPrs = await octokit.rest.search.issuesAndPullRequests({
+          q: `is:pr is:open author:${me.login}`,
+          per_page: 50,
+        });
+        const prs = Array.isArray(openPrs.data?.items) ? openPrs.data.items : [];
+        for (const pr of prs) {
+          if (computeIsStale(pr)) {
+            rawItems.push(formatInboxItemFromPR(pr, 'stale'));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch open PRs', err.message);
+      }
+
+      // 3. Failing CI PRs
+      try {
+        const failingPrs = await octokit.rest.search.issuesAndPullRequests({
+          q: `is:pr is:open author:${me.login} status:failure`,
+          per_page: 50,
+        });
+        const prs = Array.isArray(failingPrs.data?.items) ? failingPrs.data.items : [];
+        for (const pr of prs) {
+          rawItems.push(formatInboxItemFromPR(pr, 'ci_failing'));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch failing PRs', err.message);
+      }
+
+      // 4. Ready to merge PRs
+      try {
+        const readyPrs = await octokit.rest.search.issuesAndPullRequests({
+          q: `is:pr is:open author:${me.login} status:success review:approved`,
+          per_page: 50,
+        });
+        const prs = Array.isArray(readyPrs.data?.items) ? readyPrs.data.items : [];
+        for (const pr of prs) {
+          rawItems.push(formatInboxItemFromPR(pr, 'ready_to_merge'));
+        }
+      } catch (err) {
+        console.warn('Failed to fetch ready PRs', err.message);
+      }
+
+      // Filter out snoozed items
+      const items = await filterSnoozed(rawItems, (item) => item.id);
+
+      // Deduplicate by ID
+      const unique = [];
+      const seen = new Set();
+      for (const item of items) {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          unique.push(item);
+        }
+      }
+
+      unique.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      return res.json({ ok: true, data: { items: unique } });
+    } catch (error) {
+      console.error('Failed to load inbox:', error);
+      return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to load inbox' } });
+    }
+  });
+
+  app.post('/api/github/inbox/snooze', async (req, res) => {
+    try {
+      const { id, untilTimestamp } = req.body || {};
+      if (!id || typeof untilTimestamp !== 'number') {
+        return res.status(400).json({ ok: false, error: { code: 'bad_input', message: 'id and untilTimestamp are required' } });
+      }
+
+      const { snoozeItem } = await import('./snooze-store.js');
+      await snoozeItem(id, untilTimestamp);
+
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('Failed to snooze item:', error);
+      return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to snooze item' } });
+    }
+  });
+
+  app.post('/api/github/inbox/mark-done', async (req, res) => {
+    try {
+      const { notificationId } = req.body || {};
+      if (!notificationId) {
+        return res.status(400).json({ ok: false, error: { code: 'bad_input', message: 'notificationId is required' } });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ ok: false, error: { code: 'not_authenticated', message: 'GitHub not authenticated' } });
+      }
+
+      await octokit.rest.activity.markThreadAsRead({ thread_id: notificationId });
+
+      return res.json({ ok: true });
+    } catch (error) {
+      console.error('Failed to mark item done:', error);
+      return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to mark item done' } });
+    }
+  });
 }

@@ -4,6 +4,7 @@ import type {
   GitHubBranchProtection,
   GitHubChecksLogsInput,
   GitHubChecksLogsResult,
+  GitHubInboxResult,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssueStartWorkInput,
@@ -69,4 +70,9 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
     sendBridgeMessage<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>('api:github/pr:protection', { directory, baseBranch }),
   checksLogs: async (payload: GitHubChecksLogsInput) =>
     sendBridgeMessage<GitHubChecksLogsResult>('api:github/checks:logs', payload),
+  inboxList: async () => sendBridgeMessage<GitHubInboxResult>('api:github/inbox:list'),
+  inboxSnooze: async (id: string, untilTimestamp: number) =>
+    sendBridgeMessage<{ ok: boolean }>('api:github/inbox:snooze', { id, untilTimestamp }),
+  inboxMarkDone: async (notificationId: string) =>
+    sendBridgeMessage<{ ok: boolean }>('api:github/inbox:mark-done', { notificationId }),
 });

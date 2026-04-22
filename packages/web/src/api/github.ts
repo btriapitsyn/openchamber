@@ -4,6 +4,7 @@ import type {
   GitHubBranchProtection,
   GitHubChecksLogsInput,
   GitHubChecksLogsResult,
+  GitHubInboxResult,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssueStartWorkInput,
@@ -273,6 +274,37 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     if (!result) {
       throw new Error(response.statusText || 'Failed to download check logs');
     }
+    return result;
+  },
+
+  async inboxList(): Promise<GitHubInboxResult> {
+    const response = await fetch('/api/github/inbox', { method: 'GET', headers: { Accept: 'application/json' } });
+    const result = await jsonOrNull<GitHubInboxResult>(response);
+    if (!result) {
+      throw new Error(response.statusText || 'Failed to load inbox');
+    }
+    return result;
+  },
+
+  async inboxSnooze(id: string, untilTimestamp: number): Promise<{ ok: boolean }> {
+    const response = await fetch('/api/github/inbox/snooze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ id, untilTimestamp }),
+    });
+    const result = await jsonOrNull<{ ok: boolean }>(response);
+    if (!result) throw new Error('Failed to snooze item');
+    return result;
+  },
+
+  async inboxMarkDone(notificationId: string): Promise<{ ok: boolean }> {
+    const response = await fetch('/api/github/inbox/mark-done', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ notificationId }),
+    });
+    const result = await jsonOrNull<{ ok: boolean }>(response);
+    if (!result) throw new Error('Failed to mark item done');
     return result;
   },
 });

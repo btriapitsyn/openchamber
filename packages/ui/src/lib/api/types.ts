@@ -1010,6 +1010,26 @@ export type GitHubChecksLogsResult = {
   error?: { code: string; message: string };
 };
 
+export type GitHubInboxItem = {
+  id: string;
+  type: string;
+  title: string;
+  repoFullName: string;
+  url: string;
+  updatedAt: string;
+  reason: string;
+  notificationId?: string;
+  number?: number;
+};
+
+export type GitHubInboxResult = {
+  ok: boolean;
+  data?: {
+    items: GitHubInboxItem[];
+  };
+  error?: { code: string; message: string };
+};
+
 export interface GitHubAPI {
   authStatus(): Promise<GitHubAuthStatus>;
   authStart(): Promise<GitHubDeviceFlowStart>;
@@ -1032,6 +1052,9 @@ export interface GitHubAPI {
   ): Promise<GitHubPullRequestContextResult>;
   prProtection(directory: string, baseBranch: string): Promise<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>;
   checksLogs(payload: GitHubChecksLogsInput): Promise<GitHubChecksLogsResult>;
+  inboxList(): Promise<GitHubInboxResult>;
+  inboxSnooze(id: string, untilTimestamp: number): Promise<{ ok: boolean }>;
+  inboxMarkDone(notificationId: string): Promise<{ ok: boolean }>;
 
   issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>;
   issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;
