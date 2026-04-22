@@ -803,12 +803,41 @@ export type GitHubPullRequestsListResult = {
   hasMore?: boolean;
 };
 
+export type GitHubPullRequestReview = {
+  id: number;
+  state: string;
+  body: string;
+  submittedAt?: string;
+  author?: GitHubUserSummary | null;
+};
+
+export type GitHubRequestedReviewers = {
+  users: GitHubUserSummary[];
+  teams: Array<{ slug: string; name?: string }>;
+};
+
+export type GitHubBranchProtection = {
+  enabled: boolean;
+  requiredStatusChecks?: {
+    strict?: boolean;
+    contexts: string[];
+  } | null;
+  requiredReviews?: {
+    requiredApprovingReviewCount: number;
+    dismissStaleReviews?: boolean;
+    requireCodeOwnerReviews?: boolean;
+  } | null;
+  enforceAdmins?: boolean;
+};
+
 export type GitHubPullRequestContextResult = {
   connected: boolean;
   repo?: GitHubRepoRef | null;
   pr?: GitHubPullRequestSummary | null;
   issueComments?: GitHubIssueComment[];
   reviewComments?: GitHubPullRequestReviewComment[];
+  reviews?: GitHubPullRequestReview[];
+  requestedReviewers?: GitHubRequestedReviewers;
   files?: GitHubPullRequestFile[];
   diff?: string;
   checks?: GitHubChecksSummary | null;
@@ -984,6 +1013,7 @@ export interface GitHubAPI {
     number: number,
     options?: { includeDiff?: boolean; includeCheckDetails?: boolean }
   ): Promise<GitHubPullRequestContextResult>;
+  prProtection(directory: string, baseBranch: string): Promise<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>;
 
   issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>;
   issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;

@@ -974,27 +974,16 @@ export function registerGitHubRoutes(app) {
 
       const baseBranch = typeof req.body?.baseBranch === 'string' ? req.body.baseBranch.trim() : 'HEAD';
 
-      const { createWorktree } = await import('../git/service.js');
-      const worktreeResult = await createWorktree(directory, {
-        mode: 'new',
-        branchName,
-        worktreeName: branchName,
-        startRef: baseBranch,
-      });
-
       return res.json({
         ok: true,
         data: {
-          branch: worktreeResult.branch,
-          worktreePath: worktreeResult.path,
+          branch: branchName,
           brief: briefText,
           sessionSeed,
+          baseBranch,
         },
       });
     } catch (error) {
-      if (error.message?.includes('Branch already exists')) {
-        return res.status(409).json({ ok: false, error: { code: 'conflict', message: error.message } });
-      }
       console.error('Failed to start work from issue:', error);
       return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to start work from issue' } });
     }
@@ -1165,6 +1154,37 @@ export function registerGitHubRoutes(app) {
         position: typeof comment.position === 'number' ? comment.position : null,
         author: comment.user ? { login: comment.user.login, id: comment.user.id, avatarUrl: comment.user.avatar_url } : null,
       }));
+
+      const reviewsResp = await octokit.rest.pulls.listReviews({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: number,
+        per_page: 100,
+      });
+      const reviews = (Array.isArray(reviewsResp?.data) ? reviewsResp.data : []).map((review) => ({
+        id: review.id,
+        state: review.state,
+        body: review.body || '',
+        submittedAt: review.submitted_at,
+        author: review.user ? { login: review.user.login, id: review.user.id, avatarUrl: review.user.avatar_url } : null,
+      }));
+
+      const requestedReviewersResp = await octokit.rest.pulls.listRequestedReviewers({
+        owner: repo.owner,
+        repo: repo.repo,
+        pull_number: number,
+      });
+      const requestedReviewers = {
+        users: (Array.isArray(requestedReviewersResp?.data?.users) ? requestedReviewersResp.data.users : []).map((u) => ({
+          login: u.login,
+          id: u.id,
+          avatarUrl: u.avatar_url,
+        })),
+        teams: (Array.isArray(requestedReviewersResp?.data?.teams) ? requestedReviewersResp.data.teams : []).map((t) => ({
+          slug: t.slug,
+          name: t.name,
+        })),
+      };
 
       const filesResp = await octokit.rest.pulls.listFiles({
         owner: repo.owner,
@@ -1403,6 +1423,8 @@ export function registerGitHubRoutes(app) {
         pr,
         issueComments,
         reviewComments,
+        reviews,
+        requestedReviewers,
         files,
         ...(diff ? { diff } : {}),
         checks,
@@ -1416,6 +1438,70 @@ export function registerGitHubRoutes(app) {
       }
       console.error('Failed to load GitHub PR context:', error);
       return res.status(500).json({ error: error.message || 'Failed to load GitHub PR context' });
+    }
+  });
+
+  app.get('/api/github/pr/protection', async (req, res) => {
+    try {
+      const directory = typeof req.query?.directory === 'string' ? req.query.directory.trim() : '';
+      const baseBranch = typeof req.query?.baseBranch === 'string' ? req.query.baseBranch.trim() : '';
+      if (!directory || !baseBranch) {
+        return res.status(400).json({ ok: false, error: { code: 'bad_input', message: 'directory and baseBranch are required' } });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ ok: false, error: { code: 'not_authenticated', message: 'GitHub not authenticated' } });
+      }
+
+      const { resolveGitHubRepoFromDirectory } = await import('./index.js');
+      const { repo } = await resolveGitHubRepoFromDirectory(directory);
+      if (!repo) {
+        return res.status(404).json({ ok: false, error: { code: 'not_found', message: 'Repo not found' } });
+      }
+
+      let protection = null;
+      try {
+        const protResp = await octokit.rest.repos.getBranchProtection({
+          owner: repo.owner,
+          repo: repo.repo,
+          branch: baseBranch,
+        });
+        const data = protResp?.data;
+        if (data) {
+          const requiredStatusChecks = data.required_status_checks
+            ? {
+                strict: data.required_status_checks.strict,
+                contexts: data.required_status_checks.contexts || [],
+              }
+            : null;
+          const requiredReviews = data.required_pull_request_reviews
+            ? {
+                requiredApprovingReviewCount: data.required_pull_request_reviews.required_approving_review_count || 0,
+                dismissStaleReviews: data.required_pull_request_reviews.dismiss_stale_reviews,
+                requireCodeOwnerReviews: data.required_pull_request_reviews.require_code_owner_reviews,
+              }
+            : null;
+          protection = {
+            enabled: true,
+            requiredStatusChecks,
+            requiredReviews,
+            enforceAdmins: Boolean(data.enforce_admins?.enabled),
+          };
+        }
+      } catch (error) {
+        if (error?.status === 404) {
+          protection = { enabled: false };
+        } else {
+          throw error;
+        }
+      }
+
+      return res.json({ ok: true, data: { protection } });
+    } catch (error) {
+      console.error('Failed to load branch protection:', error);
+      return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to load branch protection' } });
     }
   });
 }

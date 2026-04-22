@@ -1,6 +1,7 @@
 import type {
   GitHubAPI,
   GitHubAuthStatus,
+  GitHubBranchProtection,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssueStartWorkInput,
@@ -62,4 +63,6 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
       includeDiff: Boolean(options?.includeDiff),
       includeCheckDetails: Boolean(options?.includeCheckDetails),
     }),
+  prProtection: async (directory: string, baseBranch: string) =>
+    sendBridgeMessage<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>('api:github/pr:protection', { directory, baseBranch }),
 });

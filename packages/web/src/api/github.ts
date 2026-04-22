@@ -1,6 +1,7 @@
 import type {
   GitHubAPI,
   GitHubAuthStatus,
+  GitHubBranchProtection,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssueStartWorkInput,
@@ -242,6 +243,18 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     const result = await jsonOrNull<GitHubIssueStartWorkResult>(response);
     if (!result) {
       throw new Error(response.statusText || 'Failed to start work on issue');
+    }
+    return result;
+  },
+
+  async prProtection(directory: string, baseBranch: string): Promise<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }> {
+    const response = await fetch(
+      `/api/github/pr/protection?directory=${encodeURIComponent(directory)}&baseBranch=${encodeURIComponent(baseBranch)}`,
+      { method: 'GET', headers: { Accept: 'application/json' } }
+    );
+    const result = await jsonOrNull<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>(response);
+    if (!result) {
+      throw new Error(response.statusText || 'Failed to load branch protection');
     }
     return result;
   },
