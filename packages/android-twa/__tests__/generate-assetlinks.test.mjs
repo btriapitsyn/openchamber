@@ -3,7 +3,7 @@ import { generateAssetlinksJson, extractFingerprint, isQuietMode, isJsonMode } f
 
 describe('generateAssetlinksJson', () => {
   test('generates correct assetlinks.json structure', () => {
-    const packageId = 'ai.opencode.openchamber.twa'
+  const packageId = 'ai.opencode.openchamber.configurable'
     const fingerprint = '14:6D:E9:A3:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55'
 
     const result = generateAssetlinksJson(packageId, fingerprint)

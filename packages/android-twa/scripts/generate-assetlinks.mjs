@@ -51,7 +51,7 @@ async function main() {
     }
 
     const alias = process.env.TWA_KEY_ALIAS || 'openchamber'
-    const packageId = process.env.TWA_PACKAGE_ID || 'ai.opencode.openchamber.twa'
+  const packageId = process.env.TWA_PACKAGE_ID || 'ai.opencode.openchamber.configurable'
 
     let spin;
     if (shouldRenderHumanOutput()) {

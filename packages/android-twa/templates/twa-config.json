@@ -1,5 +1,5 @@
 {
-  "packageId": "${TWA_PACKAGE_ID:-ai.opencode.openchamber.twa}",
+  "packageId": "${TWA_PACKAGE_ID:-ai.opencode.openchamber.configurable}",
   "host": "${TWA_HOST}",
   "name": "OpenChamber",
   "launcherName": "OpenChamber",

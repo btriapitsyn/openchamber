@@ -95,7 +95,7 @@ describe('collectConfig', () => {
     process.env.TWA_MANIFEST_URL = 'https://test.com/site.webmanifest'
 
     const config = await collectConfig()
-    expect(config.packageId).toBe('ai.opencode.openchamber.twa')
+    expect(config.packageId).toBe('ai.opencode.openchamber.configurable')
 
     delete process.env.TWA_MANIFEST_URL
   })

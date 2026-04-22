@@ -66,7 +66,7 @@ bun run android:assetlinks
 | `TWA_MANIFEST_URL` | ✅ | - | Full URL to your site.webmanifest |
 | `TWA_HOST` | ✅ | - | Your domain hostname (without https://) |
 | `TWA_DEFAULT_URL` | ✅ | - | Full HTTPS URL to your OpenChamber instance |
-| `TWA_PACKAGE_ID` | ⬜ | `ai.opencode.openchamber.twa` | Android package ID |
+| `TWA_PACKAGE_ID` | ⬜ | `ai.opencode.openchamber.configurable` | Android package ID |
 | `TWA_KEYSTORE_PATH` | ⬜ | `./android.keystore` | Path to existing keystore |
 | `TWA_KEY_ALIAS` | ⬜ | `openchamber` | Keystore key alias |
 | `BUBBLEWRAP_KEYSTORE_PASSWORD` | ⬜ | - | Keystore password (for CI/CD) |

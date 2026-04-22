@@ -82,7 +82,7 @@ async function collectConfig() {
   const config = {
     manifestUrl: process.env.TWA_MANIFEST_URL,
     host: process.env.TWA_HOST,
-    packageId: process.env.TWA_PACKAGE_ID || 'ai.opencode.openchamber.twa',
+    packageId: process.env.TWA_PACKAGE_ID || 'ai.opencode.openchamber.configurable',
     keystorePath: process.env.TWA_KEYSTORE_PATH,
     keyAlias: process.env.TWA_KEY_ALIAS || 'openchamber'
   }
