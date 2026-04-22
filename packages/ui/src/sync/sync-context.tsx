@@ -1128,15 +1128,7 @@ function handleEvent(
         ? (idleSession as Session & { parentID?: string | null }).parentID
         : null
       if (parentID) {
-        void Promise.resolve().then(async () => {
-          const dirStore = childStores.getChild(resolvedDirectory)
-          if (!dirStore) return
-          try {
-            await repairSessionParts(resolvedDirectory, parentID, dirStore)
-          } catch {
-            // Transient failure — next event or reconnect will catch up
-          }
-        })
+        enqueuePartsRepair(resolvedDirectory, parentID, childStores)
       }
     }
   }
@@ -1900,9 +1892,14 @@ export function useSessionMessageRecords(
  * whose child session messages were never loaded — bootstrap only loads
  * session metadata, not messages.
  */
+
+// Module-level in-flight tracking for useEnsureSessionMessages.
+// Prevents redundant parallel fetches when multiple component instances
+// (e.g. multiple ToolParts) request the same session's messages.
+const _ensureMessagesLoading = new Set<string>()
+
 export function useEnsureSessionMessages(sessionID: string, directory?: string) {
   const store = useDirectoryStore(directory)
-  const loadingRef = React.useRef<Set<string>>(new Set())
 
   React.useEffect(() => {
     if (!sessionID) return
@@ -1912,11 +1909,13 @@ export function useEnsureSessionMessages(sessionID: string, directory?: string) 
     if (Object.prototype.hasOwnProperty.call(state.message, sessionID)) return
     // Session doesn't exist — nothing to load
     if (!state.session.some((s) => s.id === sessionID)) return
-    // Already loading this session
-    if (loadingRef.current.has(sessionID)) return
 
-    loadingRef.current.add(sessionID)
     const dir = directory ?? opencodeClient.getDirectory()
+    const loadingKey = `${dir ?? ""}:${sessionID}`
+    // Already loading this session for this directory
+    if (_ensureMessagesLoading.has(loadingKey)) return
+
+    _ensureMessagesLoading.add(loadingKey)
 
     void (async () => {
       try {
@@ -1951,7 +1950,7 @@ export function useEnsureSessionMessages(sessionID: string, directory?: string) 
       } catch {
         // Transient failure — next navigation or reconnect will retry
       } finally {
-        loadingRef.current.delete(sessionID)
+        _ensureMessagesLoading.delete(loadingKey)
       }
     })()
   }, [sessionID, store, directory])
