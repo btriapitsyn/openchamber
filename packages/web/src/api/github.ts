@@ -3,6 +3,8 @@ import type {
   GitHubAuthStatus,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
+  GitHubIssueStartWorkInput,
+  GitHubIssueStartWorkResult,
   GitHubIssuesListResult,
   GitHubPullRequestContextResult,
   GitHubPullRequestsListResult,
@@ -229,5 +231,18 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
       throw new Error(payload?.error || response.statusText || 'Failed to load issue comments');
     }
     return payload;
+  },
+
+  async startWorkOnIssue(payload: GitHubIssueStartWorkInput): Promise<GitHubIssueStartWorkResult> {
+    const response = await fetch('/api/github/issues/start-work', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await jsonOrNull<GitHubIssueStartWorkResult>(response);
+    if (!result) {
+      throw new Error(response.statusText || 'Failed to start work on issue');
+    }
+    return result;
   },
 });

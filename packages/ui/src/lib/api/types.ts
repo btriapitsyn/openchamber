@@ -916,6 +916,26 @@ export type GitHubIssueCommentsResult = {
   comments?: GitHubIssueComment[];
 };
 
+export type GitHubIssueStartWorkInput = {
+  directory: string;
+  owner?: string;
+  repo?: string;
+  issueNumber: number;
+  baseBranch?: string;
+  branchPrefix?: string;
+};
+
+export type GitHubIssueStartWorkResult = {
+  ok: boolean;
+  data?: {
+    branch: string;
+    brief: string;
+    sessionSeed: string;
+    baseBranch: string;
+  };
+  error?: { code: string; message: string };
+};
+
 export type GitHubAuthStatus = {
   connected: boolean;
   user?: GitHubUserSummary | null;
@@ -968,6 +988,7 @@ export interface GitHubAPI {
   issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>;
   issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;
   issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult>;
+  startWorkOnIssue(payload: GitHubIssueStartWorkInput): Promise<GitHubIssueStartWorkResult>;
 }
 
 export interface RuntimeAPIs {

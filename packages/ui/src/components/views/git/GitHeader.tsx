@@ -23,6 +23,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { BranchSelector } from './BranchSelector';
 import { WorktreeBranchDisplay } from './WorktreeBranchDisplay';
 import { SyncActions } from './SyncActions';
+import { StartWorkButton } from '@/features/issue-work';
 import type { GitStatus, GitIdentityProfile, GitRemote } from '@/lib/api/types';
 import { useUIStore } from '@/stores/useUIStore';
 
@@ -235,6 +236,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
           <TooltipContent sideOffset={8}>History</TooltipContent>
         </Tooltip>
       ) : null}
+      <StartWorkButton />
     </div>
   );
 

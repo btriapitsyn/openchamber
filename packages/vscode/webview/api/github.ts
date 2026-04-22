@@ -3,6 +3,8 @@ import type {
   GitHubAuthStatus,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
+  GitHubIssueStartWorkInput,
+  GitHubIssueStartWorkResult,
   GitHubIssuesListResult,
   GitHubPullRequestContextResult,
   GitHubPullRequestsListResult,
@@ -48,6 +50,8 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
     sendBridgeMessage<GitHubIssueGetResult>('api:github/issues:get', { directory, number }),
   issueComments: async (directory: string, number: number) =>
     sendBridgeMessage<GitHubIssueCommentsResult>('api:github/issues:comments', { directory, number }),
+  startWorkOnIssue: async (payload: GitHubIssueStartWorkInput) =>
+    sendBridgeMessage<GitHubIssueStartWorkResult>('api:github/issues:start-work', payload),
 
   prsList: async (directory: string, options?: { page?: number }) =>
     sendBridgeMessage<GitHubPullRequestsListResult>('api:github/pulls:list', { directory, page: options?.page ?? 1 }),
