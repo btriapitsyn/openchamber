@@ -916,9 +916,8 @@ const scheduledTasksRuntime = createScheduledTasksRuntime({
     const settings = await readSettingsFromDiskMigrated();
     return sanitizeProjects(settings?.projects || []);
   },
-  buildOpenCodeUrl,
-  getOpenCodeAuthHeaders,
-  waitForOpenCodeReady,
+  backendRegistry,
+  sessionBindingsRuntime,
   emitTaskRunEvent: (event) => {
     for (const client of uiOpenChamberEventClients) {
       try {
