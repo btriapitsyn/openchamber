@@ -8,6 +8,7 @@ import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useUIStore } from '@/stores/useUIStore';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
+import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 // ---- Types ----
 
 /** File changed by an AI tool (non-Git mode) */
@@ -213,6 +214,7 @@ export const PendingChangesBar: React.FC = React.memo(() => {
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const sessionMessageRecords = useSessionMessageRecords(currentSessionId ?? '');
     const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
+    const runtime = React.useContext(RuntimeAPIContext);
     const isGitRepo = useIsGitRepo(currentDirectory);
     const gitStatus = useGitStore((s) =>
         currentDirectory ? s.directories.get(currentDirectory)?.status ?? null : null,
@@ -289,17 +291,30 @@ export const PendingChangesBar: React.FC = React.memo(() => {
     const handleOpenFile = (file: ChangedFileEntry) => {
         if (!currentDirectory) return;
 
-        const targetPath = isGitFile(file)
+        // Absolute path for native editor APIs
+        const absolutePath = file.path.startsWith('/')
+            ? file.path
+            : (currentDirectory.endsWith('/') ? currentDirectory : currentDirectory + '/') + file.path;
+
+        // Relative path for web fallback
+        const relativePath = isGitFile(file)
             ? file.relativePath
             : toRelativePath(file.path, currentDirectory);
 
-        const store = useUIStore.getState();
-        if (!store.isMobile) {
-            store.openContextDiff(currentDirectory, targetPath);
-            return;
+        const editor = runtime?.editor;
+        if (editor && !isGitFile(file) && file.patch) {
+            void editor.openDiff('', absolutePath, undefined, { patch: file.patch });
+        } else if (editor) {
+            void editor.openFile(absolutePath);
+        } else {
+            const store = useUIStore.getState();
+            if (!store.isMobile) {
+                store.openContextDiff(currentDirectory, relativePath);
+                return;
+            }
+            store.navigateToDiff(relativePath);
+            store.setRightSidebarOpen(false);
         }
-        store.navigateToDiff(targetPath);
-        store.setRightSidebarOpen(false);
     };
 
     // ---- Label ----
