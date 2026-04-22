@@ -1867,6 +1867,72 @@ export function useSessionMessageRecords(
 }
 
 /**
+ * Ensures a session's messages are loaded into the sync store.
+ * If the session exists in state.session but messages haven't been fetched
+ * (state.message[sessionID] is absent), triggers a background API fetch.
+ *
+ * This covers the case where a user navigates to an old parent session
+ * whose child session messages were never loaded — bootstrap only loads
+ * session metadata, not messages.
+ */
+export function useEnsureSessionMessages(sessionID: string, directory?: string) {
+  const store = useDirectoryStore(directory)
+  const loadingRef = React.useRef<Set<string>>(new Set())
+
+  React.useEffect(() => {
+    if (!sessionID) return
+
+    const state = store.getState()
+    // Already loaded — nothing to do
+    if (Object.prototype.hasOwnProperty.call(state.message, sessionID)) return
+    // Session doesn't exist — nothing to load
+    if (!state.session.some((s) => s.id === sessionID)) return
+    // Already loading this session
+    if (loadingRef.current.has(sessionID)) return
+
+    loadingRef.current.add(sessionID)
+    const dir = directory ?? opencodeClient.getDirectory()
+
+    void (async () => {
+      try {
+        const scopedClient = opencodeClient.getScopedSdkClient(dir)
+        const response = await scopedClient.session.messages({
+          sessionID,
+          limit: RECONNECT_MESSAGE_LIMIT,
+        })
+        const records = (response.data ?? []).filter(
+          (record: { info?: { id?: string } }) => !!record?.info?.id,
+        )
+        if (records.length === 0) return
+
+        const nextMessages = records
+          .map((record: { info: Message }) => stripMessageDiffSnapshots(record.info))
+          .filter((m: Message | null): m is Message => m !== null)
+          .sort((a: Message, b: Message) => cmp(a.id, b.id))
+
+        const nextPartState: Record<string, Part[]> = {}
+        for (const record of records) {
+          const messageId = record?.info?.id
+          if (!messageId) continue
+          nextPartState[messageId] = (record.parts ?? [])
+            .filter((part: Part) => !!part?.id && !RECONNECT_SKIP_PARTS.has(part.type))
+            .sort((a: Part, b: Part) => cmp(a.id, b.id))
+        }
+
+        store.setState((state: DirectoryStore) => ({
+          message: { ...state.message, [sessionID]: nextMessages },
+          part: { ...state.part, ...nextPartState },
+        }))
+      } catch {
+        // Transient failure — next navigation or reconnect will retry
+      } finally {
+        loadingRef.current.delete(sessionID)
+      }
+    })()
+  }, [sessionID, store, directory])
+}
+
+/**
  * Determines if a session is actively working.
  * Checks session_status and only falls back to incomplete assistant messages
  * when authoritative status is missing.
