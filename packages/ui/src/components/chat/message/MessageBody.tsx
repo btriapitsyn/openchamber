@@ -6,6 +6,7 @@ import ToolPart from './parts/ToolPart';
 import AssistantTextPart from './parts/AssistantTextPart';
 import ReasoningPart from './parts/ReasoningPart';
 import { MessageFilesDisplay } from '../FileAttachment';
+import { TurnChangedFilesDropdown } from '../TurnChangedFilesDropdown';
 import type { ToolPart as ToolPartType } from '@opencode-ai/sdk/v2';
 import type { StreamPhase, ToolPopupContent, AgentMentionInfo } from './types';
 import type { TurnGroupingContext } from '../lib/turns/types';
@@ -1593,25 +1594,41 @@ const AssistantMessageBody: React.FC<Omit<MessageBodyProps, 'isUser'>> = ({
                 </div>
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
                 {shouldShowFooter && (
-                    <div className="mt-2 mb-1 flex items-center justify-start gap-1.5">
+                    <div
+                        className="mt-2 mb-1 flex items-center justify-start gap-1.5"
+                        style={{ containerType: 'inline-size', containerName: 'message-footer' }}
+                    >
                         <div className="flex items-center gap-1.5">
                             {footerButtons}
                         </div>
                         <div className="flex items-center gap-1.5">
                             {turnDurationText ? (
-                                <span className="text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
-                                    <RiHourglassLine className="h-3.5 w-3.5" />
-                                    {turnDurationText}
-                                </span>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <span className="text-sm text-muted-foreground/60 tabular-nums flex items-center gap-1">
+                                            <RiHourglassLine className="h-3.5 w-3.5" />
+                                            <span className="message-footer__label">{turnDurationText}</span>
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{turnDurationText}</TooltipContent>
+                                </Tooltip>
                             ) : null}
                             {footerTimestamp ? (
-                                <span
-                                    className={footerTimestampClassName}
-                                    aria-label={`Message time: ${footerTimestamp}`}
-                                >
-                                    <RiTimeLine className="h-3.5 w-3.5" />
-                                    {footerTimestamp}
-                                </span>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <span
+                                            className={footerTimestampClassName}
+                                            aria-label={`Message time: ${footerTimestamp}`}
+                                        >
+                                            <RiTimeLine className="h-3.5 w-3.5" />
+                                            <span className="message-footer__label">{footerTimestamp}</span>
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>{footerTimestamp}</TooltipContent>
+                                </Tooltip>
+                            ) : null}
+                            {isLastAssistantInTurn && hasStopFinish ? (
+                                <TurnChangedFilesDropdown activityParts={turnGroupingContext?.activityParts} />
                             ) : null}
                         </div>
                     </div>

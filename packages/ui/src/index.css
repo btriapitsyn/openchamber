@@ -776,6 +776,13 @@ html:not(.dark) .chat-scroll {
   }
 }
 
+/* Assistant message footer: collapse text labels to icons when narrow. */
+@container message-footer (max-width: 24rem) {
+  .message-footer__label {
+    display: none;
+  }
+}
+
 /* Animated tabs: collapse labels based on local container width. */
 @container animated-tabs (max-width: 23rem) {
   .animated-tabs__label {
