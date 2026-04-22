@@ -895,11 +895,34 @@ export const PullRequestSection: React.FC<{
           rawDetails: annotation.rawDetails,
         }));
       });
+
+      const failedLogs: Record<string, string> = {};
+      if (context.repo && github.checksLogs) {
+        for (const run of failed) {
+          if (run.job?.jobId) {
+            try {
+              const logResult = await github.checksLogs({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                runId: run.job.runId,
+                jobId: run.job.jobId,
+              });
+              if (logResult.ok && logResult.data?.excerpt) {
+                failedLogs[run.name] = logResult.data.excerpt;
+              }
+            } catch {
+              // ignore individual log fetch failures
+            }
+          }
+        }
+      }
+
       const payloadText = `GitHub PR failed checks (JSON)\n${JSON.stringify({
         repo: context.repo ?? null,
         pr: context.pr ?? null,
         failedChecks: failed,
         failedAnnotations,
+        failedLogs,
       }, null, 2)}`;
 
       dispatchSyntheticPrompt(target, visibleText, instructionsText, payloadText);
