@@ -1062,6 +1062,12 @@ export interface GitHubAPI {
   startWorkOnIssue(payload: GitHubIssueStartWorkInput): Promise<GitHubIssueStartWorkResult>;
 }
 
+export interface TeamsAPI {
+  workspacesList(): Promise<{ ok: boolean; data?: { workspaces: Record<string, unknown>[] }; error?: { code: string; message: string } }>;
+  workspaceCreate(payload: { githubOrgLogin: string; githubInstallationId: number; displayName: string }): Promise<{ ok: boolean; data?: { workspaceId: string }; error?: { code: string; message: string } }>;
+  workspaceActivate(id: string): Promise<{ ok: boolean; error?: { code: string; message: string } }>;
+}
+
 export interface RuntimeAPIs {
   runtime: RuntimeDescriptor;
   terminal: TerminalAPI;
@@ -1071,6 +1077,7 @@ export interface RuntimeAPIs {
   permissions: PermissionsAPI;
   notifications: NotificationsAPI;
   github?: GitHubAPI;
+  teams?: TeamsAPI;
   push?: PushAPI;
   diagnostics?: DiagnosticsAPI;
   tools: ToolsAPI;
