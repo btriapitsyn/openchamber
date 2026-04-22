@@ -88,9 +88,9 @@ public class SettingsActivity extends AppCompatActivity {
     private void setupButtons() {
         connectButton.setOnClickListener(
                 v -> {
-                    String url = urlInput.getText().toString().trim();
-                    // Strip trailing slashes
-                    url = url.replaceAll("/+$", "");
+            String rawUrl = urlInput.getText().toString().trim();
+            // Strip trailing slashes
+            final String url = rawUrl.replaceAll("/+$", "");
                     // Reject control characters
                     if (url.matches(".*[\\x00-\\x1F\\x7F].*")) {
                         errorText.setVisibility(View.VISIBLE);
