@@ -402,7 +402,7 @@ logs into chat by hand.
 **Stuck checks.**
 - Confirm `getOctokitOrNull()` returns a client with `actions.downloadJobLogsForWorkflowRun` available.
 
-**Status:** planned, after 1.3.
+**Status:** shipped (commits: 1d084d17, 873ae09d).
 
 ---
 
