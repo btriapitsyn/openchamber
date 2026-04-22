@@ -2,6 +2,8 @@ import type {
   GitHubAPI,
   GitHubAuthStatus,
   GitHubBranchProtection,
+  GitHubChecksLogsInput,
+  GitHubChecksLogsResult,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssueStartWorkInput,
@@ -255,6 +257,21 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     const result = await jsonOrNull<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>(response);
     if (!result) {
       throw new Error(response.statusText || 'Failed to load branch protection');
+    }
+    return result;
+  },
+
+  async checksLogs(payload: GitHubChecksLogsInput): Promise<GitHubChecksLogsResult> {
+    const url = new URL('/api/github/checks/logs', window.location.origin);
+    url.searchParams.append('owner', payload.owner);
+    url.searchParams.append('repo', payload.repo);
+    if (payload.runId) url.searchParams.append('runId', String(payload.runId));
+    url.searchParams.append('jobId', String(payload.jobId));
+
+    const response = await fetch(url.toString(), { method: 'GET', headers: { Accept: 'application/json' } });
+    const result = await jsonOrNull<GitHubChecksLogsResult>(response);
+    if (!result) {
+      throw new Error(response.statusText || 'Failed to download check logs');
     }
     return result;
   },

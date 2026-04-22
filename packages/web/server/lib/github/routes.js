@@ -1506,4 +1506,49 @@ export function registerGitHubRoutes(app) {
       return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to load branch protection' } });
     }
   });
+
+  app.get('/api/github/checks/logs', async (req, res) => {
+    try {
+      const owner = typeof req.query?.owner === 'string' ? req.query.owner.trim() : '';
+      const repo = typeof req.query?.repo === 'string' ? req.query.repo.trim() : '';
+      const runId = typeof req.query?.runId === 'string' ? Number(req.query.runId) : null;
+      const jobId = typeof req.query?.jobId === 'string' ? Number(req.query.jobId) : null;
+
+      if (!owner || !repo || !jobId) {
+        return res.status(400).json({ ok: false, error: { code: 'bad_input', message: 'owner, repo, and jobId are required' } });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.status(401).json({ ok: false, error: { code: 'not_authenticated', message: 'GitHub not authenticated' } });
+      }
+
+      let rawLog = '';
+      try {
+        const logResp = await octokit.rest.actions.downloadJobLogsForWorkflowRun({
+          owner,
+          repo,
+          job_id: jobId,
+        });
+        rawLog = typeof logResp?.data === 'string' ? logResp.data : '';
+      } catch (error) {
+        if (error?.status === 403) {
+          return res.status(403).json({ ok: false, error: { code: 'forbidden', message: 'Missing permissions to read logs. Add actions:read scope.' } });
+        }
+        if (error?.status === 404) {
+          return res.status(404).json({ ok: false, error: { code: 'not_found', message: 'Log not found or not available.' } });
+        }
+        throw error;
+      }
+
+      const { extractLogExcerpt } = await import('./checks-logs.js');
+      const excerpt = extractLogExcerpt(rawLog);
+
+      return res.json({ ok: true, data: { excerpt } });
+    } catch (error) {
+      console.error('Failed to download check logs:', error);
+      return res.status(500).json({ ok: false, error: { code: 'internal', message: error.message || 'Failed to download check logs' } });
+    }
+  });
 }

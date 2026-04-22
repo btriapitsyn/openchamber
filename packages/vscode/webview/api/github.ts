@@ -2,6 +2,8 @@ import type {
   GitHubAPI,
   GitHubAuthStatus,
   GitHubBranchProtection,
+  GitHubChecksLogsInput,
+  GitHubChecksLogsResult,
   GitHubIssueCommentsResult,
   GitHubIssueGetResult,
   GitHubIssueStartWorkInput,
@@ -65,4 +67,6 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
     }),
   prProtection: async (directory: string, baseBranch: string) =>
     sendBridgeMessage<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>('api:github/pr:protection', { directory, baseBranch }),
+  checksLogs: async (payload: GitHubChecksLogsInput) =>
+    sendBridgeMessage<GitHubChecksLogsResult>('api:github/checks:logs', payload),
 });

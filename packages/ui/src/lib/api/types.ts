@@ -995,6 +995,21 @@ export type GitHubDeviceFlowComplete =
   | { connected: true; user: GitHubUserSummary; scope?: string }
   | { connected: false; status?: string; error?: string };
 
+export type GitHubChecksLogsInput = {
+  owner: string;
+  repo: string;
+  runId?: number | null;
+  jobId: number;
+};
+
+export type GitHubChecksLogsResult = {
+  ok: boolean;
+  data?: {
+    excerpt: string;
+  };
+  error?: { code: string; message: string };
+};
+
 export interface GitHubAPI {
   authStatus(): Promise<GitHubAuthStatus>;
   authStart(): Promise<GitHubDeviceFlowStart>;
@@ -1016,6 +1031,7 @@ export interface GitHubAPI {
     options?: { includeDiff?: boolean; includeCheckDetails?: boolean }
   ): Promise<GitHubPullRequestContextResult>;
   prProtection(directory: string, baseBranch: string): Promise<{ ok: boolean; data?: { protection: GitHubBranchProtection }; error?: { code: string; message: string } }>;
+  checksLogs(payload: GitHubChecksLogsInput): Promise<GitHubChecksLogsResult>;
 
   issuesList(directory: string, options?: { page?: number }): Promise<GitHubIssuesListResult>;
   issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;
