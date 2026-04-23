@@ -1572,6 +1572,8 @@ export function registerGitHubRoutes(app) {
 
       let rawItems = [];
 
+      const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
       // 1. Notifications
       try {
         const notifs = await octokit.rest.activity.listNotificationsForAuthenticatedUser({ per_page: 50 });
@@ -1583,6 +1585,8 @@ export function registerGitHubRoutes(app) {
           console.warn('Failed to fetch notifications', err.message);
         }
       }
+
+      await delay(1000);
 
       // 2. Open PRs for stale & ready to merge
       try {
@@ -1600,6 +1604,8 @@ export function registerGitHubRoutes(app) {
         console.warn('Failed to fetch open PRs', err.message);
       }
 
+      await delay(2000); // Prevent GitHub Search Secondary Rate Limit
+
       // 3. Failing CI PRs
       try {
         const failingPrs = await octokit.rest.search.issuesAndPullRequests({
@@ -1613,6 +1619,8 @@ export function registerGitHubRoutes(app) {
       } catch (err) {
         console.warn('Failed to fetch failing PRs', err.message);
       }
+
+      await delay(2000); // Prevent GitHub Search Secondary Rate Limit
 
       // 4. Ready to merge PRs
       try {
