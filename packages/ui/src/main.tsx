@@ -32,13 +32,14 @@ void initializeAppearancePreferences().then(() => {
   void Promise.all([
     syncDesktopSettings(),
     applyPersistedDirectoryPreferences(),
-  ]).then(() => {
-    startAppearanceAutoSave();
-    startModelPrefsAutoSave();
-    startTypographyWatcher();
-  }).catch((err) => {
+  ]).catch((err) => {
     console.error('[main] settings init failed:', err);
   });
+
+  // Start watchers regardless of whether secondary settings succeed.
+  startAppearanceAutoSave();
+  startModelPrefsAutoSave();
+  startTypographyWatcher();
 }).catch((err) => {
   console.error('[main] appearance init failed:', err);
 });

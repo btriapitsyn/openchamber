@@ -168,9 +168,11 @@ export async function bootstrapDirectory(input: {
     .filter((r): r is PromiseRejectedResult => r.status === "rejected")
     .map((r) => r.reason)
 
-  // path.get (index 3) and session.status (index 4) have no global-state
-  // fallback. If either fails, the UI cannot safely advance to "complete".
-  const criticalPhase1Failed = phase1Results[3].status === "rejected" || phase1Results[4].status === "rejected"
+  // path.get and session.status have no global-state fallback.
+  // If either fails, the UI cannot safely advance to "complete".
+  const [, , , pathResult, sessionStatusResult] = phase1Results
+  const criticalPhase1Failed =
+    pathResult.status === "rejected" || sessionStatusResult.status === "rejected"
 
   if (phase1Errors.length === phase1Results.length || criticalPhase1Failed) {
     console.error(`[bootstrap] directory bootstrap failed for ${directory}`, phase1Errors[0])
