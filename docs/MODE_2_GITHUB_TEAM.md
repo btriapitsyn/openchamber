@@ -248,6 +248,8 @@ within 1s. Heavy work deferred to an in-process queue.
 - Confirm the Express app can accept `application/json` with raw body
   preserved (needed for HMAC); GitHub expects exact bytes.
 
+**Status:** shipped (commit: f24f9821).
+
 ---
 
 ### 2.3 Team PR Board (Kanban)
