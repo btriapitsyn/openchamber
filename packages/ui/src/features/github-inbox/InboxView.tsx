@@ -3,6 +3,7 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import type { GitHubInboxItem } from '@/lib/api/types';
 import { RiCheckLine, RiTimeLine, RiGitPullRequestLine, RiErrorWarningLine, RiGitMergeLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStartWork } from '@/features/issue-work/useStartWork';
 import { useUIStore } from '@/stores/useUIStore';
 
@@ -104,93 +105,90 @@ export const InboxView: React.FC = () => {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 border-b border-[hsl(var(--border))] p-2">
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="flex-1 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-1 typography-micro text-[hsl(var(--foreground))]"
-        >
-          <option value="all">All Notifications</option>
-          <option value="review_requested">Review Requested</option>
-          <option value="assigned">Assigned</option>
-          <option value="mentioned">Mentioned</option>
-          <option value="ci_failing">CI Failing</option>
-          <option value="stale">Stale PRs</option>
-          <option value="ready_to_merge">Ready to Merge</option>
-        </select>
+        <Select value={filter} onValueChange={setFilter}>
+          <SelectTrigger className="flex-1 h-7 typography-micro">
+            <SelectValue placeholder="Filter..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Notifications</SelectItem>
+            <SelectItem value="review_requested">Review Requested</SelectItem>
+            <SelectItem value="assigned">Assigned</SelectItem>
+            <SelectItem value="mentioned">Mentioned</SelectItem>
+            <SelectItem value="ci_failing">CI Failing</SelectItem>
+            <SelectItem value="stale">Stale PRs</SelectItem>
+            <SelectItem value="ready_to_merge">Ready to Merge</SelectItem>
+          </SelectContent>
+        </Select>
         <Button variant="ghost" size="sm" onClick={fetchInbox} disabled={loading} className="h-7 px-2 typography-micro">
           {loading ? '...' : 'Refresh'}
         </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-2">
-        {error && <div className="text-red-500 typography-micro mb-2">{error}</div>}
+        {error && <div className="text-[hsl(var(--status-error))] typography-micro mb-2">{error}</div>}
         {filteredItems.length === 0 && !loading && (
           <div className="text-center text-[hsl(var(--muted-foreground))] typography-micro mt-4">
             Inbox is empty.
           </div>
         )}
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 p-1">
           {filteredItems.map((item) => (
-            <div key={item.id} className="flex flex-col gap-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3">
+            <div key={item.id} className="flex flex-col gap-2 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-2.5">
               <div className="flex items-start gap-2">
-                {item.reason === 'stale' && <RiTimeLine className="size-4 text-[hsl(var(--status-warning))]" />}
-                {item.reason === 'ci_failing' && <RiErrorWarningLine className="size-4 text-[hsl(var(--status-error))]" />}
-                {item.reason === 'ready_to_merge' && <RiGitMergeLine className="size-4 text-[hsl(var(--status-success))]" />}
-                {['stale', 'ci_failing', 'ready_to_merge'].indexOf(item.reason) === -1 && <RiGitPullRequestLine className="size-4 text-[hsl(var(--muted-foreground))]" />}
+                {item.reason === 'stale' && <RiTimeLine className="size-4 shrink-0 text-[hsl(var(--status-warning))]" />}
+                {item.reason === 'ci_failing' && <RiErrorWarningLine className="size-4 shrink-0 text-[hsl(var(--status-error))]" />}
+                {item.reason === 'ready_to_merge' && <RiGitMergeLine className="size-4 shrink-0 text-[hsl(var(--status-success))]" />}
+                {['stale', 'ci_failing', 'ready_to_merge'].indexOf(item.reason) === -1 && <RiGitPullRequestLine className="size-4 shrink-0 text-[hsl(var(--muted-foreground))]" />}
                 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="typography-micro text-[hsl(var(--muted-foreground))]">{item.repoFullName}</span>
-                    <span className="typography-micro text-[hsl(var(--muted-foreground))] opacity-70">{new Date(item.updatedAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="typography-micro font-medium text-[hsl(var(--foreground))] truncate">{item.repoFullName}</span>
+                    <span className="typography-micro text-[hsl(var(--muted-foreground))] opacity-80 whitespace-nowrap">
+                      {new Date(item.updatedAt).toLocaleDateString()}
+                    </span>
                   </div>
-                  <div className="typography-ui-label font-medium text-[hsl(var(--foreground))] line-clamp-2">
+                  <div className="typography-micro text-[hsl(var(--muted-foreground))] break-words line-clamp-2 mt-0.5">
                     {item.title}
                   </div>
                 </div>
               </div>
               
-              <div className="flex items-center gap-2 pt-2 border-t border-[hsl(var(--border))]">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="h-7 typography-micro px-2"
-                  onClick={() => handleMarkDone(item)}
-                  disabled={snoozing.has(item.id)}
-                >
-                  <RiCheckLine className="size-3 mr-1" /> Done
-                </Button>
-                
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-7 typography-micro px-2"
-                  onClick={() => handleSnooze(item.id, 1)}
-                  disabled={snoozing.has(item.id)}
-                >
-                  Snooze 1d
-                </Button>
-
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-7 typography-micro px-2"
-                  onClick={() => handleSnooze(item.id, 7)}
-                  disabled={snoozing.has(item.id)}
-                >
-                  Snooze 1w
-                </Button>
-
+              <div className="flex items-center gap-1.5 mt-1">
                 {item.number && (
                   <Button 
-                    variant="default" 
+                    variant="secondary" 
                     size="sm" 
-                    className="h-7 typography-micro px-2 ml-auto"
+                    className="h-6 typography-micro px-2"
                     onClick={() => handleStartWork(item)}
                     disabled={startingWork || snoozing.has(item.id)}
                   >
-                    Start work
+                    Start Work
                   </Button>
                 )}
+
+                <div className="ml-auto flex items-center gap-1">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                    onClick={() => handleMarkDone(item)}
+                    disabled={snoozing.has(item.id)}
+                    title="Mark Done"
+                  >
+                    <RiCheckLine className="size-3.5" />
+                  </Button>
+                  
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                    onClick={() => handleSnooze(item.id, 1)}
+                    disabled={snoozing.has(item.id)}
+                    title="Snooze 1d"
+                  >
+                    <RiTimeLine className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

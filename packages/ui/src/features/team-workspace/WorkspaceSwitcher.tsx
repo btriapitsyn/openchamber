@@ -55,7 +55,7 @@ export const WorkspaceSwitcher: React.FC = () => {
             className="flex items-center justify-between"
           >
             <span className="truncate">{w.display_name}</span>
-            {w.id === activeWorkspaceId && <span className="text-[hsl(var(--status-success))] text-xs">✓</span>}
+            {w.id === activeWorkspaceId && <span className="text-[hsl(var(--status-success))] typography-micro">✓</span>}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
