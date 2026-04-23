@@ -1406,7 +1406,7 @@ const useMermaidInlineInteractions = ({
   }, [allowWheelZoom, containerRef, mermaidBlocks, onShowPopup]);
 };
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
+const MarkdownRendererImpl: React.FC<MarkdownRendererProps> = ({
   content,
   part,
   messageId,
@@ -1463,7 +1463,20 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   return markdownContent;
 };
 
-export const SimpleMarkdownRenderer: React.FC<{
+export const MarkdownRenderer = React.memo(MarkdownRendererImpl, (prev, next) => {
+  return prev.content === next.content
+    && prev.isStreaming === next.isStreaming
+    && prev.disableStreamAnimation === next.disableStreamAnimation
+    && prev.variant === next.variant
+    && prev.isAnimated === next.isAnimated
+    && prev.skipFadeIn === next.skipFadeIn
+    && prev.className === next.className
+    && prev.messageId === next.messageId
+    && prev.onShowPopup === next.onShowPopup
+    && prev.part?.id === next.part?.id;
+});
+
+const SimpleMarkdownRendererImpl: React.FC<{
   content: string;
   className?: string;
   variant?: MarkdownVariant;
@@ -1523,3 +1536,13 @@ export const SimpleMarkdownRenderer: React.FC<{
     </div>
   );
 };
+
+export const SimpleMarkdownRenderer = React.memo(SimpleMarkdownRendererImpl, (prev, next) => {
+  return prev.content === next.content
+    && prev.variant === next.variant
+    && prev.className === next.className
+    && prev.disableLinkSafety === next.disableLinkSafety
+    && prev.stripFrontmatter === next.stripFrontmatter
+    && prev.onShowPopup === next.onShowPopup
+    && prev.allowMermaidWheelZoom === next.allowMermaidWheelZoom;
+});

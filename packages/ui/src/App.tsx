@@ -31,7 +31,6 @@ import {
   type BootInjectionStatus,
   type DesktopBootView,
 } from '@/lib/desktopBoot';
-import { OnboardingScreen } from '@/components/onboarding/OnboardingScreen';
 import type { RecoveryVariant } from '@/components/onboarding/DesktopConnectionRecovery';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
@@ -55,6 +54,11 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QuickOpenDialog } from '@/components/ui/QuickOpenDialog';
 import { McpOAuthCallbackPage } from '@/components/sections/mcp/McpOAuthCallbackPage';
 import { MCP_OAUTH_CALLBACK_PATH } from '@/components/sections/mcp/mcpOAuth';
+
+// Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
+const OnboardingScreen = React.lazy(() =>
+  import('@/components/onboarding/OnboardingScreen').then((m) => ({ default: m.OnboardingScreen })),
+);
 
 const AboutDialogWrapper: React.FC = () => {
   const isAboutDialogOpen = useUIStore((s) => s.isAboutDialogOpen);
@@ -747,6 +751,11 @@ function App({ apis }: AppProps) {
     );
   }
 
+  // Always mount the full provider tree to avoid remounts when isInitialized
+  // flips from false → true. FireworksProvider and VoiceProvider are lightweight
+  // shells; their heavy children are only activated when actually needed.
+  const isBootShell = !isInitialized && !isDesktopRuntime;
+
   return (
     <ErrorBoundary>
       <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
@@ -758,11 +767,15 @@ function App({ apis }: AppProps) {
                   <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                   <MainLayout />
                   <Toaster />
-                  <ConfigUpdateOverlay />
-                  <QuickOpenDialog />
-                  <AboutDialogWrapper />
-                  {showMemoryDebug && (
-                    <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                  {!isBootShell && (
+                    <>
+                      <ConfigUpdateOverlay />
+                      <QuickOpenDialog />
+                      <AboutDialogWrapper />
+                      {showMemoryDebug && (
+                        <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                      )}
+                    </>
                   )}
                 </div>
               </TooltipProvider>
