@@ -2,8 +2,16 @@ import React, { useState } from 'react';
 import { RiBriefcaseLine } from '@remixicon/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useStartWork } from './useStartWork';
-
 
 export function StartWorkButton() {
   const [open, setOpen] = useState(false);
@@ -40,49 +48,54 @@ export function StartWorkButton() {
         <TooltipContent sideOffset={8}>Work on issue</TooltipContent>
       </Tooltip>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5 shadow-lg">
-            <h3 className="mb-1 typography-ui-header font-semibold">Work on GitHub Issue</h3>
-            <p className="mb-4 typography-meta text-[hsl(var(--muted-foreground))]">
+      <Dialog open={open} onOpenChange={(isOpen) => {
+        if (!loading) {
+          setOpen(isOpen);
+          if (!isOpen) setIssueNumber('');
+        }
+      }}>
+        <DialogContent showCloseButton={false} className="max-w-sm gap-5">
+          <DialogHeader>
+            <DialogTitle>Work on GitHub Issue</DialogTitle>
+            <DialogDescription>
               Enter an issue number to create a branch, worktree, and session.
-            </p>
-            <form onSubmit={handleSubmit}>
-              <label className="mb-1 block typography-ui-label">Issue number</label>
-              <input
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="typography-ui-label text-[hsl(var(--foreground))]">Issue number</label>
+              <Input
                 type="number"
                 min={1}
                 value={issueNumber}
                 onChange={(e) => setIssueNumber(e.target.value)}
-                className="mb-3 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 typography-meta outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]"
                 placeholder="e.g. 42"
                 required
                 disabled={loading}
               />
               {error && (
-                <p className="mb-3 typography-meta text-[hsl(var(--destructive))]">{error}</p>
+                <p className="typography-micro text-[hsl(var(--status-error))]">{error}</p>
               )}
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setOpen(false);
-                    setIssueNumber('');
-                  }}
-                  disabled={loading}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm" disabled={loading || !issueNumber}>
-                  {loading ? 'Starting…' : 'Start Work'}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </div>
+            <DialogFooter className="w-full sm:justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setOpen(false);
+                  setIssueNumber('');
+                }}
+                disabled={loading}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading || !issueNumber}>
+                {loading ? 'Starting…' : 'Start Work'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
