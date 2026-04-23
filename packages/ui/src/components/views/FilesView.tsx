@@ -1866,13 +1866,26 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     }
   }, [canEdit, textViewMode]);
 
+  const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
+  const HTML_VIEWER_MODE_KEY = 'openchamber:files:html-viewer-mode';
+
   React.useEffect(() => {
     const defaultMode = settingsDefaultFileViewerPreview ? 'view' : 'edit';
     setTextViewMode(defaultMode);
-    setHtmlViewMode(settingsDefaultFileViewerPreview ? 'preview' : 'edit');
-  }, [selectedFile?.path, settingsDefaultFileViewerPreview]);
 
-  const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
+    // Respect per-type localStorage preference when available,
+    // falling back to the setting-derived default when nothing is stored.
+    let htmlDefault: 'preview' | 'edit' = settingsDefaultFileViewerPreview ? 'preview' : 'edit';
+    try {
+      const stored = localStorage.getItem(HTML_VIEWER_MODE_KEY);
+      if (stored === 'preview' || stored === 'edit') {
+        htmlDefault = stored;
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+    setHtmlViewMode(htmlDefault);
+  }, [selectedFile?.path, settingsDefaultFileViewerPreview]);
 
   React.useEffect(() => {
     try {
@@ -1909,21 +1922,6 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         setJsonViewMode('tree');
       } else if (stored === 'text') {
         setJsonViewMode('text');
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
-
-  const HTML_VIEWER_MODE_KEY = 'openchamber:files:html-viewer-mode';
-
-  React.useEffect(() => {
-    try {
-      const stored = localStorage.getItem(HTML_VIEWER_MODE_KEY);
-      if (stored === 'preview') {
-        setHtmlViewMode('preview');
-      } else if (stored === 'edit') {
-        setHtmlViewMode('edit');
       }
     } catch {
       // Ignore localStorage errors
