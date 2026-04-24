@@ -19,7 +19,7 @@ import type { CreateMultiRunParams, MultiRunModelSelection } from '@/types/multi
 import { ModelMultiSelect, generateInstanceId, type ModelSelectionWithId } from './ModelMultiSelect';
 import { BranchSelector, useBranchOptions } from './BranchSelector';
 import { AgentSelector } from './AgentSelector';
-import { CommandAutocomplete, type CommandAutocompleteHandle } from '@/components/chat/CommandAutocomplete';
+import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from '@/components/chat/CommandAutocomplete';
 import { FileMentionAutocomplete, type FileMentionHandle } from '@/components/chat/FileMentionAutocomplete';
 import { isDesktopShell } from '@/lib/desktop';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
@@ -505,7 +505,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
     });
   }, [prompt, updateAutocompleteState]);
 
-  const handleAutocompleteCommandSelect = React.useCallback((command: { name: string }) => {
+  const handleAutocompleteCommandSelect = React.useCallback((command: CommandInfo) => {
     const nextPrompt = `/${command.name} `;
     setPrompt(nextPrompt);
     setShowCommandAutocomplete(false);
@@ -585,7 +585,7 @@ export const MultiRunLauncher: React.FC<MultiRunLauncherProps> = ({
   const configuredSetupCount = setupCommands.filter(cmd => cmd.trim()).length;
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full bg-background" data-keyboard-avoid="true">
+    <form onSubmit={handleSubmit} className="flex flex-col h-full bg-background">
       {!isWindowed ? (
         <header
           onMouseDown={handleDragStart}

@@ -1,3 +1,21 @@
+## [1.9.8] - 2026-04-22
+
+- Sessions/Reliability: fixed parent-child session sync during reconnects and navigation, so status and progress stay aligned in nested session trees (thanks to @jwcrystal).
+- Settings/Sync: settings changes now sync more reliably with other clients, and sidebar session pagination is steadier in larger workspaces.
+- Sessions/Folders: folder updates now persist through server-backed APIs, improving consistency across different machine path setups.
+- UI: refined chat chrome with a cleaner bottom scroll fade and hidden idle tasks row.
+- Chat/Commands: added `/summary` slash command for a non-destructive session summary - optional topic hint after the command focuses the output, and the prompt is customizable under Settings: Magic Prompts.
+
+## [1.9.7] - 2026-04-22
+
+- Sessions/UI: added bulk selection in the sessions sidebar and fixed pinned sessions so they stay pinned after reloads (thanks to @yart).
+- Chat/Files: you can now drag files and folders from the file tree into chat, with improved `@folder` autocomplete when building prompt context (thanks to @youfch).
+- Files: open editors now refresh file content after external changes, reducing stale-file surprises while coding (thanks to @jwcrystal).
+- Settings/MCP: improved MCP auth flow with remote config support and clearer diagnostics for faster setup and troubleshooting (thanks to @daveotero).
+- Chat/Questions: single-choice questions now use radio selection, making guided responses clearer and faster.
+- Reliability: config resolution now matches OpenCode behavior more closely, reducing extension/runtime mismatches during startup and settings reads (thanks to @cyan).
+- Reliability/Streaming: strengthened bootstrap and connection recovery paths, improving first-load consistency and reducing stuck/empty session states during reconnects.
+
 ## [1.9.6] - 2026-04-17
 
 - Reliability: improved startup shell detection to avoid false OpenCode discovery on POSIX login shells, reducing stuck startup edge cases in new workspaces (thanks to @geekifan).

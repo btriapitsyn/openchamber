@@ -1,7 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles/fonts'
-import 'katex/dist/katex.min.css'
 import './index.css'
 import App from './App.tsx'
 import { SessionAuthGate } from './components/auth/SessionAuthGate'
@@ -25,14 +24,25 @@ const runtimeAPIs = (typeof window !== 'undefined' && window.__OPENCHAMBER_RUNTI
   throw new Error('Runtime APIs not provided for legacy UI entrypoint.');
 })();
 
-await Promise.all([
-  syncDesktopSettings(),
-  initializeAppearancePreferences(),
-  applyPersistedDirectoryPreferences(),
-]);
-startAppearanceAutoSave();
-startModelPrefsAutoSave();
-startTypographyWatcher();
+// Initialize settings asynchronously — the app renders with defaults first
+// and hydrates once persisted preferences are applied. Users with non-default
+// themes may briefly see default appearance on cold start; accepted trade-off
+// for faster time-to-first-paint.
+void initializeAppearancePreferences().then(() => {
+  void Promise.all([
+    syncDesktopSettings(),
+    applyPersistedDirectoryPreferences(),
+  ]).catch((err) => {
+    console.error('[main] settings init failed:', err);
+  });
+
+  // Start watchers regardless of whether secondary settings succeed.
+  startAppearanceAutoSave();
+  startModelPrefsAutoSave();
+  startTypographyWatcher();
+}).catch((err) => {
+  console.error('[main] appearance init failed:', err);
+});
 
 
 const rootElement = document.getElementById('root');

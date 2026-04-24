@@ -28,10 +28,11 @@ import * as sessionActions from '@/sync/session-actions';
 import { useUserMessageHistory } from '@/sync/sync-context';
 import { useInlineCommentDraftStore, type InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { appendInlineComments } from '@/lib/messages/inlineComments';
+import { renderMagicPrompt } from '@/lib/magicPrompts';
 import { AttachedFilesList } from './FileAttachment';
 import { QueuedMessageChips } from './QueuedMessageChips';
 import { FileMentionAutocomplete, type FileMentionHandle } from './FileMentionAutocomplete';
-import { CommandAutocomplete, type CommandAutocompleteHandle } from './CommandAutocomplete';
+import { CommandAutocomplete, type CommandAutocompleteHandle, type CommandInfo } from './CommandAutocomplete';
 import { SkillAutocomplete, type SkillAutocompleteHandle } from './SkillAutocomplete';
 import { cn, formatDirectoryName, isMacOS } from '@/lib/utils';
 import { ModelControls } from './ModelControls';
@@ -64,11 +65,13 @@ import { useChatSearchDirectory } from '@/hooks/useChatSearchDirectory';
 import { opencodeClient } from '@/lib/opencode/client';
 import { useProjectsStore } from '@/stores/useProjectsStore';
 import { PROJECT_COLOR_MAP, PROJECT_ICON_MAP, getProjectIconImageUrl } from '@/lib/projectMeta';
-import { useGitBranches, useGitStore } from '@/stores/useGitStore';
+import { useGitBranches, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
+import { useDirectoryStore } from '@/stores/useDirectoryStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { createWorktreeDraft } from '@/lib/worktreeSessionCreator';
 import { buildSessionTargetOptions } from '@/sync/session-worktree-contract';
 import { usePermissionStore } from '@/stores/permissionStore';
+import { extractGitChangedFiles } from './changedFiles';
 
 const MAX_VISIBLE_TEXTAREA_LINES = 8;
 const EMPTY_QUEUE: QueuedMessage[] = [];
@@ -749,6 +752,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         Promise.resolve((useSessionUIStore.getState().sendMessage as (...a: unknown[]) => unknown)(...args)),
     ).current;
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
+    const currentDirectory = useDirectoryStore((s) => s.currentDirectory);
     const newSessionDraft = useSessionUIStore((s) => s.newSessionDraft);
     const newSessionDraftOpen = Boolean(newSessionDraft?.open);
     const setNewSessionDraftTarget = useSessionUIStore((s) => s.setNewSessionDraftTarget);
@@ -783,7 +787,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const primaryAgents = React.useMemo(() => agents.filter((agent) => agent.mode === 'primary'), [agents]);
     const isMobile = useUIStore((state) => state.isMobile);
     const inputBarOffset = useUIStore((state) => state.inputBarOffset);
-    const isKeyboardOpen = useUIStore((state) => state.isKeyboardOpen);
     const persistChatDraft = useUIStore((state) => state.persistChatDraft);
     const inputSpellcheckEnabled = useUIStore((state) => state.inputSpellcheckEnabled);
     const isExpandedInput = useUIStore((state) => state.isExpandedInput);
@@ -791,6 +794,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     const { git: runtimeGit } = useRuntimeAPIs();
     const { currentTheme } = useThemeSystem();
     const chatSearchDirectory = useChatSearchDirectory();
+    const isGitRepo = useIsGitRepo(currentDirectory);
+    const currentGitStatus = useGitStore((state) =>
+        currentDirectory ? state.directories.get(currentDirectory)?.status ?? null : null,
+    );
     const [showAbortStatus, setShowAbortStatus] = React.useState(false);
     const setSessionAutoAccept = usePermissionStore((state) => state.setSessionAutoAccept);
     const composerHighlightRef = React.useRef<HTMLDivElement | null>(null);
@@ -1162,50 +1169,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
     // Session activity for queue availability and controls
     const { phase: sessionPhase } = useCurrentSessionActivity();
 
-    const handleTextareaPointerDownCapture = React.useCallback((event: React.PointerEvent<HTMLTextAreaElement>) => {
-        if (!isMobile) {
-            return;
-        }
-
-        if (event.pointerType !== 'touch') {
-            return;
-        }
-
-        const textarea = textareaRef.current;
-        if (!textarea) {
-            return;
-        }
-
-        if (document.activeElement === textarea) {
-            return;
-        }
-
-        // Prevent iOS from scrolling the page to reveal the input.
-        event.preventDefault();
-        event.stopPropagation();
-
-        const scroller = document.scrollingElement;
-        if (scroller && scroller.scrollTop !== 0) {
-            scroller.scrollTop = 0;
-        }
-        if (window.scrollY !== 0) {
-            window.scrollTo(0, 0);
-        }
-
-        try {
-            textarea.focus({ preventScroll: true });
-        } catch {
-            textarea.focus();
-        }
-
-        const len = textarea.value.length;
-        try {
-            textarea.setSelectionRange(len, len);
-        } catch {
-            // ignored
-        }
-    }, [isMobile]);
-
     const handleOpenMobileControls = React.useCallback(() => {
         if (!isMobile) {
             return;
@@ -1218,16 +1181,12 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
 
         setMobileControlsPanel(null);
 
-        if (isKeyboardOpen) {
-            textareaRef.current?.blur();
-            requestAnimationFrame(() => {
-                setMobileControlsOpen(true);
-            });
-            return;
+        if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
         }
 
         setMobileControlsOpen(true);
-    }, [isMobile, isKeyboardOpen, mobileControlsOpen]);
+    }, [isMobile, mobileControlsOpen]);
 
     const handleCloseMobileControls = React.useCallback(() => {
         setMobileControlsOpen(false);
@@ -1519,9 +1478,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             }
             else if (commandName === 'compact' && currentSessionId) {
                 try {
-                    if (!useConfigStore.getState().isConnected) {
-                        throw new Error("Connection lost. Please wait for reconnection.");
-                    }
+                    await sessionActions.waitForConnectionOrThrow();
                     const { opencodeClient } = await import('@/lib/opencode/client');
                     const sdk = opencodeClient.getSdkClient();
                     const configState = useConfigStore.getState();
@@ -1532,6 +1489,57 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     });
                 } catch (error) {
                     toast.error(error instanceof Error ? error.message : 'Failed to compact session');
+                }
+                return;
+            }
+            else if (commandName === 'summary' && currentSessionId) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    // Everything after `/summary ` is an optional topic hint
+                    // the user wants the summary focused on.
+                    const topic = normalizedCommand.replace(/^\/summary\b/i, '').trim();
+                    const topicLine = topic ? ` focused on: ${topic}` : '';
+                    const topicBlock = topic
+                        ? `The user asked you to focus this summary on: ${topic}. Prioritize that topic; mention unrelated threads only in passing.`
+                        : '';
+                    const visibleText = await renderMagicPrompt('session.summary.visible', { topic_line: topicLine });
+                    const instructionsText = await renderMagicPrompt('session.summary.instructions', { topic_block: topicBlock });
+                    await sendMessage(
+                        visibleText,
+                        currentProviderId,
+                        currentModelId,
+                        currentAgentName,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        currentVariant,
+                        inputMode,
+                    );
+                    scrollToBottom?.({ instant: true, force: true });
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Failed to generate summary');
+                }
+                return;
+            }
+            else if (commandName === 'review' && currentSessionId) {
+                try {
+                    await sessionActions.waitForConnectionOrThrow();
+                    const visibleText = await renderMagicPrompt('session.review.visible');
+                    const instructionsText = await renderMagicPrompt('session.review.instructions');
+                    await sendMessage(
+                        visibleText,
+                        currentProviderId,
+                        currentModelId,
+                        currentAgentName,
+                        [],
+                        agentMentionName,
+                        [{ text: instructionsText, synthetic: true }],
+                        currentVariant,
+                        inputMode,
+                    );
+                    scrollToBottom?.({ instant: true, force: true });
+                } catch (error) {
+                    toast.error(error instanceof Error ? error.message : 'Failed to review changes');
                 }
                 return;
             }
@@ -2079,7 +2087,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             const isWordBoundary = !charBefore || /\s/.test(charBefore);
             if (isWordBoundary && !textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
                 setMentionQuery(textAfterAt);
-                setAutocompleteTab('agents');
+                setAutocompleteTab((current) => current === 'files' ? 'files' : 'agents');
                 setShowFileMention(true);
             } else {
                 setShowFileMention(false);
@@ -2122,22 +2130,31 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                 // ignored
             }
         }
+        const cursorPosition = textarea?.selectionStart ?? message.length;
+        const textBeforeCursor = message.substring(0, cursorPosition);
+        const lastAtSymbol = textBeforeCursor.lastIndexOf('@');
+        const nextMentionQuery = lastAtSymbol !== -1
+            ? textBeforeCursor.substring(lastAtSymbol + 1).replace(/[\s\n].*$/, '')
+            : '';
+
         setAutocompleteTab(tab);
         setCommandQuery('');
-        setMentionQuery('');
         if (tab === 'commands') {
+            setMentionQuery('');
             applyAutocompletePrefix('/');
         }
         if (tab === 'agents') {
+            setMentionQuery(nextMentionQuery);
             applyAutocompletePrefix('@');
         }
         if (tab === 'files') {
+            setMentionQuery(nextMentionQuery);
             applyAutocompletePrefix('@');
         }
         setShowSkillAutocomplete(false);
         setShowCommandAutocomplete(tab === 'commands');
         setShowFileMention(tab === 'agents' || tab === 'files');
-    }, [applyAutocompletePrefix, isMobile, setAutocompleteTab, setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention, setShowSkillAutocomplete]);
+    }, [applyAutocompletePrefix, isMobile, message, setAutocompleteTab, setCommandQuery, setMentionQuery, setShowCommandAutocomplete, setShowFileMention, setShowSkillAutocomplete]);
 
     const handleOpenCommandMenu = React.useCallback(() => {
         if (!isMobile) {
@@ -2442,7 +2459,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         textareaRef.current?.focus();
     };
 
-    const handleCommandSelect = (command: { name: string; description?: string; agent?: string; model?: string }) => {
+    const handleCommandSelect = (command: CommandInfo) => {
 
         setMessage(`/${command.name} `);
 
@@ -3089,6 +3106,13 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
         return draftBranchItems.find((item) => item.value === selectedValue)?.label ?? formatDirectoryName(selectedValue);
     }, [draftBranchItems, selectedDraftDirectory]);
 
+    const hasPendingChanges = React.useMemo(() => {
+        if (isGitRepo !== true || !currentGitStatus || currentGitStatus.isClean) {
+            return false;
+        }
+        return extractGitChangedFiles(currentGitStatus.files, currentGitStatus.diffStats, currentDirectory).length > 0;
+    }, [currentDirectory, currentGitStatus, isGitRepo]);
+
     const selectedDraftBranchIsKnown = React.useMemo(() => {
         if (!selectedDraftDirectory) {
             return true;
@@ -3267,10 +3291,10 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             className={cn(
                 "relative pt-0 pb-4",
                 isDesktopExpanded && 'flex h-full min-h-0 flex-col pt-4',
-                isMobile && (isKeyboardOpen ? 'ios-keyboard-safe-area' : 'bottom-safe-area')
+                isMobile && 'bottom-safe-area'
             )}
-            data-keyboard-avoid="true"
-            style={isMobile && inputBarOffset > 0 && !isKeyboardOpen ? { marginBottom: `${inputBarOffset}px` } : undefined}
+
+            style={isMobile && inputBarOffset > 0 ? { marginBottom: `${inputBarOffset}px` } : undefined}
         >
             <div className={cn('chat-column relative overflow-visible', isDesktopExpanded && 'flex flex-1 min-h-0 flex-col')}>
                 <AttachedFilesList />
@@ -3398,7 +3422,7 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                     showAbortStatus={showAbortStatus}
                     showAssistantStatus={false}
                     showTodos
-                    leftAccessory={newSessionDraftOpen ? null : <PendingChangesBar />}
+                    leftAccessory={newSessionDraftOpen || !hasPendingChanges ? null : <PendingChangesBar />}
                 />
                 {showDraftTargetSelectors && selectedDraftProject ? (
                     <div className="mb-1.5 flex min-w-0 items-center gap-1.5 px-0.5">
@@ -3625,7 +3649,6 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                             onDropCapture={handleDropCapture}
                             onDrop={handleDrop}
                             onDragEnd={handleDragEnd}
-                            onPointerDownCapture={handleTextareaPointerDownCapture}
                             onKeyUp={updateAutocompleteOverlayPosition}
                             onClick={updateAutocompleteOverlayPosition}
                             onScroll={(event) => {

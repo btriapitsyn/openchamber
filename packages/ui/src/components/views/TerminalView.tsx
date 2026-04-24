@@ -143,7 +143,6 @@ export const TerminalView: React.FC = () => {
     const [activeModifier, setActiveModifier] = React.useState<Modifier | null>(null);
     const [isRestarting, setIsRestarting] = React.useState(false);
     const [viewportLayoutVersion, setViewportLayoutVersion] = React.useState(0);
-    const keyboardAvoidTargetId = React.useId();
 
     const streamCleanupRef = React.useRef<(() => void) | null>(null);
     const activeTerminalIdRef = React.useRef<string | null>(null);
@@ -1069,8 +1068,6 @@ export const TerminalView: React.FC = () => {
             <div
                 className="relative flex-1 overflow-hidden"
                 style={{ backgroundColor: xtermTheme.background }}
-                id={keyboardAvoidTargetId}
-                data-keyboard-avoid="true"
             >
                 <div className="h-full w-full box-border pl-7 pr-5 pt-3 pb-4">
                     {shouldRenderViewport ? (
@@ -1088,7 +1085,6 @@ export const TerminalView: React.FC = () => {
                             fontSize={terminalFontSize}
                             enableTouchScroll={hasTouchInput}
                             autoFocus={isTerminalVisible}
-                            keyboardAvoidTargetId={keyboardAvoidTargetId}
                         />
                     ) : null}
                 </div>

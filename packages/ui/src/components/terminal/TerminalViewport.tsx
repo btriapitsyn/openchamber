@@ -76,7 +76,6 @@ interface TerminalViewportProps {
   className?: string;
   enableTouchScroll?: boolean;
   autoFocus?: boolean;
-  keyboardAvoidTargetId?: string;
 }
 
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
@@ -92,7 +91,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       className,
       enableTouchScroll,
       autoFocus = true,
-      keyboardAvoidTargetId,
     },
     ref
   ) => {
@@ -1514,7 +1512,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
-                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
                 aria-label="Terminal input"
                 aria-hidden="true"
                 style={{
@@ -1542,7 +1539,6 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
-                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
                 aria-label="Terminal input"
                 aria-hidden="true"
                 style={{

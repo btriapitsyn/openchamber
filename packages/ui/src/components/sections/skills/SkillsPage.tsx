@@ -340,7 +340,7 @@ const SkillsInstalledPage: React.FC = () => {
   }
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
+    <ScrollableOverlay outerClassName="h-full" className="w-full">
       <div className="mx-auto w-full max-w-3xl p-3 sm:p-6 sm:pt-8">
 
         {/* Header */}
@@ -558,7 +558,7 @@ const SkillsInstalledPage: React.FC = () => {
         setIsFileDialogOpen(open);
         if (!open) setEditingFilePath(null);
       }}>
-        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col" keyboardAvoid>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle>{editingFilePath ? 'Edit Supporting File' : 'Add Supporting File'}</DialogTitle>
             <DialogDescription>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { SessionSidebar } from '@/components/session/SessionSidebar';
-import { ChatView, SettingsView } from '@/components/views';
+import { ChatView } from '@/components/views';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useViewportStore } from '@/sync/viewport-store';
 import { useSessions, useDirectorySync } from '@/sync/sync-context';
@@ -26,6 +26,8 @@ import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { UsageWindow } from '@/types';
 import { RiAddLine, RiArrowLeftLine, RiRefreshLine, RiRobot2Line, RiSettings3Line, RiTimerLine } from '@remixicon/react';
+
+const SettingsView = React.lazy(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
@@ -388,10 +390,12 @@ export const VSCodeLayout: React.FC = () => {
         </div>
       ) : currentView === 'settings' ? (
         // Settings view
-        <SettingsView
-          onClose={() => setCurrentView(usesExpandedLayout ? 'chat' : 'sessions')}
-          forceMobile={usesMobileLayout}
-        />
+        <React.Suspense fallback={null}>
+          <SettingsView
+            onClose={() => setCurrentView(usesExpandedLayout ? 'chat' : 'sessions')}
+            forceMobile={usesMobileLayout}
+          />
+        </React.Suspense>
       ) : usesExpandedLayout ? (
         // Expanded layout: sessions sidebar + chat side by side
         <div className="flex h-full">

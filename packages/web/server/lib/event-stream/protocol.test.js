@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MESSAGE_STREAM_DIRECTORY_WS_PATH,
   MESSAGE_STREAM_GLOBAL_WS_PATH,
+  MESSAGE_STREAM_WS_MAX_BUFFERED_BYTES,
   parseSseEventEnvelope,
   sendMessageStreamWsEvent,
   sendMessageStreamWsFrame,
@@ -61,6 +62,30 @@ describe('event stream protocol helpers', () => {
 
     expect(sent).toBe(true);
     expect(rawPayload).toBe('{"type":"ready"}');
+  });
+
+  it('closes slow websocket clients instead of adding more buffered data', () => {
+    let closeCall = null;
+    let sendCalls = 0;
+    const socket = {
+      readyState: 1,
+      bufferedAmount: MESSAGE_STREAM_WS_MAX_BUFFERED_BYTES + 1,
+      send() {
+        sendCalls += 1;
+      },
+      close(code, reason) {
+        closeCall = { code, reason };
+      },
+    };
+
+    const sent = sendMessageStreamWsFrame(socket, { type: 'ready' });
+
+    expect(sent).toBe(false);
+    expect(sendCalls).toBe(0);
+    expect(closeCall).toEqual({
+      code: 1013,
+      reason: 'Message stream client is too slow',
+    });
   });
 
   it('serializes event frames with routing metadata', () => {

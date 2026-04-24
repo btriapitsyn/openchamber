@@ -335,10 +335,16 @@ This module provides OpenCode server integration utilities for the web server ru
   - OpenCode readiness gate for proxied `/api` requests
 
 ## Public exports (watcher.js)
-- `createOpenCodeWatcherRuntime(dependencies)`: creates global event watcher runtime.
+- `createOpenCodeWatcherRuntime(dependencies)`: creates global event watcher runtime backed by the shared upstream SSE reader.
 - Returned API:
   - `start()`
   - `stop()`
+- Behavior:
+  - Waits for OpenCode readiness before attaching the watcher.
+  - In production wiring, subscribes to the shared global message-stream hub instead of opening its own `/global/event` connection.
+  - Can still create its own `/global/event` reader when no shared hub is provided, which keeps module tests and isolated reuse simple.
+  - Reuses event-stream parsing, `Last-Event-ID`, stall timeout, and reconnect behavior.
+  - Forwards unwrapped global event payloads into notification/session side effects.
 
 ## Storage and configuration
 - Provider auth: `~/.local/share/opencode/auth.json`.

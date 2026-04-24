@@ -115,10 +115,12 @@ export type DesktopSettings = {
   autoCreateWorktree?: boolean;
   queueModeEnabled?: boolean;
   gitmojiEnabled?: boolean;
+  defaultFileViewerPreview?: boolean;
   zenModel?: string;
   gitProviderId?: string;
   gitModelId?: string;
   pwaAppName?: string;
+  pwaOrientation?: 'system' | 'portrait' | 'landscape';
   inputSpellcheckEnabled?: boolean;
   showToolFileIcons?: boolean;
   showExpandedBashTools?: boolean;

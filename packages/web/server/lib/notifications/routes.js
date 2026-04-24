@@ -46,6 +46,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
     markSessionUnviewed,
     markUserMessageSent,
     setPushInitialized,
+    setAutoAcceptSession,
   } = dependencies;
 
   const ensureSessionWatcher = async () => {
@@ -171,6 +172,7 @@ export const registerNotificationRoutes = (app, dependencies) => {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
     const clients = getUiNotificationClients();
@@ -293,5 +295,21 @@ export const registerNotificationRoutes = (app, dependencies) => {
       sessionId,
       messageSent: true,
     });
+  });
+
+  // Mirror client-side Permission Auto-Accept state to the server so it can
+  // suppress permission notifications at the source (the 500ms debounce race
+  // otherwise leaks notifications for auto-accepted permissions).
+  app.post('/api/notifications/auto-accept', (req, res) => {
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : '';
+    const enabled = body.enabled === true;
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId required' });
+    }
+    if (typeof setAutoAcceptSession === 'function') {
+      setAutoAcceptSession(sessionId, enabled);
+    }
+    return res.json({ success: true, sessionId, enabled });
   });
 };

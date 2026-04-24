@@ -24,6 +24,7 @@ import { setActionRefs } from "./session-actions"
 import { setSyncRefs } from "./sync-refs"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { syncDebug } from "./debug"
+import { getReconnectCandidateSessionIds } from "./reconnect-recovery"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import { useConfigStore } from "@/stores/useConfigStore"
@@ -133,6 +134,7 @@ const requestSignature = (items: Array<{ id: string }> | undefined): string => {
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
 const partRepairSignature = (part: Part): string => JSON.stringify(part)
+const syncSnapshotSignature = (value: unknown): string => JSON.stringify(value)
 
 function haveEquivalentPartSnapshots(left: Part[] | undefined, right: Part[]): boolean {
   if (!left) {
@@ -158,6 +160,36 @@ function haveEquivalentPartSnapshots(left: Part[] | undefined, right: Part[]): b
   }
 
   return true
+}
+
+function haveEquivalentMessageSnapshots(left: Message[] | undefined, right: Message[]): boolean {
+  if (!left) {
+    return right.length === 0
+  }
+
+  if (left.length !== right.length) {
+    return false
+  }
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftMessage = left[index]
+    const rightMessage = right[index]
+    if (!leftMessage || !rightMessage) {
+      return false
+    }
+    if (leftMessage.id !== rightMessage.id) {
+      return false
+    }
+    if (syncSnapshotSignature(leftMessage) !== syncSnapshotSignature(rightMessage)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function haveEquivalentSyncSnapshots(left: unknown, right: unknown): boolean {
+  return syncSnapshotSignature(left) === syncSnapshotSignature(right)
 }
 
 // ---------------------------------------------------------------------------
@@ -273,25 +305,13 @@ function isRecentBoot() {
   return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
 }
 
-function getReconnectCandidateSessionIds(state: State) {
-  const ids = new Set<string>()
-
-  for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
-    if (status && status.type !== "idle") ids.add(sessionId)
+function getViewedSessionRecoveryTarget(directory: string) {
+  if (!_activeDirectory || !_activeSession) return null
+  if (directory !== _activeDirectory) return null
+  return {
+    directory: _activeDirectory,
+    sessionId: _activeSession,
   }
-
-  for (const [sessionId, messages] of Object.entries(state.message ?? {})) {
-    const lastMessage = messages[messages.length - 1]
-    if (
-      lastMessage
-      && lastMessage.role === "assistant"
-      && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
-    ) {
-      ids.add(sessionId)
-    }
-  }
-
-  return Array.from(ids)
 }
 
 function toSessionStatus(status: Awaited<ReturnType<typeof opencodeClient.getSessionStatus>>[string]): SessionStatus | undefined {
@@ -701,7 +721,10 @@ async function resyncDirectoryAfterReconnect(
   routingIndex: EventRoutingIndex,
 ) {
   const current = store.getState()
-  const candidateSessionIds = getReconnectCandidateSessionIds(current)
+  const candidateSessionIds = getReconnectCandidateSessionIds(current, {
+    directory,
+    viewedSession: getViewedSessionRecoveryTarget(directory),
+  })
   if (candidateSessionIds.length === 0) return
 
   const nextStatuses = await opencodeClient.getSessionStatusForDirectory(directory)
@@ -715,9 +738,23 @@ async function resyncDirectoryAfterReconnect(
   }
 
   if (Object.keys(relevantStatuses).length > 0) {
-    store.setState((state: DirectoryStore) => ({
-      session_status: { ...state.session_status, ...relevantStatuses },
-    }))
+    store.setState((state: DirectoryStore) => {
+      let changed = false
+      for (const [sessionId, nextStatus] of Object.entries(relevantStatuses)) {
+        if (!haveEquivalentSyncSnapshots(state.session_status?.[sessionId], nextStatus)) {
+          changed = true
+          break
+        }
+      }
+
+      if (!changed) {
+        return state
+      }
+
+      return {
+        session_status: { ...state.session_status, ...relevantStatuses },
+      }
+    })
   }
 
   const scopedClient = opencodeClient.getScopedSdkClient(directory)
@@ -735,45 +772,56 @@ async function resyncDirectoryAfterReconnect(
       .filter((record) => !!record?.info?.id)
       .map((record) => stripMessageDiffSnapshots(record.info))
       .sort((a, b) => cmp(a.id, b.id))
-    const nextMessageIds = new Set(nextMessages.map((message) => message.id))
 
     store.setState((state: DirectoryStore) => {
-      const sessions = [...state.session]
-      const sessionIndex = sessions.findIndex((item) => item.id === nextSession.id)
+      const sessionIndex = state.session.findIndex((item) => item.id === nextSession.id)
+      let sessions = state.session
       let sessionChanged = false
       let sessionTotal = state.sessionTotal
 
       if (sessionIndex >= 0) {
-        if (sessions[sessionIndex] !== nextSession) {
+        if (!haveEquivalentSyncSnapshots(sessions[sessionIndex], nextSession)) {
+          sessions = [...state.session]
           sessions[sessionIndex] = nextSession
           sessionChanged = true
         }
       } else {
+        sessions = [...state.session]
         sessions.push(nextSession)
         sessions.sort((a, b) => cmp(a.id, b.id))
         if (!nextSession.parentID) sessionTotal += 1
         sessionChanged = true
       }
 
-      const nextPartState = { ...state.part }
-      const previousMessages = state.message[sessionId] ?? []
-      for (const message of previousMessages) {
-        if (!nextMessageIds.has(message.id)) {
-          delete nextPartState[message.id]
-        }
-      }
+      // Merge parts: overwrite only messages present in the fetch snapshot.
+      // Do NOT delete parts for messages that may have been added by SSE
+      // events arriving between the fetch and the setState — those are more recent.
+      let nextPartState = state.part
+      let partsChanged = false
       for (const record of records) {
         const messageId = record?.info?.id
         if (!messageId) continue
-        nextPartState[messageId] = (record.parts ?? [])
+        const nextParts = (record.parts ?? [])
           .filter((part) => !!part?.id && !RECONNECT_SKIP_PARTS.has(part.type))
           .sort((a, b) => cmp(a.id, b.id))
+        if (!haveEquivalentPartSnapshots(state.part[messageId], nextParts)) {
+          if (!partsChanged) {
+            nextPartState = { ...state.part }
+            partsChanged = true
+          }
+          nextPartState[messageId] = nextParts
+        }
+      }
+
+      const messagesChanged = !haveEquivalentMessageSnapshots(state.message[sessionId], nextMessages)
+      if (!sessionChanged && !messagesChanged && !partsChanged) {
+        return state
       }
 
       return {
         ...(sessionChanged ? { session: sessions, sessionTotal } : {}),
-        message: { ...state.message, [sessionId]: nextMessages },
-        part: nextPartState,
+        ...(messagesChanged ? { message: { ...state.message, [sessionId]: nextMessages } } : {}),
+        ...(partsChanged ? { part: nextPartState } : {}),
       }
     })
 
@@ -1104,7 +1152,25 @@ function handleEvent(
     }
   }
 
-  // Read live state, create targeted draft cloning ONLY fields the event
+  // Sync-layer parent resync: when a child session goes idle, schedule
+  // a targeted parts repair for the parent session. This ensures the
+  // parent's task tool part reflects the child's completion even when
+  // no ToolPart component is mounted.
+  if (payload.type === "session.idle") {
+    const idleSessionId = getSessionIdFromPayload(payload)
+    if (idleSessionId && resolvedDirectory && resolvedDirectory !== "global") {
+      const sessionState = store.getState()
+      const idleSession = sessionState.session.find((s) => s.id === idleSessionId)
+      const parentID = idleSession
+        ? (idleSession as Session & { parentID?: string | null }).parentID
+        : null
+      if (parentID) {
+        enqueuePartsRepair(resolvedDirectory, parentID, childStores)
+      }
+    }
+  }
+
+  // Read live state, create targeted draft cloning ONLY fields that event
   // type will mutate. This preserves reference identity for untouched slices
   // so Zustand selectors skip re-renders for unrelated subscribers.
   const current = store.getState()
@@ -1336,6 +1402,21 @@ export function SyncProvider(props: {
   // Abort controller owned by the pipeline closure. Cleanup aborts + flushes.
   useEffect(() => {
     const reconnectResyncing = new Set<string>()
+    const triggerRecoveryResync = (directory: string) => {
+      const store = childStores.children.get(directory)
+      if (!store) return
+      if (reconnectResyncing.has(directory)) return
+
+      reconnectResyncing.add(directory)
+      void resyncDirectoryAfterReconnect(directory, store, routingIndex)
+        .catch(() => {
+          // Transient failure during resync — next SSE event, transport switch,
+          // or reconnect will catch up.
+        })
+        .finally(() => {
+          reconnectResyncing.delete(directory)
+        })
+    }
 
     const { cleanup } = createEventPipeline({
       sdk: props.sdk,
@@ -1347,23 +1428,35 @@ export function SyncProvider(props: {
         handleEvent(directory, payload, childStores, routingIndex)
       },
       onReconnect: () => {
-        useConfigStore.setState({ isConnected: true })
-        for (const [dir, store] of childStores.children) {
-          if (reconnectResyncing.has(dir)) continue
-          if (getReconnectCandidateSessionIds(store.getState()).length === 0) continue
-
-          reconnectResyncing.add(dir)
-          void resyncDirectoryAfterReconnect(dir, store, routingIndex)
-            .catch(() => {
-              // Transient failure during resync — next SSE event or reconnect will catch up.
-            })
-            .finally(() => {
-              reconnectResyncing.delete(dir)
-            })
+        useConfigStore.setState({
+          isConnected: true,
+          hasEverConnected: true,
+          connectionPhase: "connected",
+        })
+        for (const dir of childStores.children.keys()) {
+          triggerRecoveryResync(dir)
         }
       },
-      onDisconnect: () => {
-        useConfigStore.setState({ isConnected: false })
+      onDisconnect: (reason) => {
+        const { hasEverConnected } = useConfigStore.getState()
+        useConfigStore.setState({
+          isConnected: false,
+          connectionPhase: hasEverConnected ? "reconnecting" : "connecting",
+          lastDisconnectReason: reason,
+        })
+      },
+      onTransportSwitch: () => {
+        // Transport switched (e.g. WS timeout → SSE fallback) without a full
+        // disconnect. If the active session missed the transition into a busy
+        // turn, force a targeted resync for the viewed directory.
+        useConfigStore.setState({
+          isConnected: true,
+          hasEverConnected: true,
+          connectionPhase: "connected",
+        })
+        if (_activeDirectory) {
+          triggerRecoveryResync(_activeDirectory)
+        }
       },
     })
     return cleanup
@@ -1846,6 +1939,79 @@ export function useSessionMessageRecords(
   }, [options?.suspendPartUpdates, sessionID, store])
 
   return React.useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot)
+}
+
+/**
+ * Ensures a session's messages are loaded into the sync store.
+ * If the session exists in state.session but messages haven't been fetched
+ * (state.message[sessionID] is absent), triggers a background API fetch.
+ *
+ * This covers the case where a user navigates to an old parent session
+ * whose child session messages were never loaded — bootstrap only loads
+ * session metadata, not messages.
+ */
+
+// Module-level in-flight tracking for useEnsureSessionMessages.
+// Prevents redundant parallel fetches when multiple component instances
+// (e.g. multiple ToolParts) request the same session's messages.
+const _ensureMessagesLoading = new Set<string>()
+
+export function useEnsureSessionMessages(sessionID: string, directory?: string) {
+  const store = useDirectoryStore(directory)
+
+  React.useEffect(() => {
+    if (!sessionID) return
+
+    const state = store.getState()
+    // Already loaded — nothing to do
+    if (Object.prototype.hasOwnProperty.call(state.message, sessionID)) return
+    // Session doesn't exist — nothing to load
+    if (!state.session.some((s) => s.id === sessionID)) return
+
+    const dir = directory ?? opencodeClient.getDirectory()
+    const loadingKey = `${dir ?? ""}:${sessionID}`
+    // Already loading this session for this directory
+    if (_ensureMessagesLoading.has(loadingKey)) return
+
+    _ensureMessagesLoading.add(loadingKey)
+
+    void (async () => {
+      try {
+        const scopedClient = opencodeClient.getScopedSdkClient(dir ?? "")
+        const response = await scopedClient.session.messages({
+          sessionID: sessionID,
+          limit: RECONNECT_MESSAGE_LIMIT,
+        })
+        const records = (response.data ?? []).filter(
+          (record: { info?: { id?: string } }) => !!record?.info?.id,
+        )
+        if (records.length === 0) return
+
+        const nextMessages = records
+          .map((record: { info: Message }) => stripMessageDiffSnapshots(record.info))
+          .filter((m: Message | null): m is Message => m !== null)
+          .sort((a: Message, b: Message) => cmp(a.id, b.id))
+
+        const nextPartState: Record<string, Part[]> = {}
+        for (const record of records) {
+          const messageId = record?.info?.id
+          if (!messageId) continue
+          nextPartState[messageId] = (record.parts ?? [])
+            .filter((part: Part) => !!part?.id && !RECONNECT_SKIP_PARTS.has(part.type))
+            .sort((a: Part, b: Part) => cmp(a.id, b.id))
+        }
+
+        store.setState((state: DirectoryStore) => ({
+          message: { ...state.message, [sessionID]: nextMessages },
+          part: { ...state.part, ...nextPartState },
+        }))
+      } catch {
+        // Transient failure — next navigation or reconnect will retry
+      } finally {
+        _ensureMessagesLoading.delete(loadingKey)
+      }
+    })()
+  }, [sessionID, store, directory])
 }
 
 /**

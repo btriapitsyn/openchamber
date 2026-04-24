@@ -7,10 +7,9 @@
     --oc-safe-area-bottom-visual: 0px;
     --oc-safe-area-left: 0px;
     --oc-header-height: 56px;
-    --oc-visual-viewport-offset-top: 0px;
-    --oc-keyboard-inset: 0px;
-    --oc-keyboard-avoid-offset: 0px;
-    --oc-keyboard-home-indicator: 0px;
+    --oc-wco-left-inset: 0px;
+    --oc-wco-right-inset: 0px;
+    --oc-wco-titlebar-height: 0px;
     --ui-regular-font-weight: 400;
     --oc-scrollbar-thumb: oklch(0.32 0.03 50 / 0.4);
     --oc-scrollbar-thumb-hover: oklch(0.32 0.03 50 / 0.6);

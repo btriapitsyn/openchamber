@@ -319,12 +319,17 @@ export const createOpenCodeLifecycleRuntime = (deps) => {
     }
 
     try {
-      const response = await fetch(buildOpenCodeUrl('/session', ''), {
+      const response = await fetch(buildOpenCodeUrl('/global/health', ''), {
         method: 'GET',
-        headers: getOpenCodeAuthHeaders(),
-        signal: AbortSignal.timeout(2000),
+        headers: {
+          Accept: 'application/json',
+          ...getOpenCodeAuthHeaders(),
+        },
+        signal: AbortSignal.timeout(5000),
       });
-      return response.ok;
+      if (!response.ok) return false;
+      const body = await response.json().catch(() => null);
+      return body?.healthy === true;
     } catch {
       return false;
     }

@@ -278,7 +278,7 @@ export const AgentGroupDetail: React.FC<AgentGroupDetailProps> = ({
       </div>
 
       <Dialog open={Boolean(worktreeDialog)} onOpenChange={(open) => { if (!open) setWorktreeDialog(null); }}>
-        <DialogContent className="max-w-md" keyboardAvoid>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
               {worktreeDialog?.kind === 'remove' ? 'Remove worktree' : 'Remove other worktrees'}

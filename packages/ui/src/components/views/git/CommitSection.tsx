@@ -53,7 +53,7 @@ export const CommitSection: React.FC<CommitSectionProps> = ({
   const contentClassName = 'flex flex-col gap-3 px-0 pt-1 pb-3';
 
   return (
-    <section className={containerClassName} data-keyboard-avoid="true">
+    <section className={containerClassName}>
       <div className={headerClassName}>
         <h3 className="typography-ui-header font-semibold text-foreground">Commit</h3>
       </div>

@@ -1,6 +1,6 @@
 {
   "name": "@openchamber/electron",
-  "version": "1.9.6",
+  "version": "1.9.8",
   "private": true,
   "description": "Electron desktop runtime for OpenChamber",
   "author": "OpenChamber",
@@ -76,8 +76,17 @@
         "height": 340
       },
       "contents": [
-        { "x": 180, "y": 140, "type": "file" },
-        { "x": 360, "y": 140, "type": "link", "path": "/Applications" }
+        {
+          "x": 180,
+          "y": 140,
+          "type": "file"
+        },
+        {
+          "x": 360,
+          "y": 140,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "publish": {

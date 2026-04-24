@@ -30,6 +30,8 @@ export const DefaultsSettings: React.FC = () => {
   const setSettingsDefaultModel = useConfigStore((state) => state.setSettingsDefaultModel);
   const setSettingsDefaultVariant = useConfigStore((state) => state.setSettingsDefaultVariant);
   const setSettingsDefaultAgent = useConfigStore((state) => state.setSettingsDefaultAgent);
+  const setSettingsDefaultFileViewerPreview = useConfigStore((state) => state.setSettingsDefaultFileViewerPreview);
+  const settingsDefaultFileViewerPreview = useConfigStore((state) => state.settingsDefaultFileViewerPreview);
   const showDeletionDialog = useUIStore((state) => state.showDeletionDialog);
   const setShowDeletionDialog = useUIStore((state) => state.setShowDeletionDialog);
   const providers = useConfigStore((state) => state.providers);
@@ -187,6 +189,12 @@ export const DefaultsSettings: React.FC = () => {
     [setAgent, setSettingsDefaultAgent]
   );
 
+  const handleToggleFileViewerPreview = React.useCallback(() => {
+    const next = !settingsDefaultFileViewerPreview;
+    setSettingsDefaultFileViewerPreview(next);
+    updateDesktopSettings({ defaultFileViewerPreview: next }).catch(console.warn);
+  }, [settingsDefaultFileViewerPreview, setSettingsDefaultFileViewerPreview]);
+
   const availableVariants = React.useMemo(() => {
     if (!parsedModel.providerId || !parsedModel.modelId) return [];
     const provider = providers.find((p) => p.id === parsedModel.providerId);
@@ -298,6 +306,23 @@ export const DefaultsSettings: React.FC = () => {
         >
           <Checkbox checked={showDeletionDialog} onChange={setShowDeletionDialog} ariaLabel="Show deletion dialog" />
           <span className="typography-ui-label text-foreground">Show Deletion Dialog</span>
+        </div>
+
+        <div
+          className="group flex cursor-pointer items-center gap-2 py-1"
+          role="button"
+          tabIndex={0}
+          aria-pressed={settingsDefaultFileViewerPreview}
+          onClick={handleToggleFileViewerPreview}
+          onKeyDown={(event) => {
+            if (event.key === ' ' || event.key === 'Enter') {
+              event.preventDefault();
+              handleToggleFileViewerPreview();
+            }
+          }}
+        >
+          <Checkbox checked={settingsDefaultFileViewerPreview} onChange={setSettingsDefaultFileViewerPreview} ariaLabel="Open files in preview mode" />
+          <span className="typography-ui-label text-foreground">Open files in preview mode</span>
         </div>
 
       </section>

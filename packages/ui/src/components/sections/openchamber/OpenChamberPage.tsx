@@ -33,7 +33,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
     if (!section) {
         return (
             <ScrollableOverlay
-                keyboardAvoid
                 outerClassName="h-full"
                 className="w-full"
             >
@@ -98,7 +97,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
 
     return (
         <ScrollableOverlay
-            keyboardAvoid
             outerClassName="h-full"
             className="w-full"
         >
@@ -119,6 +117,7 @@ const VisualSectionContent: React.FC = () => {
     return <OpenChamberVisualSettings visibleSettings={[
         'theme',
         'pwaInstallName',
+        'pwaOrientation',
         'timeFormat',
         'weekStart',
         'fontSize',

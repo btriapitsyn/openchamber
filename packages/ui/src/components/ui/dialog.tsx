@@ -80,7 +80,6 @@ DialogOverlay.displayName = "DialogOverlay";
 
 type DialogContentProps = Omit<React.ComponentProps<typeof BaseDialog.Popup>, "children"> & {
   showCloseButton?: boolean
-  keyboardAvoid?: boolean
   children?: React.ReactNode
   onOpenAutoFocus?: (event: Event) => void
   onCloseAutoFocus?: (event: Event) => void
@@ -90,7 +89,6 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
-  keyboardAvoid = false,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
@@ -104,7 +102,6 @@ function DialogContent({
       <BaseDialog.Popup
         data-slot="dialog-content"
         data-state-slot="dialog"
-        data-keyboard-avoid={keyboardAvoid ? "true" : undefined}
         className={cn(
           "bg-background text-foreground fixed top-[50%] left-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border p-6 shadow-none overflow-hidden pwa-dialog-content",
           className

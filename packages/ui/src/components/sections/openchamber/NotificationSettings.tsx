@@ -411,6 +411,31 @@ export const NotificationSettings: React.FC = () => {
     };
   };
 
+  const handleTestNotification = async () => {
+    const apis = getRegisteredRuntimeAPIs();
+    if (!apis?.notifications) {
+      toast.error('Notifications API not available');
+      return;
+    }
+
+    try {
+      const success = await apis.notifications.notifyAgentCompletion({
+        title: 'Test Notification',
+        body: 'This is a test notification from OpenChamber.',
+        tag: 'openchamber-test',
+      });
+
+      if (success) {
+        toast.success('Test notification sent successfully');
+      } else {
+        toast.error('Failed to send test notification');
+      }
+    } catch (error) {
+      console.error('Test notification failed:', error);
+      toast.error('Failed to send test notification');
+    }
+  };
+
   const handleEnableBackgroundNotifications = async () => {
     if (!pushSupported) {
       toast.error('Push notifications not supported');
@@ -582,26 +607,39 @@ export const NotificationSettings: React.FC = () => {
             </div>
 
             {nativeNotificationsEnabled && canShowNotifications && (
-              <div
-                className="group flex cursor-pointer items-center gap-2 py-1.5"
-                role="button"
-                tabIndex={0}
-                aria-pressed={notificationMode === 'always'}
-                onClick={() => setNotificationMode(notificationMode === 'always' ? 'hidden-only' : 'always')}
-                onKeyDown={(event) => {
-                  if (event.key === ' ' || event.key === 'Enter') {
-                    event.preventDefault();
-                    setNotificationMode(notificationMode === 'always' ? 'hidden-only' : 'always');
-                  }
-                }}
-              >
-                <Checkbox
-                  checked={notificationMode === 'always'}
-                  onChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
-                  ariaLabel="Notify while app is focused"
-                />
-                <span className="typography-ui-label text-foreground">Notify While App is Focused</span>
-              </div>
+              <>
+                <div
+                  className="group flex cursor-pointer items-center gap-2 py-1.5"
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={notificationMode === 'always'}
+                  onClick={() => setNotificationMode(notificationMode === 'always' ? 'hidden-only' : 'always')}
+                  onKeyDown={(event) => {
+                    if (event.key === ' ' || event.key === 'Enter') {
+                      event.preventDefault();
+                      setNotificationMode(notificationMode === 'always' ? 'hidden-only' : 'always');
+                    }
+                  }}
+                >
+                  <Checkbox
+                    checked={notificationMode === 'always'}
+                    onChange={(checked) => setNotificationMode(checked ? 'always' : 'hidden-only')}
+                    ariaLabel="Notify while app is focused"
+                  />
+                  <span className="typography-ui-label text-foreground">Notify While App is Focused</span>
+                </div>
+
+                <div className="py-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleTestNotification()}
+                  >
+                    Send test notification
+                  </Button>
+                </div>
+              </>
             )}
           </section>
 
@@ -782,6 +820,11 @@ export const NotificationSettings: React.FC = () => {
                     ariaLabel="Summarize last message"
                   />
                   <span className="typography-ui-label text-foreground">Summarize Last Message</span>
+                </div>
+                <div className="pl-6 pb-1">
+                  <span className="typography-meta text-muted-foreground">
+                    Requires <code className="text-[var(--primary-base)]">{'{last_message}'}</code> in the notification template.
+                  </span>
                 </div>
 
                 <div className={cn("flex flex-col gap-2 py-1 sm:flex-row sm:items-center sm:gap-8")}>

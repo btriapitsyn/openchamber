@@ -21,10 +21,10 @@ export type FlushHandler = (events: QueuedEvent[]) => void
 
 const FLUSH_FRAME_MS = 33
 const STREAM_YIELD_MS = 8
-const RECONNECT_DELAY_MS = 250
-const HEARTBEAT_TIMEOUT_MS = 15_000
+const DEFAULT_RECONNECT_DELAY_MS = 250
+const DEFAULT_HEARTBEAT_TIMEOUT_MS = 30_000
 const WS_FALLBACK_WINDOW_MS = 60_000
-const WS_READY_TIMEOUT_MS = 2_000
+const DEFAULT_WS_READY_TIMEOUT_MS = 2_000
 const ABSOLUTE_URL_PATTERN = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//
 
 export type EventPipelineInput = {
@@ -34,8 +34,13 @@ export type EventPipelineInput = {
   /** Called after stream reconnects (visibility restore or heartbeat timeout). */
   onReconnect?: () => void
   /** Called when the stream disconnects (heartbeat timeout, network error, or transport failure). */
-  onDisconnect?: () => void
+  onDisconnect?: (reason: string) => void
+  /** Called when transport switches (e.g. WS timeout → SSE fallback) without actual disconnection. */
+  onTransportSwitch?: () => void
   transport?: "auto" | "ws" | "sse"
+  heartbeatTimeoutMs?: number
+  reconnectDelayMs?: number
+  wsReadyTimeoutMs?: number
 }
 
 type MessageStreamWsFrame = {
@@ -143,8 +148,25 @@ type DirectoryQueue = {
   last: number
 }
 
+type AttemptAbortReason =
+  | "pipeline_stopped"
+  | "ws_heartbeat_timeout"
+  | "sse_heartbeat_timeout"
+  | null
+
 export function createEventPipeline(input: EventPipelineInput) {
-  const { sdk, onEvent, onReconnect, onDisconnect, routeDirectory, transport = "auto" } = input
+  const {
+    sdk,
+    onEvent,
+    onReconnect,
+    onDisconnect,
+    onTransportSwitch,
+    routeDirectory,
+    transport = "auto",
+    heartbeatTimeoutMs = DEFAULT_HEARTBEAT_TIMEOUT_MS,
+    reconnectDelayMs = DEFAULT_RECONNECT_DELAY_MS,
+    wsReadyTimeoutMs = DEFAULT_WS_READY_TIMEOUT_MS,
+  } = input
   const abort = new AbortController()
   let disconnected = false
   let lastEventId: string | undefined
@@ -242,6 +264,16 @@ export function createEventPipeline(input: EventPipelineInput) {
   let attempt: AbortController | undefined
   let lastEventAt = Date.now()
   let heartbeat: ReturnType<typeof setTimeout> | undefined
+  let activeTransport: "ws" | "sse" = transport === "ws" ? "ws" : "sse"
+  let attemptAbortReason: AttemptAbortReason = null
+
+  const notifyDisconnected = (reason: string) => {
+    if (disconnected) {
+      return
+    }
+    disconnected = true
+    onDisconnect?.(reason)
+  }
 
   const markConnected = () => {
     disconnected = false
@@ -293,8 +325,9 @@ export function createEventPipeline(input: EventPipelineInput) {
     lastEventAt = Date.now()
     if (heartbeat) clearTimeout(heartbeat)
     heartbeat = setTimeout(() => {
+      attemptAbortReason = `${activeTransport}_heartbeat_timeout`
       attempt?.abort()
-    }, HEARTBEAT_TIMEOUT_MS)
+    }, heartbeatTimeoutMs)
   }
 
   const clearHeartbeat = () => {
@@ -306,6 +339,7 @@ export function createEventPipeline(input: EventPipelineInput) {
   const runSseAttempt = async (signal: AbortSignal) => {
     const events = await sdk.global.event({
       signal,
+      ...(lastEventId && lastEventId.length > 0 ? { headers: { "Last-Event-ID": lastEventId } } : {}),
       onSseError: (error: unknown) => {
         if (isAbortError(error)) return
         if (streamErrorLogged) return
@@ -357,7 +391,7 @@ export function createEventPipeline(input: EventPipelineInput) {
         } catch {
           // ignore
         }
-      }, WS_READY_TIMEOUT_MS)
+      }, wsReadyTimeoutMs)
 
       const cleanup = () => {
         if (readyTimer) {
@@ -429,6 +463,7 @@ export function createEventPipeline(input: EventPipelineInput) {
 
         if (frame.type === "error") {
           const error = new Error(frame.message || "Message stream WebSocket error")
+          ;(error as Error & { reason?: string }).reason = `ws_error_frame:${frame.message || "unknown"}`
           setFallbackCode(error)
           settleReject(error)
           try {
@@ -463,13 +498,16 @@ export function createEventPipeline(input: EventPipelineInput) {
         void 0
       }
 
-      socket.onclose = () => {
+      socket.onclose = (event) => {
         if (signal.aborted) {
           settleResolve()
           return
         }
 
         const error = new Error("Global message stream WebSocket closed")
+        ;(error as Error & { reason?: string }).reason = opened
+          ? `ws_closed:code=${event?.code ?? "?"}`
+          : "ws_closed_before_ready"
         setFallbackCode(error)
         settleReject(error)
       }
@@ -493,9 +531,12 @@ export function createEventPipeline(input: EventPipelineInput) {
     while (!abort.signal.aborted) {
       attempt = new AbortController()
       lastEventAt = Date.now()
-      let retryDelayMs = RECONNECT_DELAY_MS
+      attemptAbortReason = null
+      let retryDelayMs = reconnectDelayMs
       const currentTransport = resolveTransport()
+      activeTransport = currentTransport
       const onAbort = () => {
+        attemptAbortReason = "pipeline_stopped"
         attempt?.abort()
       }
       abort.signal.addEventListener("abort", onAbort)
@@ -510,6 +551,12 @@ export function createEventPipeline(input: EventPipelineInput) {
         const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined
         if (currentTransport === "ws" && code === "WS_FALLBACK") {
           retryDelayMs = 0
+          // Transport switch (WS → SSE fallback), not a real disconnection.
+          // No events were lost — the next attempt will use SSE and carry
+          // lastEventId for gapless replay. Notify consumer so it can set
+          // isConnected, but do NOT treat this as a disconnection requiring
+          // a full directory resync.
+          onTransportSwitch?.()
         } else if (!isAbortError(error)) {
           if (!streamErrorLogged) {
             streamErrorLogged = true
@@ -519,10 +566,18 @@ export function createEventPipeline(input: EventPipelineInput) {
           // update connection state (e.g. set isConnected = false).
           // Guard: only fire once per disconnection cycle to avoid repeated
           // setState calls on every failed retry attempt.
-          if (!disconnected) {
-            disconnected = true
-            onDisconnect?.()
-          }
+          const taggedReason = typeof error === "object" && error !== null
+            ? (error as { reason?: unknown }).reason
+            : undefined
+          const message = typeof error === "object" && error !== null
+            ? (error as { message?: unknown }).message
+            : undefined
+          const reason = typeof taggedReason === "string" && taggedReason.length > 0
+            ? taggedReason
+            : typeof message === "string" && message.length > 0
+              ? `${currentTransport}_error:${message.slice(0, 80)}`
+              : `${currentTransport}_error:unknown`
+          notifyDisconnected(reason)
         }
       } finally {
         abort.signal.removeEventListener("abort", onAbort)
@@ -531,6 +586,11 @@ export function createEventPipeline(input: EventPipelineInput) {
       }
 
       if (abort.signal.aborted) return
+      if (attemptAbortReason && attemptAbortReason !== "pipeline_stopped") {
+        notifyDisconnected(attemptAbortReason)
+        retryDelayMs = 0
+        attemptAbortReason = null
+      }
       if (retryDelayMs > 0) {
         await wait(retryDelayMs)
       }
@@ -540,7 +600,7 @@ export function createEventPipeline(input: EventPipelineInput) {
   const onVisibility = () => {
     if (typeof document === "undefined") return
     if (document.visibilityState !== "visible") return
-    if (Date.now() - lastEventAt < HEARTBEAT_TIMEOUT_MS) return
+    if (Date.now() - lastEventAt < heartbeatTimeoutMs) return
     attempt?.abort()
   }
 

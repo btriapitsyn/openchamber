@@ -605,7 +605,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         // No sidebar available; fall back to direct content.
         const fallback = renderPageContent(settingsSlug);
         return (
-          <div className="flex-1 min-h-0 overflow-hidden bg-background" data-keyboard-avoid="true">
+          <div className="flex-1 min-h-0 overflow-hidden bg-background">
             <ErrorBoundary>{fallback}</ErrorBoundary>
           </div>
         );
@@ -623,7 +623,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     const content = renderPageContent(settingsSlug);
 
     return (
-      <div className="flex-1 min-h-0 overflow-hidden bg-background" data-keyboard-avoid="true">
+      <div className="flex-1 min-h-0 overflow-hidden bg-background">
         <ErrorBoundary>{content}</ErrorBoundary>
       </div>
     );

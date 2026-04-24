@@ -135,7 +135,7 @@ const AgentGroupItem: React.FC<AgentGroupItemProps> = ({ group, isSelected, isBu
       </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent className="max-w-md" keyboardAvoid>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Delete agent group</DialogTitle>
             <DialogDescription>

@@ -5,22 +5,15 @@ import {
   MESSAGE_STREAM_DIRECTORY_WS_PATH,
   MESSAGE_STREAM_GLOBAL_WS_PATH,
   MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS,
-  parseSseEventEnvelope,
   sendMessageStreamWsEvent,
-  sendMessageStreamWsFrame,
 } from './protocol.js';
-
-function shouldTriggerUpstreamHealthCheck(upstream) {
-  if (!upstream) {
-    return true;
-  }
-
-  if (!upstream.body) {
-    return upstream.ok || upstream.status >= 500;
-  }
-
-  return upstream.status >= 500;
-}
+import { createGlobalMessageStreamHub } from './global-hub.js';
+import { createGlobalMessageStreamWsBridge } from './global-ws-bridge.js';
+import { acceptDirectoryMessageStreamWsConnection } from './directory-ws-bridge.js';
+import {
+  DEFAULT_UPSTREAM_RECONNECT_DELAY_MS,
+  DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
+} from './upstream-reader.js';
 
 export function createGlobalUiEventBroadcaster({
   sseClients,
@@ -67,10 +60,32 @@ export function createMessageStreamWsRuntime({
   processForwardedEventPayload,
   wsClients,
   triggerHealthCheck,
+  heartbeatIntervalMs = MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS,
+  upstreamStallTimeoutMs = DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
+  upstreamReconnectDelayMs = DEFAULT_UPSTREAM_RECONNECT_DELAY_MS,
   fetchImpl = fetch,
+  globalEventHub = null,
 }) {
   const wsServer = new WebSocketServer({
     noServer: true,
+  });
+
+  const ownsGlobalHub = !globalEventHub;
+  const globalHub = globalEventHub ?? createGlobalMessageStreamHub({
+    buildOpenCodeUrl,
+    getOpenCodeAuthHeaders,
+    fetchImpl,
+    upstreamStallTimeoutMs,
+    upstreamReconnectDelayMs,
+  });
+
+  const globalBridge = createGlobalMessageStreamWsBridge({
+    globalHub,
+    ownsGlobalHub,
+    wsClients,
+    processForwardedEventPayload,
+    triggerHealthCheck,
+    heartbeatIntervalMs,
   });
 
   wsServer.on('connection', (socket, req) => {
@@ -81,171 +96,27 @@ export function createMessageStreamWsRuntime({
     const requestedLastEventId = requestUrl.searchParams.get('lastEventId')?.trim() || '';
     const requestedDirectory = requestUrl.searchParams.get('directory')?.trim() || '';
 
-    const controller = new AbortController();
-    const cleanup = () => {
-      if (!controller.signal.aborted) {
-        controller.abort();
-      }
-      wsClients.delete(socket);
-    };
-
-    const pingInterval = setInterval(() => {
-      if (socket.readyState !== 1) {
-        return;
-      }
-
-      try {
-        socket.ping();
-      } catch {
-      }
-    }, MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS);
-
-    const heartbeatInterval = setInterval(() => {
-      sendMessageStreamWsEvent(socket, { type: 'openchamber:heartbeat', timestamp: Date.now() }, { directory: 'global' });
-    }, MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS);
-
-    socket.on('close', () => {
-      clearInterval(pingInterval);
-      clearInterval(heartbeatInterval);
-      cleanup();
-    });
-
-    socket.on('error', () => {
-      void 0;
-    });
-
-    const run = async () => {
-      let targetUrl;
-      try {
-        targetUrl = new URL(buildOpenCodeUrl(isGlobalStream ? '/global/event' : '/event', ''));
-      } catch {
-        sendMessageStreamWsFrame(socket, { type: 'error', message: 'OpenCode service unavailable' });
-        socket.close(1011, 'OpenCode service unavailable');
-        return;
-      }
-
-      if (!isGlobalStream && requestedDirectory) {
-        targetUrl.searchParams.set('directory', requestedDirectory);
-      }
-
-      const headers = {
-        Accept: 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        ...getOpenCodeAuthHeaders(),
-      };
-
-      if (requestedLastEventId) {
-        headers['Last-Event-ID'] = requestedLastEventId;
-      }
-
-      let upstream;
-      try {
-        upstream = await fetchImpl(targetUrl.toString(), {
-          headers,
-          signal: controller.signal,
-        });
-      } catch {
-        if (!controller.signal.aborted) {
-          sendMessageStreamWsFrame(socket, { type: 'error', message: 'Failed to connect to OpenCode event stream' });
-          socket.close(1011, 'Failed to connect to OpenCode event stream');
-          // Trigger immediate health check so the server detects and
-          // restarts a dead OpenCode process without waiting for the next
-          // periodic interval (up to 15 s).
-          triggerHealthCheck?.();
-        }
-        return;
-      }
-
-      if (!upstream.ok || !upstream.body) {
-        sendMessageStreamWsFrame(socket, {
-          type: 'error',
-          message: `OpenCode event stream unavailable (${upstream.status})`,
-        });
-        socket.close(1011, 'OpenCode event stream unavailable');
-        if (shouldTriggerUpstreamHealthCheck(upstream)) {
-          triggerHealthCheck?.();
-        }
-        return;
-      }
-
-      sendMessageStreamWsFrame(socket, {
-        type: 'ready',
-        scope: isGlobalStream ? 'global' : 'directory',
+    if (isGlobalStream) {
+      globalBridge.accept(socket, {
+        requestedLastEventId,
       });
+      return;
+    }
 
-      if (isGlobalStream) {
-        wsClients.add(socket);
-      }
-
-      const decoder = new TextDecoder();
-      const reader = upstream.body.getReader();
-      let buffer = '';
-
-      const forwardBlock = (block) => {
-        if (!block) {
-          return;
-        }
-
-        const envelope = parseSseEventEnvelope(block);
-        const payload = envelope?.payload ?? null;
-        if (!payload) {
-          return;
-        }
-
-        const directory = isGlobalStream
-          ? (typeof envelope?.directory === 'string' && envelope.directory.length > 0 ? envelope.directory : 'global')
-          : (requestedDirectory || envelope?.directory || 'global');
-
-        sendMessageStreamWsEvent(socket, payload, {
-          directory,
-          eventId: typeof envelope?.eventId === 'string' && envelope.eventId.length > 0 ? envelope.eventId : undefined,
-        });
-
-        processForwardedEventPayload(payload, (syntheticPayload) => {
-          sendMessageStreamWsEvent(socket, syntheticPayload, { directory: 'global' });
-        });
-      };
-
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) {
-            break;
-          }
-
-          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n');
-
-          let separatorIndex = buffer.indexOf('\n\n');
-          while (separatorIndex !== -1) {
-            const block = buffer.slice(0, separatorIndex);
-            buffer = buffer.slice(separatorIndex + 2);
-            forwardBlock(block);
-            separatorIndex = buffer.indexOf('\n\n');
-          }
-        }
-
-        if (buffer.trim().length > 0) {
-          forwardBlock(buffer.trim());
-        }
-      } catch (error) {
-        if (!controller.signal.aborted) {
-          console.warn('Message stream WS proxy error:', error);
-          sendMessageStreamWsFrame(socket, { type: 'error', message: 'Message stream proxy error' });
-          socket.close(1011, 'Message stream proxy error');
-        }
-      } finally {
-        cleanup();
-        try {
-          if (socket.readyState === 1 || socket.readyState === 0) {
-            socket.close();
-          }
-        } catch {
-        }
-      }
-    };
-
-    void run();
+    acceptDirectoryMessageStreamWsConnection({
+      socket,
+      requestedLastEventId,
+      requestedDirectory,
+      buildOpenCodeUrl,
+      getOpenCodeAuthHeaders,
+      processForwardedEventPayload,
+      wsClients,
+      triggerHealthCheck,
+      heartbeatIntervalMs,
+      upstreamStallTimeoutMs,
+      upstreamReconnectDelayMs,
+      fetchImpl,
+    });
   });
 
   const upgradeHandler = (req, socket, head) => {
@@ -287,6 +158,7 @@ export function createMessageStreamWsRuntime({
     wsServer,
     async close() {
       server.off('upgrade', upgradeHandler);
+      globalBridge.close();
 
       try {
         for (const client of wsServer.clients) {

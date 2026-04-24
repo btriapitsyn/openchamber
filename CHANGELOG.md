@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.9.8] - 2026-04-22
+
+- Sessions/Reliability: fixed parent-child session sync during reconnects and navigation, so status and progress stay aligned in complex session trees (thanks to @jwcrystal).
+- Settings/Sync: settings updates now sync more reliably across clients, and sidebar session pagination is steadier in larger workspaces.
+- Sessions/Folders: folder changes now persist through server-backed endpoints, improving consistency across environments and path setups.
+- Notifications: permission notifications are now suppressed when auto-accept is enabled, reducing noise during trusted runs.
+- Chat/Files: improved changed-files handling in chat and restored quick file-open flows from pending changes, so jump-to-edit stays fast (thanks to @jwcrystal).
+- UI: improved bottom scroll shadow behavior and hide the tasks row when there is no active work for a cleaner conversation view.
+- Reliability/Desktop: improved live event-stream recovery after transient stalls, wait briefly before failing chat actions during reconnects, and persist Electron server logs for easier disconnect debugging.
+- Desktop/macOS: System color mode now tracks OS theme changes, traffic-light controls stay visible after dock restore, and update restart/changelog handling is more reliable.
+- Chat/Commands: added `/summary` slash command for a non-destructive session summary - optional topic hint after the command focuses the output, and the prompt is customizable under Settings: Magic Prompts.
+
+## [1.9.7] - 2026-04-22
+
+- Desktop: added an Electron desktop runtime in parallel with the current Tauri app, with Electron planned to become the default path in an upcoming release.
+- Plans/Notes/Todos: added editable project plans from assistant messages, external plan upload, configurable planning magic prompts, and quicker note/todo handoff into new sessions or worktrees.
+- Chat/Files: you can now drag files and folders from the file tree into chat, with improved `@folder` autocomplete for faster context building (thanks to @youfch).
+- Sessions/UI: added bulk session selection in the sidebar and fixed pinned sessions so they persist reliably after reloads (thanks to @yart).
+- Files/Git: added a file-change summary bar and auto-refresh for open files changed outside the app, improving review flow and keeping editors in sync (thanks to @jwcrystal).
+- Git/Worktrees: improved branch/worktree reliability by allowing checkout with uncommitted changes, tightening worktree cache invalidation, and reducing incorrect remote prefetches (thanks to @jwcrystal, @jasonalsing).
+- Settings/MCP: improved MCP auth flow with better remote-config support and clearer diagnostics, and aligned config resolution with OpenCode behavior for more predictable setup (thanks to @daveotero, @cyan).
+- Reliability/Chat: hardened bootstrap and stream-connection recovery, preserved session/connect state more reliably, and reduced streaming UI churn for smoother long runs.
+- Web/PWA: added install orientation controls and fixed loopback-origin handling for web push notifications in local setups (thanks to @vhqtvn, @yart).
 
 ## [1.9.6] - 2026-04-17
 
@@ -17,7 +40,6 @@ All notable changes to this project will be documented in this file.
 - Desktop: added quick open and a LAN access toggle, plus safer quit behavior around scheduled tasks for smoother local-network and day-to-day desktop workflows (thanks to @An-jinu).
 - Chat/Markdown: added LaTeX rendering support for clearer math and technical notation in messages (thanks to @ricautomation).
 - Settings/Skills: skills are now sorted within groups so larger skill lists are easier to scan (thanks to @roctom).
-
 
 ## [1.9.5] - 2026-04-14
 
@@ -70,7 +92,6 @@ All notable changes to this project will be documented in this file.
 - CLI/Server: added `--foreground` for process-manager deployments, made managed server hostname configurable, and added an explicit `--host` option with safer localhost defaults (thanks to @colinmollenhour, @rapidrabbit76, @yulia-ivashko).
 - Docker/Deployments: improved container defaults for broader compatibility, including UID 1000 user behavior, non-fatal SSH key generation, and better localhost detection in container networking (thanks to @yulia-ivashko).
 - Web/PWA: fixed manifest behavior behind Cloudflare Access so install flows work more reliably in protected environments (thanks to @arthurfiorette).
-
 
 ## [1.9.1] - 2026-03-20
 

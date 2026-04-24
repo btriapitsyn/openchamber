@@ -1253,7 +1253,7 @@ export const McpPage: React.FC = () => {
   );
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
+    <ScrollableOverlay outerClassName="h-full" className="w-full">
       <div className="mx-auto w-full max-w-3xl p-3 sm:p-6 sm:pt-8">
 
         {/* Header */}
@@ -1755,7 +1755,7 @@ export const McpPage: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="max-w-md" keyboardAvoid>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Import JSON Snippet</DialogTitle>
             <DialogDescription>

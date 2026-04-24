@@ -156,7 +156,7 @@ export const InstallSkillDialog: React.FC<InstallSkillDialogProps> = ({ open, on
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md" keyboardAvoid>
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Install skill</DialogTitle>
             <DialogDescription>

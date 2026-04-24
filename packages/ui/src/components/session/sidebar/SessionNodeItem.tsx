@@ -259,6 +259,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         ? 'group-hover:pr-5'
         : 'group-hover:pr-5 group-focus-within:pr-5');
   const suppressNextSelectRef = React.useRef(false);
+  const [isTouchPressed, setIsTouchPressed] = React.useState(false);
 
   const session = node.session;
   const liveSession = useSession(session.id);
@@ -356,7 +357,7 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <form
             className="flex w-full items-center gap-2"
-            data-keyboard-avoid="true"
+
             onSubmit={(event) => {
               event.preventDefault();
               handleSaveEdit();
@@ -516,6 +517,16 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       suppressNextSelectRef.current = true;
     }
   };
+  const handleRowPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (mobileVariant && event.pointerType === 'touch') {
+      setIsTouchPressed(true);
+    }
+  };
+  const handleRowPointerEnd = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (mobileVariant && event.pointerType === 'touch') {
+      setIsTouchPressed(false);
+    }
+  };
 
   const sessionMenuContent = (
     <DropdownMenuContent align="end" className="min-w-[180px]" onCloseAutoFocus={(event) => { if (renamingFolderId) event.preventDefault(); }}>
@@ -639,15 +650,19 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
                 <TooltipTrigger asChild>
                   <button
                     type="button"
-                    disabled={isMissingDirectory}
-                    onMouseDown={handleRowMouseDown}
-                    onClick={(event) => handleRowSelect(event)}
+	                    disabled={isMissingDirectory}
+	                    onPointerDown={handleRowPointerDown}
+	                    onPointerUp={handleRowPointerEnd}
+	                    onPointerCancel={handleRowPointerEnd}
+	                    onMouseDown={handleRowMouseDown}
+	                    onClick={(event) => handleRowSelect(event)}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
                       handleSessionDoubleClick();
                     }}
                     className={cn(
-                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+	                      'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+	                      isTouchPressed && 'bg-interactive-hover/70',
                       mobileVariant
                         ? (isVSCode ? revealPaddingClass : 'pr-7')
                         : revealPaddingClass,
@@ -700,15 +715,19 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
             ) : (
               <button
                 type="button"
-                disabled={isMissingDirectory}
-                onMouseDown={handleRowMouseDown}
-                onClick={(event) => handleRowSelect(event)}
+	                disabled={isMissingDirectory}
+	                onPointerDown={handleRowPointerDown}
+	                onPointerUp={handleRowPointerEnd}
+	                onPointerCancel={handleRowPointerEnd}
+	                onMouseDown={handleRowMouseDown}
+	                onClick={(event) => handleRowSelect(event)}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
                   handleSessionDoubleClick();
                 }}
                 className={cn(
-                  'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+	                  'flex min-w-0 flex-1 cursor-pointer flex-col gap-0 overflow-hidden rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 text-foreground select-none disabled:cursor-not-allowed transition-[padding]',
+	                  isTouchPressed && 'bg-interactive-hover/70',
                   mobileVariant
                     ? (isVSCode ? revealPaddingClass : 'pr-7')
                     : revealPaddingClass

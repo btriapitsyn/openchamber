@@ -484,7 +484,7 @@ export const SessionAuthGate: React.FC<SessionAuthGateProps> = ({ children }) =>
           </div>
 
           {!isTunnelLocked && (
-            <form onSubmit={handleSubmit} className="w-full space-y-2" data-keyboard-avoid="true">
+            <form onSubmit={handleSubmit} className="w-full space-y-2">
               {canUsePasskey && (
                 <Button
                   type="button"

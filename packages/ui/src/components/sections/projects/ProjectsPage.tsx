@@ -236,7 +236,7 @@ export const ProjectsPage: React.FC = () => {
 
   if (!selectedProject) {
     return (
-      <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
+      <ScrollableOverlay outerClassName="h-full" className="w-full">
         <div className="mx-auto w-full max-w-4xl p-3 sm:p-6 sm:pt-8">
           <p className="typography-meta text-muted-foreground">No projects available.</p>
         </div>
@@ -244,7 +244,7 @@ export const ProjectsPage: React.FC = () => {
     );
   }
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full bg-background">
+    <ScrollableOverlay outerClassName="h-full" className="w-full bg-background">
       <div className="mx-auto w-full max-w-4xl p-3 sm:p-6 sm:pt-8">
         
         {/* Top Header & Actions */}

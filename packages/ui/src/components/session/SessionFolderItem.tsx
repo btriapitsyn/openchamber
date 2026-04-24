@@ -178,7 +178,7 @@ const SessionFolderItemBase = <TSessionNode,>({
           {renaming ? (
             <form
               className="flex min-w-0 flex-1 items-center gap-1"
-              data-keyboard-avoid="true"
+
               onPointerDown={(event) => event.stopPropagation()}
               onMouseDown={(event) => event.stopPropagation()}
               onSubmit={(event) => {
