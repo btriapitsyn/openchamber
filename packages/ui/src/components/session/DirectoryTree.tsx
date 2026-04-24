@@ -747,7 +747,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                     }}
                     onBlur={createDirectory}
                     className="h-6 typography-meta flex-1 selection:bg-interactive-selection selection:text-interactive-selection-foreground"
-                    placeholder="new_directory"
+                    placeholder={t('directoryTree.field.newDirectoryPlaceholder')}
                   />
                   <button
                     onClick={(e) => {
@@ -836,7 +836,7 @@ export const DirectoryTree: React.FC<DirectoryTreeProps> = ({
                   }}
                   onBlur={createDirectory}
                   className="h-6 typography-meta flex-1 selection:bg-interactive-selection selection:text-interactive-selection-foreground"
-                  placeholder="new_directory"
+                  placeholder={t('directoryTree.field.newDirectoryPlaceholder')}
                 />
                 <button
                   onClick={(e) => {
