@@ -23,6 +23,7 @@ import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { usePwaDetection } from '@/hooks/usePwaDetection';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { useI18n, type Locale } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import {
     setDirectoryShowHidden,
@@ -226,6 +227,7 @@ interface OpenChamberVisualSettingsProps {
 }
 
 export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps> = ({ visibleSettings }) => {
+    const { locale, locales, setLocale, label, t } = useI18n();
     const { isMobile } = useDeviceInfo();
     const { browserTab } = usePwaDetection();
     const directoryShowHidden = useDirectoryShowHidden();
@@ -586,6 +588,25 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                         ))}
                                     </div>
                                 </div>
+                            </div>
+
+                            <div className="mt-2 grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
+                                <div className="flex min-w-0 flex-col">
+                                    <span className="typography-ui-label text-foreground shrink-0">{t('settings.appearance.language.label')}</span>
+                                    <span className="typography-meta text-muted-foreground">{t('settings.appearance.language.description')}</span>
+                                </div>
+                                <Select value={locale} onValueChange={(value) => setLocale(value as Locale)}>
+                                    <SelectTrigger aria-label={t('settings.appearance.language.select')} className="w-fit">
+                                        <SelectValue>{label(locale)}</SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {locales.map((availableLocale) => (
+                                            <SelectItem key={availableLocale} value={availableLocale}>
+                                                {label(availableLocale)}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             <div className="mt-2 grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
