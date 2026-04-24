@@ -314,9 +314,9 @@ export const CommandsPage: React.FC = () => {
 
           <div className="mt-2 px-2">
             <p className="typography-meta text-muted-foreground">
-              <code className="text-foreground">$ARGUMENTS</code> user input &middot;{' '}
-              <code className="text-foreground">!`cmd`</code> shell output &middot;{' '}
-              <code className="text-foreground">@file</code> file contents
+              <code className="text-foreground">$ARGUMENTS</code> {t('settings.commands.page.templateHint.userInput')} &middot;{' '}
+              <code className="text-foreground">!`cmd`</code> {t('settings.commands.page.templateHint.shellOutput')} &middot;{' '}
+              <code className="text-foreground">@file</code> {t('settings.commands.page.templateHint.fileContents')}
             </p>
           </div>
         </div>

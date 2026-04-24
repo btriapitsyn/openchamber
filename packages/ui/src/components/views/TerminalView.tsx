@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { useDeviceInfo } from '@/lib/device';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { primeTerminalInputTransport } from '@/lib/terminalApi';
+import { useI18n } from '@/lib/i18n';
 
 type Modifier = 'ctrl' | 'cmd';
 type MobileKey =
@@ -81,6 +82,7 @@ const getSequenceForKey = (key: MobileKey, modifier: Modifier | null): string | 
 };
 
 export const TerminalView: React.FC = () => {
+    const { t } = useI18n();
     const { terminal, runtime } = useRuntimeAPIs();
     const { currentTheme } = useThemeSystem();
     const { monoFont } = useFontPreferences();
@@ -313,14 +315,21 @@ export const TerminalView: React.FC = () => {
                                 appendToBuffer(
                                     directory,
                                     tabId,
-                                    `\r\n[Process exited${
-                                        exitCode !== null ? ` with code ${exitCode}` : ''
-                                    }${signal !== null ? ` (signal ${signal})` : ''}]\r\n`
+                                    t('terminalView.stream.processExitedMessage', {
+                                        exitCodeSegment:
+                                            exitCode !== null
+                                                ? t('terminalView.stream.processExitedWithCode', { exitCode })
+                                                : '',
+                                        signalSegment:
+                                            signal !== null
+                                                ? t('terminalView.stream.processExitedWithSignal', { signal })
+                                                : '',
+                                    })
                                 );
                                 setTabLifecycle(directory, tabId, 'exited');
                                 setTabSessionId(directory, tabId, null);
                                 setConnecting(directory, tabId, false);
-                                setConnectionError(isActionTab ? null : 'Terminal session ended');
+                                setConnectionError(isActionTab ? null : t('terminalView.error.sessionEnded'));
                                 setIsFatalError(false);
                                 setIsReconnectPending(false);
                                 disconnectStream();
@@ -340,7 +349,9 @@ export const TerminalView: React.FC = () => {
                         }
 
                         setIsReconnectPending(false);
-                        setConnectionError(`Connection failed: ${error.message}`);
+                        setConnectionError(
+                            t('terminalView.error.connectionFailed', { message: error.message })
+                        );
                         setIsFatalError(true);
                         setConnecting(directory, tabId, false);
                         setTabLifecycle(directory, tabId, 'exited');
@@ -356,7 +367,16 @@ export const TerminalView: React.FC = () => {
                 activeTerminalIdRef.current = null;
             };
         },
-        [appendToBuffer, disconnectStream, focusTerminalWhenWindowActive, setConnecting, setTabLifecycle, setTabSessionId, terminal]
+        [
+            appendToBuffer,
+            disconnectStream,
+            focusTerminalWhenWindowActive,
+            setConnecting,
+            setTabLifecycle,
+            setTabSessionId,
+            t,
+            terminal,
+        ]
     );
 
     React.useEffect(() => {
@@ -369,8 +389,8 @@ export const TerminalView: React.FC = () => {
         if (!effectiveDirectory) {
             setConnectionError(
                 hasActiveContext
-                    ? 'No working directory available for terminal.'
-                    : 'Select a session to open the terminal.'
+                    ? t('terminalView.empty.noWorkingDirectory')
+                    : t('terminalView.empty.selectSession')
             );
             disconnectStream();
             return;
@@ -451,7 +471,7 @@ export const TerminalView: React.FC = () => {
                         setConnectionError(
                             error instanceof Error
                                 ? error.message
-                                : 'Failed to start terminal session'
+                                : t('terminalView.error.startSessionFailed')
                         );
                         setIsFatalError(true);
                         setIsReconnectPending(false);
@@ -502,6 +522,7 @@ export const TerminalView: React.FC = () => {
         setTabSessionId,
         startStream,
         disconnectStream,
+        t,
         terminal,
     ]);
 
@@ -544,13 +565,15 @@ export const TerminalView: React.FC = () => {
         try {
             await closeTab(effectiveDirectory, tabId);
         } catch (error) {
-            setConnectionError(error instanceof Error ? error.message : 'Failed to restart terminal');
+            setConnectionError(
+                error instanceof Error ? error.message : t('terminalView.error.restartFailed')
+            );
             setIsFatalError(true);
             setIsReconnectPending(false);
         } finally {
             setIsRestarting(false);
         }
-    }, [activeTabId, closeTab, disconnectStream, effectiveDirectory, enableTabs, isRestarting]);
+    }, [activeTabId, closeTab, disconnectStream, effectiveDirectory, enableTabs, isRestarting, t]);
 
     const handleHardRestart = React.useCallback(async () => {
         // Keep semantics: “close tab -> new clean tab”.
@@ -625,7 +648,9 @@ export const TerminalView: React.FC = () => {
 
             void terminal.sendInput(terminalId, payload).catch((error) => {
                 if (!isReconnectPending) {
-                    setConnectionError(error instanceof Error ? error.message : 'Failed to send input');
+                    setConnectionError(
+                        error instanceof Error ? error.message : t('terminalView.error.sendInputFailed')
+                    );
                 }
             });
 
@@ -634,7 +659,7 @@ export const TerminalView: React.FC = () => {
                 terminalControllerRef.current?.focus();
             }
         },
-        [activeModifier, isReconnectPending, setActiveModifier, terminal]
+        [activeModifier, isReconnectPending, setActiveModifier, t, terminal]
     );
 
     const handleViewportResize = React.useCallback(
@@ -860,7 +885,7 @@ export const TerminalView: React.FC = () => {
     if (!hasActiveContext) {
         return (
             <div className="flex h-full items-center justify-center p-4 text-center text-sm text-muted-foreground">
-                Select a session to open the terminal
+                {t('terminalView.empty.selectSession')}
             </div>
         );
     }
@@ -868,12 +893,12 @@ export const TerminalView: React.FC = () => {
     if (!effectiveDirectory) {
         return (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
-                <p>No working directory available for this session.</p>
+                <p>{t('terminalView.empty.noWorkingDirectoryForSession')}</p>
                 <button
                     onClick={handleRestart}
                     className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
                 >
-                    Retry
+                    {t('terminalView.actions.retry')}
                 </button>
             </div>
         );
@@ -891,7 +916,7 @@ export const TerminalView: React.FC = () => {
                 onClick={() => handleMobileKeyPress('esc')}
                 disabled={quickKeysDisabled}
             >
-                Esc
+                {t('terminalView.quickKeys.escape')}
             </Button>
             <Button
                 type="button"
@@ -902,7 +927,7 @@ export const TerminalView: React.FC = () => {
                 disabled={quickKeysDisabled}
             >
                 <RiArrowRightLine size={16} />
-                <span className="sr-only">Tab</span>
+                <span className="sr-only">{t('terminalView.quickKeys.tabAria')}</span>
             </Button>
             <Button
                 type="button"
@@ -913,8 +938,8 @@ export const TerminalView: React.FC = () => {
                 onClick={() => handleModifierToggle('ctrl')}
                 disabled={quickKeysDisabled}
             >
-                <span className="text-xs font-medium">Ctrl</span>
-                <span className="sr-only">Control modifier</span>
+                <span className="text-xs font-medium">{t('terminalView.quickKeys.controlLabel')}</span>
+                <span className="sr-only">{t('terminalView.quickKeys.controlModifierAria')}</span>
             </Button>
             <Button
                 type="button"
@@ -926,7 +951,7 @@ export const TerminalView: React.FC = () => {
                 disabled={quickKeysDisabled}
             >
                 <RiCommandLine size={16} />
-                <span className="sr-only">Command modifier</span>
+                <span className="sr-only">{t('terminalView.quickKeys.commandModifierAria')}</span>
             </Button>
             <Button
                 type="button"
@@ -937,7 +962,7 @@ export const TerminalView: React.FC = () => {
                 disabled={quickKeysDisabled}
             >
                 <RiArrowUpLine size={16} />
-                <span className="sr-only">Arrow up</span>
+                <span className="sr-only">{t('terminalView.quickKeys.arrowUpAria')}</span>
             </Button>
             <Button
                 type="button"
@@ -948,7 +973,7 @@ export const TerminalView: React.FC = () => {
                 disabled={quickKeysDisabled}
             >
                 <RiArrowLeftLine size={16} />
-                <span className="sr-only">Arrow left</span>
+                <span className="sr-only">{t('terminalView.quickKeys.arrowLeftAria')}</span>
             </Button>
             <Button
                 type="button"
@@ -959,7 +984,7 @@ export const TerminalView: React.FC = () => {
                 disabled={quickKeysDisabled}
             >
                 <RiArrowDownLine size={16} />
-                <span className="sr-only">Arrow down</span>
+                <span className="sr-only">{t('terminalView.quickKeys.arrowDownAria')}</span>
             </Button>
             <Button
                 type="button"
@@ -970,7 +995,7 @@ export const TerminalView: React.FC = () => {
                 disabled={quickKeysDisabled}
             >
                 <RiArrowRightLine size={16} />
-                <span className="sr-only">Arrow right</span>
+                <span className="sr-only">{t('terminalView.quickKeys.arrowRightAria')}</span>
             </Button>
             <Button
                 type="button"
@@ -981,7 +1006,7 @@ export const TerminalView: React.FC = () => {
                 disabled={quickKeysDisabled}
             >
                 <RiArrowGoBackLine size={16} />
-                <span className="sr-only">Enter</span>
+                <span className="sr-only">{t('terminalView.quickKeys.enterAria')}</span>
             </Button>
         </>
     );
@@ -1028,7 +1053,7 @@ export const TerminalView: React.FC = () => {
                                                     e.stopPropagation();
                                                     handleCloseTab(tab.id);
                                                 }}
-                                                title="Close tab"
+                                                title={t('terminalView.tabs.closeTabTitle')}
                                             >
                                                 {isMobile ? <span aria-hidden>×</span> : <RiCloseLine size={12} />}
                                             </button>
@@ -1043,7 +1068,7 @@ export const TerminalView: React.FC = () => {
                                         'ml-1 flex items-center justify-center rounded-md border border-[var(--interactive-border)] bg-transparent text-[var(--surface-muted-foreground)] hover:bg-[var(--interactive-hover)] hover:text-[var(--surface-foreground)]',
                                         isMobile ? '!min-h-0 !min-w-0 h-8 w-8' : 'h-6.5 w-6.5'
                                     )}
-                                    title="New tab"
+                                    title={t('terminalView.tabs.newTabTitle')}
                                 >
                                     <RiAddLine size={isMobile ? 18 : 16} />
                                 </button>
@@ -1098,10 +1123,10 @@ export const TerminalView: React.FC = () => {
                                 className="h-6 px-2 py-0 text-xs"
                                 onClick={handleHardRestart}
                                 disabled={isRestarting}
-                                title="Force kill and create fresh session"
+                                title={t('terminalView.actions.hardRestartTitle')}
                                 type="button"
                             >
-                                Hard Restart
+                                {t('terminalView.actions.hardRestart')}
                             </Button>
                         )}
                     </div>
