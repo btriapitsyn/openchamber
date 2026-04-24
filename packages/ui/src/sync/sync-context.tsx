@@ -24,6 +24,7 @@ import { setActionRefs } from "./session-actions"
 import { setSyncRefs } from "./sync-refs"
 import { stripMessageDiffSnapshots, stripSessionDiffSnapshots } from "./sanitize"
 import { syncDebug } from "./debug"
+import { getReconnectCandidateSessionIds } from "./reconnect-recovery"
 import { opencodeClient } from "@/lib/opencode/client"
 import { usePermissionStore } from "@/stores/permissionStore"
 import { useConfigStore } from "@/stores/useConfigStore"
@@ -273,40 +274,13 @@ function isRecentBoot() {
   return bootingRoot || Date.now() - bootedAt < BOOT_DEBOUNCE_MS
 }
 
-function getReconnectCandidateSessionIds(state: State) {
-  const ids = new Set<string>()
-
-  for (const [sessionId, status] of Object.entries(state.session_status ?? {})) {
-    if (status && status.type !== "idle") ids.add(sessionId)
+function getViewedSessionRecoveryTarget(directory: string) {
+  if (!_activeDirectory || !_activeSession) return null
+  if (directory !== _activeDirectory) return null
+  return {
+    directory: _activeDirectory,
+    sessionId: _activeSession,
   }
-
-  for (const [sessionId, messages] of Object.entries(state.message ?? {})) {
-    const lastMessage = messages[messages.length - 1]
-    if (
-      lastMessage
-      && lastMessage.role === "assistant"
-      && typeof (lastMessage as { time?: { completed?: number } }).time?.completed !== "number"
-    ) {
-      ids.add(sessionId)
-    }
-  }
-
-  // Ensure parent sessions of any child sessions are also resynced.
-  // A child may have completed during the disconnect gap without the
-  // store knowing (SSE events lost). The parent's task tool part needs
-  // to reflect the child's final state.
-  const parentIds = new Set<string>()
-  for (const session of state.session) {
-    const parentId = (session as Session & { parentID?: string | null }).parentID
-    if (parentId) {
-      parentIds.add(parentId)
-    }
-  }
-  for (const pid of parentIds) {
-    ids.add(pid)
-  }
-
-  return Array.from(ids)
 }
 
 function toSessionStatus(status: Awaited<ReturnType<typeof opencodeClient.getSessionStatus>>[string]): SessionStatus | undefined {
@@ -716,7 +690,10 @@ async function resyncDirectoryAfterReconnect(
   routingIndex: EventRoutingIndex,
 ) {
   const current = store.getState()
-  const candidateSessionIds = getReconnectCandidateSessionIds(current)
+  const candidateSessionIds = getReconnectCandidateSessionIds(current, {
+    directory,
+    viewedSession: getViewedSessionRecoveryTarget(directory),
+  })
   if (candidateSessionIds.length === 0) return
 
   const nextStatuses = await opencodeClient.getSessionStatusForDirectory(directory)
@@ -1365,6 +1342,21 @@ export function SyncProvider(props: {
   // Abort controller owned by the pipeline closure. Cleanup aborts + flushes.
   useEffect(() => {
     const reconnectResyncing = new Set<string>()
+    const triggerRecoveryResync = (directory: string) => {
+      const store = childStores.children.get(directory)
+      if (!store) return
+      if (reconnectResyncing.has(directory)) return
+
+      reconnectResyncing.add(directory)
+      void resyncDirectoryAfterReconnect(directory, store, routingIndex)
+        .catch(() => {
+          // Transient failure during resync — next SSE event, transport switch,
+          // or reconnect will catch up.
+        })
+        .finally(() => {
+          reconnectResyncing.delete(directory)
+        })
+    }
 
     const { cleanup } = createEventPipeline({
       sdk: props.sdk,
@@ -1381,18 +1373,8 @@ export function SyncProvider(props: {
           hasEverConnected: true,
           connectionPhase: "connected",
         })
-        for (const [dir, store] of childStores.children) {
-          if (reconnectResyncing.has(dir)) continue
-          if (getReconnectCandidateSessionIds(store.getState()).length === 0) continue
-
-          reconnectResyncing.add(dir)
-          void resyncDirectoryAfterReconnect(dir, store, routingIndex)
-            .catch(() => {
-              // Transient failure during resync — next SSE event or reconnect will catch up.
-            })
-            .finally(() => {
-              reconnectResyncing.delete(dir)
-            })
+        for (const dir of childStores.children.keys()) {
+          triggerRecoveryResync(dir)
         }
       },
       onDisconnect: (reason) => {
@@ -1404,14 +1386,17 @@ export function SyncProvider(props: {
         })
       },
       onTransportSwitch: () => {
-        // Transport switched (e.g. WS timeout → SSE fallback) without
-        // actual disconnection. No events lost — just update connection
-        // state without triggering a full directory resync.
+        // Transport switched (e.g. WS timeout → SSE fallback) without a full
+        // disconnect. If the active session missed the transition into a busy
+        // turn, force a targeted resync for the viewed directory.
         useConfigStore.setState({
           isConnected: true,
           hasEverConnected: true,
           connectionPhase: "connected",
         })
+        if (_activeDirectory) {
+          triggerRecoveryResync(_activeDirectory)
+        }
       },
     })
     return cleanup
