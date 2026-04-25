@@ -1471,7 +1471,7 @@ export const useUIStore = create<UIStore>()(
         },
 
         setKeyboardOpen: (open) => {
-          set({ isKeyboardOpen: open });
+          set((state) => state.isKeyboardOpen === open ? state : { isKeyboardOpen: open });
         },
 
         toggleFavoriteModel: (providerID, modelID) => {
