@@ -18,6 +18,10 @@ const getNotificationRegistration = async (): Promise<ServiceWorkerRegistration 
     return existing;
   }
 
+  if (!existing) {
+    return null;
+  }
+
   try {
     const ready = await Promise.race<ServiceWorkerRegistration | null>([
       navigator.serviceWorker.ready,
