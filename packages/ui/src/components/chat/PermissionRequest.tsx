@@ -15,7 +15,7 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
 }) => {
   const [isResponding, setIsResponding] = React.useState(false);
   const [hasResponded, setHasResponded] = React.useState(false);
-  const respondToPermission = sessionActions.respondToPermission;;
+  const respondToPermission = sessionActions.respondToPermission;
 
   const handleResponse = async (response: PermissionResponse) => {
     setIsResponding(true);
@@ -24,7 +24,9 @@ export const PermissionRequest: React.FC<PermissionRequestProps> = ({
       await respondToPermission(permission.sessionID, permission.id, response);
       setHasResponded(true);
       onResponse?.(response);
-    } catch { /* ignored */ } finally {
+    } catch (error) {
+      console.error('[PermissionRequest] Failed to respond to permission:', error);
+    } finally {
       setIsResponding(false);
     }
   };

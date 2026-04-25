@@ -438,9 +438,13 @@ export async function respondToPermission(
   response: "once" | "always" | "reject",
 ): Promise<void> {
   await waitForConnectionOrThrow()
+  const directory = resolveDirectoryForBlockingRequest("permission", sessionId, requestId)
+    || getSessionDirectory(sessionId)
+    || dir()
   const result = await getRequestReplyClient("permission", sessionId, requestId).permission.reply({
     requestID: requestId,
     reply: response,
+    ...(directory ? { directory } : {}),
   })
   if (!result.data) {
     throw new Error("Permission reply failed")
@@ -452,9 +456,13 @@ export async function dismissPermission(
   requestId: string,
 ): Promise<void> {
   await waitForConnectionOrThrow()
+  const directory = resolveDirectoryForBlockingRequest("permission", sessionId, requestId)
+    || getSessionDirectory(sessionId)
+    || dir()
   const result = await getRequestReplyClient("permission", sessionId, requestId).permission.reply({
     requestID: requestId,
     reply: "reject",
+    ...(directory ? { directory } : {}),
   })
   if (!result.data) {
     throw new Error("Permission dismissal failed")
@@ -471,9 +479,13 @@ export async function respondToQuestion(
   answers: string[] | string[][],
 ): Promise<void> {
   await waitForConnectionOrThrow()
+  const directory = resolveDirectoryForBlockingRequest("question", sessionId, requestId)
+    || getSessionDirectory(sessionId)
+    || dir()
   const result = await getRequestReplyClient("question", sessionId, requestId).question.reply({
     requestID: requestId,
     answers: answers as Array<Array<string>>,
+    ...(directory ? { directory } : {}),
   })
   if (!result.data) {
     throw new Error("Question reply failed")
@@ -485,8 +497,12 @@ export async function rejectQuestion(
   requestId: string,
 ): Promise<void> {
   await waitForConnectionOrThrow()
+  const directory = resolveDirectoryForBlockingRequest("question", sessionId, requestId)
+    || getSessionDirectory(sessionId)
+    || dir()
   const result = await getRequestReplyClient("question", sessionId, requestId).question.reject({
     requestID: requestId,
+    ...(directory ? { directory } : {}),
   })
   if (!result.data) {
     throw new Error("Question rejection failed")

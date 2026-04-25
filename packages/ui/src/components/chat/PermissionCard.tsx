@@ -64,7 +64,7 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
 }) => {
   const [isResponding, setIsResponding] = React.useState(false);
   const [hasResponded, setHasResponded] = React.useState(false);
-  const respondToPermission = sessionActions.respondToPermission;;
+  const respondToPermission = sessionActions.respondToPermission;
   const sessions = useSessions();
   const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
   const isFromSubagent = React.useMemo(() => {
@@ -82,7 +82,9 @@ export const PermissionCard: React.FC<PermissionCardProps> = ({
       await respondToPermission(permission.sessionID, permission.id, response);
       setHasResponded(true);
       onResponse?.(response);
-    } catch { /* ignored */ } finally {
+    } catch (error) {
+      console.error('[PermissionCard] Failed to respond to permission:', error);
+    } finally {
       setIsResponding(false);
     }
   };
