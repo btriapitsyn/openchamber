@@ -40,6 +40,12 @@ describe('pathLooksUserConfigured', () => {
     expect(pathLooksUserConfigured('/some/path/.pyenv/shims:/usr/bin', home, delim)).toBe(true);
     expect(pathLooksUserConfigured('/some/path/.opencode/bin:/usr/bin', home, delim)).toBe(true);
   });
+
+  it('detects Windows home and toolchain paths', () => {
+    const windowsHome = 'C:\\Users\\agent';
+    expect(pathLooksUserConfigured('C:\\Users\\agent\\.bun\\bin;C:\\Windows\\System32', windowsHome, ';')).toBe(true);
+    expect(pathLooksUserConfigured('C:\\tools\\.cargo\\bin;C:\\Windows\\System32', windowsHome, ';')).toBe(true);
+  });
 });
 
 describe('mergePathValues', () => {

@@ -35,6 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { toast } from '@/components/ui';
+import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, getExportRevealLabelKey, revealExportedMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
 import type { ChildSessionExport } from '@/lib/exportSession';
@@ -320,27 +321,38 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
 
-  const collectChildExports = React.useCallback(async (children: SessionNode[]): Promise<ChildSessionExport[]> => {
+  const descendantCount = React.useMemo(() => collectNodeDescendantIds(node).length, [collectNodeDescendantIds, node]);
+
+  const collectChildExports = React.useCallback(async (children: SessionNode[]): Promise<{ children: ChildSessionExport[]; skipped: number }> => {
     const results: ChildSessionExport[] = [];
+    let skipped = 0;
     for (const child of children) {
       try {
         await sync.syncSession(child.session.id);
         const childRecords = buildSessionMessageRecordsSnapshot(directoryStore.getState(), child.session.id).list;
-        const childTitle = child.session.title || 'Untitled Sub-agent';
+        const childTitle = child.session.title || t('sessions.sidebar.session.export.untitledSubagent');
         const childAgent = (child.session as Session & { agent?: string }).agent;
         const grandChildren = await collectChildExports(child.children);
+        skipped += grandChildren.skipped;
         results.push({
           title: childTitle,
           agent: childAgent,
           records: childRecords,
-          children: grandChildren,
+          children: grandChildren.children,
         });
       } catch {
-        // Skip children that fail to sync — continue exporting the rest.
+        skipped += collectNodeDescendantIds(child).length + 1;
       }
     }
-    return results;
-  }, [directoryStore, sync]);
+    return { children: results, skipped };
+  }, [collectNodeDescendantIds, directoryStore, sync, t]);
+
+  const showSkippedSubtasksWarning = React.useCallback((count: number) => {
+    if (count <= 0) return;
+    toast.warning(count === 1
+      ? t('sessions.sidebar.session.export.skippedSubtaskSingle', { count })
+      : t('sessions.sidebar.session.export.skippedSubtaskMany', { count }));
+  }, [t]);
 
   const doExportSession = React.useCallback(async (includeSubtasks: boolean) => {
     if (!sessionDirectory) {
@@ -357,8 +369,11 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     }
 
     let childExports: ChildSessionExport[] | undefined;
+    let skippedSubtaskCount = 0;
     if (includeSubtasks && node.children.length > 0) {
-      childExports = await collectChildExports(node.children);
+      const collected = await collectChildExports(node.children);
+      childExports = collected.children;
+      skippedSubtaskCount = collected.skipped;
     }
 
     const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null, childExports);
@@ -378,12 +393,14 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
           },
         },
       });
+      showSkippedSubtasksWarning(skippedSubtaskCount);
       return;
     }
 
     downloadAsMarkdown(markdown, filename);
     toast.success(t('sessions.sidebar.session.export.success'));
-  }, [collectChildExports, directoryStore, node.children, resolvedSession.title, session.id, sessionDirectory, sync, t]);
+    showSkippedSubtasksWarning(skippedSubtaskCount);
+  }, [collectChildExports, directoryStore, node.children, resolvedSession.title, session.id, sessionDirectory, showSkippedSubtasksWarning, sync, t]);
   const handleExportSession = React.useCallback(async () => {
     if (node.children.length > 0) {
       setExportIncludeSubtasks(true);
@@ -854,9 +871,11 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent showCloseButton={false} className="max-w-sm gap-5">
           <DialogHeader>
-            <DialogTitle>Export Markdown</DialogTitle>
+            <DialogTitle>{t('sessions.sidebar.session.export.dialog.title')}</DialogTitle>
             <DialogDescription>
-              This session has {collectNodeDescendantIds(node).length} sub-agent task{collectNodeDescendantIds(node).length === 1 ? '' : 's'}. Include them in the export?
+              {descendantCount === 1
+                ? t('sessions.sidebar.session.export.dialog.descriptionSingle', { count: descendantCount })
+                : t('sessions.sidebar.session.export.dialog.descriptionMany', { count: descendantCount })}
             </DialogDescription>
           </DialogHeader>
           <label className="flex items-center gap-2 typography-ui-label cursor-pointer">
@@ -866,26 +885,27 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
               onChange={(e) => setExportIncludeSubtasks(e.target.checked)}
               className="h-4 w-4 rounded border-border accent-primary"
             />
-            Include sub-agent tasks
+            {t('sessions.sidebar.session.export.dialog.includeSubtasks')}
           </label>
           <DialogFooter>
-            <button
+            <Button
               type="button"
               onClick={() => setExportDialogOpen(false)}
-              className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 typography-ui-label text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              variant="outline"
+              size="sm"
             >
-              Cancel
-            </button>
-            <button
+              {t('sessions.sidebar.dialogs.cancel')}
+            </Button>
+            <Button
               type="button"
               onClick={() => {
                 setExportDialogOpen(false);
                 void doExportSession(exportIncludeSubtasks);
               }}
-              className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 typography-ui-label text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              size="sm"
             >
-              Export
-            </button>
+              {t('sessions.sidebar.session.export.dialog.confirm')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

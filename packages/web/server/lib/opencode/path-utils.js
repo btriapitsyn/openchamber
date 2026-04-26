@@ -43,24 +43,26 @@ export function pathLooksUserConfigured(value, home, delim) {
     return false;
   }
 
-  const homeWithSep = home + '/';
+  const normalizedHome = typeof home === 'string' ? home.replaceAll('\\', '/') : '';
+  const homeWithSep = normalizedHome ? normalizedHome + '/' : '';
 
   return value.split(delim).some((segment) => {
     if (!segment) return false;
+    const normalizedSegment = segment.replaceAll('\\', '/');
 
     // Any path under the user's home directory.
-    if (segment === home || segment.startsWith(homeWithSep)) {
+    if (normalizedHome && (normalizedSegment === normalizedHome || normalizedSegment.startsWith(homeWithSep))) {
       return true;
     }
 
     // Well-known package-manager / toolchain prefixes.
-    if (TOOLCHAIN_SEGMENTS.some((prefix) => segment.startsWith(prefix))) {
+    if (TOOLCHAIN_SEGMENTS.some((prefix) => normalizedSegment.startsWith(prefix))) {
       return true;
     }
 
     // Well-known dot-directories inside home (e.g. ~/.cargo/bin).
-    const last = segment.split('/').filter(Boolean).pop();
-    if (last && TOOLCHAIN_BASENAMES.has(last)) {
+    const parts = normalizedSegment.split('/').filter(Boolean);
+    if (parts.some((part) => TOOLCHAIN_BASENAMES.has(part))) {
       return true;
     }
 

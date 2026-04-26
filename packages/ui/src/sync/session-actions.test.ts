@@ -89,11 +89,6 @@ mock.module("./sync-refs", () => ({
   registerSessionDirectory: () => {},
 }))
 
-// Mock synthetic (imported but not used in permission functions)
-mock.module("@/lib/messages/synthetic", () => ({
-  isSyntheticPart: () => false,
-}))
-
 import { create, type StoreApi } from "zustand"
 import { INITIAL_STATE } from "./types"
 import type { DirectoryStore } from "./child-store"
