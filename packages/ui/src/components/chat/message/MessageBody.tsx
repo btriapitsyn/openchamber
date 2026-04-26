@@ -46,6 +46,7 @@ import { useI18n } from '@/lib/i18n';
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
+const STANDALONE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-2 mb-1 ml-2 pl-3 border-l border-border/40 flex items-center justify-start gap-1.5';
 
 type SubtaskPartLike = Part & {
     type: 'subtask';
@@ -292,7 +293,7 @@ interface MessageBodyProps {
 
     shouldShowHeader?: boolean;
     hasTextContent?: boolean;
-    onCopyMessage?: () => void;
+    onCopyMessage?: () => void | boolean | Promise<void | boolean>;
     copiedMessage?: boolean;
     onAuxiliaryContentComplete?: () => void;
     showReasoningTraces?: boolean;
@@ -577,6 +578,251 @@ const UserMessageBody = React.memo(({ messageId, parts, isMobile, hasTouchInput,
     );
 });
 
+interface AssistantMessageActionButtonsProps {
+    hasCopyableText: boolean;
+    isTouchContext: boolean;
+    onCopyMessage?: () => void | boolean | Promise<void | boolean>;
+    onShareImage: () => Promise<void>;
+    ttsText: string;
+}
+
+const AssistantMessageActionButtons = React.memo(({
+    hasCopyableText,
+    isTouchContext,
+    onCopyMessage,
+    onShareImage,
+    ttsText,
+}: AssistantMessageActionButtonsProps) => {
+    const { t } = useI18n();
+    const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
+    const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
+    const voiceProvider = useConfigStore((state) => state.voiceProvider);
+    const [copyHintVisible, setCopyHintVisible] = React.useState(false);
+    const [isMessageCopied, setIsMessageCopied] = React.useState(false);
+    const [isSharing, setIsSharing] = React.useState(false);
+    const copyHintTimeoutRef = React.useRef<number | null>(null);
+    const copiedResetTimeoutRef = React.useRef<number | null>(null);
+    const canCopyMessage = Boolean(onCopyMessage);
+
+    const clearCopyHintTimeout = React.useCallback(() => {
+        if (copyHintTimeoutRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(copyHintTimeoutRef.current);
+            copyHintTimeoutRef.current = null;
+        }
+    }, []);
+
+    const clearCopiedResetTimeout = React.useCallback(() => {
+        if (copiedResetTimeoutRef.current !== null && typeof window !== 'undefined') {
+            window.clearTimeout(copiedResetTimeoutRef.current);
+            copiedResetTimeoutRef.current = null;
+        }
+    }, []);
+
+    React.useEffect(() => {
+        return () => {
+            clearCopyHintTimeout();
+            clearCopiedResetTimeout();
+        };
+    }, [clearCopiedResetTimeout, clearCopyHintTimeout]);
+
+    React.useEffect(() => {
+        if (!hasCopyableText || !canCopyMessage) {
+            setCopyHintVisible(false);
+            setIsMessageCopied(false);
+            clearCopyHintTimeout();
+            clearCopiedResetTimeout();
+        }
+    }, [canCopyMessage, clearCopiedResetTimeout, clearCopyHintTimeout, hasCopyableText]);
+
+    const revealCopyHint = React.useCallback(() => {
+        if (!isTouchContext || !canCopyMessage || !hasCopyableText || typeof window === 'undefined') {
+            return;
+        }
+
+        clearCopyHintTimeout();
+        setCopyHintVisible(true);
+        copyHintTimeoutRef.current = window.setTimeout(() => {
+            setCopyHintVisible(false);
+            copyHintTimeoutRef.current = null;
+        }, 1800);
+    }, [canCopyMessage, clearCopyHintTimeout, hasCopyableText, isTouchContext]);
+
+    const handleCopyButtonClick = React.useCallback(
+        async (event: React.MouseEvent<HTMLButtonElement>) => {
+            if (!onCopyMessage || !hasCopyableText) {
+                return;
+            }
+
+            event.stopPropagation();
+            event.preventDefault();
+
+            const copied = await onCopyMessage();
+            if (copied === false) {
+                return;
+            }
+
+            clearCopiedResetTimeout();
+            setIsMessageCopied(true);
+            if (typeof window !== 'undefined') {
+                copiedResetTimeoutRef.current = window.setTimeout(() => {
+                    setIsMessageCopied(false);
+                    copiedResetTimeoutRef.current = null;
+                }, 2000);
+            }
+
+            if (isTouchContext) {
+                revealCopyHint();
+            }
+        },
+        [clearCopiedResetTimeout, hasCopyableText, isTouchContext, onCopyMessage, revealCopyHint]
+    );
+
+    const handleShareImageClick = React.useCallback(
+        async (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+            event.preventDefault();
+
+            if (isSharing || !hasCopyableText) {
+                return;
+            }
+
+            setIsSharing(true);
+            try {
+                await onShareImage();
+            } finally {
+                setIsSharing(false);
+            }
+        },
+        [hasCopyableText, isSharing, onShareImage]
+    );
+
+    const readAloudTooltip = React.useMemo(() => {
+        if (isTTSPlaying) {
+            return t('chat.messageBody.tts.stopSpeaking');
+        }
+        const providerLabel = voiceProvider === 'browser'
+            ? 'Browser'
+            : voiceProvider === 'openai'
+                ? 'OpenAI'
+                : voiceProvider === 'openai-compatible'
+                    ? 'Custom'
+                    : 'Say';
+        return t('chat.messageBody.tts.readAloudWithProvider', { provider: providerLabel });
+    }, [isTTSPlaying, t, voiceProvider]);
+
+    const handleTTSClick = React.useCallback(
+        (event: React.MouseEvent<HTMLButtonElement>) => {
+            event.stopPropagation();
+            event.preventDefault();
+
+            if (isTTSPlaying) {
+                stopTTS();
+                return;
+            }
+
+            if (ttsText.trim()) {
+                void playTTS(ttsText);
+            }
+        },
+        [isTTSPlaying, playTTS, stopTTS, ttsText]
+    );
+
+    return (
+        <>
+            {onCopyMessage && (
+                <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
+                            className={cn(
+                                'h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
+                                !hasCopyableText && 'opacity-50'
+                            )}
+                            disabled={!hasCopyableText}
+                            aria-label={t('chat.messageBody.actions.copyMessageAria')}
+                            aria-hidden={!hasCopyableText}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                                void handleCopyButtonClick(event);
+                            }}
+                            onFocus={() => {
+                                if (hasCopyableText) {
+                                    setCopyHintVisible(true);
+                                }
+                            }}
+                            onBlur={() => {
+                                if (!isMessageCopied) {
+                                    setCopyHintVisible(false);
+                                }
+                            }}
+                        >
+                            {isMessageCopied ? (
+                                <RiCheckLine className="h-3.5 w-3.5 text-[color:var(--status-success)]" />
+                            ) : (
+                                <RiFileCopyLine className="h-3.5 w-3.5" />
+                            )}
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.copyAnswer')}</TooltipContent>
+                </Tooltip>
+            )}
+            <Tooltip delayDuration={1000}>
+                <TooltipTrigger asChild>
+                    <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        disabled={isSharing || !hasCopyableText}
+                        className={cn(
+                            'h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
+                            (!hasCopyableText || isSharing) && 'opacity-50'
+                        )}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            void handleShareImageClick(event);
+                        }}
+                    >
+                        {isSharing ? (
+                            <RiLoader4Line className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <RiImageDownloadLine className="h-4 w-4" />
+                        )}
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent sideOffset={6}>{isSharing ? t('chat.messageBody.actions.savingImage') : t('chat.messageBody.actions.saveAsImage')}</TooltipContent>
+            </Tooltip>
+            {showMessageTTSButtons && hasCopyableText && (
+                <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                                'h-8 w-8 bg-transparent hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
+                                isTTSPlaying ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'
+                            )}
+                            aria-label={isTTSPlaying ? t('chat.messageBody.tts.stopSpeaking') : t('chat.messageBody.tts.readAloud')}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={handleTTSClick}
+                        >
+                            {isTTSPlaying ? (
+                                <RiStopLine className="h-3.5 w-3.5" />
+                            ) : (
+                                <RiVolumeUpLine className="h-3.5 w-3.5" />
+                            )}
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={6}>{readAloudTooltip}</TooltipContent>
+                </Tooltip>
+            )}
+        </>
+    );
+});
+
 const AssistantMessageBody = React.memo(({
     sessionId,
     messageId,
@@ -597,7 +843,6 @@ const AssistantMessageBody = React.memo(({
     onContentChange,
     hasTextContent = false,
     onCopyMessage,
-    copiedMessage = false,
     onAuxiliaryContentComplete,
     showReasoningTraces = false,
     turnGroupingContext,
@@ -606,8 +851,6 @@ const AssistantMessageBody = React.memo(({
     const { t } = useI18n();
     const streamPhase = _streamPhase;
     void _allowAnimation;
-    const [copyHintVisible, setCopyHintVisible] = React.useState(false);
-    const copyHintTimeoutRef = React.useRef<number | null>(null);
     const messageContentRef = React.useRef<HTMLDivElement>(null);
     const toolRevealReadyRef = React.useRef(false);
 
@@ -615,8 +858,6 @@ const AssistantMessageBody = React.memo(({
         toolRevealReadyRef.current = true;
     }, []);
 
-    const canCopyMessage = Boolean(onCopyMessage);
-    const isMessageCopied = Boolean(copiedMessage);
     const isTouchContext = Boolean(hasTouchInput ?? isMobile);
     const awaitingMessageCompletion = !isMessageCompleted;
     const animateActivityRows = awaitingMessageCompletion || Boolean(turnGroupingContext?.isWorking);
@@ -730,19 +971,6 @@ const AssistantMessageBody = React.memo(({
     const collapsedPreviewCount = 7;
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
     const hasStopFinish = messageFinish === 'stop';
-
-    // TTS for message playback
-    const { isPlaying: isTTSPlaying, play: playTTS, stop: stopTTS } = useMessageTTS();
-    const showMessageTTSButtons = useConfigStore((state) => state.showMessageTTSButtons);
-    const voiceProvider = useConfigStore((state) => state.voiceProvider);
-
-    const readAloudTooltip = React.useMemo(() => {
-        if (isTTSPlaying) {
-            return t('chat.messageBody.tts.stopSpeaking');
-        }
-        const providerLabel = voiceProvider === 'browser' ? 'Browser' : voiceProvider === 'openai' ? 'OpenAI' : voiceProvider === 'openai-compatible' ? 'Custom' : 'Say';
-        return t('chat.messageBody.tts.readAloudWithProvider', { provider: providerLabel });
-    }, [isTTSPlaying, t, voiceProvider]);
 
     const currentSession = React.useMemo(() => {
         if (!currentSessionId) {
@@ -882,50 +1110,6 @@ const AssistantMessageBody = React.memo(({
 
     const hasCopyableText = Boolean(hasTextContent) && !awaitingMessageCompletion;
 
-    const clearCopyHintTimeout = React.useCallback(() => {
-        if (copyHintTimeoutRef.current !== null && typeof window !== 'undefined') {
-            window.clearTimeout(copyHintTimeoutRef.current);
-            copyHintTimeoutRef.current = null;
-        }
-    }, []);
-
-    const revealCopyHint = React.useCallback(() => {
-        if (!isTouchContext || !canCopyMessage || !hasCopyableText || typeof window === 'undefined') {
-            return;
-        }
-
-        clearCopyHintTimeout();
-        setCopyHintVisible(true);
-        copyHintTimeoutRef.current = window.setTimeout(() => {
-            setCopyHintVisible(false);
-            copyHintTimeoutRef.current = null;
-        }, 1800);
-    }, [canCopyMessage, clearCopyHintTimeout, hasCopyableText, isTouchContext]);
-
-    React.useEffect(() => {
-        if (!hasCopyableText) {
-            setCopyHintVisible(false);
-            clearCopyHintTimeout();
-        }
-    }, [clearCopyHintTimeout, hasCopyableText]);
-
-    const handleCopyButtonClick = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
-            if (!onCopyMessage || !hasCopyableText) {
-                return;
-            }
-
-            event.stopPropagation();
-            event.preventDefault();
-            onCopyMessage();
-
-            if (isTouchContext) {
-                revealCopyHint();
-            }
-        },
-        [hasCopyableText, isTouchContext, onCopyMessage, revealCopyHint]
-    );
-
     const handleForkClick = React.useCallback(
         (event: React.MouseEvent<HTMLButtonElement>) => {
             event.stopPropagation();
@@ -951,23 +1135,6 @@ const AssistantMessageBody = React.memo(({
             openMultiRunLauncherWithPrompt(prefilledPrompt);
         },
         [assistantPlanText, openMultiRunLauncherWithPrompt]
-    );
-
-    const handleTTSClick = React.useCallback(
-        (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            event.preventDefault();
-            
-            if (isTTSPlaying) {
-                stopTTS();
-                return;
-            }
-            
-            if (assistantPlanText.trim()) {
-                void playTTS(assistantPlanText);
-            }
-        },
-        [assistantPlanText, isTTSPlaying, playTTS, stopTTS]
     );
 
     const handleSaveAsPlanClick = React.useCallback(
@@ -1014,16 +1181,10 @@ const AssistantMessageBody = React.memo(({
         [assistantPlanText, currentProjectRef, t]
     );
 
-    const [isSharing, setIsSharing] = React.useState(false);
+    const shareMessageAsImage = React.useCallback(
+        async () => {
+            if (!messageContentRef.current) return;
 
-    const handleShareImage = React.useCallback(
-        async (event: React.MouseEvent<HTMLButtonElement>) => {
-            event.stopPropagation();
-            event.preventDefault();
-
-            if (!messageContentRef.current || isSharing) return;
-
-            setIsSharing(true);
             let wrapper: HTMLDivElement | null = null;
             try {
                 const originalElement = messageContentRef.current;
@@ -1128,17 +1289,10 @@ const AssistantMessageBody = React.memo(({
                 if (wrapper && wrapper.parentNode) {
                     wrapper.parentNode.removeChild(wrapper);
                 }
-                setIsSharing(false);
             }
         },
-        [messageId, isSharing, t]
+        [messageId, t]
     );
-
-    React.useEffect(() => {
-        return () => {
-            clearCopyHintTimeout();
-        };
-    }, [clearCopyHintTimeout]);
 
     const activityPartsForTurn = React.useMemo(() => {
         const all = turnGroupingContext?.activityParts;
@@ -1201,108 +1355,15 @@ const AssistantMessageBody = React.memo(({
     const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage));
     const shouldShowStandaloneMessageActions = showSplitAssistantMessageActions && shouldShowMessageActions && !shouldShowTurnFooter;
 
-    const renderMessageActionButtons = React.useCallback(() => (
-         <>
-              {onCopyMessage && (
-                  <Tooltip delayDuration={1000}>
-                      <TooltipTrigger asChild>
-                          <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              data-visible={copyHintVisible || isMessageCopied ? 'true' : undefined}
-                              className={cn(
-                                  'h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
-                                  !hasCopyableText && 'opacity-50'
-                              )}
-                              disabled={!hasCopyableText}
-                              aria-label={t('chat.messageBody.actions.copyMessageAria')}
-                              aria-hidden={!hasCopyableText}
-                              onPointerDown={(event) => event.stopPropagation()}
-                              onClick={handleCopyButtonClick}
-                              onFocus={() => {
-                                  if (hasCopyableText) {
-                                      setCopyHintVisible(true);
-                                  }
-                              }}
-                              onBlur={() => {
-                                  if (!isMessageCopied) {
-                                      setCopyHintVisible(false);
-                                  }
-                              }}
-                          >
-                              {isMessageCopied ? (
-                                  <RiCheckLine className="h-3.5 w-3.5 text-[color:var(--status-success)]" />
-                              ) : (
-                                  <RiFileCopyLine className="h-3.5 w-3.5" />
-                              )}
-                          </Button>
-                       </TooltipTrigger>
-                       <TooltipContent sideOffset={6}>{t('chat.messageBody.actions.copyAnswer')}</TooltipContent>
-                   </Tooltip>
-               )}
-               <Tooltip delayDuration={1000}>
-                   <TooltipTrigger asChild>
-                       <Button
-                           type="button"
-                           size="icon"
-                           variant="ghost"
-                           disabled={isSharing || !hasCopyableText}
-                           className={cn(
-                               'h-8 w-8 text-muted-foreground bg-transparent hover:text-foreground hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
-                               (!hasCopyableText || isSharing) && 'opacity-50'
-                           )}
-                           onPointerDown={(event) => event.stopPropagation()}
-                           onClick={handleShareImage}
-                       >
-                            {isSharing ? (
-                                <RiLoader4Line className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <RiImageDownloadLine className="h-4 w-4" />
-                            )}
-                        </Button>
-                     </TooltipTrigger>
-                     <TooltipContent sideOffset={6}>{isSharing ? t('chat.messageBody.actions.savingImage') : t('chat.messageBody.actions.saveAsImage')}</TooltipContent>
-                 </Tooltip>
-              {showMessageTTSButtons && hasCopyableText && (
-                  <Tooltip delayDuration={1000}>
-                      <TooltipTrigger asChild>
-                         <Button
-                             type="button"
-                             variant="ghost"
-                             size="icon"
-                             className={cn(
-                                 'h-8 w-8 bg-transparent hover:!bg-transparent active:!bg-transparent focus-visible:!bg-transparent focus-visible:ring-2 focus-visible:ring-primary/50',
-                                 isTTSPlaying ? 'text-green-500' : 'text-muted-foreground hover:text-foreground'
-                             )}
-                             aria-label={isTTSPlaying ? t('chat.messageBody.tts.stopSpeaking') : t('chat.messageBody.tts.readAloud')}
-                             onPointerDown={(event) => event.stopPropagation()}
-                             onClick={handleTTSClick}
-                         >
-                             {isTTSPlaying ? (
-                                 <RiStopLine className="h-3.5 w-3.5" />
-                             ) : (
-                                 <RiVolumeUpLine className="h-3.5 w-3.5" />
-                             )}
-                         </Button>
-                     </TooltipTrigger>
-                       <TooltipContent sideOffset={6}>{readAloudTooltip}</TooltipContent>
-                   </Tooltip>
-               )}
-          </>
-    ), [
-        copyHintVisible,
-        handleCopyButtonClick,
-        handleShareImage,
-        handleTTSClick,
-        hasCopyableText,
-        isMessageCopied,
-        isSharing,
-        isTTSPlaying,
-        onCopyMessage,
-        readAloudTooltip,
-        showMessageTTSButtons,
-    ]);
+    const messageActionButtons = React.useMemo(() => (
+        <AssistantMessageActionButtons
+            hasCopyableText={hasCopyableText}
+            isTouchContext={isTouchContext}
+            onCopyMessage={onCopyMessage}
+            onShareImage={shareMessageAsImage}
+            ttsText={assistantPlanText}
+        />
+    ), [assistantPlanText, hasCopyableText, isTouchContext, onCopyMessage, shareMessageAsImage]);
 
     const lastRenderableTextPartIndex = React.useMemo(() => {
         if (!shouldShowStandaloneMessageActions) {
@@ -1329,7 +1390,6 @@ const AssistantMessageBody = React.memo(({
     }, [activityByPart, shouldDeferSortedInlineText, shouldShowStandaloneMessageActions, visibleParts]);
 
     const shouldRenderStandaloneActionsAfterContent = shouldShowStandaloneMessageActions && lastRenderableTextPartIndex < 0;
-    const standaloneMessageActionsClassName = 'mt-2 mb-1 ml-2 pl-3 border-l border-border/40 flex items-center justify-start gap-1.5';
 
 
     const renderedParts = React.useMemo(() => {
@@ -1398,9 +1458,9 @@ const AssistantMessageBody = React.memo(({
                 );
                 if (shouldShowStandaloneMessageActions && i === lastRenderableTextPartIndex) {
                     rendered.push(
-                        <div key={`message-actions-${messageId}`} className={standaloneMessageActionsClassName} data-message-actions="true">
+                        <div key={`message-actions-${messageId}`} className={STANDALONE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                             <div className="flex items-center gap-1.5" data-message-action-group="true">
-                                {renderMessageActionButtons()}
+                                {messageActionButtons}
                             </div>
                         </div>
                     );
@@ -1528,7 +1588,7 @@ const AssistantMessageBody = React.memo(({
         isSortedRenderMode,
         lastRenderableTextPartIndex,
         messageId,
-        renderMessageActionButtons,
+        messageActionButtons,
         sessionId,
         onContentChange,
         onShowPopup,
@@ -1629,7 +1689,6 @@ const AssistantMessageBody = React.memo(({
                  'relative w-full group/message'
              )}
               style={CONTAIN_LAYOUT_STYLE}
-              onTouchStart={isTouchContext && canCopyMessage && hasCopyableText ? revealCopyHint : undefined}
           >
               <TextSelectionMenu containerRef={messageContentRef} />
              <SaveProjectPlanDialog
@@ -1660,9 +1719,9 @@ const AssistantMessageBody = React.memo(({
                 </div>
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
                 {shouldRenderStandaloneActionsAfterContent && (
-                    <div className={standaloneMessageActionsClassName} data-message-actions="true">
+                    <div className={STANDALONE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                         <div className="flex items-center gap-1.5" data-message-action-group="true">
-                            {renderMessageActionButtons()}
+                            {messageActionButtons}
                         </div>
                     </div>
                 )}
@@ -1672,7 +1731,7 @@ const AssistantMessageBody = React.memo(({
                         style={MESSAGE_FOOTER_CONTAINER_STYLE}
                     >
                         <div className="flex items-center gap-1.5" data-message-action-group="true">
-                            {renderMessageActionButtons()}
+                            {messageActionButtons}
                             {finalTurnActionButtons}
                         </div>
                         <div className="flex items-center gap-1.5">
