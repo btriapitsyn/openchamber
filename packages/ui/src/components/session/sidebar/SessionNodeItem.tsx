@@ -177,8 +177,20 @@ const areEqual = (prev: Props, next: Props): boolean => {
   if (prev.hasSessionSearchQuery !== next.hasSessionSearchQuery) return false;
   if (prev.normalizedSessionSearchQuery !== next.normalizedSessionSearchQuery) return false;
   if (prev.notifyOnSubtasks !== next.notifyOnSubtasks) return false;
-  if ((prev.editingId === prevSessionId) !== (next.editingId === nextSessionId)) return false;
-  if (prev.editTitle !== next.editTitle && ((prev.editingId === prevSessionId) || (next.editingId === nextSessionId))) return false;
+  if (prev.editingId !== next.editingId) {
+    const prevEditingInTree = treeContainsSessionId(prev.node, prev.editingId);
+    const nextEditingInTree = treeContainsSessionId(next.node, next.editingId);
+    if (prevEditingInTree || nextEditingInTree) {
+      return false;
+    }
+  }
+  if (prev.editTitle !== next.editTitle) {
+    const prevEditingInTree = treeContainsSessionId(prev.node, prev.editingId);
+    const nextEditingInTree = treeContainsSessionId(next.node, next.editingId);
+    if (prevEditingInTree || nextEditingInTree) {
+      return false;
+    }
+  }
   if ((prev.copiedSessionId === prevSessionId) !== (next.copiedSessionId === nextSessionId)) return false;
 
   const prevMenuInTree = treeContainsMenuKey(prev.node, prev.openSidebarMenuKey, prev.renderContext ?? 'project', prev.archivedBucket ?? false);
