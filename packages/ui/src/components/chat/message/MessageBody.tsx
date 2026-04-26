@@ -725,6 +725,7 @@ const AssistantMessageBody = React.memo(({
     const [isPlanDialogOpen, setIsPlanDialogOpen] = React.useState(false);
     const [isSavingPlan, setIsSavingPlan] = React.useState(false);
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
+    const showSplitAssistantMessageActions = useUIStore((state) => state.showSplitAssistantMessageActions);
     const isSortedRenderMode = chatRenderMode === 'sorted';
     const collapsedPreviewCount = 7;
     const isLastAssistantInTurn = turnGroupingContext?.isLastAssistantInTurn ?? false;
@@ -1198,7 +1199,7 @@ const AssistantMessageBody = React.memo(({
     const showErrorMessage = Boolean(errorMessage);
     const shouldShowMessageActions = hasCopyableText;
     const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage));
-    const shouldShowStandaloneMessageActions = shouldShowMessageActions && !shouldShowTurnFooter;
+    const shouldShowStandaloneMessageActions = showSplitAssistantMessageActions && shouldShowMessageActions && !shouldShowTurnFooter;
 
     const renderMessageActionButtons = React.useCallback(() => (
          <>
