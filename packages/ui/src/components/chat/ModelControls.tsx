@@ -457,6 +457,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
     const [desktopModelQuery, setDesktopModelQuery] = React.useState('');
     const [modelSelectedIndex, setModelSelectedIndex] = React.useState(0);
     const modelItemRefs = React.useRef<(HTMLDivElement | null)[]>([]);
+    const keyboardOwnsModelSelectionRef = React.useRef(false);
+    const lastModelPointerPositionRef = React.useRef<{ x: number; y: number } | null>(null);
     const [pendingThinkingVariants, setPendingThinkingVariants] = React.useState<Map<string, string | undefined>>(new Map());
     const [adjustedThinkingModels, setAdjustedThinkingModels] = React.useState<Set<string>>(new Set());
     const favoriteRowSensors = useSensors(
@@ -503,6 +505,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         if (!isModelSelectorOpen) {
             setDesktopModelQuery('');
             setModelSelectedIndex(0);
+            keyboardOwnsModelSelectionRef.current = false;
+            lastModelPointerPositionRef.current = null;
             setPendingThinkingVariants(new Map());
             setAdjustedThinkingModels(new Set());
 
@@ -857,7 +861,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         uiAgentName,
     ]);
 
-    const commitVariantSelectionForModel = React.useCallback((providerId: string, modelId: string, variant: string | undefined) => {
+    const resolveLiveAgentName = React.useCallback(() => {
+        const liveConfigAgentName = useConfigStore.getState().currentAgentName;
+        if (currentSessionId) {
+            return useSelectionStore.getState().getSessionAgentSelection(currentSessionId)
+                || stickySessionAgentRef.current
+                || liveConfigAgentName
+                || currentAgentName;
+        }
+        return liveConfigAgentName || currentAgentName;
+    }, [currentAgentName, currentSessionId]);
+
+    const commitVariantSelectionForModel = React.useCallback((providerId: string, modelId: string, variant: string | undefined, agentNameOverride?: string | null) => {
         const variantOptions = getModelVariantOptions(providerId, modelId);
         if (variantOptions.length === 0) {
             manualVariantSelectionRef.current = false;
@@ -869,31 +884,30 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         setCurrentVariant(variant);
         addRecentEffort(providerId, modelId, variant);
 
-        const effectiveAgentName = uiAgentName || currentAgentName;
+        const effectiveAgentName = agentNameOverride ?? resolveLiveAgentName();
         if (currentSessionId && effectiveAgentName) {
             saveAgentModelVariantForSession(currentSessionId, effectiveAgentName, providerId, modelId, variant);
         }
     }, [
         addRecentEffort,
-        currentAgentName,
         currentSessionId,
         getModelVariantOptions,
+        resolveLiveAgentName,
         saveAgentModelVariantForSession,
         setCurrentVariant,
-        uiAgentName,
     ]);
 
-    const applyModelSelectionWithVariant = React.useCallback((providerId: string, modelId: string, variant: string | undefined) => {
-        const effectiveAgentName = uiAgentName || currentAgentName || undefined;
+    const applyModelSelectionWithVariant = React.useCallback((providerId: string, modelId: string, variant: string | undefined, agentNameOverride?: string | null) => {
+        const effectiveAgentName = agentNameOverride ?? resolveLiveAgentName() ?? undefined;
         const result = tryApplyModelSelection(providerId, modelId, effectiveAgentName);
         if (result !== 'applied') {
             return result;
         }
 
         addRecentModel(providerId, modelId);
-        commitVariantSelectionForModel(providerId, modelId, variant);
+        commitVariantSelectionForModel(providerId, modelId, variant, effectiveAgentName);
         return 'applied';
-    }, [addRecentModel, commitVariantSelectionForModel, currentAgentName, tryApplyModelSelection, uiAgentName]);
+    }, [addRecentModel, commitVariantSelectionForModel, resolveLiveAgentName, tryApplyModelSelection]);
 
     React.useEffect(() => {
         if (!currentSessionId) {
@@ -1243,9 +1257,16 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         handleAgentChange(nextAgentName, { closeModelSelector: false });
     }, [agents, currentAgentName, handleAgentChange]);
 
-    const handleProviderAndModelChange = (providerId: string, modelId: string) => {
+    const handleProviderAndModelChange = (
+        providerId: string,
+        modelId: string,
+        options?: { applyVariant?: boolean; variant?: string | undefined; agentName?: string | null },
+    ) => {
         try {
-            const result = tryApplyModelSelection(providerId, modelId, uiAgentName || currentAgentName || undefined);
+            const effectiveAgentName = options?.agentName ?? resolveLiveAgentName() ?? undefined;
+            const result = options?.applyVariant
+                ? applyModelSelectionWithVariant(providerId, modelId, options.variant, effectiveAgentName)
+                : tryApplyModelSelection(providerId, modelId, effectiveAgentName);
             if (result !== 'applied') {
                 if (result === 'provider-missing') {
                     console.error('[ModelControls] Provider not available for selection:', providerId);
@@ -1254,8 +1275,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 }
                 return;
             }
-            // Add to recent models on successful selection
-            addRecentModel(providerId, modelId);
+            if (!options?.applyVariant) {
+                // Add to recent models on successful selection.
+                addRecentModel(providerId, modelId);
+            }
             setAgentMenuOpen(false);
             if (isCompact) {
                 closeMobilePanel();
@@ -2242,6 +2265,26 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         const staticSlideIndex = !supportsRotatingMetadata && hasCapabilities && hasPrice ? 1 : 0;
         const staticMetadataSlide = slides[staticSlideIndex];
 
+        const handlePointerActivity = (event: React.MouseEvent) => {
+            const nextPosition = { x: event.clientX, y: event.clientY };
+            const previousPosition = lastModelPointerPositionRef.current;
+            const pointerMoved = !previousPosition
+                || previousPosition.x !== nextPosition.x
+                || previousPosition.y !== nextPosition.y;
+
+            lastModelPointerPositionRef.current = nextPosition;
+
+            if (keyboardOwnsModelSelectionRef.current && !pointerMoved) {
+                return;
+            }
+
+            if (keyboardOwnsModelSelectionRef.current && pointerMoved) {
+                keyboardOwnsModelSelectionRef.current = false;
+            }
+
+            setModelSelectedIndex(flatIndex);
+        };
+
         return (
             <div
                 key={`${keyPrefix}-${providerID}-${modelID}`}
@@ -2251,7 +2294,8 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                      isHighlighted ? "bg-interactive-selection" : "hover:bg-interactive-hover/50"
                 )}
                 onClick={() => handleProviderAndModelChange(providerID, modelID)}
-                onMouseEnter={() => setModelSelectedIndex(flatIndex)}
+                onMouseEnter={handlePointerActivity}
+                onMouseMove={handlePointerActivity}
             >
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     {showProviderLogo && (
@@ -2428,6 +2472,7 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
         // Handle keyboard navigation
         const handleModelKeyDown = (e: React.KeyboardEvent) => {
             e.stopPropagation();
+            keyboardOwnsModelSelectionRef.current = true;
 
             if (e.key === 'Tab') {
                 e.preventDefault();
@@ -2468,7 +2513,10 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                 const currentVariantIndex = variantsWithDefault.indexOf(activeModelVariant);
                 const safeCurrentIndex = currentVariantIndex >= 0 ? currentVariantIndex : 0;
                 const direction = e.key === 'ArrowRight' ? 1 : -1;
-                const nextVariantIndex = (safeCurrentIndex + direction + variantsWithDefault.length) % variantsWithDefault.length;
+                const nextVariantIndex = Math.min(
+                    variantsWithDefault.length - 1,
+                    Math.max(0, safeCurrentIndex + direction),
+                );
                 const nextVariant = variantsWithDefault[nextVariantIndex];
 
                 setPendingThinkingVariants((prev) => {
@@ -2489,14 +2537,11 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
                     const mapKey = buildModelRefKey(providerID, modelID);
                     const pendingVariant = pendingThinkingVariants.get(mapKey);
                     const wasAdjusted = adjustedThinkingModels.has(mapKey);
+                    const effectiveAgentName = resolveLiveAgentName();
 
-                    handleProviderAndModelChange(providerID, modelID);
-
-                    if (wasAdjusted) {
-                        setTimeout(() => {
-                            handleVariantSelect(pendingVariant);
-                        }, 0);
-                    }
+                    handleProviderAndModelChange(providerID, modelID, wasAdjusted
+                        ? { applyVariant: true, variant: pendingVariant, agentName: effectiveAgentName }
+                        : { agentName: effectiveAgentName });
                 }
             } else if (e.key === 'Escape') {
                 e.preventDefault();
@@ -2532,13 +2577,20 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             setModelSelectedIndex(0);
         };
 
+        const handleModelMenuOpenChange = (nextOpen: boolean, eventDetails?: { reason?: string }) => {
+            if (!nextOpen && eventDetails?.reason === 'cancelOpen') {
+                return;
+            }
+            setAgentMenuOpen(nextOpen);
+        };
+
         // Build index mapping for rendering
         let currentFlatIndex = 0;
 
         return (
             <Tooltip delayDuration={1000}>
                 {!isCompact ? (
-                    <DropdownMenu open={agentMenuOpen} onOpenChange={setAgentMenuOpen}>
+                    <DropdownMenu open={agentMenuOpen} onOpenChange={handleModelMenuOpenChange}>
                         <TooltipTrigger asChild>
                             <DropdownMenuTrigger asChild>
                                 <div
@@ -2760,7 +2812,13 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
 
                             {/* Keyboard hints footer */}
                             <div className="px-3 pt-1 pb-1.5 border-t border-border/40 typography-micro text-muted-foreground">
-                                ↑↓ navigate • Tab switch agent{highlightedSupportsThinking ? ' • ←→ thinking' : ''} • Enter select • Esc close
+                                <div className="flex items-center gap-x-2 whitespace-nowrap overflow-hidden">
+                                    <span>↑↓ navigate</span>
+                                    <span>Tab switch agent</span>
+                                    <span className={cn(!highlightedSupportsThinking && 'invisible')}>
+                                        ←→ thinking
+                                    </span>
+                                </div>
                             </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
