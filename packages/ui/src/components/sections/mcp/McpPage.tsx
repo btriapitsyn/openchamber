@@ -13,6 +13,7 @@ import {
   type McpDraft,
   type McpScope,
 } from '@/stores/useMcpConfigStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   parseImportedMcpSnippet,
   applyImportedMcpToDraft,
@@ -51,6 +52,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from '@/components/ui/select';
+import { useI18n } from '@/lib/i18n';
 
 // ─────────────────────────────────────────────────────────────
 // CommandTextarea  — one arg per line, paste-friendly
@@ -58,6 +60,11 @@ import {
 interface CommandTextareaProps {
   value: string[];
   onChange: (v: string[]) => void;
+  pasteCommandTitle: string;
+  pasteCommandLabel: string;
+  pasteSuccess: (count: number) => string;
+  clipboardReadFailed: string;
+  preview: (count: number) => string;
 }
 
 /**
@@ -115,7 +122,15 @@ function extractAuthorizationResponse(raw: string): {
   };
 }
 
-const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange }) => {
+const CommandTextarea: React.FC<CommandTextareaProps> = ({
+  value,
+  onChange,
+  pasteCommandTitle,
+  pasteCommandLabel,
+  pasteSuccess,
+  clipboardReadFailed,
+  preview,
+}) => {
   // Internal: one arg per line
   const [text, setText] = React.useState(() => value.join('\n'));
 
@@ -143,9 +158,9 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange }) =>
         : parseShellCommand(trimmed);
       setText(lines.join('\n'));
       onChange(lines);
-      toast.success(`Pasted ${lines.length} argument${lines.length !== 1 ? 's' : ''}`);
+      toast.success(pasteSuccess(lines.length));
     } catch {
-      toast.error('Cannot read clipboard');
+      toast.error(clipboardReadFailed);
     }
   };
 
@@ -158,10 +173,10 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange }) =>
           className="!font-normal gap-1 text-muted-foreground"
           onClick={handlePasteFromClipboard}
           type="button"
-          title="Paste a local command from clipboard and auto-split"
+          title={pasteCommandTitle}
         >
           <RiClipboardLine className="h-3 w-3" />
-          Paste Command
+          {pasteCommandLabel}
         </Button>
       </div>
 
@@ -192,7 +207,7 @@ const CommandTextarea: React.FC<CommandTextareaProps> = ({ value, onChange }) =>
       {value.length > 0 && (
         <details className="group">
           <summary className="typography-micro text-muted-foreground/60 cursor-pointer select-none hover:text-muted-foreground">
-            Preview ({value.length} args)
+            {preview(value.length)}
           </summary>
           <div className="mt-1 rounded-md bg-[var(--surface-elevated)] px-3 py-2 overflow-x-auto">
             <code className="typography-micro text-foreground/80 whitespace-pre">
@@ -223,6 +238,17 @@ interface EnvEditorProps {
   keyInputClassName?: string;
   pasteLabel?: string;
   pasteTitle?: string;
+  noPairsFoundError: string;
+  importSuccess: (count: number) => string;
+  clipboardReadFailed: string;
+  keyLabel: string;
+  valueLabel: string;
+  valuePlaceholder: string;
+  hideValueTitle: string;
+  showValueTitle: string;
+  addVariable: string;
+  plainTextWarning: string;
+  removeVariableAria: string;
 }
 
 const normalizeEnvKey = (value: string): string => value.toUpperCase().replace(/[^A-Z0-9_]/g, '_');
@@ -235,6 +261,17 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
   keyInputClassName = 'w-36 shrink-0 font-mono typography-meta uppercase',
   pasteLabel = 'Paste .env',
   pasteTitle = 'Paste KEY=VALUE lines from clipboard',
+  noPairsFoundError,
+  importSuccess,
+  clipboardReadFailed,
+  keyLabel,
+  valueLabel,
+  valuePlaceholder,
+  hideValueTitle,
+  showValueTitle,
+  addVariable,
+  plainTextWarning,
+  removeVariableAria,
 }) => {
   const [revealedKeys, setRevealedKeys] = React.useState<Set<number>>(new Set());
 
@@ -282,7 +319,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
         if (key) parsed.push({ key, value: val });
       }
       if (parsed.length === 0) {
-        toast.error('No KEY=VALUE pairs found in clipboard');
+        toast.error(noPairsFoundError);
         return;
       }
       // Merge: update existing keys, append new ones
@@ -293,9 +330,9 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
         else merged.push(p);
       }
       onChange(merged);
-      toast.success(`Imported ${parsed.length} variable${parsed.length !== 1 ? 's' : ''}`);
+      toast.success(importSuccess(parsed.length));
     } catch {
-      toast.error('Cannot read clipboard');
+      toast.error(clipboardReadFailed);
     }
   };
 
@@ -306,8 +343,8 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
       {/* Header row */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <span className="typography-micro text-muted-foreground w-32 shrink-0">Key</span>
-          <span className="typography-micro text-muted-foreground">Value</span>
+          <span className="typography-micro text-muted-foreground w-32 shrink-0">{keyLabel}</span>
+          <span className="typography-micro text-muted-foreground">{valueLabel}</span>
         </div>
         <Button
           variant="ghost"
@@ -343,7 +380,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
                 type={revealedKeys.has(idx) ? 'text' : 'password'}
                 value={entry.value}
                 onChange={(e) => updateRow(idx, 'value', e.target.value)}
-                placeholder="value"
+                placeholder={valuePlaceholder}
                 className="font-mono typography-meta pr-8 w-full"
                 autoComplete="new-password"
                 data-bwignore="true"
@@ -355,7 +392,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
                 type="button"
                 onClick={() => toggleReveal(idx)}
                 className="absolute right-2 text-muted-foreground/60 hover:text-muted-foreground"
-                title={revealedKeys.has(idx) ? 'Hide' : 'Show'}
+                title={revealedKeys.has(idx) ? hideValueTitle : showValueTitle}
               >
                 {revealedKeys.has(idx)
                   ? <RiEyeOffLine className="h-3.5 w-3.5" />
@@ -367,6 +404,7 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
               variant="ghost"
               className="h-7 w-7 px-0 shrink-0 text-muted-foreground hover:text-[var(--status-error)]"
               onClick={() => removeRow(idx)}
+              aria-label={removeVariableAria}
             >
               <RiDeleteBinLine className="h-3.5 w-3.5" />
             </Button>
@@ -382,12 +420,12 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
         type="button"
       >
         <RiAddLine className="h-3.5 w-3.5" />
-        Add variable
+        {addVariable}
       </Button>
 
       {hasSensitiveValues && (
         <p className="typography-micro text-muted-foreground/60">
-          ⚠ Values are stored as plain text in opencode.json
+          {plainTextWarning}
         </p>
       )}
     </div>
@@ -397,14 +435,12 @@ const EnvEditor: React.FC<EnvEditorProps> = ({
 // ─────────────────────────────────────────────────────────────
 // Status badge
 // ─────────────────────────────────────────────────────────────
-const STATUS_LABEL: Record<string, string> = {
-  connected: 'Connected',
-  failed: 'Failed',
-  needs_auth: 'Needs auth',
-  needs_client_registration: 'Needs registration',
-};
-
-const StatusBadge: React.FC<{ status: string | undefined; enabled: boolean; variant?: 'compact' | 'pill' }> = ({ status, enabled, variant = 'compact' }) => {
+const StatusBadge: React.FC<{
+  status: string | undefined;
+  enabled: boolean;
+  getStatusLabel: (status: string) => string;
+  variant?: 'compact' | 'pill'
+}> = ({ status, enabled, getStatusLabel, variant = 'compact' }) => {
   if (!enabled) return null;
   if (!status) return null;
 
@@ -420,32 +456,36 @@ const StatusBadge: React.FC<{ status: string | undefined; enabled: boolean; vari
   if (variant === 'pill') {
     return (
       <span className={cn('typography-micro font-medium rounded-full px-2 py-0.5', colors.text, colors.bg)}>
-        ● {STATUS_LABEL[status] ?? status}
+        ● {getStatusLabel(status)}
       </span>
     );
   }
 
   return (
     <span className={cn('typography-micro font-medium', colors.text)}>
-      ● {STATUS_LABEL[status] ?? status}
+      ● {getStatusLabel(status)}
     </span>
   );
 };
 
-const getStatusDescription = (status: string | undefined, error?: string): string => {
+const getStatusDescription = (
+  status: string | undefined,
+  t: (key: string, params?: Record<string, unknown>) => string,
+  error?: string
+): string => {
   switch (status) {
     case 'connected':
-      return 'Connected and ready for OpenCode to discover tools and resources.';
+      return t('settings.mcp.page.status.description.connected');
     case 'failed':
-      return error?.trim() || 'OpenCode could not reach this MCP server.';
+      return error?.trim() || t('settings.mcp.page.status.description.failedDefault');
     case 'needs_auth':
-      return 'This remote MCP server requires authorization before it can connect.';
+      return t('settings.mcp.page.status.description.needsAuth');
     case 'needs_client_registration':
-      return error?.trim() || 'This remote MCP server requires client registration before authorization can complete.';
+      return error?.trim() || t('settings.mcp.page.status.description.needsClientRegistrationDefault');
     case 'disabled':
-      return 'This MCP server is disabled in configuration.';
+      return t('settings.mcp.page.status.description.disabled');
     default:
-      return 'Refresh or test the connection to load live runtime status.';
+      return t('settings.mcp.page.status.description.default');
   }
 };
 
@@ -530,10 +570,14 @@ const clearPendingMcpAuthContext = async (stateKey: string | null | undefined): 
   await fetch(`/api/mcp/auth/pending?state=${encodeURIComponent(stateKey.trim())}`, { method: 'DELETE' }).catch(() => undefined);
 };
 
-const normalizeMcpAuthErrorMessage = (error: unknown, fallback: string): string => {
+const normalizeMcpAuthErrorMessage = (
+  error: unknown,
+  fallback: string,
+  t: (key: string, params?: Record<string, unknown>) => string
+): string => {
   const message = error instanceof Error ? error.message : fallback;
   if (/oauth state required/i.test(message)) {
-    return 'Authorization session expired or was cleared during reload. Click Authorize again.';
+    return t('settings.mcp.page.toast.authSessionExpired');
   }
   return message;
 };
@@ -652,7 +696,7 @@ const CodexMcpEditor: React.FC<{ serverName: string }> = ({ serverName }) => {
   }
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
+    <ScrollableOverlay outerClassName="h-full" className="w-full">
       <div className="mx-auto w-full max-w-3xl p-3 sm:p-6 sm:pt-8">
         <div className="mb-4">
           <p className="typography-meta text-muted-foreground">Codex MCP server &middot; configured in <code className="font-mono text-xs">~/.codex/config.toml</code></p>
@@ -700,7 +744,15 @@ const CodexMcpEditor: React.FC<{ serverName: string }> = ({ serverName }) => {
               <div className="py-1.5">
                 <span className="typography-ui-label text-foreground">Command</span>
                 <div className="mt-1.5">
-                  <CommandTextarea value={command} onChange={setCommand} />
+                  <CommandTextarea
+                    value={command}
+                    onChange={setCommand}
+                    pasteCommandTitle="Paste command"
+                    pasteCommandLabel="Paste command"
+                    pasteSuccess={(count) => `Pasted ${count} arguments`}
+                    clipboardReadFailed="Could not read clipboard"
+                    preview={(count) => `${count} arguments`}
+                  />
                 </div>
               </div>
             ) : (
@@ -765,6 +817,11 @@ const CodexMcpEditor: React.FC<{ serverName: string }> = ({ serverName }) => {
 };
 
 export const McpPage: React.FC = () => {
+  const { t } = useI18n();
+  const tUnsafe = React.useCallback(
+    (key: string, params?: Record<string, unknown>) => t(key as never, params as never),
+    [t]
+  );
   const {
     selectedMcpName,
     mcpServers,
@@ -775,7 +832,17 @@ export const McpPage: React.FC = () => {
     createMcp,
     updateMcp,
     deleteMcp,
-  } = useMcpConfigStore();
+  } = useMcpConfigStore(useShallow((s) => ({
+    selectedMcpName: s.selectedMcpName,
+    mcpServers: s.mcpServers,
+    mcpDraft: s.mcpDraft,
+    setMcpDraft: s.setMcpDraft,
+    setSelectedMcp: s.setSelectedMcp,
+    getMcpByName: s.getMcpByName,
+    createMcp: s.createMcp,
+    updateMcp: s.updateMcp,
+    deleteMcp: s.deleteMcp,
+  })));
 
   const currentDirectory = useDirectoryStore((state) => state.currentDirectory);
   const isVSCodeAuthRuntime = React.useMemo(() => isVSCodeRuntime(), []);
@@ -871,9 +938,9 @@ export const McpPage: React.FC = () => {
       setImportJsonText(text);
       setImportError(null);
     } catch {
-      toast.error('Cannot read clipboard');
+      toast.error(t('settings.mcp.page.toast.clipboardReadFailed'));
     }
-  }, []);
+  }, [t]);
 
   const handleImportJson = React.useCallback(() => {
     const outcome = parseImportedMcpSnippet(importJsonText, { fallbackName: draftName });
@@ -919,7 +986,7 @@ export const McpPage: React.FC = () => {
     setImportJsonText('');
     setImportError(null);
 
-    toast.success('MCP configuration imported');
+    toast.success(t('settings.mcp.page.toast.configImported'));
   }, [
     importJsonText,
     draftName,
@@ -937,6 +1004,7 @@ export const McpPage: React.FC = () => {
     timeout,
     enabled,
     isNewServer,
+    t,
   ]);
 
   // Populate form when selection changes
@@ -991,13 +1059,13 @@ export const McpPage: React.FC = () => {
       const oauth = remoteServer?.oauth;
       const oauthConfig = oauth && typeof oauth === 'object' ? oauth : null;
       const nextOauthEnabled = oauth !== false;
-      const t = selectedServer.type;
-      const cmd = t === 'local' ? ((selectedServer as { command?: string[] }).command ?? []) : [];
-      const u = t === 'remote' ? ((selectedServer as { url?: string }).url ?? '') : '';
+      const serverType = selectedServer.type;
+      const cmd = serverType === 'local' ? ((selectedServer as { command?: string[] }).command ?? []) : [];
+      const u = serverType === 'remote' ? ((selectedServer as { url?: string }).url ?? '') : '';
       const nextTimeout = typeof remoteServer?.timeout === 'number' && Number.isFinite(remoteServer.timeout)
         ? String(remoteServer.timeout)
         : '';
-      setMcpType(t);
+      setMcpType(serverType);
       setCommand(cmd);
       setUrl(u);
       setEnvEntries(envArr);
@@ -1011,7 +1079,7 @@ export const McpPage: React.FC = () => {
       setEnabled(selectedServer.enabled);
       setIsAdvancedRemoteOptionsOpen(false);
       initialRef.current = {
-        mcpType: t,
+        mcpType: serverType,
         command: cmd,
         url: u,
         envEntries: envArr,
@@ -1048,15 +1116,15 @@ export const McpPage: React.FC = () => {
 
   const handleSave = async () => {
     const name = isNewServer ? draftName.trim() : selectedMcpName ?? '';
-    if (!name) { toast.error('Name is required'); return; }
+    if (!name) { toast.error(t('settings.mcp.page.toast.nameRequired')); return; }
     if (isNewServer && mcpServers.some((s) => s.name === name)) {
-      toast.error('A server with this name already exists'); return;
+      toast.error(t('settings.mcp.page.toast.serverNameExists')); return;
     }
     if (mcpType === 'local' && command.filter(Boolean).length === 0) {
-      toast.error('Command cannot be empty for a local server'); return;
+      toast.error(t('settings.mcp.page.toast.localCommandRequired')); return;
     }
     if (mcpType === 'remote' && !url.trim()) {
-      toast.error('URL cannot be empty for a remote server'); return;
+      toast.error(t('settings.mcp.page.toast.remoteUrlRequired')); return;
     }
 
     const draft: McpDraft = {
@@ -1084,17 +1152,21 @@ export const McpPage: React.FC = () => {
         if (isNewServer) { setMcpDraft(null); setSelectedMcp(name); }
         await refreshStatus({ directory: currentDirectory, silent: true });
         if (result.reloadFailed) {
-          toast.warning(result.message || (isNewServer ? 'MCP server created, but OpenCode reload failed.' : 'Saved, but OpenCode reload failed.'), {
-            description: result.warning || 'Retry refresh or reopen Settings before authorizing this server.',
+          toast.warning(result.message || (isNewServer
+            ? t('settings.mcp.page.toast.serverCreatedReloadFailed')
+            : t('settings.mcp.page.toast.savedReloadFailed')), {
+            description: result.warning || t('settings.mcp.page.toast.retryRefreshHint'),
           });
         } else {
-          toast.success(result.message || (isNewServer ? 'MCP server created. OpenCode reloading…' : 'Saved. OpenCode reloading…'));
+          toast.success(result.message || (isNewServer
+            ? t('settings.mcp.page.toast.serverCreatedReloading')
+            : t('settings.mcp.page.toast.savedReloading')));
         }
       } else {
-        toast.error('Failed to save');
+        toast.error(t('settings.mcp.page.toast.saveFailed'));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'An error occurred');
+      toast.error(err instanceof Error ? err.message : t('settings.mcp.page.toast.unexpectedError'));
     } finally {
       setIsSaving(false);
     }
@@ -1108,14 +1180,14 @@ export const McpPage: React.FC = () => {
       await clearPendingMcpAuthContext(authStateKey);
       resetTransientAuthState();
       if (result.reloadFailed) {
-        toast.warning(result.message || `"${selectedMcpName}" deleted, but OpenCode reload failed`, {
-          description: result.warning || 'Refresh the MCP list if the UI looks stale.',
+        toast.warning(result.message || t('settings.mcp.page.toast.serverDeletedReloadFailed', { name: selectedMcpName }), {
+          description: result.warning || t('settings.mcp.page.toast.refreshListIfStale'),
         });
       } else {
-        toast.success(result.message || `"${selectedMcpName}" deleted`);
+        toast.success(result.message || t('settings.mcp.page.toast.serverDeleted', { name: selectedMcpName }));
       }
       setShowDeleteConfirm(false);
-    } else toast.error('Failed to delete');
+    } else toast.error(t('settings.mcp.page.toast.deleteFailed'));
     setIsDeleting(false);
   };
 
@@ -1126,27 +1198,27 @@ export const McpPage: React.FC = () => {
       const isConnected = mcpStatus[selectedMcpName]?.status === 'connected';
       if (isConnected) {
         await disconnectMcp(selectedMcpName, currentDirectory);
-        toast.success('Disconnected');
+        toast.success(t('settings.mcp.page.toast.disconnected'));
       } else {
         await connectMcp(selectedMcpName, currentDirectory);
         await refreshStatus({ directory: currentDirectory, silent: true });
         const nextStatus = useMcpStore.getState().getStatusForDirectory(currentDirectory ?? null)[selectedMcpName];
         if (nextStatus?.status === 'connected') {
-          toast.success('Connected');
+          toast.success(t('settings.mcp.page.toast.connected'));
         } else if (nextStatus?.status === 'needs_auth') {
-          toast.message('Connection requires authorization');
+          toast.message(t('settings.mcp.page.toast.connectionNeedsAuthorization'));
         } else if (nextStatus?.status === 'needs_client_registration') {
-          toast.message('Connection requires client registration');
+          toast.message(t('settings.mcp.page.toast.connectionNeedsClientRegistration'));
         } else if (nextStatus?.status === 'failed') {
-          toast.error(nextStatus.error || 'Connection failed');
+          toast.error(nextStatus.error || t('settings.mcp.page.toast.connectionFailed'));
         } else {
-          toast.message('Connection attempt finished. Refresh status for details.');
+          toast.message(t('settings.mcp.page.toast.connectionAttemptFinished'));
         }
         return;
       }
       await refreshStatus({ directory: currentDirectory, silent: true });
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Connection failed');
+      toast.error(err instanceof Error ? err.message : t('settings.mcp.page.toast.connectionFailed'));
     } finally {
       setIsConnecting(false);
     }
@@ -1154,25 +1226,25 @@ export const McpPage: React.FC = () => {
 
   const requireSavedConfig = React.useCallback((): boolean => {
     if (isNewServer) {
-      toast.error('Create the server before running live actions');
+      toast.error(t('settings.mcp.page.toast.createServerBeforeLiveActions'));
       return false;
     }
     if (isDirty) {
-      toast.error('Save changes before running live actions');
+      toast.error(t('settings.mcp.page.toast.saveBeforeLiveActions'));
       return false;
     }
     return true;
-  }, [isDirty, isNewServer]);
+  }, [isDirty, isNewServer, t]);
 
   const handleRefreshRuntimeStatus = React.useCallback(async (silent = false) => {
     try {
       await refreshStatus({ directory: currentDirectory, silent });
     } catch (err) {
       if (!silent) {
-        toast.error(err instanceof Error ? err.message : 'Failed to refresh MCP status');
+        toast.error(err instanceof Error ? err.message : t('settings.mcp.page.toast.refreshStatusFailed'));
       }
     }
-  }, [currentDirectory, refreshStatus]);
+  }, [currentDirectory, refreshStatus, t]);
 
   React.useEffect(() => {
     void handleRefreshRuntimeStatus(true);
@@ -1197,7 +1269,7 @@ export const McpPage: React.FC = () => {
 
       const redirectUri = buildMcpOAuthRedirectUri(selectedMcpName, currentDirectory);
       if (!redirectUri) {
-        throw new Error('Unable to build MCP OAuth redirect URL');
+        throw new Error(t('settings.mcp.page.toast.oauthRedirectUrlBuildFailed'));
       }
 
       if (!oauthRedirectUri.trim() && !isVSCodeAuthRuntime) {
@@ -1210,11 +1282,11 @@ export const McpPage: React.FC = () => {
         });
 
         if (!saved.ok) {
-          throw new Error('Failed to save the browser callback URL for MCP authorization');
+          throw new Error(t('settings.mcp.page.toast.oauthBrowserCallbackSaveFailed'));
         }
 
         if (saved.reloadFailed) {
-          throw new Error(saved.warning || saved.message || 'OpenCode reload failed after saving the browser callback URL');
+          throw new Error(saved.warning || saved.message || t('settings.mcp.page.toast.openCodeReloadFailedAfterCallbackSave'));
         }
 
         if (runtimeActionKeyRef.current !== actionKey) {
@@ -1255,23 +1327,23 @@ export const McpPage: React.FC = () => {
       if (opened) {
         toast.message(
           isVSCodeAuthRuntime
-            ? 'Complete the MCP authorization flow in your browser, then paste the returned code or callback URL here'
-            : 'Complete the MCP authorization flow in your browser',
+            ? t('settings.mcp.page.toast.completeAuthorizationInBrowserWithPaste')
+            : t('settings.mcp.page.toast.completeAuthorizationInBrowser'),
         );
       } else {
-        toast.error('Could not open the authorization URL automatically');
+        toast.error(t('settings.mcp.page.toast.openAuthorizationUrlFailed'));
       }
     } catch (err) {
       await clearPendingMcpAuthContext(queuedStateKey);
       if (runtimeActionKeyRef.current === actionKey) {
-        toast.error(normalizeMcpAuthErrorMessage(err, 'Failed to start authorization'));
+        toast.error(normalizeMcpAuthErrorMessage(err, t('settings.mcp.page.toast.authorizationStartFailed'), tUnsafe));
       }
     } finally {
       if (runtimeActionKeyRef.current === actionKey) {
         setIsAuthorizing(false);
       }
     }
-  }, [currentDirectory, isVSCodeAuthRuntime, mcpType, oauthClientId, oauthClientSecret, oauthEnabled, oauthRedirectUri, oauthScope, requireSavedConfig, runtimeActionKey, selectedMcpName, startAuthMcp, updateMcp]);
+  }, [currentDirectory, isVSCodeAuthRuntime, mcpType, oauthClientId, oauthClientSecret, oauthEnabled, oauthRedirectUri, oauthScope, requireSavedConfig, runtimeActionKey, selectedMcpName, startAuthMcp, t, tUnsafe, updateMcp]);
 
   const handleClearAuthorization = React.useCallback(async () => {
     if (!selectedMcpName || !requireSavedConfig()) return;
@@ -1291,32 +1363,32 @@ export const McpPage: React.FC = () => {
       setIsAuthPolling(false);
       authPollAttemptsRef.current = 0;
       await clearPendingMcpAuthContext(authStateKey);
-      toast.success('Saved MCP authorization was removed');
+      toast.success(t('settings.mcp.page.toast.savedAuthorizationRemoved'));
     } catch (err) {
       if (runtimeActionKeyRef.current === actionKey) {
-        toast.error(normalizeMcpAuthErrorMessage(err, 'Failed to clear authorization'));
+        toast.error(normalizeMcpAuthErrorMessage(err, t('settings.mcp.page.toast.clearAuthorizationFailed'), tUnsafe));
       }
     } finally {
       if (runtimeActionKeyRef.current === actionKey) {
         setIsClearingAuth(false);
       }
     }
-  }, [authStateKey, clearAuthMcp, currentDirectory, requireSavedConfig, runtimeActionKey, selectedMcpName]);
+  }, [authStateKey, clearAuthMcp, currentDirectory, requireSavedConfig, runtimeActionKey, selectedMcpName, t, tUnsafe]);
 
   const handleCopyAuthUrl = React.useCallback(async () => {
     if (!authUrl) return;
     const result = await copyTextToClipboard(authUrl);
     if (result.ok) {
-      toast.success('Authorization URL copied');
+      toast.success(t('settings.mcp.page.toast.authorizationUrlCopied'));
       return;
     }
-    toast.error('Failed to copy authorization URL');
-  }, [authUrl]);
+    toast.error(t('settings.mcp.page.toast.authorizationUrlCopyFailed'));
+  }, [authUrl, t]);
 
   const handleCompleteAuthorization = React.useCallback(async () => {
     const response = extractAuthorizationResponse(authCallbackInput);
     if (!response.code) {
-      toast.error('Paste the callback URL or authorization code first');
+      toast.error(t('settings.mcp.page.toast.pasteCallbackOrCodeFirst'));
       return;
     }
 
@@ -1326,7 +1398,7 @@ export const McpPage: React.FC = () => {
     const targetDirectory = resolvedContext?.directory ?? currentDirectory;
 
     if (!targetName) {
-      toast.error('Missing MCP server details. Select the server again or paste the full callback URL.');
+      toast.error(t('settings.mcp.page.toast.missingServerDetails'));
       return;
     }
 
@@ -1347,22 +1419,24 @@ export const McpPage: React.FC = () => {
       setAuthStateKey(null);
       setIsAuthPolling(false);
       authPollAttemptsRef.current = 0;
-      toast.success(targetName === selectedMcpName ? 'MCP authorization completed' : `MCP authorization completed for ${targetName}`);
+      toast.success(targetName === selectedMcpName
+        ? t('settings.mcp.page.toast.authorizationCompleted')
+        : t('settings.mcp.page.toast.authorizationCompletedFor', { name: targetName }));
     } catch (err) {
       if (runtimeActionKeyRef.current === actionKey) {
-        toast.error(normalizeMcpAuthErrorMessage(err, 'Failed to complete MCP authorization'));
+        toast.error(normalizeMcpAuthErrorMessage(err, t('settings.mcp.page.toast.authorizationCompleteFailed'), tUnsafe));
       }
     } finally {
       if (runtimeActionKeyRef.current === actionKey) {
         setIsCompletingAuth(false);
       }
     }
-  }, [authCallbackInput, authStateKey, completeAuthMcp, currentDirectory, requireSavedConfig, runtimeActionKey, selectedMcpName]);
+  }, [authCallbackInput, authStateKey, completeAuthMcp, currentDirectory, requireSavedConfig, runtimeActionKey, selectedMcpName, t, tUnsafe]);
 
   const handleTestConnection = React.useCallback(async () => {
     if (!selectedMcpName || !requireSavedConfig()) return;
     if (!enabled) {
-      toast.error('Enable this server before testing the connection');
+      toast.error(t('settings.mcp.page.toast.enableServerBeforeTest'));
       return;
     }
 
@@ -1374,24 +1448,24 @@ export const McpPage: React.FC = () => {
       if (result.warning) {
         toast.warning(result.warning);
       } else if (nextStatus === 'connected') {
-        toast.success('Connection test succeeded');
+        toast.success(t('settings.mcp.page.toast.connectionTestSucceeded'));
       } else if (nextStatus === 'needs_auth') {
-        toast.message('Connection requires authorization');
+        toast.message(t('settings.mcp.page.toast.connectionNeedsAuthorization'));
       } else if (nextStatus === 'needs_client_registration') {
-        toast.message('Connection requires client registration');
+        toast.message(t('settings.mcp.page.toast.connectionNeedsClientRegistration'));
       } else if (nextStatus === 'failed') {
-        toast.error(result.status?.error || result.error || 'Connection test failed');
+        toast.error(result.status?.error || result.error || t('settings.mcp.page.toast.connectionTestFailed'));
       } else if (result.error) {
         toast.error(result.error);
       } else {
-        toast.message('Connection test finished. Refresh status for details.');
+        toast.message(t('settings.mcp.page.toast.connectionTestFinished'));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Connection test failed');
+      toast.error(err instanceof Error ? err.message : t('settings.mcp.page.toast.connectionTestFailed'));
     } finally {
       setIsTestingConnection(false);
     }
-  }, [currentDirectory, enabled, requireSavedConfig, selectedMcpName, testConnectionMcp]);
+  }, [currentDirectory, enabled, requireSavedConfig, selectedMcpName, t, testConnectionMcp]);
 
   React.useEffect(() => {
     if (!isAuthPolling || !selectedMcpName) {
@@ -1419,7 +1493,7 @@ export const McpPage: React.FC = () => {
           setAuthUrl(null);
           setAuthCallbackInput('');
           if (nextStatus.status === 'connected') {
-            toast.success('MCP authorization completed');
+            toast.success(t('settings.mcp.page.toast.authorizationCompleted'));
           }
           return;
         }
@@ -1428,7 +1502,7 @@ export const McpPage: React.FC = () => {
           setIsAuthPolling(false);
           authPollAttemptsRef.current = 0;
           authPollStartsFromNeedsAuthRef.current = false;
-          toast.error(nextStatus.error || 'Authorization failed');
+          toast.error(nextStatus.error || t('settings.mcp.page.toast.authorizationFailed'));
           return;
         }
 
@@ -1436,7 +1510,7 @@ export const McpPage: React.FC = () => {
           setIsAuthPolling(false);
           authPollAttemptsRef.current = 0;
           authPollStartsFromNeedsAuthRef.current = false;
-          toast.message('Authorization is still in progress in your browser. Paste the callback URL or code if needed.');
+          toast.message(t('settings.mcp.page.toast.authorizationStillInProgress'));
         }
       })();
     }, 2000);
@@ -1444,7 +1518,7 @@ export const McpPage: React.FC = () => {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [currentDirectory, isAuthPolling, refreshStatus, selectedMcpName]);
+  }, [currentDirectory, isAuthPolling, refreshStatus, selectedMcpName, t]);
 
   // Route to Codex editor if the server isn't in the OpenCode store.
   if (isCodexServer && selectedMcpName) {
@@ -1457,8 +1531,8 @@ export const McpPage: React.FC = () => {
       <div className="flex h-full items-center justify-center">
         <div className="text-center text-muted-foreground">
           <RiPlugLine className="mx-auto mb-3 h-12 w-12 opacity-50" />
-          <p className="typography-body">Select an MCP server from the sidebar</p>
-          <p className="typography-meta mt-1 opacity-75">or add a new one</p>
+          <p className="typography-body">{t('settings.mcp.page.empty.selectServer')}</p>
+          <p className="typography-meta mt-1 opacity-75">{t('settings.mcp.page.empty.addNewOne')}</p>
         </div>
       </div>
     );
@@ -1472,27 +1546,44 @@ export const McpPage: React.FC = () => {
   const suggestedRedirectUri = isVSCodeAuthRuntime ? null : buildMcpOAuthRedirectUri(selectedMcpName, currentDirectory);
   const runtimeDescription = getStatusDescription(
     effectiveRuntimeStatus?.status,
+    tUnsafe,
     effectiveRuntimeStatus && 'error' in effectiveRuntimeStatus ? effectiveRuntimeStatus.error : undefined,
   );
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'connected':
+        return t('settings.mcp.page.status.label.connected');
+      case 'failed':
+        return t('settings.mcp.page.status.label.failed');
+      case 'needs_auth':
+        return t('settings.mcp.page.status.label.needsAuth');
+      case 'needs_client_registration':
+        return t('settings.mcp.page.status.label.needsRegistration');
+      default:
+        return status;
+    }
+  };
 
   return (
-    <ScrollableOverlay keyboardAvoid outerClassName="h-full" className="w-full">
+    <ScrollableOverlay outerClassName="h-full" className="w-full">
       <div className="mx-auto w-full max-w-3xl p-3 sm:p-6 sm:pt-8">
 
         {/* Header */}
         <div className="mb-4">
           <div className="min-w-0">
             {isNewServer ? (
-              <h2 className="typography-ui-header font-semibold text-foreground truncate">New MCP Server</h2>
+              <h2 className="typography-ui-header font-semibold text-foreground truncate">{t('settings.mcp.page.header.newServer')}</h2>
             ) : (
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="typography-ui-header font-semibold text-foreground truncate">{selectedMcpName}</h2>
-                <StatusBadge status={effectiveRuntimeStatus?.status} enabled={enabled} variant="pill" />
+                <StatusBadge status={effectiveRuntimeStatus?.status} enabled={enabled} getStatusLabel={getStatusLabel} variant="pill" />
               </div>
             )}
             <div className="flex items-center gap-2 mt-0.5">
               <p className="typography-meta text-muted-foreground truncate">
-                {isNewServer ? 'Configure a new MCP server' : `${mcpType === 'local' ? 'Local · stdio' : 'Remote · SSE'} transport`}
+                {isNewServer
+                  ? t('settings.mcp.page.header.configureNewServer')
+                  : t('settings.mcp.page.header.transport', { type: mcpType === 'local' ? t('settings.mcp.page.transport.local') : t('settings.mcp.page.transport.remote') })}
               </p>
               {!isNewServer && (
                 <>
@@ -1503,7 +1594,7 @@ export const McpPage: React.FC = () => {
                     onClick={handleToggleConnect}
                     disabled={isConnecting || !enabled}
                     >
-                      {isConnecting ? 'Working...' : isConnected ? 'Disconnect' : 'Connect'}
+                      {isConnecting ? t('settings.mcp.page.actions.working') : isConnected ? t('settings.mcp.page.actions.disconnect') : t('settings.mcp.page.actions.connect')}
                     </Button>
                   {mcpType === 'remote' && (
                     <>
@@ -1514,7 +1605,11 @@ export const McpPage: React.FC = () => {
                         onClick={() => void handleStartAuthorization()}
                         disabled={isAuthorizing || !enabled}
                       >
-                        {isAuthorizing ? 'Starting...' : needsAuthorization ? 'Authorize' : 'Reauthorize'}
+                        {isAuthorizing
+                          ? t('settings.mcp.page.actions.starting')
+                          : needsAuthorization
+                            ? t('settings.mcp.page.actions.authorize')
+                            : t('settings.mcp.page.actions.reauthorize')}
                       </Button>
                       <Button
                         variant="ghost"
@@ -1523,7 +1618,7 @@ export const McpPage: React.FC = () => {
                         onClick={() => void handleClearAuthorization()}
                         disabled={isClearingAuth || !enabled}
                       >
-                        {isClearingAuth ? 'Clearing...' : 'Clear Auth'}
+                        {isClearingAuth ? t('settings.mcp.page.actions.clearing') : t('settings.mcp.page.actions.clearAuth')}
                       </Button>
                     </>
                   )}
@@ -1535,7 +1630,7 @@ export const McpPage: React.FC = () => {
                       onClick={() => void handleTestConnection()}
                       disabled={isTestingConnection || !enabled}
                     >
-                      {isTestingConnection ? 'Testing...' : 'Test'}
+                      {isTestingConnection ? t('settings.mcp.page.actions.testing') : t('settings.mcp.page.actions.test')}
                     </Button>
                   )}
                 </>
@@ -1551,14 +1646,14 @@ export const McpPage: React.FC = () => {
               <div className="space-y-4">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="typography-ui-label text-foreground">Runtime Status</span>
-                    <StatusBadge status={effectiveRuntimeStatus?.status} enabled={enabled} />
+                    <span className="typography-ui-label text-foreground">{t('settings.mcp.page.status.runtimeStatus')}</span>
+                    <StatusBadge status={effectiveRuntimeStatus?.status} enabled={enabled} getStatusLabel={getStatusLabel} />
                   </div>
                   <p className="typography-meta text-muted-foreground">{runtimeDescription}</p>
                   <p className="typography-micro text-muted-foreground/80">
                     {draftScope === 'project'
-                      ? `Project-scoped to ${currentDirectory ?? 'the active project'}`
-                      : 'User-scoped configuration'}
+                      ? t('settings.mcp.page.status.projectScopedTo', { directory: currentDirectory ?? t('settings.mcp.page.status.activeProject') })
+                      : t('settings.mcp.page.status.userScoped')}
                   </p>
                 </div>
 
@@ -1571,7 +1666,7 @@ export const McpPage: React.FC = () => {
                       onClick={() => void handleTestConnection()}
                       disabled={isTestingConnection || !enabled}
                     >
-                      {isTestingConnection ? 'Testing...' : 'Test Connection'}
+                      {isTestingConnection ? t('settings.mcp.page.actions.testing') : t('settings.mcp.page.actions.testConnection')}
                     </Button>
                   )}
                 </div>
@@ -1579,16 +1674,16 @@ export const McpPage: React.FC = () => {
                 {authUrl && (
                   <div className="rounded-md border border-[var(--interactive-border)] bg-[var(--surface-background)] px-3 py-2">
                     <div className="space-y-2">
-                      <div className="typography-micro text-muted-foreground">Authorization URL</div>
+                      <div className="typography-micro text-muted-foreground">{t('settings.mcp.page.auth.authorizationUrl')}</div>
                       <div className="break-all typography-micro text-foreground font-mono">{authUrl}</div>
                       <div className="flex flex-wrap items-center gap-2">
                         <Button variant="outline" size="xs" className="!font-normal" onClick={() => void openExternalUrl(authUrl)}>
                           <RiExternalLinkLine className="h-3.5 w-3.5" />
-                          Open in Browser
+                          {t('settings.mcp.page.actions.openInBrowser')}
                         </Button>
                         <Button variant="outline" size="xs" className="!font-normal" onClick={() => void handleCopyAuthUrl()}>
                           <RiClipboardLine className="h-3.5 w-3.5" />
-                          Copy Link
+                          {t('settings.mcp.page.actions.copyLink')}
                         </Button>
                       </div>
                     </div>
@@ -1599,15 +1694,15 @@ export const McpPage: React.FC = () => {
                   <div className="rounded-md border border-[var(--interactive-border)] bg-[var(--surface-background)] px-3 py-3">
                     <div className="space-y-2">
                       <div>
-                        <div className="typography-ui-label text-foreground">Manual Authorization Fallback</div>
+                        <div className="typography-ui-label text-foreground">{t('settings.mcp.page.auth.manualFallbackTitle')}</div>
                         <p className="mt-1 typography-micro text-muted-foreground">
-                          If the browser returns to a different machine or shows a callback URL with a code, paste that full URL or the raw code here.
+                          {t('settings.mcp.page.auth.manualFallbackDescription')}
                         </p>
                       </div>
                       <Textarea
                         value={authCallbackInput}
                         onChange={(event) => setAuthCallbackInput(event.target.value)}
-                        placeholder="Paste the callback URL or authorization code"
+                        placeholder={t('settings.mcp.page.auth.callbackInputPlaceholder')}
                         rows={3}
                         className="font-mono typography-meta resize-y"
                         data-bwignore="true"
@@ -1622,7 +1717,7 @@ export const McpPage: React.FC = () => {
                           onClick={() => void handleCompleteAuthorization()}
                           disabled={isCompletingAuth}
                         >
-                          {isCompletingAuth ? 'Completing...' : 'Complete Authorization'}
+                          {isCompletingAuth ? t('settings.mcp.page.actions.completing') : t('settings.mcp.page.actions.completeAuthorization')}
                         </Button>
                       </div>
                     </div>
@@ -1632,7 +1727,7 @@ export const McpPage: React.FC = () => {
 
               {isAuthPolling && (
                 <p className="mt-4 typography-micro text-muted-foreground">
-                  Waiting for OpenCode to observe the completed browser authorization flow...
+                  {t('settings.mcp.page.auth.waitingForOpenCode')}
                 </p>
               )}
             </div>
@@ -1642,7 +1737,7 @@ export const McpPage: React.FC = () => {
         {/* Server Identity */}
         <div className="mb-6">
           <div className="mb-1 px-1">
-            <h3 className="typography-ui-header font-medium text-foreground">Server</h3>
+            <h3 className="typography-ui-header font-medium text-foreground">{t('settings.mcp.page.server.title')}</h3>
           </div>
 
           <section className="px-2 pb-2 pt-0 space-y-0">
@@ -1650,31 +1745,31 @@ export const McpPage: React.FC = () => {
             {isNewServer && (
               <div className="flex flex-col gap-2 py-1.5 sm:flex-row sm:items-center sm:gap-8">
                 <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
-                  <span className="typography-ui-label text-foreground">Server Name</span>
+                  <span className="typography-ui-label text-foreground">{t('settings.mcp.page.server.name')}</span>
                 </div>
                 <div className="flex min-w-0 flex-1 items-center gap-2 sm:w-fit sm:flex-initial">
                   <Input
                     value={draftName}
                     onChange={(e) => setDraftName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-'))}
-                    placeholder="my-mcp-server"
+                    placeholder={t('settings.mcp.page.server.namePlaceholder')}
                     className="h-7 w-48 font-mono px-2"
                     autoFocus
                   />
                   <Select value={draftScope} onValueChange={(value) => setDraftScope(value as McpScope)}>
-                    <SelectTrigger className="!h-7 !w-7 !min-w-0 !px-0 !py-0 justify-center [&>svg:last-child]:hidden" title={draftScope === 'user' ? 'User scope' : 'Project scope'}>
+                    <SelectTrigger className="!h-7 !w-7 !min-w-0 !px-0 !py-0 justify-center [&>svg:last-child]:hidden" title={draftScope === 'user' ? t('settings.common.scope.global') : t('settings.common.scope.project')}>
                       {draftScope === 'user' ? <RiUser3Line className="h-3.5 w-3.5" /> : <RiFolderLine className="h-3.5 w-3.5" />}
                     </SelectTrigger>
                     <SelectContent align="end">
                       <SelectItem value="user">
                         <div className="flex items-center gap-2">
                           <RiUser3Line className="h-3.5 w-3.5" />
-                          <span>User</span>
+                          <span>{t('settings.common.scope.global')}</span>
                         </div>
                       </SelectItem>
                       <SelectItem value="project">
                         <div className="flex items-center gap-2">
                           <RiFolderLine className="h-3.5 w-3.5" />
-                          <span>Project</span>
+                          <span>{t('settings.common.scope.project')}</span>
                         </div>
                       </SelectItem>
                     </SelectContent>
@@ -1692,10 +1787,10 @@ export const McpPage: React.FC = () => {
                   className="!font-normal gap-1.5"
                   onClick={handleOpenImportDialog}
                   type="button"
-                  title="Import a full MCP server configuration from a JSON snippet"
+                  title={t('settings.mcp.page.server.importJsonTitle')}
                 >
                   <RiFileCodeLine className="h-3.5 w-3.5" />
-                  Import from JSON Snippet
+                  {t('settings.mcp.page.server.importJson')}
                 </Button>
               </div>
             )}
@@ -1716,14 +1811,14 @@ export const McpPage: React.FC = () => {
               <Checkbox
                 checked={enabled}
                 onChange={setEnabled}
-                ariaLabel="Enable server"
+                ariaLabel={t('settings.mcp.page.server.enableAria')}
               />
-              <span className="typography-ui-label text-foreground">Enable Server</span>
+              <span className="typography-ui-label text-foreground">{t('settings.mcp.page.server.enable')}</span>
             </div>
 
             <div className="flex flex-col gap-2 py-1.5 sm:flex-row sm:items-center sm:gap-8">
               <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
-                <span className="typography-ui-label text-foreground">Transport Mode</span>
+                <span className="typography-ui-label text-foreground">{t('settings.mcp.page.server.transportMode')}</span>
                 <div className="flex flex-wrap items-center gap-1">
                   <Button
                     variant="chip"
@@ -1732,7 +1827,7 @@ export const McpPage: React.FC = () => {
                     onClick={() => setMcpType('local')}
                     className="!font-normal"
                   >
-                    Local · stdio
+                    {t('settings.mcp.page.transport.local')}
                   </Button>
                   <Button
                     variant="chip"
@@ -1741,7 +1836,7 @@ export const McpPage: React.FC = () => {
                     onClick={() => setMcpType('remote')}
                     className="!font-normal"
                   >
-                    Remote · SSE
+                    {t('settings.mcp.page.transport.remote')}
                   </Button>
                 </div>
               </div>
@@ -1754,18 +1849,26 @@ export const McpPage: React.FC = () => {
         <div className="mb-6">
           <div className="mb-1 px-1">
             <h3 className="typography-ui-header font-medium text-foreground">
-              {mcpType === 'local' ? 'Command' : 'Server URL'}
+              {mcpType === 'local' ? t('settings.mcp.page.connection.command') : t('settings.mcp.page.connection.serverUrl')}
             </h3>
           </div>
 
           <section className="px-2 pb-2 pt-0">
             {mcpType === 'local' ? (
-              <CommandTextarea value={command} onChange={setCommand} />
+              <CommandTextarea
+                value={command}
+                onChange={setCommand}
+                pasteCommandTitle={t('settings.mcp.page.connection.pasteCommandTitle')}
+                pasteCommandLabel={t('settings.mcp.page.connection.pasteCommand')}
+                pasteSuccess={(count) => t('settings.mcp.page.toast.pastedArgumentsCount', { count })}
+                clipboardReadFailed={t('settings.mcp.page.toast.clipboardReadFailed')}
+                preview={(count) => t('settings.mcp.page.connection.previewArgs', { count })}
+              />
             ) : (
               <Input
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="https://mcp.example.com/mcp"
+                placeholder={t('settings.mcp.page.connection.serverUrlPlaceholder')}
                 className="font-mono typography-meta"
               />
             )}
@@ -1775,7 +1878,7 @@ export const McpPage: React.FC = () => {
         {mcpType === 'remote' && (
           <div className="mb-6">
             <div className="mb-1 px-1">
-              <h3 className="typography-ui-header font-medium text-foreground">Advanced Remote Options</h3>
+              <h3 className="typography-ui-header font-medium text-foreground">{t('settings.mcp.page.advanced.title')}</h3>
             </div>
 
             <section className="px-2 pb-2 pt-0">
@@ -1785,9 +1888,9 @@ export const McpPage: React.FC = () => {
               >
                 <CollapsibleTrigger className="flex w-full items-center justify-between py-0.5 group">
                   <div className="flex items-center gap-1.5 text-left">
-                    <span className="typography-ui-label font-normal text-foreground">Configure advanced options</span>
+                    <span className="typography-ui-label font-normal text-foreground">{t('settings.mcp.page.advanced.configure')}</span>
                     <span className="typography-micro text-muted-foreground">
-                      ({oauthEnabled ? 'Auto-detect' : 'Custom'} · {headerEntries.length} headers{timeout ? ` · ${timeout}ms` : ''})
+                      ({oauthEnabled ? t('settings.mcp.page.advanced.autoDetect') : t('settings.mcp.page.advanced.custom')} · {headerEntries.length} {t('settings.mcp.page.advanced.headers')}{timeout ? ` · ${timeout}ms` : ''})
                     </span>
                   </div>
                   {isAdvancedRemoteOptionsOpen ? (
@@ -1801,7 +1904,7 @@ export const McpPage: React.FC = () => {
                     <div className="space-y-2">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-8">
                         <div className="flex min-w-0 flex-col sm:w-56 shrink-0">
-                          <span className="typography-ui-label text-foreground">Timeout (ms)</span>
+                          <span className="typography-ui-label text-foreground">{t('settings.mcp.page.advanced.timeoutMs')}</span>
                         </div>
                         <div className="flex items-center gap-2">
                           <Input
@@ -1818,13 +1921,13 @@ export const McpPage: React.FC = () => {
                         </div>
                       </div>
                       <p className="typography-micro text-muted-foreground sm:pl-64">
-                        Leave blank to use OpenCode&apos;s default MCP timeout.
+                        {t('settings.mcp.page.advanced.timeoutHint')}
                       </p>
                     </div>
 
                     <div>
                       <div className="mb-2 typography-ui-label text-foreground">
-                        Request Headers
+                        {t('settings.mcp.page.advanced.requestHeaders')}
                         {headerEntries.length > 0 && (
                           <span className="ml-1.5 typography-micro text-muted-foreground font-normal">({headerEntries.length})</span>
                         )}
@@ -1833,10 +1936,21 @@ export const McpPage: React.FC = () => {
                         value={headerEntries}
                         onChange={setHeaderEntries}
                         keyTransform={(value) => value.trimStart()}
-                        keyPlaceholder="Header-Name"
+                        keyPlaceholder={t('settings.mcp.page.advanced.headerNamePlaceholder')}
                         keyInputClassName="w-36 shrink-0 font-mono typography-meta"
-                        pasteLabel="Paste headers"
-                        pasteTitle="Paste KEY=VALUE header lines from clipboard"
+                        pasteLabel={t('settings.mcp.page.advanced.pasteHeaders')}
+                        pasteTitle={t('settings.mcp.page.advanced.pasteHeadersTitle')}
+                        noPairsFoundError={t('settings.mcp.page.toast.noKeyValuePairsFound')}
+                        importSuccess={(count) => t('settings.mcp.page.toast.importedVariablesCount', { count })}
+                        clipboardReadFailed={t('settings.mcp.page.toast.clipboardReadFailed')}
+                        keyLabel={t('settings.mcp.page.env.key')}
+                        valueLabel={t('settings.mcp.page.env.value')}
+                        valuePlaceholder={t('settings.mcp.page.env.valuePlaceholder')}
+                        hideValueTitle={t('settings.mcp.page.env.hide')}
+                        showValueTitle={t('settings.mcp.page.env.show')}
+                        addVariable={t('settings.mcp.page.env.addVariable')}
+                        plainTextWarning={t('settings.mcp.page.env.plainTextWarning')}
+                        removeVariableAria={t('settings.mcp.page.env.removeVariableAria')}
                       />
                     </div>
 
@@ -1854,15 +1968,15 @@ export const McpPage: React.FC = () => {
                           }
                         }}
                       >
-                        <Checkbox checked={oauthEnabled} onChange={setOauthEnabled} ariaLabel="Enable OAuth auto-detection" />
-                        <span className="typography-ui-label text-foreground">Enable OAuth auto-detection</span>
+                        <Checkbox checked={oauthEnabled} onChange={setOauthEnabled} ariaLabel={t('settings.mcp.page.advanced.oauthAutoDetectionAria')} />
+                        <span className="typography-ui-label text-foreground">{t('settings.mcp.page.advanced.oauthAutoDetection')}</span>
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2">
                         <Input
                           value={oauthClientId}
                           onChange={(e) => setOauthClientId(e.target.value)}
-                          placeholder="OAuth client ID"
+                          placeholder={t('settings.mcp.page.advanced.oauthClientIdPlaceholder')}
                           className="font-mono typography-meta"
                           disabled={!oauthEnabled}
                           data-bwignore="true"
@@ -1871,7 +1985,7 @@ export const McpPage: React.FC = () => {
                         <Input
                           value={oauthClientSecret}
                           onChange={(e) => setOauthClientSecret(e.target.value)}
-                          placeholder="OAuth client secret"
+                          placeholder={t('settings.mcp.page.advanced.oauthClientSecretPlaceholder')}
                           className="font-mono typography-meta"
                           disabled={!oauthEnabled}
                           data-bwignore="true"
@@ -1880,7 +1994,7 @@ export const McpPage: React.FC = () => {
                         <Input
                           value={oauthScope}
                           onChange={(e) => setOauthScope(e.target.value)}
-                          placeholder="Scopes (space-delimited)"
+                          placeholder={t('settings.mcp.page.advanced.oauthScopesPlaceholder')}
                           className="font-mono typography-meta"
                           disabled={!oauthEnabled}
                           data-bwignore="true"
@@ -1889,7 +2003,7 @@ export const McpPage: React.FC = () => {
                         <Input
                           value={oauthRedirectUri}
                           onChange={(e) => setOauthRedirectUri(e.target.value)}
-                          placeholder="Redirect URI"
+                          placeholder={t('settings.mcp.page.advanced.oauthRedirectUriPlaceholder')}
                           className="font-mono typography-meta"
                           disabled={!oauthEnabled}
                           data-bwignore="true"
@@ -1898,11 +2012,11 @@ export const McpPage: React.FC = () => {
                       </div>
 
                       <p className="typography-micro text-muted-foreground">
-                        Leave these fields blank to let OpenCode infer OAuth settings from the MCP server.
+                        {t('settings.mcp.page.advanced.oauthHint')}
                       </p>
                       {suggestedRedirectUri && (
                         <p className="typography-micro text-muted-foreground">
-                          Browser-based MCP authorization uses this callback URL when the redirect URI is blank:
+                          {t('settings.mcp.page.advanced.oauthCallbackHint')}
                           <span className="mt-1 block break-all font-mono text-foreground/80">{suggestedRedirectUri}</span>
                         </p>
                       )}
@@ -1918,7 +2032,7 @@ export const McpPage: React.FC = () => {
         <div className="mb-2">
           <div className="mb-1 px-1">
             <h3 className="typography-ui-header font-medium text-foreground">
-              Environment Variables
+              {t('settings.mcp.page.env.title')}
               {envEntries.length > 0 && (
                 <span className="ml-1.5 typography-micro text-muted-foreground font-normal">
                   ({envEntries.length})
@@ -1936,10 +2050,27 @@ export const McpPage: React.FC = () => {
                 onClick={() => setEnvEntries([{ key: '', value: '' }])}
               >
                 <RiAddLine className="h-3.5 w-3.5" />
-                Add environment variable
+                {t('settings.mcp.page.env.addEnvironmentVariable')}
               </Button>
             ) : (
-              <EnvEditor value={envEntries} onChange={setEnvEntries} />
+              <EnvEditor
+                value={envEntries}
+                onChange={setEnvEntries}
+                keyPlaceholder={t('settings.mcp.page.env.keyPlaceholder')}
+                pasteLabel={t('settings.mcp.page.env.pasteEnv')}
+                pasteTitle={t('settings.mcp.page.env.pasteEnvTitle')}
+                noPairsFoundError={t('settings.mcp.page.toast.noKeyValuePairsFound')}
+                importSuccess={(count) => t('settings.mcp.page.toast.importedVariablesCount', { count })}
+                clipboardReadFailed={t('settings.mcp.page.toast.clipboardReadFailed')}
+                keyLabel={t('settings.mcp.page.env.key')}
+                valueLabel={t('settings.mcp.page.env.value')}
+                valuePlaceholder={t('settings.mcp.page.env.valuePlaceholder')}
+                hideValueTitle={t('settings.mcp.page.env.hide')}
+                showValueTitle={t('settings.mcp.page.env.show')}
+                addVariable={t('settings.mcp.page.env.addVariable')}
+                plainTextWarning={t('settings.mcp.page.env.plainTextWarning')}
+                removeVariableAria={t('settings.mcp.page.env.removeVariableAria')}
+              />
             )}
           </section>
         </div>
@@ -1952,7 +2083,7 @@ export const McpPage: React.FC = () => {
             size="xs"
             className="!font-normal"
           >
-            {isSaving ? 'Saving...' : isNewServer ? 'Create' : 'Save Changes'}
+            {isSaving ? t('settings.common.actions.saving') : isNewServer ? t('settings.common.actions.create') : t('settings.common.actions.saveChanges')}
           </Button>
           {!isNewServer && (
             <Button
@@ -1961,7 +2092,7 @@ export const McpPage: React.FC = () => {
               className="!font-normal"
               onClick={() => setShowDeleteConfirm(true)}
             >
-              Delete
+              {t('settings.common.actions.delete')}
             </Button>
           )}
         </div>
@@ -1978,11 +2109,11 @@ export const McpPage: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="max-w-md" keyboardAvoid>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Import JSON Snippet</DialogTitle>
+            <DialogTitle>{t('settings.mcp.page.importDialog.title')}</DialogTitle>
             <DialogDescription>
-              Paste a full MCP JSON snippet from docs or another config file. The parsed values will populate this form for review before saving.
+              {t('settings.mcp.page.importDialog.description')}
             </DialogDescription>
           </DialogHeader>
 
@@ -2014,7 +2145,7 @@ export const McpPage: React.FC = () => {
                 type="button"
               >
                 <RiClipboardLine className="h-3.5 w-3.5" />
-                Paste JSON from Clipboard
+                {t('settings.mcp.page.importDialog.pasteFromClipboard')}
               </Button>
             </div>
 
@@ -2030,14 +2161,14 @@ export const McpPage: React.FC = () => {
               }}
               className="text-foreground"
             >
-              Cancel
+              {t('settings.common.actions.cancel')}
             </Button>
             <Button
               onClick={handleImportJson}
               disabled={!importJsonText.trim()}
               size="sm"
             >
-              Import
+              {t('settings.common.actions.import')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -2050,10 +2181,12 @@ export const McpPage: React.FC = () => {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Delete "{selectedMcpName}"?</DialogTitle>
+            <DialogTitle>{t('settings.mcp.page.deleteDialog.title', { name: selectedMcpName ?? '' })}</DialogTitle>
             <DialogDescription>
-              This removes the server from <code className="text-foreground">opencode.json</code>.
-              OpenCode will need to reload.
+              {t('settings.mcp.page.deleteDialog.descriptionPrefix')}{' '}
+              <code className="text-foreground">opencode.json</code>.
+              {' '}
+              {t('settings.mcp.page.deleteDialog.descriptionSuffix')}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -2063,10 +2196,10 @@ export const McpPage: React.FC = () => {
               disabled={isDeleting}
               className="text-foreground"
             >
-              Cancel
+              {t('settings.common.actions.cancel')}
             </Button>
             <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting}>
-              {isDeleting ? 'Deleting…' : 'Delete'}
+              {isDeleting ? t('settings.mcp.page.actions.deleting') : t('settings.common.actions.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

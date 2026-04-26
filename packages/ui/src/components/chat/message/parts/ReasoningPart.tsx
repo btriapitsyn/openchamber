@@ -105,7 +105,7 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
             return;
         }
         onContentChange?.('structural');
-    }, [onContentChange, isExpanded, text]);
+    }, [onContentChange, text]);
 
     if (!text || text.trim().length === 0) {
         return null;
@@ -192,11 +192,11 @@ type ReasoningPartProps = {
     messageId: string;
 };
 
-const ReasoningPart: React.FC<ReasoningPartProps> = ({
+const ReasoningPart = React.memo(({
     part,
     onContentChange,
     messageId,
-}) => {
+}: ReasoningPartProps) => {
     const chatRenderMode = useUIStore((state) => state.chatRenderMode);
     const partWithText = part as PartWithText;
     const rawText = partWithText.text || partWithText.content || '';
@@ -226,7 +226,7 @@ const ReasoningPart: React.FC<ReasoningPartProps> = ({
             isStreaming={isStreaming}
         />
     );
-};
+});
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const formatReasoningText = (text: string): string => cleanReasoningText(text);

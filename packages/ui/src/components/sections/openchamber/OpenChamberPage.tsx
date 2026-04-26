@@ -32,7 +32,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
     if (!section) {
         return (
             <ScrollableOverlay
-                keyboardAvoid
                 outerClassName="h-full"
                 className="w-full"
             >
@@ -95,7 +94,6 @@ export const OpenChamberPage: React.FC<OpenChamberPageProps> = ({ section }) => 
 
     return (
         <ScrollableOverlay
-            keyboardAvoid
             outerClassName="h-full"
             className="w-full"
         >

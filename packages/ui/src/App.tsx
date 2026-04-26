@@ -5,6 +5,7 @@ import { AgentManagerView } from '@/components/views/agent-manager';
 import { ChatView } from '@/components/views';
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
+import { Button } from '@/components/ui/button';
 import { MemoryDebugPanel } from '@/components/ui/MemoryDebugPanel';
 import { setStreamPerfEnabled } from '@/stores/utils/streamDebug';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
@@ -18,6 +19,7 @@ import { useRouter } from '@/hooks/useRouter';
 import { usePushVisibilityBeacon } from '@/hooks/usePushVisibilityBeacon';
 import { usePwaManifestSync } from '@/hooks/usePwaManifestSync';
 import { usePwaInstallPrompt } from '@/hooks/usePwaInstallPrompt';
+import { useWindowControlsOverlayLayout } from '@/hooks/useWindowControlsOverlayLayout';
 import { useWindowTitle } from '@/hooks/useWindowTitle';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useBackendsStore } from '@/stores/useBackendsStore';
@@ -32,7 +34,6 @@ import {
   type BootInjectionStatus,
   type DesktopBootView,
 } from '@/lib/desktopBoot';
-import { OnboardingScreen } from '@/components/onboarding/OnboardingScreen';
 import type { RecoveryVariant } from '@/components/onboarding/DesktopConnectionRecovery';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
@@ -44,6 +45,7 @@ import { useSync } from '@/sync/use-sync';
 import { setOptimisticRefs } from '@/sync/session-actions';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
+import { loadMonoFont, loadUiFont } from '@/lib/fontLoader';
 import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { AboutDialog } from '@/components/ui/AboutDialog';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
@@ -57,6 +59,13 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QuickOpenDialog } from '@/components/ui/QuickOpenDialog';
 import { McpOAuthCallbackPage } from '@/components/sections/mcp/McpOAuthCallbackPage';
 import { MCP_OAUTH_CALLBACK_PATH } from '@/components/sections/mcp/mcpOAuth';
+import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
+import { useI18n } from '@/lib/i18n';
+
+// Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
+const OnboardingScreen = lazyWithChunkRecovery(() =>
+  import('@/components/onboarding/OnboardingScreen').then((m) => ({ default: m.OnboardingScreen })),
+);
 
 const AboutDialogWrapper: React.FC = () => {
   const isAboutDialogOpen = useUIStore((s) => s.isAboutDialogOpen);
@@ -66,6 +75,27 @@ const AboutDialogWrapper: React.FC = () => {
       open={isAboutDialogOpen}
       onOpenChange={setAboutDialogOpen}
     />
+  );
+};
+
+const StartupInitializationRecovery: React.FC<{
+  onRetry: () => void;
+  isRetrying: boolean;
+}> = ({ onRetry, isRetrying }) => {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex h-full items-center justify-center bg-background px-6 text-foreground">
+      <div className="flex max-w-md flex-col items-center gap-4 text-center">
+        <div className="flex flex-col gap-2">
+          <h1 className="typography-title text-foreground">{t('startup.initRecovery.title')}</h1>
+          <p className="typography-body text-muted-foreground">{t('startup.initRecovery.description')}</p>
+        </div>
+        <Button type="button" onClick={onRetry} disabled={isRetrying}>
+          {isRetrying ? t('startup.initRecovery.retrying') : t('startup.initRecovery.retry')}
+        </Button>
+      </div>
+    </div>
   );
 };
 
@@ -165,6 +195,7 @@ function SyncAppEffects({ embeddedBackgroundWorkEnabled }: {
   embeddedBackgroundWorkEnabled: boolean;
 }) {
   usePwaManifestSync();
+  useWindowControlsOverlayLayout();
   useSessionAutoCleanup(embeddedBackgroundWorkEnabled);
   useQueuedMessageAutoSend(embeddedBackgroundWorkEnabled);
   useKeyboardShortcuts();
@@ -196,6 +227,9 @@ function App({ apis }: AppProps) {
   const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
   const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   const [isEmbeddedVisible, setIsEmbeddedVisible] = React.useState(true);
+  const [initRetryExhausted, setInitRetryExhausted] = React.useState(false);
+  const [initRetryEpoch, setInitRetryEpoch] = React.useState(0);
+  const [manualInitRetrying, setManualInitRetrying] = React.useState(false);
   const isDesktopRuntime = React.useMemo(() => isDesktopShell(), []);
   const setPlanModeEnabled = useFeatureFlagsStore((state) => state.setPlanModeEnabled);
   const [bootInjectionStatus, setBootInjectionStatus] = React.useState<BootInjectionStatus>(() => {
@@ -208,6 +242,7 @@ function App({ apis }: AppProps) {
       : null;
   });
   const appReadyDispatchedRef = React.useRef(false);
+  const initializationInFlightRef = React.useRef(false);
   const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), []);
   const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible;
   const activeBackendId = React.useMemo(() => {
@@ -252,6 +287,8 @@ function App({ apis }: AppProps) {
     const root = document.documentElement;
     const uiStack = UI_FONT_OPTION_MAP[uiFont]?.stack ?? UI_FONT_OPTION_MAP[DEFAULT_UI_FONT].stack;
     const monoStack = CODE_FONT_OPTION_MAP[monoFont]?.stack ?? CODE_FONT_OPTION_MAP[DEFAULT_MONO_FONT].stack;
+    void loadUiFont(uiFont);
+    void loadMonoFont(monoFont);
 
     root.style.setProperty('--font-sans', uiStack);
     root.style.setProperty('--font-heading', uiStack);
@@ -356,11 +393,92 @@ function App({ apis }: AppProps) {
       if (isVSCodeRuntime) {
         return;
       }
-      await initializeApp();
+      if (initializationInFlightRef.current) {
+        return;
+      }
+      initializationInFlightRef.current = true;
+      try {
+        await initializeApp();
+      } finally {
+        initializationInFlightRef.current = false;
+      }
     };
 
     init();
   }, [initializeApp, isVSCodeRuntime]);
+
+  React.useEffect(() => {
+    if (isVSCodeRuntime || isInitialized) return;
+
+    let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let retryCount = 0;
+    const MAX_RETRIES = 10;
+    const BASE_DELAY_MS = 1000;
+
+    const retryInitialization = async () => {
+      if (!active) return;
+      if (retryCount >= MAX_RETRIES) {
+        setInitRetryExhausted(true);
+        return;
+      }
+      const state = useConfigStore.getState();
+      if (state.isInitialized) {
+        setInitRetryExhausted(false);
+        return;
+      }
+      if (initializationInFlightRef.current) {
+        retryTimer = setTimeout(retryInitialization, BASE_DELAY_MS);
+        return;
+      }
+
+      retryCount += 1;
+      initializationInFlightRef.current = true;
+      try {
+        await state.initializeApp();
+      } finally {
+        initializationInFlightRef.current = false;
+      }
+
+      const next = useConfigStore.getState();
+      if (!active) return;
+      if (next.isInitialized) {
+        setInitRetryExhausted(false);
+        return;
+      }
+      if (retryCount >= MAX_RETRIES) {
+        setInitRetryExhausted(true);
+        return;
+      }
+      const delay = Math.min(BASE_DELAY_MS * Math.pow(2, retryCount - 1), 16000);
+      retryTimer = setTimeout(retryInitialization, delay);
+    };
+
+    retryTimer = setTimeout(retryInitialization, BASE_DELAY_MS);
+
+    return () => {
+      active = false;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [initRetryEpoch, isInitialized, isVSCodeRuntime]);
+
+  React.useEffect(() => {
+    if (isInitialized) {
+      setInitRetryExhausted(false);
+    }
+  }, [isInitialized]);
+
+  React.useEffect(() => {
+    if (!initRetryExhausted) return;
+
+    const loadingElement = document.getElementById('initial-loading');
+    if (loadingElement) {
+      loadingElement.classList.add('fade-out');
+      setTimeout(() => {
+        loadingElement.remove();
+      }, 300);
+    }
+  }, [initRetryExhausted]);
 
   // Startup recovery: poll until providers AND agents are loaded.
   // loadProviders/loadAgents resolve normally even on failure (errors swallowed),
@@ -645,6 +763,24 @@ function App({ apis }: AppProps) {
     window.location.reload();
   }, []);
 
+  const handleManualInitRetry = React.useCallback(async () => {
+    if (manualInitRetrying || initializationInFlightRef.current) return;
+
+    setInitRetryExhausted(false);
+    setManualInitRetrying(true);
+    initializationInFlightRef.current = true;
+    try {
+      await useConfigStore.getState().initializeApp();
+    } finally {
+      initializationInFlightRef.current = false;
+      setManualInitRetrying(false);
+    }
+
+    if (!useConfigStore.getState().isInitialized) {
+      setInitRetryEpoch((value) => value + 1);
+    }
+  }, [manualInitRetrying]);
+
   // Map boot outcome kind to recovery variant
   const mapBootViewToRecoveryVariant = (view: DesktopBootView): RecoveryVariant | undefined => {
     if (view.screen === 'recovery') {
@@ -662,13 +798,15 @@ function App({ apis }: AppProps) {
       return (
         <ErrorBoundary>
           <div className="h-full text-foreground bg-transparent">
-            <OnboardingScreen
-              mode="first-launch"
-              onCliAvailable={handleDesktopBootDismiss}
-              onChooseRemote={() => {
-                // Switch to remote tab - handled internally by OnboardingScreen
-              }}
-            />
+            <React.Suspense fallback={<div className="h-full" />}>
+              <OnboardingScreen
+                mode="first-launch"
+                onCliAvailable={handleDesktopBootDismiss}
+                onChooseRemote={() => {
+                  // Switch to remote tab - handled internally by OnboardingScreen
+                }}
+              />
+            </React.Suspense>
           </div>
         </ErrorBoundary>
       );
@@ -681,13 +819,15 @@ function App({ apis }: AppProps) {
     return (
       <ErrorBoundary>
         <div className="h-full text-foreground bg-transparent">
-          <OnboardingScreen
-            mode="recovery"
-            recoveryVariant={recoveryVariant}
-            recoveryHostUrl={hostUrl}
-            recoveryHostLabel={undefined}
-            onCliAvailable={handleDesktopBootDismiss}
-          />
+          <React.Suspense fallback={<div className="h-full" />}>
+            <OnboardingScreen
+              mode="recovery"
+              recoveryVariant={recoveryVariant}
+              recoveryHostUrl={hostUrl}
+              recoveryHostLabel={undefined}
+              onCliAvailable={handleDesktopBootDismiss}
+            />
+          </React.Suspense>
         </div>
       </ErrorBoundary>
     );
@@ -716,6 +856,17 @@ function App({ apis }: AppProps) {
     return (
       <ErrorBoundary>
         <McpOAuthCallbackPage />
+      </ErrorBoundary>
+    );
+  }
+
+  if (initRetryExhausted && !isInitialized && !isVSCodeRuntime && !embeddedSessionChat) {
+    return (
+      <ErrorBoundary>
+        <StartupInitializationRecovery
+          onRetry={() => { void handleManualInitRetry(); }}
+          isRetrying={manualInitRetrying}
+        />
       </ErrorBoundary>
     );
   }
@@ -764,6 +915,11 @@ function App({ apis }: AppProps) {
     );
   }
 
+  // Always mount the full provider tree to avoid remounts when isInitialized
+  // flips from false → true. FireworksProvider and VoiceProvider are lightweight
+  // shells; their heavy children are only activated when actually needed.
+  const isBootShell = !isInitialized && !isDesktopRuntime;
+
   return (
     <ErrorBoundary>
       <SyncProvider sdk={opencodeClient.getSdkClient()} directory={currentDirectory || ''}>
@@ -775,11 +931,15 @@ function App({ apis }: AppProps) {
                   <SyncAppEffects embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled} />
                   <MainLayout />
                   <Toaster />
-                  <ConfigUpdateOverlay />
-                  <QuickOpenDialog />
-                  <AboutDialogWrapper />
-                  {showMemoryDebug && (
-                    <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                  {!isBootShell && (
+                    <>
+                      <ConfigUpdateOverlay />
+                      <QuickOpenDialog />
+                      <AboutDialogWrapper />
+                      {showMemoryDebug && (
+                        <MemoryDebugPanel onClose={() => setShowMemoryDebug(false)} />
+                      )}
+                    </>
                   )}
                 </div>
               </TooltipProvider>

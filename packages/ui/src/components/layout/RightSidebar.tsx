@@ -1,7 +1,8 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/useUIStore';
-import { isDesktopShell, startDesktopWindowDrag } from '@/lib/desktop';
+import { useI18n } from '@/lib/i18n';
+import { isDesktopShell, isVSCodeRuntime, startDesktopWindowDrag } from '@/lib/desktop';
 
 export const RIGHT_SIDEBAR_CONTENT_WIDTH = 420;
 const RIGHT_SIDEBAR_MIN_WIDTH = 400;
@@ -15,9 +16,11 @@ interface RightSidebarProps {
 }
 
 export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, className, onTopActionsHostChange }) => {
+  const { t } = useI18n();
   const rightSidebarWidth = useUIStore((state) => state.rightSidebarWidth);
   const setRightSidebarWidth = useUIStore((state) => state.setRightSidebarWidth);
   const isDesktopApp = React.useMemo(() => isDesktopShell(), []);
+  const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
   const [isResizing, setIsResizing] = React.useState(false);
   const startXRef = React.useRef(0);
   const startWidthRef = React.useRef(rightSidebarWidth || 420);
@@ -126,6 +129,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
     await startDesktopWindowDrag();
   }, [isDesktopApp]);
 
+  const webWindowControlsOverlayStyle = React.useMemo<React.CSSProperties | undefined>(() => {
+    if (isDesktopApp || isVSCode) {
+      return undefined;
+    }
+
+    return {
+      paddingLeft: 'calc(0.75rem + var(--oc-wco-left-inset, 0px))',
+      paddingRight: 'calc(0.75rem + var(--oc-wco-right-inset, 0px))',
+    };
+  }, [isDesktopApp, isVSCode]);
+
   return (
     <aside
       ref={sidebarRef}
@@ -149,6 +163,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
         <div
           onMouseDown={handleDragStart}
           className="app-region-drag absolute inset-x-0 top-0 z-20 flex h-[var(--oc-header-height,56px)] items-center justify-end px-3"
+          style={webWindowControlsOverlayStyle}
           aria-hidden
         >
           <div
@@ -169,7 +184,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ isOpen, children, cl
           onPointerCancel={handlePointerEnd}
           role="separator"
           aria-orientation="vertical"
-          aria-label="Resize right panel"
+          aria-label={t('sidebar.resize.rightPanelAria')}
         />
       )}
       <div

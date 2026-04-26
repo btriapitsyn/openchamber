@@ -81,7 +81,6 @@ export const MobileOverlayPanel: React.FC<MobileOverlayPanelProps> = ({
             'mx-auto max-w-lg',
             className
           )}
-          data-keyboard-avoid="true"
           onClick={(event) => event.stopPropagation()}
         >
         {(() => {

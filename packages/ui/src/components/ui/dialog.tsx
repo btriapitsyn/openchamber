@@ -3,6 +3,7 @@ import { Dialog as BaseDialog } from "@base-ui/react/dialog"
 import { RiCloseLine } from '@remixicon/react';
 
 import { cn } from "@/lib/utils"
+import { useI18n } from '@/lib/i18n'
 
 let openDialogCount = 0;
 
@@ -80,7 +81,6 @@ DialogOverlay.displayName = "DialogOverlay";
 
 type DialogContentProps = Omit<React.ComponentProps<typeof BaseDialog.Popup>, "children"> & {
   showCloseButton?: boolean
-  keyboardAvoid?: boolean
   children?: React.ReactNode
   onOpenAutoFocus?: (event: Event) => void
   onCloseAutoFocus?: (event: Event) => void
@@ -90,13 +90,13 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
-  keyboardAvoid = false,
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: DialogContentProps) {
   void onOpenAutoFocus
   void onCloseAutoFocus
+  const { t } = useI18n()
 
   return (
     <DialogPortal>
@@ -104,9 +104,8 @@ function DialogContent({
       <BaseDialog.Popup
         data-slot="dialog-content"
         data-state-slot="dialog"
-        data-keyboard-avoid={keyboardAvoid ? "true" : undefined}
         className={cn(
-          "bg-background text-foreground fixed top-[50%] left-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border p-6 shadow-none overflow-hidden pwa-dialog-content",
+          "bg-background text-foreground fixed top-[50%] left-[50%] z-50 flex flex-col w-full max-w-lg max-h-[calc(100dvh-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border p-6 shadow-none overflow-y-auto pwa-dialog-content",
           className
         )}
         {...props}
@@ -118,7 +117,7 @@ function DialogContent({
             className="ring-offset-background focus:ring-ring data-[open]:bg-interactive-active data-[open]:text-foreground absolute top-2 right-2 rounded-lg opacity-70 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none text-muted-foreground hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
           >
             <RiCloseLine/>
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t('dialog.common.actions.close')}</span>
           </BaseDialog.Close>
         )}
       </BaseDialog.Popup>

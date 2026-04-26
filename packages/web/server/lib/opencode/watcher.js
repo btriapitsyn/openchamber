@@ -1,4 +1,4 @@
-import { createOpencodeClient } from '@opencode-ai/sdk/v2';
+import { createUpstreamSseReader } from '../event-stream/upstream-reader.js';
 
 export const createOpenCodeWatcherRuntime = (deps) => {
   const {
@@ -6,9 +6,16 @@ export const createOpenCodeWatcherRuntime = (deps) => {
     buildOpenCodeUrl,
     getOpenCodeAuthHeaders,
     onPayload,
+    fetchImpl = fetch,
+    upstreamStallTimeoutMs,
+    upstreamReconnectDelayMs = 1000,
+    globalEventHub = null,
   } = deps;
 
   let abortController = null;
+  let reader = null;
+  let unsubscribeEvent = null;
+  let unsubscribeStatus = null;
 
   const unwrapGlobalEventPayload = (eventData) => {
     if (!eventData || typeof eventData !== 'object') {
@@ -32,50 +39,56 @@ export const createOpenCodeWatcherRuntime = (deps) => {
     abortController = new AbortController();
     const signal = abortController.signal;
 
-    let attempt = 0;
-    const run = async () => {
-      while (!signal.aborted) {
-        attempt += 1;
-        try {
-          const baseUrl = buildOpenCodeUrl('/', '').replace(/\/$/, '');
-          const client = createOpencodeClient({
-            baseUrl,
-            headers: getOpenCodeAuthHeaders(),
-          });
-
-          const result = await client.global.event({
-            signal,
-            sseMaxRetryAttempts: 0,
-            onSseEvent: (event) => {
-              const payload = unwrapGlobalEventPayload(event.data);
-              if (!payload || typeof payload !== 'object') {
-                return;
-              }
-              onPayload(payload);
-            },
-          });
-
-          console.log('[PushWatcher] connected');
-
-          for await (const _ of result.stream) {
-            void _;
-            if (signal.aborted) {
-              break;
-            }
-          }
-        } catch (error) {
-          if (signal.aborted) {
-            return;
-          }
-          console.warn('[PushWatcher] disconnected', error?.message ?? error);
+    if (globalEventHub) {
+      unsubscribeEvent = globalEventHub.subscribeEvent((event) => {
+        const payload = unwrapGlobalEventPayload(event.payload);
+        if (!payload || typeof payload !== 'object') {
+          return;
         }
+        onPayload(payload);
+      });
+      unsubscribeStatus = globalEventHub.subscribeStatus((status) => {
+        if (signal.aborted) {
+          return;
+        }
+        if (status.type === 'connect') {
+          console.log('[PushWatcher] connected');
+          return;
+        }
+        if (status.type === 'error' || status.type === 'initial-error') {
+          console.warn('[PushWatcher] disconnected', status.error?.error?.message ?? status.error?.message ?? status.error);
+        }
+      });
+      globalEventHub.start();
+      return;
+    }
 
-        const backoffMs = Math.min(1000 * Math.pow(2, Math.min(attempt, 5)), 30000);
-        await new Promise((resolve) => setTimeout(resolve, backoffMs));
-      }
-    };
+    reader = createUpstreamSseReader({
+      signal,
+      buildUrl: () => buildOpenCodeUrl('/global/event', ''),
+      getHeaders: getOpenCodeAuthHeaders,
+      fetchImpl,
+      stallTimeoutMs: upstreamStallTimeoutMs,
+      reconnectDelayMs: upstreamReconnectDelayMs,
+      onConnect() {
+        console.log('[PushWatcher] connected');
+      },
+      onEvent(event) {
+        const payload = unwrapGlobalEventPayload(event.payload);
+        if (!payload || typeof payload !== 'object') {
+          return;
+        }
+        onPayload(payload);
+      },
+      onError(error) {
+        if (signal.aborted) {
+          return;
+        }
+        console.warn('[PushWatcher] disconnected', error?.error?.message ?? error?.message ?? error);
+      },
+    });
 
-    void run();
+    void reader.start();
   };
 
   const stop = () => {
@@ -84,8 +97,14 @@ export const createOpenCodeWatcherRuntime = (deps) => {
     }
     try {
       abortController.abort();
+      reader?.stop();
+      unsubscribeEvent?.();
+      unsubscribeStatus?.();
     } catch {
     }
+    reader = null;
+    unsubscribeEvent = null;
+    unsubscribeStatus = null;
     abortController = null;
   };
 

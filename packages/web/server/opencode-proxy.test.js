@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { EventEmitter } from 'node:events';
 import express from 'express';
 import path from 'path';
 
-import { registerOpenCodeProxy } from './lib/opencode/proxy.js';
+import { registerOpenCodeProxy, writeSseChunkWithBackpressure } from './lib/opencode/proxy.js';
 
 const listen = (app, host = '127.0.0.1') => new Promise((resolve, reject) => {
   const server = app.listen(0, host, () => resolve(server));
@@ -79,6 +80,27 @@ describe('OpenCode proxy SSE forwarding', () => {
     expect(response.headers.get('x-upstream-test')).toBe('ok');
     expect(await response.text()).toBe('data: {"ok":true}\n\n');
     expect(seenAuthorization).toBe('Bearer test-token');
+  });
+
+  it('waits for drain when writing to a slow SSE response', async () => {
+    const writes = [];
+    const res = new EventEmitter();
+    res.writableEnded = false;
+    res.destroyed = false;
+    res.write = (value) => {
+      writes.push(value);
+      return false;
+    };
+    const controller = new AbortController();
+
+    const write = writeSseChunkWithBackpressure(res, Buffer.from('data: {"ok":true}\n\n'), controller.signal);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes).toHaveLength(1);
+
+    res.emit('drain');
+
+    await expect(write).resolves.toBe(true);
   });
 
   it('routes generic API requests through external OpenCode base URL', async () => {

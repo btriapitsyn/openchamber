@@ -298,6 +298,9 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.gitmojiEnabled === 'boolean') {
       result.gitmojiEnabled = candidate.gitmojiEnabled;
     }
+    if (typeof candidate.defaultFileViewerPreview === 'boolean') {
+      result.defaultFileViewerPreview = candidate.defaultFileViewerPreview;
+    }
     if (typeof candidate.zenModel === 'string') {
       const trimmed = candidate.zenModel.trim();
       result.zenModel = trimmed.length > 0 ? trimmed : undefined;

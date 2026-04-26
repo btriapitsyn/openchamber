@@ -193,6 +193,7 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
     const clients = getOpenChamberEventClients();
@@ -208,7 +209,22 @@ export const registerScheduledTaskRoutes = (app, dependencies) => {
     } catch {
     }
 
+    const heartbeat = setInterval(() => {
+      try {
+        writeSseEvent(res, {
+          type: 'openchamber:heartbeat',
+          properties: {
+            timestamp: Date.now(),
+          },
+        });
+      } catch {
+        clearInterval(heartbeat);
+        clients.delete(res);
+      }
+    }, 25_000);
+
     req.on('close', () => {
+      clearInterval(heartbeat);
       clients.delete(res);
     });
   });

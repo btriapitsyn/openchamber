@@ -11,6 +11,7 @@ import { BackendSwitcher } from '@/components/sections/shared/BackendSwitcher';
 import { BackendUnsupported } from '@/components/sections/shared/BackendUnsupported';
 import { useBackendsStore } from '@/stores/useBackendsStore';
 import { opencodeClient } from '@/lib/opencode/client';
+import { useI18n } from '@/lib/i18n';
 
 const ADD_PROVIDER_ID = '__add_provider__';
 
@@ -62,6 +63,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
     prevBackendRef.current = selectedBackendId;
   }, [selectedBackendId]);
 
+  const { t } = useI18n();
   const providers = useConfigStore((state) => state.providers);
   const selectedProviderId = useConfigStore((state) => state.selectedProviderId);
   const setSelectedProvider = useConfigStore((state) => state.setSelectedProvider);
@@ -144,9 +146,10 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
           onBackendChange={setSelectedBackendId}
           className="mb-3"
         />
+        <h2 className="text-base font-semibold text-foreground mb-3">{t('settings.providers.sidebar.title')}</h2>
         <SettingsProjectSelector className="mb-3" />
         <div className="flex items-center justify-between gap-2">
-          <span className="typography-meta text-muted-foreground">Total {providers.length}</span>
+          <span className="typography-meta text-muted-foreground">{t('settings.providers.sidebar.total', { count: providers.length })}</span>
           <Button size="sm"
             variant="ghost"
             className="h-7 w-7 px-0 -my-1 text-muted-foreground"
@@ -154,8 +157,8 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
               setSelectedProvider(ADD_PROVIDER_ID);
               onItemSelect?.();
             }}
-            aria-label="Connect provider"
-            title="Connect provider"
+            aria-label={t('settings.providers.sidebar.actions.connectProviderAria')}
+            title={t('settings.providers.sidebar.actions.connectProviderTitle')}
           >
             <RiAddLine className="h-3.5 w-3.5" />
           </Button>
@@ -178,13 +181,15 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
             <RiStackLine className="mx-auto mb-3 h-10 w-10 opacity-50" />
             <p className="typography-ui-label font-medium">No providers found</p>
             <p className="typography-meta mt-1 opacity-75">Check your backend configuration</p>
+            <p className="typography-ui-label font-medium">{t('settings.providers.sidebar.empty.title')}</p>
+            <p className="typography-meta mt-1 opacity-75">{t('settings.providers.sidebar.empty.description')}</p>
           </div>
         ) : (
           <>
             {userProviders.length > 0 && (
               <>
                 <div className="px-2 pb-1.5 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  User Providers
+                  {t('settings.providers.sidebar.section.userProviders')}
                 </div>
                 {userProviders.map((provider) => (
                   <ProviderListItem
@@ -203,7 +208,7 @@ export const ProvidersSidebar: React.FC<ProvidersSidebarProps> = ({ onItemSelect
             {projectProviders.length > 0 && (
               <>
                 <div className={cn('px-2 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground', userProviders.length > 0 ? 'pt-3' : 'pt-2')}>
-                  Project Providers
+                  {t('settings.providers.sidebar.section.projectProviders')}
                 </div>
                 {projectProviders.map((provider) => (
                   <ProviderListItem

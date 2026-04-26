@@ -11,6 +11,7 @@ import type { ProjectFileSearchHit } from '@/lib/opencode/client';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { useDirectoryShowHidden } from '@/lib/directoryShowHidden';
 import { useFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
+import { useI18n } from '@/lib/i18n';
 
 type FileInfo = ProjectFileSearchHit;
 type AgentInfo = {
@@ -18,6 +19,8 @@ type AgentInfo = {
   description?: string;
   mode?: string | null;
 };
+const EMPTY_FILES: FileInfo[] = [];
+const EMPTY_AGENTS: AgentInfo[] = [];
 
 export interface FileMentionHandle {
   handleKeyDown: (key: string) => void;
@@ -46,6 +49,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   onTabSelect,
   style,
 }, ref) => {
+  const { t } = useI18n();
   const currentDirectory = useChatSearchDirectory() ?? '';
   const activeProjectId = useProjectsStore((state) => state.activeProjectId);
   const activeProjectPath = useProjectsStore(
@@ -84,8 +88,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const ignoreTabClickRef = React.useRef(false);
   const normalizedSearchQuery = (searchQuery ?? '').trim();
-  const visibleAgents = normalizedSearchQuery.length > 0 ? agents : agents.slice(0, 2);
-
+  const scopeResultsToActiveTab = showTabs === true;
   const recentFiles = React.useMemo(() => {
     if (!projectRoot || !projectTabs) {
       return [] as FileInfo[];
@@ -123,6 +126,15 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
 
     return mapped;
   }, [normalizedSearchQuery, projectRoot, projectTabs]);
+  const visibleAgents = React.useMemo(
+    () => !scopeResultsToActiveTab || activeTab === 'agents'
+      ? (normalizedSearchQuery.length > 0 ? agents : agents.slice(0, 2))
+      : EMPTY_AGENTS,
+    [activeTab, agents, normalizedSearchQuery.length, scopeResultsToActiveTab],
+  );
+  const visibleDirectories = !scopeResultsToActiveTab || activeTab === 'files' ? directories : EMPTY_FILES;
+  const visibleRecentFiles = !scopeResultsToActiveTab || activeTab === 'files' ? recentFiles : EMPTY_FILES;
+  const visibleFiles = !scopeResultsToActiveTab || activeTab === 'files' ? files : EMPTY_FILES;
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -278,7 +290,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     setSelectedIndex(0);
     setOverflowMap({});
     setMarqueeDurations({});
-  }, [files, directories, recentFiles.length, visibleAgents.length]);
+  }, [visibleFiles, visibleDirectories, visibleRecentFiles.length, visibleAgents.length]);
 
   React.useEffect(() => {
     itemRefs.current[selectedIndex]?.scrollIntoView({
@@ -325,7 +337,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
       }
       window.removeEventListener('resize', updateOverflow);
     };
-  }, [files, directories]);
+  }, [visibleFiles, visibleDirectories]);
 
   React.useEffect(() => {
     const labelNode = labelRefs.current[selectedIndex];
@@ -369,7 +381,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         return;
       }
 
-      const total = visibleAgents.length + directories.length + recentFiles.length + files.length;
+      const total = visibleAgents.length + visibleDirectories.length + visibleRecentFiles.length + visibleFiles.length;
       if (total === 0) {
         return;
       }
@@ -394,23 +406,23 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           return;
         }
         const dirIndex = safeIndex - visibleAgents.length;
-        if (dirIndex < directories.length) {
-          const dir = directories[dirIndex];
+        if (dirIndex < visibleDirectories.length) {
+          const dir = visibleDirectories[dirIndex];
           if (dir) {
             handleFileSelect(dir);
           }
           return;
         }
-        const fileIndex = dirIndex - directories.length;
-        const selectedFile = fileIndex < recentFiles.length
-          ? recentFiles[fileIndex]
-          : files[fileIndex - recentFiles.length];
+        const fileIndex = dirIndex - visibleDirectories.length;
+        const selectedFile = fileIndex < visibleRecentFiles.length
+          ? visibleRecentFiles[fileIndex]
+          : visibleFiles[fileIndex - visibleRecentFiles.length];
         if (selectedFile) {
           handleFileSelect(selectedFile);
         }
       }
     }
-  }), [files, directories, recentFiles, visibleAgents, selectedIndex, onClose, handleFileSelect, handleAgentPick]);
+  }), [visibleFiles, visibleDirectories, visibleRecentFiles, visibleAgents, selectedIndex, onClose, handleFileSelect, handleAgentPick]);
 
   const getFileIcon = (file: FileInfo) => {
     const ext = file.extension?.toLowerCase();
@@ -436,6 +448,12 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     }
   };
 
+  const tabs = React.useMemo(() => ([
+    { id: 'commands' as const, label: t('chat.autocomplete.tabs.commands') },
+    { id: 'agents' as const, label: t('chat.autocomplete.tabs.agents') },
+    { id: 'files' as const, label: t('chat.autocomplete.tabs.files') },
+  ]), [t]);
+
   return (
       <div
         ref={containerRef}
@@ -445,11 +463,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
         {showTabs ? (
           <div className="px-2 pt-2 pb-1 border-b border-border/60">
             <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-elevated)] p-1">
-              {([
-                { id: 'commands' as const, label: 'Commands' },
-                { id: 'agents' as const, label: 'Agents' },
-                { id: 'files' as const, label: 'Files' },
-              ]).map((tab) => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
@@ -483,7 +497,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           </div>
         ) : null}
         <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0">
-        {loading ? (
+        {(!scopeResultsToActiveTab || activeTab === 'files') && loading ? (
           <div className="flex items-center justify-center py-4">
             <RiRefreshLine className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
@@ -513,13 +527,13 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
             })}
             {visibleAgents.length === 2 && normalizedSearchQuery.length === 0 && agents.length > 2 && (
               <div className="px-3 py-1 typography-meta text-muted-foreground">
-                Type to search more agents
+                {t('chat.fileMentionAutocomplete.searchMoreAgents')}
               </div>
             )}
-            {visibleAgents.length > 0 && (directories.length > 0 || recentFiles.length > 0 || files.length > 0) && (
+            {visibleAgents.length > 0 && (visibleDirectories.length > 0 || visibleRecentFiles.length > 0 || visibleFiles.length > 0) && (
               <div className="my-1 border-t border-border/60" />
             )}
-            {directories.map((dir, index) => {
+            {visibleDirectories.map((dir, index) => {
               const rowIndex = visibleAgents.length + index;
               const relativePath = dir.relativePath || dir.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
@@ -543,11 +557,11 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 </div>
               );
             })}
-            {directories.length > 0 && (recentFiles.length > 0 || files.length > 0) && (
+            {visibleDirectories.length > 0 && (visibleRecentFiles.length > 0 || visibleFiles.length > 0) && (
               <div className="my-1 border-t border-border/60" />
             )}
-            {recentFiles.map((file, index) => {
-              const rowIndex = visibleAgents.length + directories.length + index;
+            {visibleRecentFiles.map((file, index) => {
+              const rowIndex = visibleAgents.length + visibleDirectories.length + index;
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
@@ -595,11 +609,11 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 </div>
               );
             })}
-            {recentFiles.length > 0 && files.length > 0 && (
+            {visibleRecentFiles.length > 0 && visibleFiles.length > 0 && (
               <div className="my-1 border-t border-border/60" />
             )}
-            {files.map((file, index) => {
-              const rowIndex = visibleAgents.length + directories.length + recentFiles.length + index;
+            {visibleFiles.map((file, index) => {
+              const rowIndex = visibleAgents.length + visibleDirectories.length + visibleRecentFiles.length + index;
               const relativePath = file.relativePath || file.name;
               const displayPath = truncatePathMiddle(relativePath, { maxLength: 60 });
               const isSelected = selectedIndex === rowIndex;
@@ -652,16 +666,16 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
                 </React.Fragment>
               );
             })}
-            {files.length === 0 && directories.length === 0 && recentFiles.length === 0 && visibleAgents.length === 0 && (
+            {visibleFiles.length === 0 && visibleDirectories.length === 0 && visibleRecentFiles.length === 0 && visibleAgents.length === 0 && (
               <div className="px-3 py-2 typography-ui-label text-muted-foreground">
-                No matches found
+                {t('chat.fileMentionAutocomplete.empty')}
               </div>
             )}
           </div>
         )}
         </ScrollableOverlay>
         <div className="px-3 pt-1 pb-1.5 border-t typography-meta text-muted-foreground">
-        ↑↓ navigate • Enter select • Esc close
+        {t('chat.autocomplete.keyboardHint')}
       </div>
     </div>
   );

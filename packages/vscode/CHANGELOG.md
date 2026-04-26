@@ -1,3 +1,23 @@
+## [1.9.9] - 2026-04-26
+
+- UI/Localization: added translated interface strings for Spanish, Brazilian Portuguese, Ukrainian, and Simplified Chinese, with language selection available in extension settings.
+- Settings/Appearance: added selectable interface and code fonts with 10 choices each, and reorganized appearance sections for faster personalization.
+- Chat/Header: restored context usage in the chat header, kept it tooltip-only, and kept rate-limit usage available in expanded layouts.
+- Chat/Workflow: added keyboard turn navigation, widened chat content, and introduced a local workspace review slash command for faster review handoff.
+- Chat/Context: autocomplete and mention results are now easier to scan, with fuller results and clearer active-tab behavior while drafting.
+- Chat/Tasks: todo list progress now updates live as task status changes, and task/model status hints are steadier during active runs (thanks to @Yabuku-xD).
+- Chat/Performance: improved cold start and streaming smoothness with lazy-loaded heavy components, chunk-load recovery, and lower re-render churn in long sessions (thanks to @Yabuku-xD).
+- Reliability/Sync: improved reconnect recovery so active sessions resync more reliably after transient stream interruptions, with safer local-stream buffering (thanks to @jwcrystal, @vhqtvn).
+- Reliability/Startup: improved managed runtime startup by preserving user PATH and skipping stale session directories, reducing startup edge-case failures.
+
+## [1.9.8] - 2026-04-22
+
+- Sessions/Reliability: fixed parent-child session sync during reconnects and navigation, so status and progress stay aligned in nested session trees (thanks to @jwcrystal).
+- Settings/Sync: settings changes now sync more reliably with other clients, and sidebar session pagination is steadier in larger workspaces.
+- Sessions/Folders: folder updates now persist through server-backed APIs, improving consistency across different machine path setups.
+- UI: refined chat chrome with a cleaner bottom scroll fade and hidden idle tasks row.
+- Chat/Commands: added `/summary` slash command for a non-destructive session summary - optional topic hint after the command focuses the output, and the prompt is customizable under Settings: Magic Prompts.
+
 ## [1.9.7] - 2026-04-22
 
 - Sessions/UI: added bulk selection in the sessions sidebar and fixed pinned sessions so they stay pinned after reloads (thanks to @yart).

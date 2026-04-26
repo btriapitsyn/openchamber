@@ -644,6 +644,8 @@ export interface SettingsPayload {
   mermaidRenderingMode?: 'svg' | 'ascii';
   fontSize?: number;
   terminalFontSize?: number;
+  uiFont?: string;
+  monoFont?: string;
   padding?: number;
   cornerRadius?: number;
   inputBarOffset?: number;

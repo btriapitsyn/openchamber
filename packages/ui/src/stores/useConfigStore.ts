@@ -62,6 +62,7 @@ interface OpenChamberDefaults {
     defaultAgent?: string;
     autoCreateWorktree?: boolean;
     gitmojiEnabled?: boolean;
+    defaultFileViewerPreview?: boolean;
     zenModel?: string;
     messageStreamTransport?: 'auto' | 'ws' | 'sse';
 }
@@ -79,6 +80,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                     const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
                     const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
                     const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
+                    const defaultFileViewerPreview = typeof data?.defaultFileViewerPreview === 'boolean' ? data.defaultFileViewerPreview : undefined;
                     const zenModel = typeof data?.zenModel === 'string' ? data.zenModel.trim() : '';
                     const messageStreamTransport =
                         data?.messageStreamTransport === 'ws' || data?.messageStreamTransport === 'sse' || data?.messageStreamTransport === 'auto'
@@ -91,6 +93,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
                         defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
                         autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
                         gitmojiEnabled,
+                        defaultFileViewerPreview,
                         zenModel: zenModel.length > 0 ? zenModel : undefined,
                         messageStreamTransport,
                     };
@@ -113,6 +116,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
         const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
         const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
+        const defaultFileViewerPreview = typeof data?.defaultFileViewerPreview === 'boolean' ? data.defaultFileViewerPreview : undefined;
         const zenModel = typeof data?.zenModel === 'string' ? data.zenModel.trim() : '';
         const messageStreamTransport =
             data?.messageStreamTransport === 'ws' || data?.messageStreamTransport === 'sse' || data?.messageStreamTransport === 'auto'
@@ -125,6 +129,7 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
             defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
             autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
             gitmojiEnabled,
+            defaultFileViewerPreview,
             zenModel: zenModel.length > 0 ? zenModel : undefined,
             messageStreamTransport,
         };
@@ -455,6 +460,14 @@ const ensureModelsMetadataFetch = (
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const CONNECTION_PROBE_TIMEOUT_MS = 800;
+
+const probeOpenCodeHealth = async (timeoutMs = CONNECTION_PROBE_TIMEOUT_MS): Promise<boolean> => {
+    return Promise.race([
+        opencodeClient.checkHealth().catch(() => false),
+        sleep(Math.max(1, timeoutMs)).then(() => false),
+    ]);
+};
 
 const DIRECTORY_KEY_GLOBAL = "__global__";
 
@@ -503,6 +516,8 @@ interface ConfigStore {
     agentModelSelections: { [agentName: string]: { providerId: string; modelId: string } };
     defaultProviders: { [key: string]: string };
     isConnected: boolean;
+    hasEverConnected: boolean;
+    connectionPhase: "connecting" | "connected" | "reconnecting";
     lastDisconnectReason: string | null;
     isInitialized: boolean;
     modelsMetadata: Map<string, ModelMetadata>;
@@ -512,6 +527,7 @@ interface ConfigStore {
     settingsDefaultAgent: string | undefined;
     settingsAutoCreateWorktree: boolean;
     settingsGitmojiEnabled: boolean;
+    settingsDefaultFileViewerPreview: boolean;
     settingsZenModel: string | undefined;
     settingsMessageStreamTransport: 'auto' | 'ws' | 'sse';
     // Voice provider preference ('browser', 'openai', 'openai-compatible', or 'say' for macOS)
@@ -583,11 +599,13 @@ interface ConfigStore {
     setSettingsDefaultAgent: (agent: string | undefined) => void;
     setSettingsAutoCreateWorktree: (enabled: boolean) => void;
     setSettingsGitmojiEnabled: (enabled: boolean) => void;
+    setSettingsDefaultFileViewerPreview: (enabled: boolean) => void;
     setSettingsZenModel: (model: string | undefined) => void;
     setSettingsMessageStreamTransport: (transport: 'auto' | 'ws' | 'sse') => void;
     getResolvedGitGenerationModel: () => { providerId: string; modelId: string } | null;
     saveAgentModelSelection: (agentName: string, providerId: string, modelId: string) => void;
     getAgentModelSelection: (agentName: string) => { providerId: string; modelId: string } | null;
+    probeConnection: (options?: { timeoutMs?: number }) => Promise<boolean>;
     checkConnection: () => Promise<boolean>;
     initializeApp: () => Promise<void>;
     getCurrentProvider: () => ProviderWithModelList | undefined;
@@ -637,6 +655,8 @@ export const useConfigStore = create<ConfigStore>()(
                 agentModelSelections: {},
                 defaultProviders: {},
                 isConnected: false,
+                hasEverConnected: false,
+                connectionPhase: "connecting",
                 lastDisconnectReason: null,
                 isInitialized: false,
                 modelsMetadata: new Map<string, ModelMetadata>(),
@@ -645,6 +665,7 @@ export const useConfigStore = create<ConfigStore>()(
                 settingsDefaultAgent: undefined,
                 settingsAutoCreateWorktree: false,
                 settingsGitmojiEnabled: false,
+                settingsDefaultFileViewerPreview: false,
                 settingsZenModel: undefined,
                 settingsMessageStreamTransport: 'auto',
                 // Voice provider preference - load from localStorage or default to 'browser'
@@ -1469,6 +1490,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     settingsDefaultAgent: openChamberDefaults.defaultAgent,
                                     settingsAutoCreateWorktree: openChamberDefaults.autoCreateWorktree ?? false,
                                     settingsGitmojiEnabled: openChamberDefaults.gitmojiEnabled ?? false,
+                                    settingsDefaultFileViewerPreview: openChamberDefaults.defaultFileViewerPreview ?? false,
                                     settingsZenModel: resolvedZenModel,
                                     settingsMessageStreamTransport: openChamberDefaults.messageStreamTransport ?? state.settingsMessageStreamTransport ?? 'auto',
                                     directoryScoped: {
@@ -1929,6 +1951,10 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ settingsGitmojiEnabled: enabled });
                 },
 
+                setSettingsDefaultFileViewerPreview: (enabled: boolean) => {
+                    set({ settingsDefaultFileViewerPreview: enabled });
+                },
+
                 setSettingsZenModel: (model: string | undefined) => {
                     set({ settingsZenModel: model });
                 },
@@ -2111,6 +2137,26 @@ export const useConfigStore = create<ConfigStore>()(
                     }
                 },
 
+                probeConnection: async (options?: { timeoutMs?: number }) => {
+                    const isHealthy = await probeOpenCodeHealth(options?.timeoutMs);
+                    if (isHealthy) {
+                        set({ isConnected: true, hasEverConnected: true, connectionPhase: "connected" });
+                        return true;
+                    }
+
+                    const state = get();
+                    if (state.isConnected) {
+                        return true;
+                    }
+
+                    set({
+                        isConnected: false,
+                        connectionPhase: state.hasEverConnected ? "reconnecting" : "connecting",
+                        lastDisconnectReason: 'health_probe_unhealthy',
+                    });
+                    return false;
+                },
+
                 checkConnection: async () => {
                     const maxAttempts = 5;
                     let attempt = 0;
@@ -2119,7 +2165,14 @@ export const useConfigStore = create<ConfigStore>()(
                     while (attempt < maxAttempts) {
                         try {
                             const isHealthy = await opencodeClient.checkHealth();
-                            set({ isConnected: isHealthy });
+                            const hasEverConnected = get().hasEverConnected;
+                            set(isHealthy
+                                ? { isConnected: true, hasEverConnected: true, connectionPhase: "connected" }
+                                : {
+                                    isConnected: false,
+                                    connectionPhase: hasEverConnected ? "reconnecting" : "connecting",
+                                    lastDisconnectReason: 'health_check_unhealthy',
+                                });
                             return isHealthy;
                         } catch (error) {
                             lastError = error;
@@ -2132,7 +2185,11 @@ export const useConfigStore = create<ConfigStore>()(
                     if (lastError) {
                         console.warn("[ConfigStore] Failed to reach OpenCode after retrying:", lastError);
                     }
-                    set({ isConnected: false });
+                    set({
+                        isConnected: false,
+                        connectionPhase: get().hasEverConnected ? "reconnecting" : "connecting",
+                        lastDisconnectReason: 'health_check_failed',
+                    });
                     return false;
                 },
 
@@ -2146,7 +2203,11 @@ export const useConfigStore = create<ConfigStore>()(
 
                         if (!isConnected) {
                             if (debug) console.log("Server not connected");
-                            set({ isConnected: false });
+                            // checkConnection already set lastDisconnectReason; do not overwrite.
+                            set({
+                                isConnected: false,
+                                connectionPhase: get().hasEverConnected ? "reconnecting" : "connecting",
+                            });
                             return;
                         }
 
@@ -2163,11 +2224,16 @@ export const useConfigStore = create<ConfigStore>()(
                             await get().loadAgents();
                         }
 
-                        set({ isInitialized: true, isConnected: true });
+                        set({ isInitialized: true, isConnected: true, hasEverConnected: true, connectionPhase: "connected" });
                         if (debug) console.log("App initialized successfully");
                     } catch (error) {
                         console.error("Failed to initialize app:", error);
-                        set({ isInitialized: false, isConnected: false });
+                        set({
+                            isInitialized: false,
+                            isConnected: false,
+                            connectionPhase: get().hasEverConnected ? "reconnecting" : "connecting",
+                            lastDisconnectReason: 'init_error',
+                        });
                     }
                 },
 
@@ -2236,6 +2302,7 @@ export const useConfigStore = create<ConfigStore>()(
                     settingsDefaultAgent: state.settingsDefaultAgent,
                     settingsAutoCreateWorktree: state.settingsAutoCreateWorktree,
                     settingsGitmojiEnabled: state.settingsGitmojiEnabled,
+                    settingsDefaultFileViewerPreview: state.settingsDefaultFileViewerPreview,
                     settingsZenModel: state.settingsZenModel,
                     settingsMessageStreamTransport: state.settingsMessageStreamTransport,
                     speechRate: state.speechRate,

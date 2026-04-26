@@ -40,6 +40,7 @@ import {
 import { useSync } from '@/sync/use-sync';
 import { usePlanDetection } from '@/hooks/usePlanDetection';
 import { getAllSyncSessions } from '@/sync/sync-refs';
+import { useI18n } from '@/lib/i18n';
 
 import { EMPTY_OBJECT, EMPTY_PERMISSION_REQUESTS, EMPTY_QUESTION_REQUESTS, emptyArray } from '@/constants/empty';
 const EMPTY_MESSAGES: Array<{ info: Message; parts: Part[] }> = emptyArray<{ info: Message; parts: Part[] }>() as Array<{ info: Message; parts: Part[] }>;
@@ -47,7 +48,72 @@ const IDLE_SESSION_STATUS = { type: 'idle' as const };
 const SESSION_RESELECTED_EVENT = 'openchamber:session-reselected';
 const DEFAULT_RETRY_MESSAGE = 'Quota limit reached. Retrying automatically.';
 const CHAT_SCROLL_STYLE = { overflowAnchor: 'none' } as const;
+const CHAT_NAVIGATION_IGNORED_TARGET_SELECTOR = [
+    'a[href]',
+    'button',
+    'input',
+    'select',
+    'textarea',
+    '[contenteditable="true"]',
+    '[role="button"]',
+    '[role="combobox"]',
+    '[role="dialog"]',
+    '[role="listbox"]',
+    '[role="menu"]',
+    '[role="menuitem"]',
+    '[role="option"]',
+    '[role="textbox"]',
+    '[data-radix-popper-content-wrapper]',
+].join(',');
 type SessionMessageRecord = { info: Message; parts: Part[] };
+
+const isHTMLElement = (target: EventTarget | null): target is HTMLElement => {
+    return target instanceof HTMLElement;
+};
+
+const shouldIgnoreChatNavigationTarget = (target: EventTarget | null): boolean => {
+    if (!isHTMLElement(target)) {
+        return false;
+    }
+
+    return Boolean(target.closest(CHAT_NAVIGATION_IGNORED_TARGET_SELECTOR));
+};
+
+const shouldIgnoreChatNavigationForFocus = (activeElement: Element | null, scrollContainer: HTMLElement | null): boolean => {
+    if (typeof document === 'undefined') {
+        return true;
+    }
+
+    if (!activeElement || activeElement === document.body || activeElement === document.documentElement) {
+        return true;
+    }
+
+    if (shouldIgnoreChatNavigationTarget(activeElement)) {
+        return true;
+    }
+
+    return !scrollContainer?.contains(activeElement);
+};
+
+const hasBlockingChatOverlay = (): boolean => {
+    const {
+        isAboutDialogOpen,
+        isCommandPaletteOpen,
+        isHelpDialogOpen,
+        isImagePreviewOpen,
+        isMultiRunLauncherOpen,
+        isSessionSwitcherOpen,
+        isSettingsDialogOpen,
+    } = useUIStore.getState();
+
+    return isAboutDialogOpen
+        || isCommandPaletteOpen
+        || isHelpDialogOpen
+        || isImagePreviewOpen
+        || isMultiRunLauncherOpen
+        || isSessionSwitcherOpen
+        || isSettingsDialogOpen;
+};
 
 type HydratingToolSkeletonRow = {
     id: string;
@@ -109,6 +175,18 @@ const ChatViewport = React.memo(({
     sessionPermissions,
     isProgrammaticFollowActive,
 }: ChatViewportProps) => {
+    const focusScrollContainer = React.useCallback((event: React.MouseEvent<HTMLElement>) => {
+        if (event.defaultPrevented || shouldIgnoreChatNavigationTarget(event.target)) {
+            return;
+        }
+
+        if (typeof window !== 'undefined' && window.getSelection()?.type === 'Range') {
+            return;
+        }
+
+        scrollRef.current?.focus({ preventScroll: true });
+    }, [scrollRef]);
+
     return (
         <div
             className={cn(
@@ -126,6 +204,8 @@ const ChatViewport = React.memo(({
                     style={CHAT_SCROLL_STYLE}
                     observeMutations={false}
                     hideTopShadow={isMobile && stickyUserHeader}
+                    tabIndex={0}
+                    onClick={focusScrollContainer}
                     data-scroll-shadow="true"
                     data-scrollbar="chat"
                 >
@@ -230,6 +310,7 @@ const HYDRATING_SKELETON_ITEMS: Array<{
 ];
 
 export const ChatContainer: React.FC = () => {
+    const { t } = useI18n();
     // Session UI state
     const currentSessionId = useSessionUIStore((s) => s.currentSessionId);
     const openNewSessionDraft = useSessionUIStore((s) => s.openNewSessionDraft);
@@ -431,11 +512,13 @@ export const ChatContainer: React.FC = () => {
             size="xs"
             onClick={handleReturnToParentSession}
             className="absolute left-3 top-3 z-20 !font-normal bg-[var(--surface-background)]/95"
-            aria-label="Return to parent session"
-            title={parentSession.title?.trim() ? `Return to: ${parentSession.title}` : 'Return to parent session'}
+            aria-label={t('chat.container.returnToParent.aria')}
+            title={parentSession.title?.trim()
+                ? t('chat.container.returnToParent.titleNamed', { title: parentSession.title })
+                : t('chat.container.returnToParent.title')}
         >
             <RiArrowLeftLine className="h-4 w-4" />
-            Parent
+            {t('chat.container.returnToParent.label')}
         </Button>
     ) : null;
 
@@ -527,6 +610,49 @@ export const ChatContainer: React.FC = () => {
         scrollToMessage: timelineController.scrollToMessage,
         resumeToBottom: timelineController.resumeToBottomInstant,
     });
+
+    React.useEffect(() => {
+        if (typeof window === 'undefined' || !currentSessionId || isDesktopExpandedInput) {
+            return;
+        }
+
+        const handleChatTurnKeyDown = (event: KeyboardEvent) => {
+            if (event.defaultPrevented || event.isComposing) {
+                return;
+            }
+
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+                return;
+            }
+
+            if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+                return;
+            }
+
+            const { activeMainTab } = useUIStore.getState();
+            if (activeMainTab !== 'chat' || hasBlockingChatOverlay()) {
+                return;
+            }
+
+            const scrollContainer = scrollRef.current;
+            if (shouldIgnoreChatNavigationForFocus(document.activeElement, scrollContainer)) {
+                return;
+            }
+
+            if (shouldIgnoreChatNavigationTarget(event.target)) {
+                return;
+            }
+
+            event.preventDefault();
+            const offset = event.key === 'ArrowUp' ? -1 : 1;
+            void navigation.scrollByTurnOffset(offset, { resumePastEnd: false });
+        };
+
+        window.addEventListener('keydown', handleChatTurnKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleChatTurnKeyDown);
+        };
+    }, [currentSessionId, isDesktopExpandedInput, navigation, scrollRef]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined' || !currentSessionId) return;
@@ -639,39 +765,33 @@ export const ChatContainer: React.FC = () => {
         void load();
     }, [currentSessionId, hasLoadedSessionMessages, isPinned, loadMessages, resumeToLatestInstant, sessionStatusForCurrent.type]);
 
-    if (!currentSessionId && !draftOpen) {
-        return (
-            <div
-                className="flex flex-col h-full bg-background"
-                style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
-            >
-                <ChatEmptyState />
-            </div>
-        );
-    }
+	if (!currentSessionId && !draftOpen) {
+		return (
+			<div className="flex flex-col h-full bg-background">
+				<ChatEmptyState />
+			</div>
+		);
+	}
 
-    if (!currentSessionId && draftOpen) {
-        return (
-            <div
-                className="relative flex flex-col h-full bg-background transform-gpu"
-                style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
-            >
-                {!isDesktopExpandedInput ? (
-                <div className="flex-1 flex items-center justify-center">
-                    <ChatEmptyState />
-                </div>
-                ) : null}
+	if (!currentSessionId && draftOpen) {
+		return (
+			<div className="relative flex flex-col h-full bg-background transform-gpu">
+				{!isDesktopExpandedInput ? (
+				<div className="flex-1 flex items-center justify-center">
+					<ChatEmptyState />
+				</div>
+				) : null}
                 <div
                     className={cn(
                         'relative z-10',
-                        isDesktopExpandedInput
-                            ? 'flex-1 min-h-0 bg-background'
-                            : 'bg-background'
-                    )}
-                >
-                        <ChatInput scrollToBottom={resumeToLatestInstant} />
-                </div>
-            </div>
+						isDesktopExpandedInput
+							? 'flex-1 min-h-0 bg-background'
+							: 'bg-background'
+					)}
+				>
+						<ChatInput scrollToBottom={resumeToLatestInstant} />
+				</div>
+			</div>
         );
     }
 
@@ -679,16 +799,13 @@ export const ChatContainer: React.FC = () => {
         return null;
     }
 
-    if (isSessionHydrating && sessionMessages.length === 0 && !streamingMessageId) {
-        return (
-            <div
-                className="relative flex flex-col h-full bg-background"
-                style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
-            >
-                {returnToParentButton}
-                <div
-                    className={cn(
-                        'relative min-h-0',
+	if (isSessionHydrating && sessionMessages.length === 0 && !streamingMessageId) {
+		return (
+			<div className="relative flex flex-col h-full bg-background">
+				{returnToParentButton}
+				<div
+					className={cn(
+						'relative min-h-0',
                         isDesktopExpandedInput
                             ? 'absolute inset-0 opacity-0 pointer-events-none'
                             : 'flex-1'
@@ -727,26 +844,23 @@ export const ChatContainer: React.FC = () => {
                 <div
                     className={cn(
                         'relative z-10',
-                        isDesktopExpandedInput
-                            ? 'flex-1 min-h-0 bg-background'
-                            : 'bg-background'
-                    )}
-                >
-                    <ChatInput scrollToBottom={resumeToLatestInstant} />
-                </div>
+						isDesktopExpandedInput
+							? 'flex-1 min-h-0 bg-background'
+							: 'bg-background'
+					)}
+				>
+					<ChatInput scrollToBottom={resumeToLatestInstant} />
+				</div>
             </div>
         );
     }
 
-    if (sessionMessages.length === 0 && !streamingMessageId) {
-        return (
-            <div
-                className="relative flex flex-col h-full bg-background transform-gpu"
-                style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
-            >
-                {returnToParentButton}
-                <div
-                    className={cn(
+	if (sessionMessages.length === 0 && !streamingMessageId) {
+		return (
+			<div className="relative flex flex-col h-full bg-background transform-gpu">
+				{returnToParentButton}
+				<div
+					className={cn(
                         'relative min-h-0',
                         isDesktopExpandedInput
                             ? 'absolute inset-0 opacity-0 pointer-events-none'
@@ -763,25 +877,22 @@ export const ChatContainer: React.FC = () => {
                 <div
                     className={cn(
                         'relative z-10',
-                        isDesktopExpandedInput
-                            ? 'flex-1 min-h-0 bg-background'
-                            : 'bg-background'
-                    )}
-                >
-                    <ChatInput scrollToBottom={resumeToLatestInstant} />
-                </div>
+						isDesktopExpandedInput
+							? 'flex-1 min-h-0 bg-background'
+							: 'bg-background'
+					)}
+				>
+					<ChatInput scrollToBottom={resumeToLatestInstant} />
+				</div>
             </div>
         );
     }
 
-    return (
-        <div
-            className="relative flex flex-col h-full bg-background"
-            style={isMobile ? { paddingBottom: 'var(--oc-keyboard-inset, 0px)' } : undefined}
-        >
-            {returnToParentButton}
-            <ChatViewport
-                currentSessionId={currentSessionId}
+	return (
+		<div className="relative flex flex-col h-full bg-background">
+			{returnToParentButton}
+			<ChatViewport
+				currentSessionId={currentSessionId}
                 isDesktopExpandedInput={isDesktopExpandedInput}
                 isMobile={isMobile}
                 stickyUserHeader={stickyUserHeader}
@@ -808,13 +919,13 @@ export const ChatContainer: React.FC = () => {
             <div
                 className={cn(
                     'relative z-10',
-                    isDesktopExpandedInput
-                        ? 'flex-1 min-h-0 bg-background'
-                        : 'bg-background'
-                )}
-            >
-                {!isDesktopExpandedInput && sessionMessages.length > 0 && (
-                    <ScrollToBottomButton
+					isDesktopExpandedInput
+						? 'flex-1 min-h-0 bg-background'
+						: 'bg-background'
+				)}
+			>
+				{!isDesktopExpandedInput && sessionMessages.length > 0 && (
+					<ScrollToBottomButton
                         visible={timelineController.showScrollToBottom}
                         onClick={navigation.resumeToLatest}
                     />

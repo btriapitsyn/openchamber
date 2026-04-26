@@ -12,10 +12,20 @@ type Listener = (event: OpenChamberEvent) => void;
 
 let eventSource: EventSource | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempt = 0;
 const listeners = new Set<Listener>();
 
 const MAX_RECONNECT_DELAY_MS = 30_000;
+const HEARTBEAT_TIMEOUT_MS = 45_000;
+
+const clearHeartbeatTimer = () => {
+  if (!heartbeatTimer) {
+    return;
+  }
+  clearTimeout(heartbeatTimer);
+  heartbeatTimer = null;
+};
 
 const scheduleReconnect = () => {
   if (reconnectTimer || listeners.size === 0) {
@@ -30,10 +40,22 @@ const scheduleReconnect = () => {
 };
 
 const cleanupSource = () => {
+  clearHeartbeatTimer();
   if (eventSource) {
     eventSource.close();
   }
   eventSource = null;
+};
+
+const resetHeartbeatTimer = () => {
+  clearHeartbeatTimer();
+  if (listeners.size === 0) {
+    return;
+  }
+  heartbeatTimer = setTimeout(() => {
+    cleanupSource();
+    scheduleReconnect();
+  }, HEARTBEAT_TIMEOUT_MS);
 };
 
 const parseEnvelope = (raw: string): { type: string; properties: unknown } | null => {
@@ -57,6 +79,10 @@ const parseEnvelope = (raw: string): { type: string; properties: unknown } | nul
 const dispatchFromEnvelope = (envelope: { type: string; properties: unknown }) => {
   if (envelope.type === 'openchamber:event-stream-ready') {
     reconnectAttempt = 0;
+    return;
+  }
+
+  if (envelope.type === 'openchamber:heartbeat') {
     return;
   }
 
@@ -93,10 +119,22 @@ const connect = () => {
   if (typeof window === 'undefined' || listeners.size === 0) {
     return;
   }
+  if (typeof EventSource !== 'function') {
+    return;
+  }
+
+  if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
+    return;
+  }
+
   cleanupSource();
 
   const source = new EventSource('/api/openchamber/events');
+  source.onopen = () => {
+    resetHeartbeatTimer();
+  };
   source.onmessage = (event) => {
+    resetHeartbeatTimer();
     const envelope = parseEnvelope(event.data);
     if (!envelope) {
       return;

@@ -1,6 +1,9 @@
 export const MESSAGE_STREAM_GLOBAL_WS_PATH = '/api/global/event/ws';
 export const MESSAGE_STREAM_DIRECTORY_WS_PATH = '/api/event/ws';
 export const MESSAGE_STREAM_WS_HEARTBEAT_INTERVAL_MS = 15 * 1000;
+// Per-client pending outbound WS buffer, not a payload or stream-size limit.
+// Healthy clients stay near 0; this only trips when a client is far behind.
+export const MESSAGE_STREAM_WS_MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
 
 export function parseSseEventEnvelope(block) {
   if (!block || typeof block !== 'string') {
@@ -64,8 +67,23 @@ export function sendMessageStreamWsFrame(socket, payload) {
     return false;
   }
 
+  if (typeof socket.bufferedAmount === 'number' && socket.bufferedAmount > MESSAGE_STREAM_WS_MAX_BUFFERED_BYTES) {
+    try {
+      socket.close(1013, 'Message stream client is too slow');
+    } catch {
+    }
+    return false;
+  }
+
   try {
     socket.send(JSON.stringify(payload));
+    if (typeof socket.bufferedAmount === 'number' && socket.bufferedAmount > MESSAGE_STREAM_WS_MAX_BUFFERED_BYTES) {
+      try {
+        socket.close(1013, 'Message stream client is too slow');
+      } catch {
+      }
+      return false;
+    }
     return true;
   } catch {
     return false;

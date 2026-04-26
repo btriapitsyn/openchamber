@@ -20,10 +20,22 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
+import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { isDesktopShell } from '@/lib/desktop';
+import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 
-import { ChatView, PlanView, GitView, DiffView, TerminalView, FilesView, SettingsView, SettingsWindow, MultiRunWindow } from '@/components/views';
+import { ChatView } from '@/components/views';
+
+// Heavy views loaded on-demand to reduce initial bundle parse time.
+const PlanView = lazyWithChunkRecovery(() => import('@/components/views/PlanView').then(m => ({ default: m.PlanView })));
+const GitView = lazyWithChunkRecovery(() => import('@/components/views/GitView').then(m => ({ default: m.GitView })));
+const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then(m => ({ default: m.DiffView })));
+const TerminalView = lazyWithChunkRecovery(() => import('@/components/views/TerminalView').then(m => ({ default: m.TerminalView })));
+const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then(m => ({ default: m.FilesView })));
+const SettingsView = lazyWithChunkRecovery(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
+const SettingsWindow = lazyWithChunkRecovery(() => import('@/components/views/SettingsWindow').then(m => ({ default: m.SettingsWindow })));
+const MultiRunWindow = lazyWithChunkRecovery(() => import('@/components/views/MultiRunWindow').then(m => ({ default: m.MultiRunWindow })));
 
 // Mobile drawer width as screen percentage
 const MOBILE_DRAWER_WIDTH_PERCENT = 85;
@@ -52,6 +64,7 @@ const normalizeDirectoryKey = (value: string): string => {
 };
 
 export const MainLayout: React.FC = () => {
+    const { t } = useI18n();
     const RIGHT_SIDEBAR_AUTO_CLOSE_WIDTH = 1140;
     const RIGHT_SIDEBAR_AUTO_OPEN_WIDTH = 1220;
     const BOTTOM_TERMINAL_AUTO_CLOSE_HEIGHT = 640;
@@ -340,271 +353,18 @@ export const MainLayout: React.FC = () => {
         };
     }, []);
 
-    React.useEffect(() => {
-        if (typeof window === 'undefined' || typeof document === 'undefined') {
-            return;
-        }
-
-        const root = document.documentElement;
-
-        let stickyKeyboardInset = 0;
-        let ignoreOpenUntilZero = false;
-        let previousHeight = 0;
-        let keyboardAvoidTarget: HTMLElement | null = null;
-
-        const setKeyboardOpen = useUIStore.getState().setKeyboardOpen;
-
-        const clearKeyboardAvoidTarget = () => {
-            if (!keyboardAvoidTarget) {
-                return;
-            }
-            keyboardAvoidTarget.style.setProperty('--oc-keyboard-avoid-offset', '0px');
-            keyboardAvoidTarget.removeAttribute('data-keyboard-avoid-active');
-            keyboardAvoidTarget = null;
-        };
-
-        const resolveKeyboardAvoidTarget = (active: HTMLElement | null) => {
-            if (!active) {
-                return null;
-            }
-            const explicitTargetId = active.getAttribute('data-keyboard-avoid-target-id');
-            if (explicitTargetId) {
-                const explicitTarget = document.getElementById(explicitTargetId);
-                if (explicitTarget instanceof HTMLElement) {
-                    return explicitTarget;
-                }
-            }
-            const markedTarget = active.closest('[data-keyboard-avoid]') as HTMLElement | null;
-            if (markedTarget) {
-                // data-keyboard-avoid="none" opts out of translateY avoidance entirely.
-                // Used by components with their own scroll (e.g. CodeMirror).
-                if (markedTarget.getAttribute('data-keyboard-avoid') === 'none') {
-                    return null;
-                }
-                return markedTarget;
-            }
-            if (active.classList.contains('overlay-scrollbar-container')) {
-                const parent = active.parentElement;
-                if (parent instanceof HTMLElement) {
-                    return parent;
-                }
-            }
-            return active;
-        };
-
-        const forceKeyboardClosed = () => {
-            stickyKeyboardInset = 0;
-            ignoreOpenUntilZero = true;
-            root.style.setProperty('--oc-keyboard-inset', '0px');
-            setKeyboardOpen(false);
-        };
-
-        // Batch visualViewport updates to once per animation frame to avoid
-        // layout thrashing during keyboard open/close animations.
-        let rafId = 0;
-
-        const updateVisualViewport = () => {
-            const viewport = window.visualViewport;
-
-            const height = viewport ? Math.round(viewport.height) : window.innerHeight;
-            const offsetTop = viewport ? Math.max(0, Math.round(viewport.offsetTop)) : 0;
-
-            root.style.setProperty('--oc-visual-viewport-offset-top', `${offsetTop}px`);
-
-            const active = document.activeElement as HTMLElement | null;
-            const tagName = active?.tagName;
-            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-            const isTextTarget = isInput || Boolean(active?.isContentEditable);
-
-            const layoutHeight = Math.round(root.clientHeight || window.innerHeight);
-            const viewportSum = height + offsetTop;
-            const rawInset = Math.max(0, layoutHeight - viewportSum);
-
-            // Keyboard heuristic:
-            // - when an input is focused, smaller deltas can still be keyboard
-            // - when not focused, treat only big deltas as keyboard (ignore toolbars)
-            const openThreshold = isTextTarget ? 120 : 180;
-            const measuredInset = rawInset >= openThreshold ? rawInset : 0;
-
-            // Make the UI stable: treat keyboard inset as a step function.
-            // - When opening: take the first big inset and hold it.
-            // - When closing starts: immediately drop to 0 (even if keyboard animation continues).
-            // Closing start signals:
-            // - focus lost (handled via focusout)
-            // - visual viewport height starts increasing while inset is non-zero
-            if (ignoreOpenUntilZero) {
-                if (measuredInset === 0) {
-                    ignoreOpenUntilZero = false;
-                }
-                stickyKeyboardInset = 0;
-            } else if (stickyKeyboardInset === 0) {
-                if (measuredInset > 0 && isTextTarget) {
-                    stickyKeyboardInset = measuredInset;
-                }
-            } else {
-                // Only detect closing-by-height when focus is NOT on text input
-                // (prevents false positives during Android keyboard animation)
-                const closingByHeight = !isTextTarget && height > previousHeight + 6;
-
-                if (measuredInset === 0) {
-                    stickyKeyboardInset = 0;
-                    setKeyboardOpen(false);
-                } else if (closingByHeight) {
-                    forceKeyboardClosed();
-                } else if (measuredInset > 0 && isTextTarget) {
-                    // When focus is on text input, track actual inset (allows settling
-                    // to correct value after Android animation fluctuations)
-                    stickyKeyboardInset = measuredInset;
-                    setKeyboardOpen(true);
-                } else if (measuredInset > stickyKeyboardInset) {
-                    stickyKeyboardInset = measuredInset;
-                    setKeyboardOpen(true);
-                }
-            }
-
-            root.style.setProperty('--oc-keyboard-inset', `${stickyKeyboardInset}px`);
-            previousHeight = height;
-
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            const keyboardHomeIndicator = isIOS && stickyKeyboardInset > 0 ? 34 : 0;
-            root.style.setProperty('--oc-keyboard-home-indicator', `${keyboardHomeIndicator}px`);
-
-            const avoidTarget = isTextTarget ? resolveKeyboardAvoidTarget(active) : null;
-
-            if (!isMobile || !avoidTarget || !active) {
-                clearKeyboardAvoidTarget();
-            } else {
-                if (avoidTarget !== keyboardAvoidTarget) {
-                    clearKeyboardAvoidTarget();
-                    keyboardAvoidTarget = avoidTarget;
-                }
-                const viewportBottom = offsetTop + height;
-                const rect = active.getBoundingClientRect();
-                const overlap = rect.bottom - viewportBottom;
-                const clearance = 8;
-                const keyboardInset = Math.max(stickyKeyboardInset, measuredInset);
-                const avoidOffset = overlap > clearance && keyboardInset > 0
-                    ? Math.min(overlap, keyboardInset)
-                    : 0;
-                const target = keyboardAvoidTarget;
-                if (target) {
-                    target.style.setProperty('--oc-keyboard-avoid-offset', `${avoidOffset}px`);
-                    target.setAttribute('data-keyboard-avoid-active', 'true');
-                }
-            }
-
-            // Only force-scroll lock while an input is focused.
-            if (isMobile && isTextTarget) {
-                const scroller = document.scrollingElement;
-                if (scroller && scroller.scrollTop !== 0) {
-                    scroller.scrollTop = 0;
-                }
-                if (window.scrollY !== 0) {
-                    window.scrollTo(0, 0);
-                }
-            }
-        };
-
-        const scheduleVisualViewportUpdate = () => {
-            if (rafId) return;
-            rafId = requestAnimationFrame(() => {
-                rafId = 0;
-                updateVisualViewport();
-            });
-        };
-
-        updateVisualViewport();
-
-        const viewport = window.visualViewport;
-        viewport?.addEventListener('resize', scheduleVisualViewportUpdate);
-        viewport?.addEventListener('scroll', scheduleVisualViewportUpdate);
-        window.addEventListener('resize', scheduleVisualViewportUpdate);
-        window.addEventListener('orientationchange', scheduleVisualViewportUpdate);
-        const isTextInputTarget = (element: HTMLElement | null) => {
-            if (!element) {
-                return false;
-            }
-            const tagName = element.tagName;
-            const isInput = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
-            return isInput || element.isContentEditable;
-        };
-
-        // Reset ignoreOpenUntilZero when focus moves to a text input.
-        // This allows keyboard detection to work when user taps input quickly
-        // while keyboard is still closing (common on Android).
-        const handleFocusIn = (event: FocusEvent) => {
-            const target = event.target as HTMLElement | null;
-            if (isTextInputTarget(target)) {
-                ignoreOpenUntilZero = false;
-            }
-            scheduleVisualViewportUpdate();
-        };
-        document.addEventListener('focusin', handleFocusIn, true);
-
-        const handleFocusOut = (event: FocusEvent) => {
-            const target = event.target as HTMLElement | null;
-            if (!isTextInputTarget(target)) {
-                return;
-            }
-
-            // Check if focus is moving to another input - if so, don't close keyboard
-            const related = event.relatedTarget as HTMLElement | null;
-            if (isTextInputTarget(related)) {
-                return;
-            }
-
-            // On mobile contenteditable editors (CodeMirror), focus can momentarily
-            // leave and return during drag-selection handles. Defer closing until the
-            // next frame and only close when no text target is focused and the
-            // visual viewport inset is actually zero.
-            window.requestAnimationFrame(() => {
-                if (isTextInputTarget(document.activeElement as HTMLElement | null)) {
-                    return;
-                }
-
-                const currentViewport = window.visualViewport;
-                const height = currentViewport ? Math.round(currentViewport.height) : window.innerHeight;
-                const offsetTop = currentViewport ? Math.max(0, Math.round(currentViewport.offsetTop)) : 0;
-                const layoutHeight = Math.round(root.clientHeight || window.innerHeight);
-                const viewportSum = height + offsetTop;
-                const rawInset = Math.max(0, layoutHeight - viewportSum);
-
-                if (rawInset > 0) {
-                    updateVisualViewport();
-                    return;
-                }
-
-                forceKeyboardClosed();
-                updateVisualViewport();
-            });
-        };
-
-        document.addEventListener('focusout', handleFocusOut, true);
-
-        return () => {
-            if (rafId) cancelAnimationFrame(rafId);
-            viewport?.removeEventListener('resize', scheduleVisualViewportUpdate);
-            viewport?.removeEventListener('scroll', scheduleVisualViewportUpdate);
-            window.removeEventListener('resize', scheduleVisualViewportUpdate);
-            window.removeEventListener('orientationchange', scheduleVisualViewportUpdate);
-            document.removeEventListener('focusin', handleFocusIn, true);
-            document.removeEventListener('focusout', handleFocusOut, true);
-            clearKeyboardAvoidTarget();
-        };
-    }, [isMobile]);
-
     const secondaryView = React.useMemo(() => {
         switch (activeMainTab) {
             case 'plan':
-                return <PlanView />;
+                return <React.Suspense fallback={null}><PlanView /></React.Suspense>;
             case 'git':
-                return <GitView />;
+                return <React.Suspense fallback={null}><GitView /></React.Suspense>;
             case 'diff':
-                return <DiffView />;
+                return <React.Suspense fallback={null}><DiffView /></React.Suspense>;
             case 'terminal':
-                return <TerminalView />;
+                return <React.Suspense fallback={null}><TerminalView /></React.Suspense>;
             case 'files':
-                return <FilesView />;
+                return <React.Suspense fallback={null}><FilesView /></React.Suspense>;
             default:
                 return null;
         }
@@ -688,7 +448,7 @@ export const MainLayout: React.FC = () => {
                             setMobileLeftDrawerOpen(false);
                             setRightSidebarOpen(false);
                         }}
-                        aria-label="Close drawer"
+                        aria-label={t('mainLayout.mobile.closeDrawerAria')}
                     />
                     
                     {/* Left drawer (Session) */}
@@ -783,7 +543,7 @@ export const MainLayout: React.FC = () => {
                     >
                         <div className="h-full overflow-hidden flex flex-col bg-background shadow-none drawer-safe-area">
                             <ErrorBoundary>
-                                <GitView />
+                                <React.Suspense fallback={null}><GitView /></React.Suspense>
                             </ErrorBoundary>
                         </div>
                     </motion.aside>
@@ -824,7 +584,11 @@ export const MainLayout: React.FC = () => {
                             className="absolute inset-0 z-10 bg-background"
                             style={{ paddingTop: 'var(--oc-safe-area-top, 0px)' }}
                         >
-                            <ErrorBoundary><SettingsView onClose={() => setSettingsDialogOpen(false)} /></ErrorBoundary>
+                            <ErrorBoundary>
+                                <React.Suspense fallback={null}>
+                                    <SettingsView onClose={() => setSettingsDialogOpen(false)} />
+                                </React.Suspense>
+                            </ErrorBoundary>
                         </div>
                     )}
                 </DrawerProvider>
@@ -934,7 +698,13 @@ export const MainLayout: React.FC = () => {
                                     </div>
                                 </div>
                                 <BottomTerminalDock isOpen={isBottomTerminalOpen} isMobile={isMobile}>
-                                    {isBottomTerminalOpen ? <ErrorBoundary><TerminalView /></ErrorBoundary> : null}
+                                    {isBottomTerminalOpen ? (
+                                        <ErrorBoundary>
+                                            <React.Suspense fallback={null}>
+                                                <TerminalView />
+                                            </React.Suspense>
+                                        </ErrorBoundary>
+                                    ) : null}
                                 </BottomTerminalDock>
                             </div>
                             <RightSidebar
@@ -949,15 +719,19 @@ export const MainLayout: React.FC = () => {
                     </div>
 
                     {/* Desktop settings: windowed dialog with blur */}
-                    <SettingsWindow
-                        open={isSettingsDialogOpen}
-                        onOpenChange={setSettingsDialogOpen}
-                    />
-                    <MultiRunWindow
-                        open={isMultiRunLauncherOpen}
-                        onOpenChange={setMultiRunLauncherOpen}
-                        initialPrompt={multiRunLauncherPrefillPrompt}
-                    />
+                    <React.Suspense fallback={null}>
+                        <SettingsWindow
+                            open={isSettingsDialogOpen}
+                            onOpenChange={setSettingsDialogOpen}
+                        />
+                    </React.Suspense>
+                    <React.Suspense fallback={null}>
+                        <MultiRunWindow
+                            open={isMultiRunLauncherOpen}
+                            onOpenChange={setMultiRunLauncherOpen}
+                            initialPrompt={multiRunLauncherPrefillPrompt}
+                        />
+                    </React.Suspense>
                 </>
             )}
 

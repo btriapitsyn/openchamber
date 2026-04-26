@@ -9,6 +9,7 @@ import type { TerminalChunk } from '@/stores/useTerminalStore';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import { cn } from '@/lib/utils';
 import { OverlayScrollbar } from '@/components/ui/OverlayScrollbar';
+import { useI18n } from '@/lib/i18n';
 
 let ghosttyPromise: Promise<Ghostty> | null = null;
 
@@ -76,7 +77,6 @@ interface TerminalViewportProps {
   className?: string;
   enableTouchScroll?: boolean;
   autoFocus?: boolean;
-  keyboardAvoidTargetId?: string;
 }
 
 const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportProps>(
@@ -92,10 +92,10 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
       className,
       enableTouchScroll,
       autoFocus = true,
-      keyboardAvoidTargetId,
     },
     ref
   ) => {
+    const { t } = useI18n();
     const containerRef = React.useRef<HTMLDivElement>(null);
     const viewportRef = React.useRef<HTMLElement | null>(null);
     const terminalRef = React.useRef<GhosttyTerminal | null>(null);
@@ -1514,8 +1514,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
-                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
-                aria-label="Terminal input"
+                aria-label={t('terminalView.viewport.inputAria')}
                 aria-hidden="true"
                 style={{
                   ...hiddenInputStyle,
@@ -1542,8 +1541,7 @@ const TerminalViewport = React.forwardRef<TerminalController, TerminalViewportPr
                 tabIndex={-1}
                 enterKeyHint="send"
                 data-terminal-hidden-input="true"
-                data-keyboard-avoid-target-id={keyboardAvoidTargetId}
-                aria-label="Terminal input"
+                aria-label={t('terminalView.viewport.inputAria')}
                 aria-hidden="true"
                 style={{
                   ...hiddenInputStyle,
