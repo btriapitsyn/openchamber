@@ -298,14 +298,9 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const [exportIncludeSubtasks, setExportIncludeSubtasks] = React.useState(true);
 
   const menuInstanceKey = `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${session.id}`;
-  const sessionDirectory =
-    normalizePath((session as Session & { directory?: string | null }).directory ?? null)
-    ?? normalizePath(groupDirectory ?? null);
   const isZombie = useViewportStore(
     React.useCallback((state) => Boolean(state.sessionMemoryState.get(session.id)?.isZombie), [session.id]),
   );
-  const directoryStore = useDirectoryStore(sessionDirectory ?? undefined);
-  const sync = useSync();
   const sessionStatus = useGlobalSessionStatus(session.id);
   const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
   const directoryState = sessionDirectory ? directoryStatus.get(sessionDirectory) : null;
@@ -397,82 +392,6 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     }
     await doExportSession(false);
   }, [doExportSession, node.children.length]);
-    if (!sessionDirectory) {
-      toast.error(t('sessions.sidebar.session.export.nothingToExport'));
-      return;
-    }
-
-    await sync.syncSession(session.id);
-
-    const records = buildSessionMessageRecordsSnapshot(directoryStore.getState(), session.id).list;
-    if (records.length === 0) {
-      toast.error(t('sessions.sidebar.session.export.nothingToExport'));
-      return;
-    }
-
-    let childExports: ChildSessionExport[] | undefined;
-    if (includeSubtasks && node.children.length > 0) {
-      childExports = await collectChildExports(node.children);
-    }
-
-    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null, childExports);
-    const filename = buildExportFilename(resolvedSession.title ?? null);
-    const savedPath = await saveAsMarkdownDesktop(markdown, filename);
-
-    if (savedPath) {
-      toast.success(t('sessions.sidebar.session.export.success'), {
-        action: {
-          label: t(getExportRevealLabelKey()),
-          onClick: () => {
-            void revealExportedMarkdown(savedPath).then((revealed) => {
-              if (!revealed) {
-                toast.error(t('sessions.sidebar.session.export.failedRevealPath'));
-              }
-            });
-          },
-        },
-      });
-      return;
-    }
-
-    downloadAsMarkdown(markdown, filename);
-<<<<<<< HEAD
-    toast.success('Session exported');
-  }, [collectChildExports, directoryStore, node.children, resolvedSession.title, session.id, sessionDirectory, sync]);
-  const menuInstanceKey = `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${session.id}`;
-  const isZombie = useViewportStore(
-    React.useCallback((state) => Boolean(state.sessionMemoryState.get(session.id)?.isZombie), [session.id]),
-  );
-  const sessionStatus = useGlobalSessionStatus(session.id);
-  const sessionPermissions = useSessionPermissions(session.id, sessionDirectory ?? undefined);
-  const directoryState = sessionDirectory ? directoryStatus.get(sessionDirectory) : null;
-  const isMissingDirectory = directoryState === 'missing';
-  const isActive = currentSessionId === session.id;
-  const sessionTitle = resolvedSession.title || 'Untitled Session';
-  const hasChildren = node.children.length > 0;
-  const isPinnedSession = pinnedSessionIds.has(session.id);
-  const isExpanded = hasSessionSearchQuery ? true : expandedParents.has(session.id);
-  const isSubtaskSession = Boolean((resolvedSession as Session & { parentID?: string | null }).parentID);
-  const unseenCount = useSessionUnseenCount(session.id);
-  const needsAttention = unseenCount > 0 && (!isSubtaskSession || notifyOnSubtasks);
-  const sessionSummary = resolvedSession.summary as SessionSummaryMeta | undefined;
-  const sessionDiffStats = resolveSessionDiffStats(sessionSummary);
-  const sessionTimestamp = resolvedSession.time?.updated || resolvedSession.time?.created || Date.now();
-  const sessionUpdatedLabel = formatSessionDateLabel(sessionTimestamp);
-  const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
-  const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
-  const handleExportSession = React.useCallback(async () => {
-    if (node.children.length > 0) {
-      setExportIncludeSubtasks(true);
-      setExportDialogOpen(true);
-      return;
-    }
-    await doExportSession(false);
-  }, [doExportSession, node.children.length]);
-=======
-    toast.success(t('sessions.sidebar.session.export.success'));
-  }, [directoryStore, resolvedSession.title, session.id, sessionDirectory, sync, t]);
->>>>>>> upstream/main
 
   if (editingId === session.id) {
     return (

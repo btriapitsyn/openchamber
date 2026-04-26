@@ -257,7 +257,7 @@ export const HelpDialog: React.FC = () => {
 
                     return (
                       <div
-                        key={shortcut.id || shortcut.description}
+                        key={shortcut.id || shortcut.descriptionKey}
                         className="flex items-center justify-between py-1 px-2"
                       >
                         <div className="flex items-center gap-2">
