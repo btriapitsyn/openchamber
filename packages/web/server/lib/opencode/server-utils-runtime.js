@@ -45,6 +45,21 @@ export const createServerUtilsRuntime = (dependencies) => {
     clearLastOpenCodeError();
   };
 
+  const pathLooksUserConfigured = (value) => {
+    if (typeof value !== 'string' || !value) {
+      return false;
+    }
+
+    const home = os.homedir();
+    return value.split(path.delimiter).some((segment) => (
+      segment.startsWith(home + path.sep)
+      || segment === home
+      || segment.startsWith('/opt/homebrew/')
+      || segment.startsWith('/opt/pkg/')
+      || segment.startsWith('/opt/pmk/')
+    ));
+  };
+
   const waitForOpenCodePort = async (timeoutMs = 15000) => {
     if (getOpenCodePort() !== null) {
       return getOpenCodePort();
@@ -62,23 +77,40 @@ export const createServerUtilsRuntime = (dependencies) => {
   };
 
   const buildAugmentedPath = () => {
-    const augmented = new Set();
-
+    const home = os.homedir();
+    const currentPath = process.env.PATH || '';
     const loginShellPath = getLoginShellPath();
-    if (loginShellPath) {
-      for (const segment of loginShellPath.split(path.delimiter)) {
-        if (segment) {
-          augmented.add(segment);
+    const currentPathLooksUserConfigured = pathLooksUserConfigured(currentPath);
+    const primaryPath = currentPathLooksUserConfigured ? currentPath : loginShellPath;
+    const fallbackPath = currentPathLooksUserConfigured ? loginShellPath : currentPath;
+    const seen = new Set();
+    const augmented = [];
+
+    const addSegments = (value) => {
+      if (typeof value !== 'string' || !value) {
+        return;
+      }
+      for (const segment of value.split(path.delimiter)) {
+        if (segment && !seen.has(segment)) {
+          seen.add(segment);
+          augmented.push(segment);
         }
       }
+    };
+
+    addSegments(primaryPath);
+    addSegments(fallbackPath);
+
+    return augmented.join(path.delimiter);
+  };
+
+  const buildManagedOpenCodePath = () => {
+    const currentPath = process.env.PATH || '';
+    if (pathLooksUserConfigured(currentPath)) {
+      return currentPath;
     }
 
-    const current = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
-    for (const segment of current) {
-      augmented.add(segment);
-    }
-
-    return Array.from(augmented).join(path.delimiter);
+    return getLoginShellPath() || currentPath;
   };
 
   const parseSseDataPayload = (block) => {
@@ -159,6 +191,7 @@ export const createServerUtilsRuntime = (dependencies) => {
     setOpenCodePort,
     waitForOpenCodePort,
     buildAugmentedPath,
+    buildManagedOpenCodePath,
     parseSseDataPayload,
     fetchAgentsSnapshot,
     fetchProvidersSnapshot,

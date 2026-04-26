@@ -86,6 +86,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const ignoreTabClickRef = React.useRef(false);
   const normalizedSearchQuery = (searchQuery ?? '').trim();
+  const scopeResultsToActiveTab = showTabs === true;
   const recentFiles = React.useMemo(() => {
     if (!projectRoot || !projectTabs) {
       return [] as FileInfo[];
@@ -124,14 +125,14 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
     return mapped;
   }, [normalizedSearchQuery, projectRoot, projectTabs]);
   const visibleAgents = React.useMemo(
-    () => activeTab === 'agents'
+    () => !scopeResultsToActiveTab || activeTab === 'agents'
       ? (normalizedSearchQuery.length > 0 ? agents : agents.slice(0, 2))
       : EMPTY_AGENTS,
-    [activeTab, agents, normalizedSearchQuery.length],
+    [activeTab, agents, normalizedSearchQuery.length, scopeResultsToActiveTab],
   );
-  const visibleDirectories = activeTab === 'files' ? directories : EMPTY_FILES;
-  const visibleRecentFiles = activeTab === 'files' ? recentFiles : EMPTY_FILES;
-  const visibleFiles = activeTab === 'files' ? files : EMPTY_FILES;
+  const visibleDirectories = !scopeResultsToActiveTab || activeTab === 'files' ? directories : EMPTY_FILES;
+  const visibleRecentFiles = !scopeResultsToActiveTab || activeTab === 'files' ? recentFiles : EMPTY_FILES;
+  const visibleFiles = !scopeResultsToActiveTab || activeTab === 'files' ? files : EMPTY_FILES;
 
   React.useEffect(() => {
     const handlePointerDown = (event: MouseEvent | TouchEvent) => {
@@ -492,7 +493,7 @@ export const FileMentionAutocomplete = React.forwardRef<FileMentionHandle, FileM
           </div>
         ) : null}
         <ScrollableOverlay outerClassName="flex-1 min-h-0" className="px-0">
-        {activeTab === 'files' && loading ? (
+        {(!scopeResultsToActiveTab || activeTab === 'files') && loading ? (
           <div className="flex items-center justify-center py-4">
             <RiRefreshLine className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>

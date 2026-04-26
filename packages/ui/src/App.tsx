@@ -55,9 +55,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QuickOpenDialog } from '@/components/ui/QuickOpenDialog';
 import { McpOAuthCallbackPage } from '@/components/sections/mcp/McpOAuthCallbackPage';
 import { MCP_OAUTH_CALLBACK_PATH } from '@/components/sections/mcp/mcpOAuth';
+import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 
 // Lazy-loaded heavy views — loaded on demand to reduce initial bundle size.
-const OnboardingScreen = React.lazy(() =>
+const OnboardingScreen = lazyWithChunkRecovery(() =>
   import('@/components/onboarding/OnboardingScreen').then((m) => ({ default: m.OnboardingScreen })),
 );
 
@@ -206,6 +207,7 @@ function App({ apis }: AppProps) {
       : null;
   });
   const appReadyDispatchedRef = React.useRef(false);
+  const initializationInFlightRef = React.useRef(false);
   const embeddedSessionChat = React.useMemo<EmbeddedSessionChatConfig | null>(() => readEmbeddedSessionChatConfig(), []);
   const embeddedBackgroundWorkEnabled = !embeddedSessionChat || isEmbeddedVisible;
   const isMcpOAuthCallback = React.useMemo(() => isMcpOAuthCallbackPath(), []);
@@ -345,11 +347,54 @@ function App({ apis }: AppProps) {
       if (isVSCodeRuntime) {
         return;
       }
-      await initializeApp();
+      if (initializationInFlightRef.current) {
+        return;
+      }
+      initializationInFlightRef.current = true;
+      try {
+        await initializeApp();
+      } finally {
+        initializationInFlightRef.current = false;
+      }
     };
 
     init();
   }, [initializeApp, isVSCodeRuntime]);
+
+  React.useEffect(() => {
+    if (isVSCodeRuntime || isInitialized) return;
+
+    let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const retryInitialization = async () => {
+      if (!active) return;
+      const state = useConfigStore.getState();
+      if (state.isInitialized) return;
+      if (initializationInFlightRef.current) {
+        retryTimer = setTimeout(retryInitialization, 1000);
+        return;
+      }
+
+      initializationInFlightRef.current = true;
+      try {
+        await state.initializeApp();
+      } finally {
+        initializationInFlightRef.current = false;
+      }
+
+      const next = useConfigStore.getState();
+      if (!active || next.isInitialized) return;
+      retryTimer = setTimeout(retryInitialization, 1000);
+    };
+
+    retryTimer = setTimeout(retryInitialization, 1000);
+
+    return () => {
+      active = false;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [isInitialized, isVSCodeRuntime]);
 
   // Startup recovery: poll until providers AND agents are loaded.
   // loadProviders/loadAgents resolve normally even on failure (errors swallowed),

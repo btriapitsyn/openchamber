@@ -68,14 +68,20 @@ function connectionLostError(): Error {
 // Wait briefly for the pipeline to re-establish connection before failing a
 // send. Transient reconnects (heartbeat race, WS→SSE fallback, brief network
 // blip) otherwise surface as a hard "Connection lost" toast even though the
-// pipeline recovers within a second. Poll isConnected at 100ms intervals.
+// pipeline recovers within a second. While waiting, run bounded health probes
+// inside the same grace window so stale disconnected state can recover quickly.
 const CONNECTION_GRACE_MS = 2000
 export async function waitForConnectionOrThrow(): Promise<void> {
-  if (useConfigStore.getState().isConnected) return
   const deadline = Date.now() + CONNECTION_GRACE_MS
   while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 100))
     if (useConfigStore.getState().isConnected) return
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) break
+    if (await useConfigStore.getState().probeConnection({ timeoutMs: Math.min(500, remainingMs) })) return
+    const sleepMs = Math.min(100, deadline - Date.now())
+    if (sleepMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, sleepMs))
+    }
   }
   throw connectionLostError()
 }

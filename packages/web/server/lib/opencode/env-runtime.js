@@ -162,24 +162,19 @@ export const createOpenCodeEnvRuntime = (deps) => {
     return null;
   };
 
-  const mergePathValues = (preferred, fallback) => {
-    const merged = new Set();
+  const pathLooksUserConfigured = (value) => {
+    if (typeof value !== 'string' || !value) {
+      return false;
+    }
 
-    const addSegments = (value) => {
-      if (typeof value !== 'string' || !value) {
-        return;
-      }
-      for (const segment of value.split(path.delimiter)) {
-        if (segment) {
-          merged.add(segment);
-        }
-      }
-    };
-
-    addSegments(preferred);
-    addSegments(fallback);
-
-    return Array.from(merged).join(path.delimiter);
+    const home = os.homedir();
+    return value.split(path.delimiter).some((segment) => (
+      segment.startsWith(home + path.sep)
+      || segment === home
+      || segment.startsWith('/opt/homebrew/')
+      || segment.startsWith('/opt/pkg/')
+      || segment.startsWith('/opt/pmk/')
+    ));
   };
 
   const applyLoginShellEnvSnapshot = () => {
@@ -200,7 +195,11 @@ export const createOpenCodeEnvRuntime = (deps) => {
       process.env[key] = value;
     }
 
-    process.env.PATH = mergePathValues(snapshot.PATH || '', process.env.PATH || '');
+    const currentPath = process.env.PATH || '';
+    const shellPath = snapshot.PATH || '';
+    if (!pathLooksUserConfigured(currentPath) && shellPath) {
+      process.env.PATH = shellPath;
+    }
   };
 
   const isWslExecutableValue = (value) => {

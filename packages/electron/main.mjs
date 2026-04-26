@@ -715,24 +715,14 @@ const inheritUserShellEnv = () => {
   if (!shellEnv) return;
 
   const homeDir = os.homedir();
-  const shellPathSegments = typeof shellEnv.PATH === 'string' ? shellEnv.PATH.split(':') : [];
-  const processPathSegments = typeof process.env.PATH === 'string' ? process.env.PATH.split(':') : [];
-  const pathSegments = [
-    ...shellPathSegments,
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin',
-    path.join(homeDir, '.opencode', 'bin'),
-    path.join(homeDir, '.local', 'bin'),
-    path.join(homeDir, '.bun', 'bin'),
-    path.join(homeDir, '.cargo', 'bin'),
-    path.join(homeDir, 'bin'),
-    ...processPathSegments,
-  ].filter(Boolean);
-  const uniquePath = Array.from(new Set(pathSegments)).join(':');
+  const currentPath = process.env.PATH || '';
+  const currentPathLooksUserConfigured = currentPath.split(':').some((segment) => (
+    segment.startsWith(`${homeDir}${path.sep}`)
+    || segment === homeDir
+    || segment.startsWith('/opt/homebrew/')
+    || segment.startsWith('/opt/pkg/')
+    || segment.startsWith('/opt/pmk/')
+  ));
 
   for (const [key, value] of Object.entries(shellEnv)) {
     if (key === 'PATH') continue;
@@ -740,7 +730,9 @@ const inheritUserShellEnv = () => {
       process.env[key] = value;
     }
   }
-  process.env.PATH = uniquePath;
+  if (!currentPathLooksUserConfigured && typeof shellEnv.PATH === 'string' && shellEnv.PATH.length > 0) {
+    process.env.PATH = shellEnv.PATH;
+  }
 };
 
 const spawnLocalServer = async () => {

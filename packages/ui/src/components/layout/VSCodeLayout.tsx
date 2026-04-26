@@ -24,10 +24,11 @@ import { PaceIndicator } from '@/components/sections/usage/PaceIndicator';
 import { formatPercent, formatWindowLabel, QUOTA_PROVIDERS, calculatePace, calculateExpectedUsagePercent } from '@/lib/quota';
 import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { UsageWindow } from '@/types';
 import { RiAddLine, RiArrowLeftLine, RiRefreshLine, RiRobot2Line, RiSettings3Line, RiTimerLine } from '@remixicon/react';
 
-const SettingsView = React.lazy(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
+const SettingsView = lazyWithChunkRecovery(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
 
 const formatTime = (timestamp: number | null) => {
   if (!timestamp) return '-';
