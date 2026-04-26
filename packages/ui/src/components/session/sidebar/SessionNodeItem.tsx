@@ -35,7 +35,9 @@ import {
 import { cn } from '@/lib/utils';
 import { isVSCodeRuntime } from '@/lib/desktop';
 import { toast } from '@/components/ui';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { buildExportFilename, downloadAsMarkdown, formatSessionAsMarkdown, getExportRevealLabel, revealExportedMarkdown, saveAsMarkdownDesktop } from '@/lib/exportSession';
+import type { ChildSessionExport } from '@/lib/exportSession';
 import { buildSessionMessageRecordsSnapshot, useDirectoryStore, useGlobalSessionStatus, useSession, useSessionPermissions } from '@/sync/sync-context';
 import { useSync } from '@/sync/use-sync';
 import { useViewportStore } from '@/sync/viewport-store';
@@ -283,6 +285,70 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
     walk(root);
     return out;
   }, []);
+
+  const [exportDialogOpen, setExportDialogOpen] = React.useState(false);
+  const [exportIncludeSubtasks, setExportIncludeSubtasks] = React.useState(true);
+
+  const collectChildExports = React.useCallback(async (children: SessionNode[]): Promise<ChildSessionExport[]> => {
+    const results: ChildSessionExport[] = [];
+    for (const child of children) {
+      await sync.syncSession(child.session.id);
+      const childRecords = buildSessionMessageRecordsSnapshot(directoryStore.getState(), child.session.id).list;
+      const childTitle = child.session.title || 'Untitled Sub-agent';
+      const childAgent = (child.session as Session & { agent?: string }).agent;
+      const grandChildren = await collectChildExports(child.children);
+      results.push({
+        title: childTitle,
+        agent: childAgent,
+        records: childRecords,
+        children: grandChildren,
+      });
+    }
+    return results;
+  }, [directoryStore, sync]);
+
+  const doExportSession = React.useCallback(async (includeSubtasks: boolean) => {
+    if (!sessionDirectory) {
+      toast.error('Nothing to export');
+      return;
+    }
+
+    await sync.syncSession(session.id);
+
+    const records = buildSessionMessageRecordsSnapshot(directoryStore.getState(), session.id).list;
+    if (records.length === 0) {
+      toast.error('Nothing to export');
+      return;
+    }
+
+    let childExports: ChildSessionExport[] | undefined;
+    if (includeSubtasks && node.children.length > 0) {
+      childExports = await collectChildExports(node.children);
+    }
+
+    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null, childExports);
+    const filename = buildExportFilename(resolvedSession.title ?? null);
+    const savedPath = await saveAsMarkdownDesktop(markdown, filename);
+
+    if (savedPath) {
+      toast.success('Session exported', {
+        action: {
+          label: getExportRevealLabel(),
+          onClick: () => {
+            void revealExportedMarkdown(savedPath).then((revealed) => {
+              if (!revealed) {
+                toast.error('Failed to reveal path');
+              }
+            });
+          },
+        },
+      });
+      return;
+    }
+
+    downloadAsMarkdown(markdown, filename);
+    toast.success('Session exported');
+  }, [collectChildExports, directoryStore, node.children, resolvedSession.title, session.id, sessionDirectory, sync]);
   const menuInstanceKey = `${renderContext}:${archivedBucket ? 'archived' : 'active'}:${session.id}`;
   const sessionDirectory =
     normalizePath((session as Session & { directory?: string | null }).directory ?? null)
@@ -311,42 +377,13 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
   const sessionCompactUpdatedLabel = formatSessionCompactDateLabel(sessionTimestamp);
   const isMenuOpen = openSidebarMenuKey === menuInstanceKey;
   const handleExportSession = React.useCallback(async () => {
-    if (!sessionDirectory) {
-      toast.error('Nothing to export');
+    if (node.children.length > 0) {
+      setExportIncludeSubtasks(true);
+      setExportDialogOpen(true);
       return;
     }
-
-    await sync.syncSession(session.id);
-
-    const records = buildSessionMessageRecordsSnapshot(directoryStore.getState(), session.id).list;
-    if (records.length === 0) {
-      toast.error('Nothing to export');
-      return;
-    }
-
-    const markdown = formatSessionAsMarkdown(records, resolvedSession.title ?? null);
-    const filename = buildExportFilename(resolvedSession.title ?? null);
-    const savedPath = await saveAsMarkdownDesktop(markdown, filename);
-
-    if (savedPath) {
-      toast.success('Session exported', {
-        action: {
-          label: getExportRevealLabel(),
-          onClick: () => {
-            void revealExportedMarkdown(savedPath).then((revealed) => {
-              if (!revealed) {
-                toast.error('Failed to reveal path');
-              }
-            });
-          },
-        },
-      });
-      return;
-    }
-
-    downloadAsMarkdown(markdown, filename);
-    toast.success('Session exported');
-  }, [directoryStore, resolvedSession.title, session.id, sessionDirectory, sync]);
+    await doExportSession(false);
+  }, [doExportSession, node.children.length]);
 
   if (editingId === session.id) {
     return (
@@ -802,6 +839,44 @@ function SessionNodeItemComponent(props: Props): React.ReactNode {
       {hasChildren && isExpanded
         ? node.children.map((child) => renderSessionNode(child, depth + 1, sessionDirectory ?? groupDirectory, projectId, archivedBucket, undefined, renderContext))
         : null}
+      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+        <DialogContent showCloseButton={false} className="max-w-sm gap-5">
+          <DialogHeader>
+            <DialogTitle>Export Markdown</DialogTitle>
+            <DialogDescription>
+              This session has {collectNodeDescendantIds(node).length} sub-agent task{collectNodeDescendantIds(node).length === 1 ? '' : 's'}. Include them in the export?
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex items-center gap-2 typography-ui-label cursor-pointer">
+            <input
+              type="checkbox"
+              checked={exportIncludeSubtasks}
+              onChange={(e) => setExportIncludeSubtasks(e.target.checked)}
+              className="h-4 w-4 rounded border-border accent-primary"
+            />
+            Include sub-agent tasks
+          </label>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setExportDialogOpen(false)}
+              className="inline-flex h-8 items-center justify-center rounded-md border border-border px-3 typography-ui-label text-foreground hover:bg-interactive-hover/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setExportDialogOpen(false);
+                void doExportSession(exportIncludeSubtasks);
+              }}
+              className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 typography-ui-label text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              Export
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </React.Fragment>
   );
 }
