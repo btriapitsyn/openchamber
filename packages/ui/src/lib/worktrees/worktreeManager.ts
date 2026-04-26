@@ -13,6 +13,7 @@ import type {
   CreateGitWorktreePayload,
   GitWorktreeValidationResult,
 } from '@/lib/api/types';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 
 type WorktreeListEntry = {
   path?: string;
@@ -315,6 +316,16 @@ export async function createWorktree(project: ProjectRef, args: CreateWorktreeAr
   markWorktreeBootstrapPending(metadata.path);
 
   _worktreeListCache.delete(projectDirectory);
+
+  // Update sidebar store so new worktree appears immediately
+  const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
+  const updatedByProject = new Map(currentByProject);
+  const existing = updatedByProject.get(metadataProjectDirectory) ?? [];
+  updatedByProject.set(metadataProjectDirectory, [...existing, metadata]);
+  useSessionUIStore.setState({
+    availableWorktreesByProject: updatedByProject,
+    availableWorktrees: [...useSessionUIStore.getState().availableWorktrees, metadata],
+  });
 
   return metadata;
 }
