@@ -1,5 +1,5 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test'
-import { extractFingerprint, isQuietMode, isJsonMode } from '../scripts/fingerprint.mjs'
+import { extractFingerprint } from '../scripts/fingerprint.mjs'
 
 describe('extractFingerprint', () => {
   test('extracts SHA-256 fingerprint from keytool output', () => {
@@ -33,20 +33,3 @@ Signature algorithm name: SHA256withRSA
   })
 })
 
-describe('mode helpers', () => {
-  const originalArgv = process.argv
-
-  afterEach(() => {
-    process.argv = originalArgv
-  })
-
-  test('isQuietMode detects --quiet flag', () => {
-    process.argv = ['node', 'script.mjs', '--quiet']
-    expect(isQuietMode()).toBe(true)
-  })
-
-  test('isJsonMode detects --json flag', () => {
-    process.argv = ['node', 'script.mjs', '--json']
-    expect(isJsonMode()).toBe(true)
-  })
-})

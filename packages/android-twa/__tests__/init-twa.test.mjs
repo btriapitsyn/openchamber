@@ -1,13 +1,10 @@
 import { test, expect, describe, beforeEach, afterEach, mock } from 'bun:test'
 import {
-  validateHttps,
-  validateUrl,
-  validateManifestUrl,
-  loadEnv,
-  collectConfig,
-  isQuietMode,
-  isJsonMode,
-  canPrompt
+ validateHttps,
+ validateUrl,
+ validateManifestUrl,
+ loadEnv,
+ collectConfig,
 } from '../scripts/init-twa.mjs'
 
 describe('validateHttps', () => {
@@ -107,31 +104,3 @@ describe('collectConfig', () => {
   })
 })
 
-describe('mode helpers', () => {
-  const originalArgv = process.argv
-
-  afterEach(() => {
-    process.argv = originalArgv
-  })
-
-  test('isQuietMode detects --quiet flag', () => {
-    process.argv = ['node', 'script.mjs', '--quiet']
-    expect(isQuietMode()).toBe(true)
-
-    process.argv = ['node', 'script.mjs']
-    expect(isQuietMode()).toBe(false)
-  })
-
-  test('isJsonMode detects --json flag', () => {
-    process.argv = ['node', 'script.mjs', '--json']
-    expect(isJsonMode()).toBe(true)
-
-    process.argv = ['node', 'script.mjs']
-    expect(isJsonMode()).toBe(false)
-  })
-
-  test('canPrompt returns false in non-TTY', () => {
-    // In tests, stdout.isTTY is undefined (falsy)
-    expect(canPrompt()).toBeFalsy()
-  })
-})

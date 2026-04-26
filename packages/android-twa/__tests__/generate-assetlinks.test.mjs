@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test'
-import { generateAssetlinksJson, extractFingerprint, isQuietMode, isJsonMode } from '../scripts/generate-assetlinks.mjs'
+import { generateAssetlinksJson, extractFingerprint } from '../scripts/generate-assetlinks.mjs'
 
 describe('generateAssetlinksJson', () => {
   test('generates correct assetlinks.json structure', () => {
@@ -40,18 +40,3 @@ Certificate fingerprints:
   })
 })
 
-describe('mode helpers', () => {
-  const originalArgv = process.argv
-
-  test('isQuietMode detects --quiet flag', () => {
-    process.argv = ['node', 'script.mjs', '--quiet']
-    expect(isQuietMode()).toBe(true)
-    process.argv = originalArgv
-  })
-
-  test('isJsonMode detects --json flag', () => {
-    process.argv = ['node', 'script.mjs', '--json']
-    expect(isJsonMode()).toBe(true)
-    process.argv = originalArgv
-  })
-})

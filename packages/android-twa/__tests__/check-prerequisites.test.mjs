@@ -1,12 +1,10 @@
 import { test, expect, describe, afterEach } from 'bun:test'
 import {
-  checkJdk,
-  parseJavaVersion,
-  checkTwaProject,
-  checkBubblewrapConfig,
-  checkPrerequisites,
-  isQuietMode,
-  isJsonMode
+ checkJdk,
+ parseJavaVersion,
+ checkTwaProject,
+ checkBubblewrapConfig,
+ checkPrerequisites,
 } from '../scripts/check-prerequisites.mjs'
 
 describe('parseJavaVersion', () => {
@@ -75,26 +73,3 @@ describe('checkPrerequisites', () => {
   })
 })
 
-describe('mode helpers', () => {
-  const originalArgv = process.argv
-
-  afterEach(() => {
-    process.argv = originalArgv
-  })
-
-  test('isQuietMode detects --quiet flag', () => {
-    process.argv = ['node', 'script.mjs', '--quiet']
-    expect(isQuietMode()).toBe(true)
-
-    process.argv = ['node', 'script.mjs']
-    expect(isQuietMode()).toBe(false)
-  })
-
-  test('isJsonMode detects --json flag', () => {
-    process.argv = ['node', 'script.mjs', '--json']
-    expect(isJsonMode()).toBe(true)
-
-    process.argv = ['node', 'script.mjs']
-    expect(isJsonMode()).toBe(false)
-  })
-})

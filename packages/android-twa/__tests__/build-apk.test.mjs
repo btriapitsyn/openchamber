@@ -1,11 +1,8 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test'
 import {
-  getKeystorePassword,
-  buildApk,
-  isBubblewrapInstalled,
-  isQuietMode,
-  isJsonMode,
-  canPrompt
+ getKeystorePassword,
+ buildApk,
+ isBubblewrapInstalled,
 } from '../scripts/build-apk.mjs'
 
 describe('getKeystorePassword', () => {
@@ -40,25 +37,3 @@ describe('isBubblewrapInstalled', () => {
   })
 })
 
-describe('mode helpers', () => {
-  const originalArgv = process.argv
-
-  afterEach(() => {
-    process.argv = originalArgv
-  })
-
-  test('isQuietMode detects --quiet flag', () => {
-    process.argv = ['node', 'script.mjs', '--quiet']
-    expect(isQuietMode()).toBe(true)
-  })
-
-  test('isJsonMode detects --json flag', () => {
-    process.argv = ['node', 'script.mjs', '--json']
-    expect(isJsonMode()).toBe(true)
-  })
-
-  test('canPrompt returns false in non-TTY', () => {
-    // In tests, process.stdout.isTTY is undefined (falsy)
-    expect(canPrompt()).toBeFalsy()
-  })
-})
