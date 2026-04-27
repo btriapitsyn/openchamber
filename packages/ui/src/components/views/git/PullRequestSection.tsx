@@ -1167,8 +1167,8 @@ export const PullRequestSection: React.FC<{
 
     setIsCreating(true);
     try {
-      // Let the server determine the head source from tracking info
-      // The server will check the branch's tracking remote and use that
+      const trackingRemoteName = getTrackingRemoteName(trackingBranch);
+
       const pr = await github.prCreate({
         directory,
         title: trimmedTitle,
@@ -1177,6 +1177,9 @@ export const PullRequestSection: React.FC<{
         ...(body.trim() ? { body } : {}),
         draft,
         ...(selectedRemote ? { remote: selectedRemote.name } : {}),
+        ...(trackingRemoteName && trackingRemoteName !== selectedRemote?.name
+          ? { headRemote: trackingRemoteName }
+          : {}),
       });
       toast.success(t('gitView.pr.toast.prCreated'));
       updatePrStatus(prStatusKey, (prev) => (prev ? { ...prev, pr } : prev));
@@ -1188,7 +1191,7 @@ export const PullRequestSection: React.FC<{
     } finally {
       setIsCreating(false);
     }
-  }, [body, branch, directory, draft, github, prStatusKey, refresh, scheduleActionRefresh, selectedRemote, targetBaseBranch, title, updatePrStatus, t]);
+  }, [body, branch, directory, draft, github, prStatusKey, refresh, scheduleActionRefresh, selectedRemote, targetBaseBranch, title, trackingBranch, updatePrStatus, t]);
 
   const mergePr = React.useCallback(async (pr: GitHubPullRequest) => {
     if (!github?.prMerge) {
