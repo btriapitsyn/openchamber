@@ -545,10 +545,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [isClickInsidePortalledMenu, isFloatingToolbarOpen]);
-  const [textViewMode, setTextViewMode] = React.useState<'view' | 'edit'>('edit');
-  const [mdViewMode, setMdViewMode] = React.useState<'preview' | 'edit'>('edit');
+  type TextViewMode = 'view' | 'edit';
+  type PreviewViewMode = 'preview' | 'edit';
+
+  const [textViewMode, setTextViewMode] = React.useState<TextViewMode>('edit');
+  const [mdViewMode, setMdViewMode] = React.useState<PreviewViewMode>('edit');
   const [jsonViewMode, setJsonViewMode] = React.useState<'tree' | 'text'>('tree');
-  const [htmlViewMode, setHtmlViewMode] = React.useState<'preview' | 'edit'>('edit');
+  const [htmlViewMode, setHtmlViewMode] = React.useState<PreviewViewMode>('edit');
+  const textViewModeByPathRef = React.useRef<Record<string, TextViewMode>>({});
+  const mdViewModeByPathRef = React.useRef<Record<string, PreviewViewMode>>({});
+  const htmlViewModeByPathRef = React.useRef<Record<string, PreviewViewMode>>({});
 
   const lightTheme = React.useMemo(
     () => availableThemes.find((theme) => theme.metadata.id === lightThemeId) ?? getDefaultTheme(false),
@@ -1876,14 +1882,20 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
 
   const MD_VIEWER_MODE_KEY = 'openchamber:files:md-viewer-mode';
   const HTML_VIEWER_MODE_KEY = 'openchamber:files:html-viewer-mode';
+  const JSON_VIEWER_MODE_KEY = 'openchamber:files:json-viewer-mode';
 
   React.useEffect(() => {
-    const defaultMode = settingsDefaultFileViewerPreview ? 'view' : 'edit';
-    setTextViewMode(defaultMode);
+    const selectedPath = selectedFile?.path;
+    if (!selectedPath) {
+      return;
+    }
+
+    const defaultMode: TextViewMode = settingsDefaultFileViewerPreview ? 'view' : 'edit';
+    setTextViewMode(textViewModeByPathRef.current[selectedPath] ?? defaultMode);
 
     // Respect per-type localStorage preference when available,
     // falling back to the setting-derived default when nothing is stored.
-    let mdDefault: 'preview' | 'edit' = settingsDefaultFileViewerPreview ? 'preview' : 'edit';
+    let mdDefault: PreviewViewMode = settingsDefaultFileViewerPreview ? 'preview' : 'edit';
     try {
       const stored = localStorage.getItem(MD_VIEWER_MODE_KEY);
       if (stored === 'preview' || stored === 'edit') {
@@ -1892,9 +1904,9 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     } catch {
       // Ignore localStorage errors
     }
-    setMdViewMode(mdDefault);
+    setMdViewMode(mdViewModeByPathRef.current[selectedPath] ?? mdDefault);
 
-    let htmlDefault: 'preview' | 'edit' = settingsDefaultFileViewerPreview ? 'preview' : 'edit';
+    let htmlDefault: PreviewViewMode = settingsDefaultFileViewerPreview ? 'preview' : 'edit';
     try {
       const stored = localStorage.getItem(HTML_VIEWER_MODE_KEY);
       if (stored === 'preview' || stored === 'edit') {
@@ -1903,36 +1915,44 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     } catch {
       // Ignore localStorage errors
     }
-    setHtmlViewMode(htmlDefault);
+    setHtmlViewMode(htmlViewModeByPathRef.current[selectedPath] ?? htmlDefault);
+
+    let jsonDefault: 'tree' | 'text' = settingsDefaultFileViewerPreview ? 'tree' : 'text';
+    try {
+      const stored = localStorage.getItem(JSON_VIEWER_MODE_KEY);
+      if (stored === 'tree' || stored === 'text') {
+        jsonDefault = stored;
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+    setJsonViewMode(jsonDefault);
   }, [selectedFile?.path, settingsDefaultFileViewerPreview]);
 
-  const saveMdViewMode = React.useCallback((mode: 'preview' | 'edit') => {
+  const saveTextViewMode = React.useCallback((mode: TextViewMode) => {
+    const selectedPath = selectedFile?.path;
+    if (selectedPath) {
+      textViewModeByPathRef.current[selectedPath] = mode;
+    }
+    setTextViewMode(mode);
+  }, [selectedFile?.path]);
+
+  const saveMdViewMode = React.useCallback((mode: PreviewViewMode) => {
+    const selectedPath = selectedFile?.path;
+    if (selectedPath) {
+      mdViewModeByPathRef.current[selectedPath] = mode;
+    }
     setMdViewMode(mode);
     try {
       localStorage.setItem(MD_VIEWER_MODE_KEY, mode);
     } catch {
       // Ignore localStorage errors
     }
-  }, []);
+  }, [selectedFile?.path]);
 
-  const getMdViewMode = React.useCallback((): 'preview' | 'edit' => {
+  const getMdViewMode = React.useCallback((): PreviewViewMode => {
     return mdViewMode;
   }, [mdViewMode]);
-
-  const JSON_VIEWER_MODE_KEY = 'openchamber:files:json-viewer-mode';
-
-  React.useEffect(() => {
-    try {
-      const stored = localStorage.getItem(JSON_VIEWER_MODE_KEY);
-      if (stored === 'tree') {
-        setJsonViewMode('tree');
-      } else if (stored === 'text') {
-        setJsonViewMode('text');
-      }
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
 
   const saveJsonViewMode = React.useCallback((mode: 'tree' | 'text') => {
     setJsonViewMode(mode);
@@ -1943,16 +1963,20 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     }
   }, []);
 
-  const saveHtmlViewMode = React.useCallback((mode: 'preview' | 'edit') => {
+  const saveHtmlViewMode = React.useCallback((mode: PreviewViewMode) => {
+    const selectedPath = selectedFile?.path;
+    if (selectedPath) {
+      htmlViewModeByPathRef.current[selectedPath] = mode;
+    }
     setHtmlViewMode(mode);
     try {
       localStorage.setItem(HTML_VIEWER_MODE_KEY, mode);
     } catch {
       // Ignore localStorage errors
     }
-  }, []);
+  }, [selectedFile?.path]);
 
-  const getHtmlViewMode = React.useCallback((): 'preview' | 'edit' => {
+  const getHtmlViewMode = React.useCallback((): PreviewViewMode => {
     return htmlViewMode;
   }, [htmlViewMode]);
   React.useEffect(() => {
@@ -2119,12 +2143,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return;
     }
 
-    if (canEdit && textViewMode !== 'edit') {
-      setTextViewMode('edit');
-      return;
-    }
-
-    if (canEdit) {
+    if (canEdit && textViewMode === 'edit') {
       const view = editorViewRef.current;
       if (!view) {
         return;
@@ -2544,6 +2563,15 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               </>
             )}
           </>
+        )}
+
+        {canUseShikiFileView && canEdit && !isJson && !isHtml && (
+          <PreviewToggleButton
+            currentMode={textViewMode === 'view' ? 'preview' : 'edit'}
+            onToggle={() => {
+              saveTextViewMode(textViewMode === 'view' ? 'edit' : 'view');
+            }}
+          />
         )}
 
         {(isMarkdown || isHtmlFile(selectedFile?.path ?? '')) && (

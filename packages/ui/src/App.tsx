@@ -43,6 +43,7 @@ import { useSync } from '@/sync/use-sync';
 import { setOptimisticRefs } from '@/sync/session-actions';
 import { useFontPreferences } from '@/hooks/useFontPreferences';
 import { CODE_FONT_OPTION_MAP, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTION_MAP } from '@/lib/fontOptions';
+import { loadMonoFont, loadUiFont } from '@/lib/fontLoader';
 import { ConfigUpdateOverlay } from '@/components/ui/ConfigUpdateOverlay';
 import { AboutDialog } from '@/components/ui/AboutDialog';
 import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
@@ -269,6 +270,8 @@ function App({ apis }: AppProps) {
     const root = document.documentElement;
     const uiStack = UI_FONT_OPTION_MAP[uiFont]?.stack ?? UI_FONT_OPTION_MAP[DEFAULT_UI_FONT].stack;
     const monoStack = CODE_FONT_OPTION_MAP[monoFont]?.stack ?? CODE_FONT_OPTION_MAP[DEFAULT_MONO_FONT].stack;
+    void loadUiFont(uiFont);
+    void loadMonoFont(monoFont);
 
     root.style.setProperty('--font-sans', uiStack);
     root.style.setProperty('--font-heading', uiStack);

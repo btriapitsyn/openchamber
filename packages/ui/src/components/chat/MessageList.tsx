@@ -1474,21 +1474,22 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return false;
                 }
 
-                const targetIsTail = trailingStreamingEntry !== undefined && index >= historyEntries.length;
-                if (targetIsTail) {
-                    return false;
-                }
-
                 const container = resolveScrollContainer();
                 if (!container) {
                     return false;
                 }
                 const turnElement = container.querySelector<HTMLElement>(`[data-turn-id="${turnId}"]`);
-                if (!turnElement) {
-                    return scrollHistoryIndexIntoView(index, behavior);
+                if (turnElement) {
+                    turnElement.scrollIntoView({ behavior, block: 'start' });
+                    return true;
                 }
-                turnElement.scrollIntoView({ behavior, block: 'start' });
-                return true;
+
+                const targetIsTail = trailingStreamingEntry !== undefined && index >= historyEntries.length;
+                if (targetIsTail) {
+                    return false;
+                }
+
+                return scrollHistoryIndexIntoView(index, behavior);
             },
 
             scrollToMessageId: (messageId: string, options?: { behavior?: ScrollBehavior }) => {
@@ -1498,13 +1499,12 @@ const MessageList = React.forwardRef<MessageListHandle, MessageListProps>(({
                     return false;
                 }
 
-                const targetIsTail = trailingStreamingEntry !== undefined && index >= historyEntries.length;
-                if (targetIsTail) {
-                    return false;
-                }
-
                 return scrollMessageElementIntoView(messageId, behavior)
-                    || scrollHistoryIndexIntoView(index, behavior);
+                    || (
+                        trailingStreamingEntry !== undefined && index >= historyEntries.length
+                            ? false
+                            : scrollHistoryIndexIntoView(index, behavior)
+                    );
             },
 
             captureViewportAnchor: () => {

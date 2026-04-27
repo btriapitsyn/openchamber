@@ -4,7 +4,7 @@ import { SessionSidebar } from '@/components/session/SessionSidebar';
 import { ChatView } from '@/components/views';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useViewportStore } from '@/sync/viewport-store';
-import { useSessions, useDirectorySync } from '@/sync/sync-context';
+import { useSessions, useDirectorySync, useSessionMessages, useSessionMessagesResolved } from '@/sync/sync-context';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { ContextUsageDisplay } from '@/components/ui/ContextUsageDisplay';
 import { McpDropdown } from '@/components/mcp/McpDropdown';
@@ -27,6 +27,7 @@ import { useQuotaAutoRefresh, useQuotaStore } from '@/stores/useQuotaStore';
 import { updateDesktopSettings } from '@/lib/persistence';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import type { UsageWindow } from '@/types';
+import type { SessionContextUsage } from '@/stores/types/sessionTypes';
 import { RiAddLine, RiArrowLeftLine, RiRefreshLine, RiRobot2Line, RiSettings3Line, RiTimerLine } from '@remixicon/react';
 
 const SettingsView = lazyWithChunkRecovery(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
@@ -384,6 +385,7 @@ export const VSCodeLayout: React.FC = () => {
             title={sessions.find((session) => session.id === currentSessionId)?.title || t('vscodeLayout.title.chat')}
             showMcp
             showContextUsage
+            showRateLimits
           />
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary>
@@ -435,6 +437,7 @@ export const VSCodeLayout: React.FC = () => {
                 : sessions.find((session) => session.id === currentSessionId)?.title || t('vscodeLayout.title.chat')}
               showMcp
               showContextUsage
+              showRateLimits
             />
             <div className="flex-1 overflow-hidden">
               <ErrorBoundary>
@@ -499,8 +502,11 @@ interface VSCodeHeaderProps {
 
 const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, onNewSession, onSettings, onAgentManager, showMcp, showContextUsage, showRateLimits }) => {
   const { t } = useI18n();
-  const getCurrentModel = useConfigStore((s) => s.getCurrentModel);
-  const getContextUsage = useSessionUIStore((state) => state.getContextUsage);
+  const getCurrentModel = useConfigStore((state) => state.getCurrentModel);
+  const providers = useConfigStore((state) => state.providers);
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const currentSessionMessages = useSessionMessages(currentSessionId ?? '');
+  const currentSessionMessagesResolved = useSessionMessagesResolved(currentSessionId ?? '');
   const quotaResults = useQuotaStore((state) => state.results);
   const fetchAllQuotas = useQuotaStore((state) => state.fetchAllQuotas);
   const isQuotaLoading = useQuotaStore((state) => state.isLoading);
@@ -517,12 +523,97 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
   }, [loadQuotaSettings]);
 
   const currentModel = getCurrentModel();
-  const limits = (currentModel?.limit && typeof currentModel.limit === 'object'
-    ? currentModel.limit
-    : null) as { context?: number; output?: number } | null;
-  const contextLimit = typeof limits?.context === 'number' ? limits.context : 0;
-  const outputLimit = typeof limits?.output === 'number' ? limits.output : 0;
-  const contextUsage = getContextUsage(contextLimit, outputLimit);
+  const latestAssistantModel = React.useMemo(() => {
+    for (let i = currentSessionMessages.length - 1; i >= 0; i -= 1) {
+      const message = currentSessionMessages[i] as { role?: unknown; providerID?: unknown; modelID?: unknown };
+      if (message.role !== 'assistant') continue;
+      if (typeof message.providerID !== 'string' || typeof message.modelID !== 'string') continue;
+      const provider = providers.find((entry) => entry.id === message.providerID);
+      const model = provider?.models.find((entry) => entry.id === message.modelID);
+      if (model) return model;
+    }
+    return undefined;
+  }, [currentSessionMessages, providers]);
+  const modelForLimits = currentModel?.limit ? currentModel : latestAssistantModel;
+  const limit = modelForLimits && typeof modelForLimits.limit === 'object' && modelForLimits.limit !== null
+    ? (modelForLimits.limit as Record<string, unknown>)
+    : null;
+  const contextLimit = limit && typeof limit.context === 'number' ? limit.context : 0;
+  const outputLimit = limit && typeof limit.output === 'number' ? limit.output : 0;
+
+  const contextUsage = React.useMemo<SessionContextUsage | null>(() => {
+    if (!currentSessionId || currentSessionMessages.length === 0) {
+      return null;
+    }
+
+    type AssistantTokens = { input: number; output: number; reasoning: number; cache: { read: number; write: number } };
+    let lastTokens: AssistantTokens | undefined;
+    let lastMessageId: string | undefined;
+
+    for (let i = currentSessionMessages.length - 1; i >= 0; i -= 1) {
+      const message = currentSessionMessages[i];
+      if (message.role !== 'assistant') continue;
+      const tokens = (message as { tokens?: AssistantTokens }).tokens;
+      if (!tokens) continue;
+      const total = tokens.input + tokens.output + tokens.reasoning + (tokens.cache?.read ?? 0) + (tokens.cache?.write ?? 0);
+      if (total > 0) {
+        lastTokens = tokens;
+        lastMessageId = message.id;
+        break;
+      }
+    }
+
+    if (!lastTokens) {
+      return null;
+    }
+
+    const totalTokens = lastTokens.input + lastTokens.output + lastTokens.reasoning + (lastTokens.cache?.read ?? 0) + (lastTokens.cache?.write ?? 0);
+    const thresholdLimit = contextLimit > 0 ? contextLimit : 200000;
+    const percentage = contextLimit > 0 ? Math.round((totalTokens / contextLimit) * 100) : 0;
+    const normalizedOutput = outputLimit > 0 ? Math.round((lastTokens.output / outputLimit) * 100) : undefined;
+
+    return {
+      totalTokens,
+      percentage,
+      contextLimit: contextLimit || 0,
+      outputLimit: outputLimit || undefined,
+      normalizedOutput,
+      thresholdLimit,
+      lastMessageId,
+    };
+  }, [contextLimit, currentSessionId, currentSessionMessages, outputLimit]);
+  const [stableContextUsage, setStableContextUsage] = React.useState<SessionContextUsage | null>(null);
+  const isContextUsageResolvedForSession = !currentSessionId || currentSessionMessagesResolved;
+
+  React.useEffect(() => {
+    if (!currentSessionId) {
+      setStableContextUsage((prev) => (prev === null ? prev : null));
+      return;
+    }
+
+    if (contextUsage && contextUsage.totalTokens > 0) {
+      setStableContextUsage((prev) => {
+        if (
+          prev
+          && prev.totalTokens === contextUsage.totalTokens
+          && prev.percentage === contextUsage.percentage
+          && prev.contextLimit === contextUsage.contextLimit
+          && (prev.outputLimit ?? 0) === (contextUsage.outputLimit ?? 0)
+          && (prev.normalizedOutput ?? 0) === (contextUsage.normalizedOutput ?? 0)
+          && prev.thresholdLimit === contextUsage.thresholdLimit
+          && prev.lastMessageId === contextUsage.lastMessageId
+        ) {
+          return prev;
+        }
+        return contextUsage;
+      });
+      return;
+    }
+
+    if (isContextUsageResolvedForSession) {
+      setStableContextUsage((prev) => (prev === null ? prev : null));
+    }
+  }, [contextUsage, currentSessionId, isContextUsageResolvedForSession]);
 
   const rateLimitGroups = React.useMemo(() => {
     const groups: Array<{
@@ -743,13 +834,17 @@ const VSCodeHeader: React.FC<VSCodeHeaderProps> = ({ title, showBack, onBack, on
           <RiSettings3Line className="h-5 w-5" />
         </button>
       )}
-      {showContextUsage && contextUsage && contextUsage.totalTokens > 0 && (
+      {showContextUsage && stableContextUsage && stableContextUsage.totalTokens > 0 && (
         <ContextUsageDisplay
-          totalTokens={contextUsage.totalTokens}
-          percentage={contextUsage.percentage}
-          contextLimit={contextUsage.contextLimit}
-          outputLimit={contextUsage.outputLimit ?? 0}
-          size="compact"
+          totalTokens={stableContextUsage.totalTokens}
+          percentage={stableContextUsage.percentage}
+          contextLimit={stableContextUsage.contextLimit}
+          outputLimit={stableContextUsage.outputLimit ?? 0}
+          className="h-9 shrink-0 pl-1 pr-1 typography-ui-label"
+          valueClassName="font-semibold leading-none"
+          hideIcon
+          showPercentIcon
+          percentIconClassName="h-5 w-5"
         />
       )}
     </div>

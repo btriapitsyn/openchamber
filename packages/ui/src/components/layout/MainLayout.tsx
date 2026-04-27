@@ -20,7 +20,6 @@ import { useUIStore } from '@/stores/useUIStore';
 import { useUpdateStore } from '@/stores/useUpdateStore';
 import { useDeviceInfo } from '@/lib/device';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
-import { useMobileKeyboardManager } from '@/hooks/useMobileKeyboardManager';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { isDesktopShell } from '@/lib/desktop';
@@ -354,8 +353,6 @@ export const MainLayout: React.FC = () => {
         };
     }, []);
 
-    useMobileKeyboardManager(isMobile);
-
     const secondaryView = React.useMemo(() => {
         switch (activeMainTab) {
             case 'plan':
@@ -387,8 +384,7 @@ export const MainLayout: React.FC = () => {
         <DiffWorkerProvider>
             <div
                 className={cn(
-                    'main-content-safe-area',
-                    isMobile ? 'h-full' : 'h-[100dvh]',
+                    'main-content-safe-area h-[100dvh]',
                     isMobile ? 'flex flex-col' : 'flex',
                     'bg-background'
                 )}

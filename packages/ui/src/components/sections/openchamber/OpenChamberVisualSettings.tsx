@@ -23,6 +23,7 @@ import { isDesktopShell, isVSCodeRuntime, isWebRuntime } from '@/lib/desktop';
 import { useDeviceInfo } from '@/lib/device';
 import { usePwaDetection } from '@/hooks/usePwaDetection';
 import { updateDesktopSettings } from '@/lib/persistence';
+import { CODE_FONT_OPTIONS, DEFAULT_MONO_FONT, DEFAULT_UI_FONT, UI_FONT_OPTIONS, type MonoFontOption, type UiFontOption } from '@/lib/fontOptions';
 import { useI18n, type Locale } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
 import {
@@ -249,6 +250,10 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     const setFontSize = useUIStore(state => state.setFontSize);
     const terminalFontSize = useUIStore(state => state.terminalFontSize);
     const setTerminalFontSize = useUIStore(state => state.setTerminalFontSize);
+    const uiFont = useUIStore(state => state.uiFont);
+    const setUiFont = useUIStore(state => state.setUiFont);
+    const monoFont = useUIStore(state => state.monoFont);
+    const setMonoFont = useUIStore(state => state.setMonoFont);
     const padding = useUIStore(state => state.padding);
     const setPadding = useUIStore(state => state.setPadding);
     const inputBarOffset = useUIStore(state => state.inputBarOffset);
@@ -451,7 +456,11 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
     };
 
     const isVSCode = isVSCodeRuntime();
-    const hasAppearanceSettings = (shouldShow('theme') || shouldShow('pwaInstallName') || shouldShow('pwaOrientation') || shouldShow('timeFormat') || shouldShow('weekStart')) && !isVSCode;
+    const hasThemeSettings = shouldShow('theme') && !isVSCode;
+    const hasLocalizationSettings = shouldShow('theme') || shouldShow('timeFormat') || shouldShow('weekStart');
+    const hasAppearanceSettings = isVSCode
+        ? hasLocalizationSettings
+        : (shouldShow('theme') || shouldShow('pwaInstallName') || shouldShow('pwaOrientation') || shouldShow('timeFormat') || shouldShow('weekStart'));
     const hasLayoutSettings = shouldShow('fontSize') || shouldShow('terminalFontSize') || shouldShow('spacing') || shouldShow('inputBarOffset');
     const hasNavigationSettings = shouldShow('terminalQuickKeys') && !isMobile;
     const hasBehaviorSettings = shouldShow('mermaidRendering')
@@ -588,10 +597,9 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
 
                 {/* --- Appearance & Themes --- */}
                 {hasAppearanceSettings && (
-                    <div className="mb-8 space-y-3">
-                        <section className="px-2 pb-2 pt-0 space-y-0.5">
-
-                            <div className="pb-1.5">
+                    <div className="mb-8 space-y-6">
+                        {hasThemeSettings && (
+                            <section className="px-2 pb-2 pt-0 space-y-2">
                                 <div className="flex min-w-0 flex-col gap-1.5">
                                     <span className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.visual.section.colorMode')}</span>
                                     <div className="flex flex-wrap items-center gap-1">
@@ -601,149 +609,159 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                                 variant="chip"
                                                 size="xs"
                                                 aria-pressed={themeMode === option.value}
-                                            className="!font-normal"
-                                            onClick={() => setThemeMode(option.value)}
-                                        >
+                                                className="!font-normal"
+                                                onClick={() => setThemeMode(option.value)}
+                                            >
                                                 {tUnsafe(option.labelKey)}
                                             </Button>
                                         ))}
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="mt-2 grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
-                                <div className="flex min-w-0 flex-col">
-                                    <span className="typography-ui-label text-foreground shrink-0">{t('settings.appearance.language.label')}</span>
-                                    <span className="typography-meta text-muted-foreground">{t('settings.appearance.language.description')}</span>
+                                <div className="grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.lightTheme')}</span>
+                                        <Select value={selectedLightTheme?.metadata.id ?? ''} onValueChange={setLightThemePreference}>
+                                            <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectLightThemeAria')} className="w-fit">
+                                                <SelectValue placeholder={t('settings.openchamber.visual.field.selectThemePlaceholder')}>
+                                                    {selectedLightTheme
+                                                        ? formatThemeLabel(selectedLightTheme.metadata.name, 'light')
+                                                        : undefined}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {lightThemes.map((theme) => (
+                                                    <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
+                                                        {formatThemeLabel(theme.metadata.name, 'light')}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.darkTheme')}</span>
+                                        <Select value={selectedDarkTheme?.metadata.id ?? ''} onValueChange={setDarkThemePreference}>
+                                            <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectDarkThemeAria')} className="w-fit">
+                                                <SelectValue placeholder={t('settings.openchamber.visual.field.selectThemePlaceholder')}>
+                                                    {selectedDarkTheme
+                                                        ? formatThemeLabel(selectedDarkTheme.metadata.name, 'dark')
+                                                        : undefined}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {darkThemes.map((theme) => (
+                                                    <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
+                                                        {formatThemeLabel(theme.metadata.name, 'dark')}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
-                                <Select value={locale} onValueChange={(value) => setLocale(value as Locale)}>
-                                    <SelectTrigger aria-label={t('settings.appearance.language.select')} className="w-fit">
-                                        <SelectValue>{label(locale)}</SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {locales.map((availableLocale) => (
-                                            <SelectItem key={availableLocale} value={availableLocale}>
-                                                {label(availableLocale)}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
 
-                            <div className="mt-2 grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
-                                <div className="flex min-w-0 items-center gap-2">
-                                    <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.lightTheme')}</span>
-                                    <Select value={selectedLightTheme?.metadata.id ?? ''} onValueChange={setLightThemePreference}>
-                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectLightThemeAria')} className="w-fit">
-                                            <SelectValue placeholder={t('settings.openchamber.visual.field.selectThemePlaceholder')}>
-                                                {selectedLightTheme
-                                                    ? formatThemeLabel(selectedLightTheme.metadata.name, 'light')
-                                                    : undefined}
-                                            </SelectValue>
+                                <div className="flex items-center gap-2 py-1.5">
+                                    <button
+                                        type="button"
+                                        disabled={customThemesLoading || themesReloading}
+                                        onClick={() => {
+                                            const startedAt = Date.now();
+                                            setThemesReloading(true);
+                                            void reloadCustomThemes().finally(() => {
+                                                const elapsed = Date.now() - startedAt;
+                                                if (elapsed < 500) {
+                                                    window.setTimeout(() => {
+                                                        setThemesReloading(false);
+                                                    }, 500 - elapsed);
+                                                    return;
+                                                }
+                                                setThemesReloading(false);
+                                            });
+                                        }}
+                                        className="inline-flex items-center typography-ui-label font-normal text-foreground underline decoration-[1px] underline-offset-2 hover:text-foreground/80 disabled:cursor-not-allowed disabled:text-muted-foreground/60"
+                                    >
+                                        {themesReloading ? t('settings.openchamber.visual.actions.reloadingThemes') : t('settings.openchamber.visual.actions.reloadThemes')}
+                                    </button>
+                                    <Tooltip delayDuration={700}>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="flex items-center justify-center rounded-md p-1 text-muted-foreground/70 hover:text-foreground"
+                                                aria-label={t('settings.openchamber.visual.field.themeImportInfoAria')}
+                                            >
+                                                <RiInformationLine className="h-3.5 w-3.5" />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent sideOffset={8}>
+                                            {t('settings.openchamber.visual.field.themeImportInfoTooltip')}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </div>
+                            </section>
+                        )}
+
+                        {hasLocalizationSettings && (
+                            <section className="px-2 pb-2 pt-0 space-y-2">
+                                <h4 className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.visual.section.localization')}</h4>
+
+                                <div className="grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
+                                    <div className="flex min-w-0 flex-col">
+                                        <span className="typography-ui-label text-foreground shrink-0">{t('settings.appearance.language.label')}</span>
+                                        <span className="typography-meta text-muted-foreground">{t('settings.appearance.language.description')}</span>
+                                    </div>
+                                    <Select value={locale} onValueChange={(value) => setLocale(value as Locale)}>
+                                        <SelectTrigger aria-label={t('settings.appearance.language.select')} className="w-fit">
+                                            <SelectValue>{label(locale)}</SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {lightThemes.map((theme) => (
-                                                <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
-                                                    {formatThemeLabel(theme.metadata.name, 'light')}
+                                            {locales.map((availableLocale) => (
+                                                <SelectItem key={availableLocale} value={availableLocale}>
+                                                    {label(availableLocale)}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="flex min-w-0 items-center gap-2">
-                                    <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.darkTheme')}</span>
-                                    <Select value={selectedDarkTheme?.metadata.id ?? ''} onValueChange={setDarkThemePreference}>
-                                        <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectDarkThemeAria')} className="w-fit">
-                                            <SelectValue placeholder={t('settings.openchamber.visual.field.selectThemePlaceholder')}>
-                                                {selectedDarkTheme
-                                                    ? formatThemeLabel(selectedDarkTheme.metadata.name, 'dark')
-                                                    : undefined}
-                                            </SelectValue>
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {darkThemes.map((theme) => (
-                                                <SelectItem key={theme.metadata.id} value={theme.metadata.id}>
-                                                    {formatThemeLabel(theme.metadata.name, 'dark')}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
 
-                            {(shouldShow('timeFormat') || shouldShow('weekStart')) && (
-                                <div className="mt-1 grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
-                                    {shouldShow('timeFormat') && (
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.timeFormat')}</span>
-                                            <Select value={timeFormatPreference} onValueChange={(value: 'auto' | '12h' | '24h') => handleTimeFormatPreferenceChange(value)}>
-                                                <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectTimeFormatAria')} className="w-fit">
-                                                    <SelectValue>{selectedTimeFormatLabel}</SelectValue>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {TIME_FORMAT_OPTIONS.map((option) => (
-                                                        <SelectItem key={option.id} value={option.id}>{tUnsafe(option.labelKey)}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    )}
+                                {!isVSCode && (shouldShow('timeFormat') || shouldShow('weekStart')) && (
+                                    <div className="grid grid-cols-1 gap-2 py-1.5 md:grid-cols-[14rem_auto] md:gap-x-8 md:gap-y-2">
+                                        {shouldShow('timeFormat') && (
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.timeFormat')}</span>
+                                                <Select value={timeFormatPreference} onValueChange={(value: 'auto' | '12h' | '24h') => handleTimeFormatPreferenceChange(value)}>
+                                                    <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectTimeFormatAria')} className="w-fit">
+                                                        <SelectValue>{selectedTimeFormatLabel}</SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {TIME_FORMAT_OPTIONS.map((option) => (
+                                                            <SelectItem key={option.id} value={option.id}>{tUnsafe(option.labelKey)}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
 
-                                    {shouldShow('weekStart') && (
-                                        <div className="flex min-w-0 items-center gap-2">
-                                            <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.weekStartsOn')}</span>
-                                            <Select value={weekStartPreference} onValueChange={(value: 'auto' | 'monday' | 'sunday') => handleWeekStartPreferenceChange(value)}>
-                                                <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectWeekStartAria')} className="w-fit">
-                                                    <SelectValue>{selectedWeekStartLabel}</SelectValue>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {WEEK_START_OPTIONS.map((option) => (
-                                                        <SelectItem key={option.id} value={option.id}>{tUnsafe(option.labelKey)}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                        {shouldShow('weekStart') && (
+                                            <div className="flex min-w-0 items-center gap-2">
+                                                <span className="typography-ui-label text-foreground shrink-0">{t('settings.openchamber.visual.field.weekStartsOn')}</span>
+                                                <Select value={weekStartPreference} onValueChange={(value: 'auto' | 'monday' | 'sunday') => handleWeekStartPreferenceChange(value)}>
+                                                    <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectWeekStartAria')} className="w-fit">
+                                                        <SelectValue>{selectedWeekStartLabel}</SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {WEEK_START_OPTIONS.map((option) => (
+                                                            <SelectItem key={option.id} value={option.id}>{tUnsafe(option.labelKey)}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </section>
+                        )}
 
-                            <div className="flex items-center gap-2 py-1.5">
-                                <button
-                                    type="button"
-                                    disabled={customThemesLoading || themesReloading}
-                                    onClick={() => {
-                                        const startedAt = Date.now();
-                                        setThemesReloading(true);
-                                        void reloadCustomThemes().finally(() => {
-                                            const elapsed = Date.now() - startedAt;
-                                            if (elapsed < 500) {
-                                                window.setTimeout(() => {
-                                                    setThemesReloading(false);
-                                                }, 500 - elapsed);
-                                                return;
-                                            }
-                                            setThemesReloading(false);
-                                        });
-                                    }}
-                                    className="inline-flex items-center typography-ui-label font-normal text-foreground underline decoration-[1px] underline-offset-2 hover:text-foreground/80 disabled:cursor-not-allowed disabled:text-muted-foreground/60"
-                                >
-                                    {themesReloading ? t('settings.openchamber.visual.actions.reloadingThemes') : t('settings.openchamber.visual.actions.reloadThemes')}
-                                </button>
-                                <Tooltip delayDuration={700}>
-                                    <TooltipTrigger asChild>
-                                        <button
-                                            type="button"
-                                            className="flex items-center justify-center rounded-md p-1 text-muted-foreground/70 hover:text-foreground"
-                                            aria-label={t('settings.openchamber.visual.field.themeImportInfoAria')}
-                                        >
-                                            <RiInformationLine className="h-3.5 w-3.5" />
-                                        </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent sideOffset={8}>
-                                        {t('settings.openchamber.visual.field.themeImportInfoTooltip')}
-                                    </TooltipContent>
-                                </Tooltip>
-                            </div>
+                        {(showPwaInstallNameSetting || showPwaOrientationSetting) && (
+                            <section className="px-2 pb-2 pt-0 space-y-2">
 
                             {showPwaInstallNameSetting && (
                                 <div className="py-1.5 space-y-1.5">
@@ -832,7 +850,8 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                                     </div>
                                 </div>
                             )}
-                        </section>
+                            </section>
+                        )}
                     </div>
                 )}
 
@@ -842,6 +861,72 @@ export const OpenChamberVisualSettings: React.FC<OpenChamberVisualSettingsProps>
                         <section className="p-2 space-y-0.5">
                             <h4 className="typography-ui-header font-medium text-foreground">{t('settings.openchamber.visual.section.spacingAndLayout')}</h4>
                             <div className="pl-2">
+
+                            {shouldShow('fontSize') && !isMobile && (
+                                <div className="flex items-center gap-8 py-1">
+                                    <div className="flex min-w-0 flex-col w-56 shrink-0">
+                                        <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.interfaceFont')}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 w-fit">
+                                        <Select value={uiFont} onValueChange={(value) => setUiFont(value as UiFontOption)}>
+                                            <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectInterfaceFontAria')} className="w-[13rem]">
+                                                <SelectValue>{UI_FONT_OPTIONS.find((option) => option.id === uiFont)?.label}</SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {UI_FONT_OPTIONS.map((option) => (
+                                                    <SelectItem key={option.id} value={option.id}>
+                                                        <span style={{ fontFamily: option.stack }}>{option.label}</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="sm"
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => setUiFont(DEFAULT_UI_FONT)}
+                                            disabled={uiFont === DEFAULT_UI_FONT}
+                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
+                                            aria-label={t('settings.openchamber.visual.actions.resetInterfaceFontAria')}
+                                            title={t('settings.common.actions.reset')}
+                                        >
+                                            <RiRestartLine className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {shouldShow('terminalFontSize') && (
+                                <div className={cn("py-1", isMobile ? "flex flex-col gap-3" : "flex items-center gap-8")}>
+                                    <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "w-56 shrink-0")}>
+                                        <span className="typography-ui-label text-foreground">{t('settings.openchamber.visual.field.codeFont')}</span>
+                                    </div>
+                                    <div className={cn("flex items-center gap-2", isMobile ? "w-full" : "w-fit")}>
+                                        <Select value={monoFont} onValueChange={(value) => setMonoFont(value as MonoFontOption)}>
+                                            <SelectTrigger aria-label={t('settings.openchamber.visual.field.selectCodeFontAria')} className="w-[13rem]">
+                                                <SelectValue>{CODE_FONT_OPTIONS.find((option) => option.id === monoFont)?.label}</SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {CODE_FONT_OPTIONS.map((option) => (
+                                                    <SelectItem key={option.id} value={option.id}>
+                                                        <span style={{ fontFamily: option.stack }}>{option.label}</span>
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="sm"
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={() => setMonoFont(DEFAULT_MONO_FONT)}
+                                            disabled={monoFont === DEFAULT_MONO_FONT}
+                                            className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
+                                            aria-label={t('settings.openchamber.visual.actions.resetCodeFontAria')}
+                                            title={t('settings.common.actions.reset')}
+                                        >
+                                            <RiRestartLine className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
 
                             {shouldShow('fontSize') && !isMobile && (
                                 <div className="flex items-center gap-8 py-1">

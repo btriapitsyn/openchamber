@@ -28,7 +28,6 @@ import { useProjectSessionSelection } from './sidebar/hooks/useProjectSessionSel
 import { useGroupOrdering } from './sidebar/hooks/useGroupOrdering';
 import { useSessionGrouping } from './sidebar/hooks/useSessionGrouping';
 import { useSessionSearchEffects } from './sidebar/hooks/useSessionSearchEffects';
-import { useDirectoryStatusProbe } from './sidebar/hooks/useDirectoryStatusProbe';
 import { useSessionActions } from './sidebar/hooks/useSessionActions';
 import { useSidebarPersistence } from './sidebar/hooks/useSidebarPersistence';
 import { useProjectRepoStatus } from './sidebar/hooks/useProjectRepoStatus';
@@ -74,7 +73,7 @@ import {
   formatProjectLabel,
   normalizePath,
 } from './sidebar/utils';
-import { refreshGlobalSessions, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
+import { refreshGlobalSessions, resolveGlobalSessionDirectory, useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
 import { subscribeOpenchamberEvents } from '@/lib/openchamberEvents';
@@ -112,6 +111,32 @@ type PrIndicator = {
   } | null;
 };
 
+const buildKnownSessionDirectories = (
+  projects: Array<{ path: string }>,
+  availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
+): Set<string> => {
+  const directories = new Set<string>();
+  for (const project of projects) {
+    const normalized = normalizePath(project.path)?.toLowerCase();
+    if (normalized) directories.add(normalized);
+  }
+  for (const worktrees of availableWorktreesByProject.values()) {
+    for (const worktree of worktrees) {
+      const normalized = normalizePath(worktree.path)?.toLowerCase();
+      if (normalized) directories.add(normalized);
+    }
+  }
+  return directories;
+};
+
+const isKnownActiveSessionDirectory = (session: Session, knownDirectories: Set<string>): boolean => {
+  if (session.time?.archived) return true;
+  const directory = normalizePath(resolveGlobalSessionDirectory(session))?.toLowerCase();
+  if (!directory) return true;
+  if (knownDirectories.size === 0) return true;
+  return knownDirectories.has(directory);
+};
+
 interface SessionSidebarProps {
   mobileVariant?: boolean;
   onSessionSelected?: (sessionId: string) => void;
@@ -136,7 +161,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [editTitle, setEditTitle] = React.useState('');
   const [editingProjectDialogId, setEditingProjectDialogId] = React.useState<string | null>(null);
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
-  const [directoryStatus, setDirectoryStatus] = React.useState<Map<string, 'unknown' | 'exists' | 'missing'>>(
+  const [directoryStatus] = React.useState<Map<string, 'unknown' | 'exists' | 'missing'>>(
     () => new Map(),
   );
   const safeStorage = React.useMemo(() => getSafeStorage(), []);
@@ -304,6 +329,11 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     restartToUpdate: s.restartToUpdate,
   })));
 
+  const knownSessionDirectories = React.useMemo(
+    () => buildKnownSessionDirectories(projects, availableWorktreesByProject),
+    [availableWorktreesByProject, projects],
+  );
+
   const sessions = React.useMemo(() => {
     const liveById = new Map(liveSessions.map((session) => [session.id, session]));
     const merged = globalActiveSessions.map((session) => liveById.get(session.id) ?? session);
@@ -316,8 +346,8 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       merged.push(session);
     });
 
-    return merged;
-  }, [globalActiveSessions, liveSessions]);
+    return merged.filter((session) => isKnownActiveSessionDirectory(session, knownSessionDirectories));
+  }, [globalActiveSessions, knownSessionDirectories, liveSessions]);
 
   const syncSessionStructureSignature = React.useMemo(
     () => liveSessions
@@ -546,13 +576,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
     map.forEach((list) => list.sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)));
     return map;
   }, [sortedSessions, pinnedSessionIds]);
-
-  useDirectoryStatusProbe({
-    sortedSessions,
-    projects,
-    directoryStatus,
-    setDirectoryStatus,
-  });
 
   const emptyState = (
     <div className="py-6 text-center text-muted-foreground">
