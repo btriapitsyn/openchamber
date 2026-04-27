@@ -368,11 +368,22 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
     metadataProjectDirectory,
     projectWorktrees.filter((w) => normalizePath(w.path) !== normalizedWorktreePath),
   );
+
+  // Clean up worktreeMetadata for sessions in the removed worktree
+  const currentMetadata = useSessionUIStore.getState().worktreeMetadata;
+  const updatedMetadata = new Map(currentMetadata);
+  for (const [sid, meta] of currentMetadata.entries()) {
+    if (meta && normalizePath(meta.path) === normalizedWorktreePath) {
+      updatedMetadata.delete(sid);
+    }
+  }
+
   useSessionUIStore.setState({
     availableWorktreesByProject: updatedByProject,
     availableWorktrees: useSessionUIStore.getState().availableWorktrees.filter(
       (w) => normalizePath(w.path) !== normalizedWorktreePath,
     ),
+    worktreeMetadata: updatedMetadata,
   });
 
   const branchName = (worktree.branch || '').replace(/^refs\/heads\//, '').trim();
