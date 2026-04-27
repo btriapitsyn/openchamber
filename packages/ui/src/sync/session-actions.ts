@@ -214,7 +214,7 @@ export async function deleteSession(sessionId: string, _options?: Record<string,
   const sessionDirectory = getSessionDirectory(sessionId)
   // Remove from UI immediately, rollback on error
   let snapshot = optimisticRemoveSession(sessionId, sessionDirectory)
-  let removedFromDir: string | null = snapshot ? sessionDirectory : null
+  let removedFromDir: string | null = snapshot ? (sessionDirectory ?? null) : null
 
   // If the session wasn't in the resolved directory (e.g. archived session
   // whose original child store was disposed), search all child stores.
