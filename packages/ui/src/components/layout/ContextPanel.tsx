@@ -325,6 +325,64 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
   const showLoading = isLoopback && (proxyState.status === 'loading' || proxyState.status === 'idle');
   const showError = isLoopback && proxyState.status === 'error';
 
+  // Out-of-band upstream probe: iframes don't expose HTTP status to the parent,
+  // so when the proxy returns a 502 (upstream dev server is offline) the iframe
+  // would just render the raw JSON error body. Probe the proxy URL with a HEAD
+  // request and surface a friendly overlay when the upstream is unreachable.
+  type UpstreamState = 'unknown' | 'reachable' | 'unreachable';
+  const [upstreamState, setUpstreamState] = React.useState<UpstreamState>('unknown');
+
+  React.useEffect(() => {
+    if (!proxySrc) {
+      setUpstreamState('unknown');
+      return;
+    }
+
+    let cancelled = false;
+    setUpstreamState('unknown');
+
+    void (async () => {
+      const probe = async (method: 'HEAD' | 'GET'): Promise<Response | null> => {
+        try {
+          return await fetch(proxySrc, {
+            method,
+            credentials: 'include',
+            cache: 'no-store',
+            redirect: 'manual',
+          });
+        } catch {
+          return null;
+        }
+      };
+
+      let response = await probe('HEAD');
+      // Some dev servers reject HEAD with 404/405; fall back to a single GET.
+      if (response && (response.status === 404 || response.status === 405)) {
+        response = await probe('GET');
+      }
+
+      if (cancelled) return;
+
+      if (!response) {
+        // Network-level failure (e.g. server itself is down) — treat as unreachable.
+        setUpstreamState('unreachable');
+        return;
+      }
+
+      // The proxy emits 502 when the upstream is unreachable. Anything else
+      // (including 4xx from the upstream) means the upstream answered.
+      setUpstreamState(response.status === 502 ? 'unreachable' : 'reachable');
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [proxySrc, reloadNonce]);
+
+  const showUpstreamUnreachable = isLoopback
+    && proxyState.status === 'ready'
+    && upstreamState === 'unreachable';
+
   return (
     <div className="absolute inset-0 flex flex-col">
       <div className="flex items-center gap-1 border-b border-border/40 bg-[var(--surface-background)] px-2 py-1">
@@ -360,7 +418,20 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
         </Button>
       </div>
       <div className="min-h-0 flex-1 bg-background">
-        {effectiveSrc ? (
+        {showUpstreamUnreachable ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
+            <div>{t('contextPanel.preview.upstreamUnreachable')}</div>
+            <div className="text-xs opacity-70">{t('contextPanel.preview.upstreamUnreachableHint')}</div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => bumpReload()}
+            >
+              {t('contextPanel.preview.actions.retry')}
+            </Button>
+          </div>
+        ) : effectiveSrc ? (
           <iframe
             key={`${effectiveSrc}:${reloadNonce}`}
             src={effectiveSrc}
