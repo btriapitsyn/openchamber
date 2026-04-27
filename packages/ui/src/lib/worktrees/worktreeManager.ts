@@ -341,7 +341,8 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   deleteLocalBranch?: boolean;
   remoteName?: string;
 }): Promise<void> {
-  const projectDirectory = project.path;
+  const projectDirectory = normalizePath(project.path);
+  const metadataProjectDirectory = await resolvePrimaryWorktreeDirectory(projectDirectory).catch(() => projectDirectory);
 
   const deleteRemote = Boolean(options?.deleteRemoteBranch);
   const deleteLocalBranch = options?.deleteLocalBranch === true;
@@ -362,9 +363,9 @@ export async function removeProjectWorktree(project: ProjectRef, worktree: Workt
   const normalizedWorktreePath = normalizePath(worktree.path);
   const currentByProject = useSessionUIStore.getState().availableWorktreesByProject;
   const updatedByProject = new Map(currentByProject);
-  const projectWorktrees = updatedByProject.get(normalizePath(project.path)) ?? [];
+  const projectWorktrees = updatedByProject.get(metadataProjectDirectory) ?? [];
   updatedByProject.set(
-    normalizePath(project.path),
+    metadataProjectDirectory,
     projectWorktrees.filter((w) => normalizePath(w.path) !== normalizedWorktreePath),
   );
   useSessionUIStore.setState({
