@@ -43,6 +43,31 @@ export const writeSseChunkWithBackpressure = async (res, value, signal) => {
   return !signal?.aborted && !res.writableEnded && !res.destroyed;
 };
 
+export const createSseBoundaryTracker = () => {
+  const decoder = new TextDecoder();
+  let tail = '';
+
+  const normalize = (value) => value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  return {
+    observe(value) {
+      const text = typeof value === 'string'
+        ? value
+        : decoder.decode(value, { stream: true });
+      if (text.length > 0) {
+        tail = `${tail}${normalize(text)}`;
+        if (tail.length > 4096) {
+          tail = tail.slice(-4096);
+        }
+      }
+      return this.isAtBoundary();
+    },
+    isAtBoundary() {
+      return tail.length === 0 || tail.endsWith('\n\n');
+    },
+  };
+};
+
 export const registerOpenCodeProxy = (app, deps) => {
   const {
     fs,
@@ -114,6 +139,8 @@ export const registerOpenCodeProxy = (app, deps) => {
     let upstream = null;
     let reader = null;
     let heartbeatTimer = null;
+    let writeQueue = Promise.resolve(true);
+    const sseBoundary = createSseBoundaryTracker();
 
     req.on('close', closeUpstream);
 
@@ -169,11 +196,27 @@ export const registerOpenCodeProxy = (app, deps) => {
           if (abortController.signal.aborted || res.writableEnded || res.destroyed) {
             return;
           }
-          const canContinue = await writeSseChunkWithBackpressure(res, ':heartbeat\n\n', abortController.signal);
+          if (!sseBoundary.isAtBoundary()) {
+            scheduleHeartbeat();
+            return;
+          }
+          const canContinue = await enqueueSseWrite(':heartbeat\n\n');
           if (canContinue) {
             scheduleHeartbeat();
           }
         }, SSE_HEARTBEAT_INTERVAL_MS);
+      };
+
+      const enqueueSseWrite = (value) => {
+        writeQueue = writeQueue
+          .catch(() => false)
+          .then((canContinue) => {
+            if (!canContinue) {
+              return false;
+            }
+            return writeSseChunkWithBackpressure(res, value, abortController.signal);
+          });
+        return writeQueue;
       };
 
       scheduleHeartbeat();
@@ -185,7 +228,8 @@ export const registerOpenCodeProxy = (app, deps) => {
           break;
         }
         if (value && value.length > 0) {
-          const canContinue = await writeSseChunkWithBackpressure(res, value, abortController.signal);
+          sseBoundary.observe(value);
+          const canContinue = await enqueueSseWrite(value);
           if (!canContinue) {
             break;
           }
