@@ -783,41 +783,60 @@ export function registerGitHubRoutes(app) {
       }
 
       const { resolveGitHubRepoFromDirectory } = await import('./index.js');
+      const { resolveRepoNetwork } = await import('./repo/fork-detection.js');
+
+      const repoNetwork = await resolveRepoNetwork(octokit, directory);
       const { repo } = await resolveGitHubRepoFromDirectory(directory);
       if (!repo) {
         return res.json({ connected: true, repo: null, issues: [] });
       }
 
-      const list = await octokit.rest.issues.listForRepo({
-        owner: repo.owner,
-        repo: repo.repo,
-        state: 'open',
-        per_page: 50,
-        page: Number.isFinite(page) && page > 0 ? page : 1,
-      });
-      const link = typeof list?.headers?.link === 'string' ? list.headers.link : '';
-      const hasMore = /rel="next"/.test(link);
-      const issues = (Array.isArray(list?.data) ? list.data : [])
-        .filter((item) => !item?.pull_request)
-        .map((item) => ({
-          number: item.number,
-          title: item.title,
-          url: item.html_url,
-          state: item.state === 'closed' ? 'closed' : 'open',
-          author: item.user ? { login: item.user.login, id: item.user.id, avatarUrl: item.user.avatar_url } : null,
-          labels: Array.isArray(item.labels)
-            ? item.labels
-                .map((label) => {
-                  if (typeof label === 'string') return null;
-                  const name = typeof label?.name === 'string' ? label.name : '';
-                  if (!name) return null;
-                  return { name, color: typeof label?.color === 'string' ? label.color : undefined };
-                })
-                .filter(Boolean)
-            : [],
-        }));
+      const effectivePage = Number.isFinite(page) && page > 0 ? page : 1;
+      const reposToQuery = repoNetwork || [{ ...repo, source: 'origin' }];
 
-      return res.json({ connected: true, repo, issues, page: Number.isFinite(page) && page > 0 ? page : 1, hasMore });
+      const queryRepo = async (repoRef) => {
+        try {
+          const list = await octokit.rest.issues.listForRepo({
+            owner: repoRef.owner,
+            repo: repoRef.repo,
+            state: 'open',
+            per_page: 50,
+            page: effectivePage,
+          });
+          const link = typeof list?.headers?.link === 'string' ? list.headers.link : '';
+          const hasMore = /rel="next"/.test(link);
+          const issues = (Array.isArray(list?.data) ? list.data : [])
+            .filter((item) => !item?.pull_request)
+            .map((item) => ({
+              number: item.number,
+              title: item.title,
+              url: item.html_url,
+              state: item.state === 'closed' ? 'closed' : 'open',
+              author: item.user ? { login: item.user.login, id: item.user.id, avatarUrl: item.user.avatar_url } : null,
+              labels: Array.isArray(item.labels)
+                ? item.labels
+                    .map((label) => {
+                      if (typeof label === 'string') return null;
+                      const name = typeof label?.name === 'string' ? label.name : '';
+                      if (!name) return null;
+                      return { name, color: typeof label?.color === 'string' ? label.color : undefined };
+                    })
+                    .filter(Boolean)
+                : [],
+              sourceRepo: { owner: repoRef.owner, repo: repoRef.repo, source: repoRef.source },
+            }));
+          return { issues, hasMore };
+        } catch (error) {
+          console.warn(`Failed to list issues for ${repoRef.owner}/${repoRef.repo}:`, error?.message || error);
+          return { issues: [], hasMore: false };
+        }
+      };
+
+      const results = await Promise.all(reposToQuery.map(queryRepo));
+      const allIssues = results.flatMap((r) => r.issues);
+      const anyHasMore = results.some((r) => r.hasMore);
+
+      return res.json({ connected: true, repo, issues: allIssues, page: effectivePage, hasMore: anyHasMore });
     } catch (error) {
       console.error('Failed to list GitHub issues:', error);
       return res.status(500).json({ error: error.message || 'Failed to list GitHub issues' });
