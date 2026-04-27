@@ -411,6 +411,31 @@ export const listConfiguredQuotaProviders = () => {
     configured.add('github-copilot-addon');
   }
 
+  const minimaxAuth = normalizeAuthEntry(getAuthEntry(auth, ['minimax-coding-plan']));
+  if (minimaxAuth && ((minimaxAuth as Record<string, unknown>).key || (minimaxAuth as Record<string, unknown>).token)) {
+    configured.add('minimax-coding-plan');
+  }
+
+  const minimaxCnAuth = normalizeAuthEntry(getAuthEntry(auth, ['minimax-cn-coding-plan']));
+  if (minimaxCnAuth && ((minimaxCnAuth as Record<string, unknown>).key || (minimaxCnAuth as Record<string, unknown>).token)) {
+    configured.add('minimax-cn-coding-plan');
+  }
+
+  const ollamaCloudAuth = normalizeAuthEntry(getAuthEntry(auth, ['ollama-cloud', 'ollamacloud']));
+  const ollamaCloudCookie = (() => {
+    const cookiePath = path.join(os.homedir(), '.config', 'ollama-quota', 'cookie');
+    try {
+      if (!fs.existsSync(cookiePath)) return false;
+      const content = fs.readFileSync(cookiePath, 'utf-8');
+      return content.trim().length > 0;
+    } catch {
+      return false;
+    }
+  })();
+  if ((ollamaCloudAuth && ((ollamaCloudAuth as Record<string, unknown>).key || (ollamaCloudAuth as Record<string, unknown>).token)) || ollamaCloudCookie) {
+    configured.add('ollama-cloud');
+  }
+
   return Array.from(configured);
 };
 
@@ -1508,6 +1533,12 @@ export const fetchQuotaForProvider = async (providerId: string): Promise<Provide
       return fetchZaiQuota();
     case 'zhipuai-coding-plan':
       return fetchZhipuaiCodingPlanQuota();
+    case 'minimax-coding-plan':
+      return fetchMinimaxCodingPlanQuota();
+    case 'minimax-cn-coding-plan':
+      return fetchMinimaxCnCodingPlanQuota();
+    case 'ollama-cloud':
+      return fetchOllamaCloudQuota();
     default:
       return buildResult({
         providerId,
@@ -1516,5 +1547,346 @@ export const fetchQuotaForProvider = async (providerId: string): Promise<Provide
         configured: false,
         error: 'Unsupported provider',
       });
+  }
+};
+
+const fetchMinimaxCodingPlanQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['minimax-coding-plan'])) as Record<string, unknown> | null;
+  const apiKey = (entry?.key as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!apiKey) {
+    return buildResult({
+      providerId: 'minimax-coding-plan',
+      providerName: 'MiniMax Coding Plan (minimax.io)',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.minimax.io/v1/api/openplatform/coding_plan/remains',
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'minimax-coding-plan',
+        providerName: 'MiniMax Coding Plan (minimax.io)',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const baseResp = payload?.base_resp as Record<string, unknown> | undefined;
+    if (baseResp && (baseResp.status_code as number) !== 0) {
+      return buildResult({
+        providerId: 'minimax-coding-plan',
+        providerName: 'MiniMax Coding Plan (minimax.io)',
+        ok: false,
+        configured: true,
+        error: (baseResp.status_msg as string) || `API error: ${baseResp.status_code}`,
+      });
+    }
+
+    const modelRemains = payload?.model_remains as Array<Record<string, unknown>> | undefined;
+    const firstModel = modelRemains?.[0];
+    if (!firstModel) {
+      return buildResult({
+        providerId: 'minimax-coding-plan',
+        providerName: 'MiniMax Coding Plan (minimax.io)',
+        ok: false,
+        configured: true,
+        error: 'No model quota data available',
+      });
+    }
+
+    const intervalTotal = toNumber(firstModel.current_interval_total_count as number | undefined);
+    const intervalUsage = toNumber(firstModel.current_interval_usage_count as number | undefined);
+    const intervalStartAt = toTimestamp(firstModel.start_time as number | undefined);
+    const intervalResetAt = toTimestamp(firstModel.end_time as number | undefined);
+    const weeklyTotal = toNumber(firstModel.current_weekly_total_count as number | undefined);
+    const weeklyUsage = toNumber(firstModel.current_weekly_usage_count as number | undefined);
+    const weeklyStartAt = toTimestamp(firstModel.weekly_start_time as number | undefined);
+    const weeklyResetAt = toTimestamp(firstModel.weekly_end_time as number | undefined);
+
+    const intervalUsed = intervalUsage;
+    const weeklyUsed = weeklyUsage;
+
+    const intervalUsedPercent =
+      intervalTotal !== null && intervalUsed !== null && intervalTotal > 0
+        ? Math.max(0, Math.min(100, (intervalUsed / intervalTotal) * 100))
+        : null;
+    const intervalWindowSeconds =
+      intervalStartAt !== null && intervalResetAt !== null && intervalResetAt > intervalStartAt
+        ? Math.floor((intervalResetAt - intervalStartAt) / 1000)
+        : null;
+    const weeklyUsedPercent =
+      weeklyTotal !== null && weeklyUsed !== null && weeklyTotal > 0
+        ? Math.max(0, Math.min(100, (weeklyUsed / weeklyTotal) * 100))
+        : null;
+    const weeklyWindowSeconds =
+      weeklyStartAt !== null && weeklyResetAt !== null && weeklyResetAt > weeklyStartAt
+        ? Math.floor((weeklyResetAt - weeklyStartAt) / 1000)
+        : null;
+
+    const windows: Record<string, UsageWindow> = {
+      '5h': toUsageWindow({
+        usedPercent: intervalUsedPercent,
+        windowSeconds: intervalWindowSeconds,
+        resetAt: intervalResetAt,
+      }),
+      weekly: toUsageWindow({
+        usedPercent: weeklyUsedPercent,
+        windowSeconds: weeklyWindowSeconds,
+        resetAt: weeklyResetAt,
+      }),
+    };
+
+    return buildResult({
+      providerId: 'minimax-coding-plan',
+      providerName: 'MiniMax Coding Plan (minimax.io)',
+      ok: true,
+      configured: true,
+      usage: { windows },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'minimax-coding-plan',
+      providerName: 'MiniMax Coding Plan (minimax.io)',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
+const fetchMinimaxCnCodingPlanQuota = async (): Promise<ProviderResult> => {
+  const auth = readAuthFile();
+  const entry = normalizeAuthEntry(getAuthEntry(auth, ['minimax-cn-coding-plan'])) as Record<string, unknown> | null;
+  const apiKey = (entry?.key as string | undefined) ?? (entry?.token as string | undefined);
+
+  if (!apiKey) {
+    return buildResult({
+      providerId: 'minimax-cn-coding-plan',
+      providerName: 'MiniMax Coding Plan (minimaxi.com)',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch(
+      'https://www.minimaxi.com/v1/api/openplatform/coding_plan/remains',
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'minimax-cn-coding-plan',
+        providerName: 'MiniMax Coding Plan (minimaxi.com)',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const payload = await response.json() as Record<string, unknown>;
+    const baseResp = payload?.base_resp as Record<string, unknown> | undefined;
+    if (baseResp && (baseResp.status_code as number) !== 0) {
+      return buildResult({
+        providerId: 'minimax-cn-coding-plan',
+        providerName: 'MiniMax Coding Plan (minimaxi.com)',
+        ok: false,
+        configured: true,
+        error: (baseResp.status_msg as string) || `API error: ${baseResp.status_code}`,
+      });
+    }
+
+    const modelRemains = payload?.model_remains as Array<Record<string, unknown>> | undefined;
+    const firstModel = modelRemains?.[0];
+    if (!firstModel) {
+      return buildResult({
+        providerId: 'minimax-cn-coding-plan',
+        providerName: 'MiniMax Coding Plan (minimaxi.com)',
+        ok: false,
+        configured: true,
+        error: 'No model quota data available',
+      });
+    }
+
+    const intervalTotal = toNumber(firstModel.current_interval_total_count as number | undefined);
+    const intervalUsage = toNumber(firstModel.current_interval_usage_count as number | undefined);
+    const intervalStartAt = toTimestamp(firstModel.start_time as number | undefined);
+    const intervalResetAt = toTimestamp(firstModel.end_time as number | undefined);
+    const weeklyTotal = toNumber(firstModel.current_weekly_total_count as number | undefined);
+    const weeklyUsage = toNumber(firstModel.current_weekly_usage_count as number | undefined);
+    const weeklyStartAt = toTimestamp(firstModel.weekly_start_time as number | undefined);
+    const weeklyResetAt = toTimestamp(firstModel.weekly_end_time as number | undefined);
+
+    const intervalUsed = intervalTotal !== null && intervalUsage !== null ? intervalTotal - intervalUsage : null;
+    const weeklyUsed = weeklyTotal !== null && weeklyUsage !== null ? weeklyTotal - weeklyUsage : null;
+
+    const intervalUsedPercent =
+      intervalTotal !== null && intervalUsed !== null && intervalTotal > 0
+        ? Math.max(0, Math.min(100, (intervalUsed / intervalTotal) * 100))
+        : null;
+    const intervalWindowSeconds =
+      intervalStartAt !== null && intervalResetAt !== null && intervalResetAt > intervalStartAt
+        ? Math.floor((intervalResetAt - intervalStartAt) / 1000)
+        : null;
+    const weeklyUsedPercent =
+      weeklyTotal !== null && weeklyUsed !== null && weeklyTotal > 0
+        ? Math.max(0, Math.min(100, (weeklyUsed / weeklyTotal) * 100))
+        : null;
+    const weeklyWindowSeconds =
+      weeklyStartAt !== null && weeklyResetAt !== null && weeklyResetAt > weeklyStartAt
+        ? Math.floor((weeklyResetAt - weeklyStartAt) / 1000)
+        : null;
+
+    const windows: Record<string, UsageWindow> = {
+      '5h': toUsageWindow({
+        usedPercent: intervalUsedPercent,
+        windowSeconds: intervalWindowSeconds,
+        resetAt: intervalResetAt,
+      }),
+      weekly: toUsageWindow({
+        usedPercent: weeklyUsedPercent,
+        windowSeconds: weeklyWindowSeconds,
+        resetAt: weeklyResetAt,
+      }),
+    };
+
+    return buildResult({
+      providerId: 'minimax-cn-coding-plan',
+      providerName: 'MiniMax Coding Plan (minimaxi.com)',
+      ok: true,
+      configured: true,
+      usage: { windows },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'minimax-cn-coding-plan',
+      providerName: 'MiniMax Coding Plan (minimaxi.com)',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
+  }
+};
+
+const fetchOllamaCloudQuota = async (): Promise<ProviderResult> => {
+  const COOKIE_PATH = path.join(os.homedir(), '.config', 'ollama-quota', 'cookie');
+
+  const readCookieFile = () => {
+    try {
+      if (!fs.existsSync(COOKIE_PATH)) return null;
+      const content = fs.readFileSync(COOKIE_PATH, 'utf-8');
+      const trimmed = content.trim();
+      return trimmed || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const cookie = readCookieFile();
+
+  if (!cookie) {
+    return buildResult({
+      providerId: 'ollama-cloud',
+      providerName: 'Ollama Cloud',
+      ok: false,
+      configured: false,
+      error: 'Not configured',
+    });
+  }
+
+  try {
+    const response = await fetch('https://ollama.com/settings', {
+      method: 'GET',
+      headers: {
+        Cookie: cookie,
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+    });
+
+    if (!response.ok) {
+      return buildResult({
+        providerId: 'ollama-cloud',
+        providerName: 'Ollama Cloud',
+        ok: false,
+        configured: true,
+        error: `API error: ${response.status}`,
+      });
+    }
+
+    const html = await response.text();
+    const windows: Record<string, UsageWindow> = {};
+
+    const sessionMatch = html.match(/Session\s+usage[^0-9]*([0-9.]+)%/i);
+    if (sessionMatch) {
+      const usedPercent = toNumber(parseFloat(sessionMatch[1]));
+      windows.session = toUsageWindow({
+        usedPercent,
+        windowSeconds: null,
+        resetAt: null,
+      });
+    }
+
+    const weeklyMatch = html.match(/Weekly\s+usage[^0-9]*([0-9.]+)%/i);
+    if (weeklyMatch) {
+      const usedPercent = toNumber(parseFloat(weeklyMatch[1]));
+      windows.weekly = toUsageWindow({
+        usedPercent,
+        windowSeconds: null,
+        resetAt: null,
+      });
+    }
+
+    const premiumMatch = html.match(/Premium[^0-9]*([0-9]+)\s*\/\s*([0-9]+)/i);
+    if (premiumMatch) {
+      const used = toNumber(parseInt(premiumMatch[1], 10));
+      const total = toNumber(parseInt(premiumMatch[2], 10));
+      const usedPercent = total && used !== null ? Math.min(100, (used / total) * 100) : null;
+      windows.premium = toUsageWindow({
+        usedPercent,
+        windowSeconds: null,
+        resetAt: null,
+        valueLabel: `${used ?? 0} / ${total ?? 0}`,
+      });
+    }
+
+    return buildResult({
+      providerId: 'ollama-cloud',
+      providerName: 'Ollama Cloud',
+      ok: true,
+      configured: true,
+      usage: { windows },
+    });
+  } catch (error) {
+    return buildResult({
+      providerId: 'ollama-cloud',
+      providerName: 'Ollama Cloud',
+      ok: false,
+      configured: true,
+      error: error instanceof Error ? error.message : 'Request failed',
+    });
   }
 };
