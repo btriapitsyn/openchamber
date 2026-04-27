@@ -46,7 +46,7 @@ import { useI18n } from '@/lib/i18n';
 
 const CONTAIN_LAYOUT_STYLE = { contain: 'layout' as const, transform: 'translateZ(0)' };
 const MESSAGE_FOOTER_CONTAINER_STYLE = { containerType: 'inline-size' as const, containerName: 'message-footer' };
-const STANDALONE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-2 mb-1 ml-2 pl-3 border-l border-border/40 flex items-center justify-start gap-1.5';
+const INLINE_MESSAGE_ACTIONS_CLASS_NAME = 'mt-2 mb-1 flex items-center justify-start gap-1.5';
 
 type SubtaskPartLike = Part & {
     type: 'subtask';
@@ -582,7 +582,7 @@ interface AssistantMessageActionButtonsProps {
     hasCopyableText: boolean;
     isTouchContext: boolean;
     onCopyMessage?: () => void | boolean | Promise<void | boolean>;
-    onShareImage: () => Promise<void>;
+    onShareImage: (sourceElement?: HTMLElement | null) => Promise<void>;
     ttsText: string;
 }
 
@@ -688,7 +688,9 @@ const AssistantMessageActionButtons = React.memo(({
 
             setIsSharing(true);
             try {
-                await onShareImage();
+            const root = event.currentTarget.closest('[data-message-text-export-root]');
+            const sourceElement = root?.querySelector<HTMLElement>('[data-message-text-export-source]') ?? null;
+            await onShareImage(sourceElement);
             } finally {
                 setIsSharing(false);
             }
@@ -852,6 +854,7 @@ const AssistantMessageBody = React.memo(({
     const streamPhase = _streamPhase;
     void _allowAnimation;
     const messageContentRef = React.useRef<HTMLDivElement>(null);
+    const messageTextContentRef = React.useRef<HTMLDivElement>(null);
     const toolRevealReadyRef = React.useRef(false);
 
     React.useEffect(() => {
@@ -1182,12 +1185,13 @@ const AssistantMessageBody = React.memo(({
     );
 
     const shareMessageAsImage = React.useCallback(
-        async () => {
-            if (!messageContentRef.current) return;
+        async (requestedSourceElement?: HTMLElement | null) => {
+            const sourceElement = requestedSourceElement ?? messageTextContentRef.current ?? messageContentRef.current;
+            if (!sourceElement) return;
 
             let wrapper: HTMLDivElement | null = null;
             try {
-                const originalElement = messageContentRef.current;
+                const originalElement = sourceElement;
                 const computedStyle = window.getComputedStyle(originalElement);
                 const rootStyle = window.getComputedStyle(document.documentElement);
                 const resolvedBackgroundColor =
@@ -1353,7 +1357,8 @@ const AssistantMessageBody = React.memo(({
     const showErrorMessage = Boolean(errorMessage);
     const shouldShowMessageActions = hasCopyableText;
     const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage));
-    const shouldShowStandaloneMessageActions = showSplitAssistantMessageActions && shouldShowMessageActions && !shouldShowTurnFooter;
+    const shouldRenderActionsInActivity = isSortedRenderMode;
+    const shouldShowStandaloneMessageActions = showSplitAssistantMessageActions && shouldShowMessageActions && !shouldShowTurnFooter && !shouldRenderActionsInActivity;
 
     const messageActionButtons = React.useMemo(() => (
         <AssistantMessageActionButtons
@@ -1364,6 +1369,32 @@ const AssistantMessageBody = React.memo(({
             ttsText={assistantPlanText}
         />
     ), [assistantPlanText, hasCopyableText, isTouchContext, onCopyMessage, shareMessageAsImage]);
+
+    const renderJustificationActions = React.useCallback((activity: NonNullable<TurnGroupingContext['activityParts']>[number]) => {
+        if (!showSplitAssistantMessageActions || !isSortedRenderMode) {
+            return null;
+        }
+
+        const text = extractTextContent(activity.part).trim();
+        if (!text) {
+            return null;
+        }
+
+        const copyJustificationText = async () => {
+            const result = await copyTextToClipboard(text);
+            return result.ok;
+        };
+
+        return (
+            <AssistantMessageActionButtons
+                hasCopyableText={true}
+                isTouchContext={isTouchContext}
+                onCopyMessage={copyJustificationText}
+                onShareImage={shareMessageAsImage}
+                ttsText={text}
+            />
+        );
+    }, [isSortedRenderMode, isTouchContext, shareMessageAsImage, showSplitAssistantMessageActions]);
 
     const lastRenderableTextPartIndex = React.useMemo(() => {
         if (!shouldShowStandaloneMessageActions) {
@@ -1421,6 +1452,7 @@ const AssistantMessageBody = React.memo(({
                             animateRows={animateActivityRows}
                             animatedToolIds={animatedToolIdsLookup}
                             diffStats={turnGroupingContext.diffStats}
+                            renderJustificationActions={renderJustificationActions}
                         />
                     </div>
                 );
@@ -1446,19 +1478,20 @@ const AssistantMessageBody = React.memo(({
                     continue;
                 }
                 rendered.push(
-                    <AssistantTextPart
-                        key={`assistant-text-${messageId}-${i}`}
-                        part={part}
-                        sessionId={sessionId}
-                        messageId={messageId}
-                        streamPhase={streamPhase}
-                        chatRenderMode={chatRenderMode}
-                        onContentChange={onContentChange}
-                    />
+                    <div key={`assistant-text-${messageId}-${i}`} ref={messageTextContentRef} data-message-text-export-source="true">
+                        <AssistantTextPart
+                            part={part}
+                            sessionId={sessionId}
+                            messageId={messageId}
+                            streamPhase={streamPhase}
+                            chatRenderMode={chatRenderMode}
+                            onContentChange={onContentChange}
+                        />
+                    </div>
                 );
                 if (shouldShowStandaloneMessageActions && i === lastRenderableTextPartIndex) {
                     rendered.push(
-                        <div key={`message-actions-${messageId}`} className={STANDALONE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
+                        <div key={`message-actions-${messageId}`} className={INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                             <div className="flex items-center gap-1.5" data-message-action-group="true">
                                 {messageActionButtons}
                             </div>
@@ -1589,6 +1622,7 @@ const AssistantMessageBody = React.memo(({
         lastRenderableTextPartIndex,
         messageId,
         messageActionButtons,
+        renderJustificationActions,
         sessionId,
         onContentChange,
         onShowPopup,
@@ -1684,8 +1718,9 @@ const AssistantMessageBody = React.memo(({
       return (
 
          <div
-             ref={messageContentRef}
-             className={cn(
+              ref={messageContentRef}
+              data-message-text-export-root="true"
+              className={cn(
                  'relative w-full group/message'
              )}
               style={CONTAIN_LAYOUT_STYLE}
@@ -1719,7 +1754,7 @@ const AssistantMessageBody = React.memo(({
                 </div>
                 <MessageFilesDisplay files={parts} onShowPopup={onShowPopup} />
                 {shouldRenderStandaloneActionsAfterContent && (
-                    <div className={STANDALONE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
+                    <div className={INLINE_MESSAGE_ACTIONS_CLASS_NAME} data-message-actions="true">
                         <div className="flex items-center gap-1.5" data-message-action-group="true">
                             {messageActionButtons}
                         </div>
