@@ -1330,7 +1330,8 @@ export const PullRequestSection: React.FC<{
     return null;
   }
 
-  const repoUrl = status?.repo?.url || null;
+  const originRepoUrl = status?.repo?.url || null;
+  const repoUrl = (useDetectedUpstream && detectedUpstream?.url) ? detectedUpstream.url : originRepoUrl;
   const checks = status?.checks ?? null;
   const canMerge = Boolean(status?.canMerge);
   const isConnected = Boolean(status?.connected);
@@ -1724,7 +1725,7 @@ export const PullRequestSection: React.FC<{
                   <div className="min-w-0">
                     <div className="typography-ui-label text-foreground">{t('gitView.pr.createTitle')}</div>
                     <div className="typography-micro text-muted-foreground truncate">
-                      {branch} → {targetBaseBranch}
+                      {branch} <span className="opacity-60">(local)</span> → {targetBaseBranch} <span className="opacity-60">({useDetectedUpstream && detectedUpstream ? 'upstream' : 'remote'})</span>
                     </div>
                   </div>
                   {repoUrl ? (
