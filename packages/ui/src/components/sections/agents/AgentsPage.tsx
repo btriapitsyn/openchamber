@@ -8,6 +8,7 @@ import { useAgentsStore, type AgentConfig, type AgentScope } from '@/stores/useA
 import { useShallow } from 'zustand/react/shallow';
 import { useDirectorySync } from '@/sync/sync-context';
 import { useDirectoryStore } from '@/stores/useDirectoryStore';
+import { useConfigStore } from '@/stores/useConfigStore';
 import { useDeviceInfo } from '@/lib/device';
 import { opencodeClient } from '@/lib/opencode/client';
 import { RiCloseLine, RiInformationLine, RiRobot2Line, RiSubtractLine, RiUser3Line, RiFolderLine } from '@remixicon/react';
@@ -203,6 +204,8 @@ export const AgentsPage: React.FC = () => {
     setAgentDraft: s.setAgentDraft,
   })));
 
+  const providers = useConfigStore((state) => state.providers);
+
   const selectedAgent = selectedAgentName ? getAgentByName(selectedAgentName) : null;
   const isNewAgent = Boolean(agentDraft && agentDraft.name === selectedAgentName && !selectedAgent);
 
@@ -211,7 +214,36 @@ export const AgentsPage: React.FC = () => {
   const [description, setDescription] = React.useState('');
   const [mode, setMode] = React.useState<'primary' | 'subagent' | 'all'>('subagent');
   const [model, setModel] = React.useState('');
+  const [variant, setVariant] = React.useState<string | undefined>(undefined);
   const [temperature, setTemperature] = React.useState<number | undefined>(undefined);
+
+  const parsedModel = React.useMemo(() => {
+    if (!model) return { providerId: '', modelId: '' };
+    const parts = model.split('/');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      return { providerId: parts[0], modelId: parts[1] };
+    }
+    return { providerId: '', modelId: '' };
+  }, [model]);
+
+  const availableVariants = React.useMemo(() => {
+    if (!parsedModel.providerId || !parsedModel.modelId) return [];
+    const provider = providers.find((p) => p.id === parsedModel.providerId);
+    const m = provider?.models.find((mo: Record<string, unknown>) => (mo as { id?: string }).id === parsedModel.modelId) as
+      | { variants?: Record<string, unknown> }
+      | undefined;
+    const variants = m?.variants;
+    if (!variants) return [];
+    return Object.keys(variants);
+  }, [parsedModel.modelId, parsedModel.providerId, providers]);
+
+  const supportsVariants = availableVariants.length > 0;
+
+  React.useEffect(() => {
+    if (!supportsVariants && variant) {
+      setVariant(undefined);
+    }
+  }, [supportsVariants, variant]);
   const [topP, setTopP] = React.useState<number | undefined>(undefined);
   const [prompt, setPrompt] = React.useState('');
   const [globalPermission, setGlobalPermission] = React.useState<PermissionAction>('allow');
@@ -227,6 +259,7 @@ export const AgentsPage: React.FC = () => {
     description: string;
     mode: 'primary' | 'subagent' | 'all';
     model: string;
+    variant: string | undefined;
     temperature: number | undefined;
     topP: number | undefined;
     prompt: string;
@@ -461,6 +494,7 @@ export const AgentsPage: React.FC = () => {
       const descriptionValue = agentDraft.description || '';
       const modeValue = agentDraft.mode || 'subagent';
       const modelValue = agentDraft.model || '';
+      const variantValue = agentDraft.variant;
       const temperatureValue = agentDraft.temperature;
       const topPValue = agentDraft.top_p;
       const promptValue = agentDraft.prompt || '';
@@ -470,6 +504,7 @@ export const AgentsPage: React.FC = () => {
       setDescription(descriptionValue);
       setMode(modeValue);
       setModel(modelValue);
+      setVariant(variantValue);
       setTemperature(temperatureValue);
       setTopP(topPValue);
       setPrompt(promptValue);
@@ -483,6 +518,7 @@ export const AgentsPage: React.FC = () => {
         description: descriptionValue,
         mode: modeValue,
         model: modelValue,
+        variant: variantValue,
         temperature: temperatureValue,
         topP: topPValue,
         prompt: promptValue,
@@ -498,6 +534,7 @@ export const AgentsPage: React.FC = () => {
       const modelValue = selectedAgent.model?.providerID && selectedAgent.model?.modelID
         ? `${selectedAgent.model.providerID}/${selectedAgent.model.modelID}`
         : '';
+      const variantValue = selectedAgent.variant;
       const temperatureValue = selectedAgent.temperature;
       const topPValue = selectedAgent.topP;
       const promptValue = selectedAgent.prompt || '';
@@ -506,6 +543,7 @@ export const AgentsPage: React.FC = () => {
       setMode(modeValue);
 
       setModel(modelValue);
+      setVariant(variantValue);
       setTemperature(temperatureValue);
       setTopP(topPValue);
       setPrompt(promptValue);
@@ -520,6 +558,7 @@ export const AgentsPage: React.FC = () => {
         description: descriptionValue,
         mode: modeValue,
         model: modelValue,
+        variant: variantValue,
         temperature: temperatureValue,
         topP: topPValue,
         prompt: promptValue,
@@ -543,6 +582,7 @@ export const AgentsPage: React.FC = () => {
     if (description !== initial.description) return true;
     if (mode !== initial.mode) return true;
     if (model !== initial.model) return true;
+    if (variant !== initial.variant) return true;
     if (temperature !== initial.temperature) return true;
     if (topP !== initial.topP) return true;
     if (prompt !== initial.prompt) return true;
@@ -550,7 +590,7 @@ export const AgentsPage: React.FC = () => {
     if (!areRulesEqual(permissionRules, initial.permissionRules)) return true;
 
     return false;
-  }, [description, draftName, draftScope, globalPermission, isNewAgent, mode, model, permissionRules, prompt, temperature, topP]);
+  }, [description, draftName, draftScope, globalPermission, isNewAgent, mode, model, variant, permissionRules, prompt, temperature, topP]);
 
   const handleSave = async () => {
     const agentName = isNewAgent ? draftName.trim().replace(/\s+/g, '-') : selectedAgentName?.trim();
@@ -576,6 +616,7 @@ export const AgentsPage: React.FC = () => {
         description: description.trim() || undefined,
         mode,
         model: trimmedModel === '' ? null : trimmedModel,
+        variant: variant || null,
         temperature,
         top_p: topP,
         prompt: prompt.trim() || undefined,
@@ -769,8 +810,57 @@ export const AgentsPage: React.FC = () => {
                     } else {
                       setModel('');
                     }
+                    setVariant(undefined);
                   }}
                 />
+              </div>
+            </div>
+
+            <div className={cn("py-1.5", isMobile ? "flex flex-col gap-3" : "flex items-center gap-8")}>
+              <div className={cn("flex min-w-0 flex-col", isMobile ? "w-full" : "sm:w-56 shrink-0")}>
+                <div className="flex items-center gap-1.5">
+                  <span className="typography-ui-label text-foreground">{t('settings.agents.page.field.defaultThinking')}</span>
+                  <Tooltip delayDuration={1000}>
+                    <TooltipTrigger asChild>
+                      <RiInformationLine className="h-3.5 w-3.5 text-muted-foreground/60 cursor-help" />
+                    </TooltipTrigger>
+                    <TooltipContent sideOffset={8} className="max-w-xs">
+                      {t('settings.agents.page.field.defaultThinkingTooltip')}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <span className="typography-meta text-muted-foreground">{t('settings.agents.page.field.thinkingPlaceholder')}</span>
+              </div>
+              <div className={cn("flex items-center gap-2", isMobile ? "w-full" : "w-fit")}>
+                <Select
+                  value={variant ?? '__default__'}
+                  onValueChange={(v) => setVariant(v === '__default__' ? undefined : v)}
+                  disabled={!supportsVariants}
+                >
+                  <SelectTrigger className="w-fit min-w-[120px]">
+                    <SelectValue placeholder={t('settings.agents.page.option.default')}>
+                      {variant ? variant.charAt(0).toUpperCase() + variant.slice(1) : t('settings.agents.page.option.default')}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__default__">{t('settings.agents.page.option.default')}</SelectItem>
+                    {availableVariants.map((v) => (
+                      <SelectItem key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {variant !== undefined && (
+                  <Button size="sm"
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setVariant(undefined)}
+                    className="h-7 w-7 px-0 text-muted-foreground hover:text-foreground"
+                    aria-label={t('settings.agents.page.field.clearThinkingAria')}
+                    title={t('settings.common.actions.clear')}
+                  >
+                    <RiCloseLine className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             </div>
 

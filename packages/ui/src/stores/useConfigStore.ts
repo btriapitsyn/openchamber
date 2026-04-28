@@ -1696,7 +1696,7 @@ export const useConfigStore = create<ConfigStore>()(
                             const agentModel = agentProvider?.models.find((model) => model.id === modelID);
 
                             if (agentModel) {
-                                applyResolvedModelSelection(providerID, modelID, undefined);
+                                applyResolvedModelSelection(providerID, modelID, agent?.variant);
                             }
                         }
                     }
