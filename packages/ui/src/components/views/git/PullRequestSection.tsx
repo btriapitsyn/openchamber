@@ -341,6 +341,40 @@ export const PullRequestSection: React.FC<{
   );
   const [useDetectedUpstream, setUseDetectedUpstream] = React.useState(false);
 
+  const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
+  const [upstreamBranches, setUpstreamBranches] = React.useState<string[]>([]);
+  const upstreamDetectionAttemptedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!directory || !github?.repoUpstream || upstreamDetectionAttemptedRef.current) {
+      return;
+    }
+    upstreamDetectionAttemptedRef.current = true;
+
+    void (async () => {
+      try {
+        const result = await github.repoUpstream(directory);
+        if (result?.isFork && result.upstream) {
+          setDetectedUpstream(result.upstream);
+          if (github.repoBranches) {
+            try {
+              const branches = await github.repoBranches(result.upstream.owner, result.upstream.repo);
+              setUpstreamBranches(branches);
+            } catch {
+              // Silently fail — branch list is best-effort
+            }
+          }
+        }
+      } catch {
+        // Silently fail — upstream detection is best-effort
+      }
+    })();
+  }, [directory, github]);
+
+  const hasUpstreamRemote = remotes.some((r) => r.name === 'upstream');
+  const isFork = hasUpstreamRemote || detectedUpstream !== null;
+  const canShow = Boolean(directory && branch && baseBranch && (branch !== baseBranch || isFork));
+
   const prStatusKey = React.useMemo(
     () => getGitHubPrStatusKey(directory, branch),
     [directory, branch],
@@ -441,40 +475,6 @@ export const PullRequestSection: React.FC<{
   const didUserOverrideRemoteRef = React.useRef(false);
   const autoRemoteProbeDoneRef = React.useRef<Set<string>>(new Set());
   const pendingActionRefreshTimersRef = React.useRef<number[]>([]);
-
-  const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
-  const [upstreamBranches, setUpstreamBranches] = React.useState<string[]>([]);
-  const upstreamDetectionAttemptedRef = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!directory || !github?.repoUpstream || upstreamDetectionAttemptedRef.current) {
-      return;
-    }
-    upstreamDetectionAttemptedRef.current = true;
-
-    void (async () => {
-      try {
-        const result = await github.repoUpstream(directory);
-        if (result?.isFork && result.upstream) {
-          setDetectedUpstream(result.upstream);
-          if (github.repoBranches) {
-            try {
-              const branches = await github.repoBranches(result.upstream.owner, result.upstream.repo);
-              setUpstreamBranches(branches);
-            } catch {
-              // Silently fail — branch list is best-effort
-            }
-          }
-        }
-      } catch {
-        // Silently fail — upstream detection is best-effort
-      }
-    })();
-  }, [directory, github]);
-
-  const hasUpstreamRemote = remotes.some((r) => r.name === 'upstream');
-  const isFork = hasUpstreamRemote || detectedUpstream !== null;
-  const canShow = Boolean(directory && branch && baseBranch && (branch !== baseBranch || isFork));
 
   // Auto-enable detected upstream when there's no explicit upstream remote
   React.useEffect(() => {
