@@ -846,6 +846,39 @@ export function registerGitHubRoutes(app) {
     }
   });
 
+  app.get('/api/github/repo/branches', async (req, res) => {
+    try {
+      const owner = typeof req.query?.owner === 'string' ? req.query.owner.trim() : '';
+      const repo = typeof req.query?.repo === 'string' ? req.query.repo.trim() : '';
+      if (!owner || !repo) {
+        return res.status(400).json({ error: 'owner and repo are required' });
+      }
+
+      const { getOctokitOrNull } = await getGitHubLibraries();
+      const octokit = getOctokitOrNull();
+      if (!octokit) {
+        return res.json({ branches: [] });
+      }
+
+      const branches = [];
+      let page = 1;
+      while (page <= 10) {
+        const response = await octokit.rest.repos.listBranches({ owner, repo, per_page: 100, page });
+        if (!response.data || response.data.length === 0) break;
+        for (const branch of response.data) {
+          branches.push(branch.name);
+        }
+        if (response.data.length < 100) break;
+        page++;
+      }
+
+      return res.json({ branches });
+    } catch (error) {
+      console.error('Failed to fetch repo branches:', error);
+      return res.status(500).json({ error: error.message || 'Failed to fetch repo branches' });
+    }
+  });
+
   // ================= GitHub Issue APIs =================
 
   app.get('/api/github/issues/list', async (req, res) => {

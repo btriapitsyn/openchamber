@@ -341,17 +341,39 @@ export const PullRequestSection: React.FC<{
   );
   const [useDetectedUpstream, setUseDetectedUpstream] = React.useState(false);
   const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
+  const [upstreamBranches, setUpstreamBranches] = React.useState<string[]>([]);
+  const upstreamDetectionAttemptedRef = React.useRef(false);
 
-  const prStatusKey = React.useMemo(
-    () => getGitHubPrStatusKey(directory, branch),
-    [directory, branch],
-  );
-  const statusEntry = useGitHubPrStatusStore((state) => state.entries[prStatusKey]);
+  React.useEffect(() => {
+    if (!directory || !github?.repoUpstream || upstreamDetectionAttemptedRef.current) {
+      return;
+    }
+    upstreamDetectionAttemptedRef.current = true;
 
-  const isLoading = statusEntry?.isLoading ?? false;
-  const status = statusEntry?.status ?? null;
-  const error = statusEntry?.error ?? null;
-  const isInitialStatusResolved = statusEntry?.isInitialStatusResolved ?? false;
+    void (async () => {
+      try {
+        const result = await github.repoUpstream(directory);
+        if (result?.isFork && result.upstream) {
+          setDetectedUpstream(result.upstream);
+          // Fetch upstream branches for the base branch dropdown
+          if (github.repoBranches) {
+            try {
+              const branches = await github.repoBranches(result.upstream.owner, result.upstream.repo);
+              setUpstreamBranches(branches);
+            } catch {
+              // Silently fail — branch list is best-effort
+            }
+          }
+        }
+      } catch {
+        // Silently fail — upstream detection is best-effort
+      }
+    })();
+  }, [directory, github]);
+
+  const hasUpstreamRemote = remotes.some((r) => r.name === 'upstream');
+  const isFork = hasUpstreamRemote || detectedUpstream !== null;
+  const canShow = Boolean(directory && branch && baseBranch && (branch !== baseBranch || isFork));
 
   const availableBaseBranches = React.useMemo(() => {
     const selectedRemoteName = useDetectedUpstream ? null : (selectedRemote?.name?.trim() || null);
@@ -365,6 +387,15 @@ export const PullRequestSection: React.FC<{
       unique.add(branchName);
     }
 
+    // When using detected upstream, include all upstream repo branches
+    if (useDetectedUpstream) {
+      for (const b of upstreamBranches) {
+        if (b && b !== 'HEAD') {
+          unique.add(b);
+        }
+      }
+    }
+
     const defaultBase = normalizeBranchRef(baseBranch);
     if (defaultBase && defaultBase !== 'HEAD') {
       unique.add(defaultBase);
@@ -375,35 +406,26 @@ export const PullRequestSection: React.FC<{
       unique.add(currentTarget);
     }
 
-    // When using detected upstream, ensure the upstream's default branch is available
-    if (useDetectedUpstream && detectedUpstream?.defaultBranch) {
-      unique.add(detectedUpstream.defaultBranch);
-    }
-
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
-  }, [baseBranch, detectedUpstream?.defaultBranch, remoteBranches, selectedRemote?.name, targetBaseBranch, useDetectedUpstream]);
+  }, [baseBranch, remoteBranches, selectedRemote?.name, targetBaseBranch, upstreamBranches, useDetectedUpstream]);
 
   const hasMultipleRemotes = remotes.length > 1;
 
-  // Update selected remote when remotes change
+  // Auto-enable detected upstream when there's no explicit upstream remote
   React.useEffect(() => {
-    if (remotes.length === 0) {
-      if (selectedRemote) {
-        setSelectedRemote(null);
-      }
-      return;
+    if (detectedUpstream && !hasUpstreamRemote) {
+      setUseDetectedUpstream(true);
     }
+  }, [detectedUpstream, hasUpstreamRemote]);
 
-    if (!selectedRemote || !remotes.some((remote) => remote.name === selectedRemote.name)) {
-      setSelectedRemote(
-        pickInitialPrRemote(remotes, {
-          selectedRemoteName: initialSnapshot?.selectedRemoteName,
-          trackingBranch,
-        })
-      );
+  // Set target base branch to upstream's default branch when using detected upstream
+  React.useEffect(() => {
+    if (useDetectedUpstream && detectedUpstream?.defaultBranch) {
+      setTargetBaseBranch(detectedUpstream.defaultBranch);
     }
-  }, [initialSnapshot?.selectedRemoteName, remotes, selectedRemote, trackingBranch]);
+  }, [useDetectedUpstream, detectedUpstream?.defaultBranch]);
 
+  // Ensure targetBaseBranch stays in the available list
   React.useEffect(() => {
     const normalizedBase = normalizeBranchRef(baseBranch);
     if (!targetBaseBranch && normalizedBase) {
@@ -424,58 +446,6 @@ export const PullRequestSection: React.FC<{
       }
     }
   }, [availableBaseBranches, baseBranch, targetBaseBranch]);
-
-  const [checksDialogOpen, setChecksDialogOpen] = React.useState(false);
-  const [checkDetails, setCheckDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
-  const [isLoadingCheckDetails, setIsLoadingCheckDetails] = React.useState(false);
-  const [expandedCheckStepKeys, setExpandedCheckStepKeys] = React.useState<Set<string>>(new Set());
-  const [commentsDialogOpen, setCommentsDialogOpen] = React.useState(false);
-  const [commentsDetails, setCommentsDetails] = React.useState<GitHubPullRequestContextResult | null>(null);
-  const [isLoadingCommentsDetails, setIsLoadingCommentsDetails] = React.useState(false);
-
-  const attemptedBodyHydrationRef = React.useRef<Set<string>>(new Set());
-  const lastSyncedPrNumberRef = React.useRef<number | null>(null);
-  const didUserOverrideRemoteRef = React.useRef(false);
-  const autoRemoteProbeDoneRef = React.useRef<Set<string>>(new Set());
-  const pendingActionRefreshTimersRef = React.useRef<number[]>([]);
-
-  const upstreamDetectionAttemptedRef = React.useRef(false);
-
-  React.useEffect(() => {
-    if (!directory || !github?.repoUpstream || upstreamDetectionAttemptedRef.current) {
-      return;
-    }
-    upstreamDetectionAttemptedRef.current = true;
-
-    void (async () => {
-      try {
-        const result = await github.repoUpstream(directory);
-        if (result?.isFork && result.upstream) {
-          setDetectedUpstream(result.upstream);
-        }
-      } catch {
-        // Silently fail — upstream detection is best-effort
-      }
-    })();
-  }, [directory, github]);
-
-  const hasUpstreamRemote = remotes.some((r) => r.name === 'upstream');
-  const isFork = hasUpstreamRemote || detectedUpstream !== null;
-  const canShow = Boolean(directory && branch && baseBranch && (branch !== baseBranch || isFork));
-
-  // Auto-enable detected upstream when there's no explicit upstream remote
-  React.useEffect(() => {
-    if (detectedUpstream && !hasUpstreamRemote) {
-      setUseDetectedUpstream(true);
-    }
-  }, [detectedUpstream, hasUpstreamRemote]);
-
-  // Set target base branch to upstream's default branch when using detected upstream
-  React.useEffect(() => {
-    if (useDetectedUpstream && detectedUpstream?.defaultBranch) {
-      setTargetBaseBranch(detectedUpstream.defaultBranch);
-    }
-  }, [useDetectedUpstream, detectedUpstream?.defaultBranch]);
 
   const pr = status?.pr ?? null;
   const currentPrBodyHydrationKey = pr ? `${directory}#${pr.number}` : null;
@@ -1770,11 +1740,7 @@ export const PullRequestSection: React.FC<{
                       </SelectTrigger>
                       <SelectContent>
                         {availableBaseBranches.map((candidate) => (
-                          <SelectItem key={candidate} value={candidate}>
-                            {useDetectedUpstream && detectedUpstream
-                              ? `${detectedUpstream.owner}/${detectedUpstream.repo} \u00B7 ${candidate}`
-                              : candidate}
-                          </SelectItem>
+                          <SelectItem key={candidate} value={candidate}>{candidate}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

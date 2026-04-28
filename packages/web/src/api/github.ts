@@ -172,6 +172,18 @@ export const createWebGitHubAPI = (): GitHubAPI => ({
     return body;
   },
 
+  async repoBranches(owner: string, repo: string): Promise<string[]> {
+    const response = await fetch(
+      `/api/github/repo/branches?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`,
+      { method: 'GET', headers: { Accept: 'application/json' } }
+    );
+    const body = await jsonOrNull<{ branches?: string[]; error?: string }>(response);
+    if (!response.ok || !body) {
+      throw new Error(body?.error || response.statusText || 'Failed to fetch repo branches');
+    }
+    return body.branches ?? [];
+  },
+
   async prsList(directory: string, options?: { page?: number }): Promise<GitHubPullRequestsListResult> {
     const page = options?.page ?? 1;
     const response = await fetch(

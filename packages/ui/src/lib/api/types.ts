@@ -982,6 +982,7 @@ export interface GitHubAPI {
   issueGet(directory: string, number: number): Promise<GitHubIssueGetResult>;
   issueComments(directory: string, number: number): Promise<GitHubIssueCommentsResult>;
   repoUpstream(directory: string): Promise<GitHubRepoUpstreamResult>;
+  repoBranches(owner: string, repo: string): Promise<string[]>;
 }
 
 export interface RuntimeAPIs {
