@@ -1330,7 +1330,8 @@ export const PullRequestSection: React.FC<{
     return null;
   }
 
-  const repoUrl = status?.repo?.url || null;
+  const originRepoUrl = status?.repo?.url || null;
+  const repoUrl = (useDetectedUpstream && detectedUpstream?.url) ? detectedUpstream.url : originRepoUrl;
   const checks = status?.checks ?? null;
   const canMerge = Boolean(status?.canMerge);
   const isConnected = Boolean(status?.connected);
