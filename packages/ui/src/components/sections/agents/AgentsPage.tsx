@@ -240,10 +240,10 @@ export const AgentsPage: React.FC = () => {
   const supportsVariants = availableVariants.length > 0;
 
   React.useEffect(() => {
-    if (!supportsVariants && variant) {
+    if (variant && (!supportsVariants || !availableVariants.includes(variant))) {
       setVariant(undefined);
     }
-  }, [supportsVariants, variant]);
+  }, [supportsVariants, variant, availableVariants]);
   const [topP, setTopP] = React.useState<number | undefined>(undefined);
   const [prompt, setPrompt] = React.useState('');
   const [globalPermission, setGlobalPermission] = React.useState<PermissionAction>('allow');
@@ -494,7 +494,7 @@ export const AgentsPage: React.FC = () => {
       const descriptionValue = agentDraft.description || '';
       const modeValue = agentDraft.mode || 'subagent';
       const modelValue = agentDraft.model || '';
-      const variantValue = agentDraft.variant;
+      const variantValue = agentDraft.variant ?? undefined;
       const temperatureValue = agentDraft.temperature;
       const topPValue = agentDraft.top_p;
       const promptValue = agentDraft.prompt || '';
@@ -534,7 +534,7 @@ export const AgentsPage: React.FC = () => {
       const modelValue = selectedAgent.model?.providerID && selectedAgent.model?.modelID
         ? `${selectedAgent.model.providerID}/${selectedAgent.model.modelID}`
         : '';
-      const variantValue = selectedAgent.variant;
+      const variantValue = selectedAgent.variant ?? undefined;
       const temperatureValue = selectedAgent.temperature;
       const topPValue = selectedAgent.topP;
       const promptValue = selectedAgent.prompt || '';

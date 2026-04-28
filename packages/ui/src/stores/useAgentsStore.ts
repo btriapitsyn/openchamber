@@ -318,7 +318,7 @@ export const useAgentsStore = create<AgentsStore>()(
 
             if (config.description) agentConfig.description = config.description;
             if (config.model) agentConfig.model = config.model;
-            if (config.variant) agentConfig.variant = config.variant;
+            if (config.variant !== undefined && config.variant !== null) agentConfig.variant = config.variant;
             if (config.temperature !== undefined) agentConfig.temperature = config.temperature;
             if (config.top_p !== undefined) agentConfig.top_p = config.top_p;
             if (config.prompt) agentConfig.prompt = config.prompt;

@@ -1696,7 +1696,12 @@ export const useConfigStore = create<ConfigStore>()(
                             const agentModel = agentProvider?.models.find((model) => model.id === modelID);
 
                             if (agentModel) {
-                                applyResolvedModelSelection(providerID, modelID, agent?.variant);
+                                const agentVariant = agent?.variant;
+                                const variants = (agentModel as { variants?: Record<string, unknown> }).variants;
+                                const nextVariant = agentVariant && variants && Object.prototype.hasOwnProperty.call(variants, agentVariant)
+                                    ? agentVariant
+                                    : undefined;
+                                applyResolvedModelSelection(providerID, modelID, nextVariant);
                             }
                         }
                     }
