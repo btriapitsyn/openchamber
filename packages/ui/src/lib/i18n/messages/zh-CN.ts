@@ -3,6 +3,7 @@ import { settingsDict } from './zh-CN.settings';
 
 export const dict: Record<I18nKey, string> = {
   ...settingsDict,
+  'common.loading': '加载中...',
   'common.language.english': 'English',
   'common.language.simplifiedChinese': '简体中文',
   'common.language.ukrainian': '乌克兰语',

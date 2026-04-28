@@ -2,6 +2,7 @@ import { settingsDict } from './en.settings';
 
 export const dict = {
   ...settingsDict,
+  'common.loading': 'Loading...',
   'common.language.english': 'English',
   'common.language.simplifiedChinese': 'Chinese (Simplified)',
   'common.language.ukrainian': 'Ukrainian',

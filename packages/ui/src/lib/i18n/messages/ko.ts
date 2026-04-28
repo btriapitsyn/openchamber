@@ -3,6 +3,7 @@ import { settingsDict } from './ko.settings';
 
 export const dict: Record<I18nKey, string> = {
   ...settingsDict,
+  'common.loading': '로딩 중...',
   'common.language.english': '영어',
   'common.language.simplifiedChinese': '중국어(간체)',
   'common.language.ukrainian': '우크라이나어',
