@@ -340,6 +340,7 @@ export const PullRequestSection: React.FC<{
     })
   );
   const [useDetectedUpstream, setUseDetectedUpstream] = React.useState(false);
+  const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
 
   const prStatusKey = React.useMemo(
     () => getGitHubPrStatusKey(directory, branch),
@@ -438,7 +439,6 @@ export const PullRequestSection: React.FC<{
   const autoRemoteProbeDoneRef = React.useRef<Set<string>>(new Set());
   const pendingActionRefreshTimersRef = React.useRef<number[]>([]);
 
-  const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
   const upstreamDetectionAttemptedRef = React.useRef(false);
 
   React.useEffect(() => {
