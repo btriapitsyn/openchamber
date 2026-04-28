@@ -361,7 +361,7 @@ export function GitHubIntegrationDialog({
                           <div className="min-w-0 flex-1">
                             <span className="typography-small line-clamp-2">{issue.title}</span>
                             {issue.sourceRepo?.source === 'upstream' ? (
-                              <span className="typography-micro text-muted-foreground mt-0.5 block">
+                              <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info mt-0.5 inline-block">
                                 {issue.sourceRepo.owner}/{issue.sourceRepo.repo}
                               </span>
                             ) : null}
@@ -426,7 +426,7 @@ export function GitHubIntegrationDialog({
                                   {pr.head} → {pr.base}
                                 </span>
                                 {pr.sourceRepo?.source === 'upstream' ? (
-                                  <span className="typography-micro text-muted-foreground">
+                                  <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info">
                                     {pr.sourceRepo.owner}/{pr.sourceRepo.repo}
                                   </span>
                                 ) : null}

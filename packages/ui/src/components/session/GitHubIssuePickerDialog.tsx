@@ -585,7 +585,7 @@ export function GitHubIssuePickerDialog({
                   {issue.title}
                 </p>
                 {issue.sourceRepo?.source === 'upstream' ? (
-                  <span className="typography-micro text-muted-foreground mt-0.5 block">
+                  <span className="typography-micro px-1 py-0.5 rounded bg-status-info/10 text-status-info mt-0.5 inline-block">
                     {issue.sourceRepo.owner}/{issue.sourceRepo.repo}
                   </span>
                 ) : null}
