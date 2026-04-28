@@ -431,7 +431,7 @@ export const listConfiguredQuotaProviders = () => {
 
   const copilotAuth = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot', 'copilot']));
   if (copilotAuth && ((copilotAuth as Record<string, unknown>).access || (copilotAuth as Record<string, unknown>).token)) {
-configured.add('github-copilot');
+    configured.add('github-copilot');
     configured.add('github-copilot-addon');
   }
 
