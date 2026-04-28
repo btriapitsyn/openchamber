@@ -16,6 +16,7 @@ import type {
   GitHubPullRequestStatus,
   GitHubDeviceFlowComplete,
   GitHubDeviceFlowStart,
+  GitHubRepoUpstreamResult,
   GitHubUserSummary,
 } from '@openchamber/ui/lib/api/types';
 
@@ -58,4 +59,9 @@ export const createVSCodeGitHubAPI = (): GitHubAPI => ({
       includeDiff: Boolean(options?.includeDiff),
       includeCheckDetails: Boolean(options?.includeCheckDetails),
     }),
+
+  repoUpstream: async (directory: string) =>
+    sendBridgeMessage<GitHubRepoUpstreamResult>('api:github/repo:upstream', { directory }),
+  repoBranches: async (owner: string, repo: string) =>
+    sendBridgeMessage<string[]>('api:github/repo:branches', { owner, repo }),
 });

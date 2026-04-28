@@ -1,5 +1,17 @@
 const PR_STATUS_CACHE_TTL_MS = 90_000;
+const PR_STATUS_CACHE_MAX_ENTRIES = 200;
 const prStatusCache = new Map();
+
+function setPrStatusCache(key, data, fetchedAt) {
+  // Evict oldest entry when cache exceeds max size
+  if (prStatusCache.size >= PR_STATUS_CACHE_MAX_ENTRIES && !prStatusCache.has(key)) {
+    const oldest = prStatusCache.entries().next().value;
+    if (oldest) {
+      prStatusCache.delete(oldest[0]);
+    }
+  }
+  prStatusCache.set(key, { data, fetchedAt });
+}
 
 export function registerGitHubRoutes(app) {
   let githubLibraries = null;
@@ -269,7 +281,7 @@ export function registerGitHubRoutes(app) {
       const originalJson = res.json.bind(res);
       res.json = (data) => {
         if (data && data.connected === true) {
-          prStatusCache.set(cacheKey, { data, fetchedAt: Date.now() });
+          setPrStatusCache(cacheKey, data, Date.now());
         }
         return originalJson(data);
       };
@@ -597,6 +609,11 @@ export function registerGitHubRoutes(app) {
       if (!pr) {
         return res.status(500).json({ error: 'Failed to create PR' });
       }
+
+      // Invalidate PR status cache so subsequent prStatus calls fetch fresh data
+      const headBranch = head.includes(':') ? head.split(':')[1] || head : head;
+      const createCacheKey = `${directory}::${headBranch}::${remote}`;
+      prStatusCache.delete(createCacheKey);
 
       return res.json({
         number: pr.number,

@@ -344,13 +344,13 @@ export const PullRequestSection: React.FC<{
 
   const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
   const [upstreamBranches, setUpstreamBranches] = React.useState<string[]>([]);
-  const upstreamDetectionAttemptedRef = React.useRef(false);
+  const upstreamDetectionAttemptedRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    if (!directory || !github?.repoUpstream || upstreamDetectionAttemptedRef.current) {
+    if (!directory || !github?.repoUpstream || upstreamDetectionAttemptedRef.current === directory) {
       return;
     }
-    upstreamDetectionAttemptedRef.current = true;
+    upstreamDetectionAttemptedRef.current = directory;
 
     void (async () => {
       try {
