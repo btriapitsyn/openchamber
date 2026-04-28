@@ -171,7 +171,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [projectRepoStatus, setProjectRepoStatus] = React.useState<Map<string, boolean | null>>(new Map());
   const [expandedSessionGroups, setExpandedSessionGroups] = React.useState<Set<string>>(new Set());
   const [newWorktreeDialogOpen, setNewWorktreeDialogOpen] = React.useState(false);
-  const [worktreeRefreshNonce, setWorktreeRefreshNonce] = React.useState(0);
   const [updateDialogOpen, setUpdateDialogOpen] = React.useState(false);
   const [openSidebarMenuKey, setOpenSidebarMenuKey] = React.useState<string | null>(null);
   const [renamingFolderId, setRenamingFolderId] = React.useState<string | null>(null);
@@ -408,49 +407,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
       cancelled = true;
     };
   }, [currentDirectory, syncSessionStructureSignature, projects]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const discoverWorktrees = async () => {
-      const projectEntries = useProjectsStore.getState().projects;
-      if (projectEntries.length === 0) return;
-
-      const worktreesByProject = new Map<string, WorktreeMetadata[]>();
-      const allWorktrees: WorktreeMetadata[] = [];
-
-      await Promise.all(
-        projectEntries.map(async (project) => {
-          const projectPath = normalizePath(project.path);
-          if (!projectPath) return;
-          try {
-            const cachedIsGitRepo = useGitStore.getState().directories.get(projectPath)?.isGitRepo;
-            const isGitRepo = cachedIsGitRepo ?? await import('@/lib/gitApi').then(m => m.checkIsGitRepository(projectPath));
-            if (!isGitRepo) return;
-            const worktrees = await listProjectWorktrees({ id: project.id, path: projectPath });
-            if (cancelled || worktrees.length === 0) return;
-            worktreesByProject.set(projectPath, worktrees);
-            allWorktrees.push(...worktrees);
-          } catch {
-            // ignore discovery errors
-          }
-        }),
-      );
-
-      if (cancelled) return;
-
-      useSessionUIStore.setState({
-        availableWorktrees: allWorktrees,
-        availableWorktreesByProject: worktreesByProject,
-      });
-    };
-
-    void discoverWorktrees();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [worktreeRefreshNonce]);
 
   React.useEffect(() => {
     let refreshTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -1775,7 +1731,6 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
         open={newWorktreeDialogOpen}
         onOpenChange={setNewWorktreeDialogOpen}
         onWorktreeCreated={(worktreePath, options) => {
-          setWorktreeRefreshNonce((n) => n + 1);
           setActiveMainTab('chat');
           if (mobileVariant) {
             setSessionSwitcherOpen(false);
