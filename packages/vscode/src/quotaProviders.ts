@@ -431,18 +431,8 @@ export const listConfiguredQuotaProviders = () => {
 
   const copilotAuth = normalizeAuthEntry(getAuthEntry(auth, ['github-copilot', 'copilot']));
   if (copilotAuth && ((copilotAuth as Record<string, unknown>).access || (copilotAuth as Record<string, unknown>).token)) {
-    configured.add('github-copilot');
+configured.add('github-copilot');
     configured.add('github-copilot-addon');
-  }
-
-const minimaxAuth = normalizeAuthEntry(getAuthEntry(auth, ['minimax-coding-plan']));
-  if (minimaxAuth && ((minimaxAuth as Record<string, unknown>).key || (minimaxAuth as Record<string, unknown>).token)) {
-    configured.add('minimax-coding-plan');
-  }
-
-  const minimaxCnAuth = normalizeAuthEntry(getAuthEntry(auth, ['minimax-cn-coding-plan']));
-  if (minimaxCnAuth && ((minimaxCnAuth as Record<string, unknown>).key || (minimaxCnAuth as Record<string, unknown>).token)) {
-    configured.add('minimax-cn-coding-plan');
   }
 
   if (readTextFile(OLLAMA_CLOUD_COOKIE_PATH)) {
@@ -1776,10 +1766,6 @@ export const fetchQuotaForProvider = async (providerId: string): Promise<Provide
       return fetchZaiQuota();
     case 'zhipuai-coding-plan':
       return fetchZhipuaiCodingPlanQuota();
-    case 'minimax-coding-plan':
-      return fetchMinimaxCodingPlanQuota();
-    case 'minimax-cn-coding-plan':
-      return fetchMinimaxCnCodingPlanQuota();
     default:
       return buildResult({
         providerId,
