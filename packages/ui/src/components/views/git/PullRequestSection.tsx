@@ -340,6 +340,18 @@ export const PullRequestSection: React.FC<{
     })
   );
   const [useDetectedUpstream, setUseDetectedUpstream] = React.useState(false);
+
+  const prStatusKey = React.useMemo(
+    () => getGitHubPrStatusKey(directory, branch),
+    [directory, branch],
+  );
+  const statusEntry = useGitHubPrStatusStore((state) => state.entries[prStatusKey]);
+
+  const isLoading = statusEntry?.isLoading ?? false;
+  const status = statusEntry?.status ?? null;
+  const error = statusEntry?.error ?? null;
+  const isInitialStatusResolved = statusEntry?.isInitialStatusResolved ?? false;
+
   const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
   const [upstreamBranches, setUpstreamBranches] = React.useState<string[]>([]);
   const upstreamDetectionAttemptedRef = React.useRef(false);
