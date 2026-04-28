@@ -994,8 +994,9 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   }, [projectSections, homeDirectory]);
 
   const activeNowSessions = React.useMemo(
-    () => deriveActiveNowSessions(activeNowEntries, new Map(sessions.map((session) => [session.id, session]))),
-    [activeNowEntries, sessions],
+    () => deriveActiveNowSessions(activeNowEntries, new Map(sessions.map((session) => [session.id, session])))
+      .sort((a, b) => compareSessionsByPinnedAndTime(a, b, pinnedSessionIds)),
+    [activeNowEntries, pinnedSessionIds, sessions],
   );
 
   const liveActiveSessions = React.useMemo(
