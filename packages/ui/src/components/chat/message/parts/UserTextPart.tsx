@@ -141,16 +141,18 @@ const UserTextPart: React.FC<UserTextPartProps> = ({ part, messageId, agentMenti
     }
 
     return (
-        <div className="relative" key={part.id || `${messageId}-user-text`}>
+        <div key={part.id || `${messageId}-user-text`}>
             {isExpanded && (
-                <button
-                    type="button"
-                    onClick={handleCollapse}
-                    className="absolute top-0 right-0 flex items-center justify-center rounded-sm p-0.5 text-[var(--surface-mutedForeground)] hover:text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] transition-colors"
-                    aria-label="Collapse"
-                >
-                    <RiArrowUpSLine className="h-3.5 w-3.5" />
-                </button>
+                <div className="sticky top-0 z-10 flex justify-end bg-[var(--surface-background)]">
+                    <button
+                        type="button"
+                        onClick={handleCollapse}
+                        className="flex items-center justify-center rounded-sm p-0.5 text-[var(--surface-mutedForeground)] hover:text-[var(--surface-foreground)] hover:bg-[var(--interactive-hover)] transition-colors"
+                        aria-label="Collapse"
+                    >
+                        <RiArrowUpSLine className="h-3.5 w-3.5" />
+                    </button>
+                </div>
             )}
             <div
                 className={cn(
