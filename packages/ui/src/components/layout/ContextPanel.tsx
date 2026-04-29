@@ -459,6 +459,35 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
     && proxyState.status === 'ready'
     && upstreamState === 'unreachable';
 
+  const handlePreviewFrameLoad = React.useCallback((event: React.SyntheticEvent<HTMLIFrameElement>) => {
+    if (!isLoopback || proxyState.status !== 'ready') {
+      return;
+    }
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const frameWindow = event.currentTarget.contentWindow;
+    if (!frameWindow) {
+      return;
+    }
+
+    try {
+      const location = frameWindow.location;
+      if (location.origin !== window.location.origin) {
+        return;
+      }
+      if (location.pathname.startsWith(proxyState.proxyBasePath)) {
+        return;
+      }
+
+      const nextPath = `${proxyState.proxyBasePath}${location.pathname}${location.search}${location.hash}`;
+      frameWindow.location.replace(nextPath);
+    } catch {
+      // Cross-origin frames are expected for non-loopback/direct previews.
+    }
+  }, [isLoopback, proxyState]);
+
   return (
     <div className="absolute inset-0 flex flex-col">
       <div className="flex items-center gap-1 border-b border-border/40 bg-[var(--surface-background)] px-2 py-1">
@@ -518,6 +547,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
             src={effectiveSrc}
             title={t('contextPanel.preview.iframeTitle')}
             className="h-full w-full border-0"
+            onLoad={handlePreviewFrameLoad}
             sandbox={isLoopback
               ? 'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads'
               : 'allow-scripts allow-forms'}
