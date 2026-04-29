@@ -5,9 +5,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "cd configurable-wrapper && ./gradlew assembleRelease",
-    "build:debug": "cd configurable-wrapper && ./gradlew assembleDebug",
-    "build:aab": "cd configurable-wrapper && ./gradlew bundleRelease",
+    "build": "node scripts/guard-android-sdk.mjs",
+    "build:debug": "node scripts/guard-android-sdk.mjs assembleDebug",
+    "build:aab": "node scripts/guard-android-sdk.mjs bundleRelease",
     "init:bw": "node scripts/init-twa.mjs",
     "build:bw": "node scripts/build-with-check.mjs",
     "build:aab:bw": "node scripts/build-with-check.mjs --generateAppBundle",
