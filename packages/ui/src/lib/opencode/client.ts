@@ -774,6 +774,7 @@ class OpencodeService {
           continue;
         }
         recordProviderError(params.providerID);
+        cleanupSession(params.id);
         throw error;
       }
 
@@ -800,19 +801,10 @@ class OpencodeService {
       const suffix = detail && detail.trim().length > 0 ? `: ${detail.trim()}` : '';
       const error = new Error(`Failed to send message (${response.status})${suffix}`);
       recordProviderError(params.providerID, response.status);
+      cleanupSession(params.id);
       throw error;
     }
-
-    let detail = '';
-    try {
-      detail = await (response as Response).text();
-    } catch {
-      // ignore
-    }
-    const suffix = detail && detail.trim().length > 0 ? `: ${detail.trim()}` : '';
-    const error = new Error(`Failed to send message after retries (${(response as Response).status})${suffix}`);
-    recordProviderError(params.providerID, (response as Response).status);
-    throw error;
+    throw new Error('Failed to send message after retries');
   }
 
   async sendCommand(params: {
