@@ -639,7 +639,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.tabs.worktree': '워크트리',
   'gitView.toast.abortOperationFailed': '작업 중단 실패',
   'gitView.toast.appliedIdentity': '작성자 정보 적용됨: {name}',
-  'gitView.toast.applyIdentityFailed': '인증 정보 적용 실패',
+  'gitView.toast.applyIdentityFailed': '작성자 정보 적용 실패',
   'gitView.toast.branchCreatedLocally': '브랜치를 로컬에 생성했지만 업스트림 설정에 실패했습니다.',
   'gitView.toast.cannotCheckout': '브랜치를 체크아웃할 수 없음: {reason}',
   'gitView.toast.cannotCreateBranch': '브랜치를 생성할 수 없음: {reason}',
