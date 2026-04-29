@@ -924,7 +924,7 @@ export function registerGitHubRoutes(app) {
 
       const branches = [];
       let page = 1;
-      while (page <= 10) {
+      while (true) {
         const response = await octokit.rest.repos.listBranches({ owner, repo, per_page: 100, page });
         if (!response.data || response.data.length === 0) break;
         for (const branch of response.data) {

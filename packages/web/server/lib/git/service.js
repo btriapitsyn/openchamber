@@ -2085,11 +2085,12 @@ export async function getBranches(directory) {
 async function filterActiveRemoteBranches(git, remoteBranches) {
   try {
     const remotes = await git.getRemotes();
-    const actualRemoteBranches = new Set();
+    const branchesByRemote = new Map();
 
-    for (const remote of remotes) {
+    await Promise.all(remotes.map(async (remote) => {
       try {
         const lsRemoteResult = await git.raw(['ls-remote', '--heads', remote.name]);
+        const actualRemoteBranches = new Set();
         const lines = lsRemoteResult.trim().split('\n');
         for (const line of lines) {
           if (line.includes('\trefs/heads/')) {
@@ -2097,16 +2098,18 @@ async function filterActiveRemoteBranches(git, remoteBranches) {
             actualRemoteBranches.add(branchName);
           }
         }
+        branchesByRemote.set(remote.name, actualRemoteBranches);
       } catch {
         // Skip remotes that fail (e.g., unreachable)
       }
-    }
+    }));
 
     return remoteBranches.filter(remoteBranch => {
       const match = remoteBranch.match(/^remotes\/[^\/]+\/(.+)$/);
       if (!match) return false;
+      const remoteName = remoteBranch.split('/')[1];
       const branchName = match[1];
-      return actualRemoteBranches.has(branchName);
+      return branchesByRemote.get(remoteName)?.has(branchName) ?? false;
     });
   } catch (error) {
     console.warn('Failed to filter active remote branches, returning all:', error.message);

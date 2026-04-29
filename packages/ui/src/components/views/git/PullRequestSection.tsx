@@ -60,6 +60,7 @@ import { getGitHubPrStatusKey, useGitHubPrStatusStore } from '@/stores/useGitHub
 import type {
   GitHubPullRequest,
   GitHubCheckRun,
+  GitHubAPI,
   GitHubPullRequestContextResult,
   GitHubPullRequestStatus,
   GitRemote,
@@ -67,6 +68,7 @@ import type {
 import { useI18n } from '@/lib/i18n';
 
 type MergeMethod = 'merge' | 'squash' | 'rebase';
+type DetectedUpstream = { owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null };
 
 const statusColor = (state: string | undefined | null): string => {
   switch (state) {
@@ -271,6 +273,56 @@ const pullRequestDraftSnapshots = new Map<string, PullRequestDraftSnapshot>();
 
 const openExternal = openExternalUrl;
 
+function useDetectedUpstreamRepo(directory: string, github: GitHubAPI | undefined) {
+  const [detectedUpstream, setDetectedUpstream] = React.useState<DetectedUpstream | null>(null);
+  const [upstreamBranches, setUpstreamBranches] = React.useState<string[]>([]);
+  const attemptedDirectoryRef = React.useRef<string | null>(null);
+
+  React.useEffect(() => {
+    setDetectedUpstream(null);
+    setUpstreamBranches([]);
+  }, [directory]);
+
+  React.useEffect(() => {
+    if (!directory || !github?.repoUpstream || attemptedDirectoryRef.current === directory) {
+      return;
+    }
+    attemptedDirectoryRef.current = directory;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await github.repoUpstream(directory);
+        if (cancelled || !result?.isFork || !result.upstream) {
+          return;
+        }
+
+        setDetectedUpstream(result.upstream);
+        if (!github.repoBranches) {
+          return;
+        }
+
+        try {
+          const branches = await github.repoBranches(result.upstream.owner, result.upstream.repo);
+          if (!cancelled) {
+            setUpstreamBranches(branches);
+          }
+        } catch {
+          // Silently fail - branch list is best-effort.
+        }
+      } catch {
+        // Silently fail - upstream detection is best-effort.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [directory, github]);
+
+  return { detectedUpstream, upstreamBranches };
+}
+
 export const PullRequestSection: React.FC<{
   directory: string;
   branch: string;
@@ -341,52 +393,11 @@ export const PullRequestSection: React.FC<{
     })
   );
   const [useDetectedUpstream, setUseDetectedUpstream] = React.useState(false);
-
-  const [detectedUpstream, setDetectedUpstream] = React.useState<{ owner: string; repo: string; url: string; defaultBranch?: string; defaultBranchSha?: string | null; remoteName?: string | null } | null>(null);
-  const [upstreamBranches, setUpstreamBranches] = React.useState<string[]>([]);
-  const upstreamDetectionAttemptedRef = React.useRef<string | null>(null);
+  const { detectedUpstream, upstreamBranches } = useDetectedUpstreamRepo(directory, github);
 
   React.useEffect(() => {
-    setDetectedUpstream(null);
-    setUpstreamBranches([]);
     setUseDetectedUpstream(false);
   }, [directory]);
-
-  React.useEffect(() => {
-    if (!directory || !github?.repoUpstream || upstreamDetectionAttemptedRef.current === directory) {
-      return;
-    }
-    upstreamDetectionAttemptedRef.current = directory;
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        const result = await github.repoUpstream(directory);
-        if (cancelled) {
-          return;
-        }
-        if (result?.isFork && result.upstream) {
-          setDetectedUpstream(result.upstream);
-          if (github.repoBranches) {
-            try {
-              const branches = await github.repoBranches(result.upstream.owner, result.upstream.repo);
-              if (!cancelled) {
-                setUpstreamBranches(branches);
-              }
-            } catch {
-              // Silently fail — branch list is best-effort
-            }
-          }
-        }
-      } catch {
-        // Silently fail — upstream detection is best-effort
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [directory, github]);
 
   const hasUpstreamRemote = remotes.some((r) => r.name === 'upstream');
   const isFork = hasUpstreamRemote || detectedUpstream !== null;

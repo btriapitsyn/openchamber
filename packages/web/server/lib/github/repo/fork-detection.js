@@ -1,7 +1,18 @@
 import { resolveGitHubRepoFromDirectory } from './index.js';
 
 const REPO_METADATA_TTL_MS = 5 * 60_000;
+const REPO_METADATA_CACHE_MAX_ENTRIES = 200;
 const repoMetadataCache = new Map();
+
+const setRepoMetadataCache = (repoKey, data) => {
+  if (repoMetadataCache.size >= REPO_METADATA_CACHE_MAX_ENTRIES && !repoMetadataCache.has(repoKey)) {
+    const oldest = repoMetadataCache.entries().next().value;
+    if (oldest) {
+      repoMetadataCache.delete(oldest[0]);
+    }
+  }
+  repoMetadataCache.set(repoKey, { data, fetchedAt: Date.now() });
+};
 
 const normalizeRepoKey = (owner, repo) => {
   const o = typeof owner === 'string' ? owner.trim().toLowerCase() : '';
@@ -25,11 +36,11 @@ const getRepoMetadata = async (octokit, repo) => {
       repo: repo.repo,
     });
     const data = response?.data ?? null;
-    repoMetadataCache.set(repoKey, { data, fetchedAt: Date.now() });
+    setRepoMetadataCache(repoKey, data);
     return data;
   } catch (error) {
     if (error?.status === 403 || error?.status === 404) {
-      repoMetadataCache.set(repoKey, { data: null, fetchedAt: Date.now() });
+      setRepoMetadataCache(repoKey, null);
       return null;
     }
     throw error;
