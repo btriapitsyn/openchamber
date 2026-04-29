@@ -870,12 +870,18 @@ export const ModelControls: React.FC<ModelControlsProps> = ({
             return currentVariant;
         }
 
+        const effectiveAgent = agents.find((a) => a.name === effectiveAgentName);
+        if (effectiveAgent?.variant && variantOptions.includes(effectiveAgent.variant)) {
+            return effectiveAgent.variant;
+        }
+
         if (!currentSessionId && settingsDefaultVariant && variantOptions.includes(settingsDefaultVariant)) {
             return settingsDefaultVariant;
         }
 
         return undefined;
     }, [
+        agents,
         currentAgentName,
         currentModelId,
         currentProviderId,

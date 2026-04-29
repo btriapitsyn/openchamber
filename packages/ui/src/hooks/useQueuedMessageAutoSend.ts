@@ -5,6 +5,7 @@ import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSelectionStore } from '@/sync/selection-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useContextStore } from '@/stores/contextStore';
+import { useAgentsStore } from '@/stores/useAgentsStore';
 import { parseAgentMentions } from '@/lib/messages/agentMentions';
 import { getSyncSessionStatus } from '@/sync/sync-refs';
 import { useDirectorySync } from '@/sync/sync-context';
@@ -82,10 +83,13 @@ const resolveSessionSendConfig = (sessionId: string) => {
     ?? config.currentModelId
     ?? selection.lastUsedProvider?.modelID;
 
+  const agentConfigVariant = selectedAgent ? useAgentsStore.getState().getAgentByName(selectedAgent)?.variant : undefined;
+
   const variant =
     selectedAgent && providerID && modelID
       ? (selection.getAgentModelVariantForSession(sessionId, selectedAgent, providerID, modelID)
-        ?? context.getAgentModelVariantForSession(sessionId, selectedAgent, providerID, modelID))
+        ?? context.getAgentModelVariantForSession(sessionId, selectedAgent, providerID, modelID)
+        ?? agentConfigVariant)
       : undefined;
 
   return {

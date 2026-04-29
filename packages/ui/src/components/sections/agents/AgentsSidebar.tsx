@@ -219,6 +219,7 @@ export const AgentsSidebar: React.FC<AgentsSidebarProps> = ({ onItemSelect }) =>
       scope: extAgent.scope || 'user',
       description: agent.description,
       model: modelStr,
+      variant: agent.variant,
       temperature: agent.temperature,
       top_p: agent.topP,
       prompt: agent.prompt,
