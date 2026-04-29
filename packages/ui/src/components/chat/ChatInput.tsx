@@ -1021,8 +1021,42 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
             [currentSessionId, newSessionDraftOpen]
         )
     );
+    const draftSourceKey = useInlineCommentDraftStore(
+        React.useCallback(
+            (state) => {
+                const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : '');
+                const drafts = sessionKey ? (state.drafts[sessionKey] ?? []) : [];
+                let preview = 0;
+                let review = 0;
+                for (const draft of drafts) {
+                    if (draft.source === 'preview') preview += 1;
+                    else review += 1;
+                }
+                return `${preview}:${review}`;
+            },
+            [currentSessionId, newSessionDraftOpen]
+        )
+    );
     const consumeDrafts = useInlineCommentDraftStore((state) => state.consumeDrafts);
+    const removeInlineCommentDraft = useInlineCommentDraftStore((state) => state.removeDraft);
     const hasDrafts = draftCount > 0;
+    const onlyPreviewDrafts = !draftSourceKey.startsWith('0:') && draftSourceKey.endsWith(':0');
+    const draftLabel = draftSourceKey.startsWith('0:')
+        ? t('chat.chatInput.reviewComments')
+        : onlyPreviewDrafts
+        ? t('chat.chatInput.devServerLogs')
+        : t('chat.chatInput.reviewComments');
+
+    const removePreviewDrafts = React.useCallback(() => {
+        const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : '');
+        if (!sessionKey) return;
+        const drafts = useInlineCommentDraftStore.getState().drafts[sessionKey] ?? [];
+        for (const draft of drafts) {
+            if (draft.source === 'preview') {
+                removeInlineCommentDraft(sessionKey, draft.id);
+            }
+        }
+    }, [currentSessionId, newSessionDraftOpen, removeInlineCommentDraft]);
 
     // User message history for up/down arrow navigation.
     // Keep this on a narrow hook instead of full session message records.
@@ -3278,10 +3312,21 @@ const ChatInputComponent: React.FC<ChatInputProps> = ({ onOpenSettings, scrollTo
                                 borderColor: currentTheme?.colors?.interactive?.border,
                             }}
                         >
-                            <span className="text-xs font-medium text-muted-foreground">{t('chat.chatInput.reviewComments')}</span>
+                            <span className="text-xs font-medium text-muted-foreground">{draftLabel}</span>
                             <span className="text-xs font-semibold" style={{ color: currentTheme?.colors?.status?.info }}>
                                 {draftCount}
                             </span>
+                            {onlyPreviewDrafts ? (
+                                <button
+                                    type="button"
+                                    className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground hover:bg-interactive-hover hover:text-foreground"
+                                    onClick={removePreviewDrafts}
+                                    aria-label={t('chat.chatInput.devServerLogsRemove')}
+                                    title={t('chat.chatInput.devServerLogsRemove')}
+                                >
+                                    <RiCloseLine className="h-3 w-3" />
+                                </button>
+                            ) : null}
                         </div>
                     </div>
                 )}

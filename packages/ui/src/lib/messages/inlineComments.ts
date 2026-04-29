@@ -11,6 +11,10 @@ export function formatInlineCommentDraft(draft: InlineCommentDraft): string {
   if (draft.source === 'diff' && side) {
     return `Comment on \`${fileLabel}\` lines ${startLine}-${endLine} (${side}):\n\`\`\`${language}\n${code}\n\`\`\`\n\n${text}`;
   }
+
+  if (draft.source === 'preview') {
+    return `Attached preview context from \`${fileLabel}\`:\n\`\`\`${language}\n${code}\n\`\`\`\n\n${text}`;
+  }
   
   // Plan and file format (no side)
   return `Comment on \`${fileLabel}\` lines ${startLine}-${endLine}:\n\`\`\`${language}\n${code}\n\`\`\`\n\n${text}`;

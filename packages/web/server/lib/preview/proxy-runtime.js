@@ -9,6 +9,186 @@ const LOOPBACK_HOSTS = new Set([
   '0.0.0.0',
 ]);
 
+const PREVIEW_BRIDGE_SCRIPT_ID = 'openchamber-preview-bridge';
+
+const PREVIEW_BRIDGE_SCRIPT = String.raw`(() => {
+  if (window.__openchamberPreviewBridgeInstalled) return;
+  window.__openchamberPreviewBridgeInstalled = true;
+
+  const SOURCE = 'openchamber-preview-bridge';
+  const VERSION = 1;
+  const MAX_TEXT = 500;
+  const MAX_ARG = 1000;
+
+  const post = (payload) => {
+    try {
+      window.parent?.postMessage({ source: SOURCE, version: VERSION, ...payload }, window.location.origin);
+    } catch {}
+  };
+
+  const clip = (value, max = MAX_TEXT) => {
+    const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+    return text.length > max ? text.slice(0, max) + '...' : text;
+  };
+
+  const stringifyArg = (value) => {
+    if (typeof value === 'string') return clip(value, MAX_ARG);
+    if (value instanceof Error) return clip(value.stack || value.message || String(value), MAX_ARG);
+    try {
+      return clip(JSON.stringify(value), MAX_ARG);
+    } catch {
+      return clip(String(value), MAX_ARG);
+    }
+  };
+
+  const readElementUrl = (element) => {
+    return element.currentSrc || element.src || element.href || element.action || '';
+  };
+
+  const upstreamPathForUrl = (value) => {
+    try {
+      const parsed = new URL(value, window.location.href);
+      const match = parsed.pathname.match(/^\/api\/preview\/proxy\/[a-f0-9]{16,64}(\/.*)?$/i);
+      return match ? (match[1] || '/') : parsed.pathname;
+    } catch {
+      return String(value || '');
+    }
+  };
+
+  const isInternalDevToolResource = (element, value) => {
+    const tag = element?.tagName?.toLowerCase?.() || '';
+    if (tag !== 'script' && tag !== 'link') return false;
+    const path = upstreamPathForUrl(value);
+    return path === '/@vite/client'
+      || path === '/@react-refresh'
+      || path.startsWith('/@id/__x00__vite/')
+      || path.includes('/node_modules/.vite/')
+      || path.includes('/vite/dist/client/')
+      || path.includes('/astro/dist/runtime/client/dev-toolbar/');
+  };
+
+  const selectorPart = (element) => {
+    const tag = element.tagName.toLowerCase();
+    if (element.id && /^[A-Za-z][\w:.-]*$/.test(element.id)) return tag + '#' + CSS.escape(element.id);
+    const testId = element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-cy');
+    if (testId) return tag + '[data-testid="' + CSS.escape(testId) + '"]';
+    const classes = Array.from(element.classList || []).slice(0, 3).map((entry) => '.' + CSS.escape(entry)).join('');
+    return tag + classes;
+  };
+
+  const buildSelector = (element) => {
+    const parts = [];
+    let current = element;
+    while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement) {
+      let part = selectorPart(current);
+      const parent = current.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children).filter((child) => child.tagName === current.tagName);
+        if (siblings.length > 1 && !part.includes('#') && !part.includes('[data-testid=')) {
+          part += ':nth-of-type(' + (siblings.indexOf(current) + 1) + ')';
+        }
+      }
+      parts.unshift(part);
+      if (part.includes('#')) break;
+      current = parent;
+    }
+    return parts.join(' > ');
+  };
+
+  const metadataForElement = (element) => {
+    if (!element || element.nodeType !== Node.ELEMENT_NODE) return null;
+    const rect = element.getBoundingClientRect();
+    const style = window.getComputedStyle(element);
+    const attributes = {};
+    for (const name of ['id', 'class', 'role', 'aria-label', 'href', 'src', 'data-testid', 'data-test', 'data-cy']) {
+      const value = element.getAttribute?.(name);
+      if (value) attributes[name] = clip(value, 300);
+    }
+    const ancestry = [];
+    let current = element;
+    while (current && current.nodeType === Node.ELEMENT_NODE && ancestry.length < 6) {
+      ancestry.unshift({
+        tag: current.tagName.toLowerCase(),
+        id: current.id || undefined,
+        className: clip(current.className || '', 200) || undefined,
+        selectorPart: selectorPart(current),
+      });
+      current = current.parentElement;
+    }
+    return {
+      frame: 'top',
+      tag: element.tagName.toLowerCase(),
+      text: clip(element.innerText || element.textContent || ''),
+      selector: buildSelector(element),
+      path: ancestry.map((entry) => entry.tag).join(' > '),
+      bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      center: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 },
+      attributes,
+      computedStyle: {
+        display: style.display,
+        position: style.position,
+        color: style.color,
+        backgroundColor: style.backgroundColor,
+        fontFamily: style.fontFamily,
+        fontSize: style.fontSize,
+        fontWeight: style.fontWeight,
+        lineHeight: style.lineHeight,
+        zIndex: style.zIndex,
+      },
+      ancestry,
+    };
+  };
+
+  for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
+    const original = console[level];
+    console[level] = (...args) => {
+      post({ type: 'console', level, args: args.map(stringifyArg), ts: Date.now() });
+      return original.apply(console, args);
+    };
+  }
+
+  window.addEventListener('error', (event) => {
+    const target = event.target;
+    if (target && target !== window && target.nodeType === Node.ELEMENT_NODE) {
+      const url = readElementUrl(target);
+      if (isInternalDevToolResource(target, url)) {
+        return;
+      }
+      post({
+        type: 'resource-error',
+        tag: target.tagName.toLowerCase(),
+        url: clip(url, 1000),
+        outerHTML: clip(target.outerHTML || '', 1000),
+        ts: Date.now(),
+      });
+      return;
+    }
+    post({
+      type: 'runtime-error',
+      message: clip(event.message || 'Unknown error', 1000),
+      stack: clip(event.error?.stack || '', 2000) || undefined,
+      filename: event.filename,
+      line: event.lineno,
+      column: event.colno,
+      ts: Date.now(),
+    });
+  }, true);
+
+  window.addEventListener('unhandledrejection', (event) => {
+    post({
+      type: 'runtime-error',
+      message: clip(event.reason?.message || event.reason || 'Unhandled promise rejection', 1000),
+      stack: clip(event.reason?.stack || '', 2000) || undefined,
+      ts: Date.now(),
+    });
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    post({ type: 'ready', url: window.location.href, title: document.title || '' });
+  });
+  post({ type: 'ready', url: window.location.href, title: document.title || '' });
+})();`;
+
 const parseCookieHeader = (cookieHeader) => {
   const result = new Map();
   if (typeof cookieHeader !== 'string' || cookieHeader.length === 0) {
@@ -260,6 +440,21 @@ export const createPreviewProxyRuntime = ({
         });
     };
 
+    const injectPreviewBridge = (bodyText) => {
+      if (typeof bodyText !== 'string' || bodyText.includes(PREVIEW_BRIDGE_SCRIPT_ID)) {
+        return bodyText;
+      }
+
+      const script = `<script id="${PREVIEW_BRIDGE_SCRIPT_ID}">${PREVIEW_BRIDGE_SCRIPT}</script>`;
+      if (bodyText.includes('</head>')) {
+        return bodyText.replace('</head>', `${script}</head>`);
+      }
+      if (bodyText.includes('</body>')) {
+        return bodyText.replace('</body>', `${script}</body>`);
+      }
+      return `${bodyText}${script}`;
+    };
+
     app.post('/api/preview/targets', express.json(), async (req, res) => {
       try {
         if (uiAuthController?.enabled) {
@@ -371,7 +566,8 @@ export const createPreviewProxyRuntime = ({
             return responseBuffer;
           }
 
-          return rewritePreviewBody(responseBuffer.toString('utf8'), `/api/preview/proxy/${resolved.id}`);
+          const rewrittenBody = rewritePreviewBody(responseBuffer.toString('utf8'), `/api/preview/proxy/${resolved.id}`);
+          return contentType.includes('text/html') ? injectPreviewBridge(rewrittenBody) : rewrittenBody;
         }),
         error: (err, _req, res) => {
           const isDev = typeof process !== 'undefined'

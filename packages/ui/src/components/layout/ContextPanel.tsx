@@ -1,5 +1,5 @@
 import React from 'react';
-import { RiArrowLeftRightLine, RiChat4Line, RiCloseLine, RiDonutChartFill, RiFileTextLine, RiFullscreenExitLine, RiFullscreenLine, RiGlobalLine, RiRefreshLine, RiExternalLinkLine, RiPlayLine } from '@remixicon/react';
+import { RiArrowLeftRightLine, RiChat4Line, RiCloseLine, RiDonutChartFill, RiFileTextLine, RiFullscreenExitLine, RiFullscreenLine, RiGlobalLine, RiRefreshLine, RiExternalLinkLine, RiPlayLine, RiTerminalBoxLine } from '@remixicon/react';
 
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { DiffView, FilesView, PlanView } from '@/components/views';
 import { useThemeSystem } from '@/contexts/useThemeSystem';
 import { openExternalUrl } from '@/lib/url';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n';
@@ -15,14 +16,51 @@ import { useUIStore } from '@/stores/useUIStore';
 import { getProjectActionsState } from '@/lib/openchamberConfig';
 import { readPackageJsonScripts, detectDevServerCommand } from '@/lib/detectDevServer';
 import { useTerminalStore } from '@/stores/useTerminalStore';
+import { useInlineCommentDraftStore } from '@/stores/useInlineCommentDraftStore';
+import { useSessionUIStore } from '@/sync/session-ui-store';
 import { connectTerminalStream, createTerminalSession, sendTerminalInput } from '@/lib/terminalApi';
 import { ContextPanelContent } from './ContextSidebarTab';
+import { toast } from '@/components/ui';
 
 const CONTEXT_PANEL_MIN_WIDTH = 360;
 const CONTEXT_PANEL_MAX_WIDTH = 1400;
 const CONTEXT_PANEL_DEFAULT_WIDTH = 600;
 const CONTEXT_TAB_LABEL_MAX_CHARS = 24;
 type TranslateFn = ReturnType<typeof useI18n>['t'];
+
+type PreviewConsoleEvent = {
+  id: number;
+  level: 'log' | 'info' | 'warn' | 'error' | 'debug' | 'resource' | 'runtime';
+  message: string;
+  details?: string;
+  ts: number;
+};
+
+type PreviewConsoleFilter = 'all' | 'errors' | 'warnings' | 'logs';
+
+type PreviewBridgeMessage = {
+  source?: string;
+  version?: number;
+  type?: string;
+  level?: PreviewConsoleEvent['level'];
+  args?: unknown[];
+  message?: unknown;
+  stack?: unknown;
+  tag?: unknown;
+  url?: unknown;
+  outerHTML?: unknown;
+  title?: unknown;
+  ts?: unknown;
+};
+
+const PREVIEW_CONSOLE_EVENT_LIMIT = 200;
+
+const getPreviewConsoleFilterMatch = (event: PreviewConsoleEvent, filter: PreviewConsoleFilter): boolean => {
+  if (filter === 'all') return true;
+  if (filter === 'errors') return event.level === 'error' || event.level === 'runtime' || event.level === 'resource';
+  if (filter === 'warnings') return event.level === 'warn';
+  return event.level === 'log' || event.level === 'info' || event.level === 'debug';
+};
 
 const normalizeDirectoryKey = (value: string): string => {
   if (!value) return '';
@@ -257,7 +295,17 @@ const getCachedProxyTarget = (url: string): CachedProxyTarget | null => {
 const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
   const { t } = useI18n();
   const [reloadNonce, bumpReload] = React.useReducer((x: number) => x + 1, 0);
+  const [proxyRegistrationNonce, bumpProxyRegistration] = React.useReducer((x: number) => x + 1, 0);
   const [proxyState, setProxyState] = React.useState<PreviewProxyState>({ status: 'idle' });
+  const iframeRef = React.useRef<HTMLIFrameElement | null>(null);
+  const nextConsoleEventIdRef = React.useRef(1);
+  const [bridgeReady, setBridgeReady] = React.useState(false);
+  const [consoleOpen, setConsoleOpen] = React.useState(false);
+  const [consoleFilter, setConsoleFilter] = React.useState<PreviewConsoleFilter>('all');
+  const [consoleEvents, setConsoleEvents] = React.useState<PreviewConsoleEvent[]>([]);
+  const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
+  const newSessionDraftOpen = useSessionUIStore((state) => state.newSessionDraft?.open);
+  const addInlineCommentDraft = useInlineCommentDraftStore((state) => state.addDraft);
 
   let parsedUrl: URL | null = null;
   try {
@@ -345,7 +393,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
     return () => {
       cancelled = true;
     };
-  }, [isLoopback, t, targetKey]);
+  }, [isLoopback, proxyRegistrationNonce, t, targetKey]);
 
   const directSrc = normalizedUrl
     && (normalizedUrl.protocol === 'http:' || normalizedUrl.protocol === 'https:')
@@ -365,6 +413,150 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
   const headerSrc = effectiveSrc || directSrc;
   const showLoading = isLoopback && (proxyState.status === 'loading' || proxyState.status === 'idle');
   const showError = isLoopback && proxyState.status === 'error';
+
+  React.useEffect(() => {
+    setBridgeReady(false);
+    setConsoleEvents([]);
+    setConsoleOpen(false);
+    setConsoleFilter('all');
+    nextConsoleEventIdRef.current = 1;
+  }, [effectiveSrc]);
+
+  React.useEffect(() => {
+    if (!isLoopback || typeof window === 'undefined') {
+      return;
+    }
+
+    const stringify = (value: unknown): string => {
+      if (typeof value === 'string') return value;
+      if (value === null || value === undefined) return '';
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    };
+
+    const pushConsoleEvent = (event: Omit<PreviewConsoleEvent, 'id'>) => {
+      const id = nextConsoleEventIdRef.current;
+      nextConsoleEventIdRef.current += 1;
+      setConsoleEvents((current) => {
+        const next = [...current, { ...event, id }];
+        return next.length > PREVIEW_CONSOLE_EVENT_LIMIT
+          ? next.slice(next.length - PREVIEW_CONSOLE_EVENT_LIMIT)
+          : next;
+      });
+    };
+
+    const handler = (event: MessageEvent<PreviewBridgeMessage>) => {
+      if (event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
+      const data = event.data;
+      if (!data || data.source !== 'openchamber-preview-bridge' || data.version !== 1) {
+        return;
+      }
+
+      if (data.type === 'ready') {
+        setBridgeReady(true);
+        return;
+      }
+
+      if (data.type === 'console') {
+        const level = data.level === 'error' || data.level === 'warn' || data.level === 'info' || data.level === 'debug'
+          ? data.level
+          : 'log';
+        const args = Array.isArray(data.args) ? data.args.map(stringify).filter(Boolean) : [];
+        pushConsoleEvent({
+          level,
+          message: args.join(' '),
+          ts: typeof data.ts === 'number' ? data.ts : Date.now(),
+        });
+        return;
+      }
+
+      if (data.type === 'runtime-error') {
+        pushConsoleEvent({
+          level: 'runtime',
+          message: stringify(data.message) || t('contextPanel.preview.console.runtimeError'),
+          details: stringify(data.stack),
+          ts: typeof data.ts === 'number' ? data.ts : Date.now(),
+        });
+        return;
+      }
+
+      if (data.type === 'resource-error') {
+        const tag = stringify(data.tag) || 'resource';
+        const url = stringify(data.url);
+        pushConsoleEvent({
+          level: 'resource',
+          message: url ? `${tag}: ${url}` : tag,
+          details: stringify(data.outerHTML),
+          ts: typeof data.ts === 'number' ? data.ts : Date.now(),
+        });
+      }
+    };
+
+    window.addEventListener('message', handler);
+    return () => {
+      window.removeEventListener('message', handler);
+    };
+  }, [isLoopback, t]);
+
+  const consoleErrorCount = consoleEvents.filter((event) => event.level === 'error' || event.level === 'runtime' || event.level === 'resource').length;
+  const filteredConsoleEvents = consoleEvents.filter((event) => getPreviewConsoleFilterMatch(event, consoleFilter));
+
+  const copyConsoleEvents = React.useCallback(() => {
+    const header = [
+      `Preview URL: ${rawUrl || effectiveSrc || ''}`,
+      `Events: ${consoleEvents.length}`,
+      '',
+    ].join('\n');
+    const text = consoleEvents.map((event) => {
+      const timestamp = new Date(event.ts).toISOString();
+      const details = event.details ? `\n${event.details}` : '';
+      return `[${timestamp}] [${event.level}] ${event.message}${details}`;
+    }).join('\n');
+
+    void copyTextToClipboard(`${header}${text}`).then((result) => {
+      if (result.ok) {
+        toast.success(t('contextPanel.preview.console.copied'));
+      } else {
+        toast.error(t('contextPanel.preview.console.copyFailed'));
+      }
+    });
+  }, [consoleEvents, effectiveSrc, rawUrl, t]);
+
+  const attachConsoleEvents = React.useCallback(() => {
+    const sessionKey = currentSessionId ?? (newSessionDraftOpen ? 'draft' : null);
+    if (!sessionKey) {
+      toast.error(t('contextPanel.preview.console.attachNoSession'));
+      return;
+    }
+
+    const header = [
+      `Preview URL: ${rawUrl || effectiveSrc || ''}`,
+      `Events: ${consoleEvents.length}`,
+      '',
+    ].join('\n');
+    const text = consoleEvents.map((event) => {
+      const timestamp = new Date(event.ts).toISOString();
+      const details = event.details ? `\n${event.details}` : '';
+      return `[${timestamp}] [${event.level}] ${event.message}${details}`;
+    }).join('\n');
+
+    addInlineCommentDraft({
+      sessionKey,
+      source: 'preview',
+      fileLabel: rawUrl || effectiveSrc || 'preview',
+      startLine: 1,
+      endLine: Math.max(1, consoleEvents.length),
+      code: `${header}${text}`,
+      language: 'text',
+      text: t('contextPanel.preview.console.attachAnnotation'),
+    });
+    toast.success(t('contextPanel.preview.console.attached'));
+  }, [addInlineCommentDraft, consoleEvents, currentSessionId, effectiveSrc, newSessionDraftOpen, rawUrl, t]);
 
   // Out-of-band upstream probe: iframes don't expose HTTP status to the parent,
   // so when the proxy returns a 502 (upstream dev server is offline) the iframe
@@ -419,6 +611,13 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
         return;
       }
 
+      if (response.status === 403 || response.status === 404) {
+        previewProxyTargetCache.delete(targetKey);
+        setProxyState({ status: 'loading' });
+        bumpProxyRegistration();
+        return;
+      }
+
       // The proxy emits 502 when the upstream is unreachable. Anything else
       // (including 4xx from the upstream) means the upstream answered.
       if (response.status !== 502) {
@@ -449,7 +648,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
     return () => {
       cancelled = true;
     };
-  }, [proxySrc, reloadNonce]);
+  }, [proxySrc, reloadNonce, targetKey]);
 
   const showUpstreamStarting = isLoopback
     && proxyState.status === 'ready'
@@ -521,8 +720,25 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
         >
           <RiExternalLinkLine className="h-3.5 w-3.5" />
         </Button>
+        {isLoopback ? (
+          <Button
+            type="button"
+            size="sm"
+            variant={consoleOpen ? 'secondary' : 'ghost'}
+            className="h-7 gap-1 px-2"
+            onClick={() => setConsoleOpen((value) => !value)}
+            title={bridgeReady ? t('contextPanel.preview.console.open') : t('contextPanel.preview.console.waiting')}
+            aria-label={bridgeReady ? t('contextPanel.preview.console.open') : t('contextPanel.preview.console.waiting')}
+            disabled={!bridgeReady && consoleEvents.length === 0}
+          >
+            <RiTerminalBoxLine className="h-3.5 w-3.5" />
+            {consoleErrorCount > 0 ? (
+              <span className="typography-micro text-status-error">{consoleErrorCount}</span>
+            ) : null}
+          </Button>
+        ) : null}
       </div>
-      <div className="min-h-0 flex-1 bg-background">
+      <div className="relative min-h-0 flex-1 bg-background">
         {showUpstreamStarting ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
             <div>{t('contextPanel.preview.startingServer')}</div>
@@ -543,6 +759,7 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
           </div>
         ) : effectiveSrc && (!isLoopback || upstreamState === 'reachable') ? (
           <iframe
+            ref={iframeRef}
             key={`${effectiveSrc}:${reloadNonce}`}
             src={effectiveSrc}
             title={t('contextPanel.preview.iframeTitle')}
@@ -568,6 +785,84 @@ const PreviewPane: React.FC<PreviewPaneProps> = ({ rawUrl }) => {
             {t('contextPanel.preview.invalidUrl')}
           </div>
         )}
+        {consoleOpen ? (
+          <div className="absolute inset-x-3 bottom-3 z-10 max-h-[45%] overflow-hidden rounded-xl border border-border/70 bg-[var(--surface-elevated)] shadow-lg">
+            <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
+              <div className="typography-ui-label text-foreground">{t('contextPanel.preview.console.title')}</div>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={attachConsoleEvents}
+                  disabled={consoleEvents.length === 0}
+                >
+                  {t('contextPanel.preview.console.attach')}
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={copyConsoleEvents}
+                  disabled={consoleEvents.length === 0}
+                >
+                  {t('contextPanel.preview.console.copy')}
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  onClick={() => setConsoleEvents([])}
+                  disabled={consoleEvents.length === 0}
+                >
+                  {t('contextPanel.preview.console.clear')}
+                </Button>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 border-b border-border/30 px-3 py-1.5">
+              {(['all', 'errors', 'warnings', 'logs'] as const).map((filter) => (
+                <Button
+                  key={filter}
+                  type="button"
+                  size="xs"
+                  variant={consoleFilter === filter ? 'secondary' : 'ghost'}
+                  onClick={() => setConsoleFilter(filter)}
+                >
+                  {filter === 'all'
+                    ? t('contextPanel.preview.console.filter.all')
+                    : filter === 'errors'
+                      ? t('contextPanel.preview.console.filter.errors')
+                      : filter === 'warnings'
+                        ? t('contextPanel.preview.console.filter.warnings')
+                        : t('contextPanel.preview.console.filter.logs')}
+                </Button>
+              ))}
+            </div>
+            <div className="max-h-64 overflow-auto p-2 typography-code text-xs">
+              {consoleEvents.length === 0 ? (
+                <div className="px-2 py-3 text-muted-foreground">{t('contextPanel.preview.console.empty')}</div>
+              ) : filteredConsoleEvents.length === 0 ? (
+                <div className="px-2 py-3 text-muted-foreground">{t('contextPanel.preview.console.noFilteredEvents')}</div>
+              ) : filteredConsoleEvents.map((event) => (
+                <div key={event.id} className="border-b border-border/30 px-2 py-1 last:border-b-0">
+                  <div className="flex gap-2">
+                    <span className={cn(
+                      'shrink-0 uppercase',
+                      event.level === 'error' || event.level === 'runtime' || event.level === 'resource'
+                        ? 'text-status-error'
+                        : event.level === 'warn'
+                          ? 'text-status-warning'
+                          : 'text-muted-foreground'
+                    )}>
+                      {event.level}
+                    </span>
+                    <span className="min-w-0 break-words text-foreground">{event.message}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
