@@ -30,11 +30,13 @@ import {
   RiRestartLine,
   RiServerLine,
   RiSlashCommands2,
+  RiBrainLine,
 } from '@remixicon/react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
+import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
 import { CommandsSidebar } from '@/components/sections/commands/CommandsSidebar';
 import { CommandsPage } from '@/components/sections/commands/CommandsPage';
 import { McpSidebar } from '@/components/sections/mcp/McpSidebar';
@@ -93,6 +95,7 @@ const pageOrder: SettingsPageSlug[] = [
   'projects',
   'remote-instances',
   'agents',
+  'behavior',
   'commands',
   'mcp',
   'providers',
@@ -140,6 +143,8 @@ export function getSettingsNavIcon(slug: SettingsPageSlug): React.ComponentType<
       return RiCloudLine;
     case 'agents':
       return RiAiAgentLine;
+    case 'behavior':
+      return RiBrainLine;
     case 'commands':
       return RiSlashCommands2;
     case 'mcp':
@@ -395,6 +400,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return t('settings.page.usage.title');
       case 'agents':
         return t('settings.page.agents.title');
+      case 'behavior':
+        return t('settings.page.behavior.title');
       case 'commands':
         return t('settings.page.commands.title');
       case 'mcp':
@@ -478,6 +485,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         return <RemoteInstancesPage />;
       case 'agents':
         return <AgentsPage />;
+      case 'behavior':
+        return <BehaviorPage />;
       case 'commands':
         return <CommandsPage />;
       case 'mcp':

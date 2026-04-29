@@ -555,6 +555,14 @@ export const createSettingsHelpers = (dependencies) => {
       result.reportUsage = candidate.reportUsage;
     }
 
+    // Global behavior prompt — synced to ~/.config/opencode/AGENTS.md
+    if (typeof candidate.globalBehaviorPrompt === 'string') {
+      const value = candidate.globalBehaviorPrompt;
+      if (value.length <= 1024 * 1024) {
+        result.globalBehaviorPrompt = value;
+      }
+    }
+
     return result;
   };
 
