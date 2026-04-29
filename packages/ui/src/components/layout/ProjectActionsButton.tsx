@@ -66,6 +66,7 @@ const ANSI_ESCAPE_PREFIX = String.fromCharCode(27);
 const ANSI_ESCAPE_PATTERN = new RegExp(`${ANSI_ESCAPE_PREFIX}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
 const URL_GLOBAL_PATTERN = /https?:\/\/[^\s<>'"`]+/gi;
 const AUTO_DISCOVER_ACTION_ID = '__openchamber_auto_discover_preview__';
+const AUTO_DISCOVER_PREVIEW_WAIT_TIMEOUT_MS = 15_000;
 
 const stripControlChars = (value: string): string => {
   let next = '';
@@ -213,6 +214,7 @@ export const ProjectActionsButton = ({
   const tabByKeyRef = React.useRef<Record<string, string>>({});
   const urlWatchByRunKeyRef = React.useRef<Record<string, UrlWatchEntry>>({});
   const streamCleanupByRunKeyRef = React.useRef<Record<string, () => void>>({});
+  const previewWaitTimeoutByRunKeyRef = React.useRef<Record<string, number>>({});
   const loadRequestIdRef = React.useRef(0);
 
   const projectId = projectRef?.id ?? null;
@@ -386,6 +388,11 @@ export const ProjectActionsButton = ({
           const run = projectActionRuns[runKey];
           if (run) {
             setTabPreviewUrl(run.directory, run.tabId, maybeUrl, { locked: false, autoOpened: false });
+            if (run.status === 'waiting-for-preview') {
+              updateProjectActionRunStatus(runKey, 'running');
+            }
+            window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[runKey]);
+            delete previewWaitTimeoutByRunKeyRef.current[runKey];
             openContextPreview(run.directory, maybeUrl);
           }
         } else {
@@ -399,10 +406,12 @@ export const ProjectActionsButton = ({
     for (const runKey of Object.keys(urlWatchByRunKeyRef.current)) {
       if (!projectActionRuns[runKey]) {
         delete urlWatchByRunKeyRef.current[runKey];
+        window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[runKey]);
+        delete previewWaitTimeoutByRunKeyRef.current[runKey];
       }
     }
 
-  }, [displayActions, openContextPreview, openExternal, projectActionRuns, setTabPreviewUrl, t, terminalSessions]);
+  }, [displayActions, openContextPreview, openExternal, projectActionRuns, setTabPreviewUrl, t, terminalSessions, updateProjectActionRunStatus]);
 
   const getOrCreateActionTab = React.useCallback(async (action: OpenChamberProjectAction, options: { revealTerminal?: boolean } = {}) => {
     if (!normalizedDirectory) {
@@ -530,6 +539,8 @@ export const ProjectActionsButton = ({
               delete urlWatchByRunKeyRef.current[key];
               streamCleanupByRunKeyRef.current[key]?.();
               delete streamCleanupByRunKeyRef.current[key];
+              window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[key]);
+              delete previewWaitTimeoutByRunKeyRef.current[key];
             }
           },
           () => {
@@ -539,15 +550,6 @@ export const ProjectActionsButton = ({
         );
       }
 
-      setProjectActionRun({
-        key,
-        directory: normalizedDirectory,
-        actionId: discovered.id,
-        tabId,
-        sessionId: activeSessionId,
-        status: 'running',
-      });
-
       const hasDesktopForwardSelection = discovered.autoOpenUrl === true
         && isDesktopShellApp
         && (discovered.desktopOpenSshForward || '').trim().length > 0;
@@ -555,6 +557,23 @@ export const ProjectActionsButton = ({
       const desktopForwardUrl = discovered.autoOpenUrl && isDesktopShellApp
         ? resolveProjectActionDesktopForwardUrl(discovered.desktopOpenSshForward, desktopSshInstances)
         : null;
+
+      setProjectActionRun({
+        key,
+        directory: normalizedDirectory,
+        actionId: discovered.id,
+        tabId,
+        sessionId: activeSessionId,
+        status: discovered.id === AUTO_DISCOVER_ACTION_ID && !manualOpenUrl ? 'waiting-for-preview' : 'running',
+      });
+      window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[key]);
+      delete previewWaitTimeoutByRunKeyRef.current[key];
+      if (discovered.id === AUTO_DISCOVER_ACTION_ID && !manualOpenUrl) {
+        previewWaitTimeoutByRunKeyRef.current[key] = window.setTimeout(() => {
+          useTerminalStore.getState().updateProjectActionRunStatus(key, 'running');
+          delete previewWaitTimeoutByRunKeyRef.current[key];
+        }, AUTO_DISCOVER_PREVIEW_WAIT_TIMEOUT_MS);
+      }
 
       if (desktopForwardUrl) {
         setTabPreviewUrl(normalizedDirectory, tabId, null, { locked: true });
@@ -588,6 +607,8 @@ export const ProjectActionsButton = ({
       delete urlWatchByRunKeyRef.current[runKey];
       streamCleanupByRunKeyRef.current[runKey]?.();
       delete streamCleanupByRunKeyRef.current[runKey];
+      window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[runKey]);
+      delete previewWaitTimeoutByRunKeyRef.current[runKey];
       toast.error(error instanceof Error ? error.message : t('projectActions.error.failedToRunAction'));
     }
   }, [
@@ -656,6 +677,8 @@ export const ProjectActionsButton = ({
     delete urlWatchByRunKeyRef.current[runKey];
     streamCleanupByRunKeyRef.current[runKey]?.();
     delete streamCleanupByRunKeyRef.current[runKey];
+    window.clearTimeout(previewWaitTimeoutByRunKeyRef.current[runKey]);
+    delete previewWaitTimeoutByRunKeyRef.current[runKey];
   }, [normalizedDirectory, projectActionRuns, removeProjectActionRun, setTabSessionId, terminal, updateProjectActionRunStatus]);
 
   const handlePrimaryClick = React.useCallback(() => {
@@ -724,6 +747,7 @@ export const ProjectActionsButton = ({
   const selectedRunKey = toProjectActionRunKey(normalizedDirectory, resolvedSelected.id);
   const selectedRunning = projectActionRuns[selectedRunKey];
   const isStoppingSelected = selectedRunning?.status === 'stopping';
+  const isWaitingForSelectedPreview = selectedRunning?.status === 'waiting-for-preview';
   const selectedRunPreviewUrl = selectedRunning
     ? terminalSessions.get(selectedRunning.directory)?.tabs.find((tab) => tab.id === selectedRunning.tabId)?.previewUrl ?? null
     : null;
@@ -753,7 +777,7 @@ export const ProjectActionsButton = ({
             ? t('projectActions.actions.stopNamedAria', { name: resolvedSelected.name })
             : t('projectActions.actions.runNamedAria', { name: resolvedSelected.name })}
         >
-          {isStoppingSelected
+          {isStoppingSelected || isWaitingForSelectedPreview
             ? <RiLoader4Line className="h-5 w-5 animate-spin text-[var(--status-warning)]" />
             : selectedRunning
               ? <RiStopLine className="h-5 w-5 text-[var(--status-warning)]" />
@@ -810,7 +834,7 @@ export const ProjectActionsButton = ({
                 >
                   <Icon className="h-4 w-4" />
                   <span className="typography-ui-label text-foreground truncate">{entry.name}</span>
-                  {isStopping
+                  {isStopping || runState?.status === 'waiting-for-preview'
                     ? <RiLoader4Line className="ml-auto h-4 w-4 animate-spin text-[var(--status-warning)]" />
                     : isRunning
                       ? <RiStopLine className="ml-auto h-4 w-4 text-[var(--status-warning)]" />
@@ -848,7 +872,7 @@ export const ProjectActionsButton = ({
           : t('projectActions.actions.runNamedAria', { name: resolvedSelected.name })}
       >
         <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center">
-          {isStoppingSelected
+          {isStoppingSelected || isWaitingForSelectedPreview
             ? <RiLoader4Line className="h-4 w-4 animate-spin text-[var(--status-warning)]" />
             : selectedRunning
               ? <RiStopLine className="h-4 w-4 text-[var(--status-warning)]" />
@@ -917,7 +941,7 @@ export const ProjectActionsButton = ({
               >
                 <Icon className="h-4 w-4" />
                 <span className="typography-ui-label text-foreground truncate">{entry.name}</span>
-                {isStopping
+                {isStopping || runState?.status === 'waiting-for-preview'
                   ? <RiLoader4Line className="ml-auto h-4 w-4 animate-spin text-[var(--status-warning)]" />
                   : isRunning
                     ? <RiStopLine className="ml-auto h-4 w-4 text-[var(--status-warning)]" />

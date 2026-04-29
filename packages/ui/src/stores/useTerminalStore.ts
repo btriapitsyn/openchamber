@@ -37,7 +37,7 @@ export type TerminalProjectActionRun = {
   actionId: string;
   tabId: string;
   sessionId: string;
-  status: 'running' | 'stopping';
+  status: 'running' | 'waiting-for-preview' | 'stopping';
 };
 
 interface TerminalStore {
