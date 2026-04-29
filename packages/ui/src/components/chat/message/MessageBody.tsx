@@ -16,7 +16,7 @@ import { FadeInOnReveal } from './FadeInOnReveal';
 import { Button } from '@/components/ui/button';
 import { SaveProjectPlanDialog } from '@/components/session/SaveProjectPlanDialog';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiTimeLine, RiVolumeUpLine, RiStopLine, RiImageDownloadLine, RiLoader4Line, RiErrorWarningLine, RiBookletLine, RiGlobalLine } from '@remixicon/react';
+import { RiCheckLine, RiFileCopyLine, RiChatNewLine, RiArrowGoBackLine, RiGitBranchLine, RiHourglassLine, RiTimeLine, RiVolumeUpLine, RiStopLine, RiImageDownloadLine, RiLoader4Line, RiErrorWarningLine, RiBookletLine, RiGlobalLine, RiInformationLine } from '@remixicon/react';
 import { ArrowsMerge } from '@/components/icons/ArrowsMerge';
 import type { ContentChangeReason } from '@/hooks/useChatScrollManager';
 
@@ -303,6 +303,7 @@ interface MessageBodyProps {
     onRevert?: () => void;
     onFork?: () => void;
     errorMessage?: string;
+    errorVariant?: 'error' | 'info';
     userActionsMode?: 'inline' | 'external-content' | 'external-actions';
     stickyUserHeaderEnabled?: boolean;
 }
@@ -850,6 +851,7 @@ const AssistantMessageBody = React.memo(({
     showReasoningTraces = false,
     turnGroupingContext,
     errorMessage,
+    errorVariant = 'error',
 }: Omit<MessageBodyProps, 'isUser'>) => {
     const { t } = useI18n();
     const streamPhase = _streamPhase;
@@ -1386,6 +1388,7 @@ const AssistantMessageBody = React.memo(({
 
     const shouldDeferSortedInlineText = isSortedRenderMode && !hasStopFinish;
     const showErrorMessage = Boolean(errorMessage);
+    const ErrorIcon = errorVariant === 'info' ? RiInformationLine : RiErrorWarningLine;
     const shouldShowMessageActions = hasCopyableText;
     const shouldShowTurnFooter = isLastAssistantInTurn && hasTextContent && (hasStopFinish || Boolean(errorMessage));
     const shouldRenderActionsInActivity = isSortedRenderMode;
@@ -1798,9 +1801,17 @@ const AssistantMessageBody = React.memo(({
                     {renderedParts}
                     {showErrorMessage && (
                         <FadeInOnReveal key="assistant-error">
-                            <div className="group/assistant-text relative mt-3 p-3 rounded-lg border bg-[var(--status-error-background)] border-[var(--status-error-border)] break-words max-w-full">
+                            <div className={cn(
+                                'group/assistant-text relative mt-3 p-3 rounded-lg border break-words max-w-full',
+                                errorVariant === 'info'
+                                    ? 'bg-[var(--status-info-background)] border-[var(--status-info-border)]'
+                                    : 'bg-[var(--status-error-background)] border-[var(--status-error-border)]',
+                            )}>
                                 <div className="flex items-center gap-2">
-                                    <RiErrorWarningLine className="h-4 w-4 shrink-0 text-[var(--status-error)]" />
+                                    <ErrorIcon className={cn(
+                                        'h-4 w-4 shrink-0',
+                                        errorVariant === 'info' ? 'text-[var(--status-info)]' : 'text-[var(--status-error)]',
+                                    )} />
                                     <div className="min-w-0 flex-1 break-words">
                                         <SimpleMarkdownRenderer
                                             content={errorMessage ?? ''}
