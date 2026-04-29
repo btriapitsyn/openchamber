@@ -1,5 +1,6 @@
 export const registerServerStatusRoutes = (app, dependencies) => {
   const {
+    express,
     process,
     openchamberVersion,
     runtimeName,
@@ -35,6 +36,20 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     // Dev-only escape hatch: allow terminating the whole dev process group.
     // This should never be enabled in production runtimes.
     return process.env.OPENCHAMBER_DEV_SHUTDOWN === 'true';
+  };
+
+  const isSameOriginRequest = (req) => {
+    const rawOrigin = typeof req.get === 'function' ? req.get('origin') : '';
+    const rawHost = typeof req.get === 'function' ? req.get('host') : '';
+    if (!rawOrigin || !rawHost) {
+      return false;
+    }
+    try {
+      const origin = new URL(rawOrigin);
+      return origin.host === rawHost;
+    } catch {
+      return false;
+    }
   };
 
   const resolveProcessGroupId = async (pid) => {
@@ -138,9 +153,12 @@ export const registerServerStatusRoutes = (app, dependencies) => {
     });
   });
 
-  app.post('/api/system/dev-shutdown', async (req, res) => {
+  app.post('/api/system/dev-shutdown', express.json({ limit: '64kb' }), async (req, res) => {
     if (!isDevShutdownAllowed()) {
       return res.status(403).json({ ok: false, error: 'Dev shutdown is disabled' });
+    }
+    if (!isSameOriginRequest(req)) {
+      return res.status(403).json({ ok: false, error: 'Invalid origin' });
     }
 
     res.json({ ok: true });

@@ -8,6 +8,8 @@ type DevServerInfo = {
   previewUrlHint?: string;
 };
 
+type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun';
+
 const DEV_COMMAND_PATTERNS = [
   { pattern: /^dev(:.*)?$/i },
   { pattern: /^start(:.*)?$/i },
@@ -48,7 +50,7 @@ export async function detectDevServerCommand(
     const devScript = findDevScript(packageJsonScripts);
     if (devScript) {
       // Determine the package manager command
-      const pm = detectPackageManager();
+      const pm = await detectPackageManager(directory);
       const pmCommand = pm === 'npm' ? 'npm run' : pm === 'yarn' ? 'yarn' : pm === 'pnpm' ? 'pnpm' : pm === 'bun' ? 'bun' : 'npm run';
       return {
         command: `${pmCommand} ${devScript}`,
@@ -74,27 +76,8 @@ export async function detectDevServerCommand(
 
 async function hasStaticIndexHtml(directory: string): Promise<boolean> {
   const target = `${directory}/index.html`;
-  const runtimeFiles = getRegisteredRuntimeAPIs()?.files;
-
-  if (runtimeFiles?.readFile) {
-    try {
-      const result = await runtimeFiles.readFile(target);
-      return typeof result?.content === 'string' && result.content.length > 0;
-    } catch {
-      return false;
-    }
-  }
-
-  try {
-    const response = await fetch(`/api/fs/read?path=${encodeURIComponent(target)}&optional=true`, {
-      cache: 'no-store',
-    });
-    if (!response.ok) return false;
-    const text = await response.text();
-    return text.trim().length > 0;
-  } catch {
-    return false;
-  }
+  const content = await readOptionalTextFile(target);
+  return typeof content === 'string' && content.trim().length > 0;
 }
 
 async function allocatePreviewPort(): Promise<number | null> {
@@ -154,10 +137,59 @@ function findDevScript(scripts: Record<string, string>): string | null {
  * Note: This is intentionally a simple client-side check.
  * For server-side operations, the server's package-manager.js is used.
  */
-function detectPackageManager(): string {
-  // For client-side, we'll default to 'npm' and let the server handle the actual detection
-  // The terminal commands will use the appropriate package manager
+async function detectPackageManager(directory: string): Promise<PackageManager> {
+  const packageJsonContent = await readOptionalTextFile(`${directory}/package.json`);
+  if (packageJsonContent) {
+    try {
+      const pkg = JSON.parse(packageJsonContent) as { packageManager?: unknown };
+      const packageManager = typeof pkg.packageManager === 'string' ? pkg.packageManager.toLowerCase() : '';
+      if (packageManager.startsWith('bun@')) return 'bun';
+      if (packageManager.startsWith('pnpm@')) return 'pnpm';
+      if (packageManager.startsWith('yarn@')) return 'yarn';
+      if (packageManager.startsWith('npm@')) return 'npm';
+    } catch {
+      // Ignore malformed package.json here; readPackageJsonScripts handles it separately.
+    }
+  }
+
+  const lockfiles: Array<[string, PackageManager]> = [
+    ['bun.lock', 'bun'],
+    ['bun.lockb', 'bun'],
+    ['pnpm-lock.yaml', 'pnpm'],
+    ['yarn.lock', 'yarn'],
+    ['package-lock.json', 'npm'],
+  ];
+
+  for (const [fileName, packageManager] of lockfiles) {
+    const content = await readOptionalTextFile(`${directory}/${fileName}`);
+    if (typeof content === 'string' && content.trim().length > 0) {
+      return packageManager;
+    }
+  }
+
   return 'npm';
+}
+
+async function readOptionalTextFile(path: string): Promise<string | null> {
+  const runtimeFiles = getRegisteredRuntimeAPIs()?.files;
+  if (runtimeFiles?.readFile) {
+    try {
+      const result = await runtimeFiles.readFile(path, { optional: true });
+      return typeof result?.content === 'string' ? result.content : null;
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const response = await fetch(`/api/fs/read?path=${encodeURIComponent(path)}&optional=true`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    return response.text();
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -165,21 +197,7 @@ function detectPackageManager(): string {
  */
 export async function readPackageJsonScripts(directory: string): Promise<Record<string, string> | null> {
   try {
-    const target = `${directory}/package.json`;
-
-    // Prefer runtime files API (desktop/VS Code). This avoids relying on the web
-    // server exposing /api/fs/* when the UI is hosted elsewhere.
-    const runtimeFiles = getRegisteredRuntimeAPIs()?.files;
-    const content = runtimeFiles?.readFile
-      ? (await runtimeFiles.readFile(target)).content
-      : await (async () => {
-          const response = await fetch(`/api/fs/read?path=${encodeURIComponent(target)}&optional=true`, {
-            // Avoid conditional requests (304 + empty body breaks JSON parsing).
-            cache: 'no-store',
-          });
-          if (!response.ok) return null;
-          return response.text();
-        })();
+    const content = await readOptionalTextFile(`${directory}/package.json`);
 
     if (content == null) return null;
     const pkg = JSON.parse(content);

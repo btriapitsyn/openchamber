@@ -134,11 +134,16 @@ export const createWebFilesAPI = (): FilesAPI => ({
 
   async readFile(path: string, options): Promise<{ content: string; path: string }> {
     const target = normalizePath(path);
-    const params = new URLSearchParams({ path: target, optional: 'true' });
+    const params = new URLSearchParams({ path: target });
     if (options?.allowOutsideWorkspace) {
       params.set('allowOutsideWorkspace', 'true');
     }
-    const response = await fetch(`/api/fs/read?${params.toString()}`);
+    if (options?.optional) {
+      params.set('optional', 'true');
+    }
+    const response = await fetch(`/api/fs/read?${params.toString()}`, {
+      cache: options?.optional ? 'no-store' : 'default',
+    });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: response.statusText }));

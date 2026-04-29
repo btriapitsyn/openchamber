@@ -368,7 +368,7 @@ export const PlanView: React.FC<PlanViewProps> = ({ targetPath = null }) => {
 
       const runtimeFiles = getRegisteredRuntimeAPIs()?.files;
       if (runtimeFiles?.readFile) {
-        const result = await runtimeFiles.readFile(path);
+        const result = await runtimeFiles.readFile(path, { optional: true });
         return result?.content ?? '';
       }
 

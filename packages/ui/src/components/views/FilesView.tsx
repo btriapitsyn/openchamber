@@ -1223,19 +1223,22 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     };
   }, [currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored]);
 
-  const readFile = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean }): Promise<string> => {
+  const readFile = React.useCallback(async (path: string, options?: { allowOutsideWorkspace?: boolean; optional?: boolean }): Promise<string> => {
     if (files.readFile) {
       const result = await files.readFile(path, options);
       return result.content ?? '';
     }
 
-    const params = new URLSearchParams({ path, optional: 'true' });
+    const params = new URLSearchParams({ path });
     if (options?.allowOutsideWorkspace) {
       params.set('allowOutsideWorkspace', 'true');
     }
+    if (options?.optional) {
+      params.set('optional', 'true');
+    }
     const response = await fetch(`/api/fs/read?${params.toString()}`, {
       // Avoid conditional requests (304 + empty body).
-      cache: 'no-store',
+      cache: options?.optional ? 'no-store' : 'default',
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: response.statusText }));

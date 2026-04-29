@@ -26,7 +26,7 @@ const classifyReadError = (error: unknown): ContextFileOpenFailureReason => {
 
 const readFileContent = async (files: FilesAPI, path: string): Promise<string> => {
   if (files.readFile) {
-    const result = await files.readFile(path, { allowOutsideWorkspace: true });
+    const result = await files.readFile(path, { allowOutsideWorkspace: true, optional: true });
     return result.content ?? '';
   }
 
