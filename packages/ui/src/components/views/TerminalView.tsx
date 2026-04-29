@@ -1031,7 +1031,7 @@ export const TerminalView: React.FC = () => {
 
     return (
         <div className="flex h-full flex-col overflow-hidden bg-[var(--surface-background)]">
-            <div className={cn('sticky top-0 z-20 shrink-0 bg-[var(--surface-background)] text-xs', isMobile ? 'px-4 py-1.5' : 'px-5 py-2')}>
+            <div className={cn('sticky top-0 z-20 shrink-0 bg-[var(--surface-background)] text-xs', isMobile ? 'px-4 py-1.5' : runtime.platform === 'desktop' ? 'pl-5 pr-20 py-2' : 'px-5 py-2')}>
                 {enableTabs && directoryTerminalState ? (
                     <div className={cn('pl-1 pr-1 flex items-center gap-2', isMobile ? 'mt-1' : 'mt-2')}>
                         <div className={cn('min-w-0 flex-1 overflow-x-auto', isMobile ? 'pb-0.5' : 'pb-1')}>
@@ -1093,7 +1093,7 @@ export const TerminalView: React.FC = () => {
                             </div>
                         </div>
 
-                        <div className="flex shrink-0 items-center gap-1 overflow-x-auto pb-1">
+                        <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
                             {previewUrl ? (
                                 <Button
                                     type="button"

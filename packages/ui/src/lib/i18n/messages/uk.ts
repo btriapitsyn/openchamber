@@ -3,6 +3,8 @@ import { settingsDict } from './uk.settings';
 
 export const dict: Record<I18nKey, string> = {
   ...settingsDict,
+  "common.loading": "Завантаження...",
+  "common.unavailable": "Недоступно",
   "common.language.english": "англійська",
   "common.language.simplifiedChinese": "Китайська (спрощена)",
   "common.language.ukrainian": "Українська",
@@ -567,6 +569,8 @@ export const dict: Record<I18nKey, string> = {
   "gitView.pr.actions.shareComments": "Поділитися коментарями",
   "gitView.pr.actions.shareCommentsAria": "Надсилати агенту коментарі PR",
   "gitView.pr.actions.toggleDraftAria": "Перемкнути стан чернетки",
+  "gitView.pr.actions.refresh": "Оновити статус PR",
+  "gitView.pr.actions.refreshAria": "Оновити статус pull request",
   "gitView.pr.additionalContext.added": "Додано",
   "gitView.pr.additionalContext.hint": "Додати додатковий контекст для кращої якості огляду.",
   "gitView.pr.additionalContext.optional": "Додатково",

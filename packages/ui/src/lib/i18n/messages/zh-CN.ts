@@ -3,6 +3,8 @@ import { settingsDict } from './zh-CN.settings';
 
 export const dict: Record<I18nKey, string> = {
   ...settingsDict,
+  'common.loading': '加载中...',
+  'common.unavailable': '不可用',
   'common.language.english': 'English',
   'common.language.simplifiedChinese': '简体中文',
   'common.language.ukrainian': '乌克兰语',
@@ -567,6 +569,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.pr.actions.shareComments': '分享评论',
   'gitView.pr.actions.shareCommentsAria': '将拉取请求评论发送给智能体',
   'gitView.pr.actions.toggleDraftAria': '切换草稿状态',
+  'gitView.pr.actions.refresh': '刷新 PR 状态',
+  'gitView.pr.actions.refreshAria': '刷新拉取请求状态',
   'gitView.pr.additionalContext.added': '已添加',
   'gitView.pr.additionalContext.hint': '添加额外上下文可提升审查质量。',
   'gitView.pr.additionalContext.optional': '可选',

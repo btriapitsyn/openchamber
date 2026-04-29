@@ -2,6 +2,8 @@ import { settingsDict } from './en.settings';
 
 export const dict = {
   ...settingsDict,
+  'common.loading': 'Loading...',
+  'common.unavailable': 'Unavailable',
   'common.language.english': 'English',
   'common.language.simplifiedChinese': 'Chinese (Simplified)',
   'common.language.ukrainian': 'Ukrainian',
@@ -566,6 +568,8 @@ export const dict = {
   'gitView.pr.actions.shareComments': 'Share comments',
   'gitView.pr.actions.shareCommentsAria': 'Send pull request comments to agent',
   'gitView.pr.actions.toggleDraftAria': 'Toggle draft state',
+  'gitView.pr.actions.refresh': 'Refresh PR status',
+  'gitView.pr.actions.refreshAria': 'Refresh pull request status',
   'gitView.pr.additionalContext.added': 'Added',
   'gitView.pr.additionalContext.hint': 'Add extra context for better review quality.',
   'gitView.pr.additionalContext.optional': 'Optional',
