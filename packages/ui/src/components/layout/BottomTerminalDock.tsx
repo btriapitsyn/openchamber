@@ -135,11 +135,13 @@ export const BottomTerminalDock: React.FC<BottomTerminalDockProps> = ({ isOpen, 
       ref={dockRef}
       className={cn(
         'flex overflow-hidden border-t border-border bg-sidebar',
-        isFullscreen ? 'absolute inset-0 z-40' : 'relative',
+        isFullscreen ? 'absolute inset-x-0 bottom-0 z-40' : 'relative',
         isResizing ? 'transition-none' : 'transition-[height] duration-300 ease-in-out',
         !isOpen && 'border-t-0'
       )}
-      style={isFullscreen ? undefined : {
+      style={isFullscreen ? {
+        top: 'var(--oc-header-height, 48px)',
+      } : {
         height: `${appliedHeight}px`,
         minHeight: `${appliedHeight}px`,
         maxHeight: `${appliedHeight}px`,
