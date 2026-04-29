@@ -670,7 +670,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
             <ErrorBoundary>{renderPageSidebar(settingsSlug, {})}</ErrorBoundary>
           </div>
           <div className="flex-1 overflow-auto scrollbar-none bg-background">
-            <div className="mx-auto w-full max-w-3xl">
+            <div className="mx-auto h-full w-full max-w-3xl">
               <ErrorBoundary>{renderPageContent(settingsSlug)}</ErrorBoundary>
             </div>
           </div>
@@ -680,7 +680,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
 
     return (
       <div className="h-full overflow-auto scrollbar-none bg-background">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto h-full w-full max-w-3xl">
           <ErrorBoundary>{renderPageContent(settingsSlug)}</ErrorBoundary>
         </div>
       </div>
