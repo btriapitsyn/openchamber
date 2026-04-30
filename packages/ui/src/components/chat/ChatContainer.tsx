@@ -551,6 +551,7 @@ export const ChatContainer: React.FC = () => {
         isPinned,
         isOverflowing,
         isProgrammaticFollowActive,
+        clearRestoreInProgress,
     } = useChatScrollManager({
         currentSessionId,
         sessionMessageCount,
@@ -578,15 +579,32 @@ export const ChatContainer: React.FC = () => {
         isPinned,
         isOverflowing,
     });
-    const { loadEarlier, resumeToBottomInstant } = timelineController;
+    const { loadEarlier, resumeToBottomInstant, restoreSavedScrollPosition } = timelineController;
 
     const runLatestInstantResume = React.useCallback(async () => {
         if (!currentSessionId) {
             scrollToBottom({ instant: true, force: true });
             return;
         }
+
+        // Check if this session has a saved non-bottom scroll position.
+        const savedMemState = sessionMemoryStateMap.get(currentSessionId);
+        const savedPos = savedMemState?.scrollPosition;
+        if (savedPos) {
+            const savedMaxScroll = Math.max(0, savedPos.scrollHeight - savedPos.clientHeight);
+            // Use the same pixel threshold as the pin logic: 10% of clientHeight, clamped.
+            const threshold = Math.max(24, Math.min(200, savedPos.clientHeight * 0.10));
+            const distanceFromSavedBottom = savedMaxScroll - savedPos.scrollTop;
+            if (savedMaxScroll > 0 && distanceFromSavedBottom > threshold) {
+                await restoreSavedScrollPosition(savedPos);
+                clearRestoreInProgress(currentSessionId);
+                return;
+            }
+        }
+
         await resumeToBottomInstant();
-    }, [currentSessionId, resumeToBottomInstant, scrollToBottom]);
+        clearRestoreInProgress(currentSessionId);
+    }, [clearRestoreInProgress, currentSessionId, restoreSavedScrollPosition, resumeToBottomInstant, scrollToBottom, sessionMemoryStateMap]);
 
     const resumeToLatestInstant = React.useCallback(() => {
         void runLatestInstantResume();
