@@ -80,6 +80,7 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
             setVersion(data.openchamberVersion || null);
           }
         } catch {
+          // Ignored — fallback to null version is fine
         }
       };
       fetchVersion();
