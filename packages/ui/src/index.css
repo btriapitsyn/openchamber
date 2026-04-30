@@ -62,6 +62,12 @@ textarea[data-chat-input="true"]:focus-visible {
   cursor: not-allowed;
 }
 
+:root.light .message-content-text::selection,
+:root.light .message-content-text ::selection {
+  background: color-mix(in srgb, var(--interactive-border-focus) 18%, transparent);
+  color: var(--surface-foreground);
+}
+
 .oc-cm-selected-line {
   background: color-mix(in srgb, var(--primary-base) 22%, transparent);
 }
