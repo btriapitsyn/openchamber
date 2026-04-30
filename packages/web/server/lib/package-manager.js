@@ -707,7 +707,7 @@ export async function checkForUpdates(options = {}) {
     if (remote) {
       if (remote.available) {
         const npmLatest = await getLatestVersion();
-        if (!npmLatest || compareVersions(npmLatest, currentVersion) <= 0) {
+        if (!npmLatest || compareVersions(npmLatest, remote.version) < 0) {
           remote.available = false;
         }
       }
