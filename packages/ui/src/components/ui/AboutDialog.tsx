@@ -10,8 +10,6 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 
-declare const __APP_VERSION__: string | undefined;
-
 interface AboutDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -69,12 +67,23 @@ export const AboutDialog: React.FC<AboutDialogProps> = ({
           const v = await getVersion();
           setVersion(v);
         } catch {
-          setVersion(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
+          setVersion(null);
         }
       };
       fetchVersion();
     } else {
-      setVersion(typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : null);
+      const fetchVersion = async () => {
+        try {
+          const response = await fetch('/api/system/info');
+          if (response.ok) {
+            const data = await response.json();
+            setVersion(data.openchamberVersion || null);
+          }
+        } catch {
+          // Ignored — fallback to null version is fine
+        }
+      };
+      fetchVersion();
     }
   }, [open]);
 
