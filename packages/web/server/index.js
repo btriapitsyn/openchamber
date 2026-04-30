@@ -35,6 +35,8 @@ import {
   createGlobalUiEventBroadcaster,
   createGlobalMessageStreamHub,
   createMessageStreamWsRuntime,
+  DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
+  UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS,
 } from './lib/event-stream/index.js';
 import { createFsSearchRuntime as createFsSearchRuntimeFactory } from './lib/fs/search.js';
 import { createOpenCodeLifecycleRuntime } from './lib/opencode/lifecycle.js';
@@ -380,6 +382,11 @@ const sessionRuntime = createSessionRuntime({
   getNotificationClients: () => uiNotificationClients,
   broadcastEvent: broadcastGlobalUiEvent,
 });
+
+const getActiveSessionCount = () => {
+  const snapshot = sessionRuntime.getSessionActivitySnapshot();
+  return Object.values(snapshot).filter((entry) => entry.type === 'busy').length;
+};
 
 const projectConfigRuntime = createProjectConfigRuntime({
   fsPromises,
@@ -881,6 +888,7 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
   buildAugmentedPath,
   buildManagedOpenCodePath,
   getManagedOpenCodeShellEnvSnapshot: getLoginShellEnvSnapshot,
+  getActiveSessionCount,
 });
 
 const restartOpenCode = (...args) => openCodeLifecycleRuntime.restartOpenCode(...args);
@@ -1188,6 +1196,10 @@ async function main(options = {}) {
     globalEventHub: globalMessageStreamHub,
     processForwardedEventPayload,
     messageStreamWsClients: uiNotificationWsClients,
+    upstreamStallTimeoutMs:
+      getActiveSessionCount() > 1
+        ? UPSTREAM_STALL_TIMEOUT_CONCURRENT_MS
+        : DEFAULT_UPSTREAM_STALL_TIMEOUT_MS,
     terminalHeartbeatIntervalMs: TERMINAL_INPUT_WS_HEARTBEAT_INTERVAL_MS,
     terminalRebindWindowMs: TERMINAL_INPUT_WS_REBIND_WINDOW_MS,
     terminalMaxRebindsPerWindow: TERMINAL_INPUT_WS_MAX_REBINDS_PER_WINDOW,
