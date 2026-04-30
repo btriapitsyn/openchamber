@@ -8,11 +8,13 @@ import {
 } from '@/components/chat/lib/scroll/scrollIntent';
 
 import { useScrollEngine } from './useScrollEngine';
+import { useViewportStore } from '@/sync/viewport-store';
 
 export type ContentChangeReason = 'text' | 'structural' | 'permission';
 
 interface SessionMemoryState {
     viewportAnchor: number;
+    scrollPosition?: { scrollTop: number; scrollHeight: number; clientHeight: number };
     isStreaming: boolean;
     lastAccessedAt: number;
     backgroundMessageCount: number;
@@ -28,7 +30,7 @@ interface UseChatScrollManagerOptions {
     sessionPermissions: unknown[];
     sessionIsWorking: boolean;
     sessionMemoryState: Map<string, SessionMemoryState>;
-    updateViewportAnchor: (sessionId: string, anchor: number) => void;
+    updateViewportAnchor: (sessionId: string, anchor: number, scrollPosition?: { scrollTop: number; scrollHeight: number; clientHeight: number }) => void;
     isSyncing: boolean;
     isMobile: boolean;
     chatRenderMode?: 'sorted' | 'live';
@@ -64,6 +66,7 @@ interface UseChatScrollManagerResult {
     isPinned: boolean;
     isOverflowing: boolean;
     isProgrammaticFollowActive: boolean;
+    clearRestoreInProgress: (sessionId: string) => void;
 }
 
 const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 200;
@@ -120,9 +123,14 @@ export const useChatScrollManager = ({
     const followModeRef = React.useRef<FollowMode>('none');
     const autoScrollMarkerRef = React.useRef<AutoScrollMarker | null>(null);
     const viewportAnchorTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const pendingViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
-    const lastViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number } | null>(null);
+    const pendingViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number; scrollPosition?: { scrollTop: number; scrollHeight: number; clientHeight: number } } | null>(null);
+    const lastViewportAnchorRef = React.useRef<{ sessionId: string; anchor: number; scrollTop: number } | null>(null);
     const lastViewportAnchorWriteAtRef = React.useRef<number>(0);
+    // Guard: suppress scroll-position saving during session transition window.
+    // Without this, scroll events from content reshaping after session switch
+    // overwrite the saved position before restoreSavedScrollPosition reads it.
+    // Stores the session ID being restored; cleared after restoration completes.
+    const restoreInProgressForRef = React.useRef<string | null>(null);
 
     const markAutoScroll = React.useCallback((top: number) => {
         autoScrollMarkerRef.current = {
@@ -292,25 +300,28 @@ export const useChatScrollManager = ({
             return;
         }
 
+        // Skip only when both anchor AND pixel position are unchanged.
         const lastPersisted = lastViewportAnchorRef.current;
-        if (lastPersisted && lastPersisted.sessionId === pending.sessionId && lastPersisted.anchor === pending.anchor) {
+        if (lastPersisted
+            && lastPersisted.sessionId === pending.sessionId
+            && lastPersisted.anchor === pending.anchor
+            && lastPersisted.scrollTop === (pending.scrollPosition?.scrollTop ?? 0)) {
             pendingViewportAnchorRef.current = null;
             return;
         }
 
-        updateViewportAnchor(pending.sessionId, pending.anchor);
-        lastViewportAnchorRef.current = pending;
+        updateViewportAnchor(pending.sessionId, pending.anchor, pending.scrollPosition);
+        lastViewportAnchorRef.current = { sessionId: pending.sessionId, anchor: pending.anchor, scrollTop: pending.scrollPosition?.scrollTop ?? 0 };
         pendingViewportAnchorRef.current = null;
         lastViewportAnchorWriteAtRef.current = Date.now();
     }, [updateViewportAnchor]);
 
-    const queueViewportAnchor = React.useCallback((sessionId: string, anchor: number) => {
-        const lastPersisted = lastViewportAnchorRef.current;
-        if (lastPersisted && lastPersisted.sessionId === sessionId && lastPersisted.anchor === anchor) {
-            return;
-        }
+    const queueViewportAnchor = React.useCallback((sessionId: string, anchor: number, scrollPosition?: { scrollTop: number; scrollHeight: number; clientHeight: number }) => {
+        // Always update pending with latest pixel position, even if anchor
+        // hasn't changed — the user may have scrolled within the same
+        // coarse message-index bucket.
+        pendingViewportAnchorRef.current = { sessionId, anchor, scrollPosition };
 
-        pendingViewportAnchorRef.current = { sessionId, anchor };
         const now = Date.now();
         const elapsed = now - lastViewportAnchorWriteAtRef.current;
         if (elapsed >= VIEWPORT_ANCHOR_MIN_UPDATE_MS) {
@@ -369,6 +380,15 @@ export const useChatScrollManager = ({
         }
 
         scrollEngine.handleScroll();
+
+        // During session restore, skip all pin/unpin and position-save logic.
+        // The session-switch effect and restoreSavedScrollPosition handle
+        // restoration; intermediate scroll events from content reshaping must
+        // not override the saved position or pinned state.
+        if (restoreInProgressForRef.current === currentSessionId) {
+            return;
+        }
+
         schedulePinnedStateAndIndicators();
 
         // Handle pin/unpin logic
@@ -396,7 +416,7 @@ export const useChatScrollManager = ({
         const { scrollTop, scrollHeight, clientHeight } = container;
         const position = (scrollTop + clientHeight / 2) / Math.max(scrollHeight, 1);
         const estimatedIndex = Math.floor(position * sessionMessageCount);
-        queueViewportAnchor(currentSessionId, estimatedIndex);
+        queueViewportAnchor(currentSessionId, estimatedIndex, { scrollTop, scrollHeight, clientHeight });
     }, [
         currentSessionId,
         getDistanceFromBottom,
@@ -498,7 +518,10 @@ export const useChatScrollManager = ({
         };
     }, [handleScrollEvent, handleWheelIntent, scrollEngine, setFollowMode, updatePinnedState]);
 
-    // Session switch - always start pinned at bottom
+    // Session switch — decide initial pinned state based on saved scroll position.
+    // If the user had scrolled away from bottom in this session before, start unpinned
+    // so that the restore logic in ChatContainer can set the position without
+    // being overridden by pinned-to-bottom logic.
     React.useEffect(() => {
         if (!currentSessionId || currentSessionId === lastSessionIdRef.current) {
             return;
@@ -509,12 +532,42 @@ export const useChatScrollManager = ({
         flushViewportAnchor();
         pendingViewportAnchorRef.current = null;
 
-        // Always start pinned at bottom on session switch
-        setFollowMode(sessionIsWorking ? 'smooth' : 'none');
-        updatePinnedState(true);
-        setShowScrollButtonState(false);
-    }, [currentSessionId, flushViewportAnchor, sessionIsWorking, setFollowMode, setShowScrollButtonState, updatePinnedState]);
+        // Kill any in-flight scroll animations/follow-loops from the previous session.
+        // Without this, a spring animation or follow-burst from the old session
+        // continues driving scrollTop and triggers repin via handleScrollEvent.
+        scrollEngine.cancelAll();
 
+        // Mark session transition — suppresses scrollPosition saves
+        // so intermediate scroll events don't overwrite the saved position
+        // before the restore logic in ChatContainer reads it.
+        restoreInProgressForRef.current = currentSessionId;
+
+        // Check if this session has a saved non-bottom scroll position.
+        const savedMemState = useViewportStore.getState().sessionMemoryState.get(currentSessionId);
+        const savedScrollPos = savedMemState?.scrollPosition;
+        let hasNonBottomPosition = false;
+
+        if (savedScrollPos) {
+            const savedMaxScroll = Math.max(0, savedScrollPos.scrollHeight - savedScrollPos.clientHeight);
+            // Use the same pixel threshold as the pin logic for consistency.
+            const threshold = Math.max(24, Math.min(200, savedScrollPos.clientHeight * 0.10));
+            const distanceFromSavedBottom = savedMaxScroll - savedScrollPos.scrollTop;
+            if (savedMaxScroll > 0 && distanceFromSavedBottom > threshold) {
+                hasNonBottomPosition = true;
+            }
+        }
+
+        if (hasNonBottomPosition) {
+            setFollowMode('none');
+            updatePinnedState(false);
+        } else {
+            setFollowMode(sessionIsWorking ? 'smooth' : 'none');
+            updatePinnedState(true);
+            setShowScrollButtonState(false);
+        }
+    }, [currentSessionId, flushViewportAnchor, scrollEngine, sessionIsWorking, setFollowMode, setShowScrollButtonState, updatePinnedState]);
+
+    // Clear the restore-in-progress flag after the restore has committed.
     // Maintain pin-to-bottom when content changes
     React.useEffect(() => {
         if (!sessionIsWorking) {
@@ -787,6 +840,12 @@ export const useChatScrollManager = ({
         };
     }, [currentSessionId, onActiveTurnChange, scrollRef, sessionMessageCount]);
 
+    const clearRestoreInProgress = React.useCallback((sessionId: string) => {
+        if (restoreInProgressForRef.current === sessionId) {
+            restoreInProgressForRef.current = null;
+        }
+    }, []);
+
     return {
         scrollRef,
         handleMessageContentChange,
@@ -799,5 +858,6 @@ export const useChatScrollManager = ({
         isPinned,
         isOverflowing,
         isProgrammaticFollowActive: scrollEngine.isFollowingBottom,
+        clearRestoreInProgress,
     };
 };
