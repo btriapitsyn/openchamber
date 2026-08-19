@@ -390,6 +390,54 @@ export interface GitLogResponse {
   total: number;
 }
 
+export type GitHistoryRefKind = 'head' | 'local' | 'remote' | 'tag';
+
+export interface GitHistoryRef {
+  id: string;
+  name: string;
+  revision: string | null;
+  kind: GitHistoryRefKind;
+  category: 'branches' | 'remote-branches' | 'tags';
+}
+
+export interface GitHistoryRefsResponse {
+  refs: GitHistoryRef[];
+  current: GitHistoryRef | null;
+  upstream: GitHistoryRef | null;
+  base: GitHistoryRef | null;
+  snapshot: string;
+}
+
+export interface GitHistoryItem {
+  id: string;
+  parentIds: string[];
+  subject: string;
+  message: string;
+  author: string;
+  authorEmail: string;
+  timestamp: string;
+  statistics: { files: number; insertions: number; deletions: number };
+  references: GitHistoryRef[];
+}
+
+export interface GitHistoryPage {
+  items: GitHistoryItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+  refsSnapshot: string;
+}
+
+export interface GitHistoryOptions {
+  refs?: string[];
+  all?: boolean;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface GitHistoryMergeBaseResponse {
+  mergeBase: string | null;
+}
+
 export interface CommitFileEntry {
   path: string;
   previousPath?: string;
@@ -536,6 +584,9 @@ interface GitWorktreeAPI {
 export interface GitAPI {
   checkIsGitRepository(directory: string): Promise<boolean>;
   getGitStatus(directory: string, options?: { mode?: 'light'; fresh?: boolean }): Promise<GitStatus>;
+  getGitHistoryRefs?(directory: string): Promise<GitHistoryRefsResponse>;
+  getGitHistory?(directory: string, options: GitHistoryOptions): Promise<GitHistoryPage>;
+  getGitHistoryMergeBase?(directory: string, options: { refs: string[] }): Promise<GitHistoryMergeBaseResponse>;
   getGitDiff(directory: string, options: GetGitDiffOptions): Promise<GitDiffResponse>;
   getGitFileDiff(directory: string, options: GetGitFileDiffOptions): Promise<GitFileDiffResponse>;
   getGitRangeDiff?(directory: string, options: GetGitRangeDiffOptions): Promise<GitDiffResponse>;

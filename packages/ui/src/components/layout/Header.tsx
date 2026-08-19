@@ -37,6 +37,7 @@ import { useDeviceInfo, useTabletStandalonePwaRuntime } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo, type ShortcutActionId } from '@/lib/shortcuts';
 import { useKeybinds } from '@/hooks/useKeybind';
+import { getWorkingTreeDiffDestination } from '@/lib/getWorkingTreeDiffDestination';
 import {
 } from '@/lib/quota/model-families';
 
@@ -287,6 +288,9 @@ export const Header: React.FC = () => {
   const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
   const openContextOverview = useUIStore((state) => state.openContextOverview);
   const closeContextPanel = useUIStore((state) => state.closeContextPanel);
+  const activeMainTab = useUIStore((state) => state.activeMainTab);
+  const gitReviewLayout = useUIStore((state) => state.gitReviewLayout);
+  const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
   const shortcutOverrides = useUIStore((state) => state.shortcutOverrides);
   const sessionTabsEnabled = useUIStore((state) => state.sessionTabsEnabled);
 
@@ -1251,6 +1255,19 @@ export const Header: React.FC = () => {
     return formatShortcutForDisplay(getEffectiveShortcutCombo(actionId, shortcutOverrides));
   }, [shortcutOverrides]);
 
+  useEffect(() => {
+    const allowDesktopMainDiff = getWorkingTreeDiffDestination({
+      reviewLayout: gitReviewLayout,
+      isMobile,
+      isVSCode,
+    }) === 'main';
+    // Project actions may intentionally promote the terminal to the desktop
+    // main view, and diagram clicks open the diagram viewer; every other
+    // legacy main tab now lives in the context panel on desktop.
+    if (!isMobile && activeMainTab !== 'chat' && activeMainTab !== 'terminal' && activeMainTab !== 'diagram' && !(allowDesktopMainDiff && activeMainTab === 'diff')) {
+      setActiveMainTab('chat');
+    }
+  }, [activeMainTab, gitReviewLayout, isMobile, isVSCode, setActiveMainTab]);
 
 
   useKeybinds({

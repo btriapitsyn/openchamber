@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import { animate, motion, useMotionValue } from 'motion/react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { SidebarTopBar } from './SidebarTopBar';
 import { TitlebarLeftControls } from './TitlebarLeftControls';
+import { ProjectContextPanel } from './RightSidebarTabs';
 import { ContextPanel } from './ContextPanel';
 import { ContextPanelRail } from './ContextPanelRail';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
@@ -17,6 +19,8 @@ import { ArchiveView } from '@/components/views/ArchiveView';
 import { WorktreesView } from '@/components/views/WorktreesView';
 import { DiffWorkerProvider } from '@/contexts/DiffWorkerProvider';
 import { MultiRunLauncher } from '@/components/multirun';
+import { TerminalView } from '@/components/views/TerminalView';
+import { DrawerProvider } from '@/contexts/DrawerContext';
 
 import { useUIStore } from '@/stores/useUIStore';
 import { useSessionUIStore } from '@/sync/session-ui-store';
@@ -31,9 +35,25 @@ import { useDeviceInfo } from '@/lib/device';
 import { cn } from '@/lib/utils';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 import { useSessionListSync } from '@/components/session/sidebar/list/useSessionListSync';
+import { isVSCodeRuntime } from '@/lib/desktop';
+import { getWorkingTreeDiffDestination } from '@/lib/getWorkingTreeDiffDestination';
+import { useI18n } from '@/lib/i18n';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/icon/Icon';
 
 import { ChatView } from '@/components/views/ChatView';
 
+// Keep TerminalView eager: the bottom dock reserves its height immediately, so
+// suspending here leaves a large blank panel on slower machines.
+// Other heavy views stay on-demand to reduce initial bundle parse time:
+// DiffView/FilesView pull the CodeMirror and @pierre/diffs stacks into the
+// startup graph when imported statically.
+const PlanView = lazyWithChunkRecovery(() => import('@/components/views/PlanView').then(m => ({ default: m.PlanView })));
+const GitView = lazyWithChunkRecovery(() => import('@/components/views/GitView').then(m => ({ default: m.GitView })));
+const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then(m => ({ default: m.DiffView })));
+const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then(m => ({ default: m.FilesView })));
+const DiagramView = lazyWithChunkRecovery(() => import('@/components/views/DiagramView').then(m => ({ default: m.DiagramView })));
+const SettingsView = lazyWithChunkRecovery(() => import('@/components/views/SettingsView').then(m => ({ default: m.SettingsView })));
 const SettingsWindow = lazyWithChunkRecovery(() => import('@/components/views/SettingsWindow').then(m => ({ default: m.SettingsWindow })));
 
 /**
@@ -45,8 +65,13 @@ const SettingsWindow = lazyWithChunkRecovery(() => import('@/components/views/Se
 export const MainLayout: React.FC = () => {
     useSessionListSync({ isVSCode: false });
     useTerminalSessionKeepalive();
+    const { t } = useI18n();
     const isSidebarOpen = useUIStore((state) => state.isSidebarOpen);
+    const activeSurface = useUIStore((state) => state.activeSurface);
+    const gitReviewLayout = useUIStore((state) => state.gitReviewLayout);
     const setIsMobile = useUIStore((state) => state.setIsMobile);
+    const setActiveMainTab = useUIStore((state) => state.setActiveMainTab);
+    const isSessionSwitcherOpen = useUIStore((state) => state.isSessionSwitcherOpen);
     const isSettingsDialogOpen = useUIStore((state) => state.isSettingsDialogOpen);
     const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
     // Mount the windowed settings dialog only after its first open: rendering
@@ -85,6 +110,165 @@ export const MainLayout: React.FC = () => {
         };
     }, []);
     const { isMobile } = useDeviceInfo();
+    const isVSCode = React.useMemo(() => isVSCodeRuntime(), []);
+    const allowDesktopMainDiff = React.useMemo(() => {
+        return getWorkingTreeDiffDestination({
+            reviewLayout: gitReviewLayout,
+            isMobile,
+            isVSCode,
+        }) === 'main';
+    }, [gitReviewLayout, isMobile, isVSCode]);
+    const mobilePanelsResetRef = React.useRef(false);
+
+    // Mobile drawer state
+    const [mobileLeftDrawerOpen, setMobileLeftDrawerOpen] = React.useState(false);
+    const [mobileRightSidebarOpen, setMobileRightSidebarOpen] = React.useState(false);
+    const [mobileLeftDrawerVisible, setMobileLeftDrawerVisible] = React.useState(false);
+    const [mobileRightDrawerVisible, setMobileRightDrawerVisible] = React.useState(false);
+    const setMobileSessionPanelOpen = React.useCallback((open: boolean) => {
+        setMobileLeftDrawerOpen(open);
+        useUIStore.getState().setSessionSwitcherOpen(open);
+    }, []);
+    const initialDrawerWidthRef = React.useRef(typeof window === 'undefined' ? 0 : window.innerWidth);
+
+    // Left drawer motion value
+    const leftDrawerX = useMotionValue(-initialDrawerWidthRef.current);
+    const leftDrawerWidth = useRef(0);
+
+    // Right drawer motion value
+    const rightDrawerX = useMotionValue(initialDrawerWidthRef.current);
+    const rightDrawerWidth = useRef(0);
+
+    // Compute drawer width
+    useEffect(() => {
+        if (isMobile) {
+            leftDrawerWidth.current = window.innerWidth;
+            rightDrawerWidth.current = window.innerWidth;
+        }
+    }, [isMobile]);
+
+    // Sync left drawer state and motion value
+    useEffect(() => {
+        if (!isMobile) {
+            setMobileLeftDrawerVisible(false);
+            return;
+        }
+        if (mobileLeftDrawerOpen) {
+            setMobileLeftDrawerVisible(true);
+        }
+        animate(leftDrawerX, mobileLeftDrawerOpen ? 0 : -leftDrawerWidth.current, {
+            type: 'spring',
+            stiffness: 400,
+            damping: 35,
+            mass: 0.8,
+        });
+    }, [mobileLeftDrawerOpen, isMobile, leftDrawerX]);
+
+    // Sync right drawer state and motion value
+    useEffect(() => {
+        if (!isMobile) {
+            setMobileRightDrawerVisible(false);
+            return;
+        }
+        if (mobileRightSidebarOpen) {
+            setMobileRightDrawerVisible(true);
+        }
+        animate(rightDrawerX, mobileRightSidebarOpen ? 0 : rightDrawerWidth.current, {
+            type: 'spring',
+            stiffness: 400,
+            damping: 35,
+            mass: 0.8,
+        });
+    }, [isMobile, mobileRightSidebarOpen, rightDrawerX]);
+
+    useEffect(() => {
+        if (!isMobile) return;
+        return leftDrawerX.on('change', (value) => {
+            const width = leftDrawerWidth.current || initialDrawerWidthRef.current;
+            const visible = mobileLeftDrawerOpen || value > -width + 0.5;
+            setMobileLeftDrawerVisible((previous) => previous === visible ? previous : visible);
+        });
+    }, [isMobile, leftDrawerX, mobileLeftDrawerOpen]);
+
+    useEffect(() => {
+        if (!isMobile) return;
+        return rightDrawerX.on('change', (value) => {
+            const width = rightDrawerWidth.current || initialDrawerWidthRef.current;
+            const visible = mobileRightSidebarOpen || value < width - 0.5;
+            setMobileRightDrawerVisible((previous) => previous === visible ? previous : visible);
+        });
+    }, [isMobile, mobileRightSidebarOpen, rightDrawerX]);
+
+    // Sync session switcher close events to left drawer.
+    useEffect(() => {
+        if (isMobile && !isSessionSwitcherOpen && mobileLeftDrawerOpen) {
+            setMobileSessionPanelOpen(false);
+        }
+    }, [isSessionSwitcherOpen, isMobile, mobileLeftDrawerOpen, setMobileSessionPanelOpen]);
+
+    useEffect(() => {
+        if (!isMobile) {
+            mobilePanelsResetRef.current = false;
+            return;
+        }
+
+        if (mobilePanelsResetRef.current) {
+            return;
+        }
+
+        mobilePanelsResetRef.current = true;
+        setMobileSessionPanelOpen(false);
+        setMobileRightSidebarOpen(false);
+    }, [isMobile, setMobileSessionPanelOpen]);
+
+    useEffect(() => {
+        if (!isMobile || activeSurface !== 'chat' || mobileLeftDrawerOpen || mobileRightSidebarOpen || isSettingsDialogOpen) {
+            return;
+        }
+
+        let disposed = false;
+        let timeoutId: number | undefined;
+
+        const scheduleDraftOpen = (delayMs: number) => {
+            timeoutId = window.setTimeout(() => {
+                if (disposed) {
+                    return;
+                }
+
+                const sessionState = useSessionUIStore.getState();
+                const uiState = useUIStore.getState();
+                if (uiState.activeMainTab !== 'chat' || uiState.isSettingsDialogOpen || sessionState.currentSessionId || sessionState.newSessionDraft?.open) {
+                    return;
+                }
+
+                if (sessionState.isLoading) {
+                    scheduleDraftOpen(250);
+                    return;
+                }
+
+                sessionState.openNewSessionDraft({ automatic: true });
+            }, delayMs);
+        };
+
+        scheduleDraftOpen(500);
+
+        return () => {
+            disposed = true;
+            if (timeoutId !== undefined) {
+                window.clearTimeout(timeoutId);
+            }
+        };
+    }, [activeSurface, isMobile, isSettingsDialogOpen, mobileLeftDrawerOpen, mobileRightSidebarOpen]);
+
+    // Ensure mobile drawers are closed when opening full-screen settings
+    useEffect(() => {
+        if (!isMobile || !isSettingsDialogOpen) {
+            return;
+        }
+
+        setMobileSessionPanelOpen(false);
+        setMobileRightSidebarOpen(false);
+    }, [isMobile, isSettingsDialogOpen, setMobileSessionPanelOpen]);
 
     useUpdatePolling();
 
@@ -97,6 +281,70 @@ export const MainLayout: React.FC = () => {
         }
     }, [isMobile, setIsMobile]);
 
+    const handleToggleMobileRightDrawer = React.useCallback(() => {
+        if (mobileLeftDrawerOpen) {
+            setMobileSessionPanelOpen(false);
+        }
+        setMobileRightSidebarOpen(!mobileRightSidebarOpen);
+    }, [mobileLeftDrawerOpen, mobileRightSidebarOpen, setMobileSessionPanelOpen]);
+
+    const secondaryView = React.useMemo(() => {
+        // Desktop surfaces live in the context panel; the only full-view
+        // overlays left there are the terminal (promoted by project actions)
+        // and the diagram viewer. Mobile keeps the full tab set.
+        if (!isMobile && activeSurface !== 'terminal' && activeSurface !== 'diagram' && !(allowDesktopMainDiff && activeSurface === 'diff')) {
+            return null;
+        }
+        switch (activeSurface) {
+            case 'plan':
+                return <React.Suspense fallback={null}><PlanView /></React.Suspense>;
+            case 'git':
+                return <React.Suspense fallback={null}><GitView isActive={!mobileRightSidebarOpen} /></React.Suspense>;
+            case 'diff':
+                if (!isMobile && allowDesktopMainDiff) {
+                    return (
+                        <div id="main-diff-review-surface" className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+                            <div className="flex items-center border-b border-border px-3 py-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1.5"
+                                    onClick={() => setActiveMainTab('chat')}
+                                    aria-label={t('diffView.actions.backToChat')}
+                                >
+                                    <Icon name="arrow-left-s" className="size-4" />
+                                    <span>{t('diffView.actions.backToChat')}</span>
+                                </Button>
+                            </div>
+                            <div className="min-h-0 flex-1">
+                                <React.Suspense fallback={null}>
+                                    <DiffView
+                                        hideStackedFileSidebar
+                                        stackedDefaultCollapsedAll
+                                        pinSelectedFileHeaderToTopOnNavigate
+                                        flushContent
+                                    />
+                                </React.Suspense>
+                            </div>
+                        </div>
+                    );
+                }
+                return <React.Suspense fallback={null}><DiffView /></React.Suspense>;
+            case 'terminal':
+                return <TerminalView />;
+            case 'files':
+                return <React.Suspense fallback={null}><FilesView /></React.Suspense>;
+            case 'context':
+                return <React.Suspense fallback={null}><ProjectContextPanel /></React.Suspense>;
+            case 'diagram':
+                return <React.Suspense fallback={null}><DiagramView /></React.Suspense>;
+            default:
+                return null;
+        }
+    }, [activeSurface, allowDesktopMainDiff, isMobile, mobileRightSidebarOpen, setActiveMainTab, t]);
+
+    const isChatActive = activeSurface === 'chat';
     return (
         <DiffWorkerProvider>
             <div

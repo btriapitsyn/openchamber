@@ -8,6 +8,9 @@ const gitLibraries = {
   getWorktrees: vi.fn(),
   observeWorktreeTopology: vi.fn(),
   subscribeWorktreeTopologyChanges: vi.fn(),
+  getGitHistoryRefs: vi.fn(),
+  getGitHistory: vi.fn(),
+  getGitHistoryMergeBase: vi.fn(),
 };
 
 vi.mock('./index.js', () => ({
@@ -18,6 +21,9 @@ vi.mock('./index.js', () => ({
   getWorktrees: gitLibraries.getWorktrees,
   observeWorktreeTopology: gitLibraries.observeWorktreeTopology,
   subscribeWorktreeTopologyChanges: gitLibraries.subscribeWorktreeTopologyChanges,
+  getGitHistoryRefs: gitLibraries.getGitHistoryRefs,
+  getGitHistory: gitLibraries.getGitHistory,
+  getGitHistoryMergeBase: gitLibraries.getGitHistoryMergeBase,
 }));
 
 const { registerGitRoutes } = await import('./routes.js');
@@ -58,6 +64,7 @@ const createMockResponse = () => {
     json(payload) {
       body = payload;
     },
+    setHeader() {},
     get statusCode() {
       return statusCode;
     },
@@ -73,6 +80,9 @@ describe('git routes index mutations', () => {
     gitLibraries.unstageFiles.mockReset();
     gitLibraries.isGitRepository.mockReset();
     gitLibraries.getStatus.mockReset();
+    gitLibraries.getGitHistoryRefs.mockReset();
+    gitLibraries.getGitHistory.mockReset();
+    gitLibraries.getGitHistoryMergeBase.mockReset();
   });
 
   it('accepts legacy stage path payloads', async () => {
@@ -216,6 +226,142 @@ describe('git worktree topology routes', () => {
 
     listener({ directories: ['/repo'], at: 123 });
     expect(emitWorktreeChanged).toHaveBeenCalledWith({ directories: ['/repo'], at: 123 });
+  });
+});
+
+describe('git history routes', () => {
+  beforeEach(() => {
+    gitLibraries.getGitHistoryRefs.mockReset();
+    gitLibraries.getGitHistory.mockReset();
+    gitLibraries.getGitHistoryMergeBase.mockReset();
+  });
+
+  it('requires a directory for refs discovery', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('GET', '/api/git/history/refs')({ query: {} }, response);
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({ error: 'directory parameter is required' });
+  });
+
+  it('rejects invalid history ref payloads before invoking git', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+
+    const emptyResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: [] } },
+      emptyResponse,
+    );
+    expect(emptyResponse.statusCode).toBe(400);
+    expect(gitLibraries.getGitHistory).not.toHaveBeenCalled();
+
+    const optionResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: ['--all'] } },
+      optionResponse,
+    );
+    expect(optionResponse.statusCode).toBe(400);
+    expect(optionResponse.body).toEqual({ error: 'refs must not contain option-like values' });
+
+    const cursorResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: ['HEAD'], cursor: '%%%bad%%%' } },
+      cursorResponse,
+    );
+    expect(cursorResponse.statusCode).toBe(400);
+    expect(cursorResponse.body).toEqual({ error: 'cursor is malformed' });
+
+    const limitResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: ['HEAD'], limit: '500' } },
+      limitResponse,
+    );
+    expect(limitResponse.statusCode).toBe(400);
+    expect(limitResponse.body).toEqual({ error: 'limit must be between 1 and 100' });
+  });
+
+  it('returns bounded 4xx responses for service validation failures', async () => {
+    gitLibraries.getGitHistory.mockRejectedValue(Object.assign(new Error('Unknown ref: refs/heads/missing'), {
+      statusCode: 400,
+    }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: ['refs/heads/missing'] } },
+      response,
+    );
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({ error: 'Unknown ref: refs/heads/missing' });
+  });
+
+  it('passes repeated refs through without comma ambiguity', async () => {
+    gitLibraries.getGitHistory.mockResolvedValue({ items: [], nextCursor: null, hasMore: false, refsSnapshot: 'snap' });
+    gitLibraries.getGitHistoryMergeBase.mockResolvedValue({ mergeBase: null });
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+
+    const historyResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: ['HEAD', 'refs/heads/main'], limit: '25' } },
+      historyResponse,
+    );
+    expect(historyResponse.statusCode).toBe(200);
+    expect(gitLibraries.getGitHistory).toHaveBeenCalledWith('/repo', {
+      refs: ['HEAD', 'refs/heads/main'],
+      cursor: undefined,
+      limit: 25,
+    });
+
+    const mergeBaseResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history/merge-base')(
+      { query: { directory: '/repo', refs: ['HEAD', 'refs/heads/main'] } },
+      mergeBaseResponse,
+    );
+    expect(mergeBaseResponse.statusCode).toBe(200);
+    expect(gitLibraries.getGitHistoryMergeBase).toHaveBeenCalledWith('/repo', {
+      refs: ['HEAD', 'refs/heads/main'],
+    });
+  });
+
+  it('accepts canonical all and rejects ambiguous all-plus-refs requests', async () => {
+    gitLibraries.getGitHistory.mockResolvedValue({ items: [], nextCursor: null, hasMore: false, refsSnapshot: 'snap' });
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+
+    const allResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', all: 'true' } },
+      allResponse,
+    );
+    expect(allResponse.statusCode).toBe(200);
+    expect(gitLibraries.getGitHistory).toHaveBeenCalledWith('/repo', {
+      all: true,
+      cursor: undefined,
+      limit: undefined,
+    });
+
+    const ambiguousResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', all: 'true', refs: ['HEAD'] } },
+      ambiguousResponse,
+    );
+    expect(ambiguousResponse.statusCode).toBe(400);
+    expect(ambiguousResponse.body).toEqual({ error: 'all cannot be combined with explicit refs' });
+
+    const optionResponse = createMockResponse();
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', all: 'false', refs: ['--all'] } },
+      optionResponse,
+    );
+    expect(optionResponse.statusCode).toBe(400);
+    expect(optionResponse.body).toEqual({ error: 'refs must not contain option-like values' });
   });
 });
 

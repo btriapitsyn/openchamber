@@ -42,7 +42,6 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Icon } from "@/components/icon/Icon";
-import { Button } from '@/components/ui/button';
 
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useUIStore } from '@/stores/useUIStore';
@@ -57,6 +56,8 @@ import { ChangesPanel, type ChangesGroupConfig } from './git/ChangesPanel';
 import { CommitSection } from './git/CommitSection';
 import { GitEmptyState } from './git/GitEmptyState';
 import { HistorySection } from './git/HistorySection';
+import { GitGraphPanel } from './git/GitGraphPanel';
+import { GitWorkspacePanes } from './git/GitWorkspacePanes';
 import { ConflictDialog } from './git/ConflictDialog';
 import { StashDialog } from './git/StashDialog';
 import { DirtyBranchSwitchDialog } from './git/DirtyBranchSwitchDialog';
@@ -71,6 +72,10 @@ import { cn } from '@/lib/utils';
 import { generateCommitMessage as generateSessionCommitMessage, getGitWorktreeBootstrapStatus } from '@/lib/gitApi';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useI18n } from '@/lib/i18n';
+import { getWorkingTreeDiffDestination } from '@/lib/getWorkingTreeDiffDestination';
+import { useDeviceInfo } from '@/lib/device';
+import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
+import { getGitViewRenderMode } from './git/gitViewRenderMode';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -305,6 +310,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     bumpIndexRevision,
     ensureNestedRepos,
     selectNestedRepo,
+    invalidateHistory,
   } = useGitStore(useShallow((state) => ({
     setActiveDirectory: state.setActiveDirectory,
     ensureAll: state.ensureAll,
@@ -320,8 +326,11 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     bumpIndexRevision: state.bumpIndexRevision,
     ensureNestedRepos: state.ensureNestedRepos,
     selectNestedRepo: state.selectNestedRepo,
+    invalidateHistory: state.invalidateHistory,
   })));
   const isMobile = useUIStore((state) => state.isMobile);
+  const { screenWidth } = useDeviceInfo();
+  const gitReviewLayout = useUIStore((state) => state.gitReviewLayout);
   const openContextDiff = useUIStore((state) => state.openContextDiff);
   const openContextSurface = useUIStore((state) => state.openContextSurface);
 
@@ -407,11 +416,13 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     runMutation: ({ directory, direction, paths }) => runGitIndexMutation(directory, direction, paths),
     onMutationComplete: ({ directory }) => {
       bumpIndexRevision(directory);
+      invalidateHistory(directory);
       scheduleGitReconcile(directory);
     },
     onMutationError: ({ directory, direction, rollback }, error) => {
       rollback?.();
       bumpIndexRevision(directory);
+      invalidateHistory(directory);
       scheduleGitReconcile(directory);
       const fallback = direction === 'stage'
         ? t('gitView.toast.stageFileFailed')
@@ -426,7 +437,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       });
     },
     scheduleFlush: scheduleGitMutationFlush,
-  }), [bumpIndexRevision, runGitIndexMutation, scheduleGitMutationFlush, scheduleGitReconcile, t]);
+  }), [bumpIndexRevision, invalidateHistory, runGitIndexMutation, scheduleGitMutationFlush, scheduleGitReconcile, t]);
 
   React.useEffect(() => {
     flushQueuedGitMutationsRef.current = gitIndexMutationQueue.flush;
@@ -703,10 +714,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const [conflictDialogOpen, setConflictDialogOpen] = React.useState(false);
   const [conflictFiles, setConflictFiles] = React.useState<string[]>([]);
   const [conflictOperation, setConflictOperation] = React.useState<'merge' | 'rebase'>('merge');
-  const [graphLog, setGraphLog] = React.useState<import('@/lib/api/types').GitLogResponse | null>(null);
-  const [graphLogLoading, setGraphLogLoading] = React.useState(false);
-  const [graphLogMaxCount, setGraphLogMaxCount] = React.useState(100);
-  const [graphLogRefreshToken, setGraphLogRefreshToken] = React.useState(0);
 
   // Conflict state persistence key
   const conflictStorageKey = React.useMemo(() => {
@@ -948,9 +955,10 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       if (hint.paths?.length) {
         clearDiffCache(gitDirectory, hint.paths);
       }
+      invalidateHistory(gitDirectory);
       void fetchStatus(gitDirectory, git, { silent: true });
     });
-  }, [isActive, clearDiffCache, gitDirectory, fetchStatus, git]);
+  }, [invalidateHistory, isActive, clearDiffCache, gitDirectory, fetchStatus, git]);
 
   const refreshStatusAndBranches = React.useCallback(
     async (showErrors = true) => {
@@ -1161,6 +1169,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
       await refreshStatusAndBranches(false);
       await refreshLog();
+      invalidateHistory(gitDirectory);
     } catch (err) {
       const message =
         err instanceof Error
@@ -1223,6 +1232,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         stageFiles: [],
       });
       bumpIndexRevision(gitDirectory);
+      invalidateHistory(gitDirectory);
       toast.success(t('gitView.toast.commitCreated'));
       setCommitMessage('');
       clearGeneratedHighlights();
@@ -1350,6 +1360,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
     try {
       await git.createBranch(gitDirectory, branchName, checkoutBase ?? 'HEAD');
+      invalidateHistory(gitDirectory);
       toast.success(t('gitView.toast.createdBranch', { name: branchName }));
 
       // Checkout the new branch and stay on it
@@ -1401,6 +1412,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
 
     try {
       await git.renameBranch(gitDirectory, oldName, newName);
+      invalidateHistory(gitDirectory);
       toast.success(t('gitView.toast.renamedBranch', { oldName, newName }));
       await refreshStatusAndBranches();
       await refreshLog();
@@ -1447,6 +1459,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       // tracks it, so report the branch the repository actually landed on.
       const result = await git.checkoutBranch(gitDirectory, normalized);
       toast.success(t('gitView.toast.checkedOut', { name: result?.branch || normalized }));
+      invalidateHistory(gitDirectory);
       await refreshStatusAndBranches();
       await refreshLog();
     } catch (err) {
@@ -1708,31 +1721,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     };
   }, [baseBranch, currentBranch, gitDirectory, git, log, logMaxCountLocal]);
 
-  // Clear graph log when directory changes
-  React.useEffect(() => {
-    setGraphLog(null);
-  }, [gitDirectory]);
-
-  React.useEffect(() => {
-    if (gitLogDialogMode !== 'graph' || !gitDirectory) {
-      if (gitLogDialogMode !== 'graph') setGraphLog(null);
-      return;
-    }
-    let cancelled = false;
-    setGraphLogLoading(true);
-    git.getGitLog(gitDirectory, { maxCount: graphLogMaxCount, all: true })
-      .then((result) => {
-        if (!cancelled) setGraphLog(result);
-      })
-      .catch((err) => {
-        console.error('Failed to fetch graph log:', err);
-      })
-      .finally(() => {
-        if (!cancelled) setGraphLogLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, [gitLogDialogMode, gitDirectory, graphLogMaxCount, graphLogRefreshToken, git]);
-
   // Keep these sections stable in layout; individual cards render placeholders when unavailable.
 
   const moveChangePaths = React.useCallback((paths: string[], direction: GitIndexMutationDirection) => {
@@ -1768,6 +1756,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       try {
         await git.revertGitFile(gitDirectory, filePath, { scope: 'working' });
         toast.success(t('gitView.toast.revertedFile', { path: filePath }));
+        invalidateHistory(gitDirectory);
         await refreshStatusAndBranches(false);
       } catch (err) {
         const message = err instanceof Error ? err.message : t('gitView.toast.revertFailed');
@@ -1780,7 +1769,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         });
       }
     },
-    [gitDirectory, refreshStatusAndBranches, git, t]
+    [gitDirectory, invalidateHistory, refreshStatusAndBranches, git, t]
   );
 
   const handleRevertPaths = React.useCallback(
@@ -1824,6 +1813,10 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           bumpIndexRevision(gitDirectory);
         }
 
+        if (failed.length < uniquePaths.length) {
+          invalidateHistory(gitDirectory);
+        }
+
         await refreshStatusAndBranches(false);
 
         if (failed.length === 0) {
@@ -1853,7 +1846,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         }
       }
     },
-    [bumpIndexRevision, gitDirectory, git, isRevertingAll, refreshStatusAndBranches, revertingPaths, stagedChangeEntries, t]
+    [bumpIndexRevision, gitDirectory, git, invalidateHistory, isRevertingAll, refreshStatusAndBranches, revertingPaths, stagedChangeEntries, t]
   );
 
   const handleRevertAll = React.useCallback(
@@ -1875,12 +1868,23 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   // its own, so opening the tab under `gitDirectory` would park it under a key
   // the panel never displays.
   const handleViewChangeDiff = React.useCallback((path: string, staged: boolean) => {
-    if (currentDirectory && !isMobile) {
-      openContextDiff(currentDirectory, path, staged);
+    const scope = staged ? 'staged' : 'working';
+    const destination = getWorkingTreeDiffDestination({
+      reviewLayout: gitReviewLayout,
+      isMobile,
+      isVSCode: isVSCodeRuntime(),
+    });
+
+    if (destination === 'context' && currentDirectory) {
+      openContextDiff(currentDirectory, path, staged, scope);
       return;
     }
-    navigateToDiff(path, staged);
-  }, [currentDirectory, isMobile, navigateToDiff, openContextDiff]);
+    const previousMainTab = useUIStore.getState().activeMainTab;
+    navigateToDiff(path, staged, scope);
+    if (destination === 'main' && previousMainTab !== 'diff' && useUIStore.getState().activeMainTab !== 'diff') {
+      console.warn('[gitView] blocked main diff activation');
+    }
+  }, [currentDirectory, gitReviewLayout, isMobile, navigateToDiff, openContextDiff]);
 
   const openStashes = React.useCallback(() => setIsStashesDialogOpen(true), []);
 
@@ -2053,6 +2057,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           setConflictDialogOpen(true);
           persistConflictState(gitDirectory, result.conflictFiles ?? [], 'merge');
         } else {
+          invalidateHistory(gitDirectory);
           updateLastLog('done', `Merged ${target.branch} into ${currentBranch}`);
           clearConflictState();
           addOperationLog('Refreshing repository status...', 'running');
@@ -2073,7 +2078,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       }
       // Note: branchOperation is cleared when dialog closes via handleOperationComplete
     },
-    [gitDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
+    [gitDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, invalidateHistory, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
   );
 
   const handleRebase = React.useCallback(
@@ -2103,6 +2108,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           setConflictDialogOpen(true);
           persistConflictState(gitDirectory, result.conflictFiles ?? [], 'rebase');
         } else {
+          invalidateHistory(gitDirectory);
           updateLastLog('done', `Rebased ${currentBranch} onto ${target.branch}`);
           clearConflictState();
           addOperationLog('Refreshing repository status...', 'running');
@@ -2123,7 +2129,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       }
       // Note: branchOperation is cleared when dialog closes via handleOperationComplete
     },
-    [gitDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
+    [gitDirectory, git, status, resolveIntegrationTarget, refreshStatusAndBranches, refreshLog, invalidateHistory, isUncommittedChangesError, persistConflictState, clearConflictState, addOperationLog, updateLastLog, resetOperationLogs]
   );
 
   const handleAbortConflict = React.useCallback(async () => {
@@ -2172,6 +2178,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           persistConflictState(gitDirectory, result.conflictFiles ?? [], 'merge');
           toast.error(t('gitView.toast.mergeConflictsDetected'));
         } else {
+          invalidateHistory(gitDirectory);
           clearConflictState();
           toast.success(t('gitView.toast.mergeCompleted'));
           await refreshStatusAndBranches();
@@ -2186,6 +2193,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           persistConflictState(gitDirectory, result.conflictFiles ?? [], 'rebase');
           toast.error(t('gitView.toast.rebaseConflictsDetected'));
         } else {
+          invalidateHistory(gitDirectory);
           clearConflictState();
           toast.success(t('gitView.toast.rebaseStepCompleted'));
           await refreshStatusAndBranches();
@@ -2196,7 +2204,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
       const message = err instanceof Error ? err.message : t('gitView.toast.continueOperationFailed');
       toast.error(message);
     }
-  }, [gitDirectory, git, status, refreshStatusAndBranches, refreshLog, persistConflictState, clearConflictState, t]);
+  }, [gitDirectory, git, status, refreshStatusAndBranches, refreshLog, invalidateHistory, persistConflictState, clearConflictState, t]);
 
   const handleAbortOperation = React.useCallback(async () => {
     if (!gitDirectory) return;
@@ -2276,6 +2284,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
             setConflictOperation('merge');
             setConflictDialogOpen(true);
           } else {
+            invalidateHistory(gitDirectory);
             operationSucceeded = true;
             toast.success(t('gitView.toast.mergedIntoBranch', { branch, currentBranch: currentBranch || '' }));
           }
@@ -2287,6 +2296,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
             setConflictOperation('rebase');
             setConflictDialogOpen(true);
           } else {
+            invalidateHistory(gitDirectory);
             operationSucceeded = true;
             toast.success(t('gitView.toast.rebasedOntoBranch', { currentBranch: currentBranch || '', branch }));
           }
@@ -2321,7 +2331,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         throw err;
       }
     },
-    [bumpIndexRevision, gitDirectory, git, status, stashDialogOperation, stashDialogBranch, refreshStatusAndBranches, refreshLog, t]
+    [bumpIndexRevision, gitDirectory, git, status, stashDialogOperation, stashDialogBranch, refreshStatusAndBranches, refreshLog, invalidateHistory, t]
   );
 
   const handleLogMaxCountChange = React.useCallback(
@@ -2335,18 +2345,15 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     [gitDirectory, fetchLog, git, setLogMaxCount]
   );
 
-  const handleGraphLogMaxCountChange = React.useCallback((count: number) => {
-    setGraphLogMaxCount(count);
-  }, []);
-
   const handleGraphActionSuccess = React.useCallback(() => {
     setGitLogDialogMode(null);
     if (gitDirectory) {
+      invalidateHistory(gitDirectory);
       fetchStatus(gitDirectory, git);
       fetchBranches(gitDirectory, git);
       fetchLog(gitDirectory, git, logMaxCountLocal);
     }
-  }, [gitDirectory, fetchStatus, fetchBranches, fetchLog, logMaxCountLocal, git]);
+  }, [gitDirectory, fetchStatus, fetchBranches, fetchLog, invalidateHistory, logMaxCountLocal, git]);
 
   const handleGraphConflict = React.useCallback((result: {
     conflict: boolean;
@@ -2460,6 +2467,60 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     );
   }
 
+  const changesPaneContent = (changeEntries?.length ?? 0) > 0 ? (
+    <ChangesPanel
+      groups={changeGroups}
+      diffStats={status?.diffStats}
+      revertingPaths={revertingPaths}
+      isRevertingAll={isRevertingAll}
+      onVisiblePathsChange={setVisibleChangePaths}
+      onRevertAll={handleRevertAll}
+      onRevertDirectory={handleRevertDirectory}
+      headerBackgroundClassName="bg-background"
+    />
+  ) : (
+    <GitEmptyState onOpenStashes={() => setIsStashesDialogOpen(true)} />
+  );
+
+  const commitPaneContent = (
+    <CommitSection
+      stagedCount={stagedCount}
+      commitMessage={commitMessage}
+      onCommitMessageChange={setCommitMessage}
+      generatedHighlights={generatedHighlights}
+      onInsertHighlights={handleInsertHighlights}
+      onGenerateMessage={handleGenerateCommitMessage}
+      isGeneratingMessage={isGeneratingMessage}
+      onCommit={() => handleCommit({ pushAfter: false })}
+      onCommitAndPush={() => handleCommit({ pushAfter: true })}
+      commitAction={commitAction}
+      hasPendingIndexMutation={hasPendingIndexMutation}
+      gitmojiEnabled={settingsGitmojiEnabled}
+      onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
+    />
+  );
+
+  const graphPaneContent = (
+    <GitGraphPanel
+      directory={gitDirectory ?? currentDirectory ?? ''}
+      git={git}
+      expandedCommitHashes={expandedCommitHashes}
+      onToggleCommit={handleToggleCommit}
+      commitFilesMap={commitFilesMap}
+      loadingCommitHashes={loadingCommitHashes}
+      onCopyHash={handleCopyCommitHash}
+      onConflict={handleGraphConflict}
+      onActionSuccess={handleGraphActionSuccess}
+    />
+  );
+
+  const renderMode = getGitViewRenderMode({
+    screenWidth,
+    isMobile,
+    isDesktopShell: isDesktopShell(),
+    isVSCode: isVSCodeRuntime(),
+  });
+
   return (
     <div className={cn('flex h-full flex-col overflow-hidden')}>
            <GitHeader
@@ -2521,55 +2582,30 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         )}
 
       <div className="flex-1 min-h-0 overflow-hidden">
-        <div className="h-full min-h-0 flex flex-col">
-          <div className={cn('min-w-0 min-h-0 h-full flex flex-col')}>
-            <ScrollableOverlay
-              as={ScrollShadow}
-              ref={actionPanelScrollRef}
-              outerClassName="flex-1 min-h-0"
-              className={cn('px-4', 'pt-1 pb-4')}
-              disableHorizontal
-              preventOverscroll
-            >
-              <div className="flex h-full min-h-0 flex-col gap-3">
-                  {(changeEntries?.length ?? 0) > 0 ? (
-                    <>
-                      <div className="min-h-0 flex-1 overflow-hidden">
-                        <ChangesPanel
-                          groups={changeGroups}
-                          diffStats={status?.diffStats}
-                          revertingPaths={revertingPaths}
-                          isRevertingAll={isRevertingAll}
-                          onVisiblePathsChange={setVisibleChangePaths}
-                          onRevertAll={handleRevertAll}
-                          onRevertDirectory={handleRevertDirectory}
-                          headerBackgroundClassName="bg-background"
-                        />
-                      </div>
-
-                      <CommitSection
-                        stagedCount={stagedCount}
-                        commitMessage={commitMessage}
-                        onCommitMessageChange={setCommitMessage}
-                        generatedHighlights={generatedHighlights}
-                        onInsertHighlights={handleInsertHighlights}
-                        onGenerateMessage={handleGenerateCommitMessage}
-                        isGeneratingMessage={isGeneratingMessage}
-                        onCommit={() => handleCommit({ pushAfter: false })}
-                        onCommitAndPush={() => handleCommit({ pushAfter: true })}
-                        commitAction={commitAction}
-                        hasPendingIndexMutation={hasPendingIndexMutation}
-                        gitmojiEnabled={settingsGitmojiEnabled}
-                        onOpenGitmojiPicker={() => setIsGitmojiPickerOpen(true)}
-                      />
-                    </>
-                  ) : (
-                      <GitEmptyState onOpenStashes={() => setIsStashesDialogOpen(true)} />
-                  )}
-                </div>
-            </ScrollableOverlay>
+        <ScrollableOverlay
+          as={ScrollShadow}
+          ref={actionPanelScrollRef}
+          outerClassName="h-full min-h-0"
+          className={cn('px-4', 'pt-1 pb-4')}
+          disableHorizontal
+          preventOverscroll
+        >
+          <div className="h-full min-h-0">
+            {renderMode === 'workspace-panes' ? (
+              <GitWorkspacePanes
+                directory={currentDirectory}
+                changes={changesPaneContent}
+                commit={commitPaneContent}
+                graph={graphPaneContent}
+              />
+            ) : (
+              <div className="flex min-h-full flex-col gap-4 py-2">
+                {changesPaneContent}
+                {commitPaneContent}
+              </div>
+            )}
           </div>
-        </div>
+        </ScrollableOverlay>
       </div>
 
       <Dialog
@@ -2651,56 +2687,29 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
               <DialogTitle>
                 {gitLogDialogMode === 'graph' ? t('gitView.graph.title') : t('gitView.history.title')}
               </DialogTitle>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="mr-6 h-7 shrink-0 gap-1.5 px-2"
-                onClick={() => {
-                  if (gitLogDialogMode === 'graph') {
-                    setGraphLogRefreshToken((token) => token + 1);
-                    return;
-                  }
-                  if (!gitDirectory) return;
-                  void fetchLog(gitDirectory, git, logMaxCountLocal);
-                }}
-                disabled={gitLogDialogMode === 'graph' ? graphLogLoading : isLogLoading}
-                title={t('gitView.history.refresh')}
-                aria-label={t('gitView.history.refresh')}
-              >
-                <Icon
-                  name="refresh"
-                  className={cn(
-                    'size-4',
-                    (gitLogDialogMode === 'graph' ? graphLogLoading : isLogLoading) && 'animate-spin'
-                  )}
-                />
-                {t('gitView.history.refresh')}
-              </Button>
             </div>
             <DialogDescription>
               {t('gitView.history.dialogDescription')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 min-h-0">
-            <HistorySection
-              mode={gitLogDialogMode === 'graph' ? 'graph' : 'history'}
-              log={gitLogDialogMode === 'graph' ? graphLog ?? log : log}
-              isLogLoading={gitLogDialogMode === 'graph' ? graphLogLoading || isLogLoading : isLogLoading}
-              logMaxCount={gitLogDialogMode === 'graph' ? graphLogMaxCount : logMaxCountLocal}
-              onLogMaxCountChange={gitLogDialogMode === 'graph' ? handleGraphLogMaxCountChange : handleLogMaxCountChange}
-              expandedCommitHashes={expandedCommitHashes}
-              onToggleCommit={handleToggleCommit}
-              commitFilesMap={commitFilesMap}
-              loadingCommitHashes={loadingCommitHashes}
-              onCopyHash={handleCopyCommitHash}
-              directory={gitDirectory ?? undefined}
-              showHeader={false}
-              contentMaxHeightClassName="h-full max-h-none"
-              branchDivider={gitLogDialogMode === 'graph' ? null : historyBranchDivider}
-              onConflict={gitLogDialogMode === 'graph' ? handleGraphConflict : undefined}
-              onActionSuccess={gitLogDialogMode === 'graph' ? handleGraphActionSuccess : undefined}
-            />
+            {gitLogDialogMode === 'graph' ? graphPaneContent : (
+              <HistorySection
+                log={log}
+                isLogLoading={isLogLoading}
+                logMaxCount={logMaxCountLocal}
+                onLogMaxCountChange={handleLogMaxCountChange}
+                expandedCommitHashes={expandedCommitHashes}
+                onToggleCommit={handleToggleCommit}
+                commitFilesMap={commitFilesMap}
+                loadingCommitHashes={loadingCommitHashes}
+                onCopyHash={handleCopyCommitHash}
+                directory={gitDirectory ?? undefined}
+                showHeader={false}
+                contentMaxHeightClassName="h-full max-h-none"
+                branchDivider={historyBranchDivider}
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -2715,6 +2724,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         onChanged={async (change) => {
           if (gitDirectory && change?.affectsIndex) {
             bumpIndexRevision(gitDirectory);
+            invalidateHistory(gitDirectory);
           }
           await refreshStatusAndBranches(false);
           await refreshLog();

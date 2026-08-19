@@ -43,6 +43,9 @@ export const startAppearanceAutoSave = (): void => {
       if (isSameValue(current[key], previous[key])) continue;
       Object.assign(diff, { [key]: current[key] });
     }
+    if (current.gitReviewLayout !== previous.gitReviewLayout) {
+      diff.gitReviewLayout = current.gitReviewLayout;
+    }
 
     previous = current;
 

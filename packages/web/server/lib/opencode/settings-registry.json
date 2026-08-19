@@ -302,6 +302,9 @@
     "gitChangesViewMode": {
       "scope": "profile"
     },
+    "gitReviewLayout": {
+      "scope": "profile"
+    },
     "gitmojiEnabled": {
       "scope": "profile"
     },
