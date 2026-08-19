@@ -122,7 +122,7 @@ export const ContextUsageDisplay: React.FC<ContextUsageDisplayProps> = ({
                 className="transition-[stroke-dashoffset,stroke] duration-300"
               />
             </svg>
-            <span className="text-foreground">
+            <span className="whitespace-nowrap text-foreground">
               {formatTokens(totalTokens)} ({Math.min(percentage, 999).toFixed(1)}%)
             </span>
           </>
