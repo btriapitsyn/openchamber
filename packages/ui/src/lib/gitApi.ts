@@ -13,7 +13,6 @@ import { notifyGitStatusInvalidated } from './gitStatusInvalidation';
 export type {
   GitRemote,
   MergeConflictDetails,
-  CommitFileDiffResponse,
 } from './api/types';
 
 const getRuntimeGit = () => {
@@ -517,7 +516,10 @@ export async function generatePullRequestDescription(
   const filesSet = new Set<string>();
   await Promise.all(commits.map(async (commit) => {
     try {
-      const response = await getCommitFiles(directory, commit.hash);
+      const response = await getCommitFiles(directory, {
+        commitHash: commit.hash,
+        parentHash: null,
+      });
       const files = Array.isArray(response?.files) ? response.files : [];
       for (const file of files) {
         if (typeof file?.path === 'string' && file.path.trim().length > 0) {
@@ -1001,11 +1003,11 @@ export async function getGitLog(
 
 export async function getCommitFiles(
   directory: string,
-  hash: string
+  request: import('./api/types').GitCommitChangesRequest
 ): Promise<import('./api/types').GitCommitFilesResponse> {
   const runtime = getRuntimeGit();
-  if (runtime) return runtime.getCommitFiles(directory, hash);
-  return gitHttp.getCommitFiles(directory, hash);
+  if (runtime) return runtime.getCommitFiles(directory, request);
+  return gitHttp.getCommitFiles(directory, request);
 }
 
 export async function getGitCommitDiff(directory: string, options: import('./api/types').GetGitCommitDiffOptions): Promise<import('./api/types').GitDiffResponse> {
@@ -1019,13 +1021,11 @@ export async function getGitCommitDiff(directory: string, options: import('./api
 
 export async function getCommitFileDiff(
   directory: string,
-  hash: string,
-  filePath: string,
-  isBinary: boolean
-): Promise<import('./api/types').CommitFileDiffResponse> {
+  request: import('./api/types').GitCommitFilePreviewRequest
+): Promise<import('./api/types').GitCommitFilePreviewResponse> {
   const runtime = getRuntimeGit();
-  if (runtime?.getCommitFileDiff) return runtime.getCommitFileDiff(directory, hash, filePath, isBinary);
-  return gitHttp.getCommitFileDiff(directory, hash, filePath, isBinary);
+  if (runtime?.getCommitFileDiff) return runtime.getCommitFileDiff(directory, request);
+  return gitHttp.getCommitFileDiff(directory, request);
 }
 
 export async function getGitIdentities(): Promise<import('./api/types').GitIdentityProfile[]> {

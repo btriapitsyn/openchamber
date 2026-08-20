@@ -52,6 +52,7 @@ export type GitRepositoryPaneState = {
   changesCollapsed: boolean;
   graphCollapsed: boolean;
   graphHeight: number;
+  previewWidth: number;
   graphFilterMode: GitGraphFilterMode;
   graphManualRefIds: string[];
 };
@@ -244,6 +245,8 @@ const runtimeMemoryKey = (value?: string | null): string => {
 
 const GIT_REPOSITORY_PANE_GRAPH_HEIGHT_MIN = 180;
 const GIT_REPOSITORY_PANE_GRAPH_HEIGHT_MAX = 720;
+const GIT_REPOSITORY_PANE_PREVIEW_WIDTH_MIN = 320;
+const GIT_REPOSITORY_PANE_PREVIEW_WIDTH_MAX = 960;
 const gitGraphFilterModeSchema = z.enum(['auto', 'all', 'manual']);
 const gitRepositoryPaneManualRefIdsSchema = z.array(z.string().catch('')).catch([]).transform((ids) => Array.from(
   new Set(ids.map((item) => item.trim()).filter((item) => item !== ''))
@@ -253,6 +256,7 @@ export const DEFAULT_GIT_REPOSITORY_PANE_STATE: GitRepositoryPaneState = {
   changesCollapsed: false,
   graphCollapsed: true,
   graphHeight: 280,
+  previewWidth: 360,
   graphFilterMode: 'auto',
   graphManualRefIds: [],
 };
@@ -267,10 +271,19 @@ const clampGitRepositoryPaneGraphHeight = (value: number): number => {
   return Math.min(GIT_REPOSITORY_PANE_GRAPH_HEIGHT_MAX, Math.max(GIT_REPOSITORY_PANE_GRAPH_HEIGHT_MIN, Math.round(value)));
 };
 
+const clampGitRepositoryPanePreviewWidth = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return createDefaultGitRepositoryPaneState().previewWidth;
+  }
+
+  return Math.min(GIT_REPOSITORY_PANE_PREVIEW_WIDTH_MAX, Math.max(GIT_REPOSITORY_PANE_PREVIEW_WIDTH_MIN, Math.round(value)));
+};
+
 const gitRepositoryPaneStateSchema = z.object({
   changesCollapsed: z.boolean().catch(DEFAULT_GIT_REPOSITORY_PANE_STATE.changesCollapsed),
   graphCollapsed: z.boolean().catch(DEFAULT_GIT_REPOSITORY_PANE_STATE.graphCollapsed),
   graphHeight: z.coerce.number().catch(DEFAULT_GIT_REPOSITORY_PANE_STATE.graphHeight).transform(clampGitRepositoryPaneGraphHeight),
+  previewWidth: z.coerce.number().catch(DEFAULT_GIT_REPOSITORY_PANE_STATE.previewWidth).transform(clampGitRepositoryPanePreviewWidth),
   graphFilterMode: gitGraphFilterModeSchema.catch(DEFAULT_GIT_REPOSITORY_PANE_STATE.graphFilterMode),
   graphManualRefIds: gitRepositoryPaneManualRefIdsSchema,
 }).catch(DEFAULT_GIT_REPOSITORY_PANE_STATE);
@@ -2348,6 +2361,7 @@ export const useUIStore = create<UIStore>()(
               next.changesCollapsed === current.changesCollapsed
               && next.graphCollapsed === current.graphCollapsed
               && next.graphHeight === current.graphHeight
+              && next.previewWidth === current.previewWidth
               && next.graphFilterMode === current.graphFilterMode
               && next.graphManualRefIds.length === current.graphManualRefIds.length
               && next.graphManualRefIds.every((id, index) => id === current.graphManualRefIds[index])

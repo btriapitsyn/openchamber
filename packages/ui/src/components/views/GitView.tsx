@@ -2,7 +2,7 @@ import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useFireworksCelebration } from '@/contexts/FireworksContext';
-import type { GitIdentityProfile, CommitFileEntry, GitStatus } from '@/lib/api/types';
+import type { GitIdentityProfile, GitStatus } from '@/lib/api/types';
 import { rankByQuery } from '@/lib/search/fuzzySearch';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -57,6 +57,7 @@ import { CommitSection } from './git/CommitSection';
 import { GitEmptyState } from './git/GitEmptyState';
 import { HistorySection } from './git/HistorySection';
 import { GitGraphPanel } from './git/GitGraphPanel';
+import { GitGraphWorkspace } from './git/GitGraphWorkspace';
 import { GitWorkspacePanes } from './git/GitWorkspacePanes';
 import { ConflictDialog } from './git/ConflictDialog';
 import { StashDialog } from './git/StashDialog';
@@ -78,6 +79,7 @@ import { getWorkingTreeDiffDestination } from '@/lib/getWorkingTreeDiffDestinati
 import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { getGitViewRenderMode } from './git/gitViewRenderMode';
+import { createGitCommitDetailsController } from './git/gitCommitDetailsController';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -90,6 +92,16 @@ type HistoryBranchDivider = {
 } | null;
 
 const GIT_RECONCILE_DELAY_MS = 15000;
+
+const scheduleGitCommitDetailsIdle = (callback: () => void) => {
+  if ('requestIdleCallback' in globalThis && 'cancelIdleCallback' in globalThis) {
+    const handle = globalThis.requestIdleCallback(callback);
+    return () => globalThis.cancelIdleCallback(handle);
+  }
+
+  const handle = globalThis.setTimeout(callback, 0);
+  return () => globalThis.clearTimeout(handle);
+};
 
 type GitViewSnapshot = {
   directory?: string;
@@ -697,11 +709,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const clearGeneratedHighlights = React.useCallback(() => {
     setGeneratedHighlights([]);
   }, []);
-  const [expandedCommitHashes, setExpandedCommitHashes] = React.useState<Set<string>>(new Set());
-  const [commitFilesMap, setCommitFilesMap] = React.useState<Map<string, CommitFileEntry[]>>(new Map());
-  const [loadingCommitHashes, setLoadingCommitHashes] = React.useState<Set<string>>(new Set());
-  const commitFilesMapRef = React.useRef(commitFilesMap);
-  const loadingCommitHashesRef = React.useRef(loadingCommitHashes);
   const [historyBranchDivider, setHistoryBranchDivider] = React.useState<HistoryBranchDivider>(null);
   const [remoteUrl, setRemoteUrl] = React.useState<string | null>(null);
   const [gitmojiSearch, setGitmojiSearch] = React.useState('');
@@ -784,95 +791,23 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     });
   }, [t]);
 
-  const handleToggleCommit = React.useCallback((hash: string) => {
-    setExpandedCommitHashes((prev) => {
-      const next = new Set(prev);
-      if (next.has(hash)) {
-        next.delete(hash);
-      } else {
-        next.add(hash);
-      }
-      return next;
+  const commitDetailsController = React.useMemo(() => {
+    if (!gitDirectory || !git) {
+      return null;
+    }
+
+    return createGitCommitDetailsController({
+      directory: gitDirectory,
+      git,
+      scheduleIdle: scheduleGitCommitDetailsIdle,
     });
-  }, []);
+  }, [gitDirectory, git]);
 
   React.useEffect(() => {
-    commitFilesMapRef.current = commitFilesMap;
-  }, [commitFilesMap]);
-
-  React.useEffect(() => {
-    loadingCommitHashesRef.current = loadingCommitHashes;
-  }, [loadingCommitHashes]);
-
-  React.useEffect(() => {
-    if (!gitDirectory || !git) return;
-
-    // Find hashes that are expanded but not yet loaded or loading
-    const hashesToLoad = Array.from(expandedCommitHashes).filter(
-      (hash) => !commitFilesMapRef.current.has(hash) && !loadingCommitHashesRef.current.has(hash)
-    );
-
-    if (hashesToLoad.length === 0) return;
-
-    let cancelled = false;
-
-    setLoadingCommitHashes((prev) => {
-      const next = new Set(prev);
-      for (const hash of hashesToLoad) {
-        next.add(hash);
-      }
-      loadingCommitHashesRef.current = next;
-      return next;
-    });
-
-    void Promise.all(
-      hashesToLoad.map((hash) =>
-        git
-          .getCommitFiles(gitDirectory, hash)
-          .then((response) => ({ hash, files: response.files }))
-          .catch((error) => {
-            console.error('Failed to fetch commit files:', error);
-            return { hash, files: [] as CommitFileEntry[] };
-          })
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      setCommitFilesMap((prev) => {
-        const next = new Map(prev);
-        for (const { hash, files } of results) {
-          next.set(hash, files);
-        }
-        commitFilesMapRef.current = next;
-        return next;
-      });
-      setLoadingCommitHashes((prev) => {
-        const next = new Set(prev);
-        for (const { hash } of results) {
-          next.delete(hash);
-        }
-        loadingCommitHashesRef.current = next;
-        return next;
-      });
-    });
-
     return () => {
-      cancelled = true;
-      setLoadingCommitHashes((prev) => {
-        let changed = false;
-        const next = new Set(prev);
-        for (const hash of hashesToLoad) {
-          if (next.delete(hash)) {
-            changed = true;
-          }
-        }
-        if (!changed) {
-          return prev;
-        }
-        loadingCommitHashesRef.current = next;
-        return next;
-      });
+      commitDetailsController?.dispose();
     };
-  }, [expandedCommitHashes, gitDirectory, git]);
+  }, [commitDetailsController]);
 
   // Restore the per-repository draft when the effective repository changes
   // (e.g. the user picks a different nested repository from the picker),
@@ -2534,23 +2469,26 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     />
   );
 
-  const graphPaneContent = (
-    <GitGraphPanel
-      directory={gitDirectory ?? currentDirectory ?? ''}
-      git={git}
-      isActive={isActive}
-      expandedCommitHashes={expandedCommitHashes}
-      onToggleCommit={handleToggleCommit}
-      commitFilesMap={commitFilesMap}
-      loadingCommitHashes={loadingCommitHashes}
-      onCopyHash={handleCopyCommitHash}
-      hoverRemoteName={hoverRemoteName}
-      hoverRemoteUrl={hoverRemoteUrl}
-      hoverDetailsCache={hoverDetailsCache}
-      onConflict={handleGraphConflict}
-      onActionSuccess={handleGraphActionSuccess}
+  const graphPaneContent = commitDetailsController && gitDirectory ? (
+    <GitGraphWorkspace
+      directory={gitDirectory}
+      controller={commitDetailsController}
+      graph={(
+        <GitGraphPanel
+          directory={gitDirectory}
+          git={git}
+          isActive={isActive}
+          commitDetailsController={commitDetailsController}
+          onCopyHash={handleCopyCommitHash}
+          hoverRemoteName={hoverRemoteName}
+          hoverRemoteUrl={hoverRemoteUrl}
+          hoverDetailsCache={hoverDetailsCache}
+          onConflict={handleGraphConflict}
+          onActionSuccess={handleGraphActionSuccess}
+        />
+      )}
     />
-  );
+  ) : null;
 
   const renderMode = getGitViewRenderMode({
     screenWidth,
@@ -2732,24 +2670,29 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           </DialogHeader>
           <div className="flex-1 min-h-0">
             {gitLogDialogMode === 'graph' ? graphPaneContent : (
-              <HistorySection
-                log={log}
-                isLogLoading={isLogLoading}
-                logMaxCount={logMaxCountLocal}
-                onLogMaxCountChange={handleLogMaxCountChange}
-                expandedCommitHashes={expandedCommitHashes}
-                onToggleCommit={handleToggleCommit}
-                commitFilesMap={commitFilesMap}
-                loadingCommitHashes={loadingCommitHashes}
-                onCopyHash={handleCopyCommitHash}
-                directory={gitDirectory ?? undefined}
-                hoverRemoteName={hoverRemoteName}
-                hoverRemoteUrl={hoverRemoteUrl}
-                hoverDetailsCache={hoverDetailsCache}
-                showHeader={false}
-                contentMaxHeightClassName="h-full max-h-none"
-                branchDivider={historyBranchDivider}
-              />
+              commitDetailsController && gitDirectory ? (
+                <GitGraphWorkspace
+                  directory={gitDirectory}
+                  controller={commitDetailsController}
+                  graph={(
+                    <HistorySection
+                      log={log}
+                      isLogLoading={isLogLoading}
+                      logMaxCount={logMaxCountLocal}
+                      onLogMaxCountChange={handleLogMaxCountChange}
+                      commitDetailsController={commitDetailsController}
+                      onCopyHash={handleCopyCommitHash}
+                      directory={gitDirectory}
+                      hoverRemoteName={hoverRemoteName}
+                      hoverRemoteUrl={hoverRemoteUrl}
+                      hoverDetailsCache={hoverDetailsCache}
+                      showHeader={false}
+                      contentMaxHeightClassName="h-full max-h-none"
+                      branchDivider={historyBranchDivider}
+                    />
+                  )}
+                />
+              ) : null
             )}
           </div>
         </DialogContent>

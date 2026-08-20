@@ -352,17 +352,16 @@ const buildGitEnv = async () => {
   return env;
 };
 
-const createGit = async (directory, { allowUnsafeSshCommand = false, allowUnsafeCredentialHelper = false } = {}) => {
+const createGit = async (directory, { allowUnsafeSshCommand = false } = {}) => {
   const env = await buildGitEnv();
   const spawnOptions = { windowsHide: true };
   const binary = getGitBinary();
   const hasCustomBinary = typeof binary === 'string' && binary.trim() && binary !== 'git' && binary !== 'git.exe';
-  const unsafe = hasCustomBinary || allowUnsafeSshCommand || allowUnsafeCredentialHelper
+  const unsafe = hasCustomBinary || allowUnsafeSshCommand
     ? {
-        ...(hasCustomBinary && { allowUnsafeCustomBinary: true }),
-        ...(allowUnsafeSshCommand && { allowUnsafeSshCommand: true }),
-        ...(allowUnsafeCredentialHelper && { allowUnsafeCredentialHelper: true }),
-      }
+      ...(hasCustomBinary && { allowUnsafeCustomBinary: true }),
+      ...(allowUnsafeSshCommand && { allowUnsafeSshCommand: true }),
+    }
     : undefined;
   // Always pin simple-git to an explicit working directory. Omitting baseDir
   // makes simple-git use process.cwd(), which breaks when the OpenChamber
@@ -685,15 +684,6 @@ const parseWorktreePorcelain = (raw) => {
       const branchRef = line.substring('branch '.length).trim();
       current.branchRef = branchRef;
       current.branch = cleanBranchName(branchRef);
-      continue;
-    }
-
-    // git marks a worktree whose directory is gone (deleted outside git) as
-    // prunable; it stays registered until `git worktree prune`. The sidebar
-    // needs that distinction: the directory is missing, but the sessions that
-    // lived there are not.
-    if (line === 'prunable' || line.startsWith('prunable ')) {
-      current.prunable = true;
     }
   }
 
@@ -942,7 +932,7 @@ const runGitCommand = async (cwd, args) => {
   } catch (error) {
     return {
       success: false,
-      exitCode: Number.isInteger(error?.code) ? error.code : null,
+      exitCode: typeof error?.code === 'number' ? error.code : 1,
       stdout: String(error?.stdout || ''),
       stderr: String(error?.stderr || ''),
       message: parseGitErrorText(error),
@@ -972,6 +962,265 @@ const runGitCommandOrThrow = async (cwd, args, fallbackMessage) => {
   }
   return result;
 };
+
+const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
+const EMPTY_TREE_HASHES_BY_FORMAT = {
+  sha1: '4b825dc642cb6eb9a060e54bf8d69288fbee4904',
+  sha256: '6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321',
+};
+const MAX_COMMIT_FILE_PREVIEW_BYTES = 8 * 1024 * 1024;
+
+const isZeroObjectId = (value) => /^[0]+$/.test(String(value || ''));
+
+const parseNonNegativeInt = (value, fallbackLabel) => {
+  const parsed = Number.parseInt(String(value || ''), 10);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(`Malformed ${fallbackLabel}`);
+  }
+  return parsed;
+};
+
+const normalizeCommitHash = (value, fieldName) => {
+  const normalized = String(value || '').trim();
+  if (!FULL_GIT_OBJECT_ID_PATTERN.test(normalized)) {
+    throw new Error(`${fieldName} must be a full commit SHA`);
+  }
+  return normalized;
+};
+
+const isRecordLike = (value) => Object(value) === value && !Array.isArray(value);
+
+const normalizeNonEmptyString = (value, fieldName) => {
+  if (Object.prototype.toString.call(value) !== '[object String]' || value.length === 0) {
+    throw new Error(`${fieldName} must be a repository-relative path or null`);
+  }
+  return String(value);
+};
+
+const normalizeCommitChangesRequest = (request) => {
+  if (!isRecordLike(request)) {
+    throw new Error('commit file request is required');
+  }
+  return {
+    commitHash: normalizeCommitHash(request.commitHash, 'commitHash'),
+    parentHash: request.parentHash === null ? null : normalizeCommitHash(request.parentHash, 'parentHash'),
+  };
+};
+
+const normalizeCommitPreviewRequest = (request) => {
+  const normalized = normalizeCommitChangesRequest(request);
+  const normalizePath = (value, fieldName) => {
+    if (value === null) {
+      return null;
+    }
+    return normalizeNonEmptyString(value, fieldName);
+  };
+  const originalPath = normalizePath(request.originalPath, 'originalPath');
+  const modifiedPath = normalizePath(request.modifiedPath, 'modifiedPath');
+  if (originalPath === null && modifiedPath === null) {
+    throw new Error('originalPath or modifiedPath is required');
+  }
+  if (normalized.parentHash === null && originalPath !== null) {
+    throw new Error('root commit previews cannot request an originalPath');
+  }
+  return {
+    ...normalized,
+    originalPath,
+    modifiedPath,
+  };
+};
+
+const resolveCommitObjectPath = (directoryPath, repoRoot, filePath) => {
+  const candidates = Array.from(new Set([
+    path.resolve(repoRoot, filePath),
+    path.resolve(directoryPath, filePath),
+  ])).filter((candidate) => isInsideOrSameDirectory(repoRoot, candidate));
+
+  if (candidates.length === 0) {
+    throw new Error(`Path is outside repository: ${filePath}`);
+  }
+
+  return toGitPath(path.relative(repoRoot, candidates[0]));
+};
+
+const readCommitParentIds = async (repoRoot, commitHash) => {
+  const result = await runGitCommandOrThrow(
+    repoRoot,
+    ['rev-list', '--parents', '-n', '1', commitHash],
+    `Failed to resolve parents for commit ${commitHash}`,
+  );
+  const parts = String(result.stdout || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0 || parts[0] !== commitHash) {
+    throw new Error(`Failed to resolve parents for commit ${commitHash}`);
+  }
+  return parts.slice(1);
+};
+
+const getEmptyTreeHash = async (repoRoot) => {
+  const result = await runGitCommandOrThrow(
+    repoRoot,
+    ['rev-parse', '--show-object-format'],
+    'Failed to resolve repository object format',
+  );
+  const objectFormat = String(result.stdout || '').trim();
+  const hash = EMPTY_TREE_HASHES_BY_FORMAT[objectFormat];
+  if (!hash) {
+    throw new Error(`Unsupported git object format: ${objectFormat}`);
+  }
+  return hash;
+};
+
+const ensureCommitObjectExists = async (repoRoot, commitHash, fieldName) => {
+  const result = await runGitCommand(repoRoot, ['rev-parse', '--verify', '--quiet', `${commitHash}^{commit}`]);
+  if (!result.success) {
+    if (fieldName === 'parentHash') {
+      throw new Error(`Parent commit ${commitHash} is unavailable in this repository; fetch more history and try again`);
+    }
+    throw new Error(`Commit ${commitHash} is unavailable in this repository`);
+  }
+};
+
+const parseRawChangeRecord = (header) => {
+  const match = /^:([0-7]{6}) ([0-7]{6}) ([0-9a-f]+) ([0-9a-f]+) ([A-Z])(\d{0,3})$/i.exec(header);
+  if (!match) {
+    throw new Error(`Malformed raw change record: ${header}`);
+  }
+  return {
+    oldMode: match[1],
+    newMode: match[2],
+    oldObjectId: match[3],
+    newObjectId: match[4],
+    status: match[5].toUpperCase(),
+  };
+};
+
+const determineCommitFileKind = (oldMode, newMode) => {
+  if (oldMode === '160000' || newMode === '160000') {
+    return 'gitlink';
+  }
+  if (oldMode === '120000' || newMode === '120000') {
+    return 'symlink';
+  }
+  return 'file';
+};
+
+export function parseCommitChangesRaw(directory, raw) {
+  const input = String(raw || '');
+  if (!input) {
+    return [];
+  }
+
+  let cursor = 0;
+  const rawRecords = [];
+  while (cursor < input.length && input[cursor] === ':') {
+    const headerEnd = input.indexOf('\0', cursor);
+    if (headerEnd === -1) {
+      throw new Error(`Malformed raw change block for ${directory}`);
+    }
+    const header = input.slice(cursor, headerEnd);
+    const parsedHeader = parseRawChangeRecord(header);
+    cursor = headerEnd + 1;
+
+    const pathEnd = input.indexOf('\0', cursor);
+    if (pathEnd === -1) {
+      throw new Error(`Malformed raw path block for ${directory}`);
+    }
+    const pathValue = input.slice(cursor, pathEnd);
+    cursor = pathEnd + 1;
+
+    let originalPath;
+    let modifiedPath = pathValue;
+    if (parsedHeader.status === 'R' || parsedHeader.status === 'C') {
+      const renamedPathEnd = input.indexOf('\0', cursor);
+      if (renamedPathEnd === -1) {
+        throw new Error(`Malformed raw rename block for ${directory}`);
+      }
+      originalPath = pathValue;
+      modifiedPath = input.slice(cursor, renamedPathEnd);
+      cursor = renamedPathEnd + 1;
+    }
+
+    rawRecords.push({
+      ...parsedHeader,
+      originalPath,
+      path: modifiedPath,
+    });
+  }
+
+  const numstatRecords = [];
+  while (cursor < input.length) {
+    const addedEnd = input.indexOf('\t', cursor);
+    if (addedEnd === -1) {
+      throw new Error(`Malformed numstat block for ${directory}`);
+    }
+    const deletedEnd = input.indexOf('\t', addedEnd + 1);
+    if (deletedEnd === -1) {
+      throw new Error(`Malformed numstat block for ${directory}`);
+    }
+    const recordEnd = input.indexOf('\0', deletedEnd + 1);
+    if (recordEnd === -1) {
+      throw new Error(`Malformed numstat block for ${directory}`);
+    }
+
+    const insertionsRaw = input.slice(cursor, addedEnd);
+    const deletionsRaw = input.slice(addedEnd + 1, deletedEnd);
+    const pathValue = input.slice(deletedEnd + 1, recordEnd);
+    cursor = recordEnd + 1;
+
+    if (pathValue === '') {
+      const originalEnd = input.indexOf('\0', cursor);
+      if (originalEnd === -1) {
+        throw new Error(`Malformed rename numstat block for ${directory}`);
+      }
+      const modifiedEnd = input.indexOf('\0', originalEnd + 1);
+      if (modifiedEnd === -1) {
+        throw new Error(`Malformed rename numstat block for ${directory}`);
+      }
+      numstatRecords.push({
+        insertionsRaw,
+        deletionsRaw,
+        originalPath: input.slice(cursor, originalEnd),
+        path: input.slice(originalEnd + 1, modifiedEnd),
+      });
+      cursor = modifiedEnd + 1;
+      continue;
+    }
+
+    numstatRecords.push({
+      insertionsRaw,
+      deletionsRaw,
+      originalPath: undefined,
+      path: pathValue,
+    });
+  }
+
+  if (rawRecords.length !== numstatRecords.length) {
+    throw new Error(`Commit metadata block length mismatch for ${directory}`);
+  }
+
+  return rawRecords.map((rawRecord, index) => {
+    const numstatRecord = numstatRecords[index];
+    const isRename = rawRecord.status === 'R' || rawRecord.status === 'C';
+    if (rawRecord.path !== numstatRecord.path || (isRename && rawRecord.originalPath !== numstatRecord.originalPath)) {
+      throw new Error(`Commit metadata block association mismatch for ${directory}`);
+    }
+
+    const kind = determineCommitFileKind(rawRecord.oldMode, rawRecord.newMode);
+    const usesDashCounts = numstatRecord.insertionsRaw === '-' && numstatRecord.deletionsRaw === '-';
+    const isBinary = usesDashCounts && kind === 'file';
+    return {
+      path: rawRecord.path,
+      originalPath: rawRecord.originalPath,
+      status: rawRecord.status === 'T' ? 'M' : rawRecord.status,
+      kind,
+      originalObjectId: isZeroObjectId(rawRecord.oldObjectId) ? undefined : rawRecord.oldObjectId,
+      objectId: isZeroObjectId(rawRecord.newObjectId) ? undefined : rawRecord.newObjectId,
+      insertions: usesDashCounts ? 0 : parseNonNegativeInt(numstatRecord.insertionsRaw, 'numstat insertions'),
+      deletions: usesDashCounts ? 0 : parseNonNegativeInt(numstatRecord.deletionsRaw, 'numstat deletions'),
+      isBinary,
+    };
+  });
+}
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
@@ -2150,7 +2399,7 @@ export async function hasLocalIdentity(directory) {
 }
 
 export async function setLocalIdentity(directory, profile) {
-  const git = await createGit(directory, { allowUnsafeSshCommand: true, allowUnsafeCredentialHelper: true });
+  const git = await createGit(directory, { allowUnsafeSshCommand: true });
 
   try {
 
@@ -2468,26 +2717,11 @@ export async function getStatus(directory, options = {}) {
   }
 }
 
-const getNoIndexDiff = async (repoRoot, repoPath, contextLines) => {
-  const args = ['diff', '--no-color', '--full-index'];
-  if (Number.isFinite(contextLines)) {
-    args.push(`-U${Math.max(0, contextLines)}`);
-  }
-  args.push('--no-index', '--', '/dev/null', repoPath);
-  const result = await runGitCommand(repoRoot, args);
-  // Exit 1 means differences, even when Git also writes warnings to stderr.
-  // Spawn and buffer errors have no numeric exit code and must still fail.
-  if (result.exitCode === 0 || result.exitCode === 1) {
-    return result.stdout;
-  }
-  throw new Error(result.stderr || result.message || 'Failed to get untracked Git diff');
-};
-
 export async function getDiff(directory, { path: filePath, staged = false, contextLines = 3 } = {}) {
   const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
 
   try {
-    const args = ['diff', '--no-color', '--full-index'];
+    const args = ['diff', '--no-color'];
     const fileContext = filePath ? await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot) : null;
 
     if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
@@ -2533,7 +2767,21 @@ export async function getDiff(directory, { path: filePath, staged = false, conte
         ].join('\n');
       }
 
-      return await getNoIndexDiff(repoRoot, fileContext.repoPath, contextLines);
+      const noIndexArgs = ['diff', '--no-color'];
+      if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
+        noIndexArgs.push(`-U${Math.max(0, contextLines)}`);
+      }
+      noIndexArgs.push('--no-index', '--', '/dev/null', fileContext.repoPath);
+      try {
+        const noIndexDiff = await git.raw(noIndexArgs);
+        return noIndexDiff;
+      } catch (noIndexError) {
+        // git diff --no-index returns exit code 1 when differences exist (not a real error)
+        if (noIndexError.exitCode === 1 && noIndexError.message) {
+          return noIndexError.message;
+        }
+        throw noIndexError;
+      }
     }
   } catch (error) {
     console.error('Failed to get Git diff:', error);
@@ -2582,7 +2830,7 @@ export async function getUntrackedDiffs(directory, filePaths = [], { concurrency
   const paths = (Array.isArray(filePaths) ? filePaths : []).filter((value) => typeof value === 'string' && value);
   if (paths.length === 0) return [];
 
-  const { directoryPath, directoryGit, repoRoot } = await createRepositoryGitContext(directory);
+  const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
   const results = new Array(paths.length).fill('');
   let cursor = 0;
 
@@ -2591,7 +2839,18 @@ export async function getUntrackedDiffs(directory, filePaths = [], { concurrency
       const index = cursor++;
       try {
         const fileContext = await resolveGitFileContext(directoryPath, directoryGit, paths[index], repoRoot);
-        results[index] = await getNoIndexDiff(repoRoot, fileContext.repoPath, contextLines);
+        const args = ['diff', '--no-color'];
+        if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
+          args.push(`-U${Math.max(0, contextLines)}`);
+        }
+        args.push('--no-index', '--', '/dev/null', fileContext.repoPath);
+        try {
+          results[index] = await git.raw(args);
+        } catch (error) {
+          // `git diff --no-index` exits 1 whenever there are differences, which
+          // for a new file is always.
+          results[index] = error?.exitCode === 1 && error?.message ? error.message : '';
+        }
       } catch {
         results[index] = '';
       }
@@ -2621,51 +2880,7 @@ async function assertRangeRefsResolve(git, refs) {
   }
 }
 
-// A private index lets git include untracked paths in the same tree comparison
-// as tracked files, including a staged deletion recreated at the same path.
-// Intent-to-add records only their existence; diff reads current file contents.
-async function runWorkingTreeRangeDiff(context, baseRef, headRef, args, paths = []) {
-  const { git, repoRoot } = context;
-  const readHead = async () => {
-    const commit = (await git.raw(['rev-parse', '--verify', 'HEAD'])).trim();
-    const ref = (await git.raw(['symbolic-ref', '--quiet', 'HEAD'])).trim();
-    return `${commit}\n${ref}`;
-  };
-  const startingHead = await readHead();
-  const [headCommit, currentRef] = startingHead.split('\n');
-  const requestedRef = (await git.raw(['rev-parse', '--verify', '--symbolic-full-name', '--end-of-options', headRef])).trim();
-  if (requestedRef !== currentRef) {
-    throw new Error('Working-tree comparisons require the checked-out branch. Refresh and try again.');
-  }
-  const mergeBase = (await git.raw(['merge-base', baseRef, headCommit])).trim();
-  const readDiff = async (comparisonGit) => {
-    const diff = await comparisonGit.raw([...args, mergeBase, '--', ...paths]);
-    if (await readHead() !== startingHead) {
-      throw new Error('The checked-out branch changed during comparison. Refresh and try again.');
-    }
-    return diff;
-  };
-  const untracked = await git.raw(['ls-files', '--others', '--exclude-standard', '-z', '--', ...paths]);
-  if (!untracked) return readDiff(git);
-
-  const temporaryDirectory = await fsp.mkdtemp(path.join(os.tmpdir(), 'openchamber-branch-diff-'));
-  try {
-    const indexPath = (await git.raw(['rev-parse', '--git-path', 'index'])).trim();
-    const temporaryIndex = path.join(temporaryDirectory, 'index');
-    await fsp.copyFile(path.resolve(repoRoot, indexPath), temporaryIndex);
-    const pathspecFile = path.join(temporaryDirectory, 'paths');
-    await fsp.writeFile(pathspecFile, untracked);
-    const comparisonGit = await createGit(repoRoot);
-    comparisonGit.env('GIT_INDEX_FILE', temporaryIndex);
-    comparisonGit.env('GIT_LITERAL_PATHSPECS', '1');
-    await comparisonGit.raw(['add', '--intent-to-add', '--pathspec-from-file=' + pathspecFile, '--pathspec-file-nul']);
-    return await readDiff(comparisonGit);
-  } finally {
-    await fsp.rm(temporaryDirectory, { recursive: true, force: true });
-  }
-}
-
-export async function getRangeDiff(directory, { base, head, path: filePath, contextLines = 3, includeWorkingTree = false } = {}) {
+export async function getRangeDiff(directory, { base, head, path: filePath, contextLines = 3 } = {}) {
   const { directoryPath, directoryGit, repoRoot, git } = await createRepositoryGitContext(directory);
   const baseRef = typeof base === 'string' ? base.trim() : '';
   const headRef = typeof head === 'string' ? head.trim() : '';
@@ -2673,39 +2888,51 @@ export async function getRangeDiff(directory, { base, head, path: filePath, cont
     throw new Error('base and head are required');
   }
 
-  await assertRangeRefsResolve(git, [baseRef, headRef]);
+  // Prefer remote-tracking base ref so merged commits don't reappear
+  // when local base branch is stale (common when user stays on feature branch).
+  let resolvedBase = baseRef;
+  const originCandidate = `refs/remotes/origin/${baseRef}`;
+  try {
+    const verified = await git.raw(['rev-parse', '--verify', originCandidate]);
+    if (verified && verified.trim()) {
+      resolvedBase = `origin/${baseRef}`;
+    }
+  } catch {
+    // ignore
+  }
+
+  // Not every repository has an `origin`. When the base names a branch that
+  // exists only on another remote, a bare name does not resolve — git looks in
+  // refs/heads, not across remotes — and the diff fails with "ambiguous
+  // argument". Fall back to whichever remote actually carries it.
+  if (resolvedBase === baseRef && !/[*?[\]^~:\\]/.test(baseRef)) {
+    const resolvesLocally = await git
+      .raw(['rev-parse', '--verify', `refs/heads/${baseRef}`])
+      .then((value) => Boolean(String(value || '').trim()))
+      .catch(() => false);
+
+    if (!resolvesLocally) {
+      const remoteMatch = await git
+        .raw(['for-each-ref', '--count=1', '--format=%(refname:short)', `refs/remotes/*/${baseRef}`])
+        .then((value) => String(value || '').trim())
+        .catch(() => '');
+      if (remoteMatch) {
+        resolvedBase = remoteMatch;
+      }
+    }
+  }
+
+  await assertRangeRefsResolve(git, [resolvedBase, headRef]);
 
   const args = ['diff', '--no-color'];
   if (typeof contextLines === 'number' && !Number.isNaN(contextLines)) {
     args.push(`-U${Math.max(0, contextLines)}`);
   }
-  const paths = [];
+  args.push(`${resolvedBase}...${headRef}`);
   if (filePath) {
-    try {
-      const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
-      paths.push(fileContext.repoPath);
-    } catch (error) {
-      if (error.message !== 'Invalid file path') throw error;
-      // A committed deletion is absent from HEAD, the index, and the working
-      // tree. It is still a valid range path when it exists at the merge base.
-      const mergeBase = (await git.raw(['merge-base', baseRef, headRef])).trim();
-      for (const root of new Set([repoRoot, directoryPath])) {
-        const target = path.resolve(root, filePath);
-        if (!isInsideOrSameDirectory(repoRoot, target)) continue;
-        const repoPath = toGitPath(path.relative(repoRoot, target));
-        const exists = await git.raw(['cat-file', '-e', `${mergeBase}:${repoPath}`]).then(() => true).catch(() => false);
-        if (exists) {
-          paths.push(repoPath);
-          break;
-        }
-      }
-      if (paths.length === 0) throw error;
-    }
+    const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
+    args.push('--', fileContext.repoPath);
   }
-  if (includeWorkingTree) {
-    return runWorkingTreeRangeDiff({ git, repoRoot }, baseRef, headRef, args, paths);
-  }
-  args.push(`${baseRef}...${headRef}`, '--', ...paths);
   const diff = await git.raw(args);
   return diff;
 }
@@ -2727,9 +2954,6 @@ export function parseBranchCreationSource(reflogText) {
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean);
-  // Rebase records its destination as a commit, not a parent branch. The
-  // creation ref is no longer evidence of the current base after restacking.
-  if (lines.some((line) => /^rebase(?:\s|\()/.test(line))) return null;
   // Reflog lists newest entries first; the creation entry is the oldest one.
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const match = lines[index].match(BRANCH_CREATION_SOURCE_RE);
@@ -2781,23 +3005,31 @@ export async function getBranchBase(directory, branch) {
   return { base: source };
 }
 
-export async function getRangeFiles(directory, { base, head, includeWorkingTree = false } = {}) {
-  const { git, repoRoot } = await createRepositoryGitContext(directory);
+export async function getRangeFiles(directory, { base, head } = {}) {
+  const { git } = await createRepositoryGitContext(directory);
   const baseRef = typeof base === 'string' ? base.trim() : '';
   const headRef = typeof head === 'string' ? head.trim() : '';
   if (!baseRef || !headRef) {
     throw new Error('base and head are required');
   }
 
-  await assertRangeRefsResolve(git, [baseRef, headRef]);
+  let resolvedBase = baseRef;
+  const originCandidate = `refs/remotes/origin/${baseRef}`;
+  try {
+    const verified = await git.raw(['rev-parse', '--verify', originCandidate]);
+    if (verified && verified.trim()) {
+      resolvedBase = `origin/${baseRef}`;
+    }
+  } catch {
+    // ignore
+  }
+
+  await assertRangeRefsResolve(git, [resolvedBase, headRef]);
 
   // `-C` (copy detection among changed files only, so cheap) makes copies
   // surface as C entries instead of plain additions; rename detection is on
   // by default.
-  const args = ['diff', '--name-status', '-z', '-C'];
-  const raw = includeWorkingTree
-    ? await runWorkingTreeRangeDiff({ git, repoRoot }, baseRef, headRef, args)
-    : await git.raw([...args, `${baseRef}...${headRef}`, '--']);
+  const raw = await git.raw(['diff', '--name-status', '-z', '-C', `${resolvedBase}...${headRef}`]);
   // -z format: STATUS\0PATH\0[ORIG\0] repeated. For rename/copy entries
   // (`R100`, `C75`) the first path token is the ORIGINAL path and the second
   // is the DESTINATION — the diff (and the UI) must address the destination.
@@ -2807,7 +3039,7 @@ export async function getRangeFiles(directory, { base, head, includeWorkingTree 
     const status = (tokens[index] || '').trim();
     if (!status) continue;
     const isRenameOrCopy = status.startsWith('R') || status.startsWith('C');
-    const path = isRenameOrCopy ? (tokens[index + 2] || '') : (tokens[index + 1] || '');
+    const path = isRenameOrCopy ? (tokens[index + 2] || '').trim() : (tokens[index + 1] || '').trim();
     index += isRenameOrCopy ? 2 : 1;
     if (path) {
       files.push({ path, status: status.charAt(0) });
@@ -2851,6 +3083,27 @@ const parseIsBinaryFromNumstat = (raw) => {
   const firstLine = text.split('\n').map((line) => line.trim()).find(Boolean) || '';
   const [added, deleted] = firstLine.split('\t');
   return added === '-' || deleted === '-';
+};
+
+const extractGitStatusPath = (status, pathPart) => {
+  if ((status === 'R' || status === 'C') && pathPart.includes('\t')) {
+    return pathPart.split('\t').pop() || pathPart;
+  }
+  return pathPart;
+};
+
+const extractGitNumstatDestinationPath = (filePath) => {
+  if (!filePath.includes(' => ')) {
+    return filePath;
+  }
+
+  const braceMatch = filePath.match(/^(.*)\{([^{}]*)\s=>\s([^{}]*)\}(.*)$/);
+  if (braceMatch) {
+    const [, prefix, , destination, suffix] = braceMatch;
+    return `${prefix}${destination}${suffix}`.replace(/\/+/g, '/');
+  }
+
+  return filePath.split(' => ').pop()?.trim() || filePath;
 };
 
 const looksBinaryBySniff = async (absolutePath) => {
@@ -3102,13 +3355,11 @@ const normalizePatchTargetPath = (value) => {
 };
 
 const extractPatchTargetPath = (patch) => {
-  const firstHunk = patch.search(/^@@\s/m);
-  const header = firstHunk < 0 ? patch : patch.slice(0, firstHunk);
-  const matches = [...header.matchAll(/^(?:-{3}|\+{3})\s+.+$/gm)];
+  const matches = [...patch.matchAll(/^(?:-{3}|\+{3})\s+.+$/gm)];
   const realTargets = matches
     .map((match) => normalizePatchTargetPath(parsePatchPathToken(match[0])))
     .filter(Boolean);
-  return realTargets.at(-1) || null;
+  return realTargets[0] || null;
 };
 
 const writeTempPatchFile = async (patch) => {
@@ -3136,21 +3387,9 @@ export async function applyHunk(directory, filePath, options = {}) {
     const fileContext = await resolveGitFileContext(directoryPath, directoryGit, filePath, repoRoot);
     validateRepositoryFilePaths(repoRoot, [fileContext.repoPath]);
 
-    // Applicability alone is insufficient: a previously staged or committed
-    // hunk may still reverse cleanly against the working tree. Accept only a
-    // canonical hunk from this file's current working/index diff.
-    const current = await getDiff(directory, { path: filePath, staged: action === 'unstage', contextLines: 3 });
-    const starts = [...current.matchAll(/^@@\s/gm)].map((match) => match.index);
-    const header = current.slice(0, starts[0] ?? 0);
-    const isCurrentHunk = starts.some((start, index) => (
-      header + current.slice(start, starts[index + 1] ?? current.length) === patch
-    ));
-    if (!isCurrentHunk) {
-      const targetPath = extractPatchTargetPath(patch);
-      if (targetPath && targetPath !== fileContext.repoPath && targetPath !== filePath) {
-        throw new Error('patch target path does not match the requested file');
-      }
-      throw new Error('Hunk no longer applies — refresh and try again.');
+    const targetPath = extractPatchTargetPath(patch);
+    if (targetPath && targetPath !== fileContext.repoPath && targetPath !== filePath) {
+      throw new Error('patch target path does not match the requested file');
     }
 
     const flags = HUNK_ACTION_FLAGS[action];
@@ -4364,7 +4603,6 @@ export async function getWorktrees(directory) {
       name: path.basename(entry.worktree || ''),
       branch: entry.branch || '',
       path: entry.worktree,
-      prunable: entry.prunable === true,
     }));
   } catch (error) {
     // Worktrees are an optional feature. When the caller passes a directory
@@ -5152,11 +5390,12 @@ export async function getLog(directory, options = {}) {
     };
     const resolvedFrom = await resolveBaseRefForLog(options.from, checkRef);
 
-    // simple-git's `to` alone means HEAD..to, which is empty for the current
-    // branch. A single requested ref means its reachable history instead.
-    const baseLog = options.to && !resolvedFrom
-      ? await git.log([`--max-count=${maxCount}`, options.to, ...(filePath ? ['--', filePath] : [])])
-      : await git.log({ maxCount, from: resolvedFrom, to: options.to, file: filePath });
+    const baseLog = await git.log({
+      maxCount,
+      from: resolvedFrom,
+      to: options.to,
+      file: filePath
+    });
 
     const logArgs = [
       'log',
@@ -5400,6 +5639,44 @@ export async function canonicalizeWorktreeState(directory) {
   };
 }
 
+async function getCommitChanges(directory, request) {
+  const { repoRoot, git } = await createRepositoryGitContext(directory);
+  const { commitHash, parentHash } = normalizeCommitChangesRequest(request);
+
+  try {
+    await ensureCommitObjectExists(repoRoot, commitHash, 'commitHash');
+
+    let baseRef = parentHash;
+    if (baseRef === null) {
+      const parentIds = await readCommitParentIds(repoRoot, commitHash);
+      if (parentIds.length > 0) {
+        throw new Error(`parentHash is required for non-root commit ${commitHash}`);
+      }
+      baseRef = await getEmptyTreeHash(repoRoot);
+    } else {
+      await ensureCommitObjectExists(repoRoot, baseRef, 'parentHash');
+    }
+
+    const diffRaw = await git.raw([
+      'diff',
+      '--raw',
+      '--numstat',
+      '--no-abbrev',
+      '--diff-filter=ADMRT',
+      '-z',
+      '--find-renames=50%',
+      baseRef,
+      commitHash,
+      '--',
+    ]);
+
+    return { files: parseCommitChangesRaw(repoRoot, diffRaw) };
+  } catch (error) {
+    console.error('Failed to get commit files:', error);
+    throw error;
+  }
+}
+
 async function resolveCommitHash(git, hash) {
   if (!/^[0-9a-f]{7,64}$/i.test(hash)) throw new Error('A commit hash is required');
   return (await git.raw(['rev-parse', '--verify', '--end-of-options', `${hash}^{commit}`])).trim();
@@ -5417,44 +5694,25 @@ export async function getCommitDiff(directory, { hash, path: filePath, previousP
   ]);
 }
 
-export async function getCommitFiles(directory, commitHash) {
-  const { git } = await createRepositoryGitContext(directory);
-  const hash = await resolveCommitHash(git, commitHash);
-  const [numstat, nameStatus] = await Promise.all([
-    git.raw([...commitShowArgs(hash), '--numstat', '-z', '--']),
-    git.raw([...commitShowArgs(hash), '--name-status', '-z', '--']),
-  ]);
-  const stats = new Map();
-  const tokens = numstat.split('\0');
-  for (let index = 0; index < tokens.length; index += 1) {
-    const match = /^(\d+|-)\t(\d+|-)\t([\s\S]*)$/.exec(tokens[index]);
-    if (!match) continue;
-    let destination = match[3];
-    if (!destination) {
-      destination = tokens[index + 2];
-      index += 2;
-    }
-    stats.set(destination, {
-      insertions: Number.parseInt(match[1], 10) || 0,
-      deletions: Number.parseInt(match[2], 10) || 0,
-      isBinary: match[1] === '-',
-    });
+export async function getCommitFiles(directory, request) {
+  if (typeof request !== 'string') {
+    return getCommitChanges(directory, request);
   }
-  const files = [];
-  const names = nameStatus.split('\0');
-  for (let index = 0; index < names.length; index += 1) {
-    const changeType = names[index].charAt(0);
-    if (!changeType) continue;
-    const renamed = changeType === 'R' || changeType === 'C';
-    const previousPath = renamed ? names[++index] : undefined;
-    const filePath = names[++index];
-    const fileStats = stats.get(filePath);
-    if (!filePath || !fileStats) throw new Error('Incomplete commit file statistics');
-    const entry = { path: filePath, ...fileStats, changeType };
-    if (previousPath) entry.previousPath = previousPath;
-    files.push(entry);
-  }
-  return { files };
+
+  const { repoRoot, git } = await createRepositoryGitContext(directory);
+  const commitHash = await resolveCommitHash(git, request);
+  const parentIds = await readCommitParentIds(repoRoot, commitHash);
+  const { files } = await getCommitChanges(directory, {
+    commitHash,
+    parentHash: parentIds[0] ?? null,
+  });
+  return {
+    files: files.map(({ originalPath, status, ...file }) => ({
+      ...file,
+      previousPath: originalPath,
+      changeType: status,
+    })),
+  };
 }
 
 export async function renameBranch(directory, oldName, newName) {
@@ -5785,51 +6043,70 @@ export async function getConflictDetails(directory) {
   }
 }
 
-export async function getCommitFileDiff(directory, hash, filePath, isBinary) {
-  if (!directory || !hash || !filePath) {
-    throw new Error('directory, hash, and path are required for getCommitFileDiff');
+export async function getCommitFileDiff(directory, request) {
+  if (!directory) {
+    throw new Error('directory is required for getCommitFileDiff');
   }
 
-  if (isBinary) {
-    return { original: '', modified: '', isBinary: true };
-  }
-
+  const normalizedRequest = normalizeCommitPreviewRequest(request);
   const { directoryPath, repoRoot } = await createRepositoryGitContext(directory);
-  const candidates = Array.from(new Set([
-    toGitPath(path.relative(repoRoot, path.resolve(repoRoot, filePath))),
-    toGitPath(path.relative(repoRoot, path.resolve(directoryPath, filePath))),
-  ])).filter((candidate) => candidate && !candidate.startsWith('..') && !path.isAbsolute(candidate));
 
-  let originalResult = null;
-  let modifiedResult = null;
+  const originalPath = normalizedRequest.originalPath === null
+    ? null
+    : resolveCommitObjectPath(directoryPath, repoRoot, normalizedRequest.originalPath);
+  const modifiedPath = normalizedRequest.modifiedPath === null
+    ? null
+    : resolveCommitObjectPath(directoryPath, repoRoot, normalizedRequest.modifiedPath);
 
-  for (const candidate of candidates) {
-    const [candidateOriginalResult, candidateModifiedResult] = await Promise.all([
-      runGitCommand(repoRoot, ['show', `${hash}^:${candidate}`]),
-      runGitCommand(repoRoot, ['show', `${hash}:${candidate}`]),
-    ]);
+  await ensureCommitObjectExists(repoRoot, normalizedRequest.commitHash, 'commitHash');
+  if (normalizedRequest.parentHash !== null) {
+    await ensureCommitObjectExists(repoRoot, normalizedRequest.parentHash, 'parentHash');
+  }
 
-    if (candidateOriginalResult.success || candidateModifiedResult.success) {
-      originalResult = candidateOriginalResult;
-      modifiedResult = candidateModifiedResult;
-      break;
+  const originalSpec = normalizedRequest.parentHash !== null && originalPath !== null
+    ? `${normalizedRequest.parentHash}:${originalPath}`
+    : null;
+  const modifiedSpec = modifiedPath !== null
+    ? `${normalizedRequest.commitHash}:${modifiedPath}`
+    : null;
+
+  const readSize = async (objectSpec, label) => {
+    if (!objectSpec) {
+      return 0;
     }
+    const exists = await runGitCommand(repoRoot, ['cat-file', '-e', objectSpec]);
+    if (!exists.success) {
+      throw new Error(`Expected ${label} object is missing for ${objectSpec}`);
+    }
+    const sizeResult = await runGitCommandOrThrow(repoRoot, ['cat-file', '-s', objectSpec], `Failed to read ${label} object size`);
+    return parseNonNegativeInt(String(sizeResult.stdout || '').trim(), `${label} object size`);
+  };
+
+  const [originalBytes, modifiedBytes] = await Promise.all([
+    readSize(originalSpec, 'original'),
+    readSize(modifiedSpec, 'modified'),
+  ]);
+  const totalBytes = originalBytes + modifiedBytes;
+  if (totalBytes > MAX_COMMIT_FILE_PREVIEW_BYTES) {
+    return {
+      status: 'too-large',
+      totalBytes,
+      maxBytes: MAX_COMMIT_FILE_PREVIEW_BYTES,
+    };
   }
 
-  if (!originalResult || !modifiedResult) {
-    const resolvedPath = await resolveGitCommitFilePath(repoRoot, hash, candidates);
-    [originalResult, modifiedResult] = await Promise.all([
-      runGitCommand(repoRoot, ['show', `${hash}^:${resolvedPath}`]),
-      runGitCommand(repoRoot, ['show', `${hash}:${resolvedPath}`]),
-    ]);
-  }
+  const readContent = async (objectSpec, label) => {
+    if (!objectSpec) {
+      return '';
+    }
+    const result = await runGitCommandOrThrow(repoRoot, ['cat-file', '-p', objectSpec], `Failed to read ${label} object content`);
+    return result.stdout;
+  };
 
-  const original = originalResult.success ? originalResult.stdout : '';
-  const modified = modifiedResult.success ? modifiedResult.stdout : '';
+  const [original, modified] = await Promise.all([
+    readContent(originalSpec, 'original'),
+    readContent(modifiedSpec, 'modified'),
+  ]);
 
-  if (!originalResult.success && !modifiedResult.success) {
-    throw new Error(`Failed to read file content at commit ${hash}: ${originalResult.stderr || modifiedResult.stderr}`);
-  }
-
-  return { original, modified, isBinary: false };
+  return { status: 'ready', original, modified };
 }

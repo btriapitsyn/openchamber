@@ -31,8 +31,10 @@ import type {
   GitStashEntry,
   GitLogOptions,
   GitLogResponse,
+  GitCommitChangesRequest,
+  GitCommitFilePreviewRequest,
+  GitCommitFilePreviewResponse,
   GitCommitFilesResponse,
-  CommitFileDiffResponse,
   GitIdentityProfile,
   GitIdentitySummary,
   DiscoveredGitCredential,
@@ -50,13 +52,10 @@ import { notifyGitStatusInvalidated, subscribeGitStatusInvalidations } from './g
 import { notifyGitPush } from './gitPushEvents';
 
 const API_BASE = '/api/git';
+const ROOT_QUERY_MARKER = '__ROOT__';
 const gitRangeDiffSchema = z.object({ diff: z.string() });
 const gitRangeFilesSchema = z.object({ files: z.array(z.object({ path: z.string(), status: z.string() })) });
 const gitRangeErrorSchema = z.object({ error: z.string() });
-const gitCommitFilesSchema = z.object({ files: z.array(z.object({
-  path: z.string(), previousPath: z.string().optional(), changeType: z.string(),
-  insertions: z.number(), deletions: z.number(), isBinary: z.boolean(),
-})) });
 const gitLogEntrySchema = z.object({
   hash: z.string(), date: z.string(), message: z.string(), refs: z.string(), body: z.string(),
   author_name: z.string(), author_email: z.string(), filesChanged: z.number(),
@@ -1042,28 +1041,30 @@ export async function getGitLog(
 
 export async function getCommitFiles(
   directory: string,
-  hash: string
+  request: GitCommitChangesRequest
 ): Promise<GitCommitFilesResponse> {
   const response = await runtimeFetch(
-    buildUrl(`${API_BASE}/commit-files`, directory, { hash })
+    buildUrl(`${API_BASE}/commit-files`, directory, {
+      commitHash: request.commitHash,
+      parentHash: request.parentHash ?? ROOT_QUERY_MARKER,
+    })
   );
   if (!response.ok) {
     throw await rangeResponseError(response, 'Failed to get commit files');
   }
-  return gitCommitFilesSchema.parse(await response.json());
+  return response.json();
 }
 
 export async function getCommitFileDiff(
   directory: string,
-  hash: string,
-  filePath: string,
-  isBinary: boolean
-): Promise<CommitFileDiffResponse> {
+  request: GitCommitFilePreviewRequest
+): Promise<GitCommitFilePreviewResponse> {
   const response = await runtimeFetch(
     buildUrl(`${API_BASE}/commit-file-diff`, directory, {
-      hash,
-      path: filePath,
-      binary: isBinary ? 'true' : undefined,
+      commitHash: request.commitHash,
+      parentHash: request.parentHash ?? ROOT_QUERY_MARKER,
+      originalPath: request.originalPath ?? ROOT_QUERY_MARKER,
+      modifiedPath: request.modifiedPath ?? ROOT_QUERY_MARKER,
     })
   );
   if (!response.ok) {

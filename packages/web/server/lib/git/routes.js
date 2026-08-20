@@ -1,5 +1,11 @@
 export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
   let gitLibraries = null;
+  const ROOT_QUERY_MARKER = '__ROOT__';
+  const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
+  const readSingleQueryString = (value) => {
+    const raw = Array.isArray(value) ? value[0] : value;
+    return Object.prototype.toString.call(raw) === '[object String]' ? String(raw) : null;
+  };
   const getGitLibraries = async () => {
     if (!gitLibraries) {
       gitLibraries = await import('./index.js');
@@ -10,13 +16,13 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
     return gitLibraries;
   };
 
-  const resolveDirectoryQuery = (value, preserveWhitespace = false) => {
-    const raw = Array.isArray(value) ? value[0] : value;
-    if (typeof raw !== 'string') {
+  const resolveDirectoryQuery = (value) => {
+    const raw = readSingleQueryString(value);
+    if (raw === null) {
       return null;
     }
-    const normalized = preserveWhitespace ? raw : raw.trim();
-    return normalized || null;
+    const trimmed = raw.trim();
+    return trimmed || null;
   };
 
   const resolveStringArrayQuery = (value) => {
@@ -24,6 +30,25 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
     return values
       .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
       .filter(Boolean);
+  };
+
+  const resolveCommitHashQuery = (value, fieldName) => {
+    const raw = readSingleQueryString(value);
+    if (raw === null || !FULL_GIT_OBJECT_ID_PATTERN.test(raw.trim())) {
+      throw new Error(`${fieldName} must be a full commit SHA`);
+    }
+    return raw.trim();
+  };
+
+  const resolveNullableCommitPathQuery = (value, fieldName) => {
+    const raw = readSingleQueryString(value);
+    if (raw === ROOT_QUERY_MARKER) {
+      return null;
+    }
+    if (raw === null || raw.length === 0) {
+      throw new Error(`${fieldName} parameter is required`);
+    }
+    return raw;
   };
 
   const parseGitHistoryLimit = (value) => {
@@ -523,7 +548,6 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
       const diff = await getRangeDiff(directory, {
         base,
         head,
-        includeWorkingTree: req.query.includeWorkingTree === 'true',
         path: pathParam,
         contextLines: Number.isFinite(context) ? context : 3,
       });
@@ -570,7 +594,7 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
         return res.status(400).json({ error: 'base and head parameters are required' });
       }
 
-      const files = await getRangeFiles(directory, { base, head, includeWorkingTree: req.query.includeWorkingTree === 'true' });
+      const files = await getRangeFiles(directory, { base, head });
       res.json({ files });
     } catch (error) {
       console.error('Failed to get git range files:', error);
@@ -1396,17 +1420,28 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
   app.get('/api/git/commit-files', async (req, res) => {
     const { getCommitFiles } = await getGitLibraries();
     try {
-      const { directory, hash } = req.query;
+      const directory = resolveDirectoryQuery(req.query.directory);
       if (!directory) {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
-      if (!hash) {
+
+      const legacyHash = readSingleQueryString(req.query.hash);
+      if (req.query.hash !== undefined && !legacyHash) {
         return res.status(400).json({ error: 'hash parameter is required' });
       }
-
-      const result = await getCommitFiles(directory, hash);
+      const result = req.query.hash === undefined
+        ? await getCommitFiles(directory, {
+          commitHash: resolveCommitHashQuery(req.query.commitHash, 'commitHash'),
+          parentHash: req.query.parentHash === ROOT_QUERY_MARKER
+            ? null
+            : resolveCommitHashQuery(req.query.parentHash, 'parentHash'),
+        })
+        : await getCommitFiles(directory, legacyHash);
       res.json(result);
     } catch (error) {
+      if (/must be a full commit SHA|parameter is required/.test(String(error?.message || ''))) {
+        return res.status(400).json({ error: error.message });
+      }
       console.error('Failed to get commit files:', error);
       res.status(500).json({ error: error.message || 'Failed to get commit files' });
     }
@@ -1417,7 +1452,9 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
     try {
       const directory = resolveDirectoryQuery(req.query.directory);
       const hash = resolveDirectoryQuery(req.query.hash);
-      if (!directory || !hash) return res.status(400).json({ error: 'directory and hash are required' });
+      if (!directory || !hash) {
+        return res.status(400).json({ error: 'directory and hash are required' });
+      }
       const context = Number(req.query.context ?? 3);
       const diff = await getCommitDiff(directory, {
         hash,
@@ -1432,26 +1469,40 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
   });
 
   app.get('/api/git/commit-file-diff', async (req, res) => {
-    const { getCommitFileDiff } = await getGitLibraries();
+      const { getCommitFileDiff } = await getGitLibraries();
     try {
-      const { directory, hash, path: filePath } = req.query;
-      if (!directory || typeof directory !== 'string') {
+      const directory = resolveDirectoryQuery(req.query.directory);
+      if (!directory) {
         return res.status(400).json({ error: 'directory parameter is required' });
       }
-      if (!hash || typeof hash !== 'string') {
-        return res.status(400).json({ error: 'hash parameter is required' });
+      const originalPathQuery = readSingleQueryString(req.query.originalPath);
+      const modifiedPathQuery = readSingleQueryString(req.query.modifiedPath);
+      if (originalPathQuery === null) {
+        return res.status(400).json({ error: 'originalPath and modifiedPath parameters are required' });
       }
-      if (!/^[0-9a-fA-F]{7,40}$/.test(hash)) {
-        return res.status(400).json({ error: 'hash must be a valid commit SHA' });
-      }
-      if (!filePath || typeof filePath !== 'string') {
-        return res.status(400).json({ error: 'path parameter is required' });
+      if (modifiedPathQuery === null) {
+        return res.status(400).json({ error: 'originalPath and modifiedPath parameters are required' });
       }
 
-      const isBinary = req.query.binary === 'true';
-      const result = await getCommitFileDiff(directory, hash, filePath, isBinary);
+      const request = {
+        commitHash: resolveCommitHashQuery(req.query.commitHash, 'commitHash'),
+        parentHash: req.query.parentHash === ROOT_QUERY_MARKER
+          ? null
+          : resolveCommitHashQuery(req.query.parentHash, 'parentHash'),
+        originalPath: resolveNullableCommitPathQuery(req.query.originalPath, 'originalPath'),
+        modifiedPath: resolveNullableCommitPathQuery(req.query.modifiedPath, 'modifiedPath'),
+      };
+
+      if (request.originalPath === null && request.modifiedPath === null) {
+        return res.status(400).json({ error: 'originalPath or modifiedPath parameter is required' });
+      }
+
+      const result = await getCommitFileDiff(directory, request);
       res.json(result);
     } catch (error) {
+      if (/must be a full commit SHA|parameter is required/.test(String(error?.message || ''))) {
+        return res.status(400).json({ error: error.message });
+      }
       console.error('Failed to get commit file diff:', error);
       res.status(500).json({ error: error.message || 'Failed to get commit file diff' });
     }
