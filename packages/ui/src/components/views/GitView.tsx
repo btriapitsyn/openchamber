@@ -79,7 +79,8 @@ import { getWorkingTreeDiffDestination } from '@/lib/getWorkingTreeDiffDestinati
 import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { getGitViewRenderMode } from './git/gitViewRenderMode';
-import { createGitCommitDetailsController, scheduleGitCommitDetailsIdle } from './git/gitCommitDetailsController';
+import { createGitCommitDetailsController } from './git/gitCommitDetailsController';
+import { createGitContextCommitDetailsController } from './git/gitContextCommitDetailsController';
 
 type SyncAction = 'fetch' | 'pull' | 'push' | 'sync' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -92,6 +93,16 @@ type HistoryBranchDivider = {
 } | null;
 
 const GIT_RECONCILE_DELAY_MS = 15000;
+
+const scheduleGitCommitDetailsIdle = (callback: () => void) => {
+  if ('requestIdleCallback' in globalThis && 'cancelIdleCallback' in globalThis) {
+    const handle = globalThis.requestIdleCallback(callback);
+    return () => globalThis.cancelIdleCallback(handle);
+  }
+
+  const handle = globalThis.setTimeout(callback, 0);
+  return () => globalThis.clearTimeout(handle);
+};
 
 type GitViewSnapshot = {
   directory?: string;
@@ -336,6 +347,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const { screenWidth } = useDeviceInfo();
   const gitReviewLayout = useUIStore((state) => state.gitReviewLayout);
   const openContextDiff = useUIStore((state) => state.openContextDiff);
+  const openContextCommitDiff = useUIStore((state) => state.openContextCommitDiff);
   const openContextSurface = useUIStore((state) => state.openContextSurface);
 
   const prStatusBranch = status?.current ?? null;
@@ -802,6 +814,18 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   // Restore the per-repository draft when the effective repository changes
   // (e.g. the user picks a different nested repository from the picker),
   // mirroring the fresh-mount behavior of a directory switch.
+  const graphCommitDetailsController = React.useMemo(() => {
+    if (!commitDetailsController || !currentDirectory) {
+      return null;
+    }
+
+    return createGitContextCommitDetailsController(
+      commitDetailsController,
+      currentDirectory,
+      openContextCommitDiff,
+    );
+  }, [commitDetailsController, currentDirectory, openContextCommitDiff]);
+
   React.useEffect(() => {
     if (!gitDirectory) return;
     const snapshot = gitViewSnapshots.get(gitDirectory) ?? null;
@@ -2448,24 +2472,18 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     />
   );
 
-  const graphPaneContent = commitDetailsController && gitDirectory ? (
-    <GitGraphWorkspace
+  const graphPaneContent = graphCommitDetailsController && gitDirectory ? (
+    <GitGraphPanel
       directory={gitDirectory}
-      controller={commitDetailsController}
-      graph={(
-        <GitGraphPanel
-          directory={gitDirectory}
-          git={git}
-          isActive={isActive}
-          commitDetailsController={commitDetailsController}
-          onCopyHash={handleCopyCommitHash}
-          hoverRemoteName={hoverRemoteName}
-          hoverRemoteUrl={hoverRemoteUrl}
-          hoverDetailsCache={hoverDetailsCache}
-          onConflict={handleGraphConflict}
-          onActionSuccess={handleGraphActionSuccess}
-        />
-      )}
+      git={git}
+      isActive={isActive}
+      commitDetailsController={graphCommitDetailsController}
+      onCopyHash={handleCopyCommitHash}
+      hoverRemoteName={hoverRemoteName}
+      hoverRemoteUrl={hoverRemoteUrl}
+      hoverDetailsCache={hoverDetailsCache}
+      onConflict={handleGraphConflict}
+      onActionSuccess={handleGraphActionSuccess}
     />
   ) : null;
 
