@@ -1002,6 +1002,23 @@ export async function createBranch(
   return completeStatusMutation(directory, response);
 }
 
+export async function createGitTag(
+  directory: string,
+  name: string,
+  commitHash: string
+): Promise<{ success: boolean; tag: string }> {
+  const response = await runtimeFetch(buildUrl(`${API_BASE}/tags`, directory), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, commitHash }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new Error(error.error || 'Failed to create tag');
+  }
+  return response.json();
+}
+
 export async function renameBranch(
   directory: string,
   oldName: string,

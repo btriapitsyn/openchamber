@@ -9,6 +9,7 @@ import {
   continueMerge,
   continueRebase,
   createBranch,
+  createGitTag,
   deleteGitBranch,
   deleteRemoteBranch,
   dropGitStash,
@@ -118,6 +119,24 @@ const captureError = async (callback: () => Promise<void>): Promise<unknown> => 
 };
 
 describe('gitApiHttp index mutations', () => {
+  test('sends create tag payloads with the commit hash', async () => {
+    installWindowMock();
+    const calls = installFetchMock();
+    try {
+      await createGitTag('/repo', 'v1.2.3', '0123456789abcdef0123456789abcdef01234567');
+
+      expect(calls).toHaveLength(1);
+      expect(String(calls[0].input)).toBe('/api/git/tags?directory=%2Frepo');
+      expect(calls[0].init?.method).toBe('POST');
+      expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+        name: 'v1.2.3',
+        commitHash: '0123456789abcdef0123456789abcdef01234567',
+      });
+    } finally {
+      restoreMocks();
+    }
+  });
+
   test('sends bulk stage payloads as paths', async () => {
     installWindowMock();
     const calls = installFetchMock();
