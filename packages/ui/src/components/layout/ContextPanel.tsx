@@ -262,6 +262,10 @@ const browserFaviconFor = (url: string, faviconByOrigin: Record<string, string>)
   }
 };
 
+export const getDiffTabRenderKind = (tab: { commitDiffTarget: unknown }): 'commit' | 'working' => {
+  return tab.commitDiffTarget ? 'commit' : 'working';
+};
+
 const EDITOR_TREE_MIN_WIDTH = 200;
 const EDITOR_TREE_MAX_WIDTH = 480;
 
@@ -1281,11 +1285,13 @@ export const ContextPanel: React.FC = () => {
               activeTab?.id !== tab.id && 'hidden'
             )}
           >
-            {tab.commitDiffTarget ? (
+            {(() => {
+              const commitDiffTarget = tab.commitDiffTarget;
+              return getDiffTabRenderKind(tab) === 'commit' && commitDiffTarget ? (
               <React.Suspense fallback={null}>
                 <ContextCommitDiffView
                   directory={directoryKey}
-                  target={tab.commitDiffTarget}
+                  target={commitDiffTarget}
                   onClose={() => {
                     if (!directoryKey) {
                       return;
@@ -1294,7 +1300,7 @@ export const ContextPanel: React.FC = () => {
                   }}
                 />
               </React.Suspense>
-            ) : (
+              ) : (
               <React.Suspense fallback={null}>
                 <DiffView
                   visible={isOpen && activeTab?.id === tab.id}
@@ -1308,7 +1314,8 @@ export const ContextPanel: React.FC = () => {
                   flushContent
                 />
               </React.Suspense>
-            )}
+              );
+            })()}
           </div>
         ))}
         {terminalTab ? (
