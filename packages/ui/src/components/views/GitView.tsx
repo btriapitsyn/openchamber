@@ -76,7 +76,6 @@ import { cn } from '@/lib/utils';
 import { generateCommitMessage as generateSessionCommitMessage, getGitWorktreeBootstrapStatus } from '@/lib/gitApi';
 import { sessionEvents } from '@/lib/sessionEvents';
 import { useI18n } from '@/lib/i18n';
-import { getWorkingTreeDiffDestination } from '@/lib/getWorkingTreeDiffDestination';
 import { useDeviceInfo } from '@/lib/device';
 import { isDesktopShell, isVSCodeRuntime } from '@/lib/desktop';
 import { getGitViewRenderMode } from './git/gitViewRenderMode';
@@ -346,7 +345,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   })));
   const isMobile = useUIStore((state) => state.isMobile);
   const { screenWidth } = useDeviceInfo();
-  const gitReviewLayout = useUIStore((state) => state.gitReviewLayout);
   const openContextDiff = useUIStore((state) => state.openContextDiff);
   const openContextCommitDiff = useUIStore((state) => state.openContextCommitDiff);
   const openContextSurface = useUIStore((state) => state.openContextSurface);
@@ -358,7 +356,6 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     }
     return getFreshestPrStatusForBranch(state.entries, gitDirectory, prStatusBranch);
   });
-  const navigateToDiff = useUIStore((state) => state.navigateToDiff);
 
   const gitReconcileTimeoutRef = React.useRef<number | null>(null);
   const gitMutationFlushTimeoutRef = React.useRef<number | null>(null);
@@ -1836,28 +1833,17 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     [handleRevertPaths]
   );
 
-  // Context-panel tabs are keyed by the project root, not by the repository
-  // being diffed: the diff surface resolves the selected nested repository on
-  // its own, so opening the tab under `gitDirectory` would park it under a key
-  // the panel never displays.
+  // Changed-file diffs always open in the Context Panel under the UI root,
+  // not the effective nested repository. The diff surface resolves the chosen
+  // nested repository on its own, so keying the tab under `gitDirectory`
+  // would park it under a context key the panel never displays.
   const handleViewChangeDiff = React.useCallback((path: string, staged: boolean) => {
-    const scope = staged ? 'staged' : 'working';
-    const destination = getWorkingTreeDiffDestination({
-      reviewLayout: gitReviewLayout,
-      isMobile,
-      isVSCode: isVSCodeRuntime(),
-    });
-
-    if (destination === 'context' && currentDirectory) {
-      openContextDiff(currentDirectory, path, staged, scope);
+    if (!currentDirectory) {
       return;
     }
-    const previousMainTab = useUIStore.getState().activeMainTab;
-    navigateToDiff(path, staged, scope);
-    if (destination === 'main' && previousMainTab !== 'diff' && useUIStore.getState().activeMainTab !== 'diff') {
-      console.warn('[gitView] blocked main diff activation');
-    }
-  }, [currentDirectory, gitReviewLayout, isMobile, navigateToDiff, openContextDiff]);
+    const scope = staged ? 'staged' : 'working';
+    openContextDiff(currentDirectory, path, staged, scope);
+  }, [currentDirectory, openContextDiff]);
 
   const openStashes = React.useCallback(() => setIsStashesDialogOpen(true), []);
 
@@ -2680,7 +2666,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
                 <div className="min-h-0 flex-1">{graphPaneContent}</div>
               </div>
             ) : (
-              commitDetailsController && gitDirectory ? (
+              graphCommitDetailsController && gitDirectory ? (
                 <GitGraphWorkspace
                   directory={gitDirectory}
                   controller={commitDetailsController}
@@ -2690,7 +2676,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
                       isLogLoading={isLogLoading}
                       logMaxCount={logMaxCountLocal}
                       onLogMaxCountChange={handleLogMaxCountChange}
-                      commitDetailsController={commitDetailsController}
+                      commitDetailsController={graphCommitDetailsController}
                       onCopyHash={handleCopyCommitHash}
                       directory={gitDirectory}
                       hoverRemoteName={hoverRemoteName}
