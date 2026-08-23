@@ -3,6 +3,7 @@ import type { GitCommitChangedFile } from '@/lib/api/types';
 import { CONTEXT_SURFACES, sortContextSurfaces } from '../lib/surfaces/registry';
 import { useTerminalStore } from './useTerminalStore';
 import { useUIStore, type GitCommitDiffTarget } from './useUIStore';
+import { useGitDiffTabsStore } from './useGitDiffTabsStore';
 
 const buildCommitChangedFile = (overrides: Partial<GitCommitChangedFile> = {}): GitCommitChangedFile => ({
   path: 'src/new-name.ts',
@@ -32,6 +33,7 @@ const originalPersistOptions = useUIStore.persist.getOptions();
 beforeEach(() => {
   useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [], gitRepositoryPaneStates: {} });
   useTerminalStore.getState().clearAll();
+  useGitDiffTabsStore.setState({ byDirectory: {} });
 });
 
 describe('useUIStore context panel tabs', () => {
@@ -943,6 +945,115 @@ describe('context panel tab limits', () => {
     const tabs = state?.tabs ?? [];
     expect(tabs.some((tab) => tab.id === state?.activeTabId)).toBe(true);
     expect(tabs.some((tab) => tab.targetPath === 'http://localhost:3019/')).toBe(true);
+  });
+});
+
+describe('useUIStore contextGitSplitDiffWidth', () => {
+  test('contextGitSplitDiffWidth clamps to [360, 1200]', () => {
+    useUIStore.getState().setContextGitSplitDiffWidth(100);
+    expect(useUIStore.getState().contextGitSplitDiffWidth).toBe(360);
+
+    useUIStore.getState().setContextGitSplitDiffWidth(800);
+    expect(useUIStore.getState().contextGitSplitDiffWidth).toBe(800);
+
+    useUIStore.getState().setContextGitSplitDiffWidth(1500);
+    expect(useUIStore.getState().contextGitSplitDiffWidth).toBe(1200);
+  });
+
+  test('contextGitSplitDiffWidth ignores NaN and non-finite values', () => {
+    const initial = useUIStore.getState().contextGitSplitDiffWidth;
+
+    useUIStore.getState().setContextGitSplitDiffWidth(NaN);
+    expect(useUIStore.getState().contextGitSplitDiffWidth).toBe(initial);
+
+    useUIStore.getState().setContextGitSplitDiffWidth(Infinity);
+    expect(useUIStore.getState().contextGitSplitDiffWidth).toBe(initial);
+  });
+});
+
+describe('useUIStore openContextDiff and openContextCommitDiff with git tab', () => {
+  test('openContextDiff seeds the inner git diff tabs store', () => {
+    const directory = '/repo';
+    const path = 'src/file.ts';
+    const scope = 'working' as const;
+
+    useUIStore.getState().openContextDiff(directory, path, false, scope);
+
+    const diffStoreState = useGitDiffTabsStore.getState();
+    const dirState = diffStoreState.byDirectory[directory];
+
+    expect(dirState?.tabs).toHaveLength(1);
+    const tab = dirState?.tabs[0];
+    if (tab?.kind !== 'working') {
+      throw new Error(`Expected a working tab, got ${tab?.kind}`);
+    }
+    expect(tab.path).toBe(path);
+    expect(tab.scope).toBe(scope);
+  });
+
+  test('openContextCommitDiff seeds the inner git diff tabs store', () => {
+    const directory = '/repo';
+    const target = buildCommitDiffTarget();
+
+    useUIStore.getState().openContextCommitDiff(directory, target);
+
+    const diffStoreState = useGitDiffTabsStore.getState();
+    const dirState = diffStoreState.byDirectory[directory];
+
+    expect(dirState?.tabs).toHaveLength(1);
+    const tab = dirState?.tabs[0];
+    if (tab?.kind !== 'commit') {
+      throw new Error(`Expected a commit tab, got ${tab?.kind}`);
+    }
+    expect(tab.target).toEqual(target);
+  });
+
+  test('no-steal-focus: when git tab is active, diff tabs update inner store but activeTabId stays git', () => {
+    const directory = '/repo';
+
+    // Open git surface first
+    useUIStore.getState().openContextSurface(directory, 'git');
+
+    const panelBefore = useUIStore.getState().contextPanelByDirectory[directory];
+    const activeIdBefore = panelBefore?.activeTabId;
+    expect(activeIdBefore).toBe('git');
+    expect(panelBefore?.isOpen).toBe(true);
+
+    // Open a diff while git tab is active
+    useUIStore.getState().openContextDiff(directory, 'src/file.ts', false, 'working');
+
+    const panelAfter = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(panelAfter?.activeTabId).toBe('git');
+    expect(panelAfter?.isOpen).toBe(true);
+
+    // The singleton diff panel tab is created in the background (not active),
+    // so the rail/strip still shows the diff surface entry.
+    expect(panelAfter?.tabs.some((tab) => tab.mode === 'diff')).toBe(true);
+
+    // And the diff itself lands in the inner store for the split pane.
+    const diffStoreState = useGitDiffTabsStore.getState();
+    const dirState = diffStoreState.byDirectory[directory];
+    expect(dirState?.tabs).toHaveLength(1);
+  });
+
+  test('steal-as-today: when git tab is not active, diff tab becomes active as it does today', () => {
+    const directory = '/repo';
+
+    // Open some other tab first
+    useUIStore.getState().openContextFile(directory, 'src/other.ts');
+
+    const panelBefore = useUIStore.getState().contextPanelByDirectory[directory];
+    const activeIdBefore = panelBefore?.activeTabId;
+    expect(activeIdBefore).toBeTruthy();
+    expect(typeof activeIdBefore === 'string' && activeIdBefore.startsWith('file:')).toBe(true);
+
+    // Open a diff
+    useUIStore.getState().openContextDiff(directory, 'src/file.ts', false, 'working');
+
+    const panelAfter = useUIStore.getState().contextPanelByDirectory[directory];
+    const activeIdAfter = panelAfter?.activeTabId;
+    expect(activeIdAfter).toBe('diff');
+    expect(panelAfter?.isOpen).toBe(true);
   });
 });
 

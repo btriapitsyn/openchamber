@@ -15,6 +15,7 @@ import type { GitCommitChangedFile, LinearIssueListAssignee, LinearIssueListPrio
 import type { ProjectRef } from '@/lib/projectContextApi';
 import { directoryMayHaveActiveProjectAction, useTerminalStore } from '@/stores/useTerminalStore';
 import { useFilesViewTabsStore } from './useFilesViewTabsStore';
+import { useGitDiffTabsStore } from './useGitDiffTabsStore';
 import { isWindowsArm64 } from '@/lib/platform';
 import { isVSCodeRuntime } from '@/lib/desktop';
 
@@ -975,6 +976,7 @@ interface UIStore {
   contextRailHiddenSurfaces: string[];
   contextEditorTreeVisible: boolean;
   contextEditorTreeWidth: number;
+  contextGitSplitDiffWidth: number;
   notesPanelHeight: number;
   /** Expanded collapsible sections of the in-chat work-status panel, by id. */
   workStatusExpandedSections: Record<string, boolean>;
@@ -1192,6 +1194,7 @@ interface UIStore {
   setContextRailOrder: (order: string[]) => void;
   toggleContextEditorTree: () => void;
   setContextEditorTreeWidth: (width: number) => void;
+  setContextGitSplitDiffWidth: (width: number) => void;
   openContextSurface: (directory: string, mode: ContextPanelMode) => void;
   openContextPanelTab: (directory: string, tab: ContextPanelTabDescriptor, options?: { reveal?: boolean }) => void;
   openContextDiff: (directory: string, filePath: string, staged?: boolean, scope?: PendingDiffScope | null) => void;
@@ -1406,6 +1409,7 @@ export const useUIStore = create<UIStore>()(
         contextRailHiddenSurfaces: [],
         contextEditorTreeVisible: true,
         contextEditorTreeWidth: 240,
+        contextGitSplitDiffWidth: 560,
         notesPanelHeight: 112,
         workStatusExpandedSections: {},
         workStatusScrollTop: 0,
@@ -1593,6 +1597,13 @@ export const useUIStore = create<UIStore>()(
           set({ contextEditorTreeWidth: Math.min(480, Math.max(200, Math.round(width))) });
         },
 
+        setContextGitSplitDiffWidth: (width) => {
+          if (!Number.isFinite(width)) {
+            return;
+          }
+          set({ contextGitSplitDiffWidth: Math.min(1200, Math.max(360, Math.round(width))) });
+        },
+
         // Rail entry point: activates the most recent tab of the requested
         // mode, opens a fresh singleton tab when none exists, and toggles the
         // panel closed when the requested mode is already active and visible.
@@ -1682,12 +1693,41 @@ export const useUIStore = create<UIStore>()(
 
           const diffScope = normalizePendingDiffScope(scope) ?? (staged ? 'staged' : 'working');
 
-          get().openContextPanelTab(normalizedDirectory, {
+          useGitDiffTabsStore.getState().openTab(normalizedDirectory, {
+            kind: 'working',
+            path: normalizedFilePath,
+            scope: diffScope,
+          });
+
+          const tab: ContextPanelTabDescriptor = {
             mode: 'diff',
             targetPath: normalizedFilePath,
             stagedDiff: diffScope === 'staged',
             diffScope,
-          });
+          };
+
+          const panelState = get().contextPanelByDirectory[normalizedDirectory];
+          const activeTab = panelState?.tabs.find((entry) => entry.id === panelState.activeTabId) ?? null;
+          const gitTabActive = Boolean(panelState?.isOpen && activeTab?.mode === 'git');
+
+          // While the git surface is visible the diff lands in its split pane:
+          // keep the diff panel tab updated in the background without stealing
+          // focus from the git tab.
+          if (gitTabActive) {
+            set((state) => {
+              const prev = state.contextPanelByDirectory[normalizedDirectory];
+              const current = touchContextPanelState(prev);
+              const byDirectory = {
+                ...state.contextPanelByDirectory,
+                [normalizedDirectory]: upsertContextPanelTab(current, tab, { reveal: false }),
+              };
+
+              return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+            });
+            return;
+          }
+
+          get().openContextPanelTab(normalizedDirectory, tab);
         },
 
         openContextCommitDiff: (directory, target) => {
@@ -1697,11 +1737,39 @@ export const useUIStore = create<UIStore>()(
             return;
           }
 
-          get().openContextPanelTab(normalizedDirectory, {
+          useGitDiffTabsStore.getState().openTab(normalizedDirectory, {
+            kind: 'commit',
+            target: normalizedTarget,
+          });
+
+          const tab: ContextPanelTabDescriptor = {
             mode: 'diff',
             targetPath: normalizedTarget.file.path,
             commitDiffTarget: normalizedTarget,
-          });
+          };
+
+          const panelState = get().contextPanelByDirectory[normalizedDirectory];
+          const activeTab = panelState?.tabs.find((entry) => entry.id === panelState.activeTabId) ?? null;
+          const gitTabActive = Boolean(panelState?.isOpen && activeTab?.mode === 'git');
+
+          // While the git surface is visible the diff lands in its split pane:
+          // keep the diff panel tab updated in the background without stealing
+          // focus from the git tab.
+          if (gitTabActive) {
+            set((state) => {
+              const prev = state.contextPanelByDirectory[normalizedDirectory];
+              const current = touchContextPanelState(prev);
+              const byDirectory = {
+                ...state.contextPanelByDirectory,
+                [normalizedDirectory]: upsertContextPanelTab(current, tab, { reveal: false }),
+              };
+
+              return { contextPanelByDirectory: clampContextPanelRoots(byDirectory, 20) };
+            });
+            return;
+          }
+
+          get().openContextPanelTab(normalizedDirectory, tab);
         },
 
         openContextFile: (directory, filePath) => {
@@ -3243,6 +3311,7 @@ export const useUIStore = create<UIStore>()(
           contextRailHiddenSurfaces: state.contextRailHiddenSurfaces,
           contextEditorTreeVisible: state.contextEditorTreeVisible,
           contextEditorTreeWidth: state.contextEditorTreeWidth,
+          contextGitSplitDiffWidth: state.contextGitSplitDiffWidth,
           notesPanelHeight: state.notesPanelHeight,
           workStatusExpandedSections: state.workStatusExpandedSections,
           workStatusScrollTop: state.workStatusScrollTop,
