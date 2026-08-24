@@ -20,10 +20,16 @@ import { getGitDiffTabLabel, getGitDiffTabTitle } from './gitDiffTabLabels';
 import type { GitDiffTab } from '@/stores/useGitDiffTabsStore';
 import type { GitCommitDiffTarget } from '@/stores/useUIStore';
 
-const commitTarget = (commitHash: string, path: string): GitCommitDiffTarget => ({
-  commitHash,
-  parentHash: null,
-  file: {
+type CommitTargetOverrides = Partial<Omit<GitCommitDiffTarget, 'file'>> & {
+  file?: Partial<GitCommitDiffTarget['file']>;
+};
+
+const commitTarget = (
+  commitHash: string,
+  path: string,
+  overrides?: CommitTargetOverrides,
+): GitCommitDiffTarget => {
+  const baseFile: GitCommitDiffTarget['file'] = {
     path,
     originalPath: undefined,
     status: 'M',
@@ -33,8 +39,16 @@ const commitTarget = (commitHash: string, path: string): GitCommitDiffTarget => 
     insertions: 10,
     deletions: 5,
     isBinary: false,
-  },
-});
+    ...overrides?.file,
+  };
+
+  return {
+    commitHash,
+    parentHash: null,
+    ...overrides,
+    file: baseFile,
+  };
+};
 
 const workingTab = (path: string): GitDiffTab => ({
   kind: 'working',
@@ -44,9 +58,13 @@ const workingTab = (path: string): GitDiffTab => ({
   touchedAt: 1000,
 });
 
-const commitTab = (commitHash: string, path: string): GitDiffTab => ({
+const commitTab = (
+  commitHash: string,
+  path: string,
+  overrides?: CommitTargetOverrides,
+): GitDiffTab => ({
   kind: 'commit',
-  target: commitTarget(commitHash, path),
+  target: commitTarget(commitHash, path, overrides),
   id: `commit:${commitHash}:${path}`,
   touchedAt: 1000,
 });
@@ -70,9 +88,28 @@ describe('getGitDiffTabLabel', () => {
     expect(getGitDiffTabLabel([tab], tab)).toBe('app.tsx');
   });
 
-  test('returns basename for a commit tab', () => {
-    const tab = commitTab('abc123', 'src/history.ts');
-    expect(getGitDiffTabLabel([tab], tab)).toBe('history.ts');
+  test('shows parent and commit identities for a compared commit tab', () => {
+    const tab = commitTab('abc1234def5678', 'src/history.ts', {
+      parentHash: 'def5678abc1234',
+    });
+
+    expect(getGitDiffTabLabel([tab], tab)).toBe('history.ts (def5678) ↔ history.ts (abc1234)');
+  });
+
+  test('shows original and current basenames for a renamed commit tab', () => {
+    const tab = commitTab('abc1234def5678', 'src/new-name.ts', {
+      parentHash: 'def5678abc1234',
+      file: {
+        originalPath: 'src/old-name.ts',
+      },
+    });
+
+    expect(getGitDiffTabLabel([tab], tab)).toBe('old-name.ts (def5678) ↔ new-name.ts (abc1234)');
+  });
+
+  test('shows only the commit identity for a root commit tab', () => {
+    const tab = commitTab('abc1234def5678', 'src/history.ts');
+    expect(getGitDiffTabLabel([tab], tab)).toBe('history.ts (abc1234)');
   });
 
   test('disambiguates duplicate basenames with parent segment', () => {
@@ -110,8 +147,18 @@ describe('getGitDiffTabTitle', () => {
     expect(getGitDiffTabTitle(tab)).toBe('src/components/App.tsx');
   });
 
-  test('returns path @ shortHash for a commit tab', () => {
+  test('returns both compared paths and short hashes for a commit tab title', () => {
+    const tab = commitTab('abc1234def5678', 'src/new-name.ts', {
+      parentHash: 'def5678abc1234',
+      file: {
+        originalPath: 'src/old-name.ts',
+      },
+    });
+    expect(getGitDiffTabTitle(tab)).toBe('src/old-name.ts (def5678) ↔ src/new-name.ts (abc1234)');
+  });
+
+  test('returns path and short hash for a root commit tab title', () => {
     const tab = commitTab('abc1234def5678', 'src/history.ts');
-    expect(getGitDiffTabTitle(tab)).toBe('src/history.ts @ abc1234');
+    expect(getGitDiffTabTitle(tab)).toBe('src/history.ts (abc1234)');
   });
 });

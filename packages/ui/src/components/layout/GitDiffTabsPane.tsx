@@ -64,16 +64,20 @@ export const GitDiffTabsPane: React.FC<GitDiffTabsPaneProps> = ({ directory }) =
       )}
       data-git-diff-tabs-pane="true"
     >
-      {/* Tab strip at the top */}
-      <SortableTabsStrip
-        items={stripItems}
-        activeId={activeTabId}
-        onSelect={(id) => useGitDiffTabsStore.getState().setActiveTab(directory, id)}
-        onClose={(id) => useGitDiffTabsStore.getState().closeTab(directory, id)}
-        onReorder={(activeId, overId) =>
-          useGitDiffTabsStore.getState().reorderTabs(directory, activeId, overId)
-        }
-      />
+      <div
+        data-git-diff-tabs-header="true"
+        className="flex h-10 shrink-0 items-stretch border-b border-border"
+      >
+        <SortableTabsStrip
+          items={stripItems}
+          activeId={activeTabId}
+          onSelect={(id) => useGitDiffTabsStore.getState().setActiveTab(directory, id)}
+          onClose={(id) => useGitDiffTabsStore.getState().closeTab(directory, id)}
+          onReorder={(activeId, overId) =>
+            useGitDiffTabsStore.getState().reorderTabs(directory, activeId, overId)
+          }
+        />
+      </div>
 
       {/* Active tab content below the strip */}
       {activeTab && (
@@ -83,7 +87,6 @@ export const GitDiffTabsPane: React.FC<GitDiffTabsPaneProps> = ({ directory }) =
               <ContextCommitDiffView
                 directory={directory}
                 target={activeTab.target}
-                onClose={() => useGitDiffTabsStore.getState().closeTab(directory, activeTab.id)}
               />
             )}
             {activeTab.kind === 'working' && (

@@ -7,13 +7,11 @@ import {
   createGitCommitDetailsController,
   scheduleGitCommitDetailsIdle,
   type GitCommitComparison,
-  type GitCommitDetailsController,
 } from './gitCommitDetailsController';
 
 export interface ContextCommitDiffViewProps {
   directory: string;
   target: GitCommitDiffTarget;
-  onClose: () => void;
   createController?: typeof createGitCommitDetailsController;
 }
 
@@ -36,7 +34,6 @@ const createContextCommitFileKey = (file: Pick<GitCommitChangedFile, 'path' | 's
 export const ContextCommitDiffView: React.FC<ContextCommitDiffViewProps> = ({
   directory,
   target,
-  onClose,
   createController = createGitCommitDetailsController,
 }) => {
   const { git } = useRuntimeAPIs();
@@ -118,11 +115,6 @@ export const ContextCommitDiffView: React.FC<ContextCommitDiffViewProps> = ({
     controller.selectFile(comparison, file);
   }, [comparison, controller, file]);
 
-  const previewController = React.useMemo<GitCommitDetailsController>(() => ({
-    ...controller,
-    clearSelection: onClose,
-  }), [controller, onClose]);
-
   return (
     <section
       id="git-commit-context-diff"
@@ -131,9 +123,7 @@ export const ContextCommitDiffView: React.FC<ContextCommitDiffViewProps> = ({
       className="h-full min-h-0"
     >
       <GitCommitDiffPreview
-        controller={previewController}
-        closeMode="close"
-        autoFocusCloseButton={false}
+        controller={controller}
         announceOverlayOpen={false}
       />
     </section>

@@ -65,23 +65,14 @@ type DocumentStub = {
 };
 
 const pierreCalls: PierreDiffViewerProps[] = [];
-const closeHandlers: Array<() => void> = [];
-const buttonHandlers: Array<{ isClose: boolean; click: () => void }> = [];
+const buttonHandlers: Array<() => void> = [];
 let runtimeApis: PreviewRuntimeApis;
 
 mock.module('@/components/ui/button', () => ({
-  Button: React.forwardRef<HTMLButtonElement, MockButtonProps & { 'data-git-commit-diff-preview-close'?: string }>(({ children, onClick, ...props }, ref) => {
-    const closeMarker = props['data-git-commit-diff-preview-close'];
-    if (closeMarker === 'true' && onClick) {
-      // SAFETY: These preview button handlers never inspect the event payload in this test.
-      closeHandlers.push(() => onClick({} as React.MouseEvent<HTMLButtonElement>));
-    }
+  Button: React.forwardRef<HTMLButtonElement, MockButtonProps>(({ children, onClick, ...props }, ref) => {
     if (onClick) {
-      buttonHandlers.push({
-        isClose: closeMarker === 'true',
-        // SAFETY: These preview button handlers never inspect the event payload in this test.
-        click: () => onClick({} as React.MouseEvent<HTMLButtonElement>),
-      });
+      // SAFETY: These preview button handlers never inspect the event payload in this test.
+      buttonHandlers.push(() => onClick({} as React.MouseEvent<HTMLButtonElement>));
     }
     return React.createElement('button', { ...props, onClick, ref }, children);
   }),
@@ -228,6 +219,8 @@ const installMinimalDom = () => {
 const flush = async () => {
   await Promise.resolve();
   await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
 };
 
 const isTextNode = (node: NodeStub): node is TextStub => node.nodeType === 3;
@@ -296,31 +289,29 @@ const createDeferred = <T,>() => {
   return { promise, resolve, reject };
 };
 
-const renderView = async (target: GitCommitDiffTarget, onClose: () => void, props: RenderViewOptions = {}) => {
+const renderView = async (target: GitCommitDiffTarget, props: RenderViewOptions = {}) => {
   const dom = installMinimalDom();
   const root: Root = createRoot(dom.reactContainer);
 
   const render = async (nextTarget: GitCommitDiffTarget, nextProps: RenderViewOptions = props) => {
     await act(async () => {
-      root.render(
+      const tree = React.createElement(
+        I18nProvider,
+        null,
         React.createElement(
-            I18nProvider,
-            null,
-            React.createElement(
-              RuntimeAPIContext.Provider,
-              {
-                // SAFETY: This client test renders only the git preview path and never reads other runtime APIs.
-                value: runtimeApis as RuntimeAPIs,
-              },
-              React.createElement(ContextCommitDiffView, {
-                directory: '/repo',
-                target: nextTarget,
-              onClose,
-              ...nextProps,
-            }),
-          ),
+          RuntimeAPIContext.Provider,
+          {
+            // SAFETY: This client test renders only the git preview path and never reads other runtime APIs.
+            value: runtimeApis as RuntimeAPIs,
+          },
+          React.createElement(ContextCommitDiffView, {
+            directory: '/repo',
+            target: nextTarget,
+            ...nextProps,
+          }),
         ),
       );
+      root.render(tree);
       await flush();
     });
   };
@@ -342,12 +333,11 @@ const renderView = async (target: GitCommitDiffTarget, onClose: () => void, prop
 
 beforeEach(() => {
   pierreCalls.length = 0;
-  closeHandlers.length = 0;
   buttonHandlers.length = 0;
 });
 
 describe('ContextCommitDiffView', () => {
-  test('requests the exact historical preview and renders the ready diff with a close action', async () => {
+  test('requests the exact historical preview and renders the ready diff without nested preview close chrome', async () => {
     const requests: GitCommitFilePreviewRequest[] = [];
     runtimeApis = {
       git: {
@@ -357,11 +347,7 @@ describe('ContextCommitDiffView', () => {
         },
       },
     };
-    let closeCount = 0;
-
-    const rendered = await renderView(buildTarget(), () => {
-      closeCount += 1;
-    });
+    const rendered = await renderView(buildTarget());
 
     expect(requests).toEqual([{
       commitHash: 'a'.repeat(40),
@@ -374,8 +360,8 @@ describe('ContextCommitDiffView', () => {
     expect(pierreCalls.at(-1)?.original).toBe('before\n');
     expect(pierreCalls.at(-1)?.modified).toBe('after\n');
 
-    closeHandlers[0]?.();
-    expect(closeCount).toBe(1);
+    expect(findByAttribute(rendered.container, 'data-git-commit-diff-preview-close')).toBeNull();
+    expect(findByAttribute(rendered.container, 'data-git-commit-diff-preview-header')).toBeNull();
 
     await rendered.restore();
   });
@@ -394,21 +380,21 @@ describe('ContextCommitDiffView', () => {
       },
     };
 
-    const binary = await renderView(buildTarget({ file: buildFile({ path: 'assets/logo.png', isBinary: true, status: 'M' }) }), () => {});
+    const binary = await renderView(buildTarget({ file: buildFile({ path: 'assets/logo.png', isBinary: true, status: 'M' }) }));
     expect(requests).toHaveLength(0);
     expect(findByAttribute(binary.container, 'data-diff-viewer')).toBeNull();
     expect(collectText(binary.container)).toContain('2'.repeat(40));
     expect(collectText(binary.container)).toContain('1'.repeat(40));
     await binary.restore();
 
-    const gitlink = await renderView(buildTarget({ file: buildFile({ path: 'vendor/tooling', kind: 'gitlink', isBinary: true, objectId: 'b'.repeat(40), originalObjectId: 'a'.repeat(40) }) }), () => {});
+    const gitlink = await renderView(buildTarget({ file: buildFile({ path: 'vendor/tooling', kind: 'gitlink', isBinary: true, objectId: 'b'.repeat(40), originalObjectId: 'a'.repeat(40) }) }));
     expect(requests).toHaveLength(0);
     expect(findByAttribute(gitlink.container, 'data-diff-viewer')).toBeNull();
     expect(collectText(gitlink.container)).toContain('a'.repeat(40));
     expect(collectText(gitlink.container)).toContain('b'.repeat(40));
     await gitlink.restore();
 
-    const tooLarge = await renderView(buildTarget({ file: buildFile({ path: 'src/too-large.ts', status: 'M', originalPath: undefined }) }), () => {});
+    const tooLarge = await renderView(buildTarget({ file: buildFile({ path: 'src/too-large.ts', status: 'M', originalPath: undefined }) }));
     expect(findByAttribute(tooLarge.container, 'data-diff-viewer')).toBeNull();
     expect(requests).toEqual([{
       commitHash: 'a'.repeat(40),
@@ -418,7 +404,7 @@ describe('ContextCommitDiffView', () => {
     }]);
     await tooLarge.restore();
 
-    const error = await renderView(buildTarget({ file: buildFile({ path: 'src/error.ts', status: 'M', originalPath: undefined }) }), () => {});
+    const error = await renderView(buildTarget({ file: buildFile({ path: 'src/error.ts', status: 'M', originalPath: undefined }) }));
     expect(findByAttribute(error.container, 'data-diff-viewer')).toBeNull();
     expect(requests).toEqual([
       {
@@ -435,7 +421,7 @@ describe('ContextCommitDiffView', () => {
       },
     ]);
     await act(async () => {
-      buttonHandlers.find((handler) => !handler.isClose)?.click();
+      buttonHandlers[0]?.();
       await flush();
     });
     expect(requests).toEqual([
@@ -469,7 +455,7 @@ describe('ContextCommitDiffView', () => {
       },
     };
 
-    const rendered = await renderView(buildTarget({ file: buildFile({ path: 'src/pending.ts', status: 'M', originalPath: undefined }) }), () => {});
+    const rendered = await renderView(buildTarget({ file: buildFile({ path: 'src/pending.ts', status: 'M', originalPath: undefined }) }));
     await rendered.restore();
 
     deferred.resolve({ status: 'ready', original: 'stale old', modified: 'stale new' });
@@ -515,7 +501,7 @@ describe('ContextCommitDiffView', () => {
       };
     };
 
-    const rendered = await renderView(target, () => {}, {
+    const rendered = await renderView(target, {
       createController,
     });
 

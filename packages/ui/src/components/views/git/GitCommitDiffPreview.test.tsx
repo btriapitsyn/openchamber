@@ -304,37 +304,39 @@ const buildReadySnapshot = (fileOverrides: Partial<GitCommitChangedFile> = {}, o
   ...overrides,
 });
 
-const renderPreviewMarkup = (controller: PreviewController, props: Partial<PreviewProps> = {}) => renderToStaticMarkup(
+const renderPreviewMarkup = (
+  controller: PreviewController,
+  props: Partial<PreviewProps> = {},
+) => renderToStaticMarkup(
   React.createElement(
     I18nProvider,
     null,
     React.createElement(GitCommitDiffPreview, {
       controller,
-      closeMode: 'close',
-      autoFocusCloseButton: false,
       announceOverlayOpen: false,
       ...props,
     }),
   ),
 );
 
-const renderPreviewClient = async (controller: PreviewController, props: Partial<PreviewProps> = {}) => {
+const renderPreviewClient = async (
+  controller: PreviewController,
+  props: Partial<PreviewProps> = {},
+) => {
   const dom = installMinimalDom();
   const root: Root = createRoot(dom.reactContainer);
   await act(async () => {
     root.render(
-      React.createElement(
-        I18nProvider,
-        null,
-        React.createElement(GitCommitDiffPreview, {
-          controller,
-          closeMode: 'back',
-          autoFocusCloseButton: true,
-          announceOverlayOpen: true,
-          ...props,
-        }),
-      ),
-    );
+        React.createElement(
+          I18nProvider,
+          null,
+          React.createElement(GitCommitDiffPreview, {
+            controller,
+            announceOverlayOpen: true,
+            ...props,
+          }),
+        ),
+      );
     await flush();
   });
 
@@ -372,9 +374,16 @@ describe('GitCommitDiffPreview', () => {
 
     const renamedController = createPreviewController(buildReadySnapshot({ status: 'R', path: 'src/new-name.ts', originalPath: 'src/old-name.ts' }));
     const renamedMarkup = renderPreviewMarkup(renamedController);
-    expect(renamedMarkup).toContain('src/old-name.ts');
-    expect(renamedMarkup).toContain('src/new-name.ts');
+    expect(renamedMarkup).not.toContain('src/old-name.ts');
+    expect(renamedMarkup).not.toContain('data-git-commit-diff-preview-header');
     expect(pierreCalls.at(-1)?.fileName).toBe('src/new-name.ts');
+  });
+
+  test('renders preview content without inset padding', () => {
+    const markup = renderPreviewMarkup(createPreviewController(buildReadySnapshot()));
+
+    expect(markup).not.toContain('px-4');
+    expect(markup).not.toContain('py-3');
   });
 
   test('renders loading placeholder and keeps stale body visible for same-key retry errors', () => {
@@ -450,22 +459,19 @@ describe('GitCommitDiffPreview', () => {
     expect(tooLargeMarkup).toContain('8.0 MB');
   });
 
-  test('renders the header, clears selection from the close action, announces politely, and focuses the back button', async () => {
+  test('removes duplicate preview chrome while keeping the polite announcement', async () => {
     const controller = createPreviewController(buildReadySnapshot({ status: 'R', path: 'src/new-name.ts', originalPath: 'src/old-name.ts' }));
     const rendered = await renderPreviewClient(controller);
 
     const header = findByAttribute(rendered.container, 'data-git-commit-diff-preview-header');
-    expect(header).not.toBeNull();
+    expect(header).toBeNull();
 
     const announcement = findByAttribute(rendered.container, 'data-git-commit-diff-preview-announcement');
     expect(announcement?.attributes['aria-live']).toBe('polite');
 
     const closeButton = findByAttribute(rendered.container, 'data-git-commit-diff-preview-close');
-    expect(closeButton).not.toBeNull();
-    expect(rendered.documentStub.activeElement).toBe(closeButton);
-
-    controller.clearSelection();
-    expect(controller.calls.clearSelection).toBe(1);
+    expect(closeButton).toBeNull();
+    expect(rendered.documentStub.activeElement).toBeNull();
 
     await rendered.restore();
   });
