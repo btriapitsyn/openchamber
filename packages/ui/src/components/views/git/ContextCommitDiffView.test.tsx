@@ -1,6 +1,7 @@
 import React, { act } from 'react';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRoot, type Root } from 'react-dom/client';
+import type { DiffViewSnapshotSource } from '@/components/views/DiffView';
 import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
 import { I18nProvider } from '@/lib/i18n/context';
 import type { GitCommitChangedFile, GitCommitFilePreviewRequest, GitCommitFilePreviewResponse, RuntimeAPIs } from '@/lib/api/types';
@@ -8,10 +9,11 @@ import type { GitCommitDiffTarget } from '@/stores/useUIStore';
 import { createGitCommitDetailsController } from './gitCommitDetailsController';
 
 type MockButtonProps = React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>;
-type PierreDiffViewerProps = {
-  fileName?: string;
-  original?: string;
-  modified?: string;
+type MockDiffViewProps = {
+  snapshotSource?: DiffViewSnapshotSource;
+  hideStackedFileSidebar?: boolean;
+  showOpenInEditorAction?: boolean;
+  flushContent?: boolean;
 };
 type RenderViewOptions = {
   createController?: typeof createGitCommitDetailsController;
@@ -64,7 +66,7 @@ type DocumentStub = {
   removeEventListener(): void;
 };
 
-const pierreCalls: PierreDiffViewerProps[] = [];
+const diffViewCalls: MockDiffViewProps[] = [];
 const buttonHandlers: Array<() => void> = [];
 let runtimeApis: PreviewRuntimeApis;
 
@@ -82,14 +84,12 @@ mock.module('@/components/icon/Icon', () => ({
   Icon: ({ name, className }: { name: string; className?: string }) => React.createElement('span', { 'data-icon': name, className }),
 }));
 
-mock.module('@/components/views/PierreDiffViewer', () => ({
-  PierreDiffViewer: (props: PierreDiffViewerProps) => {
-    pierreCalls.push(props);
+mock.module('@/components/views/DiffView', () => ({
+  DiffView: (props: MockDiffViewProps) => {
+    diffViewCalls.push(props);
     return React.createElement('div', {
-      'data-diff-viewer': true,
-      'data-file-name': String(props.fileName ?? ''),
-      'data-original': String(props.original ?? ''),
-      'data-modified': String(props.modified ?? ''),
+      'data-standard-diff-view': 'true',
+      'data-diff-view-toggle': 'true',
     });
   },
 }));
@@ -332,7 +332,7 @@ const renderView = async (target: GitCommitDiffTarget, props: RenderViewOptions 
 };
 
 beforeEach(() => {
-  pierreCalls.length = 0;
+  diffViewCalls.length = 0;
   buttonHandlers.length = 0;
 });
 
@@ -356,9 +356,19 @@ describe('ContextCommitDiffView', () => {
       modifiedPath: 'src/new-name.ts',
     }]);
     expect(findByAttribute(rendered.container, 'data-git-commit-context-diff', 'true')).not.toBeNull();
-    expect(pierreCalls.at(-1)?.fileName).toBe('src/new-name.ts');
-    expect(pierreCalls.at(-1)?.original).toBe('before\n');
-    expect(pierreCalls.at(-1)?.modified).toBe('after\n');
+    expect(findByAttribute(rendered.container, 'data-diff-view-toggle', 'true')).not.toBeNull();
+    expect(diffViewCalls.at(-1)?.snapshotSource).toEqual({
+      directory: '/repo',
+      files: [{
+        path: 'src/new-name.ts',
+        status: 'R',
+        insertions: 7,
+        deletions: 3,
+        isBinary: false,
+        original: 'before\n',
+        modified: 'after\n',
+      }],
+    });
 
     expect(findByAttribute(rendered.container, 'data-git-commit-diff-preview-close')).toBeNull();
     expect(findByAttribute(rendered.container, 'data-git-commit-diff-preview-header')).toBeNull();
@@ -382,20 +392,20 @@ describe('ContextCommitDiffView', () => {
 
     const binary = await renderView(buildTarget({ file: buildFile({ path: 'assets/logo.png', isBinary: true, status: 'M' }) }));
     expect(requests).toHaveLength(0);
-    expect(findByAttribute(binary.container, 'data-diff-viewer')).toBeNull();
+    expect(findByAttribute(binary.container, 'data-standard-diff-view')).toBeNull();
     expect(collectText(binary.container)).toContain('2'.repeat(40));
     expect(collectText(binary.container)).toContain('1'.repeat(40));
     await binary.restore();
 
     const gitlink = await renderView(buildTarget({ file: buildFile({ path: 'vendor/tooling', kind: 'gitlink', isBinary: true, objectId: 'b'.repeat(40), originalObjectId: 'a'.repeat(40) }) }));
     expect(requests).toHaveLength(0);
-    expect(findByAttribute(gitlink.container, 'data-diff-viewer')).toBeNull();
+    expect(findByAttribute(gitlink.container, 'data-standard-diff-view')).toBeNull();
     expect(collectText(gitlink.container)).toContain('a'.repeat(40));
     expect(collectText(gitlink.container)).toContain('b'.repeat(40));
     await gitlink.restore();
 
     const tooLarge = await renderView(buildTarget({ file: buildFile({ path: 'src/too-large.ts', status: 'M', originalPath: undefined }) }));
-    expect(findByAttribute(tooLarge.container, 'data-diff-viewer')).toBeNull();
+    expect(findByAttribute(tooLarge.container, 'data-standard-diff-view')).toBeNull();
     expect(requests).toEqual([{
       commitHash: 'a'.repeat(40),
       parentHash: 'b'.repeat(40),
@@ -405,7 +415,7 @@ describe('ContextCommitDiffView', () => {
     await tooLarge.restore();
 
     const error = await renderView(buildTarget({ file: buildFile({ path: 'src/error.ts', status: 'M', originalPath: undefined }) }));
-    expect(findByAttribute(error.container, 'data-diff-viewer')).toBeNull();
+    expect(findByAttribute(error.container, 'data-standard-diff-view')).toBeNull();
     expect(requests).toEqual([
       {
         commitHash: 'a'.repeat(40),
@@ -460,7 +470,7 @@ describe('ContextCommitDiffView', () => {
 
     deferred.resolve({ status: 'ready', original: 'stale old', modified: 'stale new' });
     await flush();
-    expect(pierreCalls).toHaveLength(0);
+    expect(diffViewCalls).toHaveLength(0);
   });
 
   test('keeps one controller for equivalent targets, refetches only when the target changes, and disposes once on unmount', async () => {

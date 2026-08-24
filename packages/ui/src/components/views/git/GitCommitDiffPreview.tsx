@@ -1,9 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { PierreDiffViewer } from '@/components/views/PierreDiffViewer';
+import { DiffView } from '@/components/views/DiffView';
 import { useI18n } from '@/lib/i18n';
-import type { GitCommitChangedFile } from '@/lib/api/types';
-import { getLanguageFromExtension } from '@/lib/toolHelpers';
 import type {
   GitCommitDetailsController as GitCommitPreviewController,
 } from './gitCommitDetailsController';
@@ -12,6 +10,9 @@ interface GitCommitDiffPreviewProps {
   controller: GitCommitPreviewController;
   announceOverlayOpen: boolean;
 }
+
+type PreviewSnapshot = ReturnType<GitCommitPreviewController['getPreviewSnapshot']>;
+type ReadyPreviewSnapshot = Extract<PreviewSnapshot, { status: 'ready' }>;
 
 const formatPreviewBytes = (bytes: number): string => {
   if (bytes >= 1024 * 1024) {
@@ -22,20 +23,6 @@ const formatPreviewBytes = (bytes: number): string => {
   }
   return `${bytes} B`;
 };
-
-const renderDiffViewer = (file: GitCommitChangedFile, original: string, modified: string) => (
-  <div className="min-h-0 flex-1 overflow-hidden rounded-lg border border-border/60 bg-[var(--surface-background)]">
-    <PierreDiffViewer
-      original={original}
-      modified={modified}
-      language={getLanguageFromExtension(file.path) || 'text'}
-      fileName={file.path}
-      renderSideBySide={false}
-      layout="inline"
-      enableComments={false}
-    />
-  </div>
-);
 
 const isPresentObjectId = (value: string | null | undefined): value is string => value !== null && value !== undefined && value.trim() !== '';
 
@@ -56,11 +43,46 @@ const renderObjectIds = (values: Array<string | null | undefined>) => {
   );
 };
 
+const ReadySnapshotDiffView: React.FC<{ snapshot: ReadyPreviewSnapshot }> = React.memo(({ snapshot }) => {
+  const file = snapshot.file;
+  const snapshotSource = React.useMemo(() => ({
+    directory: snapshot.comparison.directory,
+    files: [{
+      path: file.path,
+      status: file.status,
+      insertions: file.insertions,
+      deletions: file.deletions,
+      isBinary: file.isBinary,
+      original: snapshot.original ?? '',
+      modified: snapshot.modified ?? '',
+    }],
+  }), [
+    file.deletions,
+    file.insertions,
+    file.isBinary,
+    file.path,
+    file.status,
+    snapshot.comparison.directory,
+    snapshot.modified,
+    snapshot.original,
+  ]);
+
+  return (
+    <DiffView
+      snapshotSource={snapshotSource}
+      hideStackedFileSidebar
+      showOpenInEditorAction={false}
+      flushContent
+    />
+  );
+});
+
 export const GitCommitDiffPreview: React.FC<GitCommitDiffPreviewProps> = ({
   controller,
   announceOverlayOpen,
 }) => {
   const { t } = useI18n();
+
   const subscribe = React.useCallback((listener: () => void) => controller.subscribePreview(listener), [controller]);
   const getSnapshot = React.useCallback(() => controller.getPreviewSnapshot(), [controller]);
   const snapshot = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -141,7 +163,9 @@ export const GitCommitDiffPreview: React.FC<GitCommitDiffPreviewProps> = ({
           </div>
         ) : null}
 
-        {snapshot.status === 'ready' ? renderDiffViewer(file, snapshot.original ?? '', snapshot.modified ?? '') : null}
+        {snapshot.status === 'ready' ? (
+          <ReadySnapshotDiffView snapshot={snapshot} />
+        ) : null}
       </div>
     </section>
   );

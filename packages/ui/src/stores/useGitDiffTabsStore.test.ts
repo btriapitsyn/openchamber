@@ -42,7 +42,7 @@ describe('useGitDiffTabsStore', () => {
     const state = useGitDiffTabsStore.getState().byDirectory[directory];
     expect(state).toBeDefined();
     expect(state?.tabs).toHaveLength(1);
-    
+
     const tab = state?.tabs[0];
     expect(tab?.kind).toBe('working');
     if (tab?.kind === 'working') {
@@ -63,7 +63,7 @@ describe('useGitDiffTabsStore', () => {
 
     const state = useGitDiffTabsStore.getState().byDirectory[directory];
     expect(state?.tabs).toHaveLength(1);
-    
+
     const tab = state?.tabs[0];
     expect(tab?.kind).toBe('commit');
     if (tab?.kind === 'commit') {
@@ -93,7 +93,7 @@ describe('useGitDiffTabsStore', () => {
 
     const state = useGitDiffTabsStore.getState().byDirectory[directory];
     expect(state?.tabs).toHaveLength(1);
-    
+
     const tab = state?.tabs[0];
     expect(tab?.id).toBe(firstId);
     if (tab?.kind === 'working') {
@@ -122,7 +122,7 @@ describe('useGitDiffTabsStore', () => {
 
     const state = useGitDiffTabsStore.getState().byDirectory[directory];
     expect(state?.tabs).toHaveLength(1);
-    
+
     const tab = state?.tabs[0];
     expect(tab?.id).toBe(firstId);
     if (tab?.kind === 'commit') {
@@ -148,7 +148,7 @@ describe('useGitDiffTabsStore', () => {
 
     const state = useGitDiffTabsStore.getState().byDirectory[directory];
     expect(state?.tabs).toHaveLength(2);
-    
+
     const tab1 = state?.tabs[1];
     if (tab1?.kind === 'working') {
       expect(tab1.path).toBe('src/b.ts');
@@ -419,7 +419,7 @@ describe('useGitDiffTabsStore', () => {
     const invalidDir = byDirectory['/repo-invalid'];
 
     expect(validDir?.tabs).toHaveLength(1);
-    
+
     const validTab = validDir?.tabs[0];
     if (validTab?.kind === 'working') {
       expect(validTab.path).toBe('src/valid.ts');

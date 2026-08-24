@@ -94,6 +94,21 @@ type DiffData = {
 };
 type DiffScope = 'all' | PendingDiffScope;
 
+export type DiffViewSnapshotFile = {
+    path: string;
+    status: string;
+    insertions: number;
+    deletions: number;
+    isBinary?: boolean;
+    original: string;
+    modified: string;
+};
+
+export type DiffViewSnapshotSource = {
+    directory: string;
+    files: readonly DiffViewSnapshotFile[];
+};
+
 type TurnSnapshotDiff = {
     file?: string;
     status?: string;
@@ -970,6 +985,7 @@ interface DiffViewProps {
     stackedDefaultCollapsedAll?: boolean;
     pinSelectedFileHeaderToTopOnNavigate?: boolean;
     showOpenInEditorAction?: boolean;
+    snapshotSource?: DiffViewSnapshotSource;
     diffScope?: DiffScope;
     onDiffScopeChange?: (scope: PendingDiffScope) => void;
     targetFilePath?: string | null;
@@ -983,6 +999,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     stackedDefaultCollapsedAll = false,
     pinSelectedFileHeaderToTopOnNavigate = false,
     showOpenInEditorAction = false,
+    snapshotSource,
     diffScope = 'all',
     onDiffScopeChange,
     targetFilePath = null,
@@ -992,17 +1009,21 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const { git, files } = useRuntimeAPIs();
     const rootDirectory = useEffectiveDirectory();
     const runtimeKey = useGitStore((state) => state.runtimeKey);
-    // Diffs belong to the repository being diffed: when the root is not
-    // itself a repository, operate on the resolved nested repository instead.
-    const { rootIsGitRepo, gitDirectory: nestedGitDirectory, nestedRepos: nestedRepoOptions } = useNestedGitDirectory(rootDirectory ?? null, { enabled: visible });
-    const effectiveDirectory = nestedGitDirectory ?? rootDirectory;
+    const isSnapshotMode = snapshotSource !== undefined;
+    // Keep the root UI directory identity separate from the effective
+    // repository authority. When the session root is not itself a repository,
+    // git data/actions key off the resolved nested repository instead.
+    const { rootIsGitRepo, gitDirectory: nestedGitDirectory, nestedRepos: nestedRepoOptions } = useNestedGitDirectory(rootDirectory ?? null, { enabled: visible && !isSnapshotMode });
+    const effectiveGitDirectory = nestedGitDirectory ?? rootDirectory;
+    const repositoryDirectory = isSnapshotMode ? null : effectiveGitDirectory;
+    const effectiveDirectory = snapshotSource?.directory ?? effectiveGitDirectory;
     const openContextSurface = useUIStore((state) => state.openContextSurface);
     const requestWalkthroughSource = useWalkthroughStore((state) => state.requestSource);
     const { screenWidth, isMobile } = useDeviceInfo();
 
-    const isGitRepo = useIsGitRepo(effectiveDirectory ?? null);
-    const status = useGitStatus(effectiveDirectory ?? null);
-    const isLoadingStatus = useGitLoadingStatus(effectiveDirectory ?? null);
+    const isGitRepo = useIsGitRepo(repositoryDirectory ?? null);
+    const status = useGitStatus(repositoryDirectory ?? null);
+    const isLoadingStatus = useGitLoadingStatus(repositoryDirectory ?? null);
     const setActiveDirectory = useGitStore((state) => state.setActiveDirectory);
     const ensureStatus = useGitStore((state) => state.ensureStatus);
     const selectNestedRepo = useGitStore((state) => state.selectNestedRepo);
@@ -1020,11 +1041,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const [fileDiffRefreshNonce, setFileDiffRefreshNonce] = React.useState<Map<string, number>>(() => new Map());
     const [reviewDialogOpen, setReviewDialogOpen] = React.useState(false);
     const [reviewFlowSubmitting, setReviewFlowSubmitting] = React.useState(false);
-    const [activeDiffScope, setActiveDiffScope] = React.useState(diffScope);
+    const [activeDiffScope, setActiveDiffScope] = React.useState<DiffScope>(isSnapshotMode ? 'all' : diffScope);
 
     React.useEffect(() => {
-        setActiveDiffScope(diffScope);
-    }, [diffScope]);
+        setActiveDiffScope(isSnapshotMode ? 'all' : diffScope);
+    }, [diffScope, isSnapshotMode]);
 
     const pendingDiffFile = useUIStore((state) => state.pendingDiffFile);
     const pendingDiffStaged = useUIStore((state) => state.pendingDiffStaged);
@@ -1032,21 +1053,28 @@ export const DiffView: React.FC<DiffViewProps> = ({
     const setPendingDiffFile = useUIStore((state) => state.setPendingDiffFile);
     const diffLayoutPreference = useUIStore((state) => state.diffLayoutPreference);
     const diffFileLayout = useUIStore((state) => state.diffFileLayout);
-    const setDiffFileLayout = useUIStore((state) => state.setDiffFileLayout);
     const diffWrapLinesStore = useUIStore((state) => state.diffWrapLines);
     const setDiffWrapLines = useUIStore((state) => state.setDiffWrapLines);
     const openContextFileAtLine = useUIStore((state) => state.openContextFileAtLine);
     const currentSessionId = useSessionUIStore((state) => state.currentSessionId);
     const sessionMessages = useSessionMessages(activeDiffScope === 'turn' ? currentSessionId ?? '' : '', rootDirectory ?? undefined);
     const diffWrapLines = diffWrapLinesStore;
+    const snapshotDiffData = React.useMemo(() => new Map(
+        (snapshotSource?.files ?? []).map((file) => [file.path, {
+            original: file.original,
+            modified: file.modified,
+            isBinary: file.isBinary,
+            contextMode: 'full' as const,
+        }]),
+    ), [snapshotSource]);
     const forcedStaged = activeDiffScope === 'staged' ? true : activeDiffScope === 'working' ? false : null;
     const activeDiffStaged = forcedStaged ?? displayFileStaged;
 
     const isMobileLayout = isMobile || screenWidth <= 768;
-    const showReviewAction = Boolean(currentSessionId) && activeDiffScope !== 'turn' && activeDiffScope !== 'commit' && activeDiffScope !== 'pr' && !isMobileLayout && !isVSCodeRuntime();
+    const showReviewAction = !isSnapshotMode && Boolean(currentSessionId) && activeDiffScope !== 'turn' && activeDiffScope !== 'commit' && activeDiffScope !== 'pr' && !isMobileLayout && !isVSCodeRuntime();
     // Same runtime and width rules as the rail surface: no point offering an
     // entry point to a surface that cannot open here.
-    const showWalkthroughAction = activeDiffScope !== 'turn' && !isMobileLayout && !isVSCodeRuntime();
+    const showWalkthroughAction = !isSnapshotMode && activeDiffScope !== 'turn' && !isMobileLayout && !isVSCodeRuntime();
     const showFileSidebar = !hideStackedFileSidebar && !isMobileLayout && screenWidth >= 1024;
     const diffScrollRef = React.useRef<HTMLElement | null>(null);
     const fileSectionRefs = React.useRef(new Map<string, HTMLDivElement | null>());
@@ -1141,8 +1169,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
             onDiffScopeChange?.('working');
         }
     }, [activeDiffScope, onDiffScopeChange]);
-    const branches = useGitStore((state) => (effectiveDirectory ? state.directories.get(effectiveDirectory)?.branches ?? null : null));
-    const isLoadingBranches = useGitStore((state) => (effectiveDirectory ? state.directories.get(effectiveDirectory)?.isLoadingBranches ?? false : false));
+    const branches = useGitStore((state) => (repositoryDirectory ? state.directories.get(repositoryDirectory)?.branches ?? null : null));
+    const isLoadingBranches = useGitStore((state) => (repositoryDirectory ? state.directories.get(repositoryDirectory)?.isLoadingBranches ?? false : false));
 
     // The Branch scope needs defaultBranches metadata that nothing else loads
     // when only the context diff panel is open (GitView and the composer fetch
@@ -1157,8 +1185,8 @@ export const DiffView: React.FC<DiffViewProps> = ({
         }
     }, [effectiveDirectory, fetchBranches, git]);
     const branchMetadataExhausted = useBoundedDirectoryRetry(
-        effectiveDirectory ?? null,
-        visible && isGitRepo !== false,
+        repositoryDirectory ?? null,
+        visible && !isSnapshotMode && isGitRepo !== false,
         isLoadingBranches,
         Boolean(branches),
         startBranchMetadataFetch,
@@ -1174,7 +1202,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     // Offered only while the default branch is known and the current branch is
     // not it (an unknown default must not flash the option on a guess), and
     // only outside VS Code (the extension has no context diff panel).
-    const showBranchOption = !isVSCodeRuntime() && isBranchScopeAvailable(currentBranch, repositoryDefaultBranch);
+    const showBranchOption = !isSnapshotMode && !isVSCodeRuntime() && isBranchScopeAvailable(currentBranch, repositoryDefaultBranch);
     // Coercion acts only on CONFIRMED unavailability: the runtime has no branch
     // scope at all, a settled status has no branch (detached HEAD), the default
     // branch is known and we are on it, or metadata retries were exhausted.
@@ -1274,6 +1302,17 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 insertions: file.insertions, deletions: file.deletions, isNew: file.status === 'A',
             }));
         }
+        if (snapshotSource) {
+            return snapshotSource.files.map((file) => ({
+                path: file.path,
+                index: '',
+                working_dir: file.status,
+                insertions: file.insertions,
+                deletions: file.deletions,
+                isNew: file.status === 'A',
+            }));
+        }
+
         if (activeDiffScope === 'branch') {
             return (branchFiles ?? [])
                 .map((file) => ({
@@ -1318,7 +1357,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                 isNew: isNewStatusFile(file),
             }))
             .sort((a, b) => a.path.localeCompare(b.path));
-    }, [activeDiffScope, branchFiles, comparison.files, lastTurnDiffs, status]);
+    }, [activeDiffScope, branchFiles, comparison.files, lastTurnDiffs, snapshotSource, status]);
 
     const changedFilePathsKey = React.useMemo(
         () => changedFiles.map((file) => file.path).join('\0'),
@@ -1449,20 +1488,15 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return 'side-by-side';
     }, [diffFileLayout, diffLayoutPreference, screenWidth]);
 
-    const currentLayoutForAllFiles = React.useMemo<'inline' | 'side-by-side' | null>(() => {
-        if (changedFiles.length === 0) return null;
-        return changedFiles.every((file) => getLayoutForFile(file) === 'side-by-side')
-            ? 'side-by-side'
-            : 'inline';
-    }, [changedFiles, getLayoutForFile]);
-
     // Ensure git status on mount
     React.useEffect(() => {
-        if (visible && effectiveDirectory) {
-            setActiveDirectory(effectiveDirectory);
-            void ensureStatus(effectiveDirectory, git);
+        if (!visible || isSnapshotMode || !effectiveDirectory) {
+            return;
         }
-    }, [effectiveDirectory, setActiveDirectory, ensureStatus, git, visible]);
+
+        setActiveDirectory(effectiveDirectory);
+        void ensureStatus(effectiveDirectory, git);
+    }, [effectiveDirectory, ensureStatus, git, isSnapshotMode, setActiveDirectory, visible]);
 
     const refreshScope = JSON.stringify([runtimeKey, effectiveDirectory]);
     const deferredRefreshRef = React.useRef({ scope: refreshScope, paths: new Set<string>(), dirty: false });
@@ -1473,7 +1507,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
         if (deferredRefreshRef.current.scope !== refreshScope) {
             deferredRefreshRef.current = { scope: refreshScope, paths: new Set(), dirty: false };
         }
-        if (!effectiveDirectory) {
+        if (isSnapshotMode || !effectiveDirectory) {
             return;
         }
         const refresh = (paths?: string[]) => {
@@ -1505,7 +1539,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             }
             refresh(hint.paths);
         });
-    }, [captureScrollAnchor, clearDiffCache, effectiveDirectory, fetchStatus, git, refreshScope, visible]);
+    }, [captureScrollAnchor, clearDiffCache, effectiveDirectory, fetchStatus, git, isSnapshotMode, refreshScope, visible]);
 
     React.useLayoutEffect(() => {
         const anchor = pendingScrollAnchorRestoreRef.current;
@@ -1783,15 +1817,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [changedFiles, displayFile, handleSelectFileAndScroll, visible]);
 
-    const handleHeaderLayoutChange = React.useCallback((mode: DiffViewMode) => {
-        const nextLayout: 'inline' | 'side-by-side' =
-            mode === 'side-by-side' ? 'side-by-side' : 'inline';
-
-        changedFiles.forEach((file) => {
-            setDiffFileLayout(file.path, nextLayout);
-        });
-    }, [changedFiles, setDiffFileLayout]);
-
     const [openingEditorFilePath, setOpeningEditorFilePath] = React.useState<string | null>(null);
 
     const openFileInEditorAtChange = React.useCallback(async (filePath: string, cachedDiffData: DiffData | null) => {
@@ -1904,25 +1929,27 @@ export const DiffView: React.FC<DiffViewProps> = ({
                                     wrapLines={diffWrapLines}
                                     isSelected={false}
                                     isExpanded={expandedFiles.has(file.path)}
-                                    isMounted={mountedStackedFiles.has(file.path) || file.path === pinnedStackedTarget}
+                                    isMounted={isSnapshotMode || mountedStackedFiles.has(file.path) || file.path === pinnedStackedTarget}
                                     onSelect={handleSelectFile}
                                     onExpandedChange={handleStackedEntryExpandedChange}
                                     registerSectionRef={registerSectionRef}
-                                    showOpenInEditorAction={showOpenInEditorAction && activeDiffScope !== 'turn'}
+                                    showOpenInEditorAction={!isSnapshotMode && showOpenInEditorAction && activeDiffScope !== 'turn'}
                                     isOpeningInEditor={openingEditorFilePath === file.path}
                                     onOpenInEditor={(filePath, diffData) => {
                                         void openFileInEditorAtChange(filePath, diffData);
                                     }}
                                     staged={getFileStaged(file.path)}
                                     loadFullFiles={loadFullFiles && activeDiffScope !== 'pr'}
-                                    readOnlyActions={activeDiffScope === 'branch' || activeDiffScope === 'commit' || activeDiffScope === 'pr'}
+                                    readOnlyActions={isSnapshotMode || activeDiffScope === 'branch' || activeDiffScope === 'commit' || activeDiffScope === 'pr'}
                                     hunkActionsEnabled={activeDiffScope === 'all' || activeDiffScope === 'working' || activeDiffScope === 'staged'}
                                     comparisonDiff={activeDiffScope === 'branch' || activeDiffScope === 'commit' || activeDiffScope === 'pr'
                                         ? comparisonDiffData.get(file.path) ?? EMPTY_COMPARISON_DIFF
                                         : undefined}
                                     onRetryComparisonDiff={() => setComparisonRetryRevision((revision) => revision + 1)}
                                     initialDiffData={
-                                        activeDiffScope === 'turn'
+                                        isSnapshotMode
+                                            ? snapshotDiffData.get(file.path) ?? null
+                                            : activeDiffScope === 'turn'
                                             ? lastTurnDiffData.get(file.path) ?? null
                                             : null
                                     }
@@ -1945,7 +1972,11 @@ export const DiffView: React.FC<DiffViewProps> = ({
             );
         }
 
-        if (activeDiffScope !== 'turn' && isLoadingStatus && !status) {
+        if (isSnapshotMode && changedFiles.length > 0) {
+            return renderStackedDiffView();
+        }
+
+        if (activeDiffScope !== 'turn' && !isSnapshotMode && isLoadingStatus && !status) {
             return (
                 <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
                     <Icon name="loader-4" className="size-4 animate-spin" />
@@ -1954,7 +1985,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
             );
         }
 
-        if (activeDiffScope !== 'turn' && isGitRepo === false) {
+        if (activeDiffScope !== 'turn' && !isSnapshotMode && isGitRepo === false) {
             return (
                 <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                     {t('diffView.state.notGitRepository')}
@@ -2060,7 +2091,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
     };
 
     return (
-        <div className="flex h-full flex-col overflow-hidden bg-background">
+        <div className="flex h-full flex-col overflow-hidden bg-background" data-diff-snapshot-mode={isSnapshotMode ? 'true' : undefined}>
             <div className="@container/diff-toolbar flex min-w-0 items-center gap-2 px-3 py-2 bg-background">
                 {rootIsGitRepo === false && Array.isArray(nestedRepoOptions) && nestedRepoOptions.length > 0 ? (
                     <NestedRepoPicker
@@ -2073,7 +2104,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     />
                 ) : null}
                 {!isMobile && (
-                    activeDiffScope !== 'all' ? (
+                    !isSnapshotMode && activeDiffScope !== 'all' ? (
                         <ChangeScopeSelector
                             scope={activeDiffScope}
                             workingCount={workingFileCount}
@@ -2200,7 +2231,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         </span>
                     </Button>
                 )}
-                {changedFiles.length > 0 && activeDiffScope !== 'pr' && (
+                {changedFiles.length > 0 && !isSnapshotMode && activeDiffScope !== 'pr' && (
                     <Tooltip>
                         <TooltipTrigger asChild>
                             <Button
@@ -2227,6 +2258,7 @@ export const DiffView: React.FC<DiffViewProps> = ({
                         variant="ghost"
                         size="sm"
                         onClick={() => setDiffWrapLines(!diffWrapLinesStore)}
+                        aria-label={diffWrapLines ? t('diffView.actions.disableLineWrap') : t('diffView.actions.enableLineWrap')}
                         className={cn(
                             'h-5 w-5 p-0 transition-opacity',
                             diffWrapLines ? 'text-foreground opacity-100' : 'text-muted-foreground opacity-60 hover:opacity-100'
@@ -2235,12 +2267,6 @@ export const DiffView: React.FC<DiffViewProps> = ({
                     >
                         <Icon name="text-wrap" className="size-4" />
                     </Button>
-                )}
-                {currentLayoutForAllFiles && (
-                    <DiffViewToggle
-                        mode={currentLayoutForAllFiles === 'side-by-side' ? 'side-by-side' : 'unified'}
-                        onModeChange={handleHeaderLayoutChange}
-                    />
                 )}
             </div>
 

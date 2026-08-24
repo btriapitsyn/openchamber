@@ -2,17 +2,19 @@ import React, { act } from 'react';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRoot, type Root } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { DiffViewSnapshotSource } from '@/components/views/DiffView';
 import { I18nProvider } from '@/lib/i18n';
 import type { GitCommitChangedFile } from '@/lib/api/types';
 
 type MockButtonProps = React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>;
-type PierreDiffViewerProps = {
-  fileName?: string;
-  original?: string;
-  modified?: string;
+type MockDiffViewProps = {
+  snapshotSource?: DiffViewSnapshotSource;
+  hideStackedFileSidebar?: boolean;
+  showOpenInEditorAction?: boolean;
+  flushContent?: boolean;
 };
 
-const pierreCalls: PierreDiffViewerProps[] = [];
+const diffViewCalls: MockDiffViewProps[] = [];
 
 mock.module('@/components/ui/button', () => ({
   Button: React.forwardRef<HTMLButtonElement, MockButtonProps>(({ children, ...props }, ref) => React.createElement('button', { ...props, ref }, children)),
@@ -22,14 +24,12 @@ mock.module('@/components/icon/Icon', () => ({
   Icon: ({ name, className }: { name: string; className?: string }) => React.createElement('span', { 'data-icon': name, className }),
 }));
 
-mock.module('@/components/views/PierreDiffViewer', () => ({
-  PierreDiffViewer: (props: PierreDiffViewerProps) => {
-    pierreCalls.push(props);
+mock.module('@/components/views/DiffView', () => ({
+  DiffView: (props: MockDiffViewProps) => {
+    diffViewCalls.push(props);
     return React.createElement('div', {
-      'data-diff-viewer': true,
-      'data-file-name': String(props.fileName ?? ''),
-      'data-original': String(props.original ?? ''),
-      'data-modified': String(props.modified ?? ''),
+      'data-standard-diff-view': 'true',
+      'data-diff-view-toggle': 'true',
     });
   },
 }));
@@ -353,30 +353,76 @@ const renderPreviewClient = async (
   };
 };
 
-beforeEach(() => {
-  pierreCalls.length = 0;
-});
+  beforeEach(() => {
+    diffViewCalls.length = 0;
+  });
 
 describe('GitCommitDiffPreview', () => {
-  test('passes ready viewer inputs for added, modified, deleted, and renamed files', () => {
+  test('passes ready snapshots to DiffView for added, modified, deleted, and renamed files', () => {
     const addedController = createPreviewController(buildReadySnapshot({ status: 'A', path: 'src/new.ts' }, { original: '', modified: 'export const created = true;\n' }));
     renderPreviewMarkup(addedController);
-    expect(pierreCalls.at(-1)?.original).toBe('');
-    expect(pierreCalls.at(-1)?.modified).toBe('export const created = true;\n');
+    expect(diffViewCalls.at(-1)?.snapshotSource).toEqual({
+      directory: '/repo',
+      files: [{
+        path: 'src/new.ts',
+        status: 'A',
+        insertions: 8,
+        deletions: 3,
+        isBinary: false,
+        original: '',
+        modified: 'export const created = true;\n',
+      }],
+    });
 
     const modifiedController = createPreviewController(buildReadySnapshot({ status: 'M', path: 'src/updated.ts' }));
     renderPreviewMarkup(modifiedController);
-    expect(pierreCalls.at(-1)?.fileName).toBe('src/updated.ts');
+    expect(diffViewCalls.at(-1)?.snapshotSource).toEqual({
+      directory: '/repo',
+      files: [{
+        path: 'src/updated.ts',
+        status: 'M',
+        insertions: 8,
+        deletions: 3,
+        isBinary: false,
+        original: 'const before = 1;\n',
+        modified: 'const after = 2;\n',
+      }],
+    });
 
     const deletedController = createPreviewController(buildReadySnapshot({ status: 'D', path: 'src/removed.ts' }, { modified: '' }));
     renderPreviewMarkup(deletedController);
-    expect(pierreCalls.at(-1)?.modified).toBe('');
+    expect(diffViewCalls.at(-1)?.snapshotSource).toEqual({
+      directory: '/repo',
+      files: [{
+        path: 'src/removed.ts',
+        status: 'D',
+        insertions: 8,
+        deletions: 3,
+        isBinary: false,
+        original: 'const before = 1;\n',
+        modified: '',
+      }],
+    });
 
     const renamedController = createPreviewController(buildReadySnapshot({ status: 'R', path: 'src/new-name.ts', originalPath: 'src/old-name.ts' }));
     const renamedMarkup = renderPreviewMarkup(renamedController);
     expect(renamedMarkup).not.toContain('src/old-name.ts');
     expect(renamedMarkup).not.toContain('data-git-commit-diff-preview-header');
-    expect(pierreCalls.at(-1)?.fileName).toBe('src/new-name.ts');
+    expect(diffViewCalls.at(-1)?.snapshotSource).toEqual({
+      directory: '/repo',
+      files: [{
+        path: 'src/new-name.ts',
+        status: 'R',
+        insertions: 8,
+        deletions: 3,
+        isBinary: false,
+        original: 'const before = 1;\n',
+        modified: 'const after = 2;\n',
+      }],
+    });
+    expect(diffViewCalls.at(-1)?.hideStackedFileSidebar).toBe(true);
+    expect(diffViewCalls.at(-1)?.showOpenInEditorAction).toBe(false);
+    expect(diffViewCalls.at(-1)?.flushContent).toBe(true);
   });
 
   test('renders preview content without inset padding', () => {
@@ -405,7 +451,7 @@ describe('GitCommitDiffPreview', () => {
     const staleMarkup = renderPreviewMarkup(staleController);
     expect(staleMarkup).toContain('Failed to load diff. Click to retry.');
     expect(staleMarkup).toContain('Retry');
-    expect(staleMarkup).not.toContain('data-diff-viewer="true"');
+    expect(staleMarkup).not.toContain('data-standard-diff-view');
   });
 
   test('renders binary and gitlink object metadata without opening the diff viewer', () => {
@@ -418,7 +464,7 @@ describe('GitCommitDiffPreview', () => {
     expect(binaryMarkup).toContain('Cannot preview binary file');
     expect(binaryMarkup).toContain('0000000');
     expect(binaryMarkup).toContain('1111111');
-    expect(binaryMarkup).not.toContain('data-diff-viewer');
+    expect(binaryMarkup).not.toContain('data-standard-diff-view');
 
     const gitlinkController = createPreviewController({
       status: 'gitlink',
@@ -431,7 +477,7 @@ describe('GitCommitDiffPreview', () => {
     expect(gitlinkMarkup).toContain('Submodule pointer');
     expect(gitlinkMarkup).toContain('aaaaaaa');
     expect(gitlinkMarkup).toContain('bbbbbbb');
-    expect(gitlinkMarkup).not.toContain('data-diff-viewer');
+    expect(gitlinkMarkup).not.toContain('data-standard-diff-view');
   });
 
   test('renders line-gate confirmation and backend too-large states', () => {
@@ -472,6 +518,26 @@ describe('GitCommitDiffPreview', () => {
     const closeButton = findByAttribute(rendered.container, 'data-git-commit-diff-preview-close');
     expect(closeButton).toBeNull();
     expect(rendered.documentStub.activeElement).toBeNull();
+
+    await rendered.restore();
+  });
+
+  test('renders DiffView flush without adding an inner ready-state wrapper', async () => {
+    const controller = createPreviewController(buildReadySnapshot({ status: 'M', path: 'src/test.ts' }));
+    const rendered = await renderPreviewClient(controller);
+
+    const diffViewer = findByAttribute(rendered.container, 'data-standard-diff-view', 'true');
+    expect(diffViewer).not.toBeNull();
+    expect(findByAttribute(rendered.container, 'data-diff-view-toggle', 'true')).not.toBeNull();
+
+    const parent = diffViewer?.parentNode;
+    expect(parent).not.toBeNull();
+    expect(parent?.nodeType).toBe(1);
+    // SAFETY: The preceding assertion confirms the parent is an ElementStub, not a TextStub.
+    const classStr = (parent as ElementStub).attributes['class'] ?? '';
+    expect(classStr).not.toContain('rounded-lg');
+    expect(classStr).not.toContain('border');
+    expect(classStr).not.toContain('bg-[var(--surface-background)]');
 
     await rendered.restore();
   });
