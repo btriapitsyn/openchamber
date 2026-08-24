@@ -603,6 +603,7 @@ export const ContextPanel: React.FC = () => {
   const isOpen = Boolean(panelState?.isOpen && activeTab);
   const isExpanded = Boolean(isOpen && panelState?.expanded);
   const [availablePanelAreaWidth, setAvailablePanelAreaWidth] = React.useState<number | null>(null);
+  const panelRef = React.useRef<HTMLElement | null>(null);
   const activeModeForWidth = activeTab?.mode ?? null;
   const manualWidth = activeModeForWidth ? panelState?.widthByMode?.[activeModeForWidth] : undefined;
   const manualWidthFraction = activeModeForWidth ? panelState?.widthFractionByMode?.[activeModeForWidth] : undefined;
@@ -661,7 +662,6 @@ export const ContextPanel: React.FC = () => {
   const startWidthRef = React.useRef(width);
   const resizingWidthRef = React.useRef<number | null>(null);
   const activeResizePointerIDRef = React.useRef<number | null>(null);
-  const panelRef = React.useRef<HTMLElement | null>(null);
   const chatFrameRefs = React.useRef<Map<string, HTMLIFrameElement>>(new Map());
   const chatFrameSrcByTabIDRef = React.useRef<Map<string, EmbeddedSessionChatURLCacheEntry>>(new Map());
   const wasOpenRef = React.useRef(false);
