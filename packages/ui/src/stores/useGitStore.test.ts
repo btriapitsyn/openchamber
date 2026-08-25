@@ -662,6 +662,34 @@ describe('useGitStore', () => {
       .toBe('Directory does not appear to be a git repository');
   });
 
+  test('returns null on forced refs refresh failure while retaining prior refs and normalized error state', async () => {
+    useGitStore.setState({
+      directories: new Map([['/repo', {
+        ...createDirectoryState(createStatus()),
+        history: {
+          refs: createHistoryRefs(),
+          refsError: null,
+          isLoadingRefs: false,
+          queries: new Map(),
+        },
+      }]]),
+      activeDirectory: '/repo',
+    });
+    const git = {
+      ...createGitApi(async () => createStatus()),
+      getGitHistoryRefs: async () => {
+        throw new Error('fatal: not a git repository (or any of the parent directories): .git');
+      },
+    };
+
+    const result = await useGitStore.getState().ensureHistoryRefs('/repo', git, { force: true });
+    const directoryState = useGitStore.getState().getDirectoryState('/repo');
+
+    expect(result).toBeNull();
+    expect(directoryState?.history.refs?.snapshot).toBe('snapshot-a');
+    expect(directoryState?.history.refsError).toBe('Directory does not appear to be a git repository');
+  });
+
   test('isolates history cache by filter and directory', async () => {
     const git = {
       ...createGitApi(async () => createStatus()),

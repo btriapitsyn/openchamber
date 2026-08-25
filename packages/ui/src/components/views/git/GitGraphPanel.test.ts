@@ -967,6 +967,54 @@ describe('GitGraphPanel component regression', () => {
     dom.restore();
   });
 
+  test('skips history refresh when retrying retained refs errors and forced refs discovery fails', async () => {
+    mockRefsState = {
+      refs: {
+        refs: [
+          { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+        ],
+        current: { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+        upstream: null,
+        base: null,
+      },
+      refsError: 'Directory does not appear to be a git repository',
+      isLoadingRefs: false,
+    };
+    mockQueryState = createQueryState({ hasMore: false });
+    mockEnsureHistoryRefs = mock(async () => null);
+    mockFetchHistoryPage = mock(async () => undefined);
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps()),
+        ),
+      );
+      await flushEffects();
+    });
+
+    const retryButton = renderedButtons.find((button) => button.size === 'xs');
+    expect(retryButton).toBeDefined();
+
+    await act(async () => {
+      await retryButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+      await flushEffects();
+    });
+
+    expect(mockEnsureHistoryRefs).toHaveBeenCalledTimes(1);
+    expect(mockFetchHistoryPage).toHaveBeenCalledTimes(0);
+
+    await act(async () => {
+      root.unmount();
+      await flushEffects();
+    });
+    dom.restore();
+  });
+
   test('requests one append page with the scroll container as observer root when the active sentinel intersects', async () => {
     const git = createUnusedGitApi();
     mockQueryState = createQueryState();
@@ -1057,7 +1105,15 @@ describe('GitGraphPanel component regression', () => {
     mockEnsureHistoryRefs = mock(async () => {
       ensureHistoryRefsCalls += 1;
       refreshSequence.push('refs');
-      return null;
+      return {
+        refs: [
+          { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+          { id: 'refs/remotes/origin/topic', name: 'origin/topic', revision: 'commit-b', kind: 'remote', category: 'remote-branches' },
+        ],
+        current: { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+        upstream: { id: 'refs/remotes/origin/topic', name: 'origin/topic', revision: 'commit-b', kind: 'remote', category: 'remote-branches' },
+        base: null,
+      };
     });
     mockFetchHistoryPage = mock(async () => {
       fetchHistoryPageCalls += 1;

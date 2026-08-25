@@ -101,6 +101,8 @@ const createMockRefsState = (): MockRefsState => ({
   isLoadingRefs: false,
 });
 
+const createMockRefsResult = () => createMockRefsState().refs;
+
 const createMockQueryState = (): NonNullable<MockQueryState> => ({
   items: [],
   outdated: false,
@@ -224,7 +226,7 @@ describe('GitGraphControls', () => {
     mockEnsureHistoryRefs = mock(async (directory: string, runtimeGit: GitAPI) => {
       ensureHistoryRefsCalls.push([directory, runtimeGit]);
       refreshSequence.push('refs');
-      return null;
+      return createMockRefsResult();
     });
     mockFetchHistoryPage = mock(async (directory: string, runtimeGit: GitAPI, query: GraphQuery) => {
       fetchHistoryPageCalls.push([directory, runtimeGit, query]);
@@ -241,6 +243,21 @@ describe('GitGraphControls', () => {
     expect(refreshSequence).toEqual(['refs', 'history']);
     expect(ensureHistoryRefsCalls).toEqual([['/repo', git]]);
     expect(fetchHistoryPageCalls).toEqual([['/repo', git, { mode: 'manual', refIds: ['refs/heads/topic'] }]]);
+  });
+
+  test('skips history refresh when forced refs discovery fails', async () => {
+    const git = createUnusedGitApi();
+    mockEnsureHistoryRefs = mock(async (directory: string, runtimeGit: GitAPI) => {
+      ensureHistoryRefsCalls.push([directory, runtimeGit]);
+      return null;
+    });
+
+    renderControls({ git });
+
+    await getButtonByAriaLabel('Refresh').props.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+
+    expect(ensureHistoryRefsCalls).toEqual([['/repo', git]]);
+    expect(fetchHistoryPageCalls).toEqual([]);
   });
 
   test('disables filter edits when refs are unavailable and refresh while graph loading is in flight', () => {

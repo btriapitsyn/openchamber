@@ -159,7 +159,10 @@ export const GitGraphPanel: React.FC<GitGraphPanelProps> = ({
 
   const refresh = React.useCallback(async () => {
     try {
-      await ensureHistoryRefs(directory, git, { force: true });
+      const refs = await ensureHistoryRefs(directory, git, { force: true });
+      if (!refs) {
+        return;
+      }
       await fetchHistoryPage(directory, git, query);
     } catch { /* errors surfaced through store state */ }
   }, [directory, ensureHistoryRefs, fetchHistoryPage, git, query]);

@@ -891,7 +891,7 @@ export const useGitStore = create<GitStore>()(
               },
             });
             set({ directories: nextDirectories });
-            return latest.history.refs;
+            return null;
           }
         })();
 
