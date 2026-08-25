@@ -29,6 +29,7 @@ const DIFF_PREFETCH_TIMEOUT_MS = 15000;
 const DIFF_PREFETCH_LARGE_FILE_THRESHOLD = 500; // skip prefetch for files with >500 changed lines
 const GIT_HISTORY_INITIAL_PAGE_SIZE = 50;
 const GIT_HISTORY_MAX_PAGE_SIZE = 100;
+const NON_REPOSITORY_ERROR = 'Directory does not appear to be a git repository';
 
 // Diff cache limits to prevent memory bloat with many modified files
 const DIFF_CACHE_MAX_ENTRIES = 30;
@@ -256,6 +257,11 @@ const buildHistoryRequestOptions = (
 const isStaleHistoryCursorError = (error: Error): boolean => {
   const message = error.message.toLowerCase();
   return message.includes('stale') && message.includes('cursor');
+};
+
+const formatHistoryRefsError = (error: unknown): string => {
+  const message = error instanceof Error ? error.message : 'Failed to load refs';
+  return /not a git repository/i.test(message) ? NON_REPOSITORY_ERROR : message;
 };
 
 type GitRequestToken = {
@@ -880,7 +886,7 @@ export const useGitStore = create<GitStore>()(
               ...latest,
               history: {
                 ...latest.history,
-                refsError: error instanceof Error ? error.message : 'Failed to load refs',
+                refsError: formatHistoryRefsError(error),
                 isLoadingRefs: false,
               },
             });

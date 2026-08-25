@@ -612,6 +612,35 @@ describe('WorkStatusGitGraphSection', () => {
     await rendered.unmount();
   });
 
+  test('renders the normalized non-repository graph error with the existing Retry action', async () => {
+    let refsCalls = 0;
+    const runtimeApis = createRuntimeApis({
+      getGitHistoryRefs: async () => {
+        refsCalls += 1;
+        if (refsCalls === 1) {
+          return createHistoryRefs();
+        }
+        throw new Error('fatal: not a git repository (or any of the parent directories): .git');
+      },
+    });
+
+    useUIStore.getState().setWorkStatusSectionExpanded('gitGraph', true);
+    await useGitStore.getState().ensureHistoryRefs('/tmp/not-a-repo', runtimeApis.git);
+    await useGitStore.getState().ensureHistoryRefs('/tmp/not-a-repo', runtimeApis.git, { force: true });
+
+    const rendered = await renderSection({ directory: '/tmp/not-a-repo', panelVisible: true }, runtimeApis);
+
+    const alert = findElement(rendered.container, (element) => element.attributes.role === 'alert');
+    expect(alert).not.toBeNull();
+    expect(collectText(alert)).toContain('Directory does not appear to be a git repository');
+    expect(collectText(rendered.container)).not.toContain('fatal: not a git repository');
+
+    const retryButton = findElement(rendered.container, (element) => element.tagName === 'BUTTON' && collectText(element).includes('Retry'));
+    expect(retryButton).not.toBeNull();
+
+    await rendered.unmount();
+  });
+
   test('renders nothing without a directory and stays inactive when the panel is hidden', async () => {
     const calls = { refs: 0, history: 0, remotes: 0 };
     const presence = collectPresenceCounts();

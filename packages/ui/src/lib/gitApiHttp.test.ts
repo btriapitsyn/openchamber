@@ -627,6 +627,25 @@ describe('gitApiHttp history requests', () => {
     }
   });
 
+  test('preserves the structured refs error returned by the server', async () => {
+    installWindowMock();
+    globalThis.fetch = (async () => new Response(JSON.stringify({
+      error: 'Directory does not appear to be a git repository',
+    }), {
+      status: 400,
+      statusText: 'Bad Request',
+      headers: { 'Content-Type': 'application/json' },
+    })) as typeof fetch;
+
+    try {
+      const error = await captureError(() => getGitHistoryRefs('/tmp/not-a-repo'));
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe('Directory does not appear to be a git repository');
+    } finally {
+      restoreMocks();
+    }
+  });
+
   test('serializes the all selector without explicit refs', async () => {
     installWindowMock();
     const calls = installFetchMock();

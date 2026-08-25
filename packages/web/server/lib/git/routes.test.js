@@ -256,6 +256,25 @@ describe('git history routes', () => {
     expect(response.body).toEqual({ error: 'directory parameter is required' });
   });
 
+  it('returns an actionable non-repository error for refs discovery', async () => {
+    gitLibraries.getGitHistoryRefs.mockRejectedValue(
+      new Error('fatal: not a git repository (or any of the parent directories): .git'),
+    );
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('GET', '/api/git/history/refs')(
+      { query: { directory: '/tmp/not-a-repo' } },
+      response,
+    );
+
+    expect(response.statusCode).toBe(400);
+    expect(response.body).toEqual({
+      error: 'Directory does not appear to be a git repository',
+    });
+  });
+
   it('rejects invalid history ref payloads before invoking git', async () => {
     const { app, getRoute } = createRouteRegistry();
     registerGitRoutes(app);

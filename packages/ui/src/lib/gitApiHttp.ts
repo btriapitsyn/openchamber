@@ -145,7 +145,11 @@ function buildUrl(
 export async function getGitHistoryRefs(directory: string): Promise<GitHistoryRefsResponse> {
   const response = await runtimeFetch(buildUrl(`${API_BASE}/history/refs`, directory));
   if (!response.ok) {
-    throw new Error(`Failed to get git history refs: ${response.statusText}`);
+    const payload = await response.json().catch(() => null) as { error?: unknown } | null;
+    const detail = typeof payload?.error === 'string' && payload.error.trim()
+      ? payload.error.trim()
+      : null;
+    throw new Error(detail ?? `Failed to get git history refs: ${response.statusText}`);
   }
   return response.json();
 }

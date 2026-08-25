@@ -648,6 +648,20 @@ describe('useGitStore', () => {
     expect(useGitStore.getState().getDirectoryState('/repo')?.history.refs?.snapshot).toBe('snapshot-a');
   });
 
+  test('normalizes non-repository refs failures for every runtime', async () => {
+    const git = {
+      ...createGitApi(async () => createStatus()),
+      getGitHistoryRefs: async () => {
+        throw new Error('fatal: not a git repository (or any of the parent directories): .git');
+      },
+    };
+
+    await useGitStore.getState().ensureHistoryRefs('/tmp/not-a-repo', git);
+
+    expect(useGitStore.getState().getDirectoryState('/tmp/not-a-repo')?.history.refsError)
+      .toBe('Directory does not appear to be a git repository');
+  });
+
   test('isolates history cache by filter and directory', async () => {
     const git = {
       ...createGitApi(async () => createStatus()),
