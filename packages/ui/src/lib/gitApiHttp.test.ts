@@ -109,7 +109,7 @@ const restoreMocks = () => {
   }
 };
 
-const captureError = async (callback: () => Promise<void>): Promise<unknown> => {
+const captureError = async <T,>(callback: () => Promise<T>): Promise<unknown> => {
   try {
     await callback();
     return null;

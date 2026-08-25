@@ -15,7 +15,10 @@ import {
   shouldAutoRefreshGitGraphQuery,
 } from './gitGraphPanelModel';
 
-type MockButtonProps = React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>;
+type MockButtonProps = React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  size?: string;
+  variant?: string;
+}>;
 type MockHistoryRef = {
   id: string;
   name: string;
@@ -163,8 +166,15 @@ let gitPaneState: GitRepositoryPaneState = {
 };
 
 const fetchHistoryCalls: FetchHistoryCall[] = [];
+const ensureHistoryRefsCalls: Array<[string, GitAPI, { force: true }]> = [];
 const observerInstances: ObserverInstance[] = [];
-let mockEnsureHistoryRefs: ReturnType<typeof mock> = mock(async () => null);
+type MockEnsureHistoryRefs = (
+  directory: string,
+  git: GitAPI,
+  options?: { force?: boolean },
+) => Promise<MockRefsPayload | null>;
+
+let mockEnsureHistoryRefs: MockEnsureHistoryRefs = mock(async (_directory: string, _git: GitAPI, _options?: { force?: boolean }) => null);
 let mockFetchHistoryPage: ReturnType<typeof mock> = mock(async () => undefined);
 const mockSetPaneState = () => undefined;
 
@@ -549,7 +559,13 @@ describe('GitGraphPanel component regression', () => {
     renderedGraphSegmentIds.length = 0;
     renderedHistoryRows.length = 0;
     renderedButtons.length = 0;
-    mockEnsureHistoryRefs = mock(async () => null);
+    ensureHistoryRefsCalls.length = 0;
+    mockEnsureHistoryRefs = mock(async (directory: string, git: GitAPI, options?: { force?: boolean }) => {
+      if (options?.force) {
+        ensureHistoryRefsCalls.push([directory, git, { force: true }]);
+      }
+      return null;
+    });
     mockFetchHistoryPage = mock(async (
       directory: string,
       git: GitAPI,
@@ -935,6 +951,7 @@ describe('GitGraphPanel component regression', () => {
       isLoadingRefs: false,
     };
     mockQueryState = createQueryState({ hasMore: false });
+    const panelGitApi = createDefaultGitGraphPanelProps().git;
     const dom = installMinimalDom();
     const root: Root = createRoot(dom.container);
 
@@ -943,7 +960,7 @@ describe('GitGraphPanel component regression', () => {
         React.createElement(
           I18nProvider,
           null,
-          createGitGraphPanelElement(createDefaultGitGraphPanelProps()),
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
         ),
       );
       await flushEffects();
@@ -957,8 +974,7 @@ describe('GitGraphPanel component regression', () => {
       await flushEffects();
     });
 
-    expect(mockEnsureHistoryRefs).toHaveBeenCalledTimes(1);
-    expect(mockEnsureHistoryRefs).toHaveBeenCalledWith('/repo', expect.anything(), { force: true });
+    expect(ensureHistoryRefsCalls).toEqual([['/repo', panelGitApi, { force: true }]]);
 
     await act(async () => {
       root.unmount();
@@ -981,7 +997,13 @@ describe('GitGraphPanel component regression', () => {
       isLoadingRefs: false,
     };
     mockQueryState = createQueryState({ hasMore: false });
-    mockEnsureHistoryRefs = mock(async () => null);
+    const panelGitApi = createDefaultGitGraphPanelProps().git;
+    mockEnsureHistoryRefs = mock(async (directory: string, git: GitAPI, options?: { force?: boolean }) => {
+      if (options?.force) {
+        ensureHistoryRefsCalls.push([directory, git, { force: true }]);
+      }
+      return null;
+    });
     mockFetchHistoryPage = mock(async () => undefined);
     const dom = installMinimalDom();
     const root: Root = createRoot(dom.container);
@@ -991,7 +1013,7 @@ describe('GitGraphPanel component regression', () => {
         React.createElement(
           I18nProvider,
           null,
-          createGitGraphPanelElement(createDefaultGitGraphPanelProps()),
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
         ),
       );
       await flushEffects();
@@ -1005,8 +1027,8 @@ describe('GitGraphPanel component regression', () => {
       await flushEffects();
     });
 
-    expect(mockEnsureHistoryRefs).toHaveBeenCalledTimes(1);
-    expect(mockFetchHistoryPage).toHaveBeenCalledTimes(0);
+    expect(ensureHistoryRefsCalls).toEqual([['/repo', panelGitApi, { force: true }]]);
+    expect(fetchHistoryCalls).toEqual([]);
 
     await act(async () => {
       root.unmount();
