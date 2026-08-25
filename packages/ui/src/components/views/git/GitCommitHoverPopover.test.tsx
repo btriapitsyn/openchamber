@@ -527,10 +527,12 @@ mock.module('@base-ui/react/popover', () => {
     return React.createElement(React.Fragment, null, children);
   };
 
-  type MockPositionerProps = React.PropsWithChildren<React.HTMLAttributes<HTMLDivElement>>;
+  type MockPositionerProps = React.PropsWithChildren<{
+    className?: string;
+  }>;
 
-  const Positioner = ({ children, ...props }: MockPositionerProps) => (
-    React.createElement('div', { 'data-positioner': 'true', ...props }, children)
+  const Positioner = ({ children, className }: MockPositionerProps) => (
+    React.createElement('div', { 'data-positioner': 'true', className }, children)
   );
 
   type MockPopupProps = React.PropsWithChildren<{
@@ -763,6 +765,7 @@ describe('GitCommitHoverPopover', () => {
     const popup = findByAttribute(rendered.container, 'data-git-commit-hover', 'abcdef1234567890');
     expect(popup).not.toBeNull();
     const positioner = findByAttribute(rendered.container, 'data-positioner', 'true');
+    expect(positioner).not.toBeNull();
     expect(positioner?.getAttribute('class')?.split(/\s+/)).toContain('z-50');
     expect(findByAttribute(rendered.container, 'data-git-commit-hover-subject', 'abcdef1234567890')).not.toBeNull();
     expect(findByAttribute(rendered.container, 'data-git-commit-hover-author', 'abcdef1234567890')).not.toBeNull();
