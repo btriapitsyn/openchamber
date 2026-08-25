@@ -646,6 +646,39 @@ describe('gitApiHttp history requests', () => {
     }
   });
 
+  test('falls back to the status text when the refs error body is unusable', async () => {
+    installWindowMock();
+
+    const cases = [
+      new Response('{"error":', {
+        status: 502,
+        statusText: 'Bad Gateway',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      new Response(JSON.stringify({}), {
+        status: 503,
+        statusText: 'Service Unavailable',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+      new Response(JSON.stringify({ error: '   ' }), {
+        status: 504,
+        statusText: 'Gateway Timeout',
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ];
+
+    try {
+      for (const response of cases) {
+        globalThis.fetch = (async () => response.clone()) as typeof fetch;
+        const error = await captureError(() => getGitHistoryRefs('/tmp/not-a-repo'));
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe(`Failed to get git history refs: ${response.statusText}`);
+      }
+    } finally {
+      restoreMocks();
+    }
+  });
+
   test('serializes the all selector without explicit refs', async () => {
     installWindowMock();
     const calls = installFetchMock();

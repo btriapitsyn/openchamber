@@ -75,8 +75,13 @@ type ObserverInstance = {
   observer: IntersectionObserver;
 };
 
+const renderedButtons: Array<MockButtonProps> = [];
+
 mock.module('@/components/ui/button', () => ({
-  Button: ({ children, ...props }: MockButtonProps) => React.createElement('button', props, children),
+  Button: ({ children, ...props }: MockButtonProps) => {
+    renderedButtons.push({ children, ...props });
+    return React.createElement('button', props, children);
+  },
 }));
 
 mock.module('@/components/icon/Icon', () => ({
@@ -543,6 +548,7 @@ describe('GitGraphPanel component regression', () => {
   beforeEach(() => {
     renderedGraphSegmentIds.length = 0;
     renderedHistoryRows.length = 0;
+    renderedButtons.length = 0;
     mockEnsureHistoryRefs = mock(async () => null);
     mockFetchHistoryPage = mock(async (
       directory: string,
@@ -913,6 +919,52 @@ describe('GitGraphPanel component regression', () => {
     expect(markup).not.toContain('>Auto</button>');
     expect(markup).not.toContain('>All</button>');
     expect(markup).not.toContain('>Manual</button>');
+  });
+
+  test('retries retained refs errors by reissuing refs discovery', async () => {
+    mockRefsState = {
+      refs: {
+        refs: [
+          { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+        ],
+        current: { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+        upstream: null,
+        base: null,
+      },
+      refsError: 'Directory does not appear to be a git repository',
+      isLoadingRefs: false,
+    };
+    mockQueryState = createQueryState({ hasMore: false });
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps()),
+        ),
+      );
+      await flushEffects();
+    });
+
+    const retryButton = renderedButtons.find((button) => button.size === 'xs');
+    expect(retryButton).toBeDefined();
+
+    await act(async () => {
+      await retryButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
+      await flushEffects();
+    });
+
+    expect(mockEnsureHistoryRefs).toHaveBeenCalledTimes(1);
+    expect(mockEnsureHistoryRefs).toHaveBeenCalledWith('/repo', expect.anything(), { force: true });
+
+    await act(async () => {
+      root.unmount();
+      await flushEffects();
+    });
+    dom.restore();
   });
 
   test('requests one append page with the scroll container as observer root when the active sentinel intersects', async () => {
