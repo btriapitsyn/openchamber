@@ -11,7 +11,7 @@ import type {
 import { createGitCommitHoverDetailsCache } from './gitCommitHoverCache';
 
 type MockButtonProps = React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement>>;
-type PopoverReason = 'triggerHover' | 'triggerFocus' | 'triggerPress' | 'escapeKey' | 'imperativeAction';
+type PopoverReason = 'trigger-hover' | 'trigger-focus' | 'trigger-press' | 'escape-key' | 'imperative-action';
 type TimerId = number;
 type TimerCallback = () => void;
 type TriggerPressEvent = { defaultPrevented?: boolean };
@@ -411,8 +411,8 @@ mock.module('@base-ui/react/popover', () => {
         return;
       }
       actionsRef.current = {
-        close: () => setOpen(false, 'imperativeAction'),
-        unmount: () => setOpen(false, 'imperativeAction'),
+        close: () => setOpen(false, 'imperative-action'),
+        unmount: () => setOpen(false, 'imperative-action'),
       };
       return () => {
         actionsRef.current = null;
@@ -457,12 +457,12 @@ mock.module('@base-ui/react/popover', () => {
     const scheduleOpen = () => {
       clearTimer(context.closeTimer);
       clearTimer(context.openTimer);
-      context.openTimer.current = setTimeout(() => context.setOpen(true, 'triggerHover'), delay);
+      context.openTimer.current = setTimeout(() => context.setOpen(true, 'trigger-hover'), delay);
     };
     const scheduleClose = () => {
       clearTimer(context.openTimer);
       clearTimer(context.closeTimer);
-      context.closeTimer.current = setTimeout(() => context.setOpen(false, 'triggerHover'), closeDelay);
+      context.closeTimer.current = setTimeout(() => context.setOpen(false, 'trigger-hover'), closeDelay);
     };
     const clone = React.cloneElement(element, {
       onPointerEnter: () => {
@@ -477,15 +477,15 @@ mock.module('@base-ui/react/popover', () => {
         if (activeDocumentStub) {
           activeDocumentStub.activeElement = triggerRegistry.get(hash)?.element ?? null;
         }
-        context.setOpen(true, 'triggerFocus');
+        context.setOpen(true, 'trigger-focus');
       },
       onClick: (event: TriggerPressEvent) => {
-        context.setOpen(!context.open, 'triggerPress');
+        context.setOpen(!context.open, 'trigger-press');
         element.props.onClick?.(event);
       },
       onKeyDown: (event: TriggerKeyDownEvent) => {
         if (event.key === 'Enter' || event.key === ' ') {
-          context.setOpen(!context.open, 'triggerPress');
+          context.setOpen(!context.open, 'trigger-press');
         }
         element.props.onKeyDown?.(event);
       },
@@ -550,7 +550,7 @@ mock.module('@base-ui/react/popover', () => {
     const cancelClose = React.useCallback(() => clearTimer(context.closeTimer), [context.closeTimer]);
     const scheduleClose = React.useCallback(() => {
       clearTimer(context.closeTimer);
-      context.closeTimer.current = setTimeout(() => context.setOpen(false, 'triggerHover'), 150);
+      context.closeTimer.current = setTimeout(() => context.setOpen(false, 'trigger-hover'), 150);
     }, [context]);
     React.useEffect(() => {
       if (!context?.open || !hash) {
@@ -562,7 +562,7 @@ mock.module('@base-ui/react/popover', () => {
         pointerLeave: scheduleClose,
         keyDown: (key: string) => {
           if (key === 'Escape') {
-            context.setOpen(false, 'escapeKey');
+            context.setOpen(false, 'escape-key');
           }
         },
       });
@@ -581,7 +581,7 @@ mock.module('@base-ui/react/popover', () => {
       onPointerLeave: scheduleClose,
       onKeyDown: (event: { key: string }) => {
         if (event.key === 'Escape') {
-          context.setOpen(false, 'escapeKey');
+          context.setOpen(false, 'escape-key');
         }
       },
     }, children);
@@ -671,6 +671,16 @@ const renderPopover = async (props: Partial<React.ComponentProps<typeof GitCommi
   return {
     container: dom.container,
     documentStub: dom.documentStub,
+    rerender: async (nextProps: Partial<React.ComponentProps<typeof GitCommitHoverPopover>>) => {
+      await act(async () => {
+        root.render(React.createElement(
+          I18nProvider,
+          null,
+          React.createElement(GitCommitHoverPopover, createDefaultProps(nextProps)),
+        ));
+        await flush();
+      });
+    },
     restore: async () => {
       await act(async () => {
         root.unmount();
@@ -820,6 +830,33 @@ describe('GitCommitHoverPopover', () => {
     expect(findByAttribute(rendered.container, 'data-git-commit-hover', 'abcdef1234567890')).toBeNull();
 
     await rendered.restore();
+  });
+
+  test('keeps an open popover stable when remote discovery changes its details key', async () => {
+    const cache = createGitCommitHoverDetailsCache({
+      load: () => new Promise<GitHubCommitDetails>(() => {}),
+      preloadImage: async () => true,
+    });
+    const consoleMessages: string[] = [];
+    const originalConsoleError = console.error;
+    console.error = (...args: unknown[]) => {
+      consoleMessages.push(args.map((value) => String(value)).join(' '));
+    };
+    const rendered = await renderPopover({ remoteName: null, detailsCache: cache });
+
+    try {
+      await act(async () => {
+        triggerRegistry.get('abcdef1234567890')?.focus();
+        await flush();
+      });
+      await rendered.rerender({ remoteName: 'origin', detailsCache: cache });
+
+      expect(findByAttribute(rendered.container, 'data-git-commit-hover', 'abcdef1234567890')).not.toBeNull();
+      expect(/getSnapshot should be cached|Maximum update depth exceeded/i.test(consoleMessages.join('\n'))).toBe(false);
+    } finally {
+      console.error = originalConsoleError;
+      await rendered.restore();
+    }
   });
 
   test('opens the real commit row popover with repository-scoped enrichment', async () => {

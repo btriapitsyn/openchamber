@@ -55,6 +55,16 @@ describe('createGitCommitHoverDetailsCache', () => {
     expect(cache.getSnapshot(key)).toEqual({ status: 'ready', details: { connected: true } });
   });
 
+  test('keeps idle snapshots stable when a hover key switches to an uncached remote', () => {
+    const cache = createGitCommitHoverDetailsCache({
+      load: async () => ({ connected: true }),
+      preloadImage: async () => true,
+    });
+    const switchedKey = { ...key, remoteName: 'upstream' };
+
+    expect(cache.getSnapshot(switchedKey)).toBe(cache.getSnapshot(switchedKey));
+  });
+
   test('reuses positive entries across later preload calls', async () => {
     let loaderCalls = 0;
     const cache = createGitCommitHoverDetailsCache({
@@ -89,8 +99,13 @@ describe('createGitCommitHoverDetailsCache', () => {
     now += 59_999;
     expect(cache.getSnapshot(key)).toEqual({ status: 'unavailable' });
 
+    const canonicalIdleSnapshot = cache.getSnapshot({ ...key, hash: 'b'.repeat(40) });
+
     now += 2;
-    expect(cache.getSnapshot(key)).toEqual({ status: 'idle' });
+    const expiredSnapshot = cache.getSnapshot(key);
+    expect(expiredSnapshot).toEqual({ status: 'idle' });
+    expect(expiredSnapshot).toBe(canonicalIdleSnapshot);
+    expect(cache.getSnapshot(key)).toBe(expiredSnapshot);
     await cache.preload(key);
     expect(loaderCalls).toBe(2);
   });
@@ -224,5 +239,15 @@ describe('createGitCommitHoverDetailsCache', () => {
 
     expect(notifications).toBe(1);
     expect(cache.getSnapshot(key)).toEqual({ status: 'idle' });
+  });
+
+  test('keeps disposed cache snapshots referentially stable', () => {
+    const cache = createGitCommitHoverDetailsCache({
+      load: async () => ({ connected: true }),
+      preloadImage: async () => true,
+    });
+
+    cache.dispose();
+    expect(cache.getSnapshot(key)).toBe(cache.getSnapshot(key));
   });
 });

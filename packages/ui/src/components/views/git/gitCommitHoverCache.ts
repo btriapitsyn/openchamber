@@ -15,6 +15,7 @@ type CacheEntry = {
 
 const DEFAULT_MAX_POSITIVE_ENTRIES = 200;
 const DEFAULT_NEGATIVE_TTL_MS = 60_000;
+const IDLE_DETAILS_SNAPSHOT: GitCommitHoverDetailsSnapshot = Object.freeze({ status: 'idle' });
 
 export type RuntimeImageConstructor = new () => {
   onload: null | ((event: Event) => void) | (() => void);
@@ -80,7 +81,7 @@ export function createGitCommitHoverDetailsCache(options: {
 
     const created: CacheEntry = {
       key,
-      snapshot: { status: 'idle' },
+      snapshot: IDLE_DETAILS_SNAPSHOT,
       listeners: new Set(),
       inFlight: null,
       negativeExpiresAt: null,
@@ -192,15 +193,15 @@ export function createGitCommitHoverDetailsCache(options: {
 
     getSnapshot(key) {
       if (disposed) {
-        return { status: 'idle' };
+        return IDLE_DETAILS_SNAPSHOT;
       }
 
       const entry = entries.get(toCacheKey(key));
       if (!entry) {
-        return { status: 'idle' };
+        return IDLE_DETAILS_SNAPSHOT;
       }
       if (isUnavailableExpired(entry)) {
-        entry.snapshot = { status: 'idle' };
+        entry.snapshot = IDLE_DETAILS_SNAPSHOT;
         entry.negativeExpiresAt = null;
       }
       return entry.snapshot;

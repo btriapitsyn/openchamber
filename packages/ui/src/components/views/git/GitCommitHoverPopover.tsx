@@ -143,7 +143,7 @@ const GitCommitHoverPopoverComponent: React.FC<GitCommitHoverPopoverProps> = ({
   const authorInitials = getAuthorInitials(authorName);
 
   const handleOpenChange = React.useCallback((nextOpen: boolean, eventDetails: { reason: string }) => {
-    if (eventDetails.reason === 'triggerPress') {
+    if (eventDetails.reason === 'trigger-press') {
       return;
     }
 
