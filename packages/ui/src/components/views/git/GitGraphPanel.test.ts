@@ -174,7 +174,9 @@ type MockEnsureHistoryRefs = (
   options?: { force?: boolean },
 ) => Promise<MockRefsPayload | null>;
 
-let mockEnsureHistoryRefs: MockEnsureHistoryRefs = mock(async (_directory: string, _git: GitAPI, _options?: { force?: boolean }) => null);
+const defaultEnsureHistoryRefs: MockEnsureHistoryRefs = async () => null;
+
+let mockEnsureHistoryRefs: MockEnsureHistoryRefs = mock(defaultEnsureHistoryRefs);
 let mockFetchHistoryPage: ReturnType<typeof mock> = mock(async () => undefined);
 const mockSetPaneState = () => undefined;
 
