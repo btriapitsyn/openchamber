@@ -170,7 +170,7 @@ const GitCommitHoverPopoverComponent: React.FC<GitCommitHoverPopoverProps> = ({
         onPointerLeave={cancelPendingPreload}
       />
       <Popover.Portal>
-        <Popover.Positioner side="right" align="start" sideOffset={8} collisionPadding={8}>
+        <Popover.Positioner className="z-50" side="right" align="start" sideOffset={8} collisionPadding={8}>
           <Popover.Popup
             initialFocus={false}
             data-git-commit-hover={model.hash}
