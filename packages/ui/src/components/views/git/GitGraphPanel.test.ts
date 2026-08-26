@@ -1126,7 +1126,7 @@ describe('GitGraphPanel component regression', () => {
     const refreshSequence: string[] = [];
     let ensureHistoryRefsCalls = 0;
     let fetchHistoryPageCalls = 0;
-    mockEnsureHistoryRefs = mock(async () => {
+    mockEnsureHistoryRefs = mock(async (): Promise<MockRefsPayload> => {
       ensureHistoryRefsCalls += 1;
       refreshSequence.push('refs');
       return {
