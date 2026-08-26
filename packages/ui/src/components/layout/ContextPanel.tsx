@@ -1413,7 +1413,7 @@ export const ContextPanel: React.FC = () => {
         // animates and the panel grows leftwards from its docked position.
         isExpanded
           ? 'absolute inset-y-0 right-0 z-20 min-w-0'
-          : 'relative h-full flex-shrink-0',
+          : 'relative z-20 h-full flex-shrink-0',
         !isOpen && 'pointer-events-none',
         'will-change-[width] motion-reduce:transition-none',
         'transition-[width] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]'
