@@ -19,6 +19,7 @@ describe('ContextUsageDisplay accessibility', () => {
           hideIcon
           showPercentIcon
           showTokenCount
+          staticProgressbar
         />
       </I18nProvider>,
     );
@@ -44,6 +45,7 @@ describe('ContextUsageDisplay accessibility', () => {
           hideIcon
           showPercentIcon
           showTokenCount
+          staticProgressbar
           onClick={() => undefined}
         />
       </I18nProvider>,
