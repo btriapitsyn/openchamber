@@ -35,6 +35,7 @@ import { getImperativeSessionMessageLoader } from "./session-message-loader"
 import { cleanupPersistedSessionState } from "./session-deletion-cleanup"
 import { requestSessionArchiveBatch } from "./session-archive-batch"
 import { registerBulkArchiveEchoes, releaseBulkArchiveEchoes } from "./bulk-archive-echo"
+import { dropSessionCaches } from "./session-cache"
 import { getRuntimeKey } from "@/lib/runtime-switch"
 import { markAmbiguousTransportFailure } from "@/lib/relay/transport-error"
 import { getErrorStatus, isAmbiguousSendFailure } from "./send-failure-classification"
@@ -1044,7 +1045,11 @@ async function cleanupReviewMetadataBeforeDelete(
 }
 
 /** Remove a server-confirmed session from every live child store that has it. */
-function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: string): SessionListSnapshot[] {
+function removeSessionFromLiveStores(
+  sessionId: string,
+  preferredDirectory?: string | null,
+  clearSessionCaches = false,
+): SessionListSnapshot[] {
   if (!_childStores) return []
 
   const snapshots: SessionListSnapshot[] = []
@@ -1066,14 +1071,45 @@ function removeSessionFromLiveStores(sessionId: string, preferredDirectory?: str
 
   for (const [directory, store] of candidates) {
     const current = store.getState()
-    if (!current.session.some((session) => session.id === sessionId)) {
+    const hasSession = current.session.some((session) => session.id === sessionId)
+    const hasCachedSession = clearSessionCaches && (
+      Object.prototype.hasOwnProperty.call(current.session_status ?? {}, sessionId)
+      || Object.prototype.hasOwnProperty.call(current.session_diff ?? {}, sessionId)
+      || Object.prototype.hasOwnProperty.call(current.todo ?? {}, sessionId)
+      || Object.prototype.hasOwnProperty.call(current.permission ?? {}, sessionId)
+      || Object.prototype.hasOwnProperty.call(current.question ?? {}, sessionId)
+      || Object.prototype.hasOwnProperty.call(current.message ?? {}, sessionId)
+      || Object.values(current.part ?? {}).some((parts) => (
+        parts ?? []
+      ).some((part) => (part as { sessionID?: string }).sessionID === sessionId))
+    )
+    if (!hasSession && !hasCachedSession) {
       continue
     }
     snapshots.push({ directory })
-    store.setState({
-      session: current.session.filter((session) => session.id !== sessionId),
+
+    const nextState: Partial<ReturnType<DirectoryStoreApi["getState"]>> = {
+      session: hasSession
+        ? current.session.filter((session) => session.id !== sessionId)
+        : current.session,
       ...sessionMutationPatch(current, sessionId, true),
-    })
+    }
+
+    if (clearSessionCaches) {
+      const cacheState = {
+        session_status: { ...(current.session_status ?? {}) },
+        session_diff: { ...(current.session_diff ?? {}) },
+        todo: { ...(current.todo ?? {}) },
+        permission: { ...(current.permission ?? {}) },
+        question: { ...(current.question ?? {}) },
+        message: { ...(current.message ?? {}) },
+        part: { ...(current.part ?? {}) },
+      }
+      dropSessionCaches(cacheState, [sessionId])
+      Object.assign(nextState, cacheState)
+    }
+
+    store.setState(nextState)
   }
 
   return snapshots
@@ -1139,10 +1175,10 @@ function cleanupSessionWorktreeMetadata(sessionId: string): void {
  */
 function finalizeConfirmedSessionDeletion(
   sessionId: string,
-  sessionDirectory?: string,
+  sessionDirectory?: string | null,
   expectedRuntimeKey = getRuntimeKey(),
 ): void {
-  const snapshots = removeSessionFromLiveStores(sessionId, sessionDirectory)
+  const snapshots = removeSessionFromLiveStores(sessionId, sessionDirectory, true)
   invalidateSessionLoads(sessionId, [...snapshots.map((snapshot) => snapshot.directory), sessionDirectory])
   useGlobalSessionsStore.getState().removeSessions([sessionId])
   const ui = useSessionUIStore.getState()
@@ -1158,14 +1194,14 @@ function finalizeConfirmedSessionDeletion(
 }
 
 type ChatDirectoryCleanupPlan = {
-  directory: string | undefined
+  directory: string | null | undefined
   /** Only a root session owns its managed chat directory. */
   rootDeleted: boolean
   /** The deleted session and the descendants the server cascade-deletes with it. */
   cascadeIds: ReadonlySet<string>
 }
 
-function planChatDirectoryCleanup(sessionId: string, snapshot: Session | null, directory: string | undefined): ChatDirectoryCleanupPlan {
+function planChatDirectoryCleanup(sessionId: string, snapshot: Session | null, directory: string | null | undefined): ChatDirectoryCleanupPlan {
   const global = useGlobalSessionsStore.getState()
   return {
     directory,
@@ -1194,6 +1230,13 @@ function isChatDirectoryStillReferenced(directory: string, excludedIds: Readonly
 async function cleanupDeletedChatDirectory(plan: ChatDirectoryCleanupPlan): Promise<void> {
   if (!plan.directory || !plan.rootDeleted) return
   if (isChatDirectoryStillReferenced(plan.directory, plan.cascadeIds)) return
+
+const getActionSessionDirectory = (
+  sessionId: string,
+  options?: { directory?: string | null },
+): string | null | undefined => (
+  options?.directory !== undefined ? options.directory : getSessionDirectory(sessionId)
+)
   try {
     await deleteChatDirectory(plan.directory)
   } catch (error) {
@@ -1208,6 +1251,8 @@ export type DeleteSessionOptions = {
    * confirmation spans a runtime switch.
    */
   expectedRuntimeKey?: string
+  /** Directory captured before an asynchronous mutation starts. */
+  directory?: string | null
 }
 
 /**
@@ -1228,7 +1273,7 @@ export type DeleteSessionOptions = {
 export async function deleteSession(sessionId: string, options?: DeleteSessionOptions): Promise<boolean> {
   const expectedRuntimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
   if (isStaleRuntime(expectedRuntimeKey)) return false
-  const sessionDirectory = getSessionDirectory(sessionId)
+  const sessionDirectory = getActionSessionDirectory(sessionId, options)
   const chatDirectoryCleanup = planChatDirectoryCleanup(sessionId, getGlobalSessionSnapshot(sessionId), sessionDirectory)
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory, expectedRuntimeKey)
@@ -1293,6 +1338,8 @@ export type DeleteSessionsOptions = {
    * stops as soon as the active runtime differs.
    */
   expectedRuntimeKey?: string
+  /** Directory captured before an asynchronous batch starts. */
+  directory?: string | null
 }
 
 /**
@@ -1317,7 +1364,9 @@ export async function deleteSessions(
       failedIds.push(...ids.slice(index))
       break
     }
-    if (await deleteSession(id, { expectedRuntimeKey })) deletedIds.push(id)
+    const deleteOptions: DeleteSessionOptions = { expectedRuntimeKey }
+    if (options?.directory !== undefined) deleteOptions.directory = options.directory
+    if (await deleteSession(id, deleteOptions)) deletedIds.push(id)
     else failedIds.push(id)
   }
 
@@ -1336,9 +1385,15 @@ export async function deleteSessions(
  * stays archived on that runtime and is re-read from the server the next time
  * the runtime is loaded.
  */
-export async function archiveSession(sessionId: string, expectedRuntimeKey = getRuntimeKey()): Promise<boolean> {
+export async function archiveSession(
+  sessionId: string,
+  expectedRuntimeKey = getRuntimeKey(),
+  capturedDirectory?: string | null,
+): Promise<boolean> {
   if (isStaleRuntime(expectedRuntimeKey)) return false
-  const sessionDirectory = getSessionDirectory(sessionId)
+  const sessionDirectory = capturedDirectory !== undefined
+    ? capturedDirectory
+    : getSessionDirectory(sessionId)
   const archivedAt = Date.now()
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory, expectedRuntimeKey)
@@ -1366,6 +1421,8 @@ export type ArchiveSessionsOptions = {
    * stops as soon as the active runtime differs.
    */
   expectedRuntimeKey?: string
+  /** Directory captured before an asynchronous batch starts. */
+  directory?: string | null
 }
 
 /**
@@ -1394,8 +1451,9 @@ export async function archiveSessions(
   const failedIds: string[] = []
   const expectedRuntimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
   if (ids.length === 0) return { archivedIds, failedIds }
+  const capturedDirectory = options?.directory
 
-  const plan = planArchiveBatches(ids)
+  const plan = planArchiveBatches(ids, capturedDirectory)
 
   for (const [directory, batchIds] of plan.batchesByDirectory) {
     if (isStaleRuntime(expectedRuntimeKey)) {
@@ -1444,7 +1502,7 @@ export async function archiveSessions(
       failedIds.push(...plan.individualIds.slice(index))
       break
     }
-    if (await archiveSession(id, expectedRuntimeKey)) archivedIds.push(id)
+    if (await archiveSession(id, expectedRuntimeKey, capturedDirectory)) archivedIds.push(id)
     else failedIds.push(id)
   }
 
@@ -1475,7 +1533,7 @@ function hasLinkedSessionCleanup(session: Session): boolean {
  * restores the per-session fetch for exactly the cases where the store has
  * nothing to say.
  */
-function planArchiveBatches(ids: string[]) {
+function planArchiveBatches(ids: string[], capturedDirectory?: string | null) {
   const global = useGlobalSessionsStore.getState()
   const knownSessions = new Map<string, Session>()
   for (const session of [...global.activeSessions, ...global.archivedSessions]) {
@@ -1490,9 +1548,11 @@ function planArchiveBatches(ids: string[]) {
 
   for (const id of ids) {
     const session = knownSessions.get(id)
-    const directory = session
-      ? resolveGlobalSessionDirectory(session) ?? getSessionDirectory(id)
-      : undefined
+    const directory = capturedDirectory !== undefined
+      ? capturedDirectory
+      : session
+        ? resolveGlobalSessionDirectory(session) ?? getSessionDirectory(id)
+        : undefined
     if (!session || !directory || hasLinkedSessionCleanup(session)) {
       individualIds.push(id)
       continue
