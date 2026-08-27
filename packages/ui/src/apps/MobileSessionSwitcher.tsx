@@ -6,6 +6,7 @@ import { SessionActivityDuration } from '@/components/session/SessionActivityDur
 import { toast } from '@/components/ui';
 import { formatSessionCompactDateLabel } from '@/components/session/sidebar/utils';
 import { useSwitcherItems } from '@/components/session/sidebar/shell/useSwitcherItems';
+import { copyTextToClipboard } from '@/lib/clipboard';
 import { useTabletLayout } from '@/lib/device';
 import { useI18n } from '@/lib/i18n';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -22,7 +23,9 @@ import { resolveSwipeMove, type SwipeAxis } from './mobileSessionSwipe';
 const RECENT_SESSIONS_LIMIT = 10;
 /** Matches the metadata popover's width so both header dropdowns read as a pair. */
 const TABLET_POPOVER_WIDTH = 380;
-const SWITCHER_ROW_ACTIONS_WIDTH = 96;
+/** Three 48px touch targets (copy ID, archive, delete), same unit as the
+    drawer rows in MobileSessionsSheet. */
+const SWITCHER_ROW_ACTIONS_WIDTH = 144;
 const SWITCHER_ROW_SWIPE_SNAP_MS = 180;
 const SWITCHER_ROW_CLICK_SUPPRESSION_MS = 400;
 
@@ -41,6 +44,7 @@ const SwitcherRow: React.FC<{
   onRevealedChange: (revealed: boolean) => void;
   confirmingDelete: boolean;
   actionPending: boolean;
+  onCopyId: () => void;
   onArchive: () => void;
   onRequestDelete: () => void;
   onConfirmDelete: () => void;
@@ -53,6 +57,7 @@ const SwitcherRow: React.FC<{
   onRevealedChange,
   confirmingDelete,
   actionPending,
+  onCopyId,
   onArchive,
   onRequestDelete,
   onConfirmDelete,
@@ -70,7 +75,7 @@ const SwitcherRow: React.FC<{
 
   const contentRef = React.useRef<HTMLButtonElement>(null);
   const actionsRef = React.useRef<HTMLDivElement>(null);
-  const archiveButtonRef = React.useRef<HTMLButtonElement>(null);
+  const firstActionButtonRef = React.useRef<HTMLButtonElement>(null);
   const startRef = React.useRef<{ x: number; y: number } | null>(null);
   const gestureStartRevealedRef = React.useRef(revealed);
   const gestureAxisRef = React.useRef<SwipeAxis>('undecided');
@@ -101,7 +106,7 @@ const SwitcherRow: React.FC<{
     }
     if (focusActionOnRevealRef.current) {
       focusActionOnRevealRef.current = false;
-      archiveButtonRef.current?.focus();
+      firstActionButtonRef.current?.focus();
     }
   }, [applyOffset, revealed]);
 
@@ -311,7 +316,18 @@ const SwitcherRow: React.FC<{
         onKeyDown={handleActionKeyDown}
       >
         <button
-          ref={archiveButtonRef}
+          ref={firstActionButtonRef}
+          type="button"
+          tabIndex={revealed ? 0 : -1}
+          disabled={actionPending}
+          className="flex flex-1 items-center justify-center text-muted-foreground transition-colors active:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+          aria-label={t('mobile.sessions.copySessionIdAria', { title })}
+          onClick={onCopyId}
+          style={{ touchAction: 'manipulation' }}
+        >
+          <Icon name="file-copy" className="size-[18px]" />
+        </button>
+        <button
           type="button"
           tabIndex={revealed ? 0 : -1}
           disabled={actionPending}
@@ -458,6 +474,21 @@ export const MobileSessionSwitcher: React.FC<{
     setConfirmingDeleteSessionId(null);
   };
 
+  const handleCopySessionId = (session: Session) => {
+    // Copy never mutates the session, so it stays out of the pending set and
+    // out of the runtime-key guard. It still closes the row and drops a primed
+    // delete: a tap that is not "delete" must re-arm the confirmation.
+    setRevealedSessionId(null);
+    setConfirmingDeleteSessionId(null);
+    void copyTextToClipboard(session.id)
+      .then((result) => {
+        toast[result.ok ? 'success' : 'error'](t(result.ok
+          ? 'sessions.sidebar.session.copyId.success'
+          : 'sessions.sidebar.session.copyId.error'));
+      })
+      .catch(() => toast.error(t('sessions.sidebar.session.copyId.error')));
+  };
+
   const handleArchive = async (session: Session) => {
     if (actionInFlightRef.current.has(session.id)) return;
     actionInFlightRef.current.add(session.id);
@@ -558,6 +589,7 @@ export const MobileSessionSwitcher: React.FC<{
                   onRevealedChange={(nextRevealed) => handleRowRevealedChange(session.id, nextRevealed)}
                   confirmingDelete={confirmingDeleteSessionId === session.id}
                   actionPending={pendingActionSessionIds.has(session.id)}
+                  onCopyId={() => handleCopySessionId(session)}
                   onArchive={() => void handleArchive(session)}
                   onRequestDelete={() => setConfirmingDeleteSessionId(session.id)}
                   onConfirmDelete={() => void handleConfirmDelete(session)}

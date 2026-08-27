@@ -27,6 +27,30 @@ describe('resolveSwipeMove', () => {
     })).toEqual({ type: 'ignore', axis: 'vertical' });
   });
 
+  test('keeps an open row clamped at the three-action width', () => {
+    expect(resolveSwipeMove({
+      touchCount: 1,
+      dx: -40,
+      dy: 0,
+      axis: 'horizontal',
+      dragging: true,
+      revealed: true,
+      actionsWidth: 144,
+    })).toEqual({ type: 'drag', axis: 'horizontal', offset: -144 });
+  });
+
+  test('drags an open row back toward closed from the revealed base', () => {
+    expect(resolveSwipeMove({
+      touchCount: 1,
+      dx: 100,
+      dy: 0,
+      axis: 'horizontal',
+      dragging: true,
+      revealed: true,
+      actionsWidth: 144,
+    })).toEqual({ type: 'drag', axis: 'horizontal', offset: -44 });
+  });
+
   test('clamps horizontal movement to the action width', () => {
     expect(resolveSwipeMove({
       touchCount: 1,
