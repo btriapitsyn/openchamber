@@ -505,6 +505,7 @@ export async function generatePullRequestDescription(
     .filter((entry) => typeof entry?.hash === 'string' && entry.hash.length > 0)
     .map((entry) => ({
       hash: entry.hash,
+      parentHash: entry.parents?.[0] ?? null,
       subject: typeof entry.message === 'string' ? entry.message.trim() : '',
       body: typeof entry.body === 'string' ? entry.body.trim().slice(0, COMMIT_BODY_CHAR_LIMIT) : '',
     }));
@@ -518,7 +519,7 @@ export async function generatePullRequestDescription(
     try {
       const response = await getCommitFiles(directory, {
         commitHash: commit.hash,
-        parentHash: null,
+        parentHash: commit.parentHash,
       });
       const files = Array.isArray(response?.files) ? response.files : [];
       for (const file of files) {

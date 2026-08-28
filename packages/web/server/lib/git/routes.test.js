@@ -374,6 +374,44 @@ describe('git history routes', () => {
     expect(response.body).toEqual({ error: 'Unknown ref: refs/heads/missing' });
   });
 
+  it('returns the stale cursor status and code for structured history conflicts', async () => {
+    gitLibraries.getGitHistory.mockRejectedValue(Object.assign(new Error('stale cursor'), {
+      statusCode: 409,
+      code: 'stale_git_history_cursor',
+    }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: ['HEAD'] } },
+      response,
+    );
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({
+      error: 'stale cursor',
+      code: 'stale_git_history_cursor',
+    });
+  });
+
+  it('omits the code field when the history service does not provide one', async () => {
+    gitLibraries.getGitHistory.mockRejectedValue(Object.assign(new Error('Conflict'), {
+      statusCode: 409,
+    }));
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('GET', '/api/git/history')(
+      { query: { directory: '/repo', refs: ['HEAD'] } },
+      response,
+    );
+
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toEqual({ error: 'Conflict' });
+  });
+
   it('passes repeated refs through without comma ambiguity', async () => {
     gitLibraries.getGitHistory.mockResolvedValue({ items: [], nextCursor: null, hasMore: false, refsSnapshot: 'snap' });
     gitLibraries.getGitHistoryMergeBase.mockResolvedValue({ mergeBase: null });

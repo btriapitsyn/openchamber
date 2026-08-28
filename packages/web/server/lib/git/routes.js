@@ -404,7 +404,13 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
       res.json(await getGitHistory(directory, all ? { all: true, cursor, limit } : { refs, cursor, limit }));
     } catch (error) {
       console.error('Failed to get git history:', error);
-      res.status(error?.statusCode || 400).json({ error: error.message || 'Failed to get git history' });
+      const responseBody = {
+        error: error.message || 'Failed to get git history',
+      };
+      if (error?.code) {
+        responseBody.code = error.code;
+      }
+      res.status(error?.statusCode || 400).json(responseBody);
     }
   });
 

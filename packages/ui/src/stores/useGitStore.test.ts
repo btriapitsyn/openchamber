@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import type { GitHistoryItem, GitHistoryOptions, GitHistoryPage, GitHistoryRefsResponse, GitStatus } from '@/lib/api/types';
+import { GitHistoryRequestError, STALE_GIT_HISTORY_CURSOR_CODE } from '@/lib/gitHistoryError';
 import { useGitStore } from './useGitStore';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { notifyGitStatusInvalidated } from '@/lib/gitStatusInvalidation';
@@ -753,6 +754,91 @@ describe('useGitStore', () => {
     await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' }, { append: true });
 
     expect(useGitStore.getState().getHistoryQueryState('/repo', { mode: 'auto' })?.items.map((item) => item.id)).toEqual(['replacement']);
+  });
+
+  test('restarts from the first page after a structured stale cursor append failure', async () => {
+    const historyCalls: GitHistoryOptions[] = [];
+    let call = 0;
+    const git = {
+      ...createGitApi(async () => createStatus()),
+      getGitHistoryRefs: async () => createHistoryRefs(),
+      getGitHistory: async (_directory: string, options: GitHistoryOptions) => {
+        historyCalls.push(options);
+        call += 1;
+        if (call === 1) {
+          return createHistoryPage(['first'], { nextCursor: 'cursor-1', hasMore: true });
+        }
+        if (call === 2) {
+          throw new GitHistoryRequestError('Conflict', {
+            status: 409,
+            code: STALE_GIT_HISTORY_CURSOR_CODE,
+          });
+        }
+        return createHistoryPage(['replacement']);
+      },
+    };
+
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' });
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' }, { append: true });
+
+    expect(historyCalls).toHaveLength(3);
+    expect(historyCalls[1]?.cursor).toBe('cursor-1');
+    expect(historyCalls[2]?.cursor).toBe(undefined);
+    expect(useGitStore.getState().getHistoryQueryState('/repo', { mode: 'auto' })?.items.map((item) => item.id)).toEqual(['replacement']);
+  });
+
+  test('uses the stale cursor message fallback for VS Code style append failures', async () => {
+    const historyCalls: GitHistoryOptions[] = [];
+    let call = 0;
+    const git = {
+      ...createGitApi(async () => createStatus()),
+      getGitHistoryRefs: async () => createHistoryRefs(),
+      getGitHistory: async (_directory: string, options: GitHistoryOptions) => {
+        historyCalls.push(options);
+        call += 1;
+        if (call === 1) {
+          return createHistoryPage(['first'], { nextCursor: 'cursor-1', hasMore: true });
+        }
+        if (call === 2) {
+          throw new Error('stale cursor');
+        }
+        return createHistoryPage(['replacement']);
+      },
+    };
+
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' });
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' }, { append: true });
+
+    expect(historyCalls).toHaveLength(3);
+    expect(historyCalls[1]?.cursor).toBe('cursor-1');
+    expect(historyCalls[2]?.cursor).toBe(undefined);
+    expect(useGitStore.getState().getHistoryQueryState('/repo', { mode: 'auto' })?.items.map((item) => item.id)).toEqual(['replacement']);
+  });
+
+  test('keeps prior rows and exposes unrelated 409 errors without restarting', async () => {
+    const historyCalls: GitHistoryOptions[] = [];
+    let call = 0;
+    const git = {
+      ...createGitApi(async () => createStatus()),
+      getGitHistoryRefs: async () => createHistoryRefs(),
+      getGitHistory: async (_directory: string, options: GitHistoryOptions) => {
+        historyCalls.push(options);
+        call += 1;
+        if (call === 1) {
+          return createHistoryPage(['first'], { nextCursor: 'cursor-1', hasMore: true });
+        }
+        throw new GitHistoryRequestError('Conflict', { status: 409 });
+      },
+    };
+
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' });
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' }, { append: true });
+
+    const query = useGitStore.getState().getHistoryQueryState('/repo', { mode: 'auto' });
+    expect(historyCalls).toHaveLength(2);
+    expect(query?.items.map((item) => item.id)).toEqual(['first']);
+    expect(query?.error).toBe('Conflict');
+    expect(query?.outdated).toBe(true);
   });
 
   test('keeps only the newest filter response', async () => {

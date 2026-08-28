@@ -186,6 +186,11 @@ The following functions are internal helpers used by exported functions:
 - `latest`: Latest commit object or null.
 - `total`: Total number of commits.
 
+### Git history route errors
+- `GET /api/git/history` returns history service errors as `{ error: string, code?: string }` with the service status code.
+- Stale history cursors return `409` with `{ error: 'stale cursor', code: 'stale_git_history_cursor' }` so HTTP runtimes can restart pagination from page one.
+- Other history failures omit `code` unless the Git service provided one.
+
 ### Commit File Metadata Response
 - `files`: Array in Git diff order.
 - Each file entry contains:
