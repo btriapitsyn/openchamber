@@ -74,16 +74,18 @@ describe('VS Code webview git API', () => {
       }));
       await mergeBasePromise;
 
+      const commitHash = 'a'.repeat(40);
+      const parentHash = 'b'.repeat(40);
       const commitFilesPromise = api.getCommitFiles?.('/repo', {
-        commitHash: 'abc123',
-        parentHash: 'def456',
+        commitHash,
+        parentHash,
       });
       const commitFilesRequest = messages.at(-1);
       assert.equal(commitFilesRequest?.type, 'api:git/commit-files');
       assert.deepEqual(commitFilesRequest?.payload, {
         directory: '/repo',
-        hash: 'abc123',
-        parentHash: 'def456',
+        hash: commitHash,
+        parentHash,
       });
       globalThis.window.dispatchEvent(new MessageEvent('message', {
         data: {
@@ -96,8 +98,8 @@ describe('VS Code webview git API', () => {
       await commitFilesPromise;
 
       const commitPreviewPromise = api.getCommitFileDiff?.('/repo', {
-        commitHash: 'abc123',
-        parentHash: 'def456',
+        commitHash,
+        parentHash,
         originalPath: 'old/name.ts',
         modifiedPath: 'new/name.ts',
       });
@@ -105,8 +107,8 @@ describe('VS Code webview git API', () => {
       assert.equal(commitPreviewRequest?.type, 'api:git/commit-file-diff');
       assert.deepEqual(commitPreviewRequest?.payload, {
         directory: '/repo',
-        hash: 'abc123',
-        parentHash: 'def456',
+        hash: commitHash,
+        parentHash,
         originalPath: 'old/name.ts',
         modifiedPath: 'new/name.ts',
       });

@@ -694,14 +694,16 @@ describe('gitApiHttp history requests', () => {
   test('accepts object requests for commit file history helpers', async () => {
     installWindowMock();
     const calls = installFetchMock();
+    const commitHash = 'a'.repeat(40);
+    const parentHash = 'b'.repeat(40);
     try {
       const changesRequest: GitCommitChangesRequest = {
-        commitHash: 'abc123',
+        commitHash,
         parentHash: null,
       };
       const previewRequest: GitCommitFilePreviewRequest = {
-        commitHash: 'abc123',
-        parentHash: 'def456',
+        commitHash,
+        parentHash,
         originalPath: null,
         modifiedPath: 'new/name.ts',
       };
@@ -709,8 +711,8 @@ describe('gitApiHttp history requests', () => {
       await getCommitFiles('/repo', changesRequest);
       await getCommitFileDiff('/repo', previewRequest);
 
-      expect(String(calls[0].input)).toBe('/api/git/commit-files?directory=%2Frepo&commitHash=abc123&parentHash=__ROOT__');
-      expect(String(calls[1].input)).toBe('/api/git/commit-file-diff?directory=%2Frepo&commitHash=abc123&parentHash=def456&originalPath=__ROOT__&modifiedPath=new%2Fname.ts');
+      expect(String(calls[0].input)).toBe(`/api/git/commit-files?directory=%2Frepo&commitHash=${commitHash}&parentHash=__ROOT__`);
+      expect(String(calls[1].input)).toBe(`/api/git/commit-file-diff?directory=%2Frepo&commitHash=${commitHash}&parentHash=${parentHash}&originalPath=__ROOT__&modifiedPath=new%2Fname.ts`);
     } finally {
       restoreMocks();
     }
