@@ -495,6 +495,62 @@ describe('VS Code git history service parity', () => {
     });
   });
 
+  it('parses 64-char object ids from diff-tree and ls-tree output', async () => {
+    const oldObjectId = 'a'.repeat(64);
+    const newObjectId = 'b'.repeat(64);
+    setGitResponse(
+      ['diff-tree', '-r', '--no-commit-id', '-M', '--raw', '--numstat', '--no-abbrev', '-z', 'parent256', 'commit256'],
+      {
+        stdout: [
+          `:100644 100644 ${oldObjectId} ${newObjectId} M\0sha256.txt\0`,
+          '2\t1\tsha256.txt\0',
+        ].join(''),
+        stderr: '',
+        exitCode: 0,
+      },
+    );
+    setGitResponse(['ls-tree', '-z', 'parent256', '--', 'sha256.txt'], {
+      stdout: `100644 blob ${oldObjectId}\tsha256.txt\0`,
+      stderr: '',
+      exitCode: 0,
+    });
+    setGitResponse(['ls-tree', '-z', 'commit256', '--', 'sha256.txt'], {
+      stdout: `100644 blob ${newObjectId}\tsha256.txt\0`,
+      stderr: '',
+      exitCode: 0,
+    });
+    setGitResponse(['cat-file', '-s', oldObjectId], { stdout: '4\n', stderr: '', exitCode: 0 });
+    setGitResponse(['cat-file', '-s', newObjectId], { stdout: '5\n', stderr: '', exitCode: 0 });
+    setGitResponse(['cat-file', '-p', oldObjectId], { stdout: 'old\n', stderr: '', exitCode: 0 });
+    setGitResponse(['cat-file', '-p', newObjectId], { stdout: 'new\n', stderr: '', exitCode: 0 });
+
+    await expect(getCommitFiles('/repo', { commitHash: 'commit256', parentHash: 'parent256' })).resolves.toEqual({
+      files: [
+        {
+          path: 'sha256.txt',
+          status: 'M',
+          kind: 'file',
+          originalObjectId: oldObjectId,
+          objectId: newObjectId,
+          insertions: 2,
+          deletions: 1,
+          isBinary: false,
+        },
+      ],
+    });
+
+    await expect(getCommitFileDiff('/repo', {
+      commitHash: 'commit256',
+      parentHash: 'parent256',
+      originalPath: 'sha256.txt',
+      modifiedPath: 'sha256.txt',
+    })).resolves.toEqual({
+      status: 'ready',
+      original: 'old\n',
+      modified: 'new\n',
+    });
+  });
+
   it('uses --root comparisons for root commits and ignores malformed records', async () => {
     setGitResponse(
       ['diff-tree', '--root', '-r', '--no-commit-id', '-M', '--raw', '--numstat', '--no-abbrev', '-z', 'root123'],
@@ -525,7 +581,7 @@ describe('VS Code git history service parity', () => {
     });
   });
 
-  it('returns an empty change list when the explicit parent is unavailable', async () => {
+  it('throws when the explicit parent diff-tree lookup fails', async () => {
     setGitResponse(
       ['diff-tree', '-r', '--no-commit-id', '-M', '--raw', '--numstat', '--no-abbrev', '-z', 'missing-parent', 'commit456'],
       {
@@ -535,7 +591,20 @@ describe('VS Code git history service parity', () => {
       },
     );
 
-    await expect(getCommitFiles('/repo', { commitHash: 'commit456', parentHash: 'missing-parent' })).resolves.toEqual({ files: [] });
+    await expect(getCommitFiles('/repo', { commitHash: 'commit456', parentHash: 'missing-parent' })).rejects.toThrow('fatal: bad object missing-parent');
+  });
+
+  it('returns an empty change list when diff-tree succeeds with no changed files', async () => {
+    setGitResponse(
+      ['diff-tree', '-r', '--no-commit-id', '-M', '--raw', '--numstat', '--no-abbrev', '-z', 'parent123', 'commit456'],
+      {
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+      },
+    );
+
+    await expect(getCommitFiles('/repo', { commitHash: 'commit456', parentHash: 'parent123' })).resolves.toEqual({ files: [] });
   });
 
   it('returns ready previews for explicit rename comparisons', async () => {

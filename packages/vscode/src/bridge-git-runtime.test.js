@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
 const gitService = {
   stageGitFiles: mock(),
   unstageGitFiles: mock(),
+  createTag: mock(),
   checkoutCommit: mock(),
   cherryPick: mock(),
   revertCommit: mock(),
@@ -24,6 +25,7 @@ describe('bridge git runtime index mutations', () => {
   beforeEach(() => {
     gitService.stageGitFiles.mockReset();
     gitService.unstageGitFiles.mockReset();
+    gitService.createTag.mockReset();
     gitService.checkoutCommit.mockReset();
     gitService.cherryPick.mockReset();
     gitService.revertCommit.mockReset();
@@ -122,6 +124,61 @@ describe('bridge git runtime index mutations', () => {
     expect(gitService.cherryPick).not.toHaveBeenCalled();
     expect(gitService.revertCommit).not.toHaveBeenCalled();
     expect(gitService.resetToCommit).not.toHaveBeenCalled();
+  });
+
+  it('accepts 64-char commit hashes at the bridge boundary for commit actions', async () => {
+    gitService.checkoutCommit.mockResolvedValue({ success: true });
+    gitService.cherryPick.mockResolvedValue({ success: true, conflict: false });
+    gitService.revertCommit.mockResolvedValue({ success: true, conflict: false });
+    gitService.resetToCommit.mockResolvedValue({ success: true });
+    const hash = 'a'.repeat(64);
+
+    expect(await handleStandardGitBridgeMessage({
+      id: '1',
+      type: 'api:git/checkout-commit',
+      payload: { directory: '/repo', hash },
+    })).toEqual({ id: '1', type: 'api:git/checkout-commit', success: true, data: { success: true } });
+    expect(await handleStandardGitBridgeMessage({
+      id: '2',
+      type: 'api:git/cherry-pick',
+      payload: { directory: '/repo', hash },
+    })).toEqual({ id: '2', type: 'api:git/cherry-pick', success: true, data: { success: true, conflict: false } });
+    expect(await handleStandardGitBridgeMessage({
+      id: '3',
+      type: 'api:git/revert-commit',
+      payload: { directory: '/repo', hash },
+    })).toEqual({ id: '3', type: 'api:git/revert-commit', success: true, data: { success: true, conflict: false } });
+    expect(await handleStandardGitBridgeMessage({
+      id: '4',
+      type: 'api:git/reset-to-commit',
+      payload: { directory: '/repo', hash, mode: 'mixed' },
+    })).toEqual({ id: '4', type: 'api:git/reset-to-commit', success: true, data: { success: true } });
+  });
+
+  it('requires full object ids for VS Code tag and commit file payloads', async () => {
+    const tagResponse = await handleStandardGitBridgeMessage({
+      id: 'tag',
+      type: 'api:git/tags',
+      payload: { directory: '/repo', method: 'POST', name: 'v1.2.3', commitHash: 'abc1234' },
+    });
+    expect(tagResponse).toEqual({ id: 'tag', type: 'api:git/tags', success: false, error: 'commitHash must be a full commit SHA' });
+
+    const metadataResponse = await handleStandardGitBridgeMessage({
+      id: 'files',
+      type: 'api:git/commit-files',
+      payload: { directory: '/repo', hash: 'abc1234', parentHash: 'd'.repeat(64) },
+    });
+    expect(metadataResponse).toEqual({ id: 'files', type: 'api:git/commit-files', success: false, error: 'hash must be a full commit SHA' });
+
+    const previewResponse = await handleStandardGitBridgeMessage({
+      id: 'diff',
+      type: 'api:git/commit-file-diff',
+      payload: { directory: '/repo', hash: 'a'.repeat(64), parentHash: 'bad-parent', originalPath: 'a.ts', modifiedPath: 'b.ts' },
+    });
+    expect(previewResponse).toEqual({ id: 'diff', type: 'api:git/commit-file-diff', success: false, error: 'parentHash must be a full commit SHA or null' });
+    expect(gitService.createTag).not.toHaveBeenCalled();
+    expect(gitService.getCommitFiles).not.toHaveBeenCalled();
+    expect(gitService.getCommitFileDiff).not.toHaveBeenCalled();
   });
 
   it('preserves bootstrap phases in status responses', async () => {
@@ -304,8 +361,8 @@ describe('bridge git runtime index mutations', () => {
       type: 'api:git/commit-files',
       payload: {
         directory: '/repo',
-        hash: 'abc1234',
-        parentHash: 'def5678',
+        hash: 'a'.repeat(64),
+        parentHash: 'b'.repeat(64),
       },
     });
 
@@ -330,9 +387,23 @@ describe('bridge git runtime index mutations', () => {
       },
     });
     expect(gitService.getCommitFiles).toHaveBeenCalledWith('/repo', {
-      commitHash: 'abc1234',
-      parentHash: 'def5678',
+      commitHash: 'a'.repeat(64),
+      parentHash: 'b'.repeat(64),
     });
+  });
+
+  it('preserves commit file lookup failures for the bridge caller', async () => {
+    gitService.getCommitFiles.mockRejectedValue(new Error('fatal: bad object missing-parent'));
+
+    await expect(handleStandardGitBridgeMessage({
+      id: 'commit-files-error',
+      type: 'api:git/commit-files',
+      payload: {
+        directory: '/repo',
+        hash: 'a'.repeat(64),
+        parentHash: 'b'.repeat(64),
+      },
+    })).rejects.toThrow('fatal: bad object missing-parent');
   });
 
   it('forwards structured commit preview requests and preserves too-large responses', async () => {
@@ -347,8 +418,8 @@ describe('bridge git runtime index mutations', () => {
       type: 'api:git/commit-file-diff',
       payload: {
         directory: '/repo',
-        hash: 'abc1234',
-        parentHash: 'def5678',
+        hash: 'a'.repeat(64),
+        parentHash: 'b'.repeat(64),
         originalPath: 'old-name.ts',
         modifiedPath: 'new-name.ts',
       },
@@ -365,8 +436,8 @@ describe('bridge git runtime index mutations', () => {
       },
     });
     expect(gitService.getCommitFileDiff).toHaveBeenCalledWith('/repo', {
-      commitHash: 'abc1234',
-      parentHash: 'def5678',
+      commitHash: 'a'.repeat(64),
+      parentHash: 'b'.repeat(64),
       originalPath: 'old-name.ts',
       modifiedPath: 'new-name.ts',
     });

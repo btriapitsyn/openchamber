@@ -85,6 +85,21 @@ describe('VS Code git tag service validation', () => {
     expect(spawnCalls).toHaveLength(0);
   });
 
+  it('rejects abbreviated commit hashes before invoking git', async () => {
+    await expect(createTag('/repo', 'v1.2.3', 'abc1234')).rejects.toThrow('Invalid commit hash');
+    expect(spawnCalls).toHaveLength(0);
+  });
+
+  it('accepts 64-char commit hashes', async () => {
+    const commitHash = 'a'.repeat(64);
+    setGitResponse(['tag', '--', 'v1.2.3', commitHash]);
+
+    await expect(createTag('/repo', 'v1.2.3', commitHash)).resolves.toEqual({ success: true, tag: 'v1.2.3' });
+
+    expect(spawnCalls).toHaveLength(1);
+    expect(spawnCalls[0]?.args).toEqual(['tag', '--', 'v1.2.3', commitHash]);
+  });
+
   it('passes tag creation arguments after -- in the raw git fallback', async () => {
     setGitResponse(['tag', '--', 'v1.2.3', '0123456789abcdef0123456789abcdef01234567']);
 

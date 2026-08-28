@@ -4,6 +4,10 @@ const gitLibraries = {
   createTag: vi.fn(),
   stageFiles: vi.fn(),
   unstageFiles: vi.fn(),
+  checkoutCommit: vi.fn(),
+  cherryPick: vi.fn(),
+  revertCommit: vi.fn(),
+  resetToCommit: vi.fn(),
   isGitRepository: vi.fn(),
   getStatus: vi.fn(),
   getWorktrees: vi.fn(),
@@ -20,6 +24,10 @@ vi.mock('./index.js', () => ({
   createTag: gitLibraries.createTag,
   stageFiles: gitLibraries.stageFiles,
   unstageFiles: gitLibraries.unstageFiles,
+  checkoutCommit: gitLibraries.checkoutCommit,
+  cherryPick: gitLibraries.cherryPick,
+  revertCommit: gitLibraries.revertCommit,
+  resetToCommit: gitLibraries.resetToCommit,
   isGitRepository: gitLibraries.isGitRepository,
   getStatus: gitLibraries.getStatus,
   getWorktrees: gitLibraries.getWorktrees,
@@ -85,6 +93,10 @@ describe('git routes index mutations', () => {
     gitLibraries.createTag.mockReset();
     gitLibraries.stageFiles.mockReset();
     gitLibraries.unstageFiles.mockReset();
+    gitLibraries.checkoutCommit.mockReset();
+    gitLibraries.cherryPick.mockReset();
+    gitLibraries.revertCommit.mockReset();
+    gitLibraries.resetToCommit.mockReset();
     gitLibraries.isGitRepository.mockReset();
     gitLibraries.getStatus.mockReset();
     gitLibraries.getGitHistoryRefs.mockReset();
@@ -163,6 +175,39 @@ describe('git routes index mutations', () => {
     expect(response.statusCode).toBe(400);
     expect(response.body).toEqual({ error: 'path parameter is required' });
     expect(gitLibraries.stageFiles).not.toHaveBeenCalled();
+  });
+
+  it('accepts 64-char commit hashes for commit action routes', async () => {
+    gitLibraries.checkoutCommit.mockResolvedValue({ success: true });
+    gitLibraries.cherryPick.mockResolvedValue({ success: true, conflict: false });
+    gitLibraries.revertCommit.mockResolvedValue({ success: true, conflict: false });
+    gitLibraries.resetToCommit.mockResolvedValue({ success: true });
+    const hash = 'a'.repeat(64);
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+
+    const checkoutResponse = createMockResponse();
+    await getRoute('POST', '/api/git/checkout-commit')({ query: { directory: '/repo' }, body: { hash } }, checkoutResponse);
+    expect(checkoutResponse.statusCode).toBe(200);
+    expect(gitLibraries.checkoutCommit).toHaveBeenCalledWith('/repo', hash);
+
+    const cherryPickResponse = createMockResponse();
+    await getRoute('POST', '/api/git/cherry-pick')({ query: { directory: '/repo' }, body: { hash } }, cherryPickResponse);
+    expect(cherryPickResponse.statusCode).toBe(200);
+    expect(gitLibraries.cherryPick).toHaveBeenCalledWith('/repo', hash);
+
+    const revertResponse = createMockResponse();
+    await getRoute('POST', '/api/git/revert-commit')({ query: { directory: '/repo' }, body: { hash } }, revertResponse);
+    expect(revertResponse.statusCode).toBe(200);
+    expect(gitLibraries.revertCommit).toHaveBeenCalledWith('/repo', hash);
+
+    const resetResponse = createMockResponse();
+    await getRoute('POST', '/api/git/reset-to-commit')(
+      { query: { directory: '/repo' }, body: { hash, mode: 'mixed' } },
+      resetResponse,
+    );
+    expect(resetResponse.statusCode).toBe(200);
+    expect(gitLibraries.resetToCommit).toHaveBeenCalledWith('/repo', hash, 'mixed', false);
   });
 });
 
@@ -552,6 +597,34 @@ describe('git commit file routes', () => {
     expect(gitLibraries.getCommitFiles).toHaveBeenCalledWith('/repo', {
       commitHash: 'a'.repeat(40),
       parentHash: 'b'.repeat(40),
+    });
+  });
+
+  it('accepts 64-char full object ids for commit file routes', async () => {
+    gitLibraries.getCommitFileDiff.mockResolvedValue({ status: 'ready', original: '', modified: '' });
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('GET', '/api/git/commit-file-diff')(
+      {
+        query: {
+          directory: '/repo',
+          commitHash: 'c'.repeat(64),
+          parentHash: 'd'.repeat(64),
+          originalPath: 'old.ts',
+          modifiedPath: 'new.ts',
+        },
+      },
+      response,
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(gitLibraries.getCommitFileDiff).toHaveBeenCalledWith('/repo', {
+      commitHash: 'c'.repeat(64),
+      parentHash: 'd'.repeat(64),
+      originalPath: 'old.ts',
+      modifiedPath: 'new.ts',
     });
   });
 

@@ -16,8 +16,14 @@ const requireDirectory = (id: string, type: string, directory?: string): BridgeR
   return null;
 };
 
+const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
+
 const isValidCommitHash = (hash: string | undefined): hash is string => (
-  typeof hash === 'string' && /^[0-9a-fA-F]{7,40}$/.test(hash)
+  typeof hash === 'string' && /^[0-9a-fA-F]{7,64}$/.test(hash)
+);
+
+const isFullGitObjectId = (hash: string | undefined): hash is string => (
+  typeof hash === 'string' && FULL_GIT_OBJECT_ID_PATTERN.test(hash)
 );
 
 const isOptionLikeGitName = (value: string | undefined): value is string => (
@@ -211,8 +217,8 @@ export async function handleStandardGitBridgeMessage(message: BridgeMessageInput
       }
 
       const commitHash = readString(payloadRecord, 'commitHash')?.trim();
-      if (!commitHash || !isValidCommitHash(commitHash)) {
-        return { id, type, success: false, error: 'commitHash must be a commit SHA' };
+      if (!commitHash || !isFullGitObjectId(commitHash)) {
+        return { id, type, success: false, error: 'commitHash must be a full commit SHA' };
       }
 
       const result = await gitService.createTag(directory!, name, commitHash);
@@ -648,8 +654,14 @@ export async function handleStandardGitBridgeMessage(message: BridgeMessageInput
       if (!directory || !hash) {
         return { id, type, success: false, error: 'Directory and hash are required' };
       }
+      if (!isFullGitObjectId(hash)) {
+        return { id, type, success: false, error: 'hash must be a full commit SHA' };
+      }
       if (parentHashValue !== undefined && parentHashValue !== null && parentHash === undefined) {
         return { id, type, success: false, error: 'parentHash must be a string or null' };
+      }
+      if (parentHash !== undefined && parentHash !== null && !isFullGitObjectId(parentHash)) {
+        return { id, type, success: false, error: 'parentHash must be a full commit SHA or null' };
       }
       const result = await gitService.getCommitFiles(directory, {
         commitHash: hash,
@@ -670,11 +682,14 @@ export async function handleStandardGitBridgeMessage(message: BridgeMessageInput
       if (!directory || !hash) {
         return { id, type, success: false, error: 'Directory and hash are required' };
       }
-      if (!/^[0-9a-fA-F]{7,40}$/.test(hash)) {
-        return { id, type, success: false, error: 'hash must be a valid commit SHA' };
+      if (!isFullGitObjectId(hash)) {
+        return { id, type, success: false, error: 'hash must be a full commit SHA' };
       }
       if (parentHashValue !== undefined && parentHashValue !== null && parentHash === undefined) {
         return { id, type, success: false, error: 'parentHash must be a string or null' };
+      }
+      if (parentHash !== undefined && parentHash !== null && !isFullGitObjectId(parentHash)) {
+        return { id, type, success: false, error: 'parentHash must be a full commit SHA or null' };
       }
       if (originalPathValue !== undefined && originalPathValue !== null && originalPath === undefined) {
         return { id, type, success: false, error: 'originalPath must be a string or null' };

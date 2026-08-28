@@ -719,7 +719,7 @@ const normalizeStartRef = (value) => {
 };
 
 function isValidCommitHash(hash) {
-  return typeof hash === 'string' && /^[0-9a-fA-F]{7,40}$/.test(hash);
+  return typeof hash === 'string' && /^[0-9a-fA-F]{7,64}$/.test(hash);
 }
 
 const parseRemoteBranchRef = (value) => {
@@ -1570,7 +1570,7 @@ export async function computeIntegratePlan(input = {}) {
   const cherry = await runGitCommandOrThrow(repoRoot, ['cherry', targetBranch, sourceBranch], 'Failed to compute cherry commits');
   const plus = new Set();
   for (const line of trimGitLines(cherry.stdout)) {
-    const match = line.match(/^\+\s+([0-9a-f]{7,40})\b/i);
+    const match = line.match(/^\+\s+([0-9a-f]{7,64})\b/i);
     if (match) {
       plus.add(match[1]);
     }

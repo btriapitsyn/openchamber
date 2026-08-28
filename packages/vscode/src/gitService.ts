@@ -35,6 +35,7 @@ const WORKTREE_INDEX_LOCK_RETRY_DELAY_MS = 250;
 const WORKTREE_INDEX_LOCK_STALE_DELAY_MS = 750;
 const GIT_NULL_REF = '0'.repeat(40);
 const COMMIT_FILE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
+const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/;
 
 type GitCommitChangedFile = {
   path: string;
@@ -375,7 +376,15 @@ async function execGit(args: string[], cwd: string): Promise<{ stdout: string; s
 }
 
 function isValidCommitHash(hash: string): boolean {
-  return /^[0-9a-fA-F]{7,40}$/.test(hash);
+  return /^[0-9a-fA-F]{7,64}$/.test(hash);
+}
+
+function isFullGitObjectId(hash: string): boolean {
+  return FULL_GIT_OBJECT_ID_PATTERN.test(hash);
+}
+
+function isZeroObjectId(hash: string): boolean {
+  return /^0+$/.test(hash);
 }
 
 function isOptionLikeGitName(value: string): boolean {
@@ -411,7 +420,7 @@ function parseCommitTreeEntry(output: string): CommitTreeEntry | null {
   if (!record) {
     return null;
   }
-  const match = /^([0-7]{6})\s+\S+\s+([0-9a-f]{40})\t(.+)$/.exec(record);
+  const match = /^([0-7]{6})\s+\S+\s+([0-9a-f]{40}|[0-9a-f]{64})\t(.+)$/.exec(record);
   if (!match) {
     return null;
   }
@@ -460,7 +469,7 @@ function parseCommitFileChanges(stdout: string): GitCommitChangedFile[] {
     const header = stdout.slice(cursor, headerEnd);
     cursor = headerEnd + 1;
 
-    const headerMatch = /^:([0-7]{6})\s+([0-7]{6})\s+([0-9a-f]{40})\s+([0-9a-f]{40})\s+([A-Z])(\d+)?$/.exec(header);
+    const headerMatch = /^:([0-7]{6})\s+([0-7]{6})\s+([0-9a-f]{40}|[0-9a-f]{64})\s+([0-9a-f]{40}|[0-9a-f]{64})\s+([A-Z])(\d+)?$/.exec(header);
     if (!headerMatch) {
       break;
     }
@@ -506,10 +515,10 @@ function parseCommitFileChanges(stdout: string): GitCommitChangedFile[] {
     if (originalPath) {
       entry.originalPath = originalPath;
     }
-    if (oldObjectId !== GIT_NULL_REF) {
+    if (!isZeroObjectId(oldObjectId)) {
       entry.originalObjectId = oldObjectId;
     }
-    if (newObjectId !== GIT_NULL_REF) {
+    if (!isZeroObjectId(newObjectId)) {
       entry.objectId = newObjectId;
     }
     indexByKey.set(buildCommitDiffEntryKey(resolvedPath, originalPath), rawEntries.push(entry) - 1);
@@ -1045,7 +1054,7 @@ export async function createTag(directory: string, name: string, commitHash: str
   if (isOptionLikeGitName(normalizedName)) {
     throw new Error('Invalid tag name');
   }
-  if (!isValidCommitHash(commitHash)) {
+  if (!isFullGitObjectId(commitHash)) {
     throw new Error('Invalid commit hash');
   }
 
@@ -3914,7 +3923,10 @@ export async function getCommitFiles(
   const result = await execGit(args, directory);
 
   if (result.exitCode !== 0) {
-    return { files: [] };
+    const message = [result.stderr, result.stdout]
+      .map((value) => String(value || '').trim())
+      .find(Boolean);
+    throw new Error(message || `Failed to read commit files for ${commitHash}`);
   }
 
   return { files: parseCommitFileChanges(result.stdout) };
