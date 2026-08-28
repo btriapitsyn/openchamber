@@ -52,7 +52,7 @@ describe('VS Code git bridge tag mutations', () => {
       id: '2',
       type: 'api:git/tags',
       success: false,
-      error: 'commitHash must be a commit SHA',
+      error: 'commitHash must be a full commit SHA',
     });
   });
 
