@@ -321,37 +321,26 @@ describe('useGitDiffTabsStore', () => {
     expect(state?.tabs).toHaveLength(12);
   });
 
-  test('clamp never drops the active tab', () => {
+  test('clamp preserves the newly active tab when timestamps tie', () => {
     const directory = '/repo';
+    const originalDateNow = Date.now;
+    Date.now = () => 0;
 
-    useGitDiffTabsStore.getState().openTab(directory, {
-      kind: 'working',
-      path: 'src/file0.ts',
-      scope: 'working',
-    });
+    try {
+      for (let i = 0; i < 13; i += 1) {
+        useGitDiffTabsStore.getState().openTab(directory, {
+          kind: 'working',
+          path: `src/file${i}.ts`,
+          scope: 'working',
+        });
+      }
 
-    const firstTabId = useGitDiffTabsStore.getState().byDirectory[directory]?.tabs[0]?.id;
-
-    for (let i = 1; i < 15; i += 1) {
-      useGitDiffTabsStore.getState().openTab(directory, {
-        kind: 'working',
-        path: `src/file${i}.ts`,
-        scope: 'working',
-      });
+      const state = useGitDiffTabsStore.getState().byDirectory[directory];
+      expect(state?.tabs).toHaveLength(12);
+      expect(state?.tabs.some((tab) => tab.id === state.activeTabId)).toBe(true);
+    } finally {
+      Date.now = originalDateNow;
     }
-
-    useGitDiffTabsStore.getState().setActiveTab(directory, firstTabId!);
-
-    for (let i = 15; i < 20; i += 1) {
-      useGitDiffTabsStore.getState().openTab(directory, {
-        kind: 'working',
-        path: `src/file${i}.ts`,
-        scope: 'working',
-      });
-    }
-
-    const state = useGitDiffTabsStore.getState().byDirectory[directory];
-    expect(state?.tabs.some((tab) => tab.id === firstTabId)).toBe(true);
   });
 
   test('max 20 directories, drops oldest by touchedAt', () => {
