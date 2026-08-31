@@ -756,6 +756,34 @@ describe('useGitStore', () => {
     expect(useGitStore.getState().getHistoryQueryState('/repo', { mode: 'auto' })?.items.map((item) => item.id)).toEqual(['replacement']);
   });
 
+  test('preserves prior rows and clears loading when the stale cursor restart fails', async () => {
+    let call = 0;
+    const git = {
+      ...createGitApi(async () => createStatus()),
+      getGitHistoryRefs: async () => createHistoryRefs(),
+      getGitHistory: async () => {
+        call += 1;
+        if (call === 1) {
+          return createHistoryPage(['first'], { nextCursor: 'cursor-1', hasMore: true });
+        }
+        if (call === 2) {
+          throw new Error('stale cursor');
+        }
+        throw new Error('retry failed');
+      },
+    };
+
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' });
+    await useGitStore.getState().fetchHistoryPage('/repo', git, { mode: 'auto' }, { append: true });
+
+    const query = useGitStore.getState().getHistoryQueryState('/repo', { mode: 'auto' });
+    expect(query?.items.map((item) => item.id)).toEqual(['first']);
+    expect(query?.isLoading).toBe(false);
+    expect(query?.isLoadingMore).toBe(false);
+    expect(query?.error).toBe('retry failed');
+    expect(query?.outdated).toBe(true);
+  });
+
   test('restarts from the first page after a structured stale cursor append failure', async () => {
     const historyCalls: GitHistoryOptions[] = [];
     let call = 0;

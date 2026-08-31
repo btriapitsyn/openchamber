@@ -988,10 +988,14 @@ export const useGitStore = create<GitStore>()(
         try {
           await commitPage(append && !shouldRestart && nextCursor !== null, nextCursor);
         } catch (error) {
-          const historyError = error instanceof Error ? error : new Error('Failed to load graph history');
+          let historyError = error instanceof Error ? error : new Error('Failed to load graph history');
           if (append && nextCursor && isStaleGitHistoryCursorError(historyError)) {
-            await commitPage(false, null);
-            return;
+            try {
+              await commitPage(false, null);
+              return;
+            } catch (retryError) {
+              historyError = retryError instanceof Error ? retryError : new Error('Failed to load graph history');
+            }
           }
           if (!isRequestCurrent(token, directory)) {
             return;
