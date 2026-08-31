@@ -8,6 +8,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import * as fs from 'fs';
+import { createHash } from 'node:crypto';
 import { spawn, execFile } from 'child_process';
 import { promisify } from 'util';
 import type { API as GitAPI, Repository, GitExtension, Status } from './git.d';
@@ -3466,13 +3467,16 @@ const mapGitHistoryRef = (id: string, name: string, revision: string | null): Gi
   return { id, name, revision, kind: 'tag', category: 'tags' };
 };
 
-const buildGitHistorySnapshot = (refs: GitHistoryRef[], current: GitHistoryRef | null): string => [
-  ...refs,
-  ...(current ? [current] : []),
-]
-  .map((ref) => `${ref.id}:${ref.revision || ''}`)
-  .sort((left, right) => left.localeCompare(right))
-  .join('|');
+// Hash snapshot so pagination cursor stays small while ref changes invalidate it.
+const buildGitHistorySnapshot = (refs: GitHistoryRef[], current: GitHistoryRef | null): string => createHash('sha256')
+  .update([
+    ...refs,
+    ...(current ? [current] : []),
+  ]
+    .map((ref) => `${ref.id}:${ref.revision || ''}`)
+    .sort((left, right) => left.localeCompare(right))
+    .join('|'))
+  .digest('hex');
 
 const buildGitHistoryBaseRef = ({
   refsById,

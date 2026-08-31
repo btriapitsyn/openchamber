@@ -51,6 +51,13 @@ const setGitResponse = (args, response) => {
   commandResponses.set(args.join('\u0000'), response);
 };
 
+const buildLegacyHistorySnapshot = (refs, current) => [...refs, ...(current ? [current] : [])]
+  .map((ref) => `${ref.id}:${ref.revision || ''}`)
+  .sort((left, right) => left.localeCompare(right))
+  .join('|');
+
+const encodeGitHistoryCursor = (payload) => Buffer.from(JSON.stringify(payload)).toString('base64url');
+
 const registerHistoryRefs = ({
   featureRevision = 'm1',
   headRevision = featureRevision,
@@ -117,15 +124,96 @@ describe('VS Code git history service parity', () => {
       expect.objectContaining({ id: 'refs/remotes/origin/main', name: 'origin/main', kind: 'remote', category: 'remote-branches' }),
       expect.objectContaining({ id: 'refs/tags/v1.0.0', name: 'v1.0.0', kind: 'tag', category: 'tags' }),
     ]));
-    expect(refs.snapshot).toBe([
-      'HEAD:m1',
-      'refs/heads/feature:m1',
-      'refs/heads/main:i1',
-      'refs/remotes/origin/feature:m1',
-      'refs/remotes/origin/main:i1',
-      'refs/tags/release/feature:m1',
-      'refs/tags/v1.0.0:i1',
-    ].join('|'));
+    const legacySnapshot = buildLegacyHistorySnapshot([
+      { id: 'refs/heads/main', revision: 'i1' },
+      { id: 'refs/heads/feature', revision: 'm1' },
+      { id: 'refs/remotes/origin/main', revision: 'i1' },
+      { id: 'refs/remotes/origin/feature', revision: 'm1' },
+      { id: 'refs/tags/v1.0.0', revision: 'i1' },
+      { id: 'refs/tags/release/feature', revision: 'm1' },
+    ], { id: 'HEAD', revision: 'm1' });
+    expect(refs.snapshot).toMatch(/^[0-9a-f]{64}$/);
+    expect(refs.snapshot).not.toBe(legacySnapshot);
+  });
+
+  it('keeps bounded history cursors with hundreds of refs and still loads page two', async () => {
+    const manyRefs = Array.from({ length: 320 }, (_, index) => ({
+      id: `refs/heads/branch-${String(index + 1).padStart(3, '0')}`,
+      name: `branch-${String(index + 1).padStart(3, '0')}`,
+      revision: `r${String(index + 1).padStart(3, '0')}`,
+    }));
+    setGitResponse(
+      ['for-each-ref', '--format=%(refname)\t%(refname:short)\t%(objectname)', 'refs/heads', 'refs/remotes', 'refs/tags'],
+      {
+        stdout: [
+          'refs/heads/main\tmain\ti1',
+          'refs/heads/feature\tfeature\tm1',
+          ...manyRefs.map((ref) => `${ref.id}\t${ref.name}\t${ref.revision}`),
+        ].join('\n'),
+        stderr: '',
+        exitCode: 0,
+      },
+    );
+    setGitResponse(['for-each-ref', '--format=%(refname) %(symref)', 'refs/remotes'], { stdout: '', stderr: '', exitCode: 0 });
+    setGitResponse(['symbolic-ref', '-q', 'HEAD'], { stdout: 'refs/heads/feature\n', stderr: '', exitCode: 0 });
+    setGitResponse(['rev-parse', 'HEAD'], { stdout: 'm1\n', stderr: '', exitCode: 0 });
+    setGitResponse(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], { stdout: '', stderr: 'no upstream', exitCode: 1 });
+    setGitResponse(
+      [
+        'log',
+        '--topo-order',
+        '--decorate=full',
+        '--date=iso-strict',
+        '--skip=0',
+        '--max-count=3',
+        '--pretty=format:%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%ad%x1f%s%x1f%D',
+        '--shortstat',
+        'HEAD',
+      ],
+      {
+        stdout: [
+          '\x1em1\x1ff1\x1fAlice\x1falice@example.com\x1f2024-01-03T00:00:00Z\x1fBounded page one\x1fHEAD -> feature\n 1 file changed, 3 insertions(+)',
+          '\x1ef1\x1fi1\x1fAlice\x1falice@example.com\x1f2024-01-02T00:00:00Z\x1fBounded page one second\x1frefs/heads/feature\n 1 file changed, 2 insertions(+)',
+          '\x1ei1\x1f\x1fAlice\x1falice@example.com\x1f2024-01-01T00:00:00Z\x1fBounded page one overflow\x1frefs/heads/main\n 1 file changed, 1 insertions(+)',
+        ].join(''),
+        stderr: '',
+        exitCode: 0,
+      },
+    );
+    setGitResponse(
+      [
+        'log',
+        '--topo-order',
+        '--decorate=full',
+        '--date=iso-strict',
+        '--skip=2',
+        '--max-count=3',
+        '--pretty=format:%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%ad%x1f%s%x1f%D',
+        '--shortstat',
+        'HEAD',
+      ],
+      {
+        stdout: '\x1ei1\x1f\x1fAlice\x1falice@example.com\x1f2024-01-01T00:00:00Z\x1fBounded page two\x1frefs/heads/main\n 1 file changed, 1 insertions(+)',
+        stderr: '',
+        exitCode: 0,
+      },
+    );
+
+    const legacySnapshot = buildLegacyHistorySnapshot([
+      { id: 'refs/heads/main', revision: 'i1' },
+      { id: 'refs/heads/feature', revision: 'm1' },
+      ...manyRefs,
+    ], { id: 'HEAD', revision: 'm1' });
+    const legacyCursor = encodeGitHistoryCursor({ offset: 2, snapshot: legacySnapshot });
+    expect(legacyCursor.length).toBeGreaterThanOrEqual(256);
+
+    const firstPage = await getGitHistory('/repo', { refs: ['HEAD'], limit: 2 });
+    expect(firstPage.nextCursor).not.toBeNull();
+    expect(firstPage.nextCursor.length).toBeLessThan(256);
+
+    const secondPage = await getGitHistory('/repo', { refs: ['HEAD'], limit: 2, cursor: firstPage.nextCursor });
+    expect(secondPage.items.map((item) => item.id)).toEqual(['i1']);
+    expect(secondPage.hasMore).toBe(false);
   });
 
   it('returns topological history pages, validates requests, and rejects stale cursors', async () => {
