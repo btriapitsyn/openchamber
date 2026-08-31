@@ -251,11 +251,6 @@ const runtimeMemoryKey = (value?: string | null): string => {
 export const normalizeContextPanelDirectoryKey = (value: string): string => normalizeDirectoryPath(value);
 const normalizeRepositoryScopedDirectoryKey = (value: string): string => normalizeDirectoryPath(value);
 
-const runtimeMemoryKey = (value?: string | null): string => {
-  const key = (value ?? getRuntimeKey()).trim();
-  return key || 'default';
-};
-
 const GIT_REPOSITORY_PANE_GRAPH_HEIGHT_MIN = 180;
 const GIT_REPOSITORY_PANE_GRAPH_HEIGHT_MAX = 720;
 const gitGraphFilterModeSchema = z.enum(['auto', 'all', 'manual']);

@@ -257,6 +257,10 @@ export function buildGitHistoryViewModels(
     }
 
     for (let index = firstParentAdded ? 1 : 0; index < graphHistoryItem.parentIds.length; index++) {
+      if (outputSwimlanes.some((node) => node.id === graphHistoryItem.parentIds[index])) {
+        continue;
+      }
+
       let color = index === 0 ? getLabelColor(graphHistoryItem, colorMap) : undefined;
 
       if (index > 0) {

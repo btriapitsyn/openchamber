@@ -9,6 +9,9 @@
 import { describe, expect, test } from 'bun:test';
 import {
   buildGitHistoryViewModels,
+  getHistoryItemColumn,
+  getHistoryItemMaxColumns,
+  getHistoryItemSecondaryParentColumns,
   historyItemBaseRefColor,
   historyItemRefColor,
   historyItemRemoteRefColor,
@@ -258,62 +261,64 @@ describe('buildGitHistoryViewModels', () => {
     // merged into main at 594c, then one more admin commit 3257 whose parent is
     // the same 2949 as the merge's second parent (criss-cross), then merged again at a37.
     // Order is topo-order as returned by `git log --all --topo-order` for that DAG.
-    const commits = [
-      makeCommit('a37', ['594c', '3257']),
-      makeCommit('3257', ['2949']),
-      makeCommit('594c', ['base', '2949']),
-      makeCommit('2949', ['c55f']),
-      makeCommit('c55f', ['48f6']),
-      makeCommit('48f6', ['base']),
-      makeCommit('base', []),
-    ];
-    const result = assignLanes(commits);
+    const viewModels = buildGitHistoryViewModels([
+      makeItem('a37', ['594c', '3257']),
+      makeItem('3257', ['2949']),
+      makeItem('594c', ['base', '2949']),
+      makeItem('2949', ['c55f']),
+      makeItem('c55f', ['48f6']),
+      makeItem('48f6', ['base']),
+      makeItem('base', []),
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
 
-    // Should use only 2 lanes (main=0, admin=1) throughout – no lane jump to 2
-    const maxLane = Math.max(...result.map((r) => r.lane));
-    expect(maxLane).toBe(1);
+    // Should use only 2 lanes (main=0, admin=1) throughout - no third column.
+    expect(Math.max(...viewModels.map(getHistoryItemMaxColumns))).toBe(2);
 
     // The intermediate admin commit 3257 should be on admin lane
-    const c3257 = result.find((r) => r.commit.hash === '3257')!;
-    expect(c3257.lane).toBe(1);
+    const c3257 = viewModels.find((model) => model.historyItem.id === '3257')!;
+    expect(getHistoryItemColumn(c3257)).toBe(1);
 
     // Second merge (594c) must reuse admin lane rather than opening a new one,
     // so its extra parent lane is 1 (reused) not a fresh lane.
-    const m1 = result.find((r) => r.commit.hash === '594c')!;
-    const m1BranchOut = m1.connectors.find((c) => c.type === 'branch-out')!;
-    expect(m1BranchOut.toLane).toBe(1);
+    const m1 = viewModels.find((model) => model.historyItem.id === '594c')!;
+    expect(getHistoryItemSecondaryParentColumns(m1)).toEqual([1]);
 
     // Crucial: at the merge row, the reused admin lane must keep its vertical
     // passing segment for continuity between 3257 above and 2949 below.
     // Without this, a gap appears between those rows (the screenshot bug).
-    const m1Passing = m1.connectors.filter((c) => c.type === 'passing');
-    expect(m1Passing.some((c) => c.fromLane === 1)).toBe(true);
+    expect(m1.inputSwimlanes[1]?.id).toBe('2949');
+    expect(m1.outputSwimlanes[1]?.id).toBe('2949');
 
     // Top merge also branch-out to admin lane
-    const m2 = result.find((r) => r.commit.hash === 'a37')!;
-    const m2BranchOut = m2.connectors.find((c) => c.type === 'branch-out')!;
-    expect(m2BranchOut.toLane).toBe(1);
+    const m2 = viewModels.find((model) => model.historyItem.id === 'a37')!;
+    expect(getHistoryItemSecondaryParentColumns(m2)).toEqual([1]);
     // Top merge's admin lane is new, so no passing at that row (branch starts there)
-    expect(m2.connectors.some((c) => c.type === 'passing' && c.fromLane === 1)).toBe(false);
+    expect(m2.inputSwimlanes[1]).toBe(undefined);
 
     // Base should merge both lanes cleanly
-    const base = result.find((r) => r.commit.hash === 'base')!;
-    const mergeIns = base.connectors.filter((c) => c.type === 'merge-in');
-    expect(mergeIns.length).toBe(1);
+    const base = viewModels.find((model) => model.historyItem.id === 'base')!;
+    expect(base.inputSwimlanes.filter((node) => node.id === 'base')).toHaveLength(2);
   });
 
   test('reuses lane when merge second parent already active (no extra lane)', () => {
-    const commits = [
-      makeCommit('m2', ['m1', 'a3']),
-      makeCommit('a3', ['common']),
-      makeCommit('m1', ['base', 'common']),
-      makeCommit('common', ['base']),
-      makeCommit('base', []),
-    ];
-    const result = assignLanes(commits);
+    const viewModels = buildGitHistoryViewModels([
+      makeItem('m2', ['m1', 'a3']),
+      makeItem('a3', ['common']),
+      makeItem('m1', ['base', 'common']),
+      makeItem('common', ['base']),
+      makeItem('base', []),
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
     // m1 should reuse lane 1 (where a3 lives) rather than opening lane 2
-    const m1 = result.find((r) => r.commit.hash === 'm1')!;
-    expect(m1.connectors.find((c) => c.type === 'branch-out')!.toLane).toBe(1);
-    expect(Math.max(...result.map((r) => r.lane))).toBe(1);
+    const m1 = viewModels.find((model) => model.historyItem.id === 'm1')!;
+    expect(getHistoryItemSecondaryParentColumns(m1)).toEqual([1]);
+    expect(Math.max(...viewModels.map(getHistoryItemMaxColumns))).toBe(2);
   });
 });

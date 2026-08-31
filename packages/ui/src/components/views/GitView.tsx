@@ -57,7 +57,6 @@ import { CommitSection } from './git/CommitSection';
 import { GitEmptyState } from './git/GitEmptyState';
 import { HistorySection } from './git/HistorySection';
 import { GitGraphPanel } from './git/GitGraphPanel';
-import { GitGraphWorkspace } from './git/GitGraphWorkspace';
 import { GitGraphControls } from './git/GitGraphControls';
 import { GitWorkspacePanes } from './git/GitWorkspacePanes';
 import { ConflictDialog } from './git/ConflictDialog';
@@ -2667,26 +2666,20 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
               </div>
             ) : (
               graphCommitDetailsController && gitDirectory ? (
-                <GitGraphWorkspace
+                <HistorySection
+                  log={log}
+                  isLogLoading={isLogLoading}
+                  logMaxCount={logMaxCountLocal}
+                  onLogMaxCountChange={handleLogMaxCountChange}
+                  commitDetailsController={graphCommitDetailsController}
+                  onCopyHash={handleCopyCommitHash}
                   directory={gitDirectory}
-                  controller={commitDetailsController}
-                  graph={(
-                    <HistorySection
-                      log={log}
-                      isLogLoading={isLogLoading}
-                      logMaxCount={logMaxCountLocal}
-                      onLogMaxCountChange={handleLogMaxCountChange}
-                      commitDetailsController={graphCommitDetailsController}
-                      onCopyHash={handleCopyCommitHash}
-                      directory={gitDirectory}
-                      hoverRemoteName={hoverRemoteName}
-                      hoverRemoteUrl={hoverRemoteUrl}
-                      hoverDetailsCache={hoverDetailsCache}
-                      showHeader={false}
-                      contentMaxHeightClassName="h-full max-h-none"
-                      branchDivider={historyBranchDivider}
-                    />
-                  )}
+                  hoverRemoteName={hoverRemoteName}
+                  hoverRemoteUrl={hoverRemoteUrl}
+                  hoverDetailsCache={hoverDetailsCache}
+                  showHeader={false}
+                  contentMaxHeightClassName="h-full max-h-none"
+                  branchDivider={historyBranchDivider}
                 />
               ) : null
             )}

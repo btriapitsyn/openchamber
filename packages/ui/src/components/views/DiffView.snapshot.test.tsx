@@ -209,6 +209,15 @@ mock.module('@/hooks/useEffectiveDirectory', () => ({
   useEffectiveDirectory: () => '/repo',
 }));
 
+mock.module('@/hooks/useNestedGitDirectory', () => ({
+  useNestedGitDirectory: () => ({
+    rootIsGitRepo: true,
+    gitDirectory: '/repo',
+    nestedRepos: null,
+    nestedRepoSelection: null,
+  }),
+}));
+
 mock.module('@/stores/useGitStore', () => ({
   useGitStore: <T,>(selector: (state: {
     setActiveDirectory: () => void;
