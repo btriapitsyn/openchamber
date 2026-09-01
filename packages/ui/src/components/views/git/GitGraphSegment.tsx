@@ -52,7 +52,7 @@ export const GitGraphSegment: React.FC<GitGraphSegmentProps> = ({ viewModel, tot
   const columnCount = Math.max(totalColumns ?? 0, getHistoryItemMaxColumns(viewModel));
   const circleColor = outputSwimlanes[circleIndex]?.color
     ?? inputSwimlanes[circleIndex]?.color
-    ?? 'var(--status-info)';
+    ?? viewModel.nodeColor;
   const secondaryParentColumns = getHistoryItemSecondaryParentColumns(viewModel);
 
   const paths: React.ReactNode[] = [];

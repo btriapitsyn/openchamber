@@ -12,16 +12,12 @@ import type { GitHistoryItem, GitHistoryRef } from '@/lib/api/types';
 const SCMIncomingHistoryItemId = 'scm-graph-incoming-changes';
 const SCMOutgoingHistoryItemId = 'scm-graph-outgoing-changes';
 
-export const historyItemRefColor = 'var(--status-info)';
-export const historyItemRemoteRefColor = 'var(--chart-5)';
-export const historyItemBaseRefColor = 'var(--status-warning)';
-
 const colorRegistry = [
-  'var(--chart-1)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-  'var(--chart-5)',
+  'var(--git-graph-1)',
+  'var(--git-graph-2)',
+  'var(--git-graph-3)',
+  'var(--git-graph-4)',
+  'var(--git-graph-5)',
 ] as const;
 
 export type { GitHistoryItem, GitHistoryRef };
@@ -38,6 +34,7 @@ export interface GitHistoryItemViewModel {
   historyItem: GitHistoryGraphItem;
   inputSwimlanes: GitHistoryGraphNode[];
   outputSwimlanes: GitHistoryGraphNode[];
+  nodeColor: string;
   kind: 'HEAD' | 'node' | 'incoming-changes' | 'outgoing-changes';
 }
 
@@ -69,26 +66,22 @@ function findLastNodeIndex(nodes: readonly GitHistoryGraphNode[], id: string): n
   return -1;
 }
 
-function getLabelColor(
+function hashGraphIdentity(identity: string): number {
+  let hash = 2166136261;
+
+  for (let index = 0; index < identity.length; index++) {
+    hash ^= identity.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function getIdentityRef(
   historyItem: GitHistoryItem | GitHistoryGraphItem,
-  colorMap: Map<string, string | undefined>,
-): string | undefined {
-  if (historyItem.id === SCMIncomingHistoryItemId) {
-    return historyItemRemoteRefColor;
-  }
-
-  if (historyItem.id === SCMOutgoingHistoryItemId) {
-    return historyItemRefColor;
-  }
-
-  for (const ref of historyItem.references ?? []) {
-    const color = colorMap.get(ref.id);
-    if (color !== undefined) {
-      return color;
-    }
-  }
-
-  return undefined;
+): GitHistoryRef | GitHistoryGraphRef | undefined {
+  const nonTagRefs = (historyItem.references ?? []).filter((ref) => ref.category !== 'tags');
+  return nonTagRefs.find((ref) => ref.id.startsWith('refs/')) ?? nonTagRefs[0];
 }
 
 function compareGitHistoryRefs(
@@ -113,6 +106,8 @@ function addIncomingOutgoingChangesHistoryItems(
   viewModels: GitHistoryItemViewModel[],
   current: GitHistoryRef | null,
   upstream: GitHistoryRef | null,
+  currentColor: string | undefined,
+  upstreamColor: string | undefined,
   addIncomingChanges: boolean,
   addOutgoingChanges: boolean,
   mergeBase: string | null,
@@ -137,12 +132,12 @@ function addIncomingOutgoingChangesHistoryItems(
         viewModels[beforeHistoryItemIndex] = {
           ...viewModels[beforeHistoryItemIndex],
           inputSwimlanes: viewModels[beforeHistoryItemIndex].inputSwimlanes.map((node) => (
-            node.id === mergeBase && node.color === historyItemRemoteRefColor
+            node.id === mergeBase && node.color === upstreamColor
               ? { ...node, id: SCMIncomingHistoryItemId }
               : node
           )),
           outputSwimlanes: viewModels[beforeHistoryItemIndex].outputSwimlanes.map((node) => (
-            node.id === mergeBase && node.color === historyItemRemoteRefColor
+            node.id === mergeBase && node.color === upstreamColor
               ? { ...node, id: SCMIncomingHistoryItemId }
               : node
           )),
@@ -168,6 +163,7 @@ function addIncomingOutgoingChangesHistoryItems(
           kind: 'incoming-changes',
           inputSwimlanes,
           outputSwimlanes,
+          nodeColor: upstreamColor ?? colorRegistry[0],
         });
       }
     }
@@ -182,7 +178,7 @@ function addIncomingOutgoingChangesHistoryItems(
       const inputSwimlanes = viewModels[currentIndex].inputSwimlanes.map(cloneNode);
       const outputSwimlanes = inputSwimlanes.concat({
         id: current.revision,
-        color: historyItemRefColor,
+        color: currentColor ?? colorRegistry[0],
       });
       const displayIdLength = viewModels[0]?.historyItem.displayId?.length ?? 0;
 
@@ -202,11 +198,12 @@ function addIncomingOutgoingChangesHistoryItems(
         kind: 'outgoing-changes',
         inputSwimlanes,
         outputSwimlanes,
+        nodeColor: currentColor ?? colorRegistry[0],
       });
 
       viewModels[currentIndex + 1].inputSwimlanes.push({
         id: current.revision,
-        color: historyItemRefColor,
+        color: currentColor ?? colorRegistry[0],
       });
     }
   }
@@ -221,13 +218,65 @@ export function buildGitHistoryViewModels(
   },
   options: { showIncoming: boolean; showOutgoing: boolean; mergeBase: string | null },
 ): GitHistoryItemViewModel[] {
-  let colorIndex = -1;
   const viewModels: GitHistoryItemViewModel[] = [];
+  const colorsByIdentity = new Map<string, string>();
   const colorMap = new Map<string, string | undefined>();
 
-  if (refs.current) colorMap.set(refs.current.id, historyItemRefColor);
-  if (refs.upstream) colorMap.set(refs.upstream.id, historyItemRemoteRefColor);
-  if (refs.base) colorMap.set(refs.base.id, historyItemBaseRefColor);
+  const assignColor = (identity: string, unavailableColors: readonly string[] = []): string => {
+    const existingColor = colorsByIdentity.get(identity);
+    if (existingColor) {
+      return existingColor;
+    }
+
+    const preferredIndex = hashGraphIdentity(identity) % colorRegistry.length;
+    let color = colorRegistry[preferredIndex];
+    const unavailable = new Set(unavailableColors);
+
+    if (unavailable.size < colorRegistry.length) {
+      for (let index = 0; index < colorRegistry.length; index++) {
+        const candidate = colorRegistry[rotate(preferredIndex + index, colorRegistry.length)];
+        if (!unavailable.has(candidate)) {
+          color = candidate;
+          break;
+        }
+      }
+    }
+
+    colorsByIdentity.set(identity, color);
+    return color;
+  };
+
+  const currentColor = refs.current
+    ? assignColor(refs.current.id)
+    : undefined;
+  const upstreamColor = refs.upstream
+    ? assignColor(refs.upstream.id, currentColor ? [currentColor] : [])
+    : undefined;
+  const baseColor = refs.base
+    ? assignColor(refs.base.id, [currentColor, upstreamColor].filter((color): color is string => Boolean(color)))
+    : undefined;
+
+  if (refs.current) colorMap.set(refs.current.id, currentColor);
+  if (refs.upstream) colorMap.set(refs.upstream.id, upstreamColor);
+  if (refs.base) colorMap.set(refs.base.id, baseColor);
+
+  const getOrAssignLabelColor = (
+    historyItem: GitHistoryItem | GitHistoryGraphItem,
+    unavailableColors: readonly string[] = [],
+  ): string | undefined => {
+    const ref = getIdentityRef(historyItem);
+    if (!ref) {
+      return undefined;
+    }
+
+    let color = colorMap.get(ref.id);
+    if (color === undefined) {
+      color = assignColor(ref.id, unavailableColors);
+      colorMap.set(ref.id, color);
+    }
+
+    return color;
+  };
 
   for (const historyItem of items) {
     const graphHistoryItem: GitHistoryGraphItem = {
@@ -238,6 +287,7 @@ export function buildGitHistoryViewModels(
     const inputSwimlanes = (viewModels.at(-1)?.outputSwimlanes ?? []).map(cloneNode);
     const outputSwimlanes: GitHistoryGraphNode[] = [];
     let firstParentAdded = false;
+    const labelColor = getOrAssignLabelColor(graphHistoryItem, inputSwimlanes.map((node) => node.color));
 
     if (graphHistoryItem.parentIds.length > 0) {
       for (const node of inputSwimlanes) {
@@ -245,7 +295,7 @@ export function buildGitHistoryViewModels(
           if (!firstParentAdded) {
             outputSwimlanes.push({
               id: graphHistoryItem.parentIds[0],
-              color: getLabelColor(graphHistoryItem, colorMap) ?? node.color,
+              color: labelColor ?? node.color,
             });
             firstParentAdded = true;
           }
@@ -257,20 +307,15 @@ export function buildGitHistoryViewModels(
     }
 
     for (let index = firstParentAdded ? 1 : 0; index < graphHistoryItem.parentIds.length; index++) {
-      if (outputSwimlanes.some((node) => node.id === graphHistoryItem.parentIds[index])) {
-        continue;
-      }
-
-      let color = index === 0 ? getLabelColor(graphHistoryItem, colorMap) : undefined;
+      let color = index === 0 ? labelColor : undefined;
 
       if (index > 0) {
         const parentItem = items.find((candidate) => candidate.id === graphHistoryItem.parentIds[index]);
-        color = parentItem ? getLabelColor(parentItem, colorMap) : undefined;
+        color = parentItem ? getOrAssignLabelColor(parentItem, outputSwimlanes.map((node) => node.color)) : undefined;
       }
 
       if (!color) {
-        colorIndex = rotate(colorIndex + 1, colorRegistry.length);
-        color = colorRegistry[colorIndex];
+        color = assignColor(graphHistoryItem.parentIds[index], outputSwimlanes.map((node) => node.color));
       }
 
       outputSwimlanes.push({
@@ -279,14 +324,26 @@ export function buildGitHistoryViewModels(
       });
     }
 
+    const inputIndex = inputSwimlanes.findIndex((node) => node.id === historyItem.id);
+    const circleIndex = inputIndex !== -1 ? inputIndex : inputSwimlanes.length;
+    const nodeColor = labelColor
+      ?? outputSwimlanes[circleIndex]?.color
+      ?? inputSwimlanes[circleIndex]?.color
+      ?? assignColor(graphHistoryItem.id, inputSwimlanes.map((node) => node.color));
+
+    const badgeColors: string[] = [];
     const references = (graphHistoryItem.references ?? []).map((ref) => {
       let color = colorMap.get(ref.id);
       if (ref.category !== 'tags' && color === undefined) {
-        const inputIndex = inputSwimlanes.findIndex((node) => node.id === historyItem.id);
-        const circleIndex = inputIndex !== -1 ? inputIndex : inputSwimlanes.length;
-        color = outputSwimlanes[circleIndex]?.color
-          ?? inputSwimlanes[circleIndex]?.color
-          ?? historyItemRefColor;
+        color = getOrAssignLabelColor(
+          { ...graphHistoryItem, references: [ref] },
+          inputSwimlanes.map((node) => node.color)
+            .concat(outputSwimlanes.map((node) => node.color), badgeColors),
+        );
+      }
+
+      if (color !== undefined) {
+        badgeColors.push(color);
       }
 
       return {
@@ -305,6 +362,7 @@ export function buildGitHistoryViewModels(
       kind,
       inputSwimlanes,
       outputSwimlanes,
+      nodeColor,
     });
   }
 
@@ -312,6 +370,8 @@ export function buildGitHistoryViewModels(
     viewModels,
     refs.current,
     refs.upstream,
+    currentColor,
+    upstreamColor,
     options.showIncoming,
     options.showOutgoing,
     options.mergeBase,

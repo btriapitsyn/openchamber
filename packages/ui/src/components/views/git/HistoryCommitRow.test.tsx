@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { I18nProvider } from '@/lib/i18n';
 import type { GitCommitChangedFile } from '@/lib/api/types';
 import type { GitCommitComparison } from './HistoryCommitRow';
+import { buildGitHistoryViewModels } from './gitGraph';
 
 Object.defineProperty(globalThis, 'localStorage', {
   configurable: true,
@@ -472,6 +473,7 @@ describe('HistoryCommitRow context menu regression', () => {
               },
               inputSwimlanes: [],
               outputSwimlanes: [{ id: 'fedcba0987654321', color: 'var(--chart-1)' }],
+              nodeColor: 'var(--chart-1)',
               kind: 'node',
             }}
             totalColumns={1}
@@ -884,6 +886,7 @@ describe('HistoryCommitRow context menu regression', () => {
               },
               inputSwimlanes: [],
               outputSwimlanes: [{ id: 'fedcba0987654321', color: 'var(--chart-1)' }],
+              nodeColor: 'var(--chart-1)',
               kind: 'node',
             }}
             totalColumns={5}
@@ -941,6 +944,7 @@ describe('HistoryCommitRow context menu regression', () => {
               },
               inputSwimlanes: [],
               outputSwimlanes: [{ id: 'fedcba0987654321', color: 'var(--chart-1)' }],
+              nodeColor: 'var(--chart-1)',
               kind: 'node',
             }}
             totalColumns={1}
@@ -1005,6 +1009,7 @@ describe('HistoryCommitRow context menu regression', () => {
               },
               inputSwimlanes: [],
               outputSwimlanes: [{ id: 'fedcba0987654321', color: 'var(--chart-1)' }],
+              nodeColor: 'var(--chart-1)',
               kind: 'node',
             }}
             totalColumns={1}
@@ -1021,5 +1026,117 @@ describe('HistoryCommitRow context menu regression', () => {
     // Verify local ref badge section does not contain cloud icon
     const mainMarkup = markup.substring(markup.indexOf('>main<') - 200, markup.indexOf('>main<') + 50);
     expect(mainMarkup).not.toContain('data-icon="cloud"');
+  });
+
+  test('renders the VS Code criss-cross merge with a third lane and the duplicate-parent connector path', () => {
+    const viewModels = buildGitHistoryViewModels([
+      {
+        id: 'a37',
+        parentIds: ['594c', '3257'],
+        subject: '',
+        message: '',
+        author: '',
+        authorEmail: '',
+        timestamp: '',
+        statistics: { files: 0, insertions: 0, deletions: 0 },
+        references: [],
+      },
+      {
+        id: '3257',
+        parentIds: ['2949'],
+        subject: '',
+        message: '',
+        author: '',
+        authorEmail: '',
+        timestamp: '',
+        statistics: { files: 0, insertions: 0, deletions: 0 },
+        references: [],
+      },
+      {
+        id: '594c',
+        parentIds: ['base', '2949'],
+        subject: 'Merge admin into main',
+        message: 'Merge admin into main',
+        author: 'Taylor Developer',
+        authorEmail: 'taylor@example.com',
+        timestamp: '2024-01-02T03:04:00.000Z',
+        statistics: { files: 1, insertions: 2, deletions: 1 },
+        references: [],
+      },
+      {
+        id: '2949',
+        parentIds: ['c55f'],
+        subject: '',
+        message: '',
+        author: '',
+        authorEmail: '',
+        timestamp: '',
+        statistics: { files: 0, insertions: 0, deletions: 0 },
+        references: [],
+      },
+      {
+        id: 'c55f',
+        parentIds: ['48f6'],
+        subject: '',
+        message: '',
+        author: '',
+        authorEmail: '',
+        timestamp: '',
+        statistics: { files: 0, insertions: 0, deletions: 0 },
+        references: [],
+      },
+      {
+        id: '48f6',
+        parentIds: ['base'],
+        subject: '',
+        message: '',
+        author: '',
+        authorEmail: '',
+        timestamp: '',
+        statistics: { files: 0, insertions: 0, deletions: 0 },
+        references: [],
+      },
+      {
+        id: 'base',
+        parentIds: [],
+        subject: '',
+        message: '',
+        author: '',
+        authorEmail: '',
+        timestamp: '',
+        statistics: { files: 0, insertions: 0, deletions: 0 },
+        references: [],
+      },
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
+    const merge = viewModels.find((model) => model.historyItem.id === '594c');
+
+    expect(merge).toBeDefined();
+
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ul>
+          <HistoryCommitRow
+            entry={merge!.historyItem}
+            mode="graph"
+            compactGraph={true}
+            viewModel={merge!}
+            totalColumns={3}
+            isExpanded={false}
+            onToggle={() => {}}
+            files={[]}
+            isLoadingFiles={false}
+            onCopyHash={() => {}}
+            directory="/repo"
+          />
+        </ul>
+      </I18nProvider>,
+    );
+
+    expect(markup).toContain('width="44"');
+    expect(markup).toContain('M 22 11 A 11 11 0 0 1 33 22 M 22 11 H 11');
   });
 });

@@ -898,6 +898,7 @@ describe('GitCommitHoverPopover', () => {
           },
           inputSwimlanes: [],
           outputSwimlanes: [],
+          nodeColor: 'var(--chart-1)',
           kind: 'node',
         },
         totalColumns: 1,

@@ -12,9 +12,6 @@ import {
   getHistoryItemColumn,
   getHistoryItemMaxColumns,
   getHistoryItemSecondaryParentColumns,
-  historyItemBaseRefColor,
-  historyItemRefColor,
-  historyItemRemoteRefColor,
   type GitHistoryGraphRef,
   type GitHistoryItem,
   type GitHistoryRef,
@@ -50,6 +47,32 @@ function makeItem(id: string, parentIds: string[], references?: GitHistoryRef[])
   };
 }
 
+function buildCrissCrossViewModels() {
+  return buildGitHistoryViewModels([
+    makeItem('a37', ['594c', '3257']),
+    makeItem('3257', ['2949']),
+    makeItem('594c', ['base', '2949']),
+    makeItem('2949', ['c55f']),
+    makeItem('c55f', ['48f6']),
+    makeItem('48f6', ['base']),
+    makeItem('base', []),
+  ], { current: null, upstream: null, base: null }, {
+    showIncoming: false,
+    showOutgoing: false,
+    mergeBase: null,
+  });
+}
+
+function expectedGraphColorFromIdentity(identity: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < identity.length; index++) {
+    hash ^= identity.charCodeAt(index);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+
+  return `var(--git-graph-${(hash % 5) + 1})`;
+}
+
 describe('buildGitHistoryViewModels', () => {
   test('returns an empty graph for empty history', () => {
     expect(buildGitHistoryViewModels([], { current: null, upstream: null, base: null }, {
@@ -74,9 +97,24 @@ describe('buildGitHistoryViewModels', () => {
 
     expect(viewModels).toHaveLength(5);
     expect(viewModels[0].inputSwimlanes).toHaveLength(0);
-    expect(viewModels[0].outputSwimlanes).toEqual([{ id: 'b', color: 'var(--chart-1)' }]);
-    expect(viewModels[1].inputSwimlanes).toEqual([{ id: 'b', color: 'var(--chart-1)' }]);
+    expect(viewModels[0].outputSwimlanes).toEqual([{ id: 'b', color: 'var(--git-graph-3)' }]);
+    expect(viewModels[1].inputSwimlanes).toEqual([{ id: 'b', color: 'var(--git-graph-3)' }]);
     expect(viewModels[4].outputSwimlanes).toHaveLength(0);
+  });
+
+  test('assigns an unlabelled first parent from its FNV-1a commit identity instead of sequence position', () => {
+    const viewModels = buildGitHistoryViewModels([
+      makeItem('a', ['b']),
+      makeItem('b', []),
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
+
+    expect(expectedGraphColorFromIdentity('b')).toBe('var(--git-graph-3)');
+    expect(viewModels[0].outputSwimlanes).toEqual([{ id: 'b', color: 'var(--git-graph-3)' }]);
+    expect(viewModels[1].nodeColor).toBe('var(--git-graph-3)');
   });
 
   test('keeps divergence and merge swimlanes stable', () => {
@@ -94,16 +132,16 @@ describe('buildGitHistoryViewModels', () => {
     });
 
     expect(viewModels[0].outputSwimlanes).toEqual([
-      { id: 'b', color: 'var(--chart-1)' },
-      { id: 'c', color: 'var(--chart-2)' },
+      { id: 'b', color: 'var(--git-graph-3)' },
+      { id: 'c', color: 'var(--git-graph-4)' },
     ]);
     expect(viewModels[1].inputSwimlanes).toEqual([
-      { id: 'b', color: 'var(--chart-1)' },
-      { id: 'c', color: 'var(--chart-2)' },
+      { id: 'b', color: 'var(--git-graph-3)' },
+      { id: 'c', color: 'var(--git-graph-4)' },
     ]);
     expect(viewModels[4].outputSwimlanes).toEqual([
-      { id: 'd', color: 'var(--chart-1)' },
-      { id: 'd', color: 'var(--chart-2)' },
+      { id: 'd', color: 'var(--git-graph-3)' },
+      { id: 'd', color: 'var(--git-graph-4)' },
     ]);
   });
 
@@ -122,23 +160,29 @@ describe('buildGitHistoryViewModels', () => {
     });
 
     expect(viewModels[2].inputSwimlanes).toEqual([
-      { id: 'b', color: 'var(--chart-1)' },
-      { id: 'b', color: 'var(--chart-2)' },
+      { id: 'b', color: 'var(--git-graph-3)' },
+      { id: 'b', color: 'var(--git-graph-4)' },
     ]);
     expect(viewModels[2].outputSwimlanes).toEqual([
-      { id: 'd', color: 'var(--chart-1)' },
-      { id: 'e', color: 'var(--chart-3)' },
+      { id: 'd', color: 'var(--git-graph-3)' },
+      { id: 'e', color: 'var(--git-graph-5)' },
     ]);
   });
 
-  test('colors ordinary branch refs from the commit lane, leaves tags uncolored, and keeps same-rank ref order stable', () => {
+  test('keeps ref colors deterministic for non-tag refs while tags stay neutral', () => {
     const topic = makeRef('refs/heads/topic', 'topic', 'a', 'branches', 'local');
     const release = makeRef('refs/remotes/origin/release', 'origin/release', 'a', 'remote-branches', 'remote');
     const tag = makeRef('refs/tags/v1.0.0', 'v1.0.0', 'a', 'tags', 'tag');
-    const viewModels = buildGitHistoryViewModels([
+    const items = [
       makeItem('a', ['b'], [topic, release, tag]),
       makeItem('b', []),
-    ], { current: null, upstream: null, base: null }, {
+    ];
+    const viewModels = buildGitHistoryViewModels(items, { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
+    const rebuilt = buildGitHistoryViewModels(items, { current: null, upstream: null, base: null }, {
       showIncoming: false,
       showOutgoing: false,
       mergeBase: null,
@@ -149,14 +193,19 @@ describe('buildGitHistoryViewModels', () => {
       release.id,
       tag.id,
     ]);
+    expect(viewModels[0].historyItem.references?.map((ref: GitHistoryGraphRef) => ref.color)).toEqual(
+      rebuilt[0].historyItem.references?.map((ref: GitHistoryGraphRef) => ref.color),
+    );
+    expect(/^var\(--git-graph-[1-5]\)$/.test(viewModels[0].historyItem.references?.[0]?.color ?? '')).toBe(true);
+    expect(/^var\(--git-graph-[1-5]\)$/.test(viewModels[0].historyItem.references?.[1]?.color ?? '')).toBe(true);
     expect(viewModels[0].historyItem.references?.map((ref: GitHistoryGraphRef) => ref.color)).toEqual([
-      'var(--chart-1)',
-      'var(--chart-1)',
+      viewModels[0].historyItem.references?.[0]?.color,
+      viewModels[0].historyItem.references?.[1]?.color,
       undefined,
     ]);
   });
 
-  test('prioritizes current, upstream, and base ref colors and ordering', () => {
+  test('keeps current and upstream ref identities on distinct graph slots', () => {
     const current = makeRef('refs/heads/topic', 'topic', 'a', 'branches', 'local');
     const upstream = makeRef('refs/remotes/origin/topic', 'origin/topic', 'c', 'remote-branches', 'remote');
     const base = makeRef('refs/remotes/origin/main', 'origin/main', 'g', 'remote-branches', 'remote');
@@ -173,9 +222,10 @@ describe('buildGitHistoryViewModels', () => {
       mergeBase: null,
     });
 
-    expect(viewModels[0].outputSwimlanes[0].color).toBe(historyItemRefColor);
-    expect(viewModels[2].outputSwimlanes[0].color).toBe(historyItemRemoteRefColor);
-    expect(viewModels[4].outputSwimlanes[1].color).toBe(historyItemBaseRefColor);
+    expect(/^var\(--git-graph-[1-5]\)$/.test(viewModels[0].historyItem.references?.[0]?.color ?? '')).toBe(true);
+    expect(/^var\(--git-graph-[1-5]\)$/.test(viewModels[2].historyItem.references?.[0]?.color ?? '')).toBe(true);
+    expect(/^var\(--git-graph-[1-5]\)$/.test(viewModels[5].historyItem.references?.[0]?.color ?? '')).toBe(true);
+    expect(viewModels[0].historyItem.references?.[0]?.color).not.toBe(viewModels[2].historyItem.references?.[0]?.color);
     expect(viewModels[0].historyItem.references?.map((ref) => ref.id)).toEqual([current.id]);
     expect(viewModels[2].historyItem.references?.map((ref) => ref.id)).toEqual([upstream.id]);
   });
@@ -195,6 +245,8 @@ describe('buildGitHistoryViewModels', () => {
       showOutgoing: true,
       mergeBase: 'e',
     });
+    const outgoingRefColor = viewModels.find((model) => model.historyItem.id === 'c')?.historyItem.references?.[0]?.color;
+    const incomingRefColor = viewModels.find((model) => model.historyItem.id === 'a')?.historyItem.references?.[0]?.color;
 
     expect(viewModels.map((model) => model.kind)).toEqual([
       'node',
@@ -206,14 +258,19 @@ describe('buildGitHistoryViewModels', () => {
       'node',
       'node',
     ]);
+    expect(/^var\(--git-graph-[1-5]\)$/.test(outgoingRefColor ?? '')).toBe(true);
+    expect(/^var\(--git-graph-[1-5]\)$/.test(incomingRefColor ?? '')).toBe(true);
+    expect(outgoingRefColor).not.toBe(incomingRefColor);
     expect(viewModels[2].outputSwimlanes).toEqual([
-      { id: 'e', color: historyItemRemoteRefColor },
-      { id: 'c', color: historyItemRefColor },
+      { id: 'e', color: incomingRefColor! },
+      { id: 'c', color: outgoingRefColor! },
     ]);
     expect(viewModels[5].inputSwimlanes).toEqual([
-      { id: 'scm-graph-incoming-changes', color: historyItemRemoteRefColor },
-      { id: 'e', color: historyItemRefColor },
+      { id: 'scm-graph-incoming-changes', color: incomingRefColor! },
+      { id: 'e', color: outgoingRefColor! },
     ]);
+    expect(viewModels[2].nodeColor).toBe(outgoingRefColor);
+    expect(viewModels[5].nodeColor).toBe(incomingRefColor);
   });
 
   test('skips the incoming synthetic node when incoming changes are already merged', () => {
@@ -247,12 +304,12 @@ describe('buildGitHistoryViewModels', () => {
     });
 
     expect(viewModels[0].outputSwimlanes).toEqual([
-      { id: 'b', color: 'var(--chart-1)' },
-      { id: 'c', color: 'var(--chart-2)' },
+      { id: 'b', color: 'var(--git-graph-3)' },
+      { id: 'c', color: 'var(--git-graph-4)' },
     ]);
     expect(viewModels[1].outputSwimlanes).toEqual([
-      { id: 'b', color: 'var(--chart-1)' },
-      { id: 'd', color: 'var(--chart-2)' },
+      { id: 'b', color: 'var(--git-graph-3)' },
+      { id: 'd', color: 'var(--git-graph-4)' },
     ]);
   });
 
@@ -280,71 +337,107 @@ describe('buildGitHistoryViewModels', () => {
     expect(appended[0].outputSwimlanes).toEqual(firstPage[0].outputSwimlanes);
     expect(appended[1].inputSwimlanes).toEqual(firstPage[1].inputSwimlanes);
     expect(appended[1].outputSwimlanes).toEqual(firstPage[1].outputSwimlanes);
+    expect(appended.slice(0, firstPage.length).map((model) => model.nodeColor)).toEqual(
+      firstPage.map((model) => model.nodeColor),
+    );
   });
 
-  test('handles double merge of same branch with single commit between merges (screenshot case)', () => {
-    // Repro for screenshot: admin branch forked from base, 3 commits (48f6,c55f,2949),
-    // merged into main at 594c, then one more admin commit 3257 whose parent is
-    // the same 2949 as the merge's second parent (criss-cross), then merged again at a37.
-    // Order is topo-order as returned by `git log --all --topo-order` for that DAG.
-    const viewModels = buildGitHistoryViewModels([
-      makeItem('a37', ['594c', '3257']),
-      makeItem('3257', ['2949']),
-      makeItem('594c', ['base', '2949']),
-      makeItem('2949', ['c55f']),
-      makeItem('c55f', ['48f6']),
-      makeItem('48f6', ['base']),
-      makeItem('base', []),
-    ], { current: null, upstream: null, base: null }, {
-      showIncoming: false,
-      showOutgoing: false,
-      mergeBase: null,
-    });
-
-    // Should use only 2 lanes (main=0, admin=1) throughout - no third column.
-    expect(Math.max(...viewModels.map(getHistoryItemMaxColumns))).toBe(2);
-
-    // The intermediate admin commit 3257 should be on admin lane
+  test('matches VS Code criss-cross topology and resolves the duplicate parent on the last matching lane', () => {
+    const viewModels = buildCrissCrossViewModels();
     const c3257 = viewModels.find((model) => model.historyItem.id === '3257')!;
     expect(getHistoryItemColumn(c3257)).toBe(1);
 
-    // Second merge (594c) must reuse admin lane rather than opening a new one,
-    // so its extra parent lane is 1 (reused) not a fresh lane.
-    const m1 = viewModels.find((model) => model.historyItem.id === '594c')!;
-    expect(getHistoryItemSecondaryParentColumns(m1)).toEqual([1]);
+    expect(Math.max(...viewModels.map(getHistoryItemMaxColumns))).toBe(3);
 
-    // Crucial: at the merge row, the reused admin lane must keep its vertical
-    // passing segment for continuity between 3257 above and 2949 below.
-    // Without this, a gap appears between those rows (the screenshot bug).
-    expect(m1.inputSwimlanes[1]?.id).toBe('2949');
-    expect(m1.outputSwimlanes[1]?.id).toBe('2949');
+    const merge = viewModels.find((model) => model.historyItem.id === '594c')!;
+    expect(merge.outputSwimlanes.map((node) => node.id)).toEqual(['base', '2949', '2949']);
+    expect(getHistoryItemSecondaryParentColumns(merge)).toEqual([2]);
 
-    // Top merge also branch-out to admin lane
-    const m2 = viewModels.find((model) => model.historyItem.id === 'a37')!;
-    expect(getHistoryItemSecondaryParentColumns(m2)).toEqual([1]);
-    // Top merge's admin lane is new, so no passing at that row (branch starts there)
-    expect(m2.inputSwimlanes[1]).toBe(undefined);
-
-    // Base should merge both lanes cleanly
-    const base = viewModels.find((model) => model.historyItem.id === 'base')!;
-    expect(base.inputSwimlanes.filter((node) => node.id === 'base')).toHaveLength(2);
+    const duplicateParent = viewModels.find((model) => model.historyItem.id === '2949')!;
+    expect(duplicateParent.inputSwimlanes.map((node) => node.id)).toEqual(['base', '2949', '2949']);
+    expect(duplicateParent.outputSwimlanes.map((node) => node.id)).toEqual(['base', 'c55f']);
   });
 
-  test('reuses lane when merge second parent already active (no extra lane)', () => {
+  test('assigns stable theme color slots from ref and commit identities across rebuilds', () => {
+    const current = makeRef('refs/heads/feature', 'feature', 'a');
+    const upstream = makeRef('refs/remotes/upstream/main', 'upstream/main', 'c', 'remote-branches', 'remote');
+    const items = [
+      makeItem('a', ['b'], [current]),
+      makeItem('b', ['c']),
+      makeItem('c', [], [upstream]),
+    ];
+    const options = { showIncoming: false, showOutgoing: false, mergeBase: null };
+    const first = buildGitHistoryViewModels(items, { current, upstream, base: null }, options);
+    const rebuilt = buildGitHistoryViewModels(items, { current, upstream, base: null }, options);
+
+    expect(first.map((model) => model.nodeColor)).toEqual(rebuilt.map((model) => model.nodeColor));
+    expect(/^var\(--git-graph-[1-5]\)$/.test(first[0].nodeColor)).toBe(true);
+    expect(/^var\(--git-graph-[1-5]\)$/.test(first[2].nodeColor)).toBe(true);
+    expect(first[0].nodeColor).not.toBe(first[2].nodeColor);
+  });
+
+  test('avoids active-lane slot collisions while palette capacity remains', () => {
     const viewModels = buildGitHistoryViewModels([
-      makeItem('m2', ['m1', 'a3']),
-      makeItem('a3', ['common']),
-      makeItem('m1', ['base', 'common']),
-      makeItem('common', ['base']),
-      makeItem('base', []),
+      makeItem('a', ['c', 'd']),
+      makeItem('d', ['e']),
+      makeItem('c', ['f']),
     ], { current: null, upstream: null, base: null }, {
       showIncoming: false,
       showOutgoing: false,
       mergeBase: null,
     });
-    // m1 should reuse lane 1 (where a3 lives) rather than opening lane 2
-    const m1 = viewModels.find((model) => model.historyItem.id === 'm1')!;
-    expect(getHistoryItemSecondaryParentColumns(m1)).toEqual([1]);
-    expect(Math.max(...viewModels.map(getHistoryItemMaxColumns))).toBe(2);
+
+    expect(expectedGraphColorFromIdentity('c')).toBe('var(--git-graph-4)');
+    expect(expectedGraphColorFromIdentity('d')).toBe('var(--git-graph-4)');
+    expect(viewModels[0].outputSwimlanes[0]?.color).toBe('var(--git-graph-4)');
+    expect(viewModels[0].outputSwimlanes[1]?.color).not.toBe('var(--git-graph-4)');
+    expect(viewModels[0].outputSwimlanes[0]?.color).not.toBe(viewModels[0].outputSwimlanes[1]?.color);
+  });
+
+  test('assigns a deterministic graph slot to root commits', () => {
+    const first = buildGitHistoryViewModels([
+      makeItem('root', []),
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
+    const rebuilt = buildGitHistoryViewModels([
+      makeItem('root', []),
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
+
+    expect(expectedGraphColorFromIdentity('root')).toBe('var(--git-graph-4)');
+    expect(first[0].nodeColor).toBe('var(--git-graph-4)');
+    expect(first[0].nodeColor).toBe(rebuilt[0].nodeColor);
+  });
+
+  test('probes labelled refs to different active-lane slots on identity collision', () => {
+    const refA = makeRef('refs/heads/a', 'a');
+    const refF = makeRef('refs/heads/f', 'f');
+    const viewModels = buildGitHistoryViewModels([
+      makeItem('a', ['b'], [refA]),
+      makeItem('b', ['root']),
+      makeItem('f', ['g'], [refF]),
+      makeItem('g', ['root']),
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
+
+    const refAColor = viewModels[0].historyItem.references?.[0]?.color;
+    const refFColor = viewModels[2].historyItem.references?.[0]?.color;
+
+    expect(expectedGraphColorFromIdentity('refs/heads/a')).toBe('var(--git-graph-1)');
+    expect(expectedGraphColorFromIdentity('refs/heads/f')).toBe('var(--git-graph-1)');
+    expect(refAColor).toBe('var(--git-graph-1)');
+    expect(refFColor).not.toBe('var(--git-graph-1)');
+    expect(viewModels[2].outputSwimlanes).toHaveLength(2);
+    expect(viewModels[2].outputSwimlanes[0]?.color).not.toBe(viewModels[2].outputSwimlanes[1]?.color);
+    expect(viewModels[2].outputSwimlanes.find((lane) => lane.id === 'g')?.color).toBe(refFColor);
   });
 });
