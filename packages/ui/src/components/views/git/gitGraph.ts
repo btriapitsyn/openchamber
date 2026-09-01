@@ -281,7 +281,7 @@ export function buildGitHistoryViewModels(
 
     const references = (graphHistoryItem.references ?? []).map((ref) => {
       let color = colorMap.get(ref.id);
-      if (colorMap.has(ref.id) && color === undefined) {
+      if (ref.category !== 'tags' && color === undefined) {
         const inputIndex = inputSwimlanes.findIndex((node) => node.id === historyItem.id);
         const circleIndex = inputIndex !== -1 ? inputIndex : inputSwimlanes.length;
         color = outputSwimlanes[circleIndex]?.color

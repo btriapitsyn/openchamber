@@ -1069,4 +1069,46 @@ describe('GitCommitHoverPopover', () => {
 
     await rendered.restore();
   });
+
+  test('renders correct ref badge icons: cloud for remote, git-commit for tag, no icon for local/head', async () => {
+    const rendered = await renderPopover({
+      references: [
+        { id: 'ref-local', name: 'feature/local-branch', kind: 'local', revision: 'abcdef1', category: 'branches' },
+        { id: 'ref-head', name: 'HEAD', kind: 'head', revision: 'abcdef1', category: 'branches' },
+        { id: 'ref-remote', name: 'origin/feature/remote-branch', kind: 'remote', revision: 'abcdef1', category: 'remote-branches' },
+        { id: 'ref-tag', name: 'v1.0.0', kind: 'tag', revision: 'abcdef1', category: 'tags' },
+      ],
+    });
+
+    await act(async () => {
+      triggerRegistry.get('abcdef1234567890')?.focus();
+      await flush();
+    });
+
+    // Local ref should have no icon
+    const localRefBadge = findByAttribute(rendered.container, 'data-git-commit-hover-ref', 'ref-local');
+    expect(localRefBadge).not.toBeNull();
+    const localIconSpan = findByAttribute(localRefBadge, 'data-icon');
+    expect(localIconSpan).toBeNull();
+
+    // Head ref should have no icon
+    const headRefBadge = findByAttribute(rendered.container, 'data-git-commit-hover-ref', 'ref-head');
+    expect(headRefBadge).not.toBeNull();
+    const headIconSpan = findByAttribute(headRefBadge, 'data-icon');
+    expect(headIconSpan).toBeNull();
+
+    // Remote ref should have cloud icon
+    const remoteRefBadge = findByAttribute(rendered.container, 'data-git-commit-hover-ref', 'ref-remote');
+    expect(remoteRefBadge).not.toBeNull();
+    const remoteIconSpan = findByAttribute(remoteRefBadge, 'data-icon', 'cloud');
+    expect(remoteIconSpan).not.toBeNull();
+
+    // Tag ref should have git-commit icon
+    const tagRefBadge = findByAttribute(rendered.container, 'data-git-commit-hover-tag', 'ref-tag');
+    expect(tagRefBadge).not.toBeNull();
+    const tagIconSpan = findByAttribute(tagRefBadge, 'data-icon', 'git-commit');
+    expect(tagIconSpan).not.toBeNull();
+
+    await rendered.restore();
+  });
 });

@@ -492,6 +492,7 @@ describe('HistoryCommitRow context menu regression', () => {
     expect(markup).toContain('whitespace-nowrap');
     expect(markup.match(/>topic<\/span>/g)).toHaveLength(1);
     expect(markup).not.toContain('origin/topic');
+    expect(markup).toContain('title="v1"');
     expect(markup).not.toContain('>v1</span>');
     expect(markup).not.toContain('<code');
     expect(markup).not.toContain('2024');
@@ -846,5 +847,179 @@ describe('HistoryCommitRow context menu regression', () => {
     expect(copyEvent.propagationStopped).toBe(true);
     expect(copiedHashes).toEqual(['abcdef1234567890']);
     expect(toggleCalls).toEqual([]);
+  });
+
+  test('compact SVG width uses row-local lanes even when a larger totalColumns prop is supplied', () => {
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ul>
+          <HistoryCommitRow
+            entry={{
+              id: 'abcdef1234567890',
+              parentIds: ['fedcba0987654321'],
+              subject: 'Compact row subject',
+              message: 'Compact row subject',
+              author: 'Taylor Developer',
+              authorEmail: 'taylor@example.com',
+              timestamp: '2024-01-02T03:04:00.000Z',
+              statistics: { files: 1, insertions: 2, deletions: 1 },
+              references: [],
+            }}
+            mode="graph"
+            compactGraph={true}
+            viewModel={{
+              historyItem: {
+                id: 'abcdef1234567890',
+                parentIds: ['fedcba0987654321'],
+                subject: 'Compact row subject',
+                message: 'Compact row subject',
+                author: 'Taylor Developer',
+                authorEmail: 'taylor@example.com',
+                timestamp: '2024-01-02T03:04:00.000Z',
+                statistics: { files: 1, insertions: 2, deletions: 1 },
+                references: [
+                  { id: 'refs/heads/local', name: 'local', revision: 'abcdef1234567890', kind: 'local', category: 'branches' },
+                  { id: 'refs/remotes/origin/remote', name: 'origin/remote', revision: 'abcdef1234567890', kind: 'remote', category: 'remote-branches' },
+                ],
+              },
+              inputSwimlanes: [],
+              outputSwimlanes: [{ id: 'fedcba0987654321', color: 'var(--chart-1)' }],
+              kind: 'node',
+            }}
+            totalColumns={5}
+            isExpanded={false}
+            onToggle={() => {}}
+            files={[]}
+            isLoadingFiles={false}
+            onCopyHash={() => {}}
+            directory="/repo"
+          />
+        </ul>
+      </I18nProvider>,
+    );
+
+    expect(markup).toContain('h-[22px]');
+    expect(markup).toContain('width="22"');
+    expect(markup).not.toContain('width="66"');
+    expect(markup).toContain('data-icon="cloud"');
+    const localBranchMarkup = markup.substring(markup.indexOf('>local<') - 200, markup.indexOf('>local<') + 50);
+    expect(localBranchMarkup).not.toContain('data-icon="git-branch"');
+  });
+
+  test('remote refs render cloud icon and local refs render no icon in compact graph', () => {
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ul>
+          <HistoryCommitRow
+            entry={{
+              id: 'abcdef1234567890',
+              parentIds: ['fedcba0987654321'],
+              subject: 'Icon test subject',
+              message: 'Icon test subject',
+              author: 'Taylor Developer',
+              authorEmail: 'taylor@example.com',
+              timestamp: '2024-01-02T03:04:00.000Z',
+              statistics: { files: 1, insertions: 2, deletions: 1 },
+              references: [],
+            }}
+            mode="graph"
+            compactGraph={true}
+            viewModel={{
+              historyItem: {
+                id: 'abcdef1234567890',
+                parentIds: ['fedcba0987654321'],
+                subject: 'Icon test subject',
+                message: 'Icon test subject',
+                author: 'Taylor Developer',
+                authorEmail: 'taylor@example.com',
+                timestamp: '2024-01-02T03:04:00.000Z',
+                statistics: { files: 1, insertions: 2, deletions: 1 },
+                references: [
+                  { id: 'refs/remotes/upstream/main', name: 'upstream/main', revision: 'abcdef1234567890', kind: 'remote', category: 'remote-branches' },
+                  { id: 'refs/heads/feature', name: 'feature', revision: 'abcdef1234567890', kind: 'local', category: 'branches' },
+                ],
+              },
+              inputSwimlanes: [],
+              outputSwimlanes: [{ id: 'fedcba0987654321', color: 'var(--chart-1)' }],
+              kind: 'node',
+            }}
+            totalColumns={1}
+            isExpanded={false}
+            onToggle={() => {}}
+            files={[]}
+            isLoadingFiles={false}
+            onCopyHash={() => {}}
+            directory="/repo"
+          />
+        </ul>
+      </I18nProvider>,
+    );
+
+    // Verify remote ref has cloud icon
+    expect(markup).toContain('data-icon="cloud"');
+    // Verify it renders the remote ref name
+    expect(markup).toContain('>upstream/main<');
+    // Verify local ref does not have cloud icon, only remote does
+    const featureMarkup = markup.substring(markup.indexOf('>feature<') - 150, markup.indexOf('>feature<') + 50);
+    expect(featureMarkup).not.toContain('data-icon="cloud"');
+  });
+
+  test('remote refs render cloud icon and local refs render no icon in full graph badge branch', () => {
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ul>
+          <HistoryCommitRow
+            entry={{
+              id: 'abcdef1234567890',
+              parentIds: ['fedcba0987654321'],
+              subject: 'Full graph test subject',
+              message: 'Full graph test subject',
+              author: 'Taylor Developer',
+              authorEmail: 'taylor@example.com',
+              timestamp: '2024-01-02T03:04:00.000Z',
+              statistics: { files: 1, insertions: 2, deletions: 1 },
+              references: [],
+            }}
+            mode="graph"
+            compactGraph={false}
+            isExpanded={false}
+            onToggle={() => {}}
+            files={[]}
+            isLoadingFiles={false}
+            onCopyHash={() => {}}
+            directory="/repo"
+            viewModel={{
+              historyItem: {
+                id: 'abcdef1234567890',
+                parentIds: ['fedcba0987654321'],
+                subject: 'Full graph test subject',
+                message: 'Full graph test subject',
+                author: 'Taylor Developer',
+                authorEmail: 'taylor@example.com',
+                timestamp: '2024-01-02T03:04:00.000Z',
+                statistics: { files: 1, insertions: 2, deletions: 1 },
+                references: [
+                  { id: 'refs/remotes/origin/develop', name: 'origin/develop', revision: 'abcdef1234567890', kind: 'remote', category: 'remote-branches' },
+                  { id: 'refs/heads/main', name: 'main', revision: 'abcdef1234567890', kind: 'local', category: 'branches' },
+                ],
+              },
+              inputSwimlanes: [],
+              outputSwimlanes: [{ id: 'fedcba0987654321', color: 'var(--chart-1)' }],
+              kind: 'node',
+            }}
+            totalColumns={1}
+          />
+        </ul>
+      </I18nProvider>,
+    );
+
+    // Verify remote ref has cloud icon in full graph branch
+    expect(markup).toContain('data-icon="cloud"');
+    // Verify both refs render (not filtered in full graph)
+    expect(markup).toContain('>origin/develop<');
+    expect(markup).toContain('>main<');
+    // Verify local ref badge section does not contain cloud icon
+    const mainMarkup = markup.substring(markup.indexOf('>main<') - 200, markup.indexOf('>main<') + 50);
+    expect(mainMarkup).not.toContain('data-icon="cloud"');
   });
 });

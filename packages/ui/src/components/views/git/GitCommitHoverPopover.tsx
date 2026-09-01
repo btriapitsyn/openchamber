@@ -254,13 +254,8 @@ const GitCommitHoverPopoverComponent: React.FC<GitCommitHoverPopoverProps> = ({
                       )}
                       style={ref.color ? { backgroundColor: ref.color } : undefined}
                     >
-                      {isRemote ? (
-                        <Icon name="cloud" className="size-3 shrink-0" />
-                      ) : isTag ? (
-                        <Icon name="git-commit" className="size-3 shrink-0" />
-                      ) : (
-                        <Icon name="git-branch" className="size-3 shrink-0" />
-                      )}
+                      {isRemote && <Icon name="cloud" className="size-3 shrink-0" />}
+                      {isTag && <Icon name="git-commit" className="size-3 shrink-0" />}
                       <span className="truncate max-w-[200px]">{ref.name}</span>
                     </span>
                   );

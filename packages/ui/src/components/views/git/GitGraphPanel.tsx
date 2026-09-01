@@ -119,10 +119,6 @@ export const GitGraphPanel: React.FC<GitGraphPanelProps> = ({
       mergeBase,
     });
   }, [mergeBase, queryItems, refs]);
-  const totalColumns = React.useMemo(
-    () => Math.max(1, ...viewModels.map((viewModel) => Math.max(viewModel.inputSwimlanes.length, viewModel.outputSwimlanes.length, 1))),
-    [viewModels],
-  );
   const hoverCoordinator = React.useMemo(() => GitCommitHoverPopover.createCoordinator(), []);
   const [, forceExpandedRefresh] = React.useReducer((count: number) => count + 1, 0);
 
@@ -368,7 +364,7 @@ export const GitGraphPanel: React.FC<GitGraphPanelProps> = ({
                   <li key={viewModel.historyItem.id} data-history-commit-row={viewModel.historyItem.id}>
                     <div className="flex h-[22px] items-center gap-1.5 px-2">
                       <div className="h-[22px] shrink-0">
-                        <GitGraphSegment viewModel={viewModel} totalColumns={totalColumns} />
+                        <GitGraphSegment viewModel={viewModel} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="typography-ui-label font-medium text-foreground line-clamp-1">
@@ -398,7 +394,6 @@ export const GitGraphPanel: React.FC<GitGraphPanelProps> = ({
                   entry={viewModel.historyItem}
                   mode="graph"
                   viewModel={viewModel}
-                  totalColumns={totalColumns}
                   isExpanded={commitDetailsController.isExpanded(comparison)}
                   onToggle={() => commitDetailsController.toggleExpanded(comparison)}
                   files={EMPTY_FILES}

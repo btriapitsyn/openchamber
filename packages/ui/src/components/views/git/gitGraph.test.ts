@@ -15,6 +15,7 @@ import {
   historyItemBaseRefColor,
   historyItemRefColor,
   historyItemRemoteRefColor,
+  type GitHistoryGraphRef,
   type GitHistoryItem,
   type GitHistoryRef,
 } from './gitGraph';
@@ -127,6 +128,31 @@ describe('buildGitHistoryViewModels', () => {
     expect(viewModels[2].outputSwimlanes).toEqual([
       { id: 'd', color: 'var(--chart-1)' },
       { id: 'e', color: 'var(--chart-3)' },
+    ]);
+  });
+
+  test('colors ordinary branch refs from the commit lane, leaves tags uncolored, and keeps same-rank ref order stable', () => {
+    const topic = makeRef('refs/heads/topic', 'topic', 'a', 'branches', 'local');
+    const release = makeRef('refs/remotes/origin/release', 'origin/release', 'a', 'remote-branches', 'remote');
+    const tag = makeRef('refs/tags/v1.0.0', 'v1.0.0', 'a', 'tags', 'tag');
+    const viewModels = buildGitHistoryViewModels([
+      makeItem('a', ['b'], [topic, release, tag]),
+      makeItem('b', []),
+    ], { current: null, upstream: null, base: null }, {
+      showIncoming: false,
+      showOutgoing: false,
+      mergeBase: null,
+    });
+
+    expect(viewModels[0].historyItem.references?.map((ref) => ref.id)).toEqual([
+      topic.id,
+      release.id,
+      tag.id,
+    ]);
+    expect(viewModels[0].historyItem.references?.map((ref: GitHistoryGraphRef) => ref.color)).toEqual([
+      'var(--chart-1)',
+      'var(--chart-1)',
+      undefined,
     ]);
   });
 

@@ -93,9 +93,17 @@ mock.module('@/components/icon/Icon', () => ({
 
 const renderedGraphSegmentIds: string[] = [];
 
+type RenderedGraphSegment = {
+  id: string;
+  totalColumns?: number;
+};
+
+const renderedGraphSegments: RenderedGraphSegment[] = [];
+
 mock.module('./GitGraphSegment', () => ({
-  GitGraphSegment: ({ viewModel }: { viewModel: { historyItem: { id: string } } }) => {
+  GitGraphSegment: ({ viewModel, totalColumns }: { viewModel: { historyItem: { id: string } }; totalColumns?: number }) => {
     renderedGraphSegmentIds.push(viewModel.historyItem.id);
+    renderedGraphSegments.push({ id: viewModel.historyItem.id, totalColumns });
     return React.createElement('span', { 'data-graph-segment-id': viewModel.historyItem.id });
   },
 }));
@@ -103,6 +111,7 @@ mock.module('./GitGraphSegment', () => ({
 const renderedHistoryRows: Array<{
   id: string;
   compactGraph?: boolean;
+  totalColumns?: number;
   commitDetailsController?: unknown;
   commitComparison?: { directory: string; commitHash: string; parentHash: string | null };
   onCompareWithRemote?: () => void;
@@ -118,6 +127,7 @@ mock.module('./HistoryCommitRow', () => ({
   HistoryCommitRow: ({
     entry,
     compactGraph,
+    totalColumns,
     commitDetailsController,
     commitComparison,
     onCompareWithRemote,
@@ -130,6 +140,7 @@ mock.module('./HistoryCommitRow', () => ({
   }: {
     entry: { id: string };
     compactGraph?: boolean;
+    totalColumns?: number;
     commitDetailsController?: unknown;
     commitComparison?: { directory: string; commitHash: string; parentHash: string | null };
     onCompareWithRemote?: () => void;
@@ -143,6 +154,7 @@ mock.module('./HistoryCommitRow', () => ({
     renderedHistoryRows.push({
       id: entry.id,
       compactGraph,
+      totalColumns,
       commitDetailsController,
       commitComparison,
       onCompareWithRemote,
@@ -559,6 +571,7 @@ const settleMergeBaseLookupCount = async (getLookupCallCount: () => number) => {
 describe('GitGraphPanel component regression', () => {
   beforeEach(() => {
     renderedGraphSegmentIds.length = 0;
+    renderedGraphSegments.length = 0;
     renderedHistoryRows.length = 0;
     renderedButtons.length = 0;
     ensureHistoryRefsCalls.length = 0;
@@ -794,6 +807,143 @@ describe('GitGraphPanel component regression', () => {
     });
 
     expect(renderedHistoryRows.some((row) => row.id === 'commit-a' && row.compactGraph === true)).toBe(true);
+
+    await act(async () => {
+      root.unmount();
+      await flushEffects();
+    });
+    dom.restore();
+  });
+
+  test('does not pass totalColumns to compact commit rows or synthetic graph segments', async () => {
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.container);
+    const getGitHistoryMergeBase = async () => ({ mergeBase: 'e' });
+    const gitApi = {
+      getGitHistoryMergeBase,
+    } satisfies Pick<GitAPI, 'getGitHistoryMergeBase'>;
+    const panelGitApiSource: Pick<GitAPI, 'getGitHistoryMergeBase'> & Partial<GitAPI> = gitApi;
+    // SAFETY: GitGraphPanel only reads getGitHistoryMergeBase from the git API on this test path.
+    const panelGitApi = panelGitApiSource as GitAPI;
+
+    mockRefsState = {
+      refs: {
+        refs: [
+          { id: 'refs/heads/main', name: 'main', revision: 'c', kind: 'local', category: 'branches' },
+          { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'a', kind: 'remote', category: 'remote-branches' },
+        ],
+        current: { id: 'refs/heads/main', name: 'main', revision: 'c', kind: 'local', category: 'branches' },
+        upstream: { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'a', kind: 'remote', category: 'remote-branches' },
+        base: null,
+      },
+      refsError: null,
+      isLoadingRefs: false,
+    };
+    mockQueryState = {
+      items: [
+        {
+          id: 'a',
+          parentIds: ['b'],
+          subject: 'remote',
+          message: 'remote',
+          author: 'author',
+          authorEmail: 'author@example.com',
+          timestamp: '2024-01-01T00:00:00Z',
+          statistics: { files: 0, insertions: 0, deletions: 0 },
+          references: [],
+        },
+        {
+          id: 'b',
+          parentIds: ['e'],
+          subject: 'remote-parent',
+          message: 'remote-parent',
+          author: 'author',
+          authorEmail: 'author@example.com',
+          timestamp: '2024-01-01T00:00:00Z',
+          statistics: { files: 0, insertions: 0, deletions: 0 },
+          references: [],
+        },
+        {
+          id: 'c',
+          parentIds: ['d'],
+          subject: 'head',
+          message: 'head',
+          author: 'author',
+          authorEmail: 'author@example.com',
+          timestamp: '2024-01-01T00:00:00Z',
+          statistics: { files: 0, insertions: 0, deletions: 0 },
+          references: [],
+        },
+        {
+          id: 'd',
+          parentIds: ['e'],
+          subject: 'local-parent',
+          message: 'local-parent',
+          author: 'author',
+          authorEmail: 'author@example.com',
+          timestamp: '2024-01-01T00:00:00Z',
+          statistics: { files: 0, insertions: 0, deletions: 0 },
+          references: [],
+        },
+        {
+          id: 'e',
+          parentIds: ['f'],
+          subject: 'merge-base',
+          message: 'merge-base',
+          author: 'author',
+          authorEmail: 'author@example.com',
+          timestamp: '2024-01-01T00:00:00Z',
+          statistics: { files: 0, insertions: 0, deletions: 0 },
+          references: [],
+        },
+        {
+          id: 'f',
+          parentIds: ['g'],
+          subject: 'older',
+          message: 'older',
+          author: 'author',
+          authorEmail: 'author@example.com',
+          timestamp: '2024-01-01T00:00:00Z',
+          statistics: { files: 0, insertions: 0, deletions: 0 },
+          references: [],
+        },
+      ],
+      outdated: false,
+      isLoading: false,
+      isLoadingMore: false,
+      error: null,
+      hasMore: false,
+      refIds: ['refs/heads/main', 'refs/remotes/origin/main'],
+    };
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    await settleMergeBaseLookupCount(() => renderedGraphSegments.length);
+
+    // Verify synthetic incoming/outgoing segments don't receive totalColumns
+    const syntheticSegments = renderedGraphSegments.filter(
+      (seg) => seg.id === 'scm-graph-outgoing-changes' || seg.id === 'scm-graph-incoming-changes',
+    );
+    expect(syntheticSegments).toHaveLength(2);
+    syntheticSegments.forEach((seg) => {
+      expect(seg.totalColumns).toBe(undefined);
+    });
+
+    // Verify compact commit rows don't receive totalColumns
+    const compactRows = renderedHistoryRows.filter((row) => row.compactGraph === true);
+    expect(compactRows.length).toBeGreaterThan(0);
+    compactRows.forEach((row) => {
+      expect(row.totalColumns).toBe(undefined);
+    });
 
     await act(async () => {
       root.unmount();

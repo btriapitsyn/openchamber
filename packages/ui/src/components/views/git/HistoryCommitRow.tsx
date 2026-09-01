@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Icon } from "@/components/icon/Icon";
+import type { IconName } from "@/components/icon/icons";
 import { cn } from '@/lib/utils';
 import type { GitCommitChangedFile, GitLogEntry, GitHistoryItem } from '@/lib/api/types';
 import type { GitCommitHoverDetailsCache } from '@/lib/api/types';
@@ -140,6 +141,13 @@ function getRefBadgeClasses(ref: GitHistoryGraphRef): string {
   }
 
   return 'border-border/60 bg-background/80 text-foreground';
+}
+
+function getRefBadgeIcon(ref: GitHistoryGraphRef): IconName | null {
+  if (ref.kind === 'remote') {
+    return 'cloud';
+  }
+  return null;
 }
 
 export const HistoryCommitRow = React.memo(({
@@ -444,7 +452,7 @@ export const HistoryCommitRow = React.memo(({
     >
       {isGraphMode && viewModel ? (
         <div className={cn('shrink-0 self-stretch', isCompactGraph ? 'h-[22px]' : '-my-2')}>
-          <GitGraphSegment viewModel={viewModel} totalColumns={totalColumns} />
+          <GitGraphSegment viewModel={viewModel} totalColumns={isCompactGraph ? undefined : totalColumns} />
         </div>
       ) : (
         <div
@@ -464,19 +472,22 @@ export const HistoryCommitRow = React.memo(({
             </span>
             {compactGraphBadges.length > 0 ? (
               <div className="flex max-w-[50%] shrink-0 items-center gap-1 overflow-hidden whitespace-nowrap">
-                {compactGraphBadges.map((badge) => (
-                  <span
-                    key={badge.id}
-                    className={cn(
-                      'inline-flex min-w-0 max-w-40 items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0 typography-micro font-medium',
-                      getRefBadgeClasses(badge),
-                    )}
-                    style={badge.color ? { backgroundColor: badge.color } : undefined}
-                  >
-                    {badge.kind === 'local' || badge.kind === 'remote' || badge.kind === 'head' ? <Icon name="git-branch" className="size-3" /> : null}
-                    <span className="truncate">{badge.name}</span>
-                  </span>
-                ))}
+                {compactGraphBadges.map((badge) => {
+                  const iconName = getRefBadgeIcon(badge);
+                  return (
+                    <span
+                      key={badge.id}
+                      className={cn(
+                        'inline-flex min-w-0 max-w-40 items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0 typography-micro font-medium',
+                        getRefBadgeClasses(badge),
+                      )}
+                      style={badge.color ? { backgroundColor: badge.color } : undefined}
+                    >
+                      {iconName ? <Icon name={iconName} className="size-3" /> : null}
+                      <span className="truncate">{badge.name}</span>
+                    </span>
+                  );
+                })}
               </div>
             ) : null}
             <span className="min-w-0 max-w-[35%] shrink truncate typography-meta text-muted-foreground" title={getEntryAuthorName(entry)}>
@@ -487,7 +498,9 @@ export const HistoryCommitRow = React.memo(({
           <>
             {isGraphMode && visibleGraphBadges.length > 0 ? (
               <div className="mb-0.5 flex flex-wrap gap-1">
-                {visibleGraphBadges.map((badge) => (
+                {visibleGraphBadges.map((badge) => {
+                  const iconName = getRefBadgeIcon(badge);
+                  return (
                   <span
                     key={badge.id}
                     className={cn(
@@ -496,10 +509,11 @@ export const HistoryCommitRow = React.memo(({
                     )}
                     style={badge.color ? { backgroundColor: badge.color } : undefined}
                   >
-                    {badge.kind === 'local' || badge.kind === 'remote' || badge.kind === 'head' ? <Icon name="git-branch" className="size-3" /> : null}
+                    {iconName ? <Icon name={iconName} className="size-3" /> : null}
                     {badge.name}
                   </span>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
 
