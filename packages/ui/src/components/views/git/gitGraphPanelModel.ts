@@ -40,6 +40,13 @@ type GitGraphPanelRenderStateInput = {
   mergeBaseError: string | null;
 };
 
+type ActivationRevalidationInput = {
+  isActive: boolean;
+  directory: string;
+  hasCachedRefs: boolean;
+  lastRevalidatedKey: string | null;
+};
+
 export const groupGraphRefs = (refs: readonly GitHistoryRef[]): ManualGraphRefGroups => ({
   branches: refs.filter((ref) => ref.category === 'branches' && ref.kind !== 'head'),
   remoteBranches: refs.filter((ref) => ref.category === 'remote-branches'),
@@ -68,6 +75,15 @@ export const shouldAutoRefreshGitGraphQuery = ({ isLoadingRefs, refsError, query
     && !queryState.isLoadingMore
     && queryState.error === null;
 };
+
+export const shouldRevalidateGitGraphOnActivation = ({
+  isActive,
+  directory,
+  hasCachedRefs,
+  lastRevalidatedKey,
+}: ActivationRevalidationInput): boolean => (
+  isActive && directory.length > 0 && hasCachedRefs && lastRevalidatedKey !== directory
+);
 
 export const isGitGraphFilterDisabled = ({ isLoadingRefs, refsError }: GitGraphFilterDisabledInput): boolean => (
   isLoadingRefs || refsError !== null

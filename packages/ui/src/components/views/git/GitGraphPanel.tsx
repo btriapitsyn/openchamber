@@ -25,6 +25,7 @@ import {
   resolveMergeBaseComparisonRefIds,
   resolveGraphQuery,
   shouldAutoRefreshGitGraphQuery,
+  shouldRevalidateGitGraphOnActivation,
 } from './gitGraphPanelModel';
 import type { GitCommitDetailsController } from './gitCommitDetailsController';
 
@@ -121,6 +122,8 @@ export const GitGraphPanel: React.FC<GitGraphPanelProps> = ({
   }, [mergeBase, queryItems, refs]);
   const hoverCoordinator = React.useMemo(() => GitCommitHoverPopover.createCoordinator(), []);
   const [, forceExpandedRefresh] = React.useReducer((count: number) => count + 1, 0);
+  const lastRevalidatedKeyRef = React.useRef<string | null>(null);
+  const previousQueryStateRef = React.useRef<{ directory: string; isActive: boolean; outdated: boolean | null } | null>(null);
 
   const [comparisonOverrides, setComparisonOverrides] = React.useState<ReadonlyMap<string, { parentHash: string; label: string }>>(new Map());
   const [comparePickerCommitHash, setComparePickerCommitHash] = React.useState<string | null>(null);
@@ -164,13 +167,48 @@ export const GitGraphPanel: React.FC<GitGraphPanelProps> = ({
   }, [directory, ensureHistoryRefs, fetchHistoryPage, git, query]);
 
   React.useEffect(() => {
+    if (!isActive) {
+      lastRevalidatedKeyRef.current = null;
+      return;
+    }
+    if (!shouldRevalidateGitGraphOnActivation({
+      isActive,
+      directory,
+      hasCachedRefs: refs !== null && refs !== undefined,
+      lastRevalidatedKey: lastRevalidatedKeyRef.current,
+    })) {
+      return;
+    }
+    lastRevalidatedKeyRef.current = directory;
+    void refresh();
+  }, [directory, isActive, refresh, refs]);
+
+  React.useEffect(() => {
+    const previousQueryState = previousQueryStateRef.current;
+    const queryIsOutdated = queryState?.outdated === true;
+    const becameOutdatedWhileActive = Boolean(
+      queryIsOutdated
+      && previousQueryState?.directory === directory
+      && previousQueryState.isActive
+      && previousQueryState.outdated === false
+    );
+    previousQueryStateRef.current = {
+      directory,
+      isActive,
+      outdated: queryState?.outdated ?? null,
+    };
+
     if (!directory || !isActive) {
       return;
     }
+    if (queryIsOutdated && !becameOutdatedWhileActive) {
+      return;
+    }
     if (shouldAutoRefreshGitGraphQuery({ isLoadingRefs, refsError, queryState })) {
+      lastRevalidatedKeyRef.current = directory;
       void refresh();
     }
-  }, [directory, isActive, isLoadingRefs, queryState, refsError, refresh]);
+  }, [directory, isActive, isLoadingRefs, queryState, refs, refsError, refresh]);
 
   React.useEffect(() => {
     if (!isActive || !git.getGitHistoryMergeBase || comparisonRefIds.length < 2) {

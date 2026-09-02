@@ -13,6 +13,7 @@ import {
   resolveMergeBaseComparisonRefIds,
   resolveGraphQuery,
   shouldAutoRefreshGitGraphQuery,
+  shouldRevalidateGitGraphOnActivation,
 } from './gitGraphPanelModel';
 
 type MockButtonProps = React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -1114,10 +1115,13 @@ describe('GitGraphPanel component regression', () => {
       await flushEffects();
     });
 
+    ensureHistoryRefsCalls.length = 0;
+
     const retryButton = renderedButtons.find((button) => button.size === 'xs');
     expect(retryButton).toBeDefined();
 
     await act(async () => {
+      // SAFETY: The mocked button handler ignores the event payload on this path.
       await retryButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
       await flushEffects();
     });
@@ -1167,10 +1171,13 @@ describe('GitGraphPanel component regression', () => {
       await flushEffects();
     });
 
+    ensureHistoryRefsCalls.length = 0;
+
     const retryButton = renderedButtons.find((button) => button.size === 'xs');
     expect(retryButton).toBeDefined();
 
     await act(async () => {
+      // SAFETY: The mocked button handler ignores the event payload on this path.
       await retryButton?.onClick?.({} as React.MouseEvent<HTMLButtonElement>);
       await flushEffects();
     });
@@ -1365,9 +1372,379 @@ describe('GitGraphPanel component regression', () => {
     expect(markup).toContain('data-history-id="stale-commit"');
     expect(markup).not.toContain(enDict['gitView.graph.outdated']);
   });
+
+  test('revalidates cached refs once when the panel becomes active, then waits for the next active spell', async () => {
+    mockQueryState = createQueryState({ hasMore: false });
+    mockEnsureHistoryRefs = mock(async (directory: string, git: GitAPI, options?: { force?: boolean }) => {
+      if (options?.force) {
+        ensureHistoryRefsCalls.push([directory, git, { force: true }]);
+      }
+      return mockRefsState.refs;
+    });
+    const panelGitApi = createUnusedGitApi();
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, isActive: false })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([]);
+    expect(fetchHistoryCalls).toEqual([]);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, isActive: true })),
+        ),
+      );
+      await flushEffects();
+    });
+    await act(async () => {
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([['/repo', panelGitApi, { force: true }]]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, isActive: true })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([['/repo', panelGitApi, { force: true }]]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, isActive: false })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, isActive: true })),
+        ),
+      );
+      await flushEffects();
+    });
+    await act(async () => {
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([
+      ['/repo', panelGitApi, { force: true }],
+      ['/repo', panelGitApi, { force: true }],
+    ]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.unmount();
+      await flushEffects();
+    });
+    dom.restore();
+  });
+
+  test('revalidates cached refs once after the directory changes while active', async () => {
+    mockQueryState = createQueryState({ hasMore: false });
+    mockEnsureHistoryRefs = mock(async (directory: string, git: GitAPI, options?: { force?: boolean }) => {
+      if (options?.force) {
+        ensureHistoryRefsCalls.push([directory, git, { force: true }]);
+      }
+      return mockRefsState.refs;
+    });
+    const panelGitApi = createUnusedGitApi();
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, directory: '/repo-a' })),
+        ),
+      );
+      await flushEffects();
+    });
+    await act(async () => {
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([['/repo-a', panelGitApi, { force: true }]]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo-a', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, directory: '/repo-b' })),
+        ),
+      );
+      await flushEffects();
+    });
+    await act(async () => {
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([
+      ['/repo-a', panelGitApi, { force: true }],
+      ['/repo-b', panelGitApi, { force: true }],
+    ]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo-a', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+      { directory: '/repo-b', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi, directory: '/repo-b' })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([
+      ['/repo-a', panelGitApi, { force: true }],
+      ['/repo-b', panelGitApi, { force: true }],
+    ]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo-a', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+      { directory: '/repo-b', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.unmount();
+      await flushEffects();
+    });
+    dom.restore();
+  });
+
+  test('refreshes cached refs and history exactly once when the active query later becomes outdated', async () => {
+    mockQueryState = createQueryState({ hasMore: false, outdated: false });
+    mockEnsureHistoryRefs = mock(async (directory: string, git: GitAPI, options?: { force?: boolean }) => {
+      if (options?.force) {
+        ensureHistoryRefsCalls.push([directory, git, { force: true }]);
+      }
+      return mockRefsState.refs;
+    });
+    const panelGitApi = createUnusedGitApi();
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
+        ),
+      );
+      await flushEffects();
+    });
+    await act(async () => {
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([['/repo', panelGitApi, { force: true }]]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    mockQueryState = createQueryState({ hasMore: false, outdated: true });
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
+        ),
+      );
+      await flushEffects();
+    });
+    await act(async () => {
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([
+      ['/repo', panelGitApi, { force: true }],
+      ['/repo', panelGitApi, { force: true }],
+    ]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([
+      ['/repo', panelGitApi, { force: true }],
+      ['/repo', panelGitApi, { force: true }],
+    ]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.unmount();
+      await flushEffects();
+    });
+    dom.restore();
+  });
+
+  test('keeps the first uncached active load to a single refs and history fetch', async () => {
+    mockRefsState = {
+      refs: null,
+      refsError: null,
+      isLoadingRefs: false,
+    };
+    mockQueryState = null;
+    const panelGitApi = createUnusedGitApi();
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.container);
+
+    mockEnsureHistoryRefs = mock(async (directory: string, git: GitAPI, options?: { force?: boolean }) => {
+      if (options?.force) {
+        ensureHistoryRefsCalls.push([directory, git, { force: true }]);
+      }
+      mockRefsState = {
+        refs: {
+          refs: [
+            { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+            { id: 'refs/remotes/origin/topic', name: 'origin/topic', revision: 'commit-b', kind: 'remote', category: 'remote-branches' },
+          ],
+          current: { id: 'refs/heads/topic', name: 'topic', revision: 'commit-a', kind: 'local', category: 'branches' },
+          upstream: { id: 'refs/remotes/origin/topic', name: 'origin/topic', revision: 'commit-b', kind: 'remote', category: 'remote-branches' },
+          base: null,
+        },
+        refsError: null,
+        isLoadingRefs: false,
+      };
+      return mockRefsState.refs;
+    });
+    mockFetchHistoryPage = mock(async (
+      directory: string,
+      git: GitAPI,
+      query: FetchHistoryCall['query'],
+      options?: FetchHistoryCall['options'],
+    ) => {
+      fetchHistoryCalls.push({ directory, git, query, options });
+      mockQueryState = createQueryState({ hasMore: false });
+      return undefined;
+    });
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          createGitGraphPanelElement(createDefaultGitGraphPanelProps({ git: panelGitApi })),
+        ),
+      );
+      await flushEffects();
+    });
+
+    expect(ensureHistoryRefsCalls).toEqual([['/repo', panelGitApi, { force: true }]]);
+    expect(fetchHistoryCalls).toEqual([
+      { directory: '/repo', git: panelGitApi, query: { mode: 'auto' }, options: undefined },
+    ]);
+
+    await act(async () => {
+      root.unmount();
+      await flushEffects();
+    });
+    dom.restore();
+  });
 });
 
 describe('GitGraphPanel helpers', () => {
+  describe('shouldRevalidateGitGraphOnActivation', () => {
+    test('revalidates when active with cached refs and no prior revalidation', () => {
+      expect(shouldRevalidateGitGraphOnActivation({
+        isActive: true, directory: '/repo', hasCachedRefs: true, lastRevalidatedKey: null,
+      })).toBe(true);
+    });
+
+    test('does not revalidate twice for the same directory in one active spell', () => {
+      expect(shouldRevalidateGitGraphOnActivation({
+        isActive: true, directory: '/repo', hasCachedRefs: true, lastRevalidatedKey: '/repo',
+      })).toBe(false);
+    });
+
+    test('revalidates again after the directory changes (worktree/session switch)', () => {
+      expect(shouldRevalidateGitGraphOnActivation({
+        isActive: true, directory: '/worktree-b', hasCachedRefs: true, lastRevalidatedKey: '/repo',
+      })).toBe(true);
+    });
+
+    test('never revalidates while inactive or without cached refs', () => {
+      expect(shouldRevalidateGitGraphOnActivation({
+        isActive: false, directory: '/repo', hasCachedRefs: true, lastRevalidatedKey: null,
+      })).toBe(false);
+      expect(shouldRevalidateGitGraphOnActivation({
+        isActive: true, directory: '/repo', hasCachedRefs: false, lastRevalidatedKey: null,
+      })).toBe(false);
+    });
+  });
+
   test('groups refs by category for manual selection', () => {
     const grouped = groupGraphRefs([
       { id: 'HEAD', name: 'HEAD', revision: 'a', kind: 'head', category: 'branches' },

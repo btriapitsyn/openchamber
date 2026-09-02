@@ -1,4 +1,34 @@
-export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
+import { createGitChangeWatcher } from './watcher.js';
+
+let sharedGitChangeWatcher = null;
+let sharedGitChangeBroadcaster = null;
+const isFunction = (value) => Object.prototype.toString.call(value) === '[object Function]';
+
+const createGitChangedBroadcaster = (broadcastGlobalUiEvent) => (directory) => {
+  if (!isFunction(broadcastGlobalUiEvent)) {
+    return;
+  }
+  broadcastGlobalUiEvent({
+    type: 'openchamber:git-changed',
+    properties: { directory },
+  });
+};
+
+const getGitChangeWatcher = (broadcastGlobalUiEvent) => {
+  if (sharedGitChangeWatcher && sharedGitChangeBroadcaster === broadcastGlobalUiEvent) {
+    return sharedGitChangeWatcher;
+  }
+
+  sharedGitChangeWatcher?.dispose();
+  sharedGitChangeBroadcaster = broadcastGlobalUiEvent;
+  sharedGitChangeWatcher = createGitChangeWatcher({
+    broadcast: createGitChangedBroadcaster(broadcastGlobalUiEvent),
+  });
+  return sharedGitChangeWatcher;
+};
+
+export function registerGitRoutes(app, { broadcastGlobalUiEvent, emitWorktreeChanged } = {}) {
+  const gitChangeWatcher = getGitChangeWatcher(broadcastGlobalUiEvent);
   let gitLibraries = null;
   const ROOT_QUERY_MARKER = '__ROOT__';
   const COMMIT_ISH_PATTERN = /^[0-9a-f]{7,64}$/i;
@@ -307,6 +337,11 @@ export function registerGitRoutes(app, { emitWorktreeChanged } = {}) {
       const mode = req.query.mode === 'light' ? 'light' : undefined;
       const status = await getStatus(directory, { mode });
       res.json(status);
+      try {
+        gitChangeWatcher.ensureWatch(directory);
+      } catch (watchError) {
+        console.warn('Failed to watch git directory for status refresh hints:', watchError);
+      }
     } catch (error) {
       // Non-repo / GitError must not abort callers that enumerate projects or
       // sessions (e.g. sidebar discovery). Log a warning and continue.
