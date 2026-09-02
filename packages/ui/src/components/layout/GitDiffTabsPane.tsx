@@ -99,7 +99,7 @@ export const GitDiffTabsPane: React.FC<GitDiffTabsPaneProps> = ({ directory }) =
                 onDiffScopeChange={(scope) =>
                   useGitDiffTabsStore.getState().updateWorkingScope(directory, activeTab.id, scope)
                 }
-                targetFilePath={activeTab.path}
+                singleFilePath={activeTab.path}
                 flushContent
               />
             )}

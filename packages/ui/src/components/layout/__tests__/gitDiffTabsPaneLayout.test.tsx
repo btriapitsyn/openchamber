@@ -4,6 +4,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
 import { useGitDiffTabsStore } from '@/stores/useGitDiffTabsStore';
 
+type MockDiffViewProps = {
+  singleFilePath?: string | null;
+  targetFilePath?: string | null;
+};
+
+const diffViewPropsCalls: MockDiffViewProps[] = [];
+
 mock.module('@/components/ui/sortable-tabs-strip', () => ({
   SortableTabsStrip: ({ items }: { items: Array<{ id: string; label: string }> }) =>
     React.createElement(
@@ -16,7 +23,10 @@ mock.module('@/components/ui/sortable-tabs-strip', () => ({
 }));
 
 mock.module('@/components/views/DiffView', () => ({
-  DiffView: () => React.createElement('div', { 'data-working-diff-view': 'true' }),
+  DiffView: (props: MockDiffViewProps) => {
+    diffViewPropsCalls.push(props);
+    return React.createElement('div', { 'data-working-diff-view': 'true' });
+  },
 }));
 
 const { GitDiffTabsPane } = await import('../GitDiffTabsPane');
@@ -211,6 +221,7 @@ const findByAttribute = (node: NodeStub | null, attribute: string, value?: strin
 };
 
 beforeEach(() => {
+  diffViewPropsCalls.length = 0;
   useGitDiffTabsStore.setState({
     byDirectory: {
       '/repo': {
@@ -256,5 +267,32 @@ describe('GitDiffTabsPane layout', () => {
       await flush();
     });
     dom.restore();
+  });
+
+  test('passes the working tab path through DiffView single-file mode', async () => {
+    const dom = installMinimalDom();
+    const root: Root = createRoot(dom.reactContainer);
+
+    await act(async () => {
+      root.render(
+        React.createElement(
+          I18nProvider,
+          null,
+          React.createElement(GitDiffTabsPane, { directory: '/repo' }),
+        ),
+      );
+      await flush();
+    });
+
+    try {
+      expect(diffViewPropsCalls.at(-1)?.singleFilePath).toBe('src/history.ts');
+      expect(diffViewPropsCalls.at(-1)?.targetFilePath).toBe(undefined);
+    } finally {
+      await act(async () => {
+        root.unmount();
+        await flush();
+      });
+      dom.restore();
+    }
   });
 });

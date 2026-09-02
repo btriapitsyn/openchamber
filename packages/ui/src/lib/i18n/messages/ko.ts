@@ -1633,6 +1633,7 @@ export const dict: Record<I18nKey, string> = {
   'diffView.state.loadingChanges': '변경 사항 로드 중…',
   'diffView.state.largeDiff': '큰 diff({count}개 변경 줄)',
   'diffView.state.largeDiffDescription': '렌더링이 느릴 수 있습니다. 아래 버튼으로 diff를 계속 볼 수 있습니다.',
+  'diffView.state.fileUnchangedInScope': '선택한 범위에서 이 파일은 변경되지 않았습니다',
   'diffView.summary.changedFilesSingle': '파일 {count}개 변경됨',
   'diffView.summary.changedFilesPlural': '파일 {count}개 변경됨',
   "diffView.scope.changed": "Changed",

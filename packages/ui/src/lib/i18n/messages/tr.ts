@@ -1621,6 +1621,7 @@ export const dict = {
   'diffView.state.loadingChanges': 'Değişiklikler yükleniyor...',
   'diffView.state.largeDiff': 'Büyük diff ({count} değiştirilen satır)',
   'diffView.state.largeDiffDescription': 'Görüntüleme yavaş olabilir. Aşağıya tıklayarak diff\'i yine de görüntüleyebilirsiniz.',
+  'diffView.state.fileUnchangedInScope': 'Bu dosya seçilen kapsamda hiç değişiklik içermez.',
   'diffView.summary.changedFilesSingle': '{count} dosya değişti',
   'diffView.summary.changedFilesPlural': '{count} dosya değişti',
   'diffView.scope.changed': 'Değişen',

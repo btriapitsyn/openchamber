@@ -1646,6 +1646,7 @@ export const dict = {
   'diffView.state.loadingChanges': 'Loading changes...',
   'diffView.state.largeDiff': 'Large diff ({count} changed lines)',
   'diffView.state.largeDiffDescription': 'Rendering may be slow. You can still view the diff by clicking below.',
+  'diffView.state.fileUnchangedInScope': 'This file has no changes in the selected scope.',
   'diffView.summary.changedFilesSingle': '{count} file changed',
   'diffView.summary.changedFilesPlural': '{count} files changed',
   'diffView.scope.changed': 'Changed',

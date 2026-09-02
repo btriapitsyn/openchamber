@@ -2,6 +2,7 @@ import React, { act } from 'react';
 import { beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRoot, type Root } from 'react-dom/client';
 import { I18nProvider } from '@/lib/i18n';
+import type { GitStatus } from '@/lib/api/types';
 
 type MockButtonProps = React.PropsWithChildren<React.ButtonHTMLAttributes<HTMLButtonElement> & {
   'data-diff-view-toggle'?: string;
@@ -86,10 +87,20 @@ type MockUIStore = UIStoreState & {
   openContextFileAtLine: () => void;
 };
 
+type MockGitDirectoryState = {
+  branches: null;
+  isLoadingBranches: false;
+  diffCache: Map<string, never>;
+};
+
 const pierreCalls: PierreDiffViewerProps[] = [];
 const renderedButtons: RenderedButton[] = [];
 const uiStoreListeners = new Set<() => void>();
 let uiStoreState: UIStoreState;
+let gitStatusState: GitStatus | null = null;
+let isGitRepoState = false;
+let isGitLoadingStatusState = false;
+let gitDirectoriesState = new Map<string, MockGitDirectoryState>();
 const noop = () => {};
 const mockUIStore: MockUIStore = {
   diffLayoutPreference: 'dynamic',
@@ -226,7 +237,7 @@ mock.module('@/stores/useGitStore', () => ({
     fetchBranches: () => Promise<void>;
     clearDiffCache: () => void;
     setDiff: () => void;
-    directories: Map<string, { branches: null; isLoadingBranches: false; diffCache: Map<string, never> }>;
+    directories: Map<string, MockGitDirectoryState>;
   }) => T) => selector({
     setActiveDirectory: () => undefined,
     ensureStatus: async () => undefined,
@@ -234,11 +245,11 @@ mock.module('@/stores/useGitStore', () => ({
     fetchBranches: async () => undefined,
     clearDiffCache: () => undefined,
     setDiff: () => undefined,
-    directories: new Map(),
+    directories: gitDirectoriesState,
   }),
-  useGitStatus: () => null,
-  useIsGitRepo: () => false,
-  useGitLoadingStatus: () => false,
+  useGitStatus: () => gitStatusState,
+  useIsGitRepo: () => isGitRepoState,
+  useGitLoadingStatus: () => isGitLoadingStatusState,
 }));
 
 mock.module('@/stores/useGitBaseBranchStore', () => ({
@@ -611,6 +622,16 @@ const snapshotSource: DiffViewSnapshotSource = {
   ],
 };
 
+const createGitStatus = (files: GitStatus['files'], diffStats: NonNullable<GitStatus['diffStats']>): GitStatus => ({
+  current: 'feature/one-file-diff-tabs',
+  tracking: 'origin/feature/one-file-diff-tabs',
+  ahead: 0,
+  behind: 0,
+  files,
+  isClean: files.length === 0,
+  diffStats,
+});
+
 describe('DiffView snapshot source', () => {
   beforeEach(() => {
     pierreCalls.length = 0;
@@ -630,6 +651,10 @@ describe('DiffView snapshot source', () => {
     mockUIStore.pendingDiffFile = uiStoreState.pendingDiffFile;
     mockUIStore.pendingDiffStaged = uiStoreState.pendingDiffStaged;
     mockUIStore.pendingDiffScope = uiStoreState.pendingDiffScope;
+    gitStatusState = null;
+    isGitRepoState = false;
+    isGitLoadingStatusState = false;
+    gitDirectoriesState = new Map();
   });
 
   test('renders snapshot files through the standard read-only viewport', async () => {
@@ -673,5 +698,61 @@ describe('DiffView snapshot source', () => {
     expect(findByAttribute(rendered.container, 'data-icon', 'edit')).toBeNull();
 
     await rendered.restore();
+  });
+
+  test('renders only the requested working-tree file when single-file mode targets one changed path', async () => {
+    gitStatusState = createGitStatus(
+      [
+        { path: 'src/target.ts', index: '', working_dir: 'M' },
+        { path: 'src/other.ts', index: '', working_dir: 'M' },
+      ],
+      {
+        'src/target.ts': { insertions: 2, deletions: 1 },
+        'src/other.ts': { insertions: 4, deletions: 3 },
+      },
+    );
+    isGitRepoState = true;
+
+    const rendered = await renderDiffView({
+      diffScope: 'working',
+      singleFilePath: 'src/target.ts',
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    try {
+      expect(countByAttribute(rendered.container, 'data-diff-file-path')).toBe(1);
+      expect(findByAttribute(rendered.container, 'data-diff-file-path')?.attributes['data-diff-file-path']).toBe('src/target.ts');
+    } finally {
+      await rendered.restore();
+    }
+  });
+
+  test('shows the single-file missing-target state instead of the clean-tree empty state', async () => {
+    gitStatusState = createGitStatus(
+      [
+        { path: 'src/other.ts', index: '', working_dir: 'M' },
+      ],
+      {
+        'src/other.ts': { insertions: 4, deletions: 3 },
+      },
+    );
+    isGitRepoState = true;
+
+    const rendered = await renderDiffView({
+      diffScope: 'working',
+      singleFilePath: 'src/target.ts',
+    });
+    await act(async () => {
+      await flush();
+    });
+
+    try {
+      expect(countByAttribute(rendered.container, 'data-diff-file-path')).toBe(0);
+      expect(countByAttribute(rendered.container, 'data-diff-empty-state', 'single-file')).toBe(1);
+    } finally {
+      await rendered.restore();
+    }
   });
 });

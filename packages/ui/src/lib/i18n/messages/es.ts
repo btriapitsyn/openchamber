@@ -1597,6 +1597,7 @@ export const dict: Record<I18nKey, string> = {
   "diffView.state.loadingChanges": "Cargando cambios...",
   "diffView.state.largeDiff": "Diff grande ({count} líneas modificadas)",
   "diffView.state.largeDiffDescription": "El renderizado puede ser lento. Aun así puedes ver el diff con el botón de abajo.",
+  "diffView.state.fileUnchangedInScope": "Este archivo no tiene cambios en el ámbito seleccionado.",
   "diffView.summary.changedFilesSingle": "{count} archivo modificado",
   "diffView.summary.changedFilesPlural": "{count} archivos modificados",
   "diffView.scope.changed": "Cambiados",

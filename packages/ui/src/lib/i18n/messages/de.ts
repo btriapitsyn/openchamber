@@ -1432,6 +1432,7 @@ export const dict = {
   'diffView.state.loadingChanges': 'Lade Änderungen...',
   'diffView.state.largeDiff': 'Großer Diff ({count} geänderte Zeilen)',
   'diffView.state.largeDiffDescription': 'Die Darstellung kann langsam sein. Sie können den Diff dennoch anzeigen, indem Sie unten klicken.',
+  'diffView.state.fileUnchangedInScope': 'Diese Datei hat keine Änderungen im ausgewählten Bereich.',
   'diffView.summary.changedFilesSingle': '{count} Datei geändert',
   'diffView.summary.changedFilesPlural': '{count} Dateien geändert',
   'diffView.scope.changed': 'Geändert',

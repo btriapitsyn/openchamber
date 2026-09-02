@@ -1395,6 +1395,7 @@ export const dict = {
   'diffView.state.loadingChanges': 'Chargement des modifications...',
   'diffView.state.largeDiff': 'Diff volumineux ({count} lignes modifiées)',
   'diffView.state.largeDiffDescription': 'Le rendu peut être lent. Vous pouvez tout de même afficher le diff avec le bouton ci-dessous.',
+  'diffView.state.fileUnchangedInScope': 'Ce fichier n\'a pas de modifications dans le périmètre sélectionné.',
   'diffView.summary.changedFilesSingle': 'Le fichier {count} a été modifié',
   'diffView.summary.changedFilesPlural': 'Fichiers {count} modifiés',
   "diffView.scope.changed": "Modifiés",
