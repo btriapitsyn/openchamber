@@ -70,16 +70,24 @@ type DocumentStub = {
 
 type ReactContainerLike = ElementStub;
 
-type MockButtonProps = React.PropsWithChildren<{
-  type?: 'button' | 'submit' | 'reset';
+type MockButtonProps = React.PropsWithChildren<Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> & {
+  onClick?: (event: TestPressEvent) => void;
+  variant?: string;
+  size?: string;
+  'data-git-commit-changed-file-row'?: string;
+}>;
+
+type ButtonRegistryEntry = {
+  children?: React.ReactNode;
   className?: string;
   title?: string;
   'aria-label'?: string;
   style?: React.CSSProperties;
   disabled?: boolean;
-  onClick?: (event: TestPressEvent) => void;
+  onClick?: MockButtonProps['onClick'];
   'data-git-commit-changed-file-row'?: string;
-}>;
+  text: string;
+};
 
 type MockInputProps = {
   value?: string;
@@ -102,7 +110,7 @@ const textFromNode = (node: React.ReactNode): string => {
   return textFromNode((node as { props?: { children?: React.ReactNode } }).props?.children ?? null);
 };
 
-const buttonRegistry: Array<MockButtonProps & { text: string }> = [];
+const buttonRegistry: ButtonRegistryEntry[] = [];
 const inputRegistry: MockInputProps[] = [];
 const menuItemRegistry: Array<MockMenuItemProps & { text: string }> = [];
 const toastMessages = { success: [] as string[], error: [] as string[] };
@@ -124,19 +132,23 @@ let clipboardResult: { ok: boolean; error?: string } = { ok: true };
 let runtimeGitCapabilities: { createGitTag?: (...args: unknown[]) => Promise<unknown> } = {};
 
 mock.module('@/components/ui/button', () => ({
-  Button: ({ children, ...props }: MockButtonProps) => {
+  Button: React.forwardRef<HTMLButtonElement, MockButtonProps>(({ children, variant: _variant, size: _size, ...props }, ref) => {
     buttonRegistry.push({ children, ...props, text: textFromNode(children) });
-    const domProps: React.HTMLAttributes<HTMLSpanElement> & Record<`data-${string}`, string | undefined> = {
+    if (props['aria-controls']) {
+      return React.createElement('button', { ...props, ref }, children);
+    }
+
+    const spanProps = {
       className: props.className,
       title: props.title,
       'aria-label': props['aria-label'],
       'aria-disabled': props.disabled ? 'true' : undefined,
       style: props.style,
       'data-git-commit-changed-file-row': props['data-git-commit-changed-file-row'],
+      onClick: props.onClick,
     };
-
-    return React.createElement('span', domProps, children);
-  },
+    return React.createElement('span', spanProps, children);
+  }),
 }));
 
 mock.module('@/components/ui/context-menu', () => ({
@@ -230,6 +242,7 @@ mock.module('./GitCommitHoverPopover', () => ({
 }));
 
 const { HistoryCommitRow } = await import('./HistoryCommitRow');
+const { Button } = await import('@/components/ui/button');
 
 const createPressEvent = (): TestPressEvent => ({
   defaultPrevented: false,
@@ -242,7 +255,7 @@ const createPressEvent = (): TestPressEvent => ({
   },
 });
 
-const invokeClick = async (handler: ((event: TestPressEvent) => void) | undefined) => {
+const invokeClick = async (handler: MockButtonProps['onClick'] | MockMenuItemProps['onClick'] | undefined) => {
   if (!handler) return;
   await act(async () => {
     handler(createPressEvent());
@@ -434,6 +447,20 @@ const getButton = (text: string) => [...buttonRegistry].reverse().find((button) 
 describe('HistoryCommitRow context menu regression', () => {
   beforeEach(() => {
     resetRegistries();
+  });
+
+  test('renders nested action-button mocks as spans and collapse-control mocks as real buttons', () => {
+    const nestedActionMarkup = renderToStaticMarkup(
+      <Button aria-label="Copy SHA">Copy</Button>,
+    );
+    const collapseControlMarkup = renderToStaticMarkup(
+      <Button aria-controls="git-graph-pane-body" aria-expanded={true}>Graph</Button>,
+    );
+
+    expect(nestedActionMarkup).toContain('<span');
+    expect(nestedActionMarkup).not.toContain('<button');
+    expect(collapseControlMarkup).toContain('<button');
+    expect(collapseControlMarkup).toContain('aria-controls="git-graph-pane-body"');
   });
 
   test('renders collapsed compact graph rows inline without date hash or copy controls', () => {
@@ -961,6 +988,9 @@ describe('HistoryCommitRow context menu regression', () => {
 
     // Verify remote ref has cloud icon
     expect(markup).toContain('data-icon="cloud"');
+    const remoteBadgeMarkup = markup.substring(markup.indexOf('data-icon="cloud"') - 200, markup.indexOf('>upstream/main<') + 50);
+    expect(remoteBadgeMarkup).toContain('h-4');
+    expect(remoteBadgeMarkup).toContain('class="size-3 shrink-0"');
     // Verify it renders the remote ref name
     expect(markup).toContain('>upstream/main<');
     // Verify local ref does not have cloud icon, only remote does
@@ -1020,6 +1050,9 @@ describe('HistoryCommitRow context menu regression', () => {
 
     // Verify remote ref has cloud icon in full graph branch
     expect(markup).toContain('data-icon="cloud"');
+    const remoteBadgeMarkup = markup.substring(markup.indexOf('data-icon="cloud"') - 200, markup.indexOf('>origin/develop<') + 50);
+    expect(remoteBadgeMarkup).toContain('h-4');
+    expect(remoteBadgeMarkup).toContain('class="size-3 shrink-0"');
     // Verify both refs render (not filtered in full graph)
     expect(markup).toContain('>origin/develop<');
     expect(markup).toContain('>main<');

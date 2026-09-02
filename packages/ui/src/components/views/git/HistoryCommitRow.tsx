@@ -478,12 +478,12 @@ export const HistoryCommitRow = React.memo(({
                     <span
                       key={badge.id}
                       className={cn(
-                        'inline-flex min-w-0 max-w-40 items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0 typography-micro font-medium',
+                        'inline-flex h-4 min-w-0 max-w-40 items-center gap-1 whitespace-nowrap rounded-full border px-1.5 py-0 typography-micro font-medium',
                         getRefBadgeClasses(badge),
                       )}
                       style={badge.color ? { backgroundColor: badge.color } : undefined}
                     >
-                      {iconName ? <Icon name={iconName} className="size-3" /> : null}
+                      {iconName ? <Icon name={iconName} className="size-3 shrink-0" /> : null}
                       <span className="truncate">{badge.name}</span>
                     </span>
                   );
@@ -501,17 +501,17 @@ export const HistoryCommitRow = React.memo(({
                 {visibleGraphBadges.map((badge) => {
                   const iconName = getRefBadgeIcon(badge);
                   return (
-                  <span
-                    key={badge.id}
-                    className={cn(
-                      'inline-flex items-center gap-1 rounded-full border px-1.5 py-0 typography-micro font-medium',
-                      getRefBadgeClasses(badge),
-                    )}
-                    style={badge.color ? { backgroundColor: badge.color } : undefined}
-                  >
-                    {iconName ? <Icon name={iconName} className="size-3" /> : null}
-                    {badge.name}
-                  </span>
+                    <span
+                      key={badge.id}
+                      className={cn(
+                        'inline-flex h-4 items-center gap-1 rounded-full border px-1.5 py-0 typography-micro font-medium',
+                        getRefBadgeClasses(badge),
+                      )}
+                      style={badge.color ? { backgroundColor: badge.color } : undefined}
+                    >
+                      {iconName ? <Icon name={iconName} className="size-3 shrink-0" /> : null}
+                      {badge.name}
+                    </span>
                   );
                 })}
               </div>

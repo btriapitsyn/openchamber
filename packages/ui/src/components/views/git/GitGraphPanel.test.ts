@@ -171,8 +171,6 @@ mock.module('./HistoryCommitRow', () => ({
 
 let gitPaneState: GitRepositoryPaneState = {
   changesCollapsed: false,
-  graphCollapsed: true,
-  graphHeight: 280,
   graphFilterMode: 'auto',
   graphManualRefIds: [],
 };
@@ -594,8 +592,6 @@ describe('GitGraphPanel component regression', () => {
     observerInstances.length = 0;
     gitPaneState = {
       changesCollapsed: false,
-      graphCollapsed: true,
-      graphHeight: 280,
       graphFilterMode: 'auto',
       graphManualRefIds: [],
     };
@@ -1388,8 +1384,6 @@ describe('GitGraphPanel helpers', () => {
   test('falls back to auto query when manual mode has no refs', () => {
     expect(resolveGraphQuery({
       changesCollapsed: false,
-      graphCollapsed: true,
-      graphHeight: 280,
       graphFilterMode: 'manual',
       graphManualRefIds: [],
     })).toEqual({ mode: 'auto' });

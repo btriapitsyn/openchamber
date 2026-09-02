@@ -68,8 +68,6 @@ mock.module('@/components/icon/Icon', () => ({
 
 let gitPaneState: GitRepositoryPaneState = {
   changesCollapsed: false,
-  graphCollapsed: false,
-  graphHeight: 280,
   graphFilterMode: 'auto',
   graphManualRefIds: [],
 };
@@ -183,8 +181,6 @@ describe('GitGraphControls', () => {
     fetchHistoryPageCalls.length = 0;
     gitPaneState = {
       changesCollapsed: false,
-      graphCollapsed: false,
-      graphHeight: 280,
       graphFilterMode: 'auto',
       graphManualRefIds: [],
     };

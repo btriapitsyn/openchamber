@@ -31,7 +31,13 @@ const getTerminalTab = (directory: string) => getContextPanelTabs(directory).fin
 const originalPersistOptions = useUIStore.persist.getOptions();
 
 beforeEach(() => {
-  useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [], gitRepositoryPaneStates: {} });
+  useUIStore.setState({
+    contextPanelByDirectory: {},
+    contextRailOrder: [],
+    gitRepositoryPaneStates: {},
+    gitGraphPaneCollapsed: true,
+    gitGraphPaneHeight: 280,
+  });
   useTerminalStore.getState().clearAll();
   useGitDiffTabsStore.setState({ byDirectory: {} });
 });
@@ -1058,10 +1064,10 @@ describe('useUIStore openContextDiff and openContextCommitDiff with git tab', ()
 });
 
 describe('useUIStore git repository pane state', () => {
-  test('stores repository-scoped pane state by runtime and normalized directory', () => {
+  test('stores graph layout once globally and keeps repository pane filters scoped by runtime and normalized directory', () => {
+    useUIStore.getState().setGitGraphPaneCollapsed(false);
+    useUIStore.getState().setGitGraphPaneHeight(999);
     useUIStore.getState().setGitRepositoryPaneState('/repo///', {
-      graphCollapsed: false,
-      graphHeight: 999,
       graphFilterMode: 'manual',
       graphManualRefIds: ['refs/tags/v1', 'refs/tags/v1', ' refs/heads/main '],
     }, 'runtime-a');
@@ -1069,22 +1075,41 @@ describe('useUIStore git repository pane state', () => {
     const runtimeA = useUIStore.getState().getGitRepositoryPaneState('/repo', 'runtime-a');
     const runtimeB = useUIStore.getState().getGitRepositoryPaneState('/repo', 'runtime-b');
 
-    expect(runtimeA.graphCollapsed).toBe(false);
-    expect(runtimeA.graphHeight).toBe(720);
+    expect(useUIStore.getState().gitGraphPaneCollapsed).toBe(false);
+    expect(useUIStore.getState().gitGraphPaneHeight).toBe(720);
     expect('previewWidth' in runtimeA).toBe(false);
     expect(runtimeA.graphFilterMode).toBe('manual');
     expect(runtimeA.graphManualRefIds).toEqual(['refs/heads/main', 'refs/tags/v1']);
     expect(runtimeB).toEqual({
       changesCollapsed: false,
-      graphCollapsed: true,
-      graphHeight: 280,
       graphFilterMode: 'auto',
       graphManualRefIds: [],
     });
   });
 
-  test('sanitizes persisted repository pane state during migration and discards legacy preview width', () => {
+  test('clamps persisted global graph height and includes global graph layout in the persistence projection', () => {
+    useUIStore.getState().setGitGraphPaneCollapsed(false);
+    useUIStore.getState().setGitGraphPaneHeight(10);
+    expect(useUIStore.getState().gitGraphPaneHeight).toBe(180);
+
+    useUIStore.getState().setGitGraphPaneHeight(999);
+
+    const persisted = useUIStore.persist.getOptions().partialize?.(useUIStore.getState());
+    const persistedGraphLayout = Object.fromEntries(
+      Object.entries(persisted ?? {}).filter(([key]) => key === 'gitGraphPaneCollapsed' || key === 'gitGraphPaneHeight')
+    );
+
+    expect(useUIStore.getState().gitGraphPaneHeight).toBe(720);
+    expect(persistedGraphLayout).toEqual({
+      gitGraphPaneCollapsed: false,
+      gitGraphPaneHeight: 720,
+    });
+  });
+
+  test('sanitizes persisted global graph layout during migration and discards legacy repository graph fields', () => {
     const migrated = useUIStore.persist.getOptions().migrate?.({
+      gitGraphPaneCollapsed: 'nope',
+      gitGraphPaneHeight: 'bad-height',
       gitRepositoryPaneStates: {
         '["runtime-a","/repo"]': {
           graphCollapsed: false,
@@ -1096,17 +1121,20 @@ describe('useUIStore git repository pane state', () => {
       },
     }, 15);
 
-    const paneStates = JSON.parse(JSON.stringify(migrated)).gitRepositoryPaneStates;
+    const migratedState = JSON.parse(JSON.stringify(migrated));
+    const paneStates = migratedState.gitRepositoryPaneStates;
 
+    expect(migratedState.gitGraphPaneCollapsed).toBe(true);
+    expect(migratedState.gitGraphPaneHeight).toBe(280);
     expect(paneStates).toEqual({
         '["runtime-a","/repo"]': {
           changesCollapsed: false,
-          graphCollapsed: false,
-          graphHeight: 180,
           graphFilterMode: 'manual',
           graphManualRefIds: ['refs/tags/v1'],
           },
     });
     expect('previewWidth' in paneStates['["runtime-a","/repo"]']).toBe(false);
+    expect('graphCollapsed' in paneStates['["runtime-a","/repo"]']).toBe(false);
+    expect('graphHeight' in paneStates['["runtime-a","/repo"]']).toBe(false);
   });
 });

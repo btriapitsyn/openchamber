@@ -29,7 +29,7 @@ function verticalPath(x: number, y1: number, y2: number): string {
   return `M ${x} ${y1} V ${y2}`;
 }
 
-function GraphPath({ d, color, strokeWidth = 1 }: { d: string; color: string; strokeWidth?: number }) {
+function GraphPath({ d, color, strokeWidth = 0.75 }: { d: string; color: string; strokeWidth?: number }) {
   return (
     <path
       d={d}
