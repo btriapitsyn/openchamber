@@ -152,12 +152,12 @@ describe('useWorkStatusVisibility', () => {
     teardown();
   });
 
-  test('hides the panel when the row cannot afford both columns', () => {
+  test('keeps the overlay visible when the row is narrow', () => {
     const { result, teardown } = renderVisibility(
       { isMobile: false, isVSCode: false },
       REQUIRED - 1,
     );
-    expect(result.visible).toBe(false);
+    expect(result.visible).toBe(true);
     teardown();
   });
 
@@ -209,14 +209,14 @@ describe('useWorkStatusVisibility', () => {
     teardown();
   });
 
-  test('reacts to a live resize across the threshold', () => {
+  test('keeps the overlay visible across chat-area resizes', () => {
     const { result, teardown } = renderVisibility(
       { isMobile: false, isVSCode: false },
       REQUIRED,
     );
     expect(result.visible).toBe(true);
     act(() => { notify?.([{ contentRect: { width: REQUIRED - 40 } }]); });
-    expect(result.visible).toBe(false);
+    expect(result.visible).toBe(true);
     act(() => { notify?.([{ contentRect: { width: REQUIRED + 200 } }]); });
     expect(result.visible).toBe(true);
     teardown();
@@ -313,13 +313,13 @@ describe('useWorkStatusVisibility', () => {
     teardown();
   });
 
-  test('reports no fit when the row is too narrow, whatever the switch says', () => {
+  test('reports fit once the overlay host is measured, regardless of width', () => {
     const { result, teardown } = renderVisibility(
       { isMobile: false, isVSCode: false },
       REQUIRED - 1,
     );
-    expect(result.fits).toBe(false);
-    expect(result.visible).toBe(false);
+    expect(result.fits).toBe(true);
+    expect(result.visible).toBe(true);
     teardown();
   });
 

@@ -24,21 +24,23 @@ selected session even without metrics, so a saved collapsed state can reopen.
 
 It is **not** a context-panel surface. It is not registered in
 `lib/surfaces/registry.ts`, has no rail icon, no tab, no persisted width and no
-resizer. It is a card floating inside the chat column — rounded border, faint
-fill, its own margin — rather than a docked pane flush against the window edge.
+resizer. It is a card floating inside the chat column, with a rounded border
+and faint fill, rather than a docked pane flush against the window edge.
 When it overlays the transcript, it uses the shared `oc-glass-panel` surface;
-the inline card keeps its lighter, non-blurred fill instead.
+the panel remains a glass overlay in its only desktop placement.
 
 ## Placement
 
 `ChatContainer`'s top-level return is a flex row:
 
 - the existing chat column (`data-composer-bound`, `flex-1 min-w-0`), holding
-  the viewport, the composer and the timeline dialog;
-- `WorkStatusPanel`, a fixed-width `shrink-0` sibling.
+  the viewport, the composer, the timeline dialog and the panel overlay;
+- `ContextPanel`, the separate right-hand surface.
 
-Nothing inside `ChatViewport` changed. The virtualizer sees the column shrink
-exactly as it already does when the context panel opens.
+`WorkStatusPanel` is an absolutely positioned overlay inside the chat column,
+anchored to that column's top-right edge. It never participates in the flex
+layout and never changes the transcript width. Nothing inside `ChatViewport`
+changed.
 
 ## Visibility
 
@@ -51,8 +53,7 @@ exactly as it already does when the context panel opens.
   the same key the rail and the panel use. It is deliberately **not** the
   directory this panel reports about: a managed Chat reports about none, and
   that empty key answered "closed" for a context panel that was plainly open;
-- the row cannot fit `WORK_STATUS_MIN_CHAT_WIDTH` of transcript alongside
-  `WORK_STATUS_PANEL_WIDTH` of panel.
+- the chat area is unavailable or has not attached yet.
 
 `ChatContainer` additionally suppresses it in mini-chat and in expanded-input
 mode. It remains available on a new-session draft: when the draft targets a

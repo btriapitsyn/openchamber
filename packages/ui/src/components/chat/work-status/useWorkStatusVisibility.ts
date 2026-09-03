@@ -18,7 +18,7 @@ const WORK_STATUS_MIN_CHAT_WIDTH = 560;
 /** The card's own horizontal margins (`ml-2` + `mr-4`). */
 const WORK_STATUS_PANEL_GUTTER = 8 + 16;
 
-/** Row width below which the panel gives its space back to the transcript. */
+/** Kept for persisted/layout compatibility; overlay placement no longer uses it. */
 export const WORK_STATUS_REQUIRED_ROW_WIDTH =
   WORK_STATUS_PANEL_WIDTH + WORK_STATUS_PANEL_GUTTER + WORK_STATUS_MIN_CHAT_WIDTH;
 
@@ -28,10 +28,10 @@ type Options = {
 };
 
 type Result = {
-  /** Layout can host the panel inline, regardless of the user's switch. */
+  /** Layout can host the panel overlay, regardless of the user's switch. */
   fits: boolean;
   /**
-   * Attach to the flex row that contains the chat column and the panel.
+   * Attach to the outer chat row so the host can be measured independently.
    *
    * A callback ref, not an object ref: an object ref gives no signal when the
    * node attaches, so a measuring effect that reads `.current` would silently
@@ -43,13 +43,11 @@ type Result = {
 };
 
 /**
- * Decides whether the work-status panel may occupy space inside the chat.
+ * Decides whether the work-status panel may appear inside the chat.
  *
- * The width test measures the ROW (chat column + panel), never the chat column
- * alone. The chat column's width is an output of this decision: hiding the
- * panel widens it, which would re-satisfy a chat-width test and re-show the
- * panel, oscillating forever. The row width is independent of the panel, so it
- * is the only stable input.
+ * The panel is an overlay and never occupies flex space. The measured chat area
+ * remains the stable lifecycle signal used to publish readiness to the Header,
+ * but its width is not a visibility threshold.
  */
 export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result => {
   const [rowNode, setRowNode] = React.useState<HTMLDivElement | null>(null);
@@ -116,7 +114,7 @@ export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result
     return () => observer.disconnect();
   }, [rowNode]);
 
-  const fits = layoutAllows && rowWidth !== null && rowWidth >= WORK_STATUS_REQUIRED_ROW_WIDTH;
+  const fits = layoutAllows && rowWidth !== null;
   const visible = panelEnabled && fits;
 
   return { rowRef, visible, fits };
