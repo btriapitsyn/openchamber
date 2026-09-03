@@ -11,7 +11,7 @@ export const WORK_STATUS_PANEL_WIDTH = 300;
 
 /** Minimum transcript width kept visible beside the floating panel. */
 const WORK_STATUS_MIN_CHAT_WIDTH = 560;
-export const WORK_STATUS_REQUIRED_CHAT_WIDTH = WORK_STATUS_PANEL_WIDTH + WORK_STATUS_MIN_CHAT_WIDTH;
+export const WORK_STATUS_REQUIRED_CHAT_WIDTH = WORK_STATUS_MIN_CHAT_WIDTH;
 
 type Options = {
   isMobile: boolean;
@@ -77,12 +77,13 @@ export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result
   // it to report that the overlay is not currently visible.
   const layoutAllows = !isMobile && !isVSCode && !contextPanelOpen;
 
-  // The overlay never changes the chat column's width, so this measurement is
-  // stable and can safely protect the transcript from being covered.
+  // Measure the actual message column, not the wider chat area. The overlay
+  // must protect the content it covers, and the message column stays stable
+  // because the overlay never participates in flex layout.
   React.useEffect(() => {
     if (!rowNode || typeof ResizeObserver === 'undefined') return undefined;
 
-    const measured = rowNode;
+    const measured = rowNode.querySelector<HTMLElement>('.chat-message-column') ?? rowNode;
     setRowWidth(measured.getBoundingClientRect().width);
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];

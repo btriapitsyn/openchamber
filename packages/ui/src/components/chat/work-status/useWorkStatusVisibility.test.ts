@@ -99,11 +99,10 @@ type Args = { isMobile: boolean; isVSCode: boolean };
 const renderVisibility = (args: Args, rowWidth: number) => {
   const dom = installMinimalDom();
   const root: Root = createRoot(dom.container);
-  // `closest` returns null here, so the hook falls back to the row itself —
-  // the fallback path is what these cases exercise.
+  // No message column is present here, so the hook falls back to the row.
   const rowNode = {
     getBoundingClientRect: () => ({ width: rowWidth }),
-    closest: () => null,
+    querySelector: () => null,
   } as unknown as HTMLDivElement;
   const result = { visible: false, fits: false };
 
@@ -166,10 +165,10 @@ describe('useWorkStatusVisibility', () => {
     // that also holds ContextPanel.
     const dom = installMinimalDom();
     const root: Root = createRoot(dom.container);
-    const chatArea = { getBoundingClientRect: () => ({ width: REQUIRED }) };
+    const messageColumn = { getBoundingClientRect: () => ({ width: REQUIRED }) };
     const rowNode = {
       getBoundingClientRect: () => ({ width: 0 }),
-      closest: () => chatArea,
+      querySelector: () => messageColumn,
     } as unknown as HTMLDivElement;
     const result = { visible: false };
 
@@ -187,14 +186,14 @@ describe('useWorkStatusVisibility', () => {
     };
 
     act(() => { root.render(React.createElement(Probe)); });
-    expect(observed).toEqual([rowNode]);
-    expect(result.visible).toBe(false);
+    expect(observed).toEqual([messageColumn]);
+    expect(result.visible).toBe(true);
 
     act(() => { root.unmount(); });
     dom.restore();
   });
 
-  test('measures the chat column when no outer host is available', () => {
+  test('measures the outer chat row when no message column is available', () => {
     const { rowNode, teardown } = renderVisibility(
       { isMobile: false, isVSCode: false },
       REQUIRED,
@@ -265,7 +264,7 @@ describe('useWorkStatusVisibility', () => {
     const root: Root = createRoot(dom.container);
     const rowNode = {
       getBoundingClientRect: () => ({ width: REQUIRED }),
-      closest: () => null,
+      querySelector: () => null,
     } as unknown as HTMLDivElement;
     const result = { visible: false };
     let attach: (value: boolean) => void = () => undefined;
