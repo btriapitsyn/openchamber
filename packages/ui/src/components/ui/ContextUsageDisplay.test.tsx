@@ -57,6 +57,41 @@ describe('ContextUsageDisplay accessibility', () => {
     expect(markup).not.toContain('role="progressbar"');
   });
 
+  test('names the non-interactive desktop variant', () => {
+    useI18nStore.getState().setLocale('en');
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ContextUsageDisplay
+          totalTokens={32_200}
+          percentage={3.1}
+          contextLimit={1_000_000}
+        />
+      </I18nProvider>,
+    );
+
+    expect(markup).not.toContain('<button');
+    expect(markup).toContain('aria-label="Context usage"');
+    expect(markup).not.toContain('aria-valuetext');
+  });
+
+  test('names the non-interactive mobile variant', () => {
+    useI18nStore.getState().setLocale('en');
+    const markup = renderToStaticMarkup(
+      <I18nProvider>
+        <ContextUsageDisplay
+          totalTokens={32_200}
+          percentage={3.1}
+          contextLimit={1_000_000}
+          isMobile
+        />
+      </I18nProvider>,
+    );
+
+    expect(markup).not.toContain('<button');
+    expect(markup).toContain('aria-label="Context usage"');
+    expect(markup).not.toContain('aria-valuetext');
+  });
+
   test('localizes compact numbers and the complete accessible value', () => {
     const values = formatContextUsageValues(32_200, 3.1, 'pt-BR');
     const accessibleValue = formatMessage(ptBRDictionary, 'contextUsage.aria.value', values);

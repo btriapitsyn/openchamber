@@ -1,4 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import type { Theme } from '@/types/theme';
 import {
@@ -172,6 +174,17 @@ describe('active embedded session chat', () => {
   test('selects no tab when a chat is not active', () => {
     expect(getActiveEmbeddedSessionChatTab(tabs, null)).toBeNull();
     expect(getActiveEmbeddedSessionChatTab(tabs, 'missing-chat')).toBeNull();
+  });
+
+  test('loads the active subagent transcript for its context indicator', () => {
+    const source = readFileSync(join(process.cwd(), 'packages/ui/src/components/layout/ContextPanel.tsx'), 'utf8');
+    const indicator = source.slice(
+      source.indexOf('const SessionContextUsageIndicator'),
+      source.indexOf('const normalizeDirectoryKey'),
+    );
+
+    expect(indicator).toContain('useEnsureSessionMessages(sessionID, directory)');
+    expect(indicator).toContain('useSessionMessages(sessionID, directory)');
   });
 
   test('requests authoritative visibility from the same-origin parent', () => {

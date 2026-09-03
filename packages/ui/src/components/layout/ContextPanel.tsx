@@ -31,7 +31,7 @@ import { useBrowserFaviconStore } from '@/stores/useBrowserFaviconStore';
 import { useFilesViewTabsStore } from '@/stores/useFilesViewTabsStore';
 import { useUIStore, type ContextPanelMode, type PendingDiffScope } from '@/stores/useUIStore';
 import { markSessionViewed } from '@/sync/notification-store';
-import { setExternallyViewedSession, useDirectoryStore, useSessionMessages } from '@/sync/sync-context';
+import { setExternallyViewedSession, useDirectoryStore, useEnsureSessionMessages, useSessionMessages } from '@/sync/sync-context';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { resolveSessionContextSnapshot } from '@/components/chat/work-status/contextUsage';
 import { ContextPanelContent } from './ContextSidebarTab';
@@ -67,6 +67,7 @@ const SessionContextUsageIndicator: React.FC<{
   sessionID: string;
   directory: string;
 }> = ({ sessionID, directory }) => {
+  useEnsureSessionMessages(sessionID, directory);
   const messages = useSessionMessages(sessionID, directory);
   const providers = useConfigStore((state) => state.providers);
   const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
