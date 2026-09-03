@@ -99,7 +99,7 @@ type Args = { isMobile: boolean; isVSCode: boolean };
 const renderVisibility = (args: Args, rowWidth: number) => {
   const dom = installMinimalDom();
   const root: Root = createRoot(dom.container);
-  // No message column is present here, so the hook falls back to the row.
+  // No stable chat column is present here, so the hook falls back to the row.
   const rowNode = {
     getBoundingClientRect: () => ({ width: rowWidth }),
     querySelector: () => null,
@@ -160,15 +160,15 @@ describe('useWorkStatusVisibility', () => {
     teardown();
   });
 
-  test('measures the chat column instead of the outer chat area', () => {
-    // The overlay must protect the transcript column, not the wider container
-    // that also holds ContextPanel.
+  test('measures the stable chat column instead of a virtualized message row', () => {
+    // The overlay must protect the chat column, not a message row that can be
+    // replaced while scrolling.
     const dom = installMinimalDom();
     const root: Root = createRoot(dom.container);
-    const messageColumn = { getBoundingClientRect: () => ({ width: REQUIRED }) };
+    const chatColumn = { getBoundingClientRect: () => ({ width: REQUIRED }) };
     const rowNode = {
       getBoundingClientRect: () => ({ width: 0 }),
-      querySelector: () => messageColumn,
+      querySelector: () => chatColumn,
     } as unknown as HTMLDivElement;
     const result = { visible: false };
 
@@ -186,14 +186,14 @@ describe('useWorkStatusVisibility', () => {
     };
 
     act(() => { root.render(React.createElement(Probe)); });
-    expect(observed).toEqual([messageColumn]);
+    expect(observed).toEqual([chatColumn]);
     expect(result.visible).toBe(true);
 
     act(() => { root.unmount(); });
     dom.restore();
   });
 
-  test('measures the outer chat row when no message column is available', () => {
+  test('measures the outer chat row when no stable chat column is available', () => {
     const { rowNode, teardown } = renderVisibility(
       { isMobile: false, isVSCode: false },
       REQUIRED,

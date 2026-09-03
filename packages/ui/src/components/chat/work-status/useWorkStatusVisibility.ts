@@ -77,13 +77,12 @@ export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result
   // it to report that the overlay is not currently visible.
   const layoutAllows = !isMobile && !isVSCode && !contextPanelOpen;
 
-  // Measure the actual message column, not the wider chat area. The overlay
-  // must protect the content it covers, and the message column stays stable
-  // because the overlay never participates in flex layout.
+  // Measure the stable chat column, not a virtualized message row. The latter
+  // can be replaced while scrolling and must not change panel visibility.
   React.useEffect(() => {
     if (!rowNode || typeof ResizeObserver === 'undefined') return undefined;
 
-    const measured = rowNode.querySelector<HTMLElement>('.chat-message-column') ?? rowNode;
+    const measured = rowNode.querySelector<HTMLElement>('[data-composer-bound]') ?? rowNode;
     setRowWidth(measured.getBoundingClientRect().width);
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
