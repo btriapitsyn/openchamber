@@ -1,6 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { getDefaultTheme } from '@/lib/theme/themes';
 import type { Theme } from '@/types/theme';
 import {
@@ -177,7 +176,7 @@ describe('active embedded session chat', () => {
   });
 
   test('loads the active subagent transcript for its context indicator', () => {
-    const source = readFileSync(join(process.cwd(), 'packages/ui/src/components/layout/ContextPanel.tsx'), 'utf8');
+    const source = readFileSync(new URL('./ContextPanel.tsx', import.meta.url), 'utf8');
     const indicator = source.slice(
       source.indexOf('const SessionContextUsageIndicator'),
       source.indexOf('const normalizeDirectoryKey'),
