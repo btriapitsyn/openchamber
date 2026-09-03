@@ -54,7 +54,7 @@ changed.
   directory this panel reports about: a managed Chat reports about none, and
   that empty key answered "closed" for a context panel that was plainly open;
 - the chat column is unavailable, has not attached yet, or is narrower than
-  884px, the 300px panel, its 24px gap, plus the minimum 560px transcript width.
+  1024px, the 300px panel, its 24px gap, plus the minimum 700px transcript width.
 
 `ChatContainer` additionally suppresses it in mini-chat and in expanded-input
 mode. It remains available on a new-session draft: when the draft targets a
@@ -73,8 +73,8 @@ late.
 
 ### Why the chat area is measured
 
-The hook measures the chat column and requires 884px: 300px for the panel, a
-24px gap, and at least 560px of transcript. When the panel is visible, the
+The hook measures the chat column and requires 1024px: 300px for the panel, a
+24px gap, and at least 700px of transcript. When the panel is visible, the
 message and composer columns reserve the panel's 324px space and shift left
 into the otherwise empty gutter. The overlay never occupies flex space.
 

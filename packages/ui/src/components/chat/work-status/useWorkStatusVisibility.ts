@@ -10,7 +10,7 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 export const WORK_STATUS_PANEL_WIDTH = 300;
 
 /** Minimum transcript width kept visible beside the floating panel. */
-const WORK_STATUS_MIN_CHAT_WIDTH = 560;
+const WORK_STATUS_MIN_CHAT_WIDTH = 700;
 const WORK_STATUS_PANEL_GAP = 24;
 export const WORK_STATUS_REQUIRED_CHAT_WIDTH = WORK_STATUS_PANEL_WIDTH + WORK_STATUS_PANEL_GAP + WORK_STATUS_MIN_CHAT_WIDTH;
 
