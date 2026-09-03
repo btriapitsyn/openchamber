@@ -1552,7 +1552,13 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 	return (
 		<div ref={workStatusRowRef} className="flex h-full min-h-0 bg-background">
 		<ChatColumnSessionContext.Provider value={chatColumnSession}>
-		<div data-composer-bound className="relative flex min-w-0 flex-1 flex-col h-full bg-background">
+        <div
+            data-composer-bound
+            className={cn(
+                'relative flex min-w-0 flex-1 flex-col h-full bg-background',
+                showWorkStatusPanel && 'work-status-overlay-visible',
+            )}
+        >
 			{returnToParentButton}
 			{sessionSurface}
 

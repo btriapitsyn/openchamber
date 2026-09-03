@@ -54,7 +54,7 @@ changed.
   directory this panel reports about: a managed Chat reports about none, and
   that empty key answered "closed" for a context panel that was plainly open;
 - the chat column is unavailable, has not attached yet, or is narrower than
-  860px, the 300px panel plus the minimum 560px transcript width.
+  884px, the 300px panel, its 24px gap, plus the minimum 560px transcript width.
 
 `ChatContainer` additionally suppresses it in mini-chat and in expanded-input
 mode. It remains available on a new-session draft: when the draft targets a
@@ -74,8 +74,9 @@ late.
 ### Why the chat area is measured
 
 The hook measures the chat column and keeps at least 560px of transcript
-visible beside the 300px overlay. The overlay never occupies flex space, so
-the measurement is stable and does not change the outer layout.
+visible beside the 300px overlay. When the panel is visible, the message and
+composer columns reserve the panel's 324px space and shift left into the
+otherwise empty gutter. The overlay never occupies flex space.
 
 The context-panel check mirrors `ContextPanel`'s own derivation: `isOpen` alone
 is not enough, because a panel with no resolvable active tab renders nothing
