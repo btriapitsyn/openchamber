@@ -115,7 +115,8 @@
   .work-status-overlay-visible .chat-message-column {
     width: min(100%, 64rem, calc(100% - 324px));
     margin-left: auto;
-    margin-right: 324px;
+    margin-right: auto;
+    transform: translateX(calc(-324px / 2));
   }
 
   @media (min-width: 1024px) {
@@ -241,5 +242,6 @@
 .work-status-overlay-visible .chat-message-column {
   width: min(100%, 64rem, calc(100% - 324px));
   margin-left: auto;
-  margin-right: 324px;
+  margin-right: auto;
+  transform: translateX(calc(-324px / 2));
 }
