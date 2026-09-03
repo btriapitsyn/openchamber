@@ -22,9 +22,10 @@ mock.module('@/hooks/useEffectiveDirectory', () => ({
   useEffectiveDirectory: () => effectiveDirectory,
 }));
 
-const { useWorkStatusVisibility, WORK_STATUS_REQUIRED_ROW_WIDTH: REQUIRED } = await import(
+const { useWorkStatusVisibility } = await import(
   './useWorkStatusVisibility'
 );
+const REQUIRED = 900;
 
 /** Elements the stubbed ResizeObserver was asked to observe, in order. */
 let observed: unknown[] = [];
@@ -162,9 +163,7 @@ describe('useWorkStatusVisibility', () => {
   });
 
   test('prefers the marked chat area over the row it was handed', () => {
-    // The row is what the context panel squeezes, over an animation. Measuring
-    // it made the panel reappear only once that number caught up, so the chat
-    // widened first and narrowed again afterwards.
+    // The marked area is the stable host around the chat and context panel.
     const dom = installMinimalDom();
     const root: Root = createRoot(dom.container);
     const chatArea = { getBoundingClientRect: () => ({ width: REQUIRED }) };

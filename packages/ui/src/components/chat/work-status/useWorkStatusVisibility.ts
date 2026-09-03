@@ -9,19 +9,6 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
  */
 export const WORK_STATUS_PANEL_WIDTH = 300;
 
-/**
- * Minimum width the message column must keep for itself. Below this the panel
- * yields — a squeezed transcript costs more than the status it displaces.
- */
-const WORK_STATUS_MIN_CHAT_WIDTH = 560;
-
-/** The card's own horizontal margins (`ml-2` + `mr-4`). */
-const WORK_STATUS_PANEL_GUTTER = 8 + 16;
-
-/** Kept for persisted/layout compatibility; overlay placement no longer uses it. */
-export const WORK_STATUS_REQUIRED_ROW_WIDTH =
-  WORK_STATUS_PANEL_WIDTH + WORK_STATUS_PANEL_GUTTER + WORK_STATUS_MIN_CHAT_WIDTH;
-
 type Options = {
   isMobile: boolean;
   isVSCode: boolean;
@@ -33,10 +20,8 @@ type Result = {
   /**
    * Attach to the outer chat row so the host can be measured independently.
    *
-   * A callback ref, not an object ref: an object ref gives no signal when the
-   * node attaches, so a measuring effect that reads `.current` would silently
-   * observe nothing whenever the row mounts after the effect first ran, and
-   * would only recover on the next unrelated dependency change.
+    * A callback ref, not an object ref: an object ref gives no signal when the
+    * node attaches, so the host would not become ready when it mounts late.
    */
   rowRef: (node: HTMLDivElement | null) => void;
   visible: boolean;
@@ -88,18 +73,8 @@ export const useWorkStatusVisibility = ({ isMobile, isVSCode }: Options): Result
   // it to offer the panel as an overlay instead of pretending it is off.
   const layoutAllows = !isMobile && !isVSCode && !contextPanelOpen;
 
-  // Measures the chat AREA — the container holding the chat and the context
-  // panel together — not the chat row inside it.
-  //
-  // The row is what the context panel squeezes, and it squeezes it over a
-  // 200ms animation. Measuring the row therefore reported a width that was
-  // still catching up while the context panel collapsed, so this panel only
-  // reappeared once that number crossed the threshold: the chat widened first
-  // and narrowed again afterwards. The chat area's width does not move when
-  // the context panel opens, so the reading is correct the instant it closes.
-  //
-  // It is also the stable input the oscillation argument needs: this panel's
-  // own visibility cannot change the width being measured.
+  // Measure the chat area only to publish host readiness. The overlay never
+  // changes that area's width, so no size threshold is needed.
   React.useEffect(() => {
     if (!rowNode || typeof ResizeObserver === 'undefined') return undefined;
 

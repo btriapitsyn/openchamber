@@ -1616,7 +1616,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 the transcript and never participates in the outer flex row. */}
             {workStatusPanelMountable ? (
                 <WorkStatusPanel
-                    overlay
                     visible={showWorkStatusPanel}
                     sessionId={currentSessionId ?? null}
                     directory={workStatusDirectory ?? null}

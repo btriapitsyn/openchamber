@@ -71,19 +71,12 @@ whenever the row mounted after the effect first ran, and only recovered on the
 next unrelated dependency change — in practice, opening and closing the context
 panel. `useWorkStatusVisibility.test.ts` covers a row that attaches late.
 
-### Why the chat area is measured, not the chat column
+### Why the chat area is measured
 
-**The width test must observe something the panel cannot resize.** The chat
-column's width is an *output* of the visibility decision: hiding the panel
-widens the chat, which would re-satisfy a chat-width test and re-show the
-panel, which narrows the chat again — an infinite oscillation.
-
-It measures the **chat area** — the container holding the chat and the context
-panel together, marked `data-chat-area` in `MainLayout`. Measuring the chat row
-instead reported a width still catching up while the context panel animated
-closed, so the panel reappeared only once that number crossed the threshold:
-the chat widened and then narrowed again. The chat area does not move when the
-context panel opens. `useWorkStatusVisibility.test.ts` pins both properties.
+The hook measures the **chat area** — the container holding the chat and the
+context panel together, marked `data-chat-area` in `MainLayout`. It uses that
+stable node only to publish host readiness to the Header. The overlay never
+occupies flex space, so its width is not a visibility threshold.
 
 The context-panel check mirrors `ContextPanel`'s own derivation: `isOpen` alone
 is not enough, because a panel with no resolvable active tab renders nothing
@@ -258,7 +251,7 @@ describes the current frame, not a preference.
 ## Appearing and disappearing
 
 The panel collapses on the context panel's own curve and duration rather than
-unmounting, and slides out to the right with a fade when switched off. It stays
+unmounting, and fades and lifts when switched off. It stays
 mounted wherever it could ever show, so the collapse has something to animate;
 its content is dropped once the collapse finishes.
 
