@@ -73,10 +73,10 @@ late.
 
 ### Why the chat area is measured
 
-The hook measures the chat column and keeps at least 560px of transcript
-visible beside the 300px overlay. When the panel is visible, the message and
-composer columns reserve the panel's 324px space and shift left into the
-otherwise empty gutter. The overlay never occupies flex space.
+The hook measures the chat column and requires 884px: 300px for the panel, a
+24px gap, and at least 560px of transcript. When the panel is visible, the
+message and composer columns reserve the panel's 324px space and shift left
+into the otherwise empty gutter. The overlay never occupies flex space.
 
 The context-panel check mirrors `ContextPanel`'s own derivation: `isOpen` alone
 is not enough, because a panel with no resolvable active tab renders nothing
