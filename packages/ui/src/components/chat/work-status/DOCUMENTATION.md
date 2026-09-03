@@ -53,7 +53,8 @@ changed.
   the same key the rail and the panel use. It is deliberately **not** the
   directory this panel reports about: a managed Chat reports about none, and
   that empty key answered "closed" for a context panel that was plainly open;
-- the chat area is unavailable or has not attached yet.
+- the chat column is unavailable, has not attached yet, or is narrower than
+  860px, the 300px panel plus the minimum 560px transcript width.
 
 `ChatContainer` additionally suppresses it in mini-chat and in expanded-input
 mode. It remains available on a new-session draft: when the draft targets a
@@ -66,17 +67,15 @@ cannot leak into the draft while directory-independent sections remain
 available.
 
 `rowRef` is a **callback ref, not an object ref**. An object ref gives no signal
-when the node attaches, so the measuring effect read `.current`, found nothing
-whenever the row mounted after the effect first ran, and only recovered on the
-next unrelated dependency change — in practice, opening and closing the context
-panel. `useWorkStatusVisibility.test.ts` covers a row that attaches late.
+when the node attaches, so the panel would not become visible when the chat
+mounted late. `useWorkStatusVisibility.test.ts` covers a row that attaches
+late.
 
 ### Why the chat area is measured
 
-The hook measures the **chat area** — the container holding the chat and the
-context panel together, marked `data-chat-area` in `MainLayout`. It uses that
-stable node only to publish host readiness to the Header. The overlay never
-occupies flex space, so its width is not a visibility threshold.
+The hook measures the chat column and keeps at least 560px of transcript
+visible beside the 300px overlay. The overlay never occupies flex space, so
+the measurement is stable and does not change the outer layout.
 
 The context-panel check mirrors `ContextPanel`'s own derivation: `isOpen` alone
 is not enough, because a panel with no resolvable active tab renders nothing
