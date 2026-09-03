@@ -332,6 +332,7 @@ const createRuntimeApis = (gitOverrides: Partial<RuntimeAPIs['git']> = {}, githu
       unstageGitFile: unexpectedAsync,
       isLinkedWorktree: async () => false,
       getGitBranches: async () => createGitBranches(),
+      getGitUnpushedBranchCounts: async () => ({ counts: {} }),
       deleteGitBranch: unexpectedAsync,
       deleteRemoteBranch: unexpectedAsync,
       removeRemote: unexpectedAsync,

@@ -33,6 +33,7 @@ const createGitStub = (overrides: Partial<GitAPI> = {}): GitAPI => ({
   unstageGitFile: async () => {},
   isLinkedWorktree: async () => false,
   getGitBranches: async () => ({ all: ['main'], current: 'main', branches: {} }),
+  getGitUnpushedBranchCounts: async () => ({ counts: {} }),
   deleteGitBranch: async () => ({ success: true }),
   deleteRemoteBranch: async () => ({ success: true }),
   removeRemote: async () => ({ success: true }),

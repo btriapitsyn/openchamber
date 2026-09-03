@@ -132,7 +132,9 @@ let clipboardResult: { ok: boolean; error?: string } = { ok: true };
 let runtimeGitCapabilities: { createGitTag?: (...args: unknown[]) => Promise<unknown> } = {};
 
 mock.module('@/components/ui/button', () => ({
-  Button: React.forwardRef<HTMLButtonElement, MockButtonProps>(({ children, variant: _variant, size: _size, ...props }, ref) => {
+  Button: React.forwardRef<HTMLButtonElement, MockButtonProps>(({ children, ...props }, ref) => {
+    delete props.variant;
+    delete props.size;
     buttonRegistry.push({ children, ...props, text: textFromNode(children) });
     if (props['aria-controls']) {
       return React.createElement('button', { ...props, ref }, children);
