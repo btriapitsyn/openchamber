@@ -429,7 +429,7 @@ describe('NeuralWatt quota provider (VS Code parity)', () => {
     assert.equal(result.usage!.windows.credits_balance!.valueLabel, '$32.68');
   });
 
-  test('surfaces subscription and allowance windows (allowance keyed by period, key name in valueLabel)', async () => {
+  test('surfaces subscription and allowance windows (allowance keyed by period, percent value)', async () => {
     const payload = {
       ...DOCUMENTED_SUBSCRIPTION_PAYLOAD,
       balance: { credits_remaining_usd: 200 },
@@ -447,11 +447,11 @@ describe('NeuralWatt quota provider (VS Code parity)', () => {
     assert.ok(Math.abs((subWindow!.usedPercent as number) - (13.9023 / 20.0) * 100) < 1e-2);
 
     // Allowance window is keyed by the localized period label ("monthly");
-    // key name flows through valueLabel for identification.
+    // the usage value stays a percent — no key-name valueLabel.
     const allowWindow = result.usage!.windows.monthly;
     assert.ok(allowWindow);
     assert.equal(allowWindow!.usedPercent, 25);
-    assert.equal(allowWindow!.valueLabel, 'Prod');
+    assert.equal(allowWindow!.valueLabel, undefined);
     assert.equal(allowWindow!.resetAt, Date.parse('2026-08-01T00:00:00Z'));
 
     assert.equal(result.usage!.windows.credits_balance, undefined);
@@ -476,7 +476,7 @@ describe('NeuralWatt quota provider (VS Code parity)', () => {
     assert.ok(Math.abs((window!.usedPercent as number) - (25 / 55) * 100) < 1e-2);
     assert.equal(window!.windowSeconds, 30 * 86400);
     assert.equal(window!.resetAt, Date.parse('2026-08-01T00:00:00Z'));
-    assert.equal(window!.valueLabel, 'prod-key');
+    assert.equal(window!.valueLabel, undefined);
     assert.equal(result.usage!.windows.credits_balance, undefined);
   });
 
@@ -515,7 +515,7 @@ describe('NeuralWatt quota provider (VS Code parity)', () => {
     assert.ok(window);
     assert.equal(window!.windowSeconds, 604800);
     assert.equal(window!.resetAt, Date.parse('2026-07-04T00:00:00Z'));
-    assert.equal(window!.valueLabel, 'Prod');
+    assert.equal(window!.valueLabel, undefined);
   });
 
   test('uses daily as the allowance key when period is daily', async () => {
@@ -555,7 +555,7 @@ describe('NeuralWatt quota provider (VS Code parity)', () => {
     assert.equal(window!.usedPercent, 25);
   });
 
-  test('marks blocked allowance as 100% with valueLabel set', async () => {
+  test('marks blocked allowance as 100% with percent value', async () => {
     const payload = {
       balance: { credits_remaining_usd: 30 },
       subscription: null,
@@ -571,7 +571,7 @@ describe('NeuralWatt quota provider (VS Code parity)', () => {
     const window = result.usage!.windows.monthly;
     assert.ok(window);
     assert.equal(window!.usedPercent, 100);
-    assert.equal(window!.valueLabel, 'sample');
+    assert.equal(window!.valueLabel, undefined);
   });
 
   test('falls back to credits_balance when neither subscription nor allowance exists', async () => {

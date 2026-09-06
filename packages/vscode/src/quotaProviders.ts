@@ -2512,7 +2512,6 @@ const fetchNeuralwattQuota = async (): Promise<ProviderResult> => {
     const subscription = payload?.subscription ?? null;
     const inOverage = Boolean(subscription?.in_overage);
     const allowance = payload?.key?.allowance ?? null;
-    const keyName = payload?.key?.name ?? null;
     const creditsRemaining = toNumber(payload?.balance?.credits_remaining_usd);
 
     const windows: Record<string, UsageWindow> = {};
@@ -2558,19 +2557,17 @@ const fetchNeuralwattQuota = async (): Promise<ProviderResult> => {
         : (spent !== null && effectiveLimit !== null && effectiveLimit > 0
             ? Math.max(0, Math.min(100, (spent / effectiveLimit) * 100))
             : null);
-      // Window title is the localized period label (daily/weekly/monthly); key
-      // name is attached via valueLabel for identification (wafer precedent).
+      // Window title is the localized period label (daily/weekly/monthly); the
+      // usage value stays a percent so the UI's display-mode toggle applies.
       const periodKey = (period === 'daily' || period === 'weekly' || period === 'monthly' || period === 'month')
         ? (period === 'month' ? 'monthly' : period)
         : 'billing_cycle';
-      const labelName = typeof keyName === 'string' && keyName.trim() ? keyName.trim() : null;
       const resetAt = toTimestamp(allowance.reset_at);
       const windowSeconds = period ? neuralwattWindowSeconds(period) : null;
       windows[periodKey] = toUsageWindow({
         usedPercent,
         windowSeconds,
         resetAt,
-        ...(labelName ? { valueLabel: labelName } : {}),
       });
     } else if (creditsRemaining !== null) {
       windows.credits_balance = toUsageWindow({
