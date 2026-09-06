@@ -21,6 +21,10 @@ let sessionDeleteError: unknown | null = null
 let beforeSessionUpdateResolve: ((sessionId: string) => void) | null = null
 let beforeSessionDeleteResolve: ((sessionId: string) => void) | null = null
 let beforeControlPlaneMoveResolve: ((sessionId: string) => void) | null = null
+let beforeDirectoryAvailabilityResolve: (() => void) | null = null
+const controlPlaneMoveErrorsById = new Map<string, Error>()
+let globalHasLoaded = true
+const deletedChatDirectories: string[] = []
 const globalUpsertedSessions: unknown[] = []
 const globalUpsertedSessionBatches: Session[][] = []
 const globalRemovedSessionIds: string[] = []
@@ -76,6 +80,8 @@ const mockSdk = {
       moveSession: mock((params: Record<string, unknown>) => {
         replyCalls.push({ method: "controlPlane.moveSession", params })
         beforeControlPlaneMoveResolve?.(String(params.sessionID))
+        const error = controlPlaneMoveErrorsById.get(String(params.sessionID))
+        if (error) return Promise.resolve({ error, response: { status: 500 } })
         return Promise.resolve({})
       }),
     },
@@ -153,6 +159,9 @@ const mockSdk = {
 }
 
 // Mock opencodeClient singleton
+// SAFETY: the actions under test touch only the SDK surface mocked above.
+const actionSdk = mockSdk as unknown as OpencodeClient
+
 mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
     getScopedSdkClient: (directory: string) => {
@@ -160,7 +169,10 @@ mock.module("@/lib/opencode/client", () => ({
       return mockScopedClient
     },
     getDirectory: () => "/test/project",
-    getDirectoryAvailability: mock(async (directory: string) => directoryAvailability.get(directory) ?? "available"),
+    getDirectoryAvailability: mock(async (directory: string) => {
+      beforeDirectoryAvailabilityResolve?.()
+      return directoryAvailability.get(directory) ?? "available"
+    }),
     getFilesystemHome: mock(async () => "/home/test"),
     getSdkClient: () => mockSdk,
     getSessionMessages: mock((sessionId: string, _limit?: number, directory?: string | null) => {
@@ -285,6 +297,7 @@ mock.module("@/stores/useGlobalSessionsStore", () => ({
     getState: () => ({
       activeSessions: globalActiveSessions,
       archivedSessions: globalArchivedSessions,
+      hasLoaded: globalHasLoaded,
       upsertSession: (session: unknown) => {
         globalUpsertedSessions.push(session)
       },
@@ -383,7 +396,9 @@ mock.module("./send-failure-classification", () => ({
 }))
 
 mock.module("@/lib/chatDirectories", () => ({
-  deleteChatDirectory: async () => {},
+  deleteChatDirectory: async (directory: string) => {
+    deletedChatDirectories.push(directory)
+  },
 }))
 
 mock.module("./session-deletion-cleanup", () => ({
@@ -549,6 +564,10 @@ describe("confirmed session removal", () => {
     archiveBatchRequests.length = 0
     archiveBatchResponse = { status: 404, body: { error: 'not found' } }
     beforeControlPlaneMoveResolve = null
+    beforeDirectoryAvailabilityResolve = null
+    controlPlaneMoveErrorsById.clear()
+    globalHasLoaded = true
+    deletedChatDirectories.length = 0
   })
 
   test("does not remove live or persisted state when delete fails", async () => {
@@ -681,6 +700,58 @@ describe("confirmed session removal", () => {
     expect(globalRemovedSessionIds).toEqual(["session-a"])
     expect(replyCalls.filter((call) => call.method === "session.delete").map((call) => call.params.sessionID))
       .toEqual(["session-a", "session-b"])
+  })
+
+  const chatDirectory = "/home/user/.config/openchamber/chats/2026-09-05/session-abc"
+  const chatSession = (id: string, parentID?: string): Session => ({
+    id,
+    slug: id,
+    projectID: "project-chats",
+    directory: chatDirectory,
+    title: id,
+    version: "1",
+    time: { created: 1, updated: 1 },
+    parentID,
+  })
+
+  test("keeps a shared chat directory while another root session still uses it", async () => {
+    const root = chatSession("chat-root")
+    const fork = chatSession("chat-fork")
+    globalActiveSessions = [root, fork]
+    const source = createStore({}, { session: [root, fork] })
+    const { deleteSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[chatDirectory, source]]), () => chatDirectory)
+
+    expect(await deleteSession("chat-root")).toBe(true)
+    expect(deletedChatDirectories).toEqual([])
+
+    globalActiveSessions = [fork]
+    expect(await deleteSession("chat-fork")).toBe(true)
+    expect(deletedChatDirectories).toEqual([chatDirectory])
+  })
+
+  test("removes the chat directory with its last root even though the root's own subagents share it", async () => {
+    const root = chatSession("chat-root")
+    const subagent = chatSession("chat-subagent", "chat-root")
+    globalActiveSessions = [root, subagent]
+    const source = createStore({}, { session: [root, subagent] })
+    const { deleteSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[chatDirectory, source]]), () => chatDirectory)
+
+    expect(await deleteSession("chat-root")).toBe(true)
+    expect(deletedChatDirectories).toEqual([chatDirectory])
+  })
+
+  test("keeps the chat directory when the global cache cannot prove it is unused", async () => {
+    const root = chatSession("chat-root")
+    globalActiveSessions = [root]
+    globalHasLoaded = false
+    const source = createStore({}, { session: [root] })
+    const { deleteSession, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[chatDirectory, source]]), () => chatDirectory)
+
+    expect(await deleteSession("chat-root")).toBe(true)
+    expect(deletedChatDirectories).toEqual([])
   })
 
   test("does not archive locally until the server returns the archived session", async () => {
@@ -959,6 +1030,10 @@ describe("session restore (unarchive)", () => {
     sessionUpdateResult = {}
     beforeSessionUpdateResolve = null
     beforeControlPlaneMoveResolve = null
+    beforeDirectoryAvailabilityResolve = null
+    controlPlaneMoveErrorsById.clear()
+    globalHasLoaded = true
+    deletedChatDirectories.length = 0
   })
 
   test("does not restore locally until the server returns the restored session", async () => {
@@ -1663,6 +1738,138 @@ describe("optimisticSend target directory", () => {
     expect(targetStore.getState().session[0].revert?.messageID).toBe(revertedMessage.id)
     expect(targetStore.getState().message["session-reverted"]).toEqual([retainedMessage, revertedMessage])
     expect(targetStore.getState().part[revertedMessage.id]).toEqual([revertedPart])
+  })
+
+  test("runs appendSubmissions before revert cleanup and optimistic insertion", async () => {
+    const revertedMessage = { id: "msg_000000000000Reverted", role: "user", sessionID: "session-reverted", time: { created: 2 } } as Message
+    const targetStore = createStore({}, {
+      session: [{ id: "session-reverted", revert: { messageID: revertedMessage.id } } as Session],
+      message: { "session-reverted": [revertedMessage] },
+      part: { [revertedMessage.id]: [{ id: "part_2", type: "text", text: "old branch" } as Part] },
+    })
+    const childStores = createChildStores([["/target/project", targetStore]])
+    const callOrder: string[] = []
+
+    const { optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(
+      () => {
+        callOrder.push("optimistic-add")
+      },
+      () => {},
+      () => {
+        callOrder.push("revert-confirm")
+      },
+    )
+
+    await optimisticSend({
+      sessionId: "session-reverted",
+      directory: "/target/project",
+      content: "new branch",
+      providerID: "provider",
+      modelID: "model",
+      appendSubmissions: () => {
+        callOrder.push("append")
+      },
+      send: async () => {},
+    })
+
+    expect(callOrder).toEqual(["append", "revert-confirm", "optimistic-add"])
+  })
+
+  test("runs appendSubmissions once for a definite rejection", async () => {
+    const targetStore = createStore({})
+    const childStores = createChildStores([["/target/project", targetStore]])
+    let appendCalls = 0
+
+    const { optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(
+      () => {},
+      () => {},
+    )
+
+    await expect(optimisticSend({
+      sessionId: "session-rejected",
+      directory: "/target/project",
+      content: "hello",
+      providerID: "provider",
+      modelID: "model",
+      appendSubmissions: () => {
+        appendCalls += 1
+      },
+      send: async () => { throw new Error("rejected") },
+    })).rejects.toThrow("rejected")
+
+    expect(appendCalls).toBe(1)
+  })
+
+  test("runs appendSubmissions once for an ambiguous confirmation", async () => {
+    const targetStore = createStore({})
+    const childStores = createChildStores([["/target/project", targetStore]])
+    let appendCalls = 0
+
+    const { optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(
+      () => {},
+      () => {},
+      () => {},
+    )
+
+    await optimisticSend({
+      sessionId: "session-confirmed",
+      directory: "/target/project",
+      content: "hello",
+      providerID: "provider",
+      modelID: "model",
+      appendSubmissions: () => {
+        appendCalls += 1
+      },
+      send: async (messageID) => {
+        sessionMessagesResult = {
+          data: [{
+            info: { id: messageID, role: "user", sessionID: "session-confirmed", time: { created: 1 } } as Message,
+            parts: [{ id: "server-part", type: "text", text: "hello" } as Part],
+          }],
+        }
+        const error = new Error("Failed to send message (504): gateway timeout") as Error & { status?: number }
+        error.status = 504
+        throw error
+      },
+    })
+
+    expect(appendCalls).toBe(1)
+  })
+
+  test("does not run appendSubmissions when the runtime changes before dispatch", async () => {
+    const targetStore = createStore({})
+    const childStores = createChildStores([["/target/project", targetStore]])
+    let appendCalls = 0
+    const { switchRuntimeEndpoint } = await import("../lib/runtime-switch")
+    switchRuntimeEndpoint({ apiBaseUrl: "http://runtime-b.test", runtimeKey: "runtime-b" })
+
+    const { optimisticSend, setActionRefs, setOptimisticRefs } = await import("./session-actions")
+    setActionRefs(mockSdk as unknown as OpencodeClient, childStores, () => "/target/project")
+    setOptimisticRefs(
+      () => {},
+      () => {},
+    )
+
+    await expect(optimisticSend({
+      sessionId: "session-race",
+      directory: "/target/project",
+      runtimeKey: "runtime-a",
+      content: "hello",
+      providerID: "provider",
+      modelID: "model",
+      appendSubmissions: () => {
+        appendCalls += 1
+      },
+      send: async () => {},
+    })).rejects.toThrow("runtime changed")
+
+    expect(appendCalls).toBe(0)
   })
 
   test("rolls back a captured send when the runtime changes after optimistic insert", async () => {
@@ -2810,5 +3017,150 @@ describe("dismissOpenPermissionsForSession", () => {
     } finally {
       console.error = originalError
     }
+  })
+})
+
+describe("relocateSessionFromMissingDirectory", () => {
+  const missingWorktree = "/projects/main/.worktrees/gone"
+  const projectDirectory = "/projects/main"
+  const worktreeSession = (id: string, parentID: string | null, directory = missingWorktree, archived = 0): Session & { project: { worktree: string } } => ({
+    id,
+    slug: id,
+    projectID: "project-main",
+    directory,
+    title: id,
+    version: "1",
+    project: { worktree: projectDirectory },
+    time: { created: 1, updated: 1, archived },
+    parentID: parentID ?? undefined,
+  })
+  const mainProject: Project = { id: "project-main", worktree: projectDirectory, time: { created: 1, updated: 1 }, sandboxes: [] }
+  const stores = () => createChildStores([[missingWorktree, createStore({})], [projectDirectory, createStore({})]])
+  const movesOf = () => replyCalls
+    .filter((call) => call.method === "controlPlane.moveSession")
+    .map((call) => ({ sessionID: call.params.sessionID, destination: call.params.destination, moveChanges: call.params.moveChanges }))
+
+  beforeEach(() => {
+    replyCalls.length = 0
+    registeredSessionDirectories.length = 0
+    movedSessionDirectories.length = 0
+    globalUpsertedSessions.length = 0
+    globalActiveSessions = []
+    globalArchivedSessions.length = 0
+    openCodeProjects.length = 0
+    directoryAvailability.clear()
+    controlPlaneMoveErrorsById.clear()
+    beforeDirectoryAvailabilityResolve = null
+    runtimeKey = "default-runtime"
+  })
+
+  test("moves the whole stranded subtree, root first, to the project directory without carrying changes", async () => {
+    const root = worktreeSession("root", null)
+    const child = worktreeSession("child", "root")
+    const archivedChild = worktreeSession("archived-child", "root", missingWorktree, 42)
+    const elsewhere = worktreeSession("elsewhere", "root", projectDirectory)
+    globalActiveSessions = [root, child, elsewhere]
+    globalArchivedSessions.push(archivedChild)
+    openCodeProjects.push(mainProject)
+    directoryAvailability.set(missingWorktree, "missing")
+    const { relocateSessionFromMissingDirectory, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, stores(), () => missingWorktree)
+
+    const result = await relocateSessionFromMissingDirectory("root")
+
+    expect(result).toEqual({
+      status: "moved",
+      sourceDirectory: missingWorktree,
+      destinationDirectory: projectDirectory,
+      movedSessionIds: ["root", "child", "archived-child"],
+    })
+    expect(movesOf()).toEqual([
+      { sessionID: "root", destination: { directory: projectDirectory }, moveChanges: false },
+      { sessionID: "child", destination: { directory: projectDirectory }, moveChanges: false },
+      { sessionID: "archived-child", destination: { directory: projectDirectory }, moveChanges: false },
+    ])
+    expect(movedSessionDirectories).toEqual([
+      { sessionID: "root", directory: projectDirectory },
+      { sessionID: "child", directory: projectDirectory },
+      { sessionID: "archived-child", directory: projectDirectory },
+    ])
+  })
+
+  for (const availability of ["available", "unknown"] as const) {
+    test(`leaves the session alone when its directory is ${availability}`, async () => {
+      globalActiveSessions = [worktreeSession("root", null)]
+      openCodeProjects.push(mainProject)
+      directoryAvailability.set(missingWorktree, availability)
+      const { relocateSessionFromMissingDirectory, setActionRefs } = await import("./session-actions")
+      setActionRefs(actionSdk, stores(), () => missingWorktree)
+
+      expect(await relocateSessionFromMissingDirectory("root")).toEqual({ status: "unchanged" })
+      expect(movesOf()).toEqual([])
+    })
+  }
+
+  test("leaves a session that already lives in its project directory alone", async () => {
+    globalActiveSessions = [worktreeSession("root", null, projectDirectory)]
+    openCodeProjects.push(mainProject)
+    directoryAvailability.set(projectDirectory, "missing")
+    const { relocateSessionFromMissingDirectory, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, stores(), () => projectDirectory)
+
+    expect(await relocateSessionFromMissingDirectory("root")).toEqual({ status: "unchanged" })
+    expect(movesOf()).toEqual([])
+  })
+
+  test("never relocates to the filesystem root OpenCode reports for its global project", async () => {
+    const chatDirectory = "/Users/tester/.config/openchamber/chats/2026-09-05/session-gone"
+    const chat = { ...worktreeSession("chat", null, chatDirectory), projectID: "global", project: { worktree: "/" } }
+    globalActiveSessions = [chat]
+    openCodeProjects.push({ id: "global", worktree: "/", time: { created: 1, updated: 1 }, sandboxes: [] })
+    directoryAvailability.set(chatDirectory, "missing")
+    const { relocateSessionFromMissingDirectory, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, stores(), () => chatDirectory)
+
+    expect(await relocateSessionFromMissingDirectory("chat")).toEqual({ status: "unchanged" })
+    expect(movesOf()).toEqual([])
+  })
+
+  test("leaves the session alone when OpenCode knows no project for it", async () => {
+    globalActiveSessions = [worktreeSession("root", null)]
+    directoryAvailability.set(missingWorktree, "missing")
+    const { relocateSessionFromMissingDirectory, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, stores(), () => missingWorktree)
+
+    expect(await relocateSessionFromMissingDirectory("root")).toEqual({ status: "unchanged" })
+    expect(movesOf()).toEqual([])
+  })
+
+  test("reports the sessions already moved when a descendant move fails", async () => {
+    globalActiveSessions = [worktreeSession("root", null), worktreeSession("child", "root")]
+    openCodeProjects.push(mainProject)
+    directoryAvailability.set(missingWorktree, "missing")
+    controlPlaneMoveErrorsById.set("child", new Error("destination busy"))
+    const { relocateSessionFromMissingDirectory, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, stores(), () => missingWorktree)
+
+    const result = await relocateSessionFromMissingDirectory("root")
+
+    expect(result.status).toBe("failed")
+    expect(result.status === "failed" ? result.movedSessionIds : null).toEqual(["root"])
+    expect(movedSessionDirectories).toEqual([{ sessionID: "root", directory: projectDirectory }])
+  })
+
+  test("publishes nothing when the runtime changes while the directory is being probed", async () => {
+    globalActiveSessions = [worktreeSession("root", null)]
+    openCodeProjects.push(mainProject)
+    directoryAvailability.set(missingWorktree, "missing")
+    const { switchRuntimeEndpoint } = await import("../lib/runtime-switch")
+    beforeDirectoryAvailabilityResolve = () => {
+      switchRuntimeEndpoint({ apiBaseUrl: "http://other.test", runtimeKey: "other-runtime" })
+    }
+    const { relocateSessionFromMissingDirectory, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, stores(), () => missingWorktree)
+
+    expect(await relocateSessionFromMissingDirectory("root")).toEqual({ status: "stale" })
+    expect(movesOf()).toEqual([])
+    expect(movedSessionDirectories).toEqual([])
   })
 })

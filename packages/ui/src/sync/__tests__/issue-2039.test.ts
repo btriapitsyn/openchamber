@@ -82,6 +82,7 @@ mock.module("@/lib/opencode/client", () => ({
   opencodeClient: {
     getDirectory: () => null,
     getFilesystemHome: mock(async () => "/home/test"),
+    getFilesystemHomeInfo: async () => ({ home: "/home/test" }),
     createDirectory: mock(async (path: string) => ({ success: true, path })),
     setDirectory: mock(() => undefined),
   },
@@ -308,6 +309,7 @@ mock.module("../session-actions", () => ({
   unrevertSession: mock(async () => undefined),
   forkFromMessage: mock(async () => undefined),
   fetchMessagesForSession: mock(async () => undefined),
+  relocateSessionFromMissingDirectory: mock(async () => ({ status: "unchanged" })),
   getSessionLastAssistantModel: () => null,
   patchSessionMetadata: mock(async () => undefined),
   abortCurrentOperation: mock(async () => undefined),
