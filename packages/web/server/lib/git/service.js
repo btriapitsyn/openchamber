@@ -352,7 +352,7 @@ const buildGitEnv = async () => {
   return env;
 };
 
-const createGit = async (directory, { allowUnsafeSshCommand = false } = {}) => {
+const createGit = async (directory, { allowUnsafeSshCommand = false, allowUnsafeCredentialHelper = false } = {}) => {
   const env = await buildGitEnv();
   const spawnOptions = { windowsHide: true };
   const binary = getGitBinary();
@@ -360,8 +360,9 @@ const createGit = async (directory, { allowUnsafeSshCommand = false } = {}) => {
   const unsafe = hasCustomBinary || allowUnsafeSshCommand
     ? {
       ...(hasCustomBinary && { allowUnsafeCustomBinary: true }),
-      ...(allowUnsafeSshCommand && { allowUnsafeSshCommand: true }),
-    }
+        ...(allowUnsafeSshCommand && { allowUnsafeSshCommand: true }),
+        ...(allowUnsafeCredentialHelper && { allowUnsafeCredentialHelper: true }),
+      }
     : undefined;
   // Always pin simple-git to an explicit working directory. Omitting baseDir
   // makes simple-git use process.cwd(), which breaks when the OpenChamber
@@ -2146,7 +2147,7 @@ export async function hasLocalIdentity(directory) {
 }
 
 export async function setLocalIdentity(directory, profile) {
-  const git = await createGit(directory, { allowUnsafeSshCommand: true });
+  const git = await createGit(directory, { allowUnsafeSshCommand: true, allowUnsafeCredentialHelper: true });
 
   try {
 
