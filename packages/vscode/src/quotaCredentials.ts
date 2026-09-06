@@ -59,7 +59,7 @@ export const validateCredential = async (provider: ManagedProvider, credential: 
     const response = await fetch('https://ollama.com/settings', { headers: { Cookie: credential.cookie }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
     if (!response.ok || (response.status >= 300 && response.status < 400)) throw new Error('Ollama Cloud authentication failed');
     const html = await response.text();
-    if (!/Session\s+usage|Weekly\s+usage|Premium[^0-9]*[0-9]+\s*\/\s*[0-9]+/i.test(html)) throw new Error('Ollama Cloud usage data could not be parsed');
+    if (!/Session\s+usage|Weekly\s+usage|Premium[^0-9]*[0-9]+\s*\/\s*[0-9]+|Monthly\s+usage/i.test(html)) throw new Error('Ollama Cloud usage data could not be parsed');
   }
   if (provider === 'cursor') {
     if (!credential.accessToken && credential.refreshToken) {
