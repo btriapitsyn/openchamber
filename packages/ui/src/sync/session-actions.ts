@@ -1230,6 +1230,12 @@ function isChatDirectoryStillReferenced(directory: string, excludedIds: Readonly
 async function cleanupDeletedChatDirectory(plan: ChatDirectoryCleanupPlan): Promise<void> {
   if (!plan.directory || !plan.rootDeleted) return
   if (isChatDirectoryStillReferenced(plan.directory, plan.cascadeIds)) return
+  try {
+    await deleteChatDirectory(plan.directory)
+  } catch (error) {
+    console.warn("[session-actions] deleted chat directory cleanup failed", error)
+  }
+}
 
 const getActionSessionDirectory = (
   sessionId: string,
@@ -1237,12 +1243,6 @@ const getActionSessionDirectory = (
 ): string | null | undefined => (
   options?.directory !== undefined ? options.directory : getSessionDirectory(sessionId)
 )
-  try {
-    await deleteChatDirectory(plan.directory)
-  } catch (error) {
-    console.warn("[session-actions] deleted chat directory cleanup failed", error)
-  }
-}
 
 export type DeleteSessionOptions = {
   /**
