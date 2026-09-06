@@ -12,6 +12,7 @@
  */
 
 import React from 'react';
+import { useInputStore } from '@/sync/input-store';
 
 import {
     getChatDraftIdentityKey,
@@ -52,8 +53,8 @@ export interface ComposerDraftOptions {
     initialDraft: { text: string; identity: ChatDraftIdentity | null };
     /** Called when the composer switches to a different draft identity. */
     onIdentityChange?: () => void;
-    /** Called after a non-empty draft is restored, to select its text. */
-    onDraftRestored?: () => void;
+    /** Called after restoring a saved draft or fork replay, to select its text. */
+    onDraftRestored?: (source: 'saved' | 'fork') => void;
 }
 
 export interface ComposerDraftControls {
@@ -81,6 +82,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
     const skipNextPersistRef = React.useRef(false);
     const lastPersistedRef = React.useRef<Map<string, string>>(new Map());
     const currentIdentityRef = React.useRef<ChatDraftIdentity | null>(initialDraft.identity);
+    const pendingComposerRestore = useInputStore((state) => state.pendingComposerRestore);
 
     // Callbacks reach the effects through a ref so a caller passing inline
     // functions does not re-run the persistence effects on every render.
@@ -129,7 +131,7 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
             writeChatDraft(initialDraft.identity, '', []);
             return;
         }
-        requestAnimationFrame(() => callbacksRef.current.onDraftRestored?.());
+        requestAnimationFrame(() => callbacksRef.current.onDraftRestored?.('saved'));
         // Runs once; the initial draft is captured at mount by design.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [persistEnabled]);
@@ -160,9 +162,34 @@ export function useComposerDraft(options: ComposerDraftOptions): ComposerDraftCo
         setMessage(restored.text);
         confirmedMentionsRef.current = restored.confirmedMentions;
         if (restored.text) {
-            requestAnimationFrame(() => callbacksRef.current.onDraftRestored?.());
+            requestAnimationFrame(() => callbacksRef.current.onDraftRestored?.('saved'));
         }
     }, [clearPending, confirmedMentionsRef, identity, messageRef, persistEnabled, persistNow, setMessage]);
+
+    // The chat column can still show the source after navigation selects a fork.
+    // Apply its replay only after the destination's draft has been loaded above.
+    React.useEffect(() => {
+        if (!pendingComposerRestore) return;
+        const input = useInputStore.getState();
+        const pending = input.consumePendingComposerRestore(identity);
+        if (!pending) return;
+
+        clearPending();
+        skipNextPersistRef.current = true;
+        messageRef.current = pending.text;
+        confirmedMentionsRef.current = new Set();
+        setMessage(pending.text);
+        // Equal source/replay text need not trigger another render to persist.
+        if (persistEnabled) persistNow(pending.target, pending.text);
+        input.clearAttachedFiles();
+        for (const file of pending.files) input.addRestoredAttachment(file);
+        requestAnimationFrame(() => {
+            const current = currentIdentityRef.current;
+            if (current && getChatDraftIdentityKey(current) === getChatDraftIdentityKey(pending.target)) {
+                callbacksRef.current.onDraftRestored?.('fork');
+            }
+        });
+    }, [clearPending, confirmedMentionsRef, identity, messageRef, pendingComposerRestore, persistEnabled, persistNow, setMessage]);
 
     // A draft deleted elsewhere (session deleted, drafts cleared) clears the
     // composer if it is the one on screen.

@@ -183,6 +183,11 @@ and the send path reading the same grammar.
   draft. Two orderings are load-bearing: the debounced write is skipped once
   while a draft is being restored, and a deleted draft's empty signature is
   recorded before a queued write could resurrect it.
+  Fork replay text and files arrive in `input-store.pendingComposerRestore`,
+  addressed to the fork's runtime, directory, and session. The hook consumes
+  them after loading that identity's draft. Selection alone is not enough:
+  the deferred chat column can still show the source composer. Ordinary
+  pending text insertions keep their existing path in `ChatInput`.
 - `state/useDraftTarget.ts` — the draft can target a directory that does not
   exist yet (a worktree being created). It must survive not appearing in the
   branch list, or the selector snaps back to the project root mid-creation. It

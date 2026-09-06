@@ -50,6 +50,38 @@ const waitForReaderCount = async (count: number) => {
 
 const pngBytes = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
 
+describe("input-store composer restore", () => {
+  beforeEach(() => {
+    useInputStore.setState({ pendingComposerRestore: null })
+  })
+
+  test("only the destination can consume a restore, and only once", () => {
+    const target = { runtimeKey: "runtime", directory: "/repo", sessionId: "fork" }
+    const pending = { target, text: "replay", files: [] }
+    useInputStore.setState({ pendingComposerRestore: pending })
+    for (const identity of [
+      null,
+      { ...target, sessionId: "source" },
+      { ...target, directory: "/elsewhere" },
+      { ...target, runtimeKey: "other-runtime" },
+    ]) {
+      expect(useInputStore.getState().consumePendingComposerRestore(identity)).toBeNull()
+      expect(useInputStore.getState().pendingComposerRestore).toBe(pending)
+    }
+    expect(useInputStore.getState().consumePendingComposerRestore(target)).toBe(pending)
+    expect(useInputStore.getState().consumePendingComposerRestore(target)).toBeNull()
+  })
+
+  test("keeps ordinary pending text independent from fork restoration", () => {
+    const target = { runtimeKey: "runtime", directory: "/repo", sessionId: "fork" }
+    const pending = { target, text: "", files: [] }
+    useInputStore.setState({ pendingComposerRestore: pending })
+    useInputStore.getState().setPendingInputText("ordinary insertion", "append")
+    expect(useInputStore.getState().consumePendingInputText()).toEqual({ text: "ordinary insertion", mode: "append" })
+    expect(useInputStore.getState().consumePendingComposerRestore(target)).toBe(pending)
+  })
+})
+
 describe("input-store attachments", () => {
   beforeEach(() => {
     pendingReaders.length = 0

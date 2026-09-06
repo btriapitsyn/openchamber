@@ -1,6 +1,7 @@
 import { describe, expect, test, beforeEach, mock } from "bun:test"
 import type { PermissionRequest } from "@/types/permission"
 import type { QuestionRequest } from "@/types/question"
+import type { InputState } from "./input-store"
 
 // Mock SDK client that records permission.reply / question.reply calls
 const replyCalls: Array<{ method: string; params: Record<string, unknown> }> = []
@@ -18,6 +19,10 @@ const failingRevertSessionIds = new Set<string>()
 const failingUnrevertSessionIds = new Set<string>()
 let afterUnrevertCall: ((sessionId: string) => void) | null = null
 let sessionDeleteError: unknown | null = null
+let sessionForkResult: Session | null = null
+let sessionForkError: Error | null = null
+let beforeSessionForkResolve: (() => void) | null = null
+const selectedSessions: Array<{ sessionId: string | null; directoryHint?: string | null }> = []
 let beforeSessionUpdateResolve: ((sessionId: string) => void) | null = null
 let beforeSessionDeleteResolve: ((sessionId: string) => void) | null = null
 let beforeControlPlaneMoveResolve: ((sessionId: string) => void) | null = null
@@ -179,6 +184,13 @@ mock.module("@/lib/opencode/client", () => ({
       replyCalls.push({ method: "session.messages", params: { sessionID: sessionId, directory } })
       return Promise.resolve(sessionMessageRecords.get(sessionId) ?? [])
     }),
+    forkSession: mock(async (sessionId: string, messageId?: string, directory?: string | null): Promise<Session> => {
+      replyCalls.push({ method: "session.fork", params: { sessionID: sessionId, messageID: messageId, directory } })
+      beforeSessionForkResolve?.()
+      if (sessionForkError) throw sessionForkError
+      if (!sessionForkResult) throw new Error("Missing fork session fixture")
+      return sessionForkResult
+    }),
     replyToPermission: mock((requestId: string, reply: string, options?: { directory?: string | null }) => {
       replyCalls.push({ method: "permission.reply", params: { requestID: requestId, reply, directory: options?.directory } })
       return Promise.resolve(true)
@@ -236,7 +248,9 @@ mock.module("./session-ui-store", () => ({
         return null
       },
       currentSessionId: null,
-      setCurrentSession: () => {},
+      setCurrentSession: (sessionId: string | null, directoryHint?: string | null) => {
+        selectedSessions.push({ sessionId, directoryHint })
+      },
       setWorktreeMetadata: () => {},
       setSessionDirectory: (sessionID: string, directory: string) => {
         movedSessionDirectories.push({ sessionID, directory })
@@ -246,15 +260,27 @@ mock.module("./session-ui-store", () => ({
 }))
 
 // Mock useInputStore
-const inputState = {
+const inputState: Pick<InputState,
+  "pendingComposerRestore" | "pendingInputText" | "pendingInputMode" | "attachedFiles"
+  | "clearAttachedFiles" | "addRestoredAttachment"
+> = {
+  pendingComposerRestore: null,
   pendingInputText: "",
-  pendingInputMode: "normal" as const,
+  pendingInputMode: "replace",
   attachedFiles: [],
   clearAttachedFiles: () => {
     inputState.attachedFiles = []
   },
-  addRestoredAttachment: (attachment: never) => {
-    inputState.attachedFiles = [...inputState.attachedFiles, attachment]
+  addRestoredAttachment: (attachment) => {
+    inputState.attachedFiles = [...inputState.attachedFiles, {
+      id: attachment.url,
+      file: new File([], attachment.filename, { type: attachment.mimeType }),
+      dataUrl: attachment.url,
+      mimeType: attachment.mimeType,
+      filename: attachment.filename,
+      size: 0,
+      source: "server",
+    }]
   },
 }
 
@@ -2132,6 +2158,197 @@ describe("respondToPermission passes directory", () => {
   })
 })
 
+describe("forkFromMessage composer restore", () => {
+  const sourceSession: Session = {
+    id: "session-a",
+    slug: "source-session",
+    projectID: "project-a",
+    directory: "/test/project",
+    title: "Source session",
+    version: "1",
+    time: { created: 1, updated: 1 },
+  }
+  const forkedSession: Session = { ...sourceSession, id: "session-fork", slug: "forked-session" }
+  const textPart: Part = {
+    id: "part-text",
+    sessionID: sourceSession.id,
+    messageID: "message-fork",
+    type: "text",
+    text: "Replay this prompt",
+  }
+  const filePart: Part = {
+    id: "part-file",
+    sessionID: sourceSession.id,
+    messageID: "message-fork",
+    type: "file",
+    url: "data:image/png;base64,aW1hZ2U=",
+    mime: "image/png",
+    filename: "screenshot.png",
+  }
+  const restoredFile = { url: filePart.url, mimeType: filePart.mime, filename: filePart.filename }
+
+  beforeEach(() => {
+    replyCalls.length = 0
+    selectedSessions.length = 0
+    runtimeKey = "fork-runtime"
+    sessionForkResult = forkedSession
+    sessionForkError = null
+    beforeSessionForkResolve = null
+    inputState.pendingComposerRestore = null
+    inputState.pendingInputText = "Keep the source draft"
+    inputState.pendingInputMode = "append"
+    inputState.attachedFiles = [{
+      id: "source-attachment",
+      file: new File(["source"], "source.txt", { type: "text/plain" }),
+      dataUrl: "data:text/plain;base64,c291cmNl",
+      mimeType: "text/plain",
+      filename: "source.txt",
+      size: 6,
+      source: "local",
+    }]
+  })
+
+  for (const directory of ["/test/project", "/canonical/project"]) {
+    test(`stages the replay for the returned session in ${directory} without changing the source composer`, async () => {
+      sessionForkResult = { ...forkedSession, directory }
+      const source = createStore({}, {
+        session: [sourceSession],
+        part: { "message-fork": [textPart, filePart] },
+      })
+      const sourceInput = { ...inputState }
+      const { forkFromMessage, setActionRefs } = await import("./session-actions")
+      setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => "/other/project")
+
+      await forkFromMessage(sourceSession.id, "message-fork")
+
+      expect(replyCalls).toEqual([{
+        method: "session.fork",
+        params: { sessionID: sourceSession.id, messageID: "message-fork", directory: sourceSession.directory },
+      }])
+      expect(inputState.pendingComposerRestore).toEqual({
+        target: { runtimeKey: "fork-runtime", directory, sessionId: forkedSession.id },
+        text: "Replay this prompt",
+        files: [restoredFile],
+      })
+      expect(inputState.pendingInputText).toBe(sourceInput.pendingInputText)
+      expect(inputState.pendingInputMode).toBe(sourceInput.pendingInputMode)
+      expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+      expect(inputState.attachedFiles).toHaveLength(1)
+      expect(selectedSessions).toEqual([{ sessionId: forkedSession.id, directoryHint: directory }])
+      expect(source.getState().session).toEqual([sourceSession, sessionForkResult])
+    })
+  }
+
+  test("uses the returned project worktree when the fork has no directory", async () => {
+    const forkWithProject: Session & { project: { worktree: string } } = {
+      ...forkedSession, directory: "", project: { worktree: "/canonical/worktree" },
+    }
+    sessionForkResult = forkWithProject
+    const source = createStore({}, { session: [sourceSession], part: { "message-fork": [textPart] } })
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(inputState.pendingComposerRestore?.target.directory).toBe("/canonical/worktree")
+    expect(selectedSessions).toEqual([{ sessionId: forkedSession.id, directoryHint: "/canonical/worktree" }])
+  })
+
+  test("stages a file-only prompt with empty text without replacing source attachments", async () => {
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [filePart] },
+    })
+    const sourceInput = { ...inputState }
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(inputState.pendingComposerRestore).toEqual({
+      target: { runtimeKey: "fork-runtime", directory: sourceSession.directory, sessionId: forkedSession.id },
+      text: "",
+      files: [restoredFile],
+    })
+    expect(inputState.pendingInputText).toBe(sourceInput.pendingInputText)
+    expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+    expect(selectedSessions).toEqual([{ sessionId: forkedSession.id, directoryHint: sourceSession.directory }])
+  })
+
+  test("excludes synthetic text and files from the staged replay", async () => {
+    const syntheticFile: Part & { synthetic: boolean } = {
+      ...filePart,
+      id: "part-synthetic-file",
+      url: "file:///test/project/generated.txt",
+      mime: "text/plain",
+      filename: "generated.txt",
+      synthetic: true,
+    }
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [
+        { ...textPart, id: "part-synthetic-text", text: "Generated file contents", synthetic: true },
+        textPart,
+        syntheticFile,
+        filePart,
+      ] },
+    })
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(inputState.pendingComposerRestore).toEqual({
+      target: { runtimeKey: "fork-runtime", directory: sourceSession.directory, sessionId: forkedSession.id },
+      text: "Replay this prompt",
+      files: [restoredFile],
+    })
+  })
+
+  test("leaves input, selection, and sessions unchanged when the fork fails", async () => {
+    sessionForkError = new Error("fork failed")
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [textPart, filePart] },
+    })
+    const sourceState = source.getState()
+    const sourceInput = { ...inputState }
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await expect(forkFromMessage(sourceSession.id, "message-fork")).rejects.toThrow("fork failed")
+
+    expect(inputState).toEqual(sourceInput)
+    expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+    expect(selectedSessions).toEqual([])
+    expect(source.getState()).toBe(sourceState)
+  })
+
+  test("does not select, mutate, or stage a fork resolved after the runtime changes", async () => {
+    beforeSessionForkResolve = () => { runtimeKey = "other-runtime" }
+    const source = createStore({}, {
+      session: [sourceSession],
+      part: { "message-fork": [textPart, filePart] },
+    })
+    const sourceState = source.getState()
+    const sourceInput = { ...inputState }
+    const { forkFromMessage, setActionRefs } = await import("./session-actions")
+    setActionRefs(actionSdk, createChildStores([[sourceSession.directory, source]]), () => sourceSession.directory)
+
+    await forkFromMessage(sourceSession.id, "message-fork")
+
+    expect(replyCalls).toEqual([{
+      method: "session.fork",
+      params: { sessionID: sourceSession.id, messageID: "message-fork", directory: sourceSession.directory },
+    }])
+    expect(runtimeKey).toBe("other-runtime")
+    expect(inputState).toEqual(sourceInput)
+    expect(inputState.attachedFiles).toBe(sourceInput.attachedFiles)
+    expect(selectedSessions).toEqual([])
+    expect(source.getState()).toBe(sourceState)
+  })
+})
+
 describe("revertToMessage passes session directory", () => {
   beforeEach(() => {
     replyCalls.length = 0
@@ -2141,7 +2358,7 @@ describe("revertToMessage passes session directory", () => {
     failingRevertSessionIds.clear()
     Object.assign(inputState, {
       pendingInputText: "previous draft",
-      pendingInputMode: "normal" as const,
+      pendingInputMode: "replace",
       attachedFiles: [],
     })
   })
