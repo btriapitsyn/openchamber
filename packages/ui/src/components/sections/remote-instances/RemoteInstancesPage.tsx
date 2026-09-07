@@ -29,6 +29,7 @@ import {
   SETTINGS_SECTION_TITLE_CLASS,
   SETTINGS_FIELD_LABEL_CLASS,
   SETTINGS_SELECT_SIZE,
+  SETTINGS_NUMBER_INPUT_CLASS,
 } from '@/components/sections/shared/SettingsSection';
 import { SettingsInfoHint } from '@/components/sections/shared/SettingsInfoHint';
 import { useDesktopSshStore } from '@/stores/useDesktopSshStore';
@@ -69,7 +70,7 @@ import {
 } from '@/lib/desktopHosts';
 import { createRelayTunnelClient } from '@/lib/relay/tunnel-client';
 import { getDesktopLanAddress, isDesktopLocalOriginActive, isDesktopShell } from '@/lib/desktop';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { loadDesktopSettings } from '@/lib/persistence';
 import { getRuntimeApiBaseUrl, switchRuntimeEndpoint } from '@/lib/runtime-switch';
 
 const randomPort = (): number => {
@@ -353,20 +354,7 @@ const resolvePairingServerUrl = async (): Promise<string> => {
     return fallback;
   }
 
-  let response: Response;
-  try {
-    response = await runtimeFetch('/api/config/settings', {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-    });
-  } catch {
-    return fallback;
-  }
-  if (!response.ok) return fallback;
-
-  const settings = (await response.json().catch(() => null)) as null | {
-    desktopLanAccessActive?: unknown;
-  };
+  const settings = await loadDesktopSettings();
   if (settings?.desktopLanAccessActive !== true) {
     return fallback;
   }
@@ -2322,7 +2310,7 @@ export const RemoteInstancesPage: React.FC = () => {
               min={5}
               max={240}
               step={1}
-              className="w-16 tabular-nums"
+              className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
               value={draft.connectionTimeoutSec}
               onValueChange={(next) => {
                 updateDraft((current) => ({
@@ -2350,7 +2338,7 @@ export const RemoteInstancesPage: React.FC = () => {
               min={1}
               max={65535}
               step={1}
-              className="w-20 tabular-nums"
+              className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
               value={draft.remoteOpenchamber.preferredPort}
               onValueChange={(next) => {
                 updateDraft((current) => ({
@@ -2517,7 +2505,7 @@ export const RemoteInstancesPage: React.FC = () => {
                 min={1}
                 max={65535}
                 step={1}
-                className="w-20 tabular-nums"
+                className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
                 value={draft.localForward.preferredLocalPort}
                 onValueChange={(next) => {
                   updateDraft((current) => ({
@@ -2775,7 +2763,7 @@ export const RemoteInstancesPage: React.FC = () => {
                           min={1}
                           max={65535}
                           step={1}
-                          className="w-16 tabular-nums"
+                          className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
                           value={forward.localPort}
                           onValueChange={(next) => {
                             updateForward((item) => ({
@@ -2817,7 +2805,7 @@ export const RemoteInstancesPage: React.FC = () => {
                             min={1}
                             max={65535}
                             step={1}
-                            className="w-16 tabular-nums"
+                            className={cn(SETTINGS_NUMBER_INPUT_CLASS, 'tabular-nums')}
                             value={forward.remotePort}
                             onValueChange={(next) => {
                               updateForward((item) => ({

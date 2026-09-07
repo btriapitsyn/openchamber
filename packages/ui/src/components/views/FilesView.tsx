@@ -24,7 +24,10 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { CodeMirrorEditor } from '@/components/ui/CodeMirrorEditor';
 import { GoToLineDialog } from './GoToLineDialog';
+import { MarkdownPreviewSearch } from './MarkdownPreviewSearch';
 import { PreviewToggleButton } from './PreviewToggleButton';
+import { createFileContentPoller } from './fileContentPoller';
+import { hasFileStatChanged } from './fileStatChange';
 import { JsonTreeView } from '@/components/ui/JsonTreeView';
 import { SimpleMarkdownRenderer } from '@/components/chat/MarkdownRenderer';
 import { languageByExtension, loadLanguageByExtension } from '@/lib/codemirror/languageByExtension';
@@ -76,6 +79,7 @@ import { getDefaultTheme } from '@/lib/theme/themes';
 import { isBrowserClientRuntime, openDesktopFileInApp, openDesktopPath } from '@/lib/desktop';
 import { useOpenInAppsStore } from '@/stores/useOpenInAppsStore';
 import { useKeybind, useKeybinds } from '@/hooks/useKeybind';
+import { isEditableEventTarget } from '@/hooks/keyboard-shortcut-dom';
 import { formatShortcutForDisplay, getEffectiveShortcutCombo } from '@/lib/shortcuts';
 import { useI18n } from '@/lib/i18n';
 import { sessionEvents } from '@/lib/sessionEvents';
@@ -312,6 +316,7 @@ const isFileMissingError = (error: unknown): boolean => {
 };
 
 const MAX_VIEW_CHARS = 200_000;
+const MAX_CONTENT_POLL_BYTES = 200_000;
 type FileLineEnding = '\n' | '\r\n';
 
 // Fast cache key for pierre's line/highlight caches: content-derived (not a
@@ -929,6 +934,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const pendingDrawioPreviewFrameRef = React.useRef<number | null>(null);
   const diagramEditorRef = React.useRef<React.ComponentRef<typeof DiagramEditor>>(null);
   const lastLoadedFileStatRef = React.useRef<FileStatSnapshot | null>(null);
+  const lastLoadedFileContentRef = React.useRef('');
+  const lastLoadedFileRevisionRef = React.useRef(0);
   const activeFileLoadIdRef = React.useRef(0);
   const loadingFilePathRef = React.useRef<string | null>(null);
   const [fileContentRevision, setFileContentRevision] = React.useState(0);
@@ -968,6 +975,24 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
   const [copiedContent, setCopiedContent] = React.useState(false);
   const [copiedPath, setCopiedPath] = React.useState(false);
   const [isGoToLineOpen, setIsGoToLineOpen] = React.useState(false);
+  // In-preview find for the rendered Markdown preview (Ctrl/Cmd+F).
+  const [mdPreviewFindOpen, setMdPreviewFindOpen] = React.useState(false);
+  const [mdPreviewFindFocusNonce, setMdPreviewFindFocusNonce] = React.useState(0);
+  const mdPreviewContainerRef = React.useRef<HTMLDivElement | null>(null);
+  // Give the rendered preview keyboard focus (without scrolling it) unless the
+  // user is typing somewhere else, so Cmd/Ctrl+F opens the preview find bar
+  // right after a Markdown file opens and after any click inside it.
+  const focusMdPreviewContainer = React.useCallback((event?: React.MouseEvent<HTMLDivElement>) => {
+    const container = event?.currentTarget ?? mdPreviewContainerRef.current;
+    if (!container) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== container) {
+      if (isEditableEventTarget(active)) return;
+      if (container.contains(active)) return;
+    }
+    container.focus({ preventScroll: true });
+  }, []);
+  const mdFullscreenPreviewContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   const canCreateFile = Boolean(files.writeFile);
   const canCreateFolder = Boolean(files.createDirectory);
@@ -1553,10 +1578,16 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     };
   }, [currentDirectory, debouncedSearchQuery, searchFiles, showHidden, showGitignored]);
 
-  const readFile = React.useCallback(async (path: string): Promise<string> => {
+  // `fresh` bypasses the content cache and HTTP cache so external-change polling
+  // compares against the file on disk rather than a cached copy.
+  const readFile = React.useCallback(async (path: string, cacheOptions?: { fresh?: boolean }): Promise<string> => {
     const options = await resolveFileReadOptions(path);
     if (files.readFile) {
-      const result = await files.readFile(path, { ...options, directory: root || undefined });
+      const result = await files.readFile(path, {
+        ...options,
+        directory: root || undefined,
+        ...cacheOptions,
+      });
       return result.content ?? '';
     }
 
@@ -1570,7 +1601,10 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     if (root) {
       params.set('directory', root);
     }
-    const response = await runtimeFetch(`/api/fs/read?${params.toString()}`);
+    const response = await runtimeFetch(
+      `/api/fs/read?${params.toString()}`,
+      cacheOptions?.fresh ? { cache: 'no-store' } : undefined,
+    );
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: response.statusText }));
       throw new Error((error as { error?: string }).error || t('filesView.error.readFileFailed'));
@@ -1670,6 +1704,8 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
         return false;
       }
       setFileContent(draftContent);
+      lastLoadedFileContentRef.current = contentToWrite;
+      lastLoadedFileRevisionRef.current += 1;
       if (root && isPathWithinRoot(selectedFile.path, root)) {
         const relativePath = getDisplayPath(root, selectedFile.path);
         if (relativePath) {
@@ -1777,10 +1813,40 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       }
     },
     find_in_file: (event) => {
-      if (!(event.target instanceof Node) || !editorWrapperRef.current?.contains(event.target)) return false;
+      if (!(event.target instanceof Node)) return false;
+
+      // Rendered Markdown preview: open the in-preview find bar instead of the
+      // editor search. Registered through the keybind schema rather than a raw
+      // window listener so it cannot swallow Cmd/Ctrl+F app-wide while a
+      // Markdown file happens to be selected behind another panel tab.
+      if (isMarkdown && getMdViewMode() === 'preview') {
+        if (isMobile) return false;
+        const previewContainer = isFullscreen
+          ? mdFullscreenPreviewContainerRef.current
+          : mdPreviewContainerRef.current;
+        if (!previewContainer?.contains(event.target)) return false;
+        setMdPreviewFindOpen(true);
+        setMdPreviewFindFocusNonce((value) => value + 1);
+        return;
+      }
+
+      if (!editorWrapperRef.current?.contains(event.target)) return false;
       setIsSearchOpen(true);
     },
   });
+
+  const applyLoadedTextContent = React.useCallback((content: string) => {
+    const editorContent = normalizeEditorLineEndings(content);
+    lastLoadedFileContentRef.current = content;
+    lastLoadedFileRevisionRef.current += 1;
+    setLoadedFileLineEnding(detectFileLineEnding(content));
+    setFileContent(editorContent);
+    diagramXmlRef.current = editorContent;
+    diagramSavedXmlRef.current = editorContent;
+    setDraftContent(editorContent.length > MAX_VIEW_CHARS
+      ? `${editorContent.slice(0, MAX_VIEW_CHARS)}\n\n… truncated …`
+      : editorContent);
+  }, []);
 
   const loadSelectedFile = React.useCallback(async (node: FileNode) => {
     const loadId = activeFileLoadIdRef.current + 1;
@@ -1859,14 +1925,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           setLoadedFilePath(node.path);
           return;
         }
-        const editorContent = normalizeEditorLineEndings(content);
-        setLoadedFileLineEnding(detectFileLineEnding(content));
-        setFileContent(editorContent);
-        diagramXmlRef.current = editorContent;
-        diagramSavedXmlRef.current = editorContent;
-        setDraftContent(editorContent.length > MAX_VIEW_CHARS
-          ? `${editorContent.slice(0, MAX_VIEW_CHARS)}\n\n… truncated …`
-          : editorContent);
+        applyLoadedTextContent(content);
         setLoadedFilePath(node.path);
         void readFileStat(node.path)
           .then((stat) => {
@@ -1933,7 +1992,7 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           setFileLoading(false);
         }
       });
-  }, [expandPaths, isMobile, loadDirectory, readFile, readFileStat, removeOpenPathsByPrefix, resolveFileReadOptions, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
+  }, [applyLoadedTextContent, expandPaths, isMobile, loadDirectory, readFile, readFileStat, removeOpenPathsByPrefix, resolveFileReadOptions, root, runtime.isDesktop, searchQuery, setSelectedPath, t]);
 
   const ensurePathVisible = React.useCallback(async (targetPath: string, includeTarget: boolean) => {
     if (!root) {
@@ -2045,38 +2104,70 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     setFileContentRevision((revision) => revision + 1);
   }), [selectedFile?.path]);
 
-  // Poll open file for external changes.
-  // When a change is detected, reset loadedFilePath so the effect above
-  // triggers a single reload — no double-load.
+  // Poll open file for external changes. Metadata is compared first so an
+  // unchanged file never reads content, and a changed text file swaps content
+  // in place; only other files fall back to a full reload.
   React.useEffect(() => {
     if (!selectedFile?.path || loadedFilePath !== selectedFile.path) {
       return;
     }
 
+    const selectedPath = selectedFile.path;
+    // draw.io preview edits live in the XML refs, not the draft buffer, so an
+    // in-place content swap has to treat them as unsaved too.
+    const hasUnsavedChanges = () => isDirtyRef.current || (
+      isDrawioFile(selectedPath) && diagramXmlRef.current !== diagramSavedXmlRef.current
+    );
+    // Same exclusions as `isTextFile`: `isBinaryFile` covers PDFs, `isImageFile` covers SVG.
+    const contentPoller = !isBinaryFile(selectedPath) && !isImageFile(selectedPath) && !contentDetectedBinary
+      ? createFileContentPoller({
+          readContent: () => readFile(selectedPath, { fresh: true }),
+          getLoadedContent: () => lastLoadedFileContentRef.current,
+          getLoadedRevision: () => lastLoadedFileRevisionRef.current,
+          isDirty: hasUnsavedChanges,
+          applyContent: (content) => {
+            // An external write can turn a text file binary; reload so the
+            // binary guards run instead of pasting binary into the editor.
+            if (looksLikeBinaryText(content)) {
+              setLoadedFilePath(null);
+              return;
+            }
+            applyLoadedTextContent(content);
+          },
+        })
+      : null;
+
     let cancelled = false;
+    let polling = false;
     const interval = window.setInterval(() => {
-      if (document.hidden) {
+      if (document.hidden || polling) {
         return;
       }
 
-      void readFileStat(selectedFile.path)
-        .then((latestStat) => {
+      polling = true;
+      void readFileStat(selectedPath)
+        .then(async (latestStat) => {
           if (cancelled || !latestStat) {
             return;
           }
 
           const previousStat = lastLoadedFileStatRef.current;
-          if (!previousStat || previousStat.path !== selectedFile.path) {
+          if (!previousStat || previousStat.path !== selectedPath) {
             lastLoadedFileStatRef.current = latestStat;
             return;
           }
 
-          const changedByMtime = latestStat.mtimeMs !== undefined
-            && previousStat.mtimeMs !== undefined
-            && latestStat.mtimeMs !== previousStat.mtimeMs;
-          const changedBySize = latestStat.size !== previousStat.size;
+          if (!hasFileStatChanged(previousStat, latestStat)) {
+            return;
+          }
 
-          if (!changedByMtime && !changedBySize) {
+          if (contentPoller && latestStat.size <= MAX_CONTENT_POLL_BYTES) {
+            // Only an observed read retires the change; a dirty buffer or a
+            // failed read leaves the baseline so the next tick retries.
+            const observed = await contentPoller.poll();
+            if (observed && !cancelled) {
+              lastLoadedFileStatRef.current = latestStat;
+            }
             return;
           }
 
@@ -2088,14 +2179,18 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           // Reset loadedFilePath so the effect above triggers a single reload.
           setLoadedFilePath(null);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          polling = false;
+        });
     }, 2000);
 
     return () => {
       cancelled = true;
+      contentPoller?.dispose();
       window.clearInterval(interval);
     };
-  }, [loadedFilePath, readFileStat, selectedFile?.path]);
+  }, [applyLoadedTextContent, contentDetectedBinary, loadedFilePath, readFile, readFileStat, selectedFile?.path]);
 
   const discardAndContinue = React.useCallback(() => {
     const nextFile = pendingSelectFileRef.current;
@@ -2483,6 +2578,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
     return mdViewMode;
   }, [mdViewMode]);
 
+  const mdPreviewFocusTargetPath = selectedFile && isMarkdown && getMdViewMode() === 'preview' && !fileLoading
+    ? selectedFile.path
+    : null;
+  React.useEffect(() => {
+    if (!mdPreviewFocusTargetPath || isMobile) return;
+    focusMdPreviewContainer();
+  }, [focusMdPreviewContainer, isFullscreen, isMobile, mdPreviewFocusTargetPath]);
+
   const saveJsonViewMode = React.useCallback((mode: 'tree' | 'text') => {
     setJsonViewMode(mode);
     try {
@@ -2550,15 +2653,13 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
       return false;
     }
 
-    diagramXmlRef.current = xml;
-    diagramSavedXmlRef.current = xml;
-    setDraftContent(xml);
+    applyLoadedTextContent(xml);
     const stat = await readFileStat(path).catch(() => null);
     if (stat) {
       lastLoadedFileStatRef.current = stat;
     }
     return true;
-  }, [files, readFileStat, t]);
+  }, [applyLoadedTextContent, files, readFileStat, t]);
 
   React.useEffect(() => {
     return () => {
@@ -3366,6 +3467,23 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
           />
         )}
 
+        {isMarkdown && getMdViewMode() === 'preview' && (
+          withTooltip(t('filesView.editor.findInFile'),
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setMdPreviewFindOpen(true);
+                setMdPreviewFindFocusNonce((value) => value + 1);
+              }}
+              className="size-6 p-0 text-foreground opacity-100 transition-opacity hover:bg-transparent focus-visible:bg-transparent active:bg-transparent"
+              title={t('filesView.editor.findInFile')}
+            >
+              <Icon name="search" className="size-4" />
+            </Button>
+          )
+        )}
+
         {isMarkdown && getMdViewMode() === 'preview' && showMessageTTSButtons && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -3842,34 +3960,55 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               </div>
             </ErrorBoundary>
           ) : selectedFile && isMarkdown && getMdViewMode() === 'preview' ? (
-            <div className="oc-file-preview h-full overflow-auto p-3" ref={markdownPreviewRef}>
-              <FilePreviewCommentMenu
-                containerRef={markdownPreviewRef}
-                filePath={selectedFile.path}
-                fileContent={fileContent}
-              />
-              {fileContent.length > 500 * 1024 && (
-                <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
-                  {t('filesView.warning.largeFilePreviewLimited', { sizeKb: Math.round(fileContent.length / 1024) })}
-                </div>
-              )}
-              <ErrorBoundary
-                fallback={
-                  <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
-                    <div className="mb-1 font-medium text-destructive">{t('filesView.error.previewUnavailable')}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {t('filesView.error.switchToEditMode')}
-                    </div>
-                  </div>
-                }
+            <div className="relative h-full min-h-0">
+              <div
+                className="oc-file-preview h-full overflow-auto p-3 outline-none"
+                // Focusable so Cmd/Ctrl+F reaches the find bar: the keybind only
+                // fires when the event target sits inside this container, and a
+                // plain div never holds focus. -1 keeps it out of the tab order.
+                tabIndex={-1}
+                onMouseDown={focusMdPreviewContainer}
+                ref={(node) => {
+                  markdownPreviewRef.current = node;
+                  mdPreviewContainerRef.current = node;
+                }}
               >
-                <SimpleMarkdownRenderer
-                  content={fileContent}
-                  className="typography-markdown-body"
-                  stripFrontmatter
-                  enableFileReferences={false}
+                <FilePreviewCommentMenu
+                  containerRef={markdownPreviewRef}
+                  filePath={selectedFile.path}
+                  fileContent={fileContent}
                 />
-              </ErrorBoundary>
+                {fileContent.length > 500 * 1024 && (
+                  <div className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/10 px-3 py-2 text-sm text-status-warning">
+                    {t('filesView.warning.largeFilePreviewLimited', { sizeKb: Math.round(fileContent.length / 1024) })}
+                  </div>
+                )}
+                <ErrorBoundary
+                  fallback={
+                    <div className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2">
+                      <div className="mb-1 font-medium text-destructive">{t('filesView.error.previewUnavailable')}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {t('filesView.error.switchToEditMode')}
+                      </div>
+                    </div>
+                  }
+                >
+                  <SimpleMarkdownRenderer
+                    content={fileContent}
+                    className="typography-markdown-body"
+                    stripFrontmatter
+                    enableFileReferences={false}
+                  />
+                </ErrorBoundary>
+              </div>
+              {!isFullscreen && (
+                <MarkdownPreviewSearch
+                  containerRef={mdPreviewContainerRef}
+                  open={mdPreviewFindOpen}
+                  onOpenChange={setMdPreviewFindOpen}
+                  focusNonce={mdPreviewFindFocusNonce}
+                />
+              )}
             </div>
           ) : selectedFile && isHtml && htmlViewMode === 'preview' ? (
             isHtmlAssetAuthLoading ? (
@@ -4213,7 +4352,19 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
               ) : null}
             </div>
           ) : isMarkdown && getMdViewMode() === 'preview' ? (
-            <div className="oc-file-preview h-full overflow-auto p-4" ref={markdownPreviewRef}>
+            // The find bar is a sibling of the scroll container, never a child:
+            // inside it, its own "1/3" and "No matches" text would be walked and
+            // highlighted by the search it drives.
+            <div className="relative h-full min-h-0">
+            <div
+              className="oc-file-preview h-full overflow-auto p-4 outline-none"
+              tabIndex={-1}
+              onMouseDown={focusMdPreviewContainer}
+              ref={(node) => {
+                markdownPreviewRef.current = node;
+                mdFullscreenPreviewContainerRef.current = node;
+              }}
+            >
               {selectedFile ? (
                 <FilePreviewCommentMenu
                   containerRef={markdownPreviewRef}
@@ -4243,6 +4394,14 @@ export const FilesView: React.FC<FilesViewProps> = ({ mode = 'full' }) => {
                   enableFileReferences={false}
                 />
               </ErrorBoundary>
+            </div>
+              <MarkdownPreviewSearch
+                containerRef={mdFullscreenPreviewContainerRef}
+                open={mdPreviewFindOpen}
+                onOpenChange={setMdPreviewFindOpen}
+                focusNonce={mdPreviewFindFocusNonce}
+                className="right-4 top-16"
+              />
             </div>
           ) : canUseShikiFileView && textViewMode === 'view' ? (
             renderShikiFileView(selectedFile, isLargeFile ? fileContent : draftContent, fullscreenViewVirtualizer)

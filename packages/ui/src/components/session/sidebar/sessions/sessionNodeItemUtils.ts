@@ -19,6 +19,12 @@ export type SessionNodeChildRenderExtras = {
   subtreeContainsEditing: Set<string>;
   menuOpenSessionId: string | null;
   nodeStructureKey: string;
+  /**
+   * Bumped once a minute by the owning list so rows that render a relative
+   * timestamp ("5m") re-render and recompute it. Only the Recent list
+   * supplies it; elsewhere the rows carry no time-dependent label.
+   */
+  relativeTimeTick?: number;
 };
 
 export type SessionNodeRenderExtras<TNode = SessionNode> = SessionNodeChildRenderExtras & {
@@ -331,6 +337,25 @@ export const nodeHasPinnedMembershipChange = (
   };
 
   return visit(prevNode, nextNode);
+};
+
+/**
+ * Visibility classes for the row's right-edge badges (pending permissions /
+ * questions). The hover actions paint over the row's right edge, and they are
+ * also forced visible while the row menu is open — without hover, so the
+ * hover reveal padding does not apply and the actions would cover the badges.
+ * The badges therefore yield exactly like the date/branch metadata label:
+ * hidden while the actions are hover-revealed or the menu is open. Rows with
+ * always-visible actions reserve permanent padding instead, so their badges
+ * never conflict and must stay visible.
+ */
+export const selectRowBadgeVisibilityClass = (input: {
+  actionsAlwaysVisible: boolean;
+  menuOpen: boolean;
+  hideOnHoverClass: string;
+}): string => {
+  if (input.actionsAlwaysVisible) return '';
+  return `transition-opacity duration-150 ${input.menuOpen ? 'opacity-0' : input.hideOnHoverClass}`;
 };
 
 /**

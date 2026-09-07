@@ -1,6 +1,5 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
   formatShortcutForDisplay,
   getEffectiveShortcutCombo,
@@ -17,6 +16,7 @@ import { useSkillsCatalogStore } from '@/stores/useSkillsCatalogStore';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { Tooltip, TooltipTrigger } from '@/components/ui/tooltip';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import { AgentsSidebar } from '@/components/sections/agents/AgentsSidebar';
 import { AgentsPage } from '@/components/sections/agents/AgentsPage';
 import { BehaviorPage } from '@/components/sections/behavior/BehaviorPage';
@@ -310,24 +310,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
     setMobileStage(def.kind === 'split' ? 'page-sidebar' : 'page-content');
   }, [isMobile, setSettingsPage]);
-
-  const openThirdPartyProviderSetup = React.useCallback(async (providerId: string): Promise<boolean> => {
-    const configStore = useConfigStore.getState();
-    await configStore.loadProviders({ source: 'settings:third-party-provider-setup' });
-    const providerAvailable = useConfigStore.getState().providers.some(
-      (provider) => provider.id === providerId,
-    );
-    if (!providerAvailable) {
-      return false;
-    }
-
-    configStore.setSelectedProvider(providerId);
-    openPage('providers');
-    if (isMobile) {
-      setMobileStage('page-content');
-    }
-    return true;
-  }, [isMobile, openPage]);
 
   const activePageMeta = React.useMemo(() => {
     return getSettingsPageMeta(settingsSlug);
@@ -680,12 +662,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       case 'git':
         return <GitPage />;
       case 'integrations':
-        return (
-          <IntegrationsPage
-            onOpenProviderSetup={openThirdPartyProviderSetup}
-            onOpenPluginManager={() => openPage('plugins')}
-          />
-        );
+        return <IntegrationsPage />;
       case 'general':
       case 'appearance':
       case 'chat':
@@ -701,7 +678,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
       default:
         return null;
     }
-  }, [openChamberSectionBySlug, openPage, openThirdPartyProviderSetup, renderUnavailable, runtimeCtx, t]);
+  }, [openChamberSectionBySlug, renderUnavailable, runtimeCtx, t]);
 
   // Mobile: if opened via deep-link / palette to a non-home page, jump into it once.
   React.useEffect(() => {
@@ -965,7 +942,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
                               : <Icon name={iconName!} className="h-[18px] w-[18px] shrink-0 sm:h-4 sm:w-4" />}
                             <span className="flex items-center gap-1.5 whitespace-nowrap overflow-hidden transition-opacity duration-150 opacity-100">
                               <span className="typography-ui-label font-normal truncate">{getPageTitle(page.slug)}</span>
-                              {(page.slug === 'tunnel' || page.slug === 'integrations') && (
+                              {page.slug === 'tunnel' && (
                                 <span className="shrink-0 typography-micro px-1 rounded leading-none pb-px text-[var(--status-warning)] bg-[var(--status-warning)]/10">
                                   {t('settings.view.badge.beta')}
                                 </span>
@@ -1014,13 +991,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
         // No sidebar available; fall back to direct content.
         const fallback = renderPageContent(settingsSlug);
         return (
-          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background">
+          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
             <ErrorBoundary>{fallback}</ErrorBoundary>
           </ScrollableOverlay>
         );
       }
       return (
-        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background">
+        <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
           <ErrorBoundary>
             {renderPageSidebar(settingsSlug, { onItemSelect: handleMobilePageSidebarItemSelect })}
           </ErrorBoundary>
@@ -1032,7 +1009,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     const content = renderPageContent(settingsSlug);
 
     return (
-      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background">
+      <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
         <ErrorBoundary>{content}</ErrorBoundary>
       </ScrollableOverlay>
     );
@@ -1049,7 +1026,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
           <div className={cn('border-r', runtimeCtx.isVSCode ? 'bg-background' : 'bg-sidebar')} style={{ width: SETTINGS_SPLIT_SIDEBAR_WIDTH, minWidth: SETTINGS_SPLIT_SIDEBAR_WIDTH, borderColor: 'var(--interactive-border)' }}>
             <ErrorBoundary>{renderPageSidebar(settingsSlug, {})}</ErrorBoundary>
           </div>
-          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background">
+          <ScrollableOverlay outerClassName="flex-1 min-h-0" className="bg-background" disableHorizontal>
             <ErrorBoundary>{renderPageContent(settingsSlug)}</ErrorBoundary>
           </ScrollableOverlay>
         </div>
@@ -1057,9 +1034,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onClose, forceMobile
     }
 
     return (
-      <div className="h-full min-h-0 overflow-y-scroll overflow-x-hidden bg-background">
+      <ScrollableOverlay outerClassName="h-full min-h-0" className="bg-background" disableHorizontal>
         <ErrorBoundary>{renderPageContent(settingsSlug)}</ErrorBoundary>
-      </div>
+      </ScrollableOverlay>
     );
   };
 

@@ -129,6 +129,7 @@ const installRendererDom = () => {
             setTimeout,
             clearTimeout,
             requestAnimationFrame: (callback: FrameRequestCallback) => setTimeout(() => callback(Date.now()), 0),
+            cancelAnimationFrame: clearTimeout,
         },
     });
     Object.defineProperty(globalThis, 'MutationObserver', {
@@ -193,6 +194,8 @@ const fakeReact = {
         return hookStates[index] as { current: T };
     },
     memo: <T>(component: T): T => component,
+    createContext: <T>(defaultValue: T) => ({ Provider: 'provider', defaultValue }),
+    useContext: <T>(context: { defaultValue: T }): T => context.defaultValue,
 };
 
 const fakeJsx = (_type: string, props: FakeJsxProps | null, ...children: FakeElement[]): FakeElement => {
@@ -286,6 +289,7 @@ mock.module('./markdown/decorate', () => ({
         );
     },
     getMarkdownCodeText: () => '',
+    stabilizeMarkdownTableWidths: () => undefined,
 }));
 mock.module('./markdown/textPosition', () => ({ findTextPosition: () => null }));
 mock.module('./markdown/mermaidViewer', () => ({

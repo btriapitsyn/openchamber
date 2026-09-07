@@ -30,14 +30,14 @@ import { useI18n } from '@/lib/i18n';
 
 type GitHubTab = 'issues' | 'prs';
 
+export type GitHubWorktreeSelection =
+  | { type: 'issue'; item: GitHubIssue; includeDiff?: boolean }
+  | { type: 'pr'; item: GitHubPullRequestSummary; includeDiff?: boolean };
+
 interface GitHubIntegrationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (result: {
-    type: 'issue' | 'pr';
-    item: GitHubIssue | GitHubPullRequestSummary;
-    includeDiff?: boolean;
-  } | null) => void;
+  onSelect: (result: GitHubWorktreeSelection | null) => void;
 }
 
 interface ValidationResult {
@@ -285,7 +285,7 @@ export function GitHubIntegrationDialog({
   const isGitHubConnected = githubAuthChecked && githubAuthStatus?.connected === true;
 
   const openGitHubSettings = () => {
-    setSettingsPage('github');
+    setSettingsPage('integrations');
     setSettingsDialogOpen(true);
   };
 

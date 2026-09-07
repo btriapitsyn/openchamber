@@ -14,6 +14,7 @@ import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 import type { IconName } from '@/components/icon/icons';
 import { useI18n } from '@/lib/i18n';
+import { isIMECompositionEvent } from '@/lib/ime';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import {
     EMPTY_INLINE_COMMENT_DRAFTS,
@@ -136,7 +137,7 @@ const DraftPreviewEntry: React.FC<{
                     aria-label={t('chat.chatInput.contextPreview.remove')}
                     title={t('chat.chatInput.contextPreview.remove')}
                 >
-                    <Icon name="close" className="h-3 w-3" />
+                    <Icon name="delete-bin" className="h-3 w-3" />
                 </button>
             </div>
             <div className="space-y-2 px-3 py-2">
@@ -165,6 +166,10 @@ const DraftPreviewEntry: React.FC<{
                                 onChange={(event) => setEditText(event.target.value)}
                                 onBlur={commitEdit}
                                 onKeyDown={(event) => {
+                                    // An IME candidate is confirmed with Enter and
+                                    // abandoned with Escape; neither keystroke should
+                                    // commit or revert the edit.
+                                    if (isIMECompositionEvent(event)) return;
                                     if (event.key === 'Enter' && !event.shiftKey) {
                                         event.preventDefault();
                                         commitEdit();

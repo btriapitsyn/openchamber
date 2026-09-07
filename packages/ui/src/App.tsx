@@ -2,6 +2,7 @@ import React from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { ChatView } from '@/components/views/ChatView';
 import { AppLinkConfirmDialog } from '@/components/chat/AppLinkConfirmDialog';
+import { SharedTrustConfirmDialog } from '@/components/projects/SharedTrustConfirmDialog';
 import { FireworksProvider } from '@/contexts/FireworksContext';
 import { Toaster } from '@/components/ui/sonner';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ import { RuntimeAPIProvider } from '@/contexts/RuntimeAPIProvider';
 import { registerRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { useUIStore } from '@/stores/useUIStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
+import { useLinearAuthStore } from '@/stores/useLinearAuthStore';
 import { useFeatureFlagsStore } from '@/stores/useFeatureFlagsStore';
 import type { RuntimeAPIs } from '@/lib/api/types';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -247,6 +249,7 @@ function App({ apis }: AppProps) {
   const isSwitchingDirectory = useDirectoryStore((state) => state.isSwitchingDirectory);
   const [showMemoryDebug, setShowMemoryDebug] = React.useState(false);
   const refreshGitHubAuthStatus = useGitHubAuthStore((state) => state.refreshStatus);
+  const refreshLinearAuthStatus = useLinearAuthStore((state) => state.refreshStatus);
   const [isVSCodeRuntime, setIsVSCodeRuntime] = React.useState<boolean>(() => apis.runtime.isVSCode);
   // Embedded chats start inactive until the parent panel identifies the active
   // tab. Otherwise a newly loaded background tab can focus its composer first
@@ -345,7 +348,13 @@ function App({ apis }: AppProps) {
     }
 
     void refreshGitHubAuthStatus(apis.github, { force: true });
-  }, [apis.github, embeddedSessionChat, refreshGitHubAuthStatus]);
+    void refreshLinearAuthStatus(apis.linear, { force: true });
+    // `apis` is the same object across an instance switch, so without the epoch
+    // this ran once for the whole app session and both statuses kept describing
+    // whichever instance happened to be connected at startup. `isConnected` is
+    // here to re-ask, not to gate: both integrations answer independently of
+    // OpenCode, but a switch can race the transport and the retry is deduped.
+  }, [apis.github, apis.linear, embeddedSessionChat, isConnected, refreshGitHubAuthStatus, refreshLinearAuthStatus, runtimeEndpointEpoch]);
 
   useAppFontEffects();
 
@@ -905,6 +914,7 @@ function App({ apis }: AppProps) {
                   embeddedBackgroundWorkEnabled={embeddedBackgroundWorkEnabled}
                 />
                 <AppLinkConfirmDialog />
+                <SharedTrustConfirmDialog />
               </div>
             </TooltipProvider>
           </RuntimeAPIProvider>
@@ -949,6 +959,7 @@ function App({ apis }: AppProps) {
                   <MainLayout />
                   <Toaster />
                   <AppLinkConfirmDialog />
+                  <SharedTrustConfirmDialog />
                   {!isBootShell && (
                     <>
                       <ConfigUpdateOverlay />

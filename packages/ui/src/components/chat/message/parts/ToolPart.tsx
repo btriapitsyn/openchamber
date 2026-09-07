@@ -14,7 +14,6 @@ import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useSessionMessageRecords, useEnsureSessionMessages } from '@/sync/sync-context';
 import { useUIStore } from '@/stores/useUIStore';
-import { sessionEvents } from '@/lib/sessionEvents';
 import { ScrollShadow } from '@/components/ui/ScrollShadow';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui';
@@ -23,6 +22,7 @@ import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { copyTextToClipboard } from '@/lib/clipboard';
 import type { ToolPopupContent } from '../types';
 import { PlainDiffFallback } from './PlainDiffFallback';
+import { isToolDiffPreviewOversized } from './toolDiffPreview';
 import { lazyWithChunkRecovery } from '@/lib/chunkLoadRecovery';
 
 import {
@@ -57,10 +57,11 @@ import {
     extractFirstChangedLineFromDiff,
     getDiffPatchEntries,
     getFirstChangedLineFromMetadata,
-    getMutatedToolPaths,
     getPatchText,
     getPrimaryDiffFromMetadata,
     getPrimaryToolPath,
+    getToolFallbackDiff,
+    resolveToolQuickOpenTarget,
     type DiffPatchEntry,
 } from './toolDiffUtils';
 import { isEmbeddedSessionChat } from '@/components/layout/contextPanelEmbeddedChat';
@@ -70,6 +71,8 @@ import { toAbsoluteFilePath } from '@/lib/path-utils';
 import { getToolDescriptionFallback } from './toolRenderUtils';
 import { ApplyPatchFileButtons } from './ApplyPatchFileButtons';
 import { openApplyPatchFileInEditor } from './applyPatchEditorAction';
+
+type ToolJsonViewMode = 'summary' | 'formatted' | 'raw';
 
 const TOOL_ROW_TEXT_CLASS = '!text-[length:var(--text-meta)] !leading-5 sm:!leading-6 tracking-normal';
 const TOOL_ROW_TITLE_CLASS = cn('typography-meta font-medium', TOOL_ROW_TEXT_CLASS);
@@ -105,14 +108,6 @@ const normalizeToolName = (toolName: string | undefined | null): string => {
 
     return trimmed;
 };
-
-const GIT_REFRESH_MUTATING_TOOLS = new Set([
-    'bash',
-    'edit',
-    'write',
-    'apply_patch',
-    'patch',
-]);
 
 const formatDuration = (start: number, end?: number, now: number = Date.now()) => {
     const duration = Math.max(0, (end ?? now) - start);
@@ -658,28 +653,23 @@ const StreamingPlainTextOutput: React.FC<{ output: string }> = ({ output }) => {
     );
 };
 
-const ToolScrollableTextOutput: React.FC<{
-    output: string;
-    part: ToolPartType;
-    metadata: Record<string, unknown> | undefined;
-    input: Record<string, unknown> | undefined;
-    isStreaming?: boolean;
-}> = ({ output, part, metadata, input, isStreaming = false }) => {
+type JsonOutputResult = ReturnType<typeof tryParseJsonOutput>;
+
+const JsonToolOutput: React.FC<{
+    jsonResult: JsonOutputResult;
+    renderedOutput: string;
+}> = ({ jsonResult, renderedOutput }) => {
     const { t } = useI18n();
-    const renderedOutput = getToolOutputText(output, part, metadata);
-    const outputLanguage = getToolOutputLanguage(output, part, metadata, input);
-    const jsonResult = React.useMemo(() => tryParseJsonOutput(renderedOutput), [renderedOutput]);
-    const [jsonViewMode, setJsonViewMode] = React.useState<'summary' | 'formatted' | 'raw'>('summary');
+    const jsonViewMode = useUIStore((state) => state.toolJsonViewMode);
     const [copiedJson, setCopiedJson] = React.useState(false);
 
     React.useEffect(() => {
-        setJsonViewMode('summary');
         setCopiedJson(false);
     }, [renderedOutput]);
 
-    const handleJsonViewChange = React.useCallback((view: 'summary' | 'formatted' | 'raw', event: React.MouseEvent<HTMLButtonElement>) => {
+    const handleJsonViewChange = React.useCallback((view: ToolJsonViewMode, event: React.MouseEvent<HTMLButtonElement>) => {
         event.stopPropagation();
-        setJsonViewMode(view);
+        useUIStore.getState().setToolJsonViewMode(view);
     }, []);
 
     const handleCopyOutput = React.useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -695,6 +685,88 @@ const ToolScrollableTextOutput: React.FC<{
         }
     }, [renderedOutput, t]);
 
+    return (
+        <div className="tool-output-surface relative p-2 rounded-xl w-full min-w-0">
+            <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn('h-6 w-6 rounded-md text-muted-foreground hover:text-foreground', jsonViewMode === 'summary' && 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]')}
+                    onClick={(event) => handleJsonViewChange('summary', event)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    aria-label={t('chat.toolPart.showNavigableJson')}
+                    title={t('chat.toolPart.showNavigableJson')}
+                >
+                    <Icon name="list-unordered" className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn('h-6 w-6 rounded-md text-muted-foreground hover:text-foreground', jsonViewMode === 'formatted' && 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]')}
+                    onClick={(event) => handleJsonViewChange('formatted', event)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    aria-label={t('chat.toolPart.showFormattedJson')}
+                    title={t('chat.toolPart.showFormattedJson')}
+                >
+                    <Icon name="node-tree" className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn('h-6 w-6 rounded-md text-muted-foreground hover:text-foreground', jsonViewMode === 'raw' && 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]')}
+                    onClick={(event) => handleJsonViewChange('raw', event)}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    aria-label={t('chat.toolPart.showRawJson')}
+                    title={t('chat.toolPart.showRawJson')}
+                >
+                    <Icon name="code-box" className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 rounded-md bg-[var(--surface-elevated)]/80 text-muted-foreground hover:text-foreground"
+                    onClick={handleCopyOutput}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    aria-label={copiedJson ? t('chat.toolPart.copiedOutput') : t('chat.toolPart.copyOutput')}
+                    title={copiedJson ? t('chat.toolPart.copiedOutput') : t('chat.toolPart.copyOutput')}
+                >
+                    <Icon name={copiedJson ? 'check' : 'file-copy'} className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+            {jsonViewMode === 'summary' ? (
+                <JsonSummaryView data={jsonResult.data} />
+            ) : jsonViewMode === 'formatted' ? (
+                <JsonTreeViewer
+                    data={jsonResult.data}
+                    initiallyExpandedDepth={1}
+                    maxHeight="400px"
+                />
+            ) : (
+                <div className="typography-code pr-12 text-muted-foreground/90">
+                    <WorkerHighlightedCode
+                        language="json"
+                        code={renderedOutput}
+                        style={TOOL_COLLAPSED_CUSTOM_STYLE}
+                        codeStyle={CODE_TAG_PROPS.style}
+                        wrap
+                    />
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ToolScrollableTextOutput: React.FC<{
+    output: string;
+    part: ToolPartType;
+    metadata: Record<string, unknown> | undefined;
+    input: Record<string, unknown> | undefined;
+    isStreaming?: boolean;
+}> = ({ output, part, metadata, input, isStreaming = false }) => {
+    const renderedOutput = getToolOutputText(output, part, metadata);
+    const outputLanguage = getToolOutputLanguage(output, part, metadata, input);
+    const jsonResult = React.useMemo(() => tryParseJsonOutput(renderedOutput), [renderedOutput]);
+
     if (part.tool === 'bash' && isStreaming) {
         return (
             <div className="typography-code text-muted-foreground/90">
@@ -704,75 +776,7 @@ const ToolScrollableTextOutput: React.FC<{
     }
 
     if (jsonResult.isJson) {
-        return (
-            <div className="tool-output-surface relative p-2 rounded-xl w-full min-w-0">
-                <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn('h-6 w-6 rounded-md text-muted-foreground hover:text-foreground', jsonViewMode === 'summary' && 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]')}
-                        onClick={(event) => handleJsonViewChange('summary', event)}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        aria-label={t('chat.toolPart.showNavigableJson')}
-                        title={t('chat.toolPart.showNavigableJson')}
-                    >
-                        <Icon name="list-unordered" className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn('h-6 w-6 rounded-md text-muted-foreground hover:text-foreground', jsonViewMode === 'formatted' && 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]')}
-                        onClick={(event) => handleJsonViewChange('formatted', event)}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        aria-label={t('chat.toolPart.showFormattedJson')}
-                        title={t('chat.toolPart.showFormattedJson')}
-                    >
-                        <Icon name="node-tree" className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn('h-6 w-6 rounded-md text-muted-foreground hover:text-foreground', jsonViewMode === 'raw' && 'bg-[var(--interactive-selection)] text-[var(--interactive-selection-foreground)]')}
-                        onClick={(event) => handleJsonViewChange('raw', event)}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        aria-label={t('chat.toolPart.showRawJson')}
-                        title={t('chat.toolPart.showRawJson')}
-                    >
-                        <Icon name="code-box" className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 rounded-md bg-[var(--surface-elevated)]/80 text-muted-foreground hover:text-foreground"
-                        onClick={handleCopyOutput}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        aria-label={copiedJson ? t('chat.toolPart.copiedOutput') : t('chat.toolPart.copyOutput')}
-                        title={copiedJson ? t('chat.toolPart.copiedOutput') : t('chat.toolPart.copyOutput')}
-                    >
-                        <Icon name={copiedJson ? 'check' : 'file-copy'} className="h-3.5 w-3.5" />
-                    </Button>
-                </div>
-                {jsonViewMode === 'summary' ? (
-                    <JsonSummaryView data={jsonResult.data} />
-                ) : jsonViewMode === 'formatted' ? (
-                    <JsonTreeViewer
-                        data={jsonResult.data}
-                        initiallyExpandedDepth={1}
-                        maxHeight="400px"
-                    />
-                ) : (
-                    <div className="typography-code pr-12 text-muted-foreground/90">
-                        <WorkerHighlightedCode
-                            language="json"
-                            code={renderedOutput}
-                            style={TOOL_COLLAPSED_CUSTOM_STYLE}
-                            codeStyle={CODE_TAG_PROPS.style}
-                            wrap
-                        />
-                    </div>
-                )}
-            </div>
-        );
+        return <JsonToolOutput jsonResult={jsonResult} renderedOutput={renderedOutput} />;
     }
 
     return (
@@ -1208,11 +1212,15 @@ const renderAnimatedPathWithIcon = (path: string, animate = true, grow = true, s
 // Suspense fallback, mirroring the preview's own error fallback.
 const LazyToolPartDiffPreview = lazyWithChunkRecovery(() => import('./ToolPartDiffPreview'));
 
-const DiffPreview: React.FC<{ diff: string; diffViewMode: DiffViewMode }> = ({ diff, diffViewMode }) => (
-    <React.Suspense fallback={<PlainDiffFallback diff={diff} />}>
-        <LazyToolPartDiffPreview diff={diff} diffViewMode={diffViewMode} />
-    </React.Suspense>
-);
+const DiffPreview: React.FC<{ diff: string; diffViewMode: DiffViewMode }> = ({ diff, diffViewMode }) => {
+    if (isToolDiffPreviewOversized(diff)) return <PlainDiffFallback diff={diff} />;
+
+    return (
+        <React.Suspense fallback={<PlainDiffFallback diff={diff} />}>
+            <LazyToolPartDiffPreview diff={diff} diffViewMode={diffViewMode} />
+        </React.Suspense>
+    );
+};
 
 interface ToolExpandedContentProps {
     part: ToolPartType;
@@ -1248,12 +1256,7 @@ const ToolExpandedContent: React.FC<ToolExpandedContentProps> = React.memo(({
     });
     const outputString = isStreamingBash ? throttledOutputString : rawOutputString;
     const attachments = stateWithData.attachments;
-    const fileDiff = isRecord(metadata?.filediff) ? metadata.filediff : undefined;
-    const diffContent = getPatchText((metadata as { patch?: unknown } | undefined)?.patch)
-        ?? getPatchText(metadata?.diff)
-        ?? getPatchText(fileDiff?.patch)
-        ?? getPatchText(fileDiff?.diff)
-        ?? null;
+    const diffContent = getToolFallbackDiff(metadata) ?? null;
     const diffEntries = React.useMemo(
         () => getDiffPatchEntries(metadata, diffContent ?? undefined, (path) => getRelativePath(path, currentDirectory)),
         [currentDirectory, diffContent, metadata]
@@ -1702,19 +1705,16 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
 
     const status = state?.status as string | undefined;
     const isFinalized = status === 'completed' || status === 'error' || status === 'aborted' || status === 'failed' || status === 'timeout' || status === 'cancelled';
-    const isSuccessfullyFinalized = status === 'completed';
     const isError = status === 'error' || status === 'failed';
 
     const [activeLatched, setActiveLatched] = React.useState<boolean>(!isFinalized);
     const previousPartIdRef = React.useRef<string | undefined>(part.id);
-    const observedActiveGitToolRef = React.useRef(!isFinalized);
 
     React.useEffect(() => {
         if (previousPartIdRef.current === part.id) {
             return;
         }
         previousPartIdRef.current = part.id;
-        observedActiveGitToolRef.current = !isFinalized;
         // Reset latch only when tool identity changes.
         setActiveLatched(!isFinalized);
     }, [isFinalized, part.id]);
@@ -1724,36 +1724,6 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
             setActiveLatched(true);
         }
     }, [isFinalized]);
-
-    React.useEffect(() => {
-        if (!isFinalized) {
-            observedActiveGitToolRef.current = true;
-            return;
-        }
-
-        // Historical completed tools can remount when the timeline changes.
-        // Refresh only for a tool whose active state this instance observed.
-        const finalizedAfterObservedActive = observedActiveGitToolRef.current;
-        if (!finalizedAfterObservedActive) {
-            return;
-        }
-
-        if (!isSuccessfullyFinalized || !GIT_REFRESH_MUTATING_TOOLS.has(normalizedPartTool)) {
-            observedActiveGitToolRef.current = false;
-            return;
-        }
-        if (!currentDirectory) {
-            return;
-        }
-
-        observedActiveGitToolRef.current = false;
-        const paths = getMutatedToolPaths(normalizedPartTool, input, metadata)
-            .map((path) => getRelativePath(path, currentDirectory));
-        sessionEvents.requestGitRefresh({
-            directory: currentDirectory,
-            ...(paths.length > 0 ? { paths } : {}),
-        });
-    }, [currentDirectory, input, isFinalized, isSuccessfullyFinalized, metadata, normalizedPartTool]);
 
     const expandedContentRef = React.useRef<HTMLDivElement>(null);
 
@@ -2055,16 +2025,14 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
     const quickOpenTarget = React.useMemo<{ absolutePath: string; line?: number; toolDiff?: string; toolName: string } | null>(() => {
         if (isTaskTool) return null;
         const toolName = normalizedPartTool || part.tool;
-        const filePath = getPrimaryToolPath(toolName, input, metadata);
-        if (typeof filePath !== 'string') return null;
-        const absolutePath = toAbsoluteFilePath(currentDirectory, filePath);
-        let line: number | undefined;
-        let toolDiff: string | undefined;
-        if (toolName === 'edit' || toolName === 'multiedit' || toolName === 'apply_patch') {
-            line = getFirstChangedLineFromMetadata(toolName, metadata, filePath);
-            toolDiff = getPrimaryDiffFromMetadata(toolName, metadata, filePath);
-        }
-        return { absolutePath, line, toolDiff, toolName };
+        const target = resolveToolQuickOpenTarget(toolName, input, metadata);
+        if (!target) return null;
+        return {
+            absolutePath: toAbsoluteFilePath(currentDirectory, target.filePath),
+            line: target.line,
+            toolDiff: target.patch,
+            toolName,
+        };
     }, [isTaskTool, normalizedPartTool, part.tool, input, metadata, currentDirectory]);
 
     const openQuickTarget = () => {
@@ -2202,9 +2170,7 @@ const ToolPartContent: React.FC<ToolPartProps> = ({
                                         onClick={handleQuickOpen}
                                         className={cn(
                                             'flex-shrink-0 inline-flex h-4 w-4 items-center justify-center rounded transition-opacity hover:bg-[var(--surface-hover)]',
-                                            // Coarse pointers never hover, so the icon has to rest visible
-                                            // there or it stays invisible while remaining tappable.
-                                            'opacity-0 group-hover/tool:opacity-60 hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-60',
+                                            'opacity-60 hover:opacity-100 focus-visible:opacity-100',
                                         )}
                                         style={{ color: 'var(--tools-icon)' }}
                                         title={t('chat.toolPart.openFile')}

@@ -1,5 +1,5 @@
-import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import React from 'react';
+import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
   Dialog,
   DialogContent,
@@ -231,7 +231,7 @@ export function GitHubIssuePickerDialog({
   const repoUrl = result?.repo?.url ?? null;
 
   const openGitHubSettings = React.useCallback(() => {
-    setSettingsPage('github');
+    setSettingsPage('integrations');
     setSettingsDialogOpen(true);
   }, [setSettingsDialogOpen, setSettingsPage]);
 

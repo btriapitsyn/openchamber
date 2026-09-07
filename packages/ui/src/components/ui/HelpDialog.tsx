@@ -221,8 +221,8 @@ export const HelpDialog: React.FC = () => {
         </DialogHeader>
 
         <ScrollableOverlay
-          outerClassName="flex-1 min-h-0"
-          className="mt-3 pr-1"
+          outerClassName="flex-1 min-h-0 mt-3"
+          className="pr-1"
           disableHorizontal
         >
           <div className="space-y-4">

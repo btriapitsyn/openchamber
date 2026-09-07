@@ -1,5 +1,9 @@
 import { EventEmitter } from 'events';
 import path from 'path';
+import { copyFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mintOutsideFileGrant, registerFsRoutes } from './routes.js';
@@ -165,7 +169,7 @@ const registerUpload = (fsPromises) => {
   return getRoute('POST', '/api/fs/upload');
 };
 
-const registerRead = (fsPromises) => {
+const registerRead = (fsPromises, resolveProjectDirectory = async () => ({ directory: '/repo' })) => {
   const { app, getRoute } = createRouteRegistry();
   registerFsRoutes(app, {
     os: { homedir: () => '/home/user' },
@@ -177,7 +181,7 @@ const registerRead = (fsPromises) => {
     spawn: vi.fn(),
     crypto: { randomUUID: () => 'job-0' },
     normalizeDirectoryPath: (p) => p,
-    resolveProjectDirectory: async () => ({ directory: '/repo' }),
+    resolveProjectDirectory,
     buildAugmentedPath: () => '/usr/bin',
     resolveGitBinaryForSpawn: () => 'git',
     openchamberUserConfigRoot: '/home/user/.config',
@@ -682,8 +686,94 @@ describe('fs read', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('Read retry exhausted for /repo/file.txt'));
     warn.mockRestore();
   });
-});
 
+  it('reads files inside the workspace whose canonical path escapes through a symlinked directory', async () => {
+    // ~/test_folder -> /outside/shared: the requested path is lexically inside
+    // the workspace, the realpath is not. The read must follow the symlink
+    // instead of rejecting it as an outside path.
+    const fsPromises = {
+      realpath: vi.fn(async (targetPath) => {
+        if (targetPath === '/repo/link/file.txt') return '/outside/shared/file.txt';
+        return targetPath;
+      }),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 5 })),
+      readFile: vi.fn(async () => 'hello'),
+    };
+    const handler = registerRead(fsPromises);
+
+    const res = await callRead(handler, { path: '/repo/link/file.txt' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('hello');
+    expect(fsPromises.readFile).toHaveBeenCalledWith('/outside/shared/file.txt', 'utf8');
+  });
+
+  it('rejects reads of canonical paths outside the workspace that no workspace symlink reaches', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fsPromises = {
+      stat: vi.fn(async () => ({ isFile: () => true, size: 6 })),
+      readFile: vi.fn(async () => 'secret'),
+    };
+    const handler = registerRead(fsPromises);
+
+    const res = await callRead(handler, { path: '/outside/shared/file.txt' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'Path is outside of active workspace' });
+    expect(fsPromises.readFile).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('reads files under a symlinked project root addressed via the client-sent lexical directory', async () => {
+    // /home/user/proj -> /real/proj: the validated base is canonical but the
+    // client (and the file tree) address files under the lexical root.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fsPromises = {
+      realpath: vi.fn(async (targetPath) => {
+        if (targetPath === '/home/user/proj') return '/real/proj';
+        if (targetPath === '/home/user/proj/file.txt') return '/real/proj/file.txt';
+        return targetPath;
+      }),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 4 })),
+      readFile: vi.fn(async () => 'data'),
+    };
+    const handler = registerRead(fsPromises, async () => ({
+      directory: '/real/proj',
+      requestedDirectory: '/home/user/proj',
+    }));
+    const res = createMockResponse();
+
+    await handler({
+      query: { path: '/home/user/proj/file.txt' },
+      get: (name) => (name === 'x-opencode-directory' ? '/home/user/proj' : undefined),
+    }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('data');
+    expect(fsPromises.readFile).toHaveBeenCalledWith('/real/proj/file.txt', 'utf8');
+    warn.mockRestore();
+  });
+
+  it('rejects path traversal that escapes the workspace even when it passes through a symlinked directory', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fsPromises = {
+      realpath: vi.fn(async (targetPath) => {
+        if (targetPath === '/repo/link') return '/outside/shared';
+        return targetPath;
+      }),
+      stat: vi.fn(async () => ({ isFile: () => true, size: 6 })),
+      readFile: vi.fn(async () => 'secret'),
+    };
+    const handler = registerRead(fsPromises);
+
+    const res = await callRead(handler, { path: '/repo/sub/../../etc/passwd' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'Path is outside of active workspace' });
+    expect(fsPromises.readFile).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
 describe('fs reveal', () => {
   it.each([
     ['linux', 'xdg-open', ['/repo']],
@@ -1050,6 +1140,225 @@ describe('fs list symlink path space (issue 2627)', () => {
   }
 });
 
+describe('fs git-dirs', () => {
+  const createDirent = (name, type) => ({
+    name,
+    isDirectory: () => type === 'dir',
+    isFile: () => type === 'file',
+    isSymbolicLink: () => type === 'symlink',
+  });
+
+  // tree maps directory path -> [[name, type], ...]
+  const registerGitDirs = (tree, { stat, readdir: readdirOverride } = {}) => {
+    const { app, getRoute } = createRouteRegistry();
+    const readdir = readdirOverride ?? vi.fn(async (dirPath) => (tree[dirPath] ?? []).map(([name, type]) => createDirent(name, type)));
+    registerFsRoutes(app, {
+      os: { homedir: () => '/home/user' },
+      path: path.posix,
+      fsPromises: {
+        realpath: async (targetPath) => targetPath,
+        stat: stat ?? vi.fn(async (targetPath) => ({ isDirectory: () => Boolean(tree[targetPath]) })),
+        readdir,
+      },
+      spawn: vi.fn(),
+      crypto: { randomUUID: () => 'job-0' },
+      normalizeDirectoryPath: (p) => p,
+      resolveProjectDirectory: async () => ({ directory: '/workspace' }),
+      buildAugmentedPath: () => '/usr/bin',
+      resolveGitBinaryForSpawn: () => 'git',
+      openchamberUserConfigRoot: '/home/user/.config',
+    });
+    return { handler: getRoute('GET', '/api/fs/git-dirs'), readdir };
+  };
+
+  const callGitDirs = async (handler, query) => {
+    const res = createMockResponse();
+    await handler({ query: query ?? {} }, res);
+    return res;
+  };
+
+  it('returns an empty list when the root itself is a repository', async () => {
+    const { handler, readdir } = registerGitDirs({
+      '/workspace': [['.git', 'dir'], ['proj-a', 'dir']],
+      '/workspace/proj-a': [['.git', 'dir']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ path: '/workspace', repositories: [] });
+    expect(readdir).toHaveBeenCalledTimes(1);
+  });
+
+  it('finds nested repositories with a .git directory', async () => {
+    const { handler } = registerGitDirs({
+      '/workspace': [['proj-a', 'dir'], ['proj-b', 'dir']],
+      '/workspace/proj-a': [['.git', 'dir'], ['src', 'dir']],
+      '/workspace/proj-a/src': [['index.ts', 'file']],
+      '/workspace/proj-b': [['.git', 'dir']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repositories).toEqual([
+      { path: '/workspace/proj-a', name: 'proj-a' },
+      { path: '/workspace/proj-b', name: 'proj-b' },
+    ]);
+  });
+
+  it('treats a .git file (linked worktree) as a repository boundary', async () => {
+    const { handler } = registerGitDirs({
+      '/workspace': [['worktree', 'dir']],
+      '/workspace/worktree': [['.git', 'file']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repositories).toEqual([{ path: '/workspace/worktree', name: 'worktree' }]);
+  });
+
+  it('stops descending at repository boundaries', async () => {
+    const { handler, readdir } = registerGitDirs({
+      '/workspace': [['outer', 'dir']],
+      '/workspace/outer': [['.git', 'dir'], ['inner', 'dir']],
+      '/workspace/outer/inner': [['.git', 'dir']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repositories).toEqual([{ path: '/workspace/outer', name: 'outer' }]);
+    expect(readdir).not.toHaveBeenCalledWith('/workspace/outer/inner', { withFileTypes: true });
+  });
+
+  it('does not descend past the depth cap', async () => {
+    const { handler } = registerGitDirs({
+      '/workspace': [['a', 'dir']],
+      '/workspace/a': [['b', 'dir']],
+      '/workspace/a/b': [['c', 'dir']],
+      '/workspace/a/b/c': [['.git', 'dir'], ['d', 'dir']],
+      '/workspace/a/b/c/d': [['.git', 'dir']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repositories).toEqual([{ path: '/workspace/a/b/c', name: 'c' }]);
+  });
+
+  it('skips junk directories', async () => {
+    const { handler, readdir } = registerGitDirs({
+      '/workspace': [['node_modules', 'dir'], ['dist', 'dir'], ['real', 'dir']],
+      '/workspace/node_modules': [['dep', 'dir']],
+      '/workspace/node_modules/dep': [['.git', 'dir']],
+      '/workspace/dist': [['.git', 'dir']],
+      '/workspace/real': [['.git', 'dir']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repositories).toEqual([{ path: '/workspace/real', name: 'real' }]);
+    expect(readdir).not.toHaveBeenCalledWith('/workspace/node_modules', { withFileTypes: true });
+  });
+
+  it('never descends into symbolic links', async () => {
+    const { handler } = registerGitDirs({
+      '/workspace': [['link', 'symlink'], ['real', 'dir']],
+      '/workspace/real': [['.git', 'dir']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repositories).toEqual([{ path: '/workspace/real', name: 'real' }]);
+  });
+
+  it('returns repositories in deterministic order', async () => {
+    const { handler } = registerGitDirs({
+      '/workspace': [['zebra', 'dir'], ['alpha', 'dir']],
+      '/workspace/zebra': [['.git', 'dir']],
+      '/workspace/alpha': [['.git', 'dir']],
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.body.repositories.map((repo) => repo.name)).toEqual(['alpha', 'zebra']);
+  });
+
+  it('returns 400 when path is missing', async () => {
+    const { handler } = registerGitDirs({});
+
+    const res = await callGitDirs(handler, {});
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('Path is required');
+  });
+
+  it('returns 400 when the path is not a directory', async () => {
+    const { handler } = registerGitDirs({
+      '/workspace': [['file.txt', 'file']],
+    }, {
+      stat: vi.fn(async (targetPath) => ({ isDirectory: () => targetPath !== '/workspace/file.txt' })),
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace/file.txt' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'Specified path is not a directory', reason: 'not-directory' });
+  });
+
+  it('returns 404 when the directory does not exist', async () => {
+    const error = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const { handler } = registerGitDirs({}, {
+      stat: vi.fn(async () => { throw error; }),
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace/missing' });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toEqual({ error: 'Directory not found', reason: 'not-found' });
+  });
+
+  for (const code of ['EACCES', 'EPERM']) {
+    it(`maps root ${code} to the os-permission contract`, async () => {
+      const error = Object.assign(new Error('denied'), { code });
+      const { handler } = registerGitDirs({}, {
+        stat: vi.fn(async () => ({ isDirectory: () => true })),
+        readdir: vi.fn(async () => { throw error; }),
+      });
+
+      const res = await callGitDirs(handler, { path: '/workspace' });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.body).toEqual({ error: 'Access to directory denied', reason: 'os-permission' });
+    });
+  }
+
+  it('skips unreadable subtrees without failing the scan', async () => {
+    const tree = {
+      '/workspace': [['blocked', 'dir'], ['open', 'dir']],
+      '/workspace/open': [['.git', 'dir']],
+    };
+    const blockedError = Object.assign(new Error('denied'), { code: 'EACCES' });
+    const { handler } = registerGitDirs(tree, {
+      readdir: vi.fn(async (dirPath) => {
+        if (dirPath === '/workspace/blocked') {
+          throw blockedError;
+        }
+        return (tree[dirPath] ?? []).map(([name, type]) => createDirent(name, type));
+      }),
+    });
+
+    const res = await callGitDirs(handler, { path: '/workspace' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repositories).toEqual([{ path: '/workspace/open', name: 'open' }]);
+  });
+});
+
 describe('fs stat directory scope (issue 3019)', () => {
   // Wires the real project-directory runtime so the stat route resolves the
   // workspace exactly as the server does: explicit x-opencode-directory header
@@ -1080,7 +1389,11 @@ describe('fs stat directory scope (issue 3019)', () => {
       path: path.posix,
       fsPromises: {
         realpath: async (targetPath) => targetPath,
-        stat: async () => ({ isFile: () => true, size: 12 }),
+        stat: async (targetPath) => (
+          targetPath === '/repo-b'
+            ? { isDirectory: () => true, mtimeMs: 123 }
+            : { isFile: () => true, size: 12, mtimeMs: 456 }
+        ),
       },
       spawn: vi.fn(),
       crypto: { randomUUID: () => 'job-0' },
@@ -1122,5 +1435,183 @@ describe('fs stat directory scope (issue 3019)', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body.isFile).toBe(true);
+  });
+
+});
+
+describe('fs stat directory error handling', () => {
+  it('loads in Node without workspace node_modules, as packaged desktop does', async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'openchamber-fs-import-'));
+    try {
+      await mkdir(path.join(directory, 'fs'));
+      await copyFile(new URL('./routes.js', import.meta.url), path.join(directory, 'fs/routes.mjs'));
+      await copyFile(new URL('../path-realpath-cache.js', import.meta.url), path.join(directory, 'path-realpath-cache.js'));
+      expect(() => execFileSync('node', [
+        '--input-type=module',
+        '--eval',
+        'await import(process.argv[1])',
+        pathToFileURL(path.join(directory, 'fs/routes.mjs')).href,
+      ], { cwd: directory, stdio: 'pipe' })).not.toThrow();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('returns directory-missing reasons and permission errors for directory stat', async () => {
+    const { app, getRoute } = createRouteRegistry();
+    const enoent = Object.assign(new Error('missing'), { code: 'ENOENT' });
+    const enotdir = Object.assign(new Error('not a directory'), { code: 'ENOTDIR' });
+    const eacces = Object.assign(new Error('denied'), { code: 'EACCES' });
+    const stat = vi.fn(async (targetPath) => {
+      if (targetPath === '/repo-b') throw enoent;
+      if (targetPath === '/repo-b/file.txt/child') throw enotdir;
+      if (targetPath === '/repo-b/protected') throw eacces;
+      if (targetPath === '/repo-b/file.txt') return { isDirectory: () => false };
+      if (targetPath === '/repo-b/failure') throw new Error('unavailable');
+      return { isDirectory: () => true, mtimeMs: 1 };
+    });
+    const readdir = vi.fn(async () => []);
+    const callStat = async (handler, { headers = {}, query }) => {
+      const res = createMockResponse();
+      const req = {
+        url: `/api/fs/directory-stat?${new URLSearchParams(query)}`,
+        query,
+        get: (name) => headers[name.toLowerCase()] ?? undefined,
+      };
+      await handler(req, res);
+      return res;
+    };
+    registerFsRoutes(app, {
+      os: { homedir: () => '/home/user' },
+      path: path.posix,
+      fsPromises: {
+        realpath: async (targetPath) => targetPath,
+        stat,
+        readdir,
+      },
+      spawn: vi.fn(),
+      crypto: { randomUUID: () => 'job-0' },
+      normalizeDirectoryPath: (p) => p,
+      resolveProjectDirectory: async () => ({ directory: '/repo' }),
+      buildAugmentedPath: () => '/usr/bin',
+      resolveGitBinaryForSpawn: () => 'git',
+      openchamberUserConfigRoot: '/home/user/.config',
+    });
+    const handler = getRoute('GET', '/api/fs/directory-stat');
+
+    const available = await callStat(handler, { query: { path: '/other-project' } });
+    expect(available.statusCode).toBe(200);
+    expect(available.body).toEqual({ isDirectory: true });
+    expect(available.getHeader('Cache-Control')).toBe('no-store');
+    expect(stat).toHaveBeenCalledTimes(1);
+
+    const invalid = await callStat(handler, { query: { path: ' ' } });
+    expect(invalid.statusCode).toBe(400);
+    expect(stat).toHaveBeenCalledTimes(1);
+
+    for (const query of ['path=/repo&path=/other', 'path[]=/repo', '']) {
+      const malformed = createMockResponse();
+      await handler({ url: `/api/fs/directory-stat?${query}` }, malformed);
+      expect(malformed.statusCode).toBe(400);
+    }
+    expect(stat).toHaveBeenCalledTimes(1);
+
+    const missing = await callStat(handler, { headers: { 'x-opencode-directory': '/repo-b' }, query: { path: '/repo-b', directory: 'true' } });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.body).toEqual({ error: 'Directory not found', reason: 'not-found' });
+
+    const notDir = await callStat(handler, { headers: { 'x-opencode-directory': '/repo-b' }, query: { path: '/repo-b/file.txt/child', directory: 'true' } });
+    expect(notDir.statusCode).toBe(400);
+    expect(notDir.body).toEqual({ error: 'Specified path is not a directory', reason: 'not-directory' });
+
+    const denied = await callStat(handler, { headers: { 'x-opencode-directory': '/repo-b' }, query: { path: '/repo-b/protected', directory: 'true' } });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.body).toEqual({ error: 'Access to directory denied', reason: 'os-permission' });
+
+    const file = await callStat(handler, { query: { path: '/repo-b/file.txt' } });
+    expect(file.statusCode).toBe(400);
+    expect(file.body.reason).toBe('not-directory');
+
+    const failure = await callStat(handler, { query: { path: '/repo-b/failure' } });
+    expect(failure.statusCode).toBe(500);
+    expect(failure.body).toEqual({ error: 'Failed to stat directory' });
+    expect(readdir).not.toHaveBeenCalled();
+  });
+});
+
+describe('fs managed chats root', () => {
+  const registerWithChatsRoot = ({ managedChatsRoot, fsPromises = {} } = {}) => {
+    const { app, getRoute } = createRouteRegistry();
+    registerFsRoutes(app, {
+      os: { homedir: () => '/home/user' },
+      path: path.posix,
+      fsPromises: {
+        realpath: async (targetPath) => targetPath,
+        mkdir: async () => undefined,
+        ...fsPromises,
+      },
+      spawn: vi.fn(),
+      crypto: { randomUUID: () => 'job-0' },
+      normalizeDirectoryPath: (p) => p,
+      resolveProjectDirectory: async () => ({ directory: '/repo' }),
+      buildAugmentedPath: () => '/usr/bin',
+      resolveGitBinaryForSpawn: () => 'git',
+      openchamberUserConfigRoot: '/home/user/.config/openchamber',
+      managedChatsRoot,
+    });
+    return {
+      home: getRoute('GET', '/api/fs/home'),
+      mkdir: getRoute('POST', '/api/fs/mkdir'),
+    };
+  };
+
+  it('exposes the default chats root next to the home directory', async () => {
+    const { home } = registerWithChatsRoot();
+
+    const res = createMockResponse();
+    await home(undefined, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.home).toBe('/home/user');
+    expect(res.body.chatsRoot).toBe('/home/user/.config/openchamber/chats');
+  });
+
+  it('exposes a relocated chats root when OPENCHAMBER_CHATS_DIR is configured upstream', async () => {
+    const { home } = registerWithChatsRoot({ managedChatsRoot: '/srv/openchamber-chats' });
+
+    const res = createMockResponse();
+    await home(undefined, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.chatsRoot).toBe('/srv/openchamber-chats');
+  });
+
+  it('allows mkdir inside the relocated chats root outside the active workspace', async () => {
+    const mkdirCalls = [];
+    const { mkdir } = registerWithChatsRoot({
+      managedChatsRoot: '/srv/openchamber-chats',
+      fsPromises: {
+        mkdir: async (targetPath) => {
+          mkdirCalls.push(targetPath);
+        },
+      },
+    });
+
+    const res = createMockResponse();
+    await mkdir({ body: { path: '/srv/openchamber-chats/2026-08-25/session-a' } }, res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(mkdirCalls).toEqual(['/srv/openchamber-chats/2026-08-25/session-a']);
+  });
+
+  it('still rejects mkdir outside the workspace and all managed roots', async () => {
+    const { mkdir } = registerWithChatsRoot({ managedChatsRoot: '/srv/openchamber-chats' });
+
+    const res = createMockResponse();
+    await mkdir({ body: { path: '/etc/passwd-holder' } }, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'Path is outside of active workspace' });
   });
 });

@@ -122,6 +122,59 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
     const contentAnimationRef = React.useRef<AnimationPlaybackControls | null>(null);
     const contentMountedRef = React.useRef(false);
 
+    // The thinking body lives in a capped scroll box in every state. While it
+    // streams, the box follows its own end so the newest thought stays in
+    // view without growing the timeline; a wheel or drag upward inside the
+    // box hands the box to the reader, and returning to its end re-arms the
+    // follow. The chat's own end-follow is unaffected: the box keeps a fixed
+    // height once capped, so the timeline stops growing underneath it, and an
+    // upward wheel over the box scrolls the box first (it is a nested
+    // scroller) and only reaches the chat once the box sits at its top.
+    const scrollBoxRef = React.useRef<HTMLElement | null>(null);
+    const followBoxEndRef = React.useRef(true);
+    const touchStartYRef = React.useRef<number | null>(null);
+    const releaseBoxFollow = React.useCallback(() => {
+        followBoxEndRef.current = false;
+    }, []);
+    const handleBoxWheel = React.useCallback((event: React.WheelEvent<HTMLElement>) => {
+        if (event.deltaY < 0) releaseBoxFollow();
+    }, [releaseBoxFollow]);
+    const handleBoxTouchStart = React.useCallback((event: React.TouchEvent<HTMLElement>) => {
+        touchStartYRef.current = event.touches[0]?.clientY ?? null;
+    }, []);
+    const handleBoxTouchMove = React.useCallback((event: React.TouchEvent<HTMLElement>) => {
+        const startY = touchStartYRef.current;
+        const touch = event.touches[0];
+        if (startY === null || !touch) return;
+        // A downward finger drags the content up: the reader wants history.
+        if (touch.clientY > startY + 4) releaseBoxFollow();
+    }, [releaseBoxFollow]);
+    const handleBoxScroll = React.useCallback((event: React.UIEvent<HTMLElement>) => {
+        const node = event.currentTarget;
+        const distanceToEnd = node.scrollHeight - node.clientHeight - node.scrollTop;
+        followBoxEndRef.current = distanceToEnd <= 2;
+    }, []);
+
+    React.useEffect(() => {
+        if (!isStreaming) return;
+        followBoxEndRef.current = true;
+        const node = scrollBoxRef.current;
+        if (!node || !globalThis.ResizeObserver) return;
+        const content = node.firstElementChild;
+        if (!content) return;
+        const follow = () => {
+            if (!followBoxEndRef.current) return;
+            const end = node.scrollHeight - node.clientHeight;
+            if (end - node.scrollTop > 1) node.scrollTop = end;
+        };
+        // Growth lands asynchronously (markdown commits off the render pass),
+        // so the content box is observed rather than the text prop.
+        const observer = new ResizeObserver(follow);
+        observer.observe(content);
+        follow();
+        return () => observer.disconnect();
+    }, [isStreaming, shouldRenderExpandedContent]);
+
     const summary = React.useMemo(() => getReasoningSummary(text), [text]);
     const toggleAriaLabel = isExpanded
         ? t('chat.reasoningTrace.collapseAria')
@@ -261,7 +314,11 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
         };
     }, []);
 
-    if (!text || text.trim().length === 0) {
+    // While genuinely streaming, the busy header must appear as soon as
+    // reasoning starts even before the block-level reveal (commitStreamedText)
+    // has committed a first complete line — otherwise "Thinking…" never shows
+    // for the first moments of a short, single-paragraph response.
+    if (!isStreaming && (!text || text.trim().length === 0)) {
         return null;
     }
 
@@ -385,28 +442,22 @@ export const ReasoningTimelineBlock: React.FC<ReasoningTimelineBlockProps> = ({
                             className="pointer-events-none absolute left-0 top-0 bottom-0 w-px"
                             style={{ backgroundColor: 'var(--tools-border)' }}
                         />
-                        {isStreaming ? (
-                            // While streaming, let the thinking grow inline — no
-                            // capped, independently-scrollable box. The chat's own
-                            // auto-follow then handles following / releasing, so the
-                            // box never captures the wheel or fights the user's
-                            // scroll. The max-height scroll box is applied only once
-                            // the thinking has finished (the branch below).
-                            <div className="p-0">
-                                {reasoningBody}
-                            </div>
-                        ) : (
-                            <ScrollableOverlay
-                                as="div"
-                                outerClassName="max-h-80"
-                                className="p-0"
-                                useScrollShadow
-                                scrollShadowSize={36}
-                                userIntentOnly
-                            >
-                                {reasoningBody}
-                            </ScrollableOverlay>
-                        )}
+                        <ScrollableOverlay
+                            ref={scrollBoxRef}
+                            as="div"
+                            outerClassName="max-h-80"
+                            className="p-0"
+                            useScrollShadow
+                            scrollShadowSize={36}
+                            userIntentOnly
+                            data-scrollable="true"
+                            onWheel={handleBoxWheel}
+                            onTouchStart={handleBoxTouchStart}
+                            onTouchMove={handleBoxTouchMove}
+                            onScroll={handleBoxScroll}
+                        >
+                            <div>{reasoningBody}</div>
+                        </ScrollableOverlay>
                     </div>
                 </div>
             ) : null}
@@ -430,8 +481,12 @@ const ReasoningPart = React.memo(({
     const rawText = partWithText.text || partWithText.content || '';
     const textContent = React.useMemo(() => cleanReasoningText(rawText), [rawText]);
     const time = partWithText.time;
-    const canBeStreaming = streamPhase === undefined || streamPhase !== 'completed';
-    const isStreaming = chatRenderMode === 'live' && canBeStreaming && typeof time?.end !== 'number';
+    // Live activity derives from the live stream phase, never from the absence
+    // of persisted timing data: cached parts may lack `time.end` even though
+    // the message finished long ago (issue #2020). A part that has ended is
+    // never streaming, even while the rest of the message still streams.
+    const isLiveStreamPhase = streamPhase === 'streaming' || streamPhase === 'cooldown';
+    const isStreaming = chatRenderMode === 'live' && isLiveStreamPhase && typeof time?.end !== 'number';
     const throttledTextRaw = useStreamingTextThrottle({
         text: textContent,
         isStreaming,
@@ -441,9 +496,11 @@ const ReasoningPart = React.memo(({
     // never mutates in place.
     const throttledText = isStreaming ? commitStreamedText(throttledTextRaw) : throttledTextRaw;
 
-    // Show reasoning even if time.end isn't set yet (during streaming)
-    // Only hide if there's no text content
-    if (!throttledText || throttledText.trim().length === 0) {
+    // Show reasoning even if time.end isn't set yet (during streaming).
+    // While genuinely streaming, keep the block mounted even before the
+    // block-level reveal commits a first line, so the busy header appears
+    // immediately instead of waiting on committed text.
+    if (!isStreaming && (!throttledText || throttledText.trim().length === 0)) {
         return null;
     }
 

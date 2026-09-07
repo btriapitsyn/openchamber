@@ -3,6 +3,7 @@ import React from 'react';
 import { FileTypeIcon } from '@/components/icons/FileTypeIcon';
 import { DiffViewIcon } from '@/components/icons/DiffIcon';
 import { Button } from '@/components/ui/button';
+import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import { SortableTabsStrip } from '@/components/ui/sortable-tabs-strip';
 import { PullRequestView } from '@/components/views/PullRequestView';
 import { TerminalView } from '@/components/views/TerminalView';
@@ -15,6 +16,9 @@ const WalkthroughView = lazyWithChunkRecovery(() => import('@/components/views/w
 const DiffView = lazyWithChunkRecovery(() => import('@/components/views/DiffView').then((m) => ({ default: m.DiffView })));
 const FilesView = lazyWithChunkRecovery(() => import('@/components/views/FilesView').then((m) => ({ default: m.FilesView })));
 const GitView = lazyWithChunkRecovery(() => import('@/components/views/GitView').then((m) => ({ default: m.GitView })));
+// The Linear rail icon stays hidden until a workspace is connected, so most
+// users never render this panel; keep it out of the main bundle.
+const LinearIssuesView = lazyWithChunkRecovery(() => import('@/components/views/LinearIssuesView').then((m) => ({ default: m.LinearIssuesView })));
 const PlanView = lazyWithChunkRecovery(() => import('@/components/views/PlanView').then((m) => ({ default: m.PlanView })));
 import { ProjectContextPanel } from './RightSidebarTabs';
 import { SidebarFilesTree } from './SidebarFilesTree';
@@ -118,6 +122,7 @@ const getModeLabel = (
   if (mode === 'browser') return t('contextPanel.mode.browser');
   if (mode === 'git') return t('layout.rightSidebar.git');
   if (mode === 'pr') return t('contextPanel.mode.pr');
+  if (mode === 'linear') return t('contextPanel.mode.linear');
   if (mode === 'notes') return t('contextRail.surface.notes');
   if (mode === 'terminal') return t('layout.mainTab.terminal');
   return t('contextPanel.mode.context');
@@ -210,6 +215,10 @@ const getTabIcon = (
 
   if (tab.mode === 'pr') {
     return <Icon name="github" className="h-3.5 w-3.5" />;
+  }
+
+  if (tab.mode === 'linear') {
+    return <Icon name="linear" className="h-3.5 w-3.5" />;
   }
 
   if (tab.mode === 'notes') {
@@ -671,8 +680,8 @@ export const ContextPanel: React.FC = () => {
     }
 
     // Terminal owns Escape so the PTY receives it (e.g. Vim Normal mode).
-    // ghostty-web listens in the bubble phase; stopping capture here would
-    // swallow the key before the terminal ever sees it (issue #2644).
+    // The terminal input listens in the bubble phase; stopping capture here
+    // would swallow the key before the terminal ever sees it (issue #2644).
     if (isTerminalEventTarget(event.target)) {
       return;
     }
@@ -939,6 +948,8 @@ export const ContextPanel: React.FC = () => {
             ? <React.Suspense fallback={null}><GitView isActive={isOpen} /></React.Suspense>
             : activeTab?.mode === 'pr'
                 ? <PullRequestView />
+            : activeTab?.mode === 'linear'
+                ? <React.Suspense fallback={null}><LinearIssuesView /></React.Suspense>
             : activeTab?.mode === 'notes'
                 ? <ProjectContextPanel />
         : activeTab?.mode === 'plan'
@@ -958,8 +969,8 @@ export const ContextPanel: React.FC = () => {
     () => tabs.filter((tab) => tab.mode === 'diff'),
     [tabs],
   );
-  const hasTerminalTab = React.useMemo(
-    () => tabs.some((tab) => tab.mode === 'terminal'),
+  const terminalTab = React.useMemo(
+    () => tabs.find((tab) => tab.mode === 'terminal') ?? null,
     [tabs],
   );
   // Keep-alive: the walkthrough holds reading progress and scroll position that
@@ -978,6 +989,50 @@ export const ContextPanel: React.FC = () => {
   );
 
   const isFileTabActive = activeTab?.mode === 'file';
+
+  const closeContextPanelTabs = useUIStore((state) => state.closeContextPanelTabs);
+  const renderTabContextMenu = React.useCallback(
+    (args: { id: string; index: number; allIds: string[]; close: () => void }): React.ReactNode => {
+      if (!directoryKey) {
+        return null;
+      }
+      const { id, index, allIds, close } = args;
+      const closeOthers = () => closeContextPanelTabs(directoryKey, allIds.filter((tabId) => tabId !== id));
+      const closeToLeft = () => closeContextPanelTabs(directoryKey, allIds.slice(0, index));
+      const closeToRight = () => closeContextPanelTabs(directoryKey, allIds.slice(index + 1));
+      const closeAll = () => closeContextPanelTabs(directoryKey, allIds);
+      const hasOthers = allIds.length > 1;
+      const isFirst = index === 0;
+      const isLast = index === allIds.length - 1;
+      return (
+        <>
+          <ContextMenuItem onClick={close}>
+            <Icon name="close" className="mr-2 size-4" />
+            {t('contextPanel.tab.menu.close')}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={closeOthers} disabled={!hasOthers}>
+            <Icon name="expand-horizontal" className="mr-2 size-4" />
+            {t('contextPanel.tab.menu.closeOthers')}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={closeToLeft} disabled={isFirst}>
+            <Icon name="expand-left" className="mr-2 size-4" />
+            {t('contextPanel.tab.menu.closeToLeft')}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={closeToRight} disabled={isLast}>
+            <Icon name="expand-right" className="mr-2 size-4" />
+            {t('contextPanel.tab.menu.closeToRight')}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={closeAll} disabled={!hasOthers}>
+            <Icon name="close-circle" className="mr-2 size-4" />
+            {t('contextPanel.tab.menu.closeAll')}
+          </ContextMenuItem>
+        </>
+      );
+    },
+    [closeContextPanelTabs, directoryKey, t],
+  );
 
   const header = (
     <header className="flex h-10 items-stretch border-b border-border">
@@ -1005,6 +1060,7 @@ export const ContextPanel: React.FC = () => {
           }}
           layoutMode="scrollable"
           variant="default"
+          tabContextMenu={renderTabContextMenu}
         />
       ) : (
         <div className="flex min-w-0 flex-1 items-center gap-1.5 px-3">
@@ -1227,15 +1283,15 @@ export const ContextPanel: React.FC = () => {
             </React.Suspense>
           </div>
         ))}
-        {hasTerminalTab ? (
+        {terminalTab ? (
           <div className={cn('absolute inset-0', activeTab?.mode === 'terminal' ? 'block' : 'hidden')}>
-            <TerminalView visible={isOpen && activeTab?.mode === 'terminal'} />
+            <TerminalView visible={isOpen && activeTab?.mode === 'terminal'} directory={terminalTab.targetDirectory} />
           </div>
         ) : null}
         {hasWalkthroughTab ? (
           <div className={cn('absolute inset-0', activeTab?.mode === 'walkthrough' ? 'block' : 'hidden')}>
             <React.Suspense fallback={null}>
-              <WalkthroughView directory={effectiveDirectory} />
+              <WalkthroughView directory={effectiveDirectory} visible={activeTab?.mode === 'walkthrough'} />
             </React.Suspense>
           </div>
         ) : null}

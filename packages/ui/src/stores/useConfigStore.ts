@@ -10,8 +10,7 @@ import { filterVisibleAgents } from "./useAgentsStore";
 import { isPrimaryMode } from "@/components/chat/mobileControlsUtils";
 import { useSessionUIStore } from "@/sync/session-ui-store";
 import { useSelectionStore } from "@/sync/selection-store";
-import { getRegisteredRuntimeAPIs } from "@/contexts/runtimeAPIRegistry";
-import { updateDesktopSettings } from "@/lib/persistence";
+import { loadDesktopSettings, updateDesktopSettings } from "@/lib/persistence";
 import { useDirectoryStore } from "@/stores/useDirectoryStore";
 import { useProjectsStore } from "@/stores/useProjectsStore";
 import { resolveProjectForSessionDirectory } from "@/lib/projectResolution";
@@ -36,21 +35,6 @@ const GIT_UTILITY_PROVIDER_ID = "zen";
 const GIT_UTILITY_PREFERRED_MODEL_ID = "big-pickle";
 const PROVIDER_CONFIG_REFRESH_CONCURRENCY = 4;
 
-const normalizeSttProvider = (value: unknown): 'local' | 'openai-compatible' | undefined => {
-    if (value === 'local' || value === 'openai-compatible') {
-        return value;
-    }
-    // Legacy providers: 'server' used an OpenAI-compatible endpoint;
-    // 'browser' and 'wasm' map to the local default.
-    if (value === 'server') {
-        return 'openai-compatible';
-    }
-    if (value === 'browser' || value === 'wasm') {
-        return 'local';
-    }
-    return undefined;
-};
-
 interface OpenChamberDefaults {
     defaultModel?: string;
     defaultVariant?: string;
@@ -67,7 +51,26 @@ interface OpenChamberDefaults {
     sttLanguage?: string;
 }
 
-const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
+// Directory activation re-reads the OpenChamber defaults, which are global,
+// not per directory: one request serves the switches that land inside this
+// window, and concurrent activations share the in-flight one.
+const OPENCHAMBER_DEFAULTS_FRESH_MS = 15_000;
+let openChamberDefaultsCache: { at: number; request: Promise<OpenChamberDefaults> } | null = null;
+
+const fetchOpenChamberDefaults = (): Promise<OpenChamberDefaults> => {
+    const now = Date.now();
+    if (openChamberDefaultsCache && now - openChamberDefaultsCache.at < OPENCHAMBER_DEFAULTS_FRESH_MS) {
+        return openChamberDefaultsCache.request;
+    }
+    const request = requestOpenChamberDefaults();
+    openChamberDefaultsCache = { at: now, request };
+    request.catch(() => {
+        if (openChamberDefaultsCache?.request === request) openChamberDefaultsCache = null;
+    });
+    return request;
+};
+
+const requestOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
     markStartupTrace('config.defaults:start');
     const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
     const finish = (source: string, result: OpenChamberDefaults) => {
@@ -81,89 +84,29 @@ const fetchOpenChamberDefaults = async (): Promise<OpenChamberDefaults> => {
         return result;
     };
     try {
-        // 1. Runtime settings API (VSCode)
-        const runtimeSettings = getRegisteredRuntimeAPIs()?.settings;
-        if (runtimeSettings) {
-            try {
-                const result = await runtimeSettings.load();
-                const data = result?.settings;
-                if (data) {
-                    const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
-                    const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
-                    const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
-                    const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
-                    const defaultFileViewerPreview = typeof data?.defaultFileViewerPreview === 'boolean' ? data.defaultFileViewerPreview : undefined;
-                    const zenModel = typeof data?.zenModel === 'string' ? data.zenModel.trim() : '';
-                    const messageStreamTransport =
-                        data?.messageStreamTransport === 'ws' || data?.messageStreamTransport === 'sse' || data?.messageStreamTransport === 'auto'
-                            ? data.messageStreamTransport
-                            : undefined;
-                    const sttProvider = normalizeSttProvider(data?.sttProvider);
-                    const sttServerUrl = typeof data?.sttServerUrl === 'string' ? data.sttServerUrl.trim() : undefined;
-                    const sttModel = typeof data?.sttModel === 'string' ? data.sttModel.trim() : undefined;
-                    const sttLocalModel = typeof data?.sttLocalModel === 'string' ? data.sttLocalModel.trim() : undefined;
-                    const sttLanguage = typeof data?.sttLanguage === 'string' ? data.sttLanguage.trim() : undefined;
-
-                    return finish('runtime-settings', {
-                        defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
-                        defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
-                        defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
-                        autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
-                        gitmojiEnabled,
-                        defaultFileViewerPreview,
-                        zenModel: zenModel.length > 0 ? zenModel : undefined,
-                        messageStreamTransport,
-                        sttProvider,
-                        sttServerUrl,
-                        sttModel,
-                        sttLocalModel,
-                        sttLanguage,
-                    });
-                }
-            } catch {
-                // Fall through to fetch
-            }
+        const data = await loadDesktopSettings();
+        if (!data) {
+            return finish('settings-unavailable', {});
         }
+        const defaultModel = data.defaultModel?.trim() ?? '';
+        const defaultVariant = data.defaultVariant?.trim() ?? '';
+        const defaultAgent = data.defaultAgent?.trim() ?? '';
+        const zenModel = data.zenModel ?? '';
 
-        // 2. Fetch API (Web/server)
-        const response = await runtimeFetch('/api/config/settings', {
-            method: 'GET',
-            headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) {
-            return finish('settings-route-not-ok', {});
-        }
-        const data = await response.json();
-        const defaultModel = typeof data?.defaultModel === 'string' ? data.defaultModel.trim() : '';
-        const defaultVariant = typeof data?.defaultVariant === 'string' ? data.defaultVariant.trim() : '';
-        const defaultAgent = typeof data?.defaultAgent === 'string' ? data.defaultAgent.trim() : '';
-        const gitmojiEnabled = typeof data?.gitmojiEnabled === 'boolean' ? data.gitmojiEnabled : undefined;
-        const defaultFileViewerPreview = typeof data?.defaultFileViewerPreview === 'boolean' ? data.defaultFileViewerPreview : undefined;
-        const zenModel = typeof data?.zenModel === 'string' ? data.zenModel.trim() : '';
-        const messageStreamTransport =
-            data?.messageStreamTransport === 'ws' || data?.messageStreamTransport === 'sse' || data?.messageStreamTransport === 'auto'
-                ? data.messageStreamTransport
-                : undefined;
-        const sttProvider = normalizeSttProvider(data?.sttProvider);
-        const sttServerUrl = typeof data?.sttServerUrl === 'string' ? data.sttServerUrl.trim() : undefined;
-        const sttModel = typeof data?.sttModel === 'string' ? data.sttModel.trim() : undefined;
-        const sttLocalModel = typeof data?.sttLocalModel === 'string' ? data.sttLocalModel.trim() : undefined;
-        const sttLanguage = typeof data?.sttLanguage === 'string' ? data.sttLanguage.trim() : undefined;
-
-        return finish('settings-route', {
+        return finish('settings', {
             defaultModel: defaultModel.length > 0 ? defaultModel : undefined,
             defaultVariant: defaultVariant.length > 0 ? defaultVariant : undefined,
             defaultAgent: defaultAgent.length > 0 ? defaultAgent : undefined,
-            autoCreateWorktree: typeof data?.autoCreateWorktree === 'boolean' ? data.autoCreateWorktree : undefined,
-            gitmojiEnabled,
-            defaultFileViewerPreview,
+            autoCreateWorktree: data.autoCreateWorktree,
+            gitmojiEnabled: data.gitmojiEnabled,
+            defaultFileViewerPreview: data.defaultFileViewerPreview,
             zenModel: zenModel.length > 0 ? zenModel : undefined,
-            messageStreamTransport,
-            sttProvider,
-            sttServerUrl,
-            sttModel,
-            sttLocalModel,
-            sttLanguage,
+            messageStreamTransport: data.messageStreamTransport,
+            sttProvider: data.sttProvider,
+            sttServerUrl: data.sttServerUrl,
+            sttModel: data.sttModel,
+            sttLocalModel: data.sttLocalModel,
+            sttLanguage: data.sttLanguage,
         });
     } catch (error) {
         markStartupTrace('config.defaults:error', { error: error instanceof Error ? error.message : String(error) });
@@ -885,10 +828,27 @@ interface DirectoryScopedConfig {
     selectionSource?: "auto" | "manual";
 }
 
+/**
+ * The thinking-effort selection, split into what the user picked and what
+ * applies when they picked nothing:
+ *
+ * - `override: string`    an effort chosen in the picker
+ * - `override: null`      "Default" chosen in the picker — send no effort
+ * - `override: undefined` nothing chosen — the inherited default applies
+ *
+ * `null` and `undefined` are not interchangeable: collapsing them makes the
+ * "Default" entry unpickable, because the settings default silently takes
+ * effect again and the next assistant reply echoes it back as an explicit
+ * choice.
+ */
 type CurrentVariantSelection = {
     override: string | null | undefined;
     inherited: string | undefined;
 };
+
+const resolveVariantFromSelection = (selection: CurrentVariantSelection): string | undefined => (
+    selection.override === null ? undefined : selection.override ?? selection.inherited
+);
 
 /**
  * Lift the active directory's cached provider/agent snapshot into the top-level
@@ -1048,6 +1008,10 @@ interface ConfigStore {
     sayVoice: string;
     browserVoice: string;
     localTtsVoiceId: number;
+    /** Local TTS model the chosen voice belongs to (catalog id). */
+    localTtsModelId: string;
+    /** Local and macOS voices follow the language of the text being read. */
+    ttsFollowTextLanguage: boolean;
     openaiVoice: string;
     openaiApiKey: string;
     openaiCompatibleUrl: string;
@@ -1075,6 +1039,8 @@ interface ConfigStore {
     setSayVoice: (voice: string) => void;
     setBrowserVoice: (voice: string) => void;
     setLocalTtsVoiceId: (voiceId: number) => void;
+    setLocalTtsModelId: (modelId: string) => void;
+    setTtsFollowTextLanguage: (enabled: boolean) => void;
     setOpenaiVoice: (voice: string) => void;
     setOpenaiApiKey: (apiKey: string) => void;
     setOpenaiCompatibleUrl: (url: string) => void;
@@ -1257,6 +1223,21 @@ export const useConfigStore = create<ConfigStore>()(
                         }
                     }
                     return 0;
+                })(),
+                localTtsModelId: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('localTtsModelId');
+                        if (saved) return saved;
+                    }
+                    return 'kokoro-en-v0_19';
+                })(),
+
+                ttsFollowTextLanguage: (() => {
+                    if (typeof window !== 'undefined') {
+                        const saved = localStorage.getItem('ttsFollowTextLanguage');
+                        if (saved !== null) return saved === 'true';
+                    }
+                    return true;
                 })(),
                 // Browser voice - load from localStorage or default to empty (auto-select)
                 browserVoice: (() => {
@@ -1862,7 +1843,7 @@ export const useConfigStore = create<ConfigStore>()(
 
                 setCurrentVariantOverride: (override, inherited) => {
                     set((state) => {
-                        const currentVariant = override ?? inherited;
+                        const currentVariant = resolveVariantFromSelection({ override, inherited });
                         if (
                             state.currentVariant === currentVariant
                             && state.currentVariantSelection.override === override
@@ -2163,8 +2144,6 @@ export const useConfigStore = create<ConfigStore>()(
                             if (shouldPersistResolvedZenModel && resolvedZenModel) {
                                 updateDesktopSettings({
                                     zenModel: resolvedZenModel,
-                                    gitProviderId: '',
-                                    gitModelId: '',
                                 }).catch(() => {
                                     // Ignore errors - best effort cleanup
                                 });
@@ -2435,6 +2414,9 @@ export const useConfigStore = create<ConfigStore>()(
                         currentProviderId,
                         currentModelId,
                     } = get();
+                    // Captured before the first set below, which unconditionally
+                    // marks the selection as manual.
+                    const hadManualSelection = get().selectionSource === "manual";
 
                     set((state) => {
                         const directoryKey = state.activeDirectoryKey;
@@ -2484,8 +2466,27 @@ export const useConfigStore = create<ConfigStore>()(
                     if (agentName) {
                         const { currentSessionId } = useSessionUIStore.getState();
 
-                        const applyResolvedModelSelection = (providerId: string, modelId: string, variant?: string) => {
+                        // Writes the effort alongside the model, because the two are one
+                        // selection: leaving `currentVariantSelection` behind would let the
+                        // picker show one effort while sends carry another.
+                        const applyResolvedModelSelection = (
+                            providerId: string,
+                            modelId: string,
+                            variantSelection: CurrentVariantSelection,
+                        ) => {
                             set((state) => {
+                                const variant = resolveVariantFromSelection(variantSelection);
+                                if (
+                                    state.currentProviderId === providerId
+                                    && state.currentModelId === modelId
+                                    && state.currentVariant === variant
+                                    && state.currentVariantSelection.override === variantSelection.override
+                                    && state.currentVariantSelection.inherited === variantSelection.inherited
+                                    && state.selectionSource === "manual"
+                                ) {
+                                    return state;
+                                }
+
                                 const directoryKey = state.activeDirectoryKey;
                                 const baseSnapshot: DirectoryScopedConfig = state.directoryScoped[directoryKey] ?? {
                                     providers: state.providers,
@@ -2511,6 +2512,7 @@ export const useConfigStore = create<ConfigStore>()(
                                     currentProviderId: providerId,
                                     currentModelId: modelId,
                                     currentVariant: variant,
+                                    currentVariantSelection: variantSelection,
                                     selectionSource: "manual",
                                     directoryScoped: {
                                         ...state.directoryScoped,
@@ -2520,16 +2522,24 @@ export const useConfigStore = create<ConfigStore>()(
                             });
                         };
 
-                        const resolveVariantForModel = (
+                        const resolveVariantSelectionForModel = (
                             providerId: string,
                             modelId: string,
                             agentVariant?: string,
-                        ): string | undefined => {
+                        ): CurrentVariantSelection => {
                             const model = providers
                                 .find((provider) => provider.id === providerId)
                                 ?.models.find((candidate) => candidate.id === modelId) as { variants?: Record<string, unknown> } | undefined;
                             const variants = model?.variants;
-                            if (!variants) return undefined;
+                            if (!variants) return { override: undefined, inherited: undefined };
+
+                            const isAvailable = (candidate: string | null | undefined): candidate is string => (
+                                candidate !== null
+                                && candidate !== undefined
+                                && Object.prototype.hasOwnProperty.call(variants, candidate)
+                            );
+
+                            const inherited = [agentVariant, settingsDefaultVariant].find(isAvailable);
 
                             const savedVariant = currentSessionId
                                 ? useSelectionStore.getState().getAgentModelVariantForSession(
@@ -2539,14 +2549,23 @@ export const useConfigStore = create<ConfigStore>()(
                                     modelId,
                                 )
                                 : undefined;
-
-                            for (const candidate of [savedVariant, agentVariant, settingsDefaultVariant]) {
-                                if (candidate && Object.prototype.hasOwnProperty.call(variants, candidate)) {
-                                    return candidate;
-                                }
+                            // `null` is this session's explicit "Default"; it outranks
+                            // the agent and settings defaults just like a named effort.
+                            if (savedVariant === null || isAvailable(savedVariant)) {
+                                return { override: savedVariant, inherited };
                             }
 
-                            return undefined;
+                            // While drafting there is no session record to read the choice
+                            // back from, and switching agent is not a change of effort:
+                            // keep the picker's choice for this same model, "Default"
+                            // (an explicit `null`) included.
+                            const liveSelection = get().currentVariantSelection;
+                            const sameModel = get().currentProviderId === providerId && get().currentModelId === modelId;
+                            if (!currentSessionId && sameModel && (liveSelection.override === null || isAvailable(liveSelection.override))) {
+                                return { override: liveSelection.override, inherited };
+                            }
+
+                            return { override: undefined, inherited };
                         };
 
                         const agent = agents.find((candidate) => candidate.name === agentName);
@@ -2554,19 +2573,15 @@ export const useConfigStore = create<ConfigStore>()(
                         // Prefer a session-level manual override for this agent over the
                         // agent's configured default. Re-applying setAgent after subtask
                         // completion / rematerialization must not clobber the override
-                        // (issue #2404). Explicit agent-picker switches still force the
-                        // agent default via ModelControls' shouldPreferAgentModel path.
+                        // (issue #2404).
                         if (currentSessionId) {
                             const existingAgentModel = useSelectionStore.getState().getAgentModelForSession(currentSessionId, agentName);
                             if (existingAgentModel && hasProviderModel(providers, existingAgentModel.providerId, existingAgentModel.modelId)) {
-                                const resolvedVariant = resolveVariantForModel(existingAgentModel.providerId, existingAgentModel.modelId, agent?.variant);
-                                if (
-                                    currentProviderId !== existingAgentModel.providerId
-                                    || currentModelId !== existingAgentModel.modelId
-                                    || get().currentVariant !== resolvedVariant
-                                ) {
-                                    applyResolvedModelSelection(existingAgentModel.providerId, existingAgentModel.modelId, resolvedVariant);
-                                }
+                                applyResolvedModelSelection(
+                                    existingAgentModel.providerId,
+                                    existingAgentModel.modelId,
+                                    resolveVariantSelectionForModel(existingAgentModel.providerId, existingAgentModel.modelId, agent?.variant),
+                                );
                                 return;
                             }
                         }
@@ -2579,9 +2594,30 @@ export const useConfigStore = create<ConfigStore>()(
                             const agentModel = agentProvider?.models.find((model) => model.id === modelID);
 
                             if (agentModel) {
-                                applyResolvedModelSelection(providerID, modelID, resolveVariantForModel(providerID, modelID, agent?.variant));
+                                applyResolvedModelSelection(providerID, modelID, resolveVariantSelectionForModel(providerID, modelID, agent?.variant));
                                 return;
                             }
+                        }
+
+                        // The user has a live manual model selection and the target
+                        // agent configures no model of its own. Switching modes or
+                        // agents must not reset the selection to the settings default
+                        // (issue #2531) — mode switches are not model changes.
+                        if (
+                            hadManualSelection
+                            && currentProviderId
+                            && currentModelId
+                            && hasProviderModel(providers, currentProviderId, currentModelId)
+                        ) {
+                            // Keeping the pair in memory is not enough: without a write
+                            // the settings default wins again after a reload. The removed
+                            // ModelControls path persisted here, so this must too.
+                            if (currentSessionId) {
+                                const selection = useSelectionStore.getState();
+                                selection.saveSessionModelSelection(currentSessionId, currentProviderId, currentModelId);
+                                selection.saveAgentModelForSession(currentSessionId, agentName, currentProviderId, currentModelId);
+                            }
+                            return;
                         }
 
                         // If the agent has no preferred model, use settings default.
@@ -2590,7 +2626,7 @@ export const useConfigStore = create<ConfigStore>()(
                             if (parsed) {
                                 const settingsProvider = providers.find((p) => p.id === parsed.providerId);
                                 if (settingsProvider?.models.some((m) => m.id === parsed.modelId)) {
-                                    applyResolvedModelSelection(parsed.providerId, parsed.modelId, resolveVariantForModel(parsed.providerId, parsed.modelId, agent?.variant));
+                                    applyResolvedModelSelection(parsed.providerId, parsed.modelId, resolveVariantSelectionForModel(parsed.providerId, parsed.modelId, agent?.variant));
                                     return;
                                 }
                             }
@@ -2917,6 +2953,20 @@ export const useConfigStore = create<ConfigStore>()(
                     set({ localTtsVoiceId: voiceId });
                     if (typeof window !== 'undefined') {
                         localStorage.setItem('localTtsVoiceId', String(voiceId));
+                    }
+                },
+
+                setLocalTtsModelId: (modelId: string) => {
+                    set({ localTtsModelId: modelId });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('localTtsModelId', modelId);
+                    }
+                },
+
+                setTtsFollowTextLanguage: (enabled: boolean) => {
+                    set({ ttsFollowTextLanguage: enabled });
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('ttsFollowTextLanguage', String(enabled));
                     }
                 },
 

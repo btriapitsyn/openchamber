@@ -1,6 +1,21 @@
 import { DateTime, IANAZone } from 'luxon';
 import parser from 'cron-parser';
 
+import { projectPathFromId } from './project-id.js';
+import {
+  DEFAULT_PLANS_DIR,
+  EMPTY_SHARED_PROJECT_CONFIG,
+  SHARED_CONFIG_RELATIVE_PATH,
+  applySharedProjectSetupPatch,
+  isSharedProjectConfigEmpty,
+  mergeProjectSetup,
+  parseSharedProjectConfig,
+  projectSetupPatchToStored,
+  projectSetupViewOf,
+  serializeSharedProjectConfig,
+  sharedTrustHashOf,
+} from './project-setup.js';
+
 const PROJECT_CONFIG_VERSION = 1;
 export const MAX_TASK_NAME_LENGTH = 80;
 const MAX_TASK_PROMPT_LENGTH = 20_000;
@@ -499,11 +514,20 @@ export const createProjectConfigRuntime = (deps) => {
     }
   };
 
+  // Normalized tasks for reading, plus the raw on-disk record of each one for
+  // writing back. Normalization only keeps the fields THIS build knows, so a
+  // write that re-serialized normalized tasks would strip every field added
+  // by a newer build (or a newer UI) the moment an older server touched the
+  // file — a goal or auto-accept setting silently lost after a task ran.
+  // Writers therefore persist untouched tasks from `rawTasksByID` verbatim and
+  // only serialize a normalized task where the task itself was deliberately
+  // replaced.
   const readProjectConfigFromDisk = async (projectID) => {
     const parsed = await readRawProjectConfigFromDisk(projectID);
     const tasksRaw = Array.isArray(parsed.scheduledTasks) ? parsed.scheduledTasks : [];
     const now = Date.now();
     const scheduledTasks = [];
+    const rawTasksByID = new Map();
     for (const task of tasksRaw) {
       try {
         const normalized = normalizeTaskForStorage(task, {
@@ -514,35 +538,55 @@ export const createProjectConfigRuntime = (deps) => {
           refreshUpdatedAt: false,
         });
         scheduledTasks.push(normalized);
+        rawTasksByID.set(normalized.id, task);
       } catch {
       }
     }
     return {
       version: PROJECT_CONFIG_VERSION,
       scheduledTasks,
+      rawTasksByID,
     };
   };
 
-  const writeProjectConfigToDisk = async (projectID, config) => {
+  // The list to write: tasks this write replaced go out normalized; every
+  // other task goes out exactly as stored, fields unknown to this build
+  // included. A state-only update counts as untouched — only its `state` is
+  // swapped onto the stored record. Callers keep working with (and returning)
+  // the normalized tasks; only the bytes on disk differ.
+  const toStoredTasks = (config, tasks, { replacedIDs = new Set(), stateUpdatedID = null } = {}) => (
+    tasks.map((task) => {
+      if (replacedIDs.has(task.id)) return task;
+      const stored = config.rawTasksByID.get(task.id);
+      if (!stored) return task;
+      return task.id === stateUpdatedID ? { ...stored, state: task.state } : stored;
+    })
+  );
+
+  // Atomic whole-document write; callers hand in the merged document so the
+  // keys they do not own survive untouched.
+  const writeRawProjectConfigToDisk = async (projectID, document) => {
     const filePath = resolveProjectConfigPath(projectID);
     const parentDirectory = path.dirname(filePath);
     const temporaryPath = `${filePath}.tmp-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    const existing = await readRawProjectConfigFromDisk(projectID);
-    const merged = {
-      ...existing,
-      version: PROJECT_CONFIG_VERSION,
-      scheduledTasks: Array.isArray(config?.scheduledTasks) ? config.scheduledTasks : [],
-    };
-
     await fsPromises.mkdir(parentDirectory, { recursive: true });
     try {
-      await fsPromises.writeFile(temporaryPath, JSON.stringify(merged, null, 2), 'utf8');
+      await fsPromises.writeFile(temporaryPath, JSON.stringify(document, null, 2), 'utf8');
       await fsPromises.rename(temporaryPath, filePath);
     } catch (error) {
       await fsPromises.rm(temporaryPath, { force: true }).catch(() => {});
       throw error;
     }
+  };
+
+  const writeProjectConfigToDisk = async (projectID, config) => {
+    const existing = await readRawProjectConfigFromDisk(projectID);
+    await writeRawProjectConfigToDisk(projectID, {
+      ...existing,
+      version: PROJECT_CONFIG_VERSION,
+      scheduledTasks: Array.isArray(config?.scheduledTasks) ? config.scheduledTasks : [],
+    });
   };
 
   const withProjectWriteLock = async (projectID, mutate) => {
@@ -607,7 +651,7 @@ export const createProjectConfigRuntime = (deps) => {
 
       const nextConfig = {
         version: PROJECT_CONFIG_VERSION,
-        scheduledTasks: nextTasks,
+        scheduledTasks: toStoredTasks(current, nextTasks, { replacedIDs: new Set([normalizedTask.id]) }),
       };
       await writeProjectConfigToDisk(projectID, nextConfig);
 
@@ -633,7 +677,7 @@ export const createProjectConfigRuntime = (deps) => {
       if (deleted) {
         await writeProjectConfigToDisk(projectID, {
           version: PROJECT_CONFIG_VERSION,
-          scheduledTasks: nextTasks,
+          scheduledTasks: toStoredTasks(current, nextTasks),
         });
       }
 
@@ -676,7 +720,7 @@ export const createProjectConfigRuntime = (deps) => {
 
       await writeProjectConfigToDisk(projectID, {
         version: PROJECT_CONFIG_VERSION,
-        scheduledTasks: nextTasks,
+        scheduledTasks: toStoredTasks(current, nextTasks, { stateUpdatedID: nextTask.id }),
       });
 
       return {
@@ -737,7 +781,7 @@ export const createProjectConfigRuntime = (deps) => {
 
       await writeProjectConfigToDisk(projectID, {
         version: PROJECT_CONFIG_VERSION,
-        scheduledTasks: nextTasks,
+        scheduledTasks: toStoredTasks(current, nextTasks, { stateUpdatedID: nextTask.id }),
       });
 
       return {
@@ -797,6 +841,7 @@ export const createProjectConfigRuntime = (deps) => {
 
       const consumedLoopPaths = new Set();
       const nextTasks = [];
+      const replacedIDs = new Set();
       for (const task of tasks) {
         if (task.loopFile && !activeLoopFilePaths.has(task.loopFile)) {
           // The driving loop file was removed (or renamed) — unschedule.
@@ -828,6 +873,7 @@ export const createProjectConfigRuntime = (deps) => {
               },
             );
             nextTasks.push(adopted);
+            replacedIDs.add(adopted.id);
             pendingLoops.delete(loop.definition.name);
             if (task.loopFile) {
               consumedLoopPaths.add(task.loopFile);
@@ -863,6 +909,7 @@ export const createProjectConfigRuntime = (deps) => {
             },
           );
           nextTasks.push(created);
+          replacedIDs.add(created.id);
         } catch (error) {
           console.warn(`[scheduled-tasks] skipped loop ${loop.filePath}:`, error?.message ?? error);
         }
@@ -870,14 +917,128 @@ export const createProjectConfigRuntime = (deps) => {
 
       await writeProjectConfigToDisk(projectID, {
         version: PROJECT_CONFIG_VERSION,
-        scheduledTasks: nextTasks,
+        scheduledTasks: toStoredTasks(current, nextTasks, { replacedIDs }),
       });
 
       return nextTasks;
     });
   };
 
+  // The client-owned part of the file (worktree setup, project actions, draft
+  // starters); see `project-setup.js`. Reads are lock-free like task lists;
+  // an update merges the sanitized patch over the raw document under the same
+  // cross-process lock the task writers use, so neither side clobbers the other.
+  // The shared file lives in the project's checkout. The checkout path comes
+  // from the id itself (`path_<base64url>`), with the personal file's
+  // `projectPath` as the fallback for ids of another form. A missing file is
+  // the normal case; an unreadable or unparsable one is reported as invalid,
+  // never as "no shared setup".
+  const projectPathOf = (projectID, personalRaw) => (
+    projectPathFromId(projectID) || (typeof personalRaw.projectPath === 'string' ? personalRaw.projectPath.trim() : '')
+  );
+  const sharedConfigPathOf = (projectPath) => path.join(projectPath, ...SHARED_CONFIG_RELATIVE_PATH.split('/'));
+
+  const readSharedProjectConfig = async (projectID, personalRaw) => {
+    const projectPath = projectPathOf(projectID, personalRaw);
+    if (!projectPath) return { status: 'missing' };
+    let raw;
+    try {
+      raw = await fsPromises.readFile(sharedConfigPathOf(projectPath), 'utf8');
+    } catch (error) {
+      if (error && typeof error === 'object' && error.code === 'ENOENT') return { status: 'missing' };
+      return { status: 'invalid', reason: error instanceof Error ? error.message : String(error) };
+    }
+    return parseSharedProjectConfig(raw);
+  };
+
+  const mergedProjectSetupOf = async (projectID, personalRaw) => (
+    mergeProjectSetup(projectSetupViewOf(personalRaw), await readSharedProjectConfig(projectID, personalRaw))
+  );
+
+  const readProjectSetup = async (projectID) => mergedProjectSetupOf(projectID, await readRawProjectConfigFromDisk(projectID));
+
+  const updateProjectSetup = async (projectID, patch) => {
+    const stored = projectSetupPatchToStored(patch);
+    return withProjectWriteLock(projectID, async () => {
+      const existing = await readRawProjectConfigFromDisk(projectID);
+      const merged = { ...existing, ...stored };
+      for (const [key, value] of Object.entries(stored)) {
+        if (value === undefined) delete merged[key];
+      }
+      await writeRawProjectConfigToDisk(projectID, merged);
+      return mergedProjectSetupOf(projectID, merged);
+    });
+  };
+
+  /**
+   * Change the team's shared file in the checkout: the patch replaces the
+   * keys it names over the current file (a broken file counts as empty, so
+   * a write repairs it). A result with nothing in it removes the file (and
+   * the `.openchamber` folder when that leaves it empty), so unsharing the
+   * last item leaves no trace. The writer has seen the commands it just
+   * shared, so the personal trust record is set to the new hash on this
+   * instance; teammates still get the prompt.
+   */
+  const updateSharedProjectSetup = async (projectID, patch) => (
+    withProjectWriteLock(projectID, async () => {
+      const personalRaw = await readRawProjectConfigFromDisk(projectID);
+      const projectPath = projectPathOf(projectID, personalRaw);
+      if (!projectPath) throw new Error('project checkout not found');
+      try {
+        if (!(await fsPromises.stat(projectPath)).isDirectory()) throw new Error('project checkout not found');
+      } catch {
+        throw new Error('project checkout not found');
+      }
+      const currentRead = await readSharedProjectConfig(projectID, personalRaw);
+      const current = currentRead.status === 'ok' ? currentRead.config : EMPTY_SHARED_PROJECT_CONFIG;
+      const next = applySharedProjectSetupPatch(current, patch);
+
+      const filePath = sharedConfigPathOf(projectPath);
+      if (isSharedProjectConfigEmpty(next)) {
+        await fsPromises.rm(filePath, { force: true });
+        await fsPromises.rmdir(path.dirname(filePath)).catch(() => {});
+      } else {
+        await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+        const temporaryPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+        try {
+          await fsPromises.writeFile(temporaryPath, serializeSharedProjectConfig(next), 'utf8');
+          await fsPromises.rename(temporaryPath, filePath);
+        } catch (error) {
+          await fsPromises.rm(temporaryPath, { force: true }).catch(() => {});
+          throw error;
+        }
+      }
+
+      const hash = sharedTrustHashOf(next);
+      const personalNext = { ...personalRaw };
+      if (hash) personalNext.sharedTrust = { hash, trustedAt: Date.now() };
+      else delete personalNext.sharedTrust;
+      await writeRawProjectConfigToDisk(projectID, personalNext);
+      return mergedProjectSetupOf(projectID, personalNext);
+    })
+  );
+
+  /**
+   * The absolute repository plans folder of a project: `plansDir` from the
+   * shared file when set, else the default `.openchamber/plans`. Setting
+   * `plansDir` replaces the default outright (nothing is read from it any
+   * more); moving files between the two is the user's job. Null only when the
+   * checkout cannot be located.
+   */
+  const resolveSharedPlansDir = async (projectID) => {
+    const personalRaw = await readRawProjectConfigFromDisk(projectID);
+    const projectPath = projectPathOf(projectID, personalRaw);
+    if (!projectPath) return null;
+    const shared = await readSharedProjectConfig(projectID, personalRaw);
+    const relative = shared.status === 'ok' && shared.config.plansDir ? shared.config.plansDir : DEFAULT_PLANS_DIR;
+    return path.join(projectPath, ...relative.split('/'));
+  };
+
   return {
+    readProjectSetup,
+    updateProjectSetup,
+    updateSharedProjectSetup,
+    resolveSharedPlansDir,
     listScheduledTasks,
     upsertScheduledTask,
     deleteScheduledTask,

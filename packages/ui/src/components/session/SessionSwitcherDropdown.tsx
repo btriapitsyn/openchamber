@@ -87,7 +87,7 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
   }, [onSelect, openNewSessionDraft]);
 
   const [expandedParents, setExpandedParents] = React.useState<Set<string>>(new Set());
-  const contentRef = React.useRef<HTMLDivElement>(null);
+  const contentRef = React.useRef<HTMLElement>(null);
   const initialFocusCompleteRef = React.useRef(false);
   const initialTarget = isNewSessionDraftOpen ? NEW_SESSION_SWITCHER_TARGET : currentSessionId;
   const toggleParent = React.useCallback((sessionId: string) => {
@@ -129,7 +129,7 @@ function SwitcherContent({ onSelect, variant, scopeProjectId }: SwitcherContentP
 
   return (
     <ScrollableOverlay
-      ref={contentRef as unknown as React.Ref<HTMLElement>}
+      ref={contentRef}
       outerClassName="max-h-[60vh]"
       disableHorizontal
     >

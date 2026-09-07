@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import { CONTEXT_SURFACES, sortContextSurfaces } from '../lib/surfaces/registry';
+import { useTerminalStore } from './useTerminalStore';
 import { useUIStore } from './useUIStore';
+
+const getContextPanelTabs = (directory: string) => useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
+
+const getTerminalTab = (directory: string) => getContextPanelTabs(directory).find((tab) => tab.mode === 'terminal');
 
 beforeEach(() => {
   useUIStore.setState({ contextPanelByDirectory: {}, contextRailOrder: [] });
+  useTerminalStore.getState().clearAll();
 });
 
 describe('useUIStore context panel tabs', () => {
@@ -205,6 +211,168 @@ describe('useUIStore context panel tabs', () => {
     const tabs = useUIStore.getState().contextPanelByDirectory[directory]?.tabs ?? [];
     expect(tabs.some((tab) => tab.mode === 'plan')).toBe(false);
   });
+
+  test('stores a terminal target under the host directory without creating a target root', () => {
+    useUIStore.getState().openContextPanelTab('/repo-worktree', {
+      mode: 'terminal',
+      targetDirectory: '/repo',
+    });
+
+    const worktreeState = useUIStore.getState().contextPanelByDirectory['/repo-worktree'];
+    const terminalTab = getTerminalTab('/repo-worktree');
+
+    expect(worktreeState?.activeTabId).toBe('terminal');
+    expect(worktreeState?.tabs).toHaveLength(1);
+    expect(terminalTab?.targetDirectory).toBe('/repo');
+    expect(useUIStore.getState().contextPanelByDirectory['/repo']).toBe(undefined);
+  });
+
+  test('normalizes terminal targets and canonicalizes same-host targets to null', () => {
+    useUIStore.getState().openContextPanelTab('/repo-worktree//', {
+      mode: 'terminal',
+      targetDirectory: ' \\repo\\nested\\ ',
+    });
+
+    let terminalTab = getTerminalTab('/repo-worktree');
+    expect(terminalTab?.targetDirectory).toBe('/repo/nested');
+
+    useUIStore.getState().openContextPanelTab('/repo-worktree//', {
+      mode: 'terminal',
+      targetDirectory: '/repo-worktree',
+    });
+
+    terminalTab = getTerminalTab('/repo-worktree');
+    expect(terminalTab?.targetDirectory).toBe(null);
+  });
+
+  test('reopening a terminal tab with null clears a previous target directory', () => {
+    useUIStore.getState().openContextPanelTab('/repo-worktree', {
+      mode: 'terminal',
+      targetDirectory: '/repo',
+    });
+    useUIStore.getState().openContextPanelTab('/repo-worktree', {
+      mode: 'terminal',
+      targetDirectory: null,
+    });
+
+    const terminalTab = getTerminalTab('/repo-worktree');
+    expect(terminalTab?.targetDirectory).toBe(null);
+  });
+
+  test('legacy terminal tabs without a target directory sanitize to null on touch', () => {
+    // SAFETY: the object mirrors the persisted context-panel shape exactly;
+    // setState bypasses the persist middleware's typing, not its migration.
+    useUIStore.setState({
+      contextPanelByDirectory: {
+        '/repo-worktree': {
+          isOpen: true,
+          expanded: false,
+          widthByMode: {},
+          touchedAt: 1,
+          activeTabId: 'terminal',
+          tabs: [
+            {
+              id: 'terminal',
+              mode: 'terminal',
+              targetPath: null,
+              dedupeKey: 'terminal',
+              label: null,
+              sessionTitleFallback: null,
+              readOnly: false,
+              stagedDiff: false,
+              diffScope: null,
+              touchedAt: 1,
+            },
+          ],
+        },
+      },
+    } as never);
+
+    useUIStore.getState().openContextPanelTab('/repo-worktree', { mode: 'diff' });
+
+    const terminalTab = getTerminalTab('/repo-worktree');
+    expect(terminalTab?.targetDirectory).toBe(null);
+  });
+
+  test('persisted terminal tabs keep a normalized target through a rehydration-like touch', () => {
+    // SAFETY: the object mirrors the persisted context-panel shape exactly;
+    // setState bypasses the persist middleware's typing, not its migration.
+    useUIStore.setState({
+      contextPanelByDirectory: {
+        '/repo-worktree': {
+          isOpen: true,
+          expanded: false,
+          widthByMode: {},
+          touchedAt: 1,
+          activeTabId: 'terminal',
+          tabs: [
+            {
+              id: 'terminal',
+              mode: 'terminal',
+              targetPath: null,
+              targetDirectory: ' \\repo\\nested\\ ',
+              dedupeKey: 'terminal',
+              label: null,
+              sessionTitleFallback: null,
+              readOnly: false,
+              stagedDiff: false,
+              diffScope: null,
+              touchedAt: 1,
+            },
+          ],
+        },
+      },
+    } as never);
+
+    useUIStore.getState().openContextPanelTab('/repo-worktree', { mode: 'diff' });
+
+    const terminalTab = getTerminalTab('/repo-worktree');
+    expect(terminalTab?.targetDirectory).toBe('/repo/nested');
+  });
+
+  test('ignores targetDirectory on non-terminal descriptors and sanitized tabs', () => {
+    useUIStore.getState().openContextPanelTab('/repo-worktree', {
+      mode: 'diff',
+      targetDirectory: '/repo',
+    });
+
+    const diffTab = getContextPanelTabs('/repo-worktree').find((tab) => tab.mode === 'diff');
+    expect(diffTab?.targetDirectory).toBe(null);
+
+    // SAFETY: the object mirrors the persisted context-panel shape exactly;
+    // setState bypasses the persist middleware's typing, not its migration.
+    useUIStore.setState({
+      contextPanelByDirectory: {
+        '/repo-worktree': {
+          isOpen: true,
+          expanded: false,
+          widthByMode: {},
+          touchedAt: 1,
+          activeTabId: 'diff',
+          tabs: [
+            {
+              id: 'diff',
+              mode: 'diff',
+              targetPath: '/repo/file.ts',
+              targetDirectory: '/stale',
+              dedupeKey: 'diff',
+              label: null,
+              sessionTitleFallback: null,
+              readOnly: false,
+              stagedDiff: false,
+              diffScope: 'working',
+              touchedAt: 1,
+            },
+          ],
+        },
+      },
+    } as never);
+
+    useUIStore.getState().openContextPanelTab('/repo-worktree', { mode: 'terminal' });
+
+    const sanitizedDiffTab = getContextPanelTabs('/repo-worktree').find((tab) => tab.mode === 'diff');
+    expect(sanitizedDiffTab?.targetDirectory).toBe(null);
+  });
 });
 
 describe('useUIStore openContextSurface', () => {
@@ -272,6 +440,105 @@ describe('useUIStore openContextSurface', () => {
     expect(activeTab?.mode).toBe('file');
     expect(activeTab?.targetPath).toBe('/repo/b.ts');
   });
+
+  test('opening the terminal surface clears a stale target on the singleton tab', () => {
+    useUIStore.getState().openContextPanelTab(directory, {
+      mode: 'terminal',
+      targetDirectory: '/repo-target',
+    });
+
+    useUIStore.getState().openContextSurface(directory, 'terminal');
+
+    const terminalTab = getTerminalTab(directory);
+    expect(terminalTab?.targetDirectory).toBe(null);
+  });
+
+  test('opening the terminal surface retains the target when the target directory still has a running project action', () => {
+    // Revisit design: manual terminal open no longer clears a still-live
+    // project-action target just to force the host shell back into view.
+    useTerminalStore.getState().ensureDirectory('/repo-target');
+    const targetTabId = useTerminalStore.getState().getDirectoryState('/repo-target')!.tabs[0]!.id;
+    useTerminalStore.getState().setTabPurpose('/repo-target', targetTabId, {
+      type: 'project-action',
+      actionId: 'build',
+      executionId: 'exec-1',
+    });
+    useTerminalStore.getState().setTabLifecycle('/repo-target', targetTabId, 'running', { expectedExecutionId: 'exec-1' });
+
+    useUIStore.getState().openContextPanelTab(directory, {
+      mode: 'terminal',
+      targetDirectory: '/repo-target',
+    });
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'diff' });
+
+    useUIStore.getState().openContextSurface(directory, 'terminal');
+
+    const state = useUIStore.getState().contextPanelByDirectory[directory];
+    const terminalTab = getTerminalTab(directory);
+    expect(state?.activeTabId).toBe('terminal');
+    expect(state?.isOpen).toBe(true);
+    expect(terminalTab?.targetDirectory).toBe('/repo-target');
+  });
+
+  test('opening the terminal surface retains the target for a hydrated idle project-action placeholder', () => {
+    useTerminalStore.getState().ensureDirectory('/repo-target');
+    const targetTabId = useTerminalStore.getState().getDirectoryState('/repo-target')!.tabs[0]!.id;
+    useTerminalStore.getState().setTabPurpose('/repo-target', targetTabId, {
+      type: 'project-action',
+      actionId: 'build',
+      executionId: null,
+    });
+
+    useUIStore.getState().openContextPanelTab(directory, {
+      mode: 'terminal',
+      targetDirectory: '/repo-target',
+    });
+
+    useUIStore.getState().openContextSurface(directory, 'terminal');
+
+    const terminalTab = getTerminalTab(directory);
+    expect(terminalTab?.targetDirectory).toBe('/repo-target');
+  });
+
+  test('opening the terminal surface clears the target when every action tab in the target directory is exited', () => {
+    useTerminalStore.getState().ensureDirectory('/repo-target');
+    const firstTargetTabId = useTerminalStore.getState().getDirectoryState('/repo-target')!.tabs[0]!.id;
+    useTerminalStore.getState().setTabPurpose('/repo-target', firstTargetTabId, {
+      type: 'project-action',
+      actionId: 'build',
+      executionId: 'exec-1',
+    });
+    useTerminalStore.getState().setTabLifecycle('/repo-target', firstTargetTabId, 'exited', { expectedExecutionId: 'exec-1' });
+    const secondTargetTabId = useTerminalStore.getState().createTab('/repo-target');
+    useTerminalStore.getState().setTabPurpose('/repo-target', secondTargetTabId, {
+      type: 'project-action',
+      actionId: 'test',
+      executionId: 'exec-2',
+    });
+    useTerminalStore.getState().setTabLifecycle('/repo-target', secondTargetTabId, 'exited', { expectedExecutionId: 'exec-2' });
+
+    useUIStore.getState().openContextPanelTab(directory, {
+      mode: 'terminal',
+      targetDirectory: '/repo-target',
+    });
+
+    useUIStore.getState().openContextSurface(directory, 'terminal');
+
+    const terminalTab = getTerminalTab(directory);
+    expect(terminalTab?.targetDirectory).toBe(null);
+  });
+
+  test('opening the terminal surface clears the target when the target directory has no terminal state', () => {
+    useUIStore.getState().openContextPanelTab(directory, {
+      mode: 'terminal',
+      targetDirectory: '/repo-target',
+    });
+
+    useUIStore.getState().openContextSurface(directory, 'terminal');
+
+    const terminalTab = getTerminalTab(directory);
+    expect(terminalTab?.targetDirectory).toBe(null);
+  });
 });
 
 describe('useUIStore closeContextPanelTab surface stability', () => {
@@ -316,6 +583,75 @@ describe('useUIStore closeContextPanelTab surface stability', () => {
     const state = useUIStore.getState().contextPanelByDirectory[directory];
     expect(state?.activeTabId).toBe('terminal');
     expect(state?.isOpen).toBe(true);
+  });
+});
+
+describe('useUIStore closeContextPanelTabs bulk', () => {
+  const directory = '/repo';
+
+  test('closing every tab of the only surface closes the panel', () => {
+    useUIStore.getState().openContextBrowser(directory, 'https://a.test');
+    useUIStore.getState().openContextBrowser(directory, 'https://b.test');
+    useUIStore.getState().openContextBrowser(directory, 'https://c.test');
+
+    const state0 = useUIStore.getState().contextPanelByDirectory[directory];
+    const ids = state0?.tabs.map((tab) => tab.id) ?? [];
+    useUIStore.getState().closeContextPanelTabs(directory, ids);
+
+    const state = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(state?.tabs).toHaveLength(0);
+    expect(state?.isOpen).toBe(false);
+  });
+
+  test('closing all tabs of the active surface closes the panel but keeps other surfaces in state', () => {
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'terminal' });
+    useUIStore.getState().openContextFile(directory, '/repo/a.ts');
+    useUIStore.getState().openContextFile(directory, '/repo/b.ts');
+
+    const state0 = useUIStore.getState().contextPanelByDirectory[directory];
+    const fileIds = state0?.tabs.filter((tab) => tab.mode === 'file').map((tab) => tab.id) ?? [];
+    useUIStore.getState().closeContextPanelTabs(directory, fileIds);
+
+    const state = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(state?.tabs.map((tab) => tab.mode)).toEqual(['terminal']);
+    expect(state?.activeTabId).toBe('terminal');
+    // Matches the single-close rule: emptying the active surface closes the panel.
+    expect(state?.isOpen).toBe(false);
+  });
+
+  test('closing only inactive-mode tabs leaves the active tab and panel intact', () => {
+    useUIStore.getState().openContextFile(directory, '/repo/a.ts');
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'terminal' });
+
+    const state0 = useUIStore.getState().contextPanelByDirectory[directory];
+    const fileTab = state0?.tabs.find((tab) => tab.mode === 'file');
+    useUIStore.getState().closeContextPanelTabs(directory, [fileTab?.id as string]);
+
+    const state = useUIStore.getState().contextPanelByDirectory[directory];
+    expect(state?.activeTabId).toBe('terminal');
+    expect(state?.isOpen).toBe(true);
+  });
+
+  test('closing a subset of the active surface including the active tab keeps a remaining same-mode tab', () => {
+    useUIStore.getState().openContextPanelTab(directory, { mode: 'terminal' });
+    useUIStore.getState().openContextFile(directory, '/repo/a.ts');
+    useUIStore.getState().openContextFile(directory, '/repo/b.ts');
+    useUIStore.getState().openContextFile(directory, '/repo/c.ts');
+
+    const state0 = useUIStore.getState().contextPanelByDirectory[directory];
+    const fileTabs = state0?.tabs.filter((tab) => tab.mode === 'file') ?? [];
+    const keptFile = fileTabs.find((tab) => tab.targetPath === '/repo/a.ts');
+    const closedIds = fileTabs.filter((tab) => tab.id !== keptFile?.id).map((tab) => tab.id);
+    expect(state0?.tabs.find((tab) => tab.id === state0.activeTabId)?.targetPath).toBe('/repo/c.ts');
+
+    useUIStore.getState().closeContextPanelTabs(directory, closedIds);
+
+    const state = useUIStore.getState().contextPanelByDirectory[directory];
+    const activeTab = state?.tabs.find((tab) => tab.id === state.activeTabId);
+    expect(activeTab?.mode).toBe('file');
+    expect(activeTab?.targetPath).toBe('/repo/a.ts');
+    expect(state?.isOpen).toBe(true);
+    expect(state?.tabs.some((tab) => tab.mode === 'terminal')).toBe(true);
   });
 });
 

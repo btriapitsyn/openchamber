@@ -77,6 +77,8 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   const { t } = useI18n();
   const [isSessionSearchOpen, setIsSessionSearchOpen] = React.useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = React.useState('');
+  // Reported by the session list below: the header cannot see what matched.
+  const [searchMatchCount, setSearchMatchCount] = React.useState(0);
   const sessionSearchContainerRef = React.useRef<HTMLDivElement | null>(null);
   const sessionSearchInputRef = React.useRef<HTMLInputElement | null>(null);
   const [editingProjectDialogId, setEditingProjectDialogId] = React.useState<string | null>(null);
@@ -590,13 +592,12 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
   }, [mobileVariant, openNewSessionDraft, setSessionSwitcherOpen]);
 
   return (
-    // One shared tooltip provider for the whole sidebar: session tooltips open
-    // instantly, and moving between rows hands the tooltip over (grouping)
-    // instead of replaying the exit/enter animation for each row.
-    // closeDelay bridges the small gap between rows: the tooltip survives the
-    // pointer crossing row margins, and the grouping timeout hands it over to
-    // the next row without an exit/enter cycle.
-    <TooltipProvider delay={0} closeDelay={150} timeout={600}>
+    // One shared tooltip provider for the whole sidebar, matching the opencode
+    // sidebar feel: 400ms before the first tooltip opens, instant close on
+    // leave, and grouping — moving between rows within 600ms hands the tooltip
+    // over to the next row without replaying the open delay or exit/enter
+    // animation.
+    <TooltipProvider delay={400} closeDelay={0} timeout={300}>
     <div
       ref={sessionSearchContainerRef}
       className={cn(
@@ -631,7 +632,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
         sessionSearchQuery={sessionSearchQuery}
         setSessionSearchQuery={setSessionSearchQuery}
         hasSessionSearchQuery={hasSessionSearchQuery}
-        searchMatchCount={0}
+        searchMatchCount={searchMatchCount}
         collapseAllProjects={projectView.actions.collapseAllProjects}
         expandAllProjects={projectView.actions.expandAllProjects}
       />
@@ -668,6 +669,7 @@ const SessionSidebarComponent: React.FC<SessionSidebarProps> = ({
           isWorktreeTopologyLoading,
           unresolvedWorktreeProjectPaths,
           projectView: projectView.state,
+          onSearchMatchCountChange: setSearchMatchCount,
         }}
         actions={{
           rowActions: {

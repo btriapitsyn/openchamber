@@ -39,7 +39,7 @@ Many fixes land without linking the issue they resolve, so an issue can sit open
 2. **Repro re-run.** When the intake comment carries an inline reproduction script or test, run it against current main. Passing repro = fixed, with the run as evidence.
 3. **Symptom search.** Extract the issue's distinctive strings (error messages, function names, user-visible symptom terms) and search `git log --grep`, `CHANGELOG.md`, and merged PR titles/bodies *since the issue's creation date*.
 
-CLOSE-FIXED always names its evidence (commit, PR, or repro run); a hunch that "this area was reworked" downgrades to a comment asking the reporter to retry on current main, keeping the issue open on the needs-reporter clock.
+CLOSE-FIXED always names its evidence (commit, PR, or repro run), and a commit counts only when it is reachable from main — `git merge-base --is-ancestor <sha> origin/main` — because `git log` across all refs happily surfaces fixes that live on abandoned branches; a hunch that "this area was reworked" downgrades to a comment asking the reporter to retry on current main, keeping the issue open on the needs-reporter clock.
 
 Every issue/PR reference in maintainer-facing reports is a clickable link (`[#3164](https://github.com/openchamber/openchamber/issues/3164)`), never a bare number; each entry carries 2–4 sentences — enough to decide without a follow-up question — and any manual-check note lives inside the entry, never in a separate number-repeating section. An issue where the maintainer already commented or the reporter replied to a question runs in pickup mode: state the thread first, continue it, never re-ask a decided question.
 
