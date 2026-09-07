@@ -620,6 +620,10 @@ const resolveSessionDirectory = (
   return resolution.directory
 }
 
+const activateConfigForDirectory = async (directory: string | null | undefined): Promise<void> => {
+  await useConfigStore.getState().activateDirectory(normalizePath(directory))
+}
+
 const applyDraftTargetSelectionDefaults = (
   draft: Pick<NewSessionDraftState, "target" | "selectedProjectId" | "directoryOverride">,
   availableWorktreesByProject: Map<string, WorktreeMetadata[]>,
@@ -1443,16 +1447,13 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
     applyDraftTargetSelectionDefaults(get().newSessionDraft, get().availableWorktreesByProject)
 
     const nextDraft = get().newSessionDraft
+    // Persist the chosen draft target so reopening the composer restores the
+    // last side the user worked on.
     persistDraftTarget({
-      projectId: nextDraft.selectedProjectId ?? null,
+      projectId: nextDraft.target === "chat" ? null : nextDraft.selectedProjectId ?? null,
       directory: normalizePath(nextDraft.directoryOverride ?? null),
       target: nextDraft.target,
     })
-
-    if (nextDirectory && nextDirectory !== useDirectoryStore.getState().currentDirectory) {
-      useDirectoryStore.getState().setDirectory(nextDirectory)
-    }
-
 
     if (nextDirectory && nextDirectory !== useDirectoryStore.getState().currentDirectory) {
       useDirectoryStore.getState().setDirectory(nextDirectory)

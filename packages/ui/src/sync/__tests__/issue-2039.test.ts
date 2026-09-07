@@ -12,7 +12,6 @@ const applyDefaultModelAgentSelectionCalls: Array<{
 }> = []
 const activateDirectoryCalls: Array<string | null | undefined> = []
 let configVariantOverride: string | null | undefined
-let projects: Array<{ id: string; path: string; label: string }> = []
 const createdWorktreeProjects: Array<{ id: string; path: string }> = []
 // Sync's session→directory index. `createSession` writes it, and directory
 // resolution reads it as the authoritative source, so the mock has to keep one.
@@ -598,11 +597,11 @@ describe("issue 2039 draft auto-accept", () => {
     useSessionUIStore.getState().openNewSessionDraft()
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    expect(activateDirectoryCalls).toEqual([null])
+    expect(activateDirectoryCalls).toEqual(["/repo"])
     expect(applyDefaultModelAgentSelectionCalls).toEqual([{
-      projectDefaultAgent: undefined,
-      projectDefaultModel: undefined,
-      projectDefaultVariant: undefined,
+      projectDefaultAgent: "agent-project",
+      projectDefaultModel: "model-project",
+      projectDefaultVariant: "variant-project",
     }])
   })
 
@@ -715,9 +714,9 @@ describe("assistant answer worktree routing", () => {
   })
 
   test("creates a sibling worktree from the captured source worktree directory", async () => {
-    projects = [
-      { id: "project", path: "/repo", label: "Repo" },
-      { id: "source-worktree", path: "/worktrees/source", label: "Source worktree" },
+    projectsState.projects = [
+      { id: "project", path: "/repo" },
+      { id: "source-worktree", path: "/worktrees/source" },
     ]
     createdWorktreeProjects.length = 0
     const sourceWorktree = {
@@ -770,7 +769,7 @@ describe("assistant answer worktree routing", () => {
         sendMessage: originalSendMessage,
         worktreeMetadata: originalWorktreeMetadata,
       })
-      projects = []
+      projectsState.projects = []
     }
 
     expect(createdWorktreeProjects).toEqual([{ id: "project", path: "/repo" }])
