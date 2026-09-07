@@ -805,7 +805,7 @@ describe('updateDesktopSettings', () => {
     expect(useUIStore.getState().terminalLoginShells).toEqual(['zsh', 'fish']);
   });
 
-  test('defaults omitted git review layout to separate during settings sync', async () => {
+  test('leaves the local git review layout alone when the server omits the key', async () => {
     getWindow();
     invalidateSettingsCache();
     useUIStore.getState().setGitReviewLayout('combined');
@@ -816,7 +816,9 @@ describe('updateDesktopSettings', () => {
 
     await syncDesktopSettings();
 
-    expect(useUIStore.getState().gitReviewLayout).toBe('separate');
+    // A server document without the key means "not set", not "reset": the
+    // registry leaves the local store untouched instead of inventing a default.
+    expect(useUIStore.getState().gitReviewLayout).toBe('combined');
   });
 
   test('hydrates the persisted git review layout from server settings', async () => {
@@ -837,7 +839,7 @@ describe('updateDesktopSettings', () => {
     expect(useUIStore.getState().gitReviewLayout).toBe('combined');
   });
 
-  test('resets an invalid git review layout from server settings to separate', async () => {
+  test('drops an invalid git review layout from server settings at the parse boundary', async () => {
     getWindow();
     invalidateSettingsCache();
     useUIStore.getState().setGitReviewLayout('combined');
@@ -858,7 +860,9 @@ describe('updateDesktopSettings', () => {
 
     await syncDesktopSettings();
 
-    expect(useUIStore.getState().gitReviewLayout).toBe('separate');
+    // The registry parser rejects the value, so the document is treated as if
+    // the key were absent and the local choice survives.
+    expect(useUIStore.getState().gitReviewLayout).toBe('combined');
   });
 
   test('treats git review layout save responses as partial patches', async () => {

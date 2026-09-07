@@ -56,8 +56,8 @@ export function useGitComparison(directory: string | null, source: GitComparison
         : target.kind === 'branch'
         ? (await getGitRangeFiles(directory, { base: target.baseRef, head: target.headRef, includeWorkingTree: true }))
           .map((file) => ({ ...file, insertions: 0, deletions: 0 }))
-        : (await getCommitFiles(directory, target.hash)).files
-          .map((file) => ({ path: file.path, status: file.changeType, previousPath: file.previousPath, insertions: file.insertions, deletions: file.deletions }));
+        : (await getCommitFiles(directory, { commitHash: target.hash, parentHash: null })).files
+          .map((file) => ({ path: file.path, status: file.status, previousPath: file.originalPath, insertions: file.insertions, deletions: file.deletions }));
       if (generation.current !== request || getRuntimeKey() !== runtime) return;
       setResult((previous) => previous?.key === key && previous.status === 'ready' && previous.files === files
         ? { ...previous, refreshing: false }

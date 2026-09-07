@@ -609,6 +609,22 @@
       "scope": "device",
       "local": true
     },
+    "contextGitSplitDiffWidth": {
+      "scope": "device",
+      "local": true
+    },
+    "gitGraphPaneCollapsed": {
+      "scope": "device",
+      "local": true
+    },
+    "gitGraphPaneHeight": {
+      "scope": "device",
+      "local": true
+    },
+    "gitRepositoryPaneStates": {
+      "scope": "device",
+      "local": true
+    },
     "notesPanelHeight": {
       "scope": "device",
       "local": true

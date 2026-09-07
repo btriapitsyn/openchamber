@@ -759,8 +759,6 @@ export const ContextPanel: React.FC = () => {
   const finishResize = React.useCallback(() => {
     // Apply the final width once, letting the regular 200ms width transition
     // carry the panel to the release position.
-    const finalWidth = clampWidthForDrag(resizingWidthRef.current ?? width);
-    const availableWidth = resizeAvailableWidthRef.current;
     const isSplitMode = activeTab?.mode === 'git' && innerDiffTabs.length > 0;
     const startingWidth = isSplitMode ? splitTotalWidth : width;
     const finalWidth = clampWidthForDrag(resizingWidthRef.current ?? startingWidth);

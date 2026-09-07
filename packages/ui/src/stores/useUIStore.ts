@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { z } from 'zod';
 import { devtools, persist } from 'zustand/middleware';
-import { z } from 'zod';
 import type { SidebarSection } from '@/constants/sidebar';
 import { createDeferredSafeJSONStorage } from './utils/safeStorage';
 import { SEMANTIC_TYPOGRAPHY, getTypographyVariable, type SemanticTypographyKey } from '@/lib/typography';
