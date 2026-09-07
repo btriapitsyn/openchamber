@@ -60,7 +60,6 @@ const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ visible, wo
                 {/* The soft shadow lives on this wrapper, away from the glass
                     button's backdrop-filter: sharing one element made the
                     shadow intermittently drop after hide/show cycles. */}
-                <div className="flex max-w-full justify-center">
                 <div className="inline-flex max-w-full rounded-full shadow-[0_2px_6px_-2px_rgb(0_0_0_/_0.10)] dark:shadow-[0_2px_6px_-2px_rgb(0_0_0_/_0.35)]">
                 <button
                     type="button"
@@ -79,7 +78,6 @@ const ScrollToBottomButton: React.FC<ScrollToBottomButtonProps> = ({ visible, wo
                     </span>
                     {working && visible ? <PillWorkingStatus /> : null}
                 </button>
-                </div>
                 </div>
             </div>
         </div>
