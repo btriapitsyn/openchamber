@@ -1601,9 +1601,15 @@ export async function unarchiveSessions(
   return { restoredIds, failedIds }
 }
 
-export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
-  const sessionDirectory = getSessionDirectory(sessionId)
+export async function updateSessionTitle(
+  sessionId: string,
+  title: string,
+  options?: { directory?: string | null; expectedRuntimeKey?: string },
+): Promise<void> {
+  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
+  const sessionDirectory = options?.directory ?? getSessionDirectory(sessionId)
   const session = await opencodeClient.updateSession(sessionId, { title }, sessionDirectory)
+  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
   useGlobalSessionsStore.getState().upsertSession(session)
   mirrorSessionIntoLiveStores(session, sessionDirectory)
 }

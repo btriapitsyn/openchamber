@@ -1,5 +1,7 @@
 import { linearIntegrationI18n } from './linear-integration.i18n';
 export const settingsDict = {
+  'settings.openchamber.visual.field.alwaysShowScrollbars': 'Kaydırma çubuklarını her zaman göster',
+  'settings.openchamber.visual.field.alwaysShowScrollbarsHint': 'Önce kaydırma yapmadan sürükleyebilmeniz için kaydırma çubuklarını görünür tutar. Yalnızca bu cihazda geçerlidir.',
   'settings.providers.page.openCodeGo.title': 'OpenCode Go kullanım takibi',
   'settings.providers.page.openCodeGo.description': 'Kayan, haftalık ve aylık kotayı göstermek için OpenCode Go kontrol panelini bağlayın.',
   'settings.providers.page.openCodeGo.workspaceId': 'Çalışma alanı ID\'si',

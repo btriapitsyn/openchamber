@@ -95,7 +95,7 @@ describe('fork composer restoration', () => {
                 expect(readChatDraft(source).text).toBe(persistEnabled ? 'source draft @source.ts' : '');
 
                 composer.render(source);
-                expect(composer.result.text).toBe(persistEnabled ? 'source draft @source.ts' : '');
+                expect(composer.result.text).toBe('source draft @source.ts');
                 expect(readChatDraft(fork).text).toBe(persistEnabled ? 'replay prompt' : '');
             } finally {
                 composer.teardown();

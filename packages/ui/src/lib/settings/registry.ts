@@ -544,6 +544,7 @@ export const LOCAL_DEVICE_KEYS = [
   'linearIssueListPriority',
   'showTerminalQuickKeysOnDesktop',
   'dockBadgeEnabled',
+  'alwaysShowScrollbars',
   'agentMemoryViewedAt',
   'projectContextSidebarWidth',
 ] as const;
