@@ -189,7 +189,14 @@ and the send path reading the same grammar.
   also owns the advisory dirty state for the selected directory, clearing it as
   soon as the target changes so a warning never names a previous branch.
 - `ui/DraftTargetSelectors.tsx` owns the controlled project/worktree picker
-  state and registers its application shortcuts locally. The selectors only
+  state and registers its application shortcuts locally. The desktop project
+  picker is a searchable popup: it ranks the current projects with
+  `rankByQuery` over display label and path, keeps the query and the active
+  result as transient local state that resets on every close, and commits
+  through the existing project-change flow only on explicit activation.
+  Filtering changes the result area below the anchored input without moving
+  the search field. The
+  worktree Select and the mobile bottom sheets are unchanged. The selectors only
   consume their shared prefix while the draft target UI is mounted.
 
 ## Input recall ownership

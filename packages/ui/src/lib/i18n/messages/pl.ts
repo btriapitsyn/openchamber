@@ -1262,6 +1262,7 @@ export const dict: Record<I18nKey, string> = {
   'chat.chatInput.draftPicker.projectTitle': 'Projekt',
   'chat.chatInput.draftPicker.searchProjects': 'Szukaj projektów...',
   'chat.chatInput.draftPicker.searchBranches': 'Szukaj gałęzi...',
+  'chat.chatInput.draftPicker.noProjectsFound': 'Nie znaleziono projektów.',
   'chat.chatInput.drop.attachFiles': 'Drop files here to attach',
   'chat.chatInput.drop.insertMention': 'Drop to insert as mention',
   'chat.chatInput.fileFallback': 'file',

@@ -2362,6 +2362,7 @@ export const dict: Record<I18nKey, string> = {
   "chat.chatInput.draftPicker.projectTitle": "Проєкт",
   "chat.chatInput.draftPicker.searchProjects": "Пошук проєктів...",
   "chat.chatInput.draftPicker.searchBranches": "Пошук гілок...",
+  "chat.chatInput.draftPicker.noProjectsFound": "Проєктів не знайдено.",
   "chat.chatInput.worktrees": "Worktree",
   "chat.chatInput.worktreeNew": "+ Новий",
   "chat.chatInput.drop.insertMention": "Відпустіть, щоб вставити як згадку",

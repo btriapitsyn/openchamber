@@ -2396,6 +2396,7 @@ export const dict = {
   'chat.chatInput.draftPicker.projectTitle': 'Project',
   'chat.chatInput.draftPicker.searchProjects': 'Search projects...',
   'chat.chatInput.draftPicker.searchBranches': 'Search branches...',
+  'chat.chatInput.draftPicker.noProjectsFound': 'No projects found',
   'chat.chatInput.worktrees': 'Worktrees',
   'chat.chatInput.worktreeNew': '+ New',
   'chat.chatInput.drop.insertMention': 'Drop to insert as mention',
