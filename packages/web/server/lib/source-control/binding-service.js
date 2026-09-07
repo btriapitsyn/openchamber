@@ -485,7 +485,7 @@ export function createBindingService({
     validateGitTransportContext,
     validateGitAuxiliaryContext,
     // Only the clone executor can transfer its captured grant to a newly published checkout.
-    bindClonedRepository: async ({ directory, approvedEndpoint, transportMode, credentialId, unverifiedConfirmed, auxiliaryGrants = [] }) => {
+    bindClonedRepository: async ({ directory, approvedEndpoint, transportMode, credentialId, unverifiedConfirmed, providerAccount, auxiliaryGrants = [] }) => {
       if (!['system', 'managed', 'anonymous'].includes(transportMode)
         || (transportMode === 'anonymous' && (credentialId !== undefined || unverifiedConfirmed !== undefined
           || normalizeGitRemoteEndpoint(approvedEndpoint).protocol !== 'https'))
@@ -514,9 +514,17 @@ export function createBindingService({
         if (grant.transportMode === 'system') input.unverifiedConfirmed = grant.unverifiedConfirmed;
         return input;
       }));
+      // The account chosen while cloning is the account this repository acts
+      // as. Persisting it here is what stops the setup asking for the same
+      // answer a second time before issues and change requests work.
+      // The transport resolver carries the raw URL alongside the redacted
+      // endpoint; the provider contract accepts only the redacted pair.
+      const providers = providerAccount
+        ? parseProviders([{ ...providerAccount, primaryRemote: 'origin' }], [{ name: 'origin', fetch: endpoint, push: endpoint }])
+        : [];
       return store.compareAndSwap(context.repositoryId, 0, {
-        configRevision: context.configRevision, providers: [], remotes: [selected], auxiliary,
-        state: bindingSummary({ providers: [], remotes: [selected], auxiliary }),
+        configRevision: context.configRevision, providers, remotes: [selected], auxiliary,
+        state: bindingSummary({ providers, remotes: [selected], auxiliary }),
       });
     },
     configureTransportBinding: async (input) => {

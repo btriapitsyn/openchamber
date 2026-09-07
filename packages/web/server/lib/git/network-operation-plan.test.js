@@ -112,6 +112,27 @@ describe('Git network operation planner', () => {
     }
   });
 
+  it('carries a clone provider account privately and checks it against the clone endpoint', async () => {
+    const input = { operation: 'clone', remoteUrl: 'https://gitlab.com/owner/repository.git', destinationPath: '/new/repo', transportMode: 'anonymous' };
+    const account = { provider: 'gitlab', instance: 'https://gitlab.com', accountId: 'gitlab-one' };
+    const plans = await makePlanner().planNetworkOperation({ ...input, providerAccount: account });
+    expect(plans.internalPlan.providerAccount).toEqual(account);
+    // The association names an account; it must not reach the public plan.
+    expect(JSON.stringify(plans.publicPlan)).not.toContain('gitlab-one');
+
+    // Omitted entirely is the supported way to bind no provider.
+    expect(await makePlanner().planNetworkOperation(input)).not.toHaveProperty('internalPlan.providerAccount');
+
+    for (const invalid of [
+      { provider: 'github', instance: 'github.com', accountId: 'a' },
+      { provider: 'bitbucket', instance: 'https://gitlab.com', accountId: 'a' },
+      { provider: 'gitlab', instance: 'https://gitlab.com', accountId: '' },
+      { provider: 'gitlab', instance: 'https://gitlab.com', accountId: 'a', extra: true },
+    ]) {
+      await expect(makePlanner().planNetworkOperation({ ...input, providerAccount: invalid })).rejects.toThrow();
+    }
+  });
+
   it('requires separate System consent for every clone auxiliary grant and keeps grants private', async () => {
     const endpoint = { displayUrl: 'https://modules.example/child.git', fingerprint: fingerprintRemoteUrl('https://modules.example/child.git') };
     const input = {

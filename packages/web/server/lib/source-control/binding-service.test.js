@@ -176,6 +176,36 @@ describe('explicit remote transport configuration', () => {
     expect(readTransportAccount).not.toHaveBeenCalled();
   });
 
+  it('records the provider account chosen while cloning alongside the transport grant', async () => {
+    const { service } = await setup();
+    const result = await service.bindClonedRepository({
+      directory: '/repo',
+      approvedEndpoint: context.remotes[0].fetch.rawUrl,
+      transportMode: 'anonymous',
+      providerAccount: { provider: 'github', instance: 'github.com', accountId: 'credential-three' },
+    });
+    expect(result.binding.providers).toEqual([{
+      provider: 'github',
+      instance: 'github.com',
+      accountId: 'credential-three',
+      primaryRemote: 'origin',
+      readiness: 'ready',
+      endpoint: { displayUrl: context.remotes[0].fetch.displayUrl, fingerprint: context.remotes[0].fetch.fingerprint },
+      repository: { owner: 'team', name: 'repo' },
+    }]);
+    expect(result.binding.state).toBe('bound');
+  });
+
+  it('rejects a clone provider account that names a remote the clone does not have', async () => {
+    const { service } = await setup();
+    await expect(service.bindClonedRepository({
+      directory: '/repo',
+      approvedEndpoint: context.remotes[0].fetch.rawUrl,
+      transportMode: 'anonymous',
+      providerAccount: { provider: 'github', instance: 'github.com', accountId: '' },
+    })).rejects.toThrow();
+  });
+
   it('accepts anonymous whole-binding updates using authoritative public endpoints', async () => {
     const { service, readTransportAccount } = await setup();
     const binding = { providers: [], remotes: [{ name: 'origin', mode: 'anonymous' }], auxiliary: [], state: 'bound' };

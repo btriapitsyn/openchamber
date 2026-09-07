@@ -1823,6 +1823,7 @@ export function createNetworkOperations({
                 directory: plan.destination, approvedEndpoint: plan.rawEndpoint,
                 transportMode: plan.transportMode, credentialId: plan.credentialId,
                 unverifiedConfirmed: plan.unverifiedConfirmed,
+                providerAccount: plan.providerAccount,
                 auxiliaryGrants: plan.auxiliaryGrants.filter((grant) => {
                   const entries = grant.kind === 'submodule' ? hydration.submodules : hydration.lfs;
                   return entries.some((entry) => entry.endpoint?.fingerprint === grant.endpoint.fingerprint);

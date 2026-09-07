@@ -126,6 +126,26 @@ const parseHydrationTransfers = (value, requirements) => {
   if (new Set(transferKeys).size !== transferKeys.length) throw planError('checkout hydration transfers must be unique');
   return transfers;
 };
+/**
+ * The provider account a cloned repository is associated with, for issues and
+ * change requests. Separate from the transport credential — a repository can
+ * fetch over SSH and still answer to a GitHub account — so it is accepted for
+ * every transport and checked only against the endpoint it will be bound to.
+ */
+const parseCloneProviderAccount = (value, parsedEndpoint) => {
+  if (value === undefined) return null;
+  if (!isPlainObject(value) || !hasExactKeys(value, ['provider', 'instance', 'accountId'])
+    || !['github', 'gitlab'].includes(value.provider)) throw planError('Provider account is invalid');
+  let instance;
+  try { instance = normalizeSourceControlProviderInstance(value.provider, value.instance); }
+  catch { throw planError('Provider account instance is invalid'); }
+  const origin = new URL(value.provider === 'github' ? 'https://github.com' : instance);
+  if (origin.hostname !== parsedEndpoint.host) throw planError('Provider account does not match the clone endpoint');
+  const accountId = requiredString(value.accountId, 'provider accountId');
+  if (accountId !== value.accountId || /[\0\r\n]/.test(accountId)) throw planError('Provider account is invalid');
+  return { provider: value.provider, instance, accountId };
+};
+
 const parseAuxiliaryGrants = (value) => {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 256) throw planError('auxiliaryGrants is invalid');
@@ -696,7 +716,7 @@ export function createNetworkOperationPlanner({
     if (!hasExactKeys(
       input,
       ['operation', 'remoteUrl', 'destinationPath', 'transportMode'],
-      ['credentialAccount', 'sshCredentialId', 'unverifiedConfirmed', 'gitIdentityId', 'auxiliaryGrants'],
+      ['credentialAccount', 'providerAccount', 'sshCredentialId', 'unverifiedConfirmed', 'gitIdentityId', 'auxiliaryGrants'],
     )) throw planError('Git clone input is invalid');
     const endpoint = parseCloneEndpoint(input.remoteUrl);
     const transportMode = parseTransportMode(input.transportMode);
@@ -758,7 +778,9 @@ export function createNetworkOperationPlanner({
     );
     if (await pathExists(destination, fsImpl)) throw planError('Clone destination already exists');
     if (await pathExists(temporaryDirectory, fsImpl)) throw planError('Clone temporary directory already exists');
+    const providerAccount = parseCloneProviderAccount(input.providerAccount, normalizeGitRemoteEndpoint(endpoint));
     const internal = { destination, temporaryDirectory, transportMode, auxiliaryGrants: parseAuxiliaryGrants(input.auxiliaryGrants) };
+    if (providerAccount) internal.providerAccount = providerAccount;
     if (transportMode === 'system') internal.unverifiedConfirmed = true;
     if (credentialId) internal.credentialId = credentialId;
     if (input.gitIdentityId !== undefined) internal.gitIdentityId = requiredString(input.gitIdentityId, 'gitIdentityId');

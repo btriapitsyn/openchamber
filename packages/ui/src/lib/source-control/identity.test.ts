@@ -6,6 +6,7 @@ import {
   mergeIncompleteSourceControlPage,
   resolveSourceControlIdentity,
   resolveSourceControlTarget,
+  gitRemoteHost,
 } from './identity';
 
 const remote = (url: string): GitRemote => ({ name: 'origin', fetchUrl: url, pushUrl: url });
@@ -119,5 +120,22 @@ describe('partial source-control pages', () => {
       [item('owner/repo', 1)],
       { items: [], page: 1, hasMore: false },
     )).toEqual([]);
+  });
+});
+
+describe('gitRemoteHost', () => {
+  test('reads the host from https and scp-like remotes alike', () => {
+    expect(gitRemoteHost('https://github.com/team/repo.git')).toBe('github.com');
+    expect(gitRemoteHost('https://GitLab.example.com:8443/team/repo.git')).toBe('gitlab.example.com');
+    expect(gitRemoteHost('git@github.com:team/repo.git')).toBe('github.com');
+    expect(gitRemoteHost('ssh://git@gitlab.example.com/team/repo.git')).toBe('gitlab.example.com');
+    expect(gitRemoteHost('  git@GitHub.com:team/repo.git  ')).toBe('github.com');
+  });
+
+  test('returns null when there is no host to read', () => {
+    expect(gitRemoteHost('')).toBeNull();
+    expect(gitRemoteHost('   ')).toBeNull();
+    expect(gitRemoteHost('team/repo.git')).toBeNull();
+    expect(gitRemoteHost('not a url')).toBeNull();
   });
 });

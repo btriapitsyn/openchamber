@@ -245,6 +245,7 @@ export const runGitClone = async ({
   git,
   gitIdentityId,
   remoteUrl,
+  providerAccount,
   selection,
   signal,
   runtimeKey = getRuntimeKey,
@@ -254,6 +255,7 @@ export const runGitClone = async ({
   git: Pick<GitAPI, 'planNetworkOperation' | 'executeNetworkOperation' | 'getNetworkOperation' | 'cancelNetworkOperation'>;
   gitIdentityId?: string;
   remoteUrl: string;
+  providerAccount?: SourceControlIdentity & { accountId: string };
   selection: Pick<Extract<GitNetworkOperationRequest, { operation: 'clone'; transportMode: 'system' }>, 'transportMode' | 'unverifiedConfirmed'>
     | Pick<Extract<GitNetworkOperationRequest, { operation: 'clone'; credentialAccount: SourceControlIdentity & { accountId: string } }>, 'transportMode' | 'credentialAccount'>
     | { transportMode: 'managed'; sshCredentialId: string; credentialAccount?: never }
@@ -273,6 +275,7 @@ export const runGitClone = async ({
     ...selection,
   };
   if (gitIdentityId) request.gitIdentityId = gitIdentityId;
+  if (providerAccount) request.providerAccount = providerAccount;
   const plan = await gitOperationRecoveryOwner.plan(git, request, capturedRuntime, () => runtimeKey() === capturedRuntime);
   onOperation?.({ runtimeKey: capturedRuntime, operation: plan, availability: 'available' });
   requireCurrentRuntime(runtimeKey, capturedRuntime);

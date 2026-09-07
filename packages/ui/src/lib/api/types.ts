@@ -442,6 +442,12 @@ export type GitNetworkOperationRequest =
       remoteUrl: string;
       destinationPath: string;
       gitIdentityId?: string;
+      /**
+       * The account the cloned repository is associated with for issues and
+       * change requests. Independent of the transport credential, so a
+       * repository can fetch over SSH and still answer to a provider account.
+       */
+      providerAccount?: SourceControlIdentity & { accountId: string };
       auxiliaryGrants?: Array<{
         kind: 'submodule' | 'lfs';
         endpoint: GitNetworkRedactedEndpoint;

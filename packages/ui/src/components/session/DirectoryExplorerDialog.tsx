@@ -5,6 +5,7 @@ import {
   endpointsShareOrigin,
   getManagedCredentialSourceLabelKey,
   getSourceControlIdentityOrigin,
+  gitRemoteHost,
 } from '@/lib/source-control/identity';
 import { ManagedSshCredentials } from '@/components/sections/openchamber/ManagedSshCredentials';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -207,6 +208,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [cloneSshCredential, setCloneSshCredential] = React.useState('');
   const [cloneCredentialAccount, setCloneCredentialAccount] = React.useState('');
   const [unverifiedConfirmed, setUnverifiedConfirmed] = React.useState(false);
+  const [cloneProviderAccountKey, setCloneProviderAccountKey] = React.useState('');
   const cloneController = React.useRef<AbortController | null>(null);
   const cloneRecovery = useGitOperationRecovery(open && isCloneMode ? 'clone' : null, git, sourceControl, { kind: 'clone' });
   const [selectedGitIdentityId, setSelectedGitIdentityId] = React.useState<string | null>(null);
@@ -231,6 +233,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     setCloneRemoteUrl('');
     setCloneTransport('');
     setCloneCredentialAccount('');
+    setCloneProviderAccountKey('');
     setCloneSshCredential('');
     setUnverifiedConfirmed(false);
     setSelectedPaths([]);
@@ -264,6 +267,19 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     return buildManagedAccountOptions(identity, entry.status.accounts, (account) => t(getManagedCredentialSourceLabelKey(account.source)));
   });
   const cloneAccount = cloneAccounts.find((account) => account.key === cloneCredentialAccount);
+  // The provider association answers "whose issues and change requests", which
+  // is a question about the host, not about how the bytes travel — so an SSH
+  // clone URL offers the same accounts an HTTPS one does.
+  const cloneRemoteHost = gitRemoteHost(cloneRemoteUrl);
+  const cloneProviderAccounts = identities.flatMap((identity) => {
+    const entry = authEntries[getSourceControlAuthKey(identity)];
+    if (identitiesError || !entry?.hasChecked || entry.isLoading || entry.status?.status !== 'connected') return [];
+    const origin = getSourceControlIdentityOrigin(identity);
+    const host = origin ? gitRemoteHost(origin) : null;
+    if (!host || !cloneRemoteHost || host !== cloneRemoteHost) return [];
+    return buildManagedAccountOptions(identity, entry.status.accounts, (account) => t(getManagedCredentialSourceLabelKey(account.source)));
+  });
+  const cloneProviderAccount = cloneProviderAccounts.find((account) => account.key === cloneProviderAccountKey);
   const cloneAccountsFailed = Boolean(identitiesError) || identities.some((identity) => {
     const status = authEntries[getSourceControlAuthKey(identity)]?.status?.status;
     return status && status !== 'connected' && status !== 'disconnected';
@@ -286,6 +302,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     }
     return Array.from(unique.values());
   }, [gitIdentityProfiles, globalGitIdentity]);
+
+  React.useEffect(() => {
+    if (!cloneCredentialAccount || cloneProviderAccountKey) return;
+    if (cloneProviderAccounts.some((account) => account.key === cloneCredentialAccount)) {
+      setCloneProviderAccountKey(cloneCredentialAccount);
+    }
+  }, [cloneCredentialAccount, cloneProviderAccountKey, cloneProviderAccounts]);
 
   React.useEffect(() => {
     if (!open || !isCloneMode || selectedGitIdentityId !== null) return;
@@ -545,6 +568,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           remoteUrl,
           destinationPath: target,
           gitIdentityId: selectedGitIdentity?.id,
+          providerAccount: cloneProviderAccount?.reference,
           git,
           selection,
           signal: controller.signal,
@@ -595,7 +619,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       cloneController.current = null;
       setIsConfirming(false);
     }
-  }, [addProject, addProjects, addedProjectPaths, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, selectedPaths, shouldCreateTarget, targetPath, t]);
+  }, [addProject, addProjects, addedProjectPaths, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, cloneProviderAccount?.reference, selectedPaths, shouldCreateTarget, targetPath, t]);
 
   const browseToDisplayPath = React.useCallback((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));
@@ -767,6 +791,19 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
               {t('settings.sourceControl.transport.retry')}
             </Button>
           </> : null}
+          {/* Independent of transport: the clone can fetch over SSH and still
+              answer to a provider account. Set here so the repository is
+              usable for issues and change requests the moment it lands. */}
+          {!runtime.isVSCode && cloneProviderAccounts.length ? (
+            <Select value={cloneProviderAccountKey} onValueChange={setCloneProviderAccountKey} disabled={isConfirming}>
+              <SelectTrigger className="w-full" aria-label={t('settings.sourceControl.binding.accountAriaLabel')}>
+                <SelectValue placeholder={t('settings.sourceControl.binding.accountLabel')}>{cloneProviderAccount?.label}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>{cloneProviderAccounts.map((account) => (
+                <SelectItem key={account.key} value={account.key}>{account.label}</SelectItem>
+              ))}</SelectContent>
+            </Select>
+          ) : null}
           {runtime.isVSCode ? <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.clone.unsupported')}</p> : null}
         </div>
       ) : null}

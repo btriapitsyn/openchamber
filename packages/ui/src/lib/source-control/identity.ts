@@ -151,6 +151,24 @@ export const getSourceControlIdentityOrigin = (identity: SourceControlIdentity):
 };
 
 /** True only when every endpoint parses and shares the given origin. */
+/**
+ * The host a git remote points at, for `https://host/owner/repo.git` and for
+ * the scp-like `git@host:owner/repo.git` alike. A provider association is
+ * about which host answers for the repository, not how the bytes travel, so
+ * it must recognise an SSH remote too.
+ */
+export const gitRemoteHost = (remoteUrl: string): string | null => {
+  const value = remoteUrl.trim();
+  if (!value) return null;
+  const scpLike = /^[^/@]+@([^/:]+):/.exec(value);
+  if (scpLike) return scpLike[1].toLowerCase();
+  try {
+    return new URL(value).hostname.toLowerCase() || null;
+  } catch {
+    return null;
+  }
+};
+
 export const endpointsShareOrigin = (endpoints: string[], origin: string): boolean => endpoints.every((endpoint) => {
   try {
     return new URL(endpoint).origin === origin;
