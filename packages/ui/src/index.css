@@ -1666,44 +1666,54 @@ textarea[data-terminal-hidden-input="true"]::placeholder {
   color: transparent !important;
 }
 
-/* Hide browser/system caret for Ghostty's own input surfaces.
-   Terminal cursor is rendered by the canvas renderer. */
-.terminal-viewport-container[contenteditable="true"][aria-label="Terminal input"],
-.terminal-viewport-container [contenteditable="true"][aria-label="Terminal input"] {
+/* libghostty-vt terminal surface. The canvas draws the grid and cursor; the
+   textarea only receives keyboard, IME and clipboard events and follows the
+   cursor so IME candidates appear where the user types. */
+.terminal-viewport-container .oc-terminal-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: text;
+}
+
+.terminal-viewport-container .oc-terminal-input {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  padding: 0;
+  border: 0;
+  resize: none;
+  pointer-events: none;
   caret-color: transparent !important;
   outline: none !important;
 }
 
-textarea[aria-label="Terminal input"],
-input[aria-label="Terminal input"] {
-  caret-color: transparent !important;
-  outline: none !important;
+.terminal-viewport-container .oc-terminal-scrollbar {
+  position: absolute;
+  top: 4px;
+  right: 1px;
+  bottom: 4px;
+  z-index: 1;
+  width: 8px;
+  cursor: default;
+  touch-action: none;
 }
 
-/* When touch terminal input uses the portaled overlay, keep Ghostty's
-   internal editable surfaces fully non-painting to avoid duplicate cursors. */
-.terminal-viewport-container[data-hidden-input-overlay-active="true"] textarea:not([data-terminal-hidden-input="true"]),
-.terminal-viewport-container[data-hidden-input-overlay-active="true"] input:not([data-terminal-hidden-input="true"]),
-.terminal-viewport-container[data-hidden-input-overlay-active="true"] [contenteditable="true"] {
-  caret-color: transparent !important;
-  color: transparent !important;
-  -webkit-text-fill-color: transparent !important;
-  background: transparent !important;
-  border: 0 !important;
-  outline: none !important;
-  box-shadow: none !important;
-  text-shadow: none !important;
+.terminal-viewport-container .oc-terminal-scrollbar-thumb {
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  top: 0;
+  border-radius: 3px;
+  background: var(--oc-scrollbar-thumb);
+  transition: background-color 120ms ease-out;
 }
 
-.terminal-viewport-container[data-hidden-input-overlay-active="true"] textarea:not([data-terminal-hidden-input="true"]),
-.terminal-viewport-container[data-hidden-input-overlay-active="true"] input:not([data-terminal-hidden-input="true"]),
-.terminal-viewport-container[data-hidden-input-overlay-active="true"] [contenteditable="true"] {
-  opacity: 0 !important;
-  font-size: 0 !important;
-  line-height: 0 !important;
-  pointer-events: none !important;
-  user-select: none !important;
-  -webkit-user-select: none !important;
+.terminal-viewport-container .oc-terminal-scrollbar:hover .oc-terminal-scrollbar-thumb {
+  background: var(--oc-scrollbar-thumb-hover);
 }
 
 /* Mobile Terminal Optimizations */
@@ -1712,15 +1722,6 @@ input[aria-label="Terminal input"] {
     font-variant-ligatures: none;
     font-feature-settings: "liga" 0, "calt" 0;
   }
-}
-
-/* Font loading states */
-.fonts-loading .terminal-viewport-container {
-  font-family: monospace;
-}
-
-.fonts-loaded .terminal-viewport-container {
-  font-family: "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Fira Code", "JetBrains Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 @keyframes oc-busy-pulse {

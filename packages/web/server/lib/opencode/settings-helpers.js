@@ -1,4 +1,10 @@
 import { isAgentMemoryFeatureAvailable } from '../agent-memory/feature-flag.js';
+import {
+  DEFAULT_INPUT_HISTORY_LIMIT,
+  DEFAULT_INPUT_HISTORY_SCOPE,
+  isInputHistoryLimit,
+  isInputHistoryScope,
+} from './input-history-scope.js';
 
 export const createSettingsHelpers = (dependencies) => {
   const {
@@ -140,6 +146,12 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.themeVariant === 'string' && (candidate.themeVariant === 'light' || candidate.themeVariant === 'dark')) {
       result.themeVariant = candidate.themeVariant;
     }
+    if (typeof candidate.inputHistoryScope === 'string' && isInputHistoryScope(candidate.inputHistoryScope)) {
+      result.inputHistoryScope = candidate.inputHistoryScope;
+    }
+    if (isInputHistoryLimit(candidate.inputHistoryLimit)) {
+      result.inputHistoryLimit = candidate.inputHistoryLimit;
+    }
     if (typeof candidate.useSystemTheme === 'boolean') {
       result.useSystemTheme = candidate.useSystemTheme;
     }
@@ -190,6 +202,9 @@ export const createSettingsHelpers = (dependencies) => {
       result.workStatusHiddenSections = [
         ...new Set(candidate.workStatusHiddenSections.filter((entry) => typeof entry === 'string' && entry.length > 0)),
       ];
+    }
+    if (typeof candidate.workStatusHiddenSectionsExplicit === 'boolean') {
+      result.workStatusHiddenSectionsExplicit = candidate.workStatusHiddenSectionsExplicit;
     }
     if (typeof candidate.desktopLanAccessEnabled === 'boolean') {
       result.desktopLanAccessEnabled = candidate.desktopLanAccessEnabled;
@@ -519,6 +534,12 @@ export const createSettingsHelpers = (dependencies) => {
     if (typeof candidate.inputSpellcheckEnabled === 'boolean') {
       result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled;
     }
+    if (candidate.enterToSend === true || candidate.enterToSend === false) {
+      result.enterToSend = candidate.enterToSend;
+    }
+    if (candidate.enterToSendConfigured === true || candidate.enterToSendConfigured === false) {
+      result.enterToSendConfigured = candidate.enterToSendConfigured;
+    }
     if (typeof candidate.showOpenCodeUpdateNotifications === 'boolean') {
       result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
     }
@@ -685,6 +706,12 @@ export const createSettingsHelpers = (dependencies) => {
       const mode = candidate.gitChangesViewMode.trim();
       if (mode === 'flat' || mode === 'tree') {
         result.gitChangesViewMode = mode;
+      }
+    }
+    if (typeof candidate.toolJsonViewMode === 'string') {
+      const mode = candidate.toolJsonViewMode.trim();
+      if (mode === 'summary' || mode === 'formatted' || mode === 'raw') {
+        result.toolJsonViewMode = mode;
       }
     }
     if (typeof candidate.directoryShowHidden === 'boolean') {
@@ -927,6 +954,8 @@ export const createSettingsHelpers = (dependencies) => {
     const pwaAppName = normalizePwaAppName(settings?.pwaAppName, '');
     const pwaOrientation = normalizePwaOrientation(settings?.pwaOrientation, 'system');
     const mobileKeyboardMode = normalizeMobileKeyboardMode(settings?.mobileKeyboardMode, 'native');
+    const inputHistoryScope = sanitized.inputHistoryScope ?? DEFAULT_INPUT_HISTORY_SCOPE;
+    const inputHistoryLimit = sanitized.inputHistoryLimit ?? DEFAULT_INPUT_HISTORY_LIMIT;
 
     return {
       ...sanitized,
@@ -937,6 +966,8 @@ export const createSettingsHelpers = (dependencies) => {
       ...(pwaAppName ? { pwaAppName } : {}),
       pwaOrientation,
       mobileKeyboardMode,
+      inputHistoryScope,
+      inputHistoryLimit,
       securityScopedBookmarks: bookmarks,
       pinnedDirectories: normalizeStringArray(settings.pinnedDirectories),
       typographySizes: sanitizeTypographySizesPartial(settings.typographySizes),

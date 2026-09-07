@@ -15,12 +15,18 @@ import { setFilesViewShowGitignored } from '@/lib/filesViewShowGitignored';
 import { loadAppearancePreferences, applyAppearancePreferences } from '@/lib/appearancePersistence';
 import { getRegisteredRuntimeAPIs } from '@/contexts/runtimeAPIRegistry';
 import { sanitizeStarterRefs } from '@/lib/draftStarters';
+import {
+  DEFAULT_INPUT_HISTORY_LIMIT,
+  DEFAULT_INPUT_HISTORY_SCOPE,
+  isInputHistoryLimit,
+  isInputHistoryScope,
+} from '@/lib/inputHistoryScope';
+import { useInputHistoryStore } from '@/stores/useInputHistoryStore';
 import { normalizeMobileKeyboardMode, setStoredMobileKeyboardMode } from '@/lib/mobileKeyboardMode';
 import { runtimeFetch } from '@/lib/runtime-fetch';
 import { isCapacitorApp } from '@/lib/platform';
 import { isTerminalShell } from '@/lib/terminalShell';
 import { getRuntimeKey, subscribeRuntimeEndpointChanged, subscribeRuntimeEndpointWillChange } from '@/lib/runtime-switch';
-import { DEFAULT_DARK_THEME_ID, DEFAULT_LIGHT_THEME_ID } from '@/lib/theme/themes';
 import { DEFAULT_OPEN_IN_APP_ID } from '@/lib/openInApps';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 
@@ -77,6 +83,8 @@ const persistRuntimeSettingsMirror = (settings: DesktopSettings, runtimeKey: str
     pwaAppName: settings.pwaAppName,
     mobileKeyboardMode: settings.mobileKeyboardMode,
     openCodeUpdateToastDismissedVersion: settings.openCodeUpdateToastDismissedVersion,
+    inputHistoryScope: settings.inputHistoryScope,
+    inputHistoryLimit: settings.inputHistoryLimit,
     dictationEnabled: settings.dictationEnabled,
     sttProvider: settings.sttProvider,
     sttServerUrl: settings.sttServerUrl,
@@ -197,20 +205,27 @@ const persistToLocalStorage = (settings: DesktopSettings) => {
 
 export interface SettingsSyncedDetail {
   settings: DesktopSettings;
-  /** Whether listeners may adopt cross-window workspace pointers
-      (activeProjectId / lastDirectory). True only for a bootstrap-grade sync:
-      the settings document is shared by every window of this server, so a
-      mid-session reconciliation adopting them would hijack this window's
-      workspace with another window's choice. */
-  adoptWorkspace: boolean;
+  /** Whether listeners may adopt authoritative state that this window owns a
+      live copy of (workspace pointers, theme). True only for a bootstrap-grade
+      sync: the settings document is shared by every window of this server, so
+      a mid-session reconciliation adopting them would hijack this window's
+      choices with another window's. Every settings save echoes the full
+      document back as a sync event with bootstrap=false — the echo itself is
+      not filtered; listeners gate their adoption on this flag and keep their
+      live state for the fields they own. */
+  bootstrap: boolean;
+  /** Whether this sync may replace this window's theme preferences. VS Code
+      settings broadcasts remain bootstrap-grade for shared workspace pointers,
+      but must not copy one webview's theme into another webview. */
+  adoptTheme: boolean;
 }
 
-const dispatchSettingsSynced = (settings: DesktopSettings, adoptWorkspace: boolean): void => {
+const dispatchSettingsSynced = (settings: DesktopSettings, bootstrap: boolean, adoptTheme = bootstrap): void => {
   if (typeof window === 'undefined') {
     return;
   }
   window.dispatchEvent(new CustomEvent<SettingsSyncedDetail>('openchamber:settings-synced', {
-    detail: { settings, adoptWorkspace },
+    detail: { settings, bootstrap, adoptTheme },
   }));
 };
 
@@ -534,14 +549,17 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
   const defaults = useUIStore.getInitialState();
 
   return {
-    useSystemTheme: true,
-    lightThemeId: DEFAULT_LIGHT_THEME_ID,
-    darkThemeId: DEFAULT_DARK_THEME_ID,
+    // Theme fields are deliberately NOT defaulted: the theme authority is the
+    // ThemeSystemContext (scoped per-runtime entry + bootstrap syncs). A
+    // server document without theme fields means "not set" — inventing
+    // defaults here would clobber the window's theme and write it back to the
+    // server. Absent fields keep the current preferences.
     openInAppId: DEFAULT_OPEN_IN_APP_ID,
     showReasoningTraces: defaults.showReasoningTraces,
     streamingAutoFollowEnabled: defaults.streamingAutoFollowEnabled,
     workStatusPanelEnabled: defaults.workStatusPanelEnabled,
     workStatusHiddenSections: defaults.workStatusHiddenSections,
+    workStatusHiddenSectionsExplicit: defaults.workStatusHiddenSectionsExplicit,
     sessionRecapEnabled: defaults.sessionRecapEnabled,
     sessionSuggestionEnabled: defaults.sessionSuggestionEnabled,
     sessionGoalEnabled: defaults.sessionGoalEnabled,
@@ -566,6 +584,8 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
     summaryLength: defaults.summaryLength,
     maxLastMessageLength: defaults.maxLastMessageLength,
     inputSpellcheckEnabled: defaults.inputSpellcheckEnabled,
+    enterToSend: defaults.enterToSend,
+    enterToSendConfigured: defaults.enterToSendConfigured,
     showOpenCodeUpdateNotifications: defaults.showOpenCodeUpdateNotifications,
     agentControlToolEnabled: defaults.agentControlToolEnabled,
     agentWebToolEnabled: defaults.agentWebToolEnabled,
@@ -585,6 +605,8 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
     userMessageRenderingMode: defaults.userMessageRenderingMode,
     collapsibleUserMessages: defaults.collapsibleUserMessages,
     messageStreamTransport: 'auto',
+    inputHistoryScope: DEFAULT_INPUT_HISTORY_SCOPE,
+    inputHistoryLimit: DEFAULT_INPUT_HISTORY_LIMIT,
     stickyUserHeader: defaults.stickyUserHeader,
     promptNavigatorEnabled: defaults.promptNavigatorEnabled,
     wideChatLayoutEnabled: defaults.wideChatLayoutEnabled,
@@ -611,6 +633,7 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
     recentEfforts: defaults.recentEfforts,
     diffLayoutPreference: defaults.diffLayoutPreference,
     gitChangesViewMode: defaults.gitChangesViewMode,
+    toolJsonViewMode: defaults.toolJsonViewMode,
     directoryShowHidden: true,
     filesViewShowGitignored: false,
     dictationEnabled: true,
@@ -632,15 +655,17 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     ? window.__zustand_config_store__ ?? null
     : null;
   const queueStore = useMessageQueueStore.getState();
+  const inputHistoryStore = useInputHistoryStore.getState();
 
   if (typeof settings.workStatusPanelEnabled === 'boolean'
     && settings.workStatusPanelEnabled !== store.workStatusPanelEnabled) {
     store.setWorkStatusPanelEnabled(settings.workStatusPanelEnabled);
   }
   if (Array.isArray(settings.workStatusHiddenSections)) {
-    const next = sanitizeWorkStatusHiddenSections(settings.workStatusHiddenSections);
-    if (next.join('\u0000') !== store.workStatusHiddenSections.join('\u0000')) {
-      store.setWorkStatusHiddenSections(next);
+    const explicit = settings.workStatusHiddenSectionsExplicit === true;
+    const next = sanitizeWorkStatusHiddenSections(settings.workStatusHiddenSections, explicit);
+    if (next.join('\u0000') !== store.workStatusHiddenSections.join('\u0000') || explicit !== store.workStatusHiddenSectionsExplicit) {
+      useUIStore.setState({ workStatusHiddenSections: next, workStatusHiddenSectionsExplicit: explicit });
     }
   }
   if (typeof settings.showReasoningTraces === 'boolean' && settings.showReasoningTraces !== store.showReasoningTraces) {
@@ -735,6 +760,16 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (typeof settings.inputSpellcheckEnabled === 'boolean' && settings.inputSpellcheckEnabled !== store.inputSpellcheckEnabled) {
     store.setInputSpellcheckEnabled(settings.inputSpellcheckEnabled);
+  }
+  if (settings.enterToSend === true || settings.enterToSend === false) {
+    if (settings.enterToSend !== store.enterToSend) {
+      store.setEnterToSend(settings.enterToSend);
+    }
+  }
+  if (settings.enterToSendConfigured === true || settings.enterToSendConfigured === false) {
+    if (settings.enterToSendConfigured !== store.enterToSendConfigured) {
+      store.setEnterToSendConfigured(settings.enterToSendConfigured);
+    }
   }
   if (
     typeof settings.showOpenCodeUpdateNotifications === 'boolean'
@@ -846,6 +881,16 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
     if (configStore && settings.messageStreamTransport !== configStore.settingsMessageStreamTransport) {
       configStore.setSettingsMessageStreamTransport(settings.messageStreamTransport);
     }
+  }
+  if (
+    typeof settings.inputHistoryScope === 'string'
+    && isInputHistoryScope(settings.inputHistoryScope)
+    && settings.inputHistoryScope !== inputHistoryStore.scope
+  ) {
+    inputHistoryStore.applyScope(settings.inputHistoryScope);
+  }
+  if (isInputHistoryLimit(settings.inputHistoryLimit) && settings.inputHistoryLimit !== inputHistoryStore.entryLimit) {
+    inputHistoryStore.applyEntryLimit(settings.inputHistoryLimit);
   }
   if (typeof settings.stickyUserHeader === 'boolean' && settings.stickyUserHeader !== store.stickyUserHeader) {
     store.setStickyUserHeader(settings.stickyUserHeader);
@@ -1036,6 +1081,12 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
       store.setGitChangesViewMode(settings.gitChangesViewMode);
     }
   }
+  if (typeof settings.toolJsonViewMode === 'string'
+    && (settings.toolJsonViewMode === 'summary' || settings.toolJsonViewMode === 'formatted' || settings.toolJsonViewMode === 'raw')) {
+    if (settings.toolJsonViewMode !== store.toolJsonViewMode) {
+      store.setToolJsonViewMode(settings.toolJsonViewMode);
+    }
+  }
   if (typeof settings.directoryShowHidden === 'boolean') {
     setDirectoryShowHidden(settings.directoryShowHidden, { persist: false });
   }
@@ -1167,11 +1218,20 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     // accumulate forever as sections get renamed.
     result.workStatusHiddenSections = sanitizeWorkStatusHiddenSections(candidate.workStatusHiddenSections);
   }
+  if (typeof candidate.workStatusHiddenSectionsExplicit === 'boolean') {
+    result.workStatusHiddenSectionsExplicit = candidate.workStatusHiddenSectionsExplicit;
+  }
   if (typeof candidate.showReasoningTraces === 'boolean') {
     result.showReasoningTraces = candidate.showReasoningTraces;
   }
   if (typeof candidate.streamingAutoFollowEnabled === 'boolean') {
     result.streamingAutoFollowEnabled = candidate.streamingAutoFollowEnabled;
+  }
+  if (typeof candidate.inputHistoryScope === 'string' && isInputHistoryScope(candidate.inputHistoryScope)) {
+    result.inputHistoryScope = candidate.inputHistoryScope;
+  }
+  if (typeof candidate.inputHistoryLimit === 'number' && isInputHistoryLimit(candidate.inputHistoryLimit)) {
+    result.inputHistoryLimit = candidate.inputHistoryLimit;
   }
   if (typeof candidate.sessionRecapEnabled === 'boolean') {
     result.sessionRecapEnabled = candidate.sessionRecapEnabled;
@@ -1439,6 +1499,12 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   if (typeof candidate.inputSpellcheckEnabled === 'boolean') {
     result.inputSpellcheckEnabled = candidate.inputSpellcheckEnabled;
   }
+  if (candidate.enterToSend === true || candidate.enterToSend === false) {
+    result.enterToSend = candidate.enterToSend;
+  }
+  if (candidate.enterToSendConfigured === true || candidate.enterToSendConfigured === false) {
+    result.enterToSendConfigured = candidate.enterToSendConfigured;
+  }
   if (typeof candidate.showOpenCodeUpdateNotifications === 'boolean') {
     result.showOpenCodeUpdateNotifications = candidate.showOpenCodeUpdateNotifications;
   }
@@ -1610,6 +1676,12 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
     && (candidate.gitChangesViewMode === 'flat' || candidate.gitChangesViewMode === 'tree')
   ) {
     result.gitChangesViewMode = candidate.gitChangesViewMode;
+  }
+  if (
+    typeof candidate.toolJsonViewMode === 'string'
+    && (candidate.toolJsonViewMode === 'summary' || candidate.toolJsonViewMode === 'formatted' || candidate.toolJsonViewMode === 'raw')
+  ) {
+    result.toolJsonViewMode = candidate.toolJsonViewMode;
   }
   if (typeof candidate.directoryShowHidden === 'boolean') {
     result.directoryShowHidden = candidate.directoryShowHidden;
@@ -1896,8 +1968,9 @@ export const invalidateSettingsCache = (): void => {
   _settingsCache = null;
 };
 
-export const syncDesktopSettings = async (options?: { adoptWorkspace?: boolean }): Promise<void> => {
-  const adoptWorkspace = options?.adoptWorkspace !== false;
+export const syncDesktopSettings = async (options?: { bootstrap?: boolean; adoptTheme?: boolean }): Promise<void> => {
+  const bootstrap = options?.bootstrap !== false;
+  const adoptTheme = options?.adoptTheme ?? bootstrap;
   if (typeof window === 'undefined') {
     return;
   }
@@ -2026,7 +2099,7 @@ export const syncDesktopSettings = async (options?: { adoptWorkspace?: boolean }
       if (!isSettingsRuntimeContextCurrent(context)) return;
     }
 
-    dispatchSettingsSynced(authoritativeSettings, adoptWorkspace);
+    dispatchSettingsSynced(authoritativeSettings, bootstrap, adoptTheme);
   };
 
   try {
