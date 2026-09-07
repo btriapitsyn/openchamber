@@ -37,6 +37,7 @@ import { createRelayDevTunnelBridge } from './relay-dev-tunnel.mjs';
 import { attachRendererRecovery } from './renderer-recovery.mjs';
 import { mintOutsideFileGrant } from '@openchamber/web/server/lib/fs/routes.js';
 import { fetchUpdateNotes } from '@openchamber/web/server/lib/changelog/update-notes.js';
+import { applyConnectAttemptTimeout } from '@openchamber/web/server/lib/network-defaults.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -104,6 +105,11 @@ if (shouldIgnoreLoopbackConnectionLimit({
 })) {
   app.commandLine.appendSwitch('ignore-connections-limit', '127.0.0.1,localhost');
 }
+// This process runs quota/provider fetches under Node/undici, whose happy-eyeballs
+// default aborts each connect attempt after 250ms — distant provider endpoints
+// routinely need longer handshakes, surfacing as "fetch failed" (#3399). No-op on
+// runtimes without the setter.
+applyConnectAttemptTimeout();
 
 protocol.registerSchemesAsPrivileged([
   {
