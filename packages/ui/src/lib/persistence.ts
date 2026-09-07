@@ -595,6 +595,7 @@ const materializeAuthoritativeUiSettings = (settings: DesktopSettings): DesktopS
     showTurnChangedFiles: defaults.showTurnChangedFiles,
     showExpandedBashTools: defaults.showExpandedBashTools,
     showExpandedEditTools: defaults.showExpandedEditTools,
+    showExpandedTodoTools: defaults.showExpandedTodoTools,
     timeFormatPreference: defaults.timeFormatPreference,
     weekStartPreference: defaults.weekStartPreference,
     desktopWindowControlsPosition: defaults.desktopWindowControlsPosition,
@@ -816,6 +817,9 @@ const applyDesktopUiPreferences = (settings: DesktopSettings) => {
   }
   if (typeof settings.showExpandedEditTools === 'boolean' && settings.showExpandedEditTools !== store.showExpandedEditTools) {
     store.setShowExpandedEditTools(settings.showExpandedEditTools);
+  }
+  if (typeof settings.showExpandedTodoTools === 'boolean' && settings.showExpandedTodoTools !== store.showExpandedTodoTools) {
+    store.setShowExpandedTodoTools(settings.showExpandedTodoTools);
   }
   if (typeof settings.timeFormatPreference === 'string'
     && (settings.timeFormatPreference === 'auto' || settings.timeFormatPreference === '12h' || settings.timeFormatPreference === '24h')) {
@@ -1534,6 +1538,9 @@ const sanitizeWebSettings = (payload: unknown): DesktopSettings | null => {
   }
   if (typeof candidate.showExpandedEditTools === 'boolean') {
     result.showExpandedEditTools = candidate.showExpandedEditTools;
+  }
+  if (typeof candidate.showExpandedTodoTools === 'boolean') {
+    result.showExpandedTodoTools = candidate.showExpandedTodoTools;
   }
   if (typeof candidate.timeFormatPreference === 'string'
     && (candidate.timeFormatPreference === 'auto' || candidate.timeFormatPreference === '12h' || candidate.timeFormatPreference === '24h')) {
