@@ -17,6 +17,7 @@ const AUTH = JSON.stringify({
   crof: { key: 'test-token' },
   neuralwatt: { key: 'test-token' },
   'opencode-go': { key: 'test-token' },
+  openrouter: { key: 'test-token' },
   'zai-coding-plan': { key: 'test-token' },
   deepseek: { key: 'test-token' },
   hyper: { key: 'test-token' },
@@ -111,6 +112,180 @@ describe('OpenCode Go quota provider (VS Code parity)', () => {
     assert.equal(result.usage!.windows['5h']!.usedPercent, 25);
     assert.throws(() => fs.statSync(legacyPath));
   });
+});
+
+describe('OpenRouter quota provider (VS Code parity)', () => {
+  const documentedPayload = {
+    data: {
+      label: 'test-key',
+      usage: 3.17561396,
+      usage_daily: 0.0000018,
+      usage_weekly: 0.0000018,
+      usage_monthly: 3.17561396,
+      limit: 30,
+      limit_remaining: 29.9999982,
+      limit_reset: 'daily',
+      is_free_tier: true,
+      is_management_key: false,
+      include_byok_in_limit: false,
+      byok_usage: 0,
+    },
+  };
+
+  test('reads the documented key endpoint and emits the current reset window', async () => {
+    let requestedUrl = '';
+    let requestInit: RequestInit | undefined;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      requestedUrl = url;
+      requestInit = init;
+      return mockResponse(documentedPayload);
+    }) as typeof fetch;
+
+    const result = await fetchQuotaForProvider('openrouter');
+
+    assert.equal(requestedUrl, 'https://openrouter.ai/api/v1/key');
+    assert.equal(requestedUrl.includes('/api/v1/credits'), false);
+    assert.equal(new Headers(requestInit?.headers).get('Authorization'), 'Bearer test-token');
+    assert.equal(new Headers(requestInit?.headers).get('Accept-Encoding'), 'identity');
+    assert.ok(requestInit?.signal instanceof AbortSignal);
+    assert.deepEqual(Object.keys(result.usage!.windows), ['daily']);
+    assert.equal(result.usage!.windows.daily!.windowSeconds, 86400);
+    assert.equal(result.usage!.windows.daily!.valueLabel, '$0.00 / $30.00');
+    assert.ok(typeof result.usage!.windows.daily!.resetAt === 'number');
+  });
+
+  test('maps an unlimited null-limit key to a monthly spent window', async () => {
+    stubFetchReturning(() => Promise.resolve(mockResponse({
+      data: { limit: null, limit_remaining: null, limit_reset: null, usage_monthly: 12.5, is_management_key: false },
+    })));
+
+    const result = await fetchQuotaForProvider('openrouter');
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(Object.keys(result.usage!.windows), ['monthly']);
+    assert.equal(result.usage!.windows.monthly!.usedPercent, null);
+    assert.equal(result.usage!.windows.monthly!.windowSeconds, 30 * 86400);
+    assert.equal(result.usage!.windows.monthly!.valueLabel, '$12.50 spent');
+    assert.ok(typeof result.usage!.windows.monthly!.resetAt === 'number');
+  });
+
+  test('maps a lifetime cap to a credits window without reset metadata', async () => {
+    stubFetchReturning(() => Promise.resolve(mockResponse({
+      data: { limit: 30, limit_remaining: 25, limit_reset: null, usage_monthly: 5 },
+    })));
+
+    const result = await fetchQuotaForProvider('openrouter');
+    const window = result.usage!.windows.credits;
+
+    assert.ok(window);
+    assert.equal(window!.windowSeconds, null);
+    assert.equal(window!.resetAt, null);
+  });
+
+  test('maps an unrecognized reset period to a credits window', async () => {
+    stubFetchReturning(() => Promise.resolve(mockResponse({
+      data: { limit: 30, limit_remaining: 25, limit_reset: 'yearly', usage_monthly: 5 },
+    })));
+
+    const result = await fetchQuotaForProvider('openrouter');
+
+    assert.ok(result.usage!.windows.credits);
+    assert.equal(result.usage!.windows.credits!.windowSeconds, null);
+    assert.equal(result.usage!.windows.credits!.resetAt, null);
+  });
+
+  test('clamps percent at 100 while leaving the money label unclamped', async () => {
+    stubFetchReturning(() => Promise.resolve(mockResponse({
+      data: { limit: 30, limit_remaining: -1, limit_reset: 'monthly', usage_monthly: 31 },
+    })));
+
+    const result = await fetchQuotaForProvider('openrouter');
+    const window = result.usage!.windows.monthly;
+
+    assert.equal(window!.usedPercent, 100);
+    assert.equal(window!.valueLabel, '$31.00 / $30.00');
+  });
+
+  test('uses a weekly window and derives its reset on Monday UTC', async () => {
+    stubFetchReturning(() => Promise.resolve(mockResponse({
+      data: { limit: 30, limit_remaining: 25, limit_reset: 'weekly', usage_monthly: 5 },
+    })));
+
+    const result = await fetchQuotaForProvider('openrouter');
+    const window = result.usage!.windows.weekly;
+
+    assert.ok(window);
+    assert.equal(window!.windowSeconds, 604800);
+    assert.equal(new Date(window!.resetAt!).getUTCDay(), 1);
+  });
+
+  test('rejects management keys with an inference-key error', async () => {
+    stubFetchReturning(() => Promise.resolve(mockResponse({ data: { is_management_key: true } })));
+
+    const result = await fetchQuotaForProvider('openrouter');
+
+    assert.equal(result.ok, false);
+    assert.equal(result.configured, true);
+    assert.equal(result.usage, null);
+    assert.equal(result.error, 'Management key configured — quota needs an inference API key');
+  });
+
+  for (const status of [401, 403]) {
+    test(`maps HTTP ${status} to session expiry`, async () => {
+      stubFetchFailing(async () => ({}), { ok: false, status });
+
+      const result = await fetchQuotaForProvider('openrouter');
+
+      assert.equal(result.ok, false);
+      assert.equal(result.error, 'Session expired — please re-authenticate with OpenRouter');
+    });
+  }
+
+  test('reports invalid JSON as a parse failure', async () => {
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => { throw new SyntaxError('Unexpected token'); },
+    }) as unknown as Response) as typeof fetch;
+
+    const result = await fetchQuotaForProvider('openrouter');
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'Invalid response from provider');
+  });
+
+  test('normalizes timeout failures', async () => {
+    stubFetchReturning(() => Promise.reject(new DOMException('Timed out', 'TimeoutError')));
+
+    const result = await fetchQuotaForProvider('openrouter');
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error, 'Request timed out');
+  });
+
+  test('rejects a response without usable quota data', async () => {
+    stubFetchReturning(() => Promise.resolve(mockResponse({ data: { limit: 30, limit_remaining: null } })));
+
+    const result = await fetchQuotaForProvider('openrouter');
+
+    assert.equal(result.ok, false);
+    assert.equal(result.configured, true);
+    assert.equal(result.usage, null);
+    assert.equal(result.error, 'No quota data in response');
+  });
+
+  for (const payload of [{ data: {} }, { data: null }]) {
+    test(`rejects ${JSON.stringify(payload)} without quota data`, async () => {
+      stubFetchReturning(() => Promise.resolve(mockResponse(payload)));
+
+      const result = await fetchQuotaForProvider('openrouter');
+
+      assert.equal(result.ok, false);
+      assert.equal(result.configured, true);
+      assert.equal(result.usage, null);
+      assert.equal(result.error, 'No quota data in response');
+    });
+  }
 });
 
 
