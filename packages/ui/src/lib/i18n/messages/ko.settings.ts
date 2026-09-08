@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.addInstance': '인스턴스 추가',
   'settings.gitlab.device.waiting': 'GitLab에서 기기를 승인한 다음 OpenChamber로 돌아오세요. 이 페이지는 자동으로 업데이트됩니다.',
   'settings.gitlab.actions.openGitLab': 'GitLab 열기',
+  'settings.sourceControl.accounts.inUse': '사용 중',
   'settings.sourceControl.accounts.available': '사용 가능',
   'settings.sourceControl.accounts.configured': '구성된 계정',
   'settings.sourceControl.accounts.connectedCount': '계정 {count}개',

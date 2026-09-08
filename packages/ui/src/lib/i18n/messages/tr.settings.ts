@@ -2297,6 +2297,7 @@ export const settingsDict = {
   'settings.gitlab.actions.addInstance': 'Instance ekle',
   'settings.gitlab.device.waiting': 'Cihazı GitLab\'da yetkilendirin, ardından OpenChamber\'a dönün. Bu sayfa otomatik olarak güncellenir.',
   'settings.gitlab.actions.openGitLab': 'GitLab\'ı Aç',
+  'settings.sourceControl.accounts.inUse': 'Kullanımda',
   'settings.sourceControl.accounts.available': 'Mevcut',
   'settings.sourceControl.accounts.configured': 'Yapılandırılmış hesaplar',
   'settings.sourceControl.accounts.connectedCount': '{count} hesap',

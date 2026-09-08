@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.addInstance': '新增執行個體',
   'settings.gitlab.device.waiting': '在 GitLab 中授權裝置，然後返回 OpenChamber。此頁面會自動更新。',
   'settings.gitlab.actions.openGitLab': '開啟 GitLab',
+  'settings.sourceControl.accounts.inUse': '使用中',
   'settings.sourceControl.accounts.available': '可用',
   'settings.sourceControl.accounts.configured': '已設定的帳戶',
   'settings.sourceControl.accounts.connectedCount': '{count} 個帳戶',

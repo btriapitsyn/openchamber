@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.addInstance': 'Adicionar instância',
   'settings.gitlab.device.waiting': 'Autorize o dispositivo no GitLab e volte ao OpenChamber. Esta página será atualizada automaticamente.',
   'settings.gitlab.actions.openGitLab': 'Abrir GitLab',
+  'settings.sourceControl.accounts.inUse': 'Em uso',
   'settings.sourceControl.accounts.available': 'Disponível',
   'settings.sourceControl.accounts.configured': 'Contas configuradas',
   'settings.sourceControl.accounts.connectedCount': '{count} contas',

@@ -250,6 +250,7 @@ export const GitHubSettings: React.FC<GitHubSettingsProps> = () => {
         <SourceControlAccountList
           accounts={accounts}
           avatarAlt={(username) => t('settings.github.page.avatarAlt.withLogin', { login: username })}
+          currentLabel={t('settings.sourceControl.accounts.inUse')}
           sourceLabel={(account) => account.source === 'cli'
             ? t('settings.github.page.accountSource.cli')
             : t('settings.github.page.accountSource.oauth')}

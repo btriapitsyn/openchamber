@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.addInstance': 'Додати інстанс',
   'settings.gitlab.device.waiting': 'Авторизуйте пристрій у GitLab, а потім поверніться до OpenChamber. Ця сторінка оновиться автоматично.',
   'settings.gitlab.actions.openGitLab': 'Відкрити GitLab',
+  'settings.sourceControl.accounts.inUse': 'Використовується',
   'settings.sourceControl.accounts.available': 'Доступний',
   'settings.sourceControl.accounts.configured': 'Налаштовані облікові записи',
   'settings.sourceControl.accounts.connectedCount': 'Облікових записів: {count}',

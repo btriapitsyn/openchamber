@@ -27,11 +27,25 @@ const groupSourceControlAccounts = (
   return Array.from(groups.values());
 };
 
+/**
+ * A short handle for one credential of an account that has several.
+ *
+ * Re-authenticating adds a credential rather than replacing one, because
+ * anything already bound to the old credential must keep reading as that
+ * credential rather than being silently retargeted. So one person can appear
+ * with two rows, and each row has to say which credential it is — the full
+ * reference is what account pickers and the binding strip show.
+ */
+const credentialHandle = (id: string): string =>
+  /[0-9a-f]{8}(?=-[0-9a-f]{4}-)/i.exec(id)?.[0] ?? id;
+
 type SourceControlAccountListProps = {
   accounts: SourceControlAuthAccount[];
   avatarAlt: (username: string) => string;
   sourceLabel: (account: SourceControlAuthAccount) => string;
   statusLabel: (account: SourceControlAuthAccount) => string;
+  /** Marks the credential this account acts as when nothing names another. */
+  currentLabel: string;
   renderActions: (account: SourceControlAuthAccount) => React.ReactNode;
 };
 
@@ -40,6 +54,7 @@ export const SourceControlAccountList: React.FC<SourceControlAccountListProps> =
   avatarAlt,
   sourceLabel,
   statusLabel,
+  currentLabel,
   renderActions,
 }) => (
   <div className="divide-y divide-[var(--surface-subtle)]">
@@ -83,6 +98,13 @@ export const SourceControlAccountList: React.FC<SourceControlAccountListProps> =
                   <span>{sourceLabel(account)}</span>
                   <span aria-hidden="true">·</span>
                   <span>{statusLabel(account)}</span>
+                  {/* Only worth the room when the same person has more than one
+                      credential; otherwise the row above already named it. */}
+                  {group.accounts.length > 1 ? <>
+                    <span aria-hidden="true">·</span>
+                    <span className="font-mono">{credentialHandle(account.id)}</span>
+                    {account.current ? <span className="rounded-full border border-border px-1.5">{currentLabel}</span> : null}
+                  </> : null}
                 </div>
                 <div className="flex flex-wrap gap-2">{renderActions(account)}</div>
               </div>

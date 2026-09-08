@@ -2291,6 +2291,7 @@ export const settingsDict = {
   'settings.gitlab.actions.addInstance': '添加实例',
   'settings.gitlab.device.waiting': '在 GitLab 中授权设备，然后返回 OpenChamber。此页面会自动更新。',
   'settings.gitlab.actions.openGitLab': '打开 GitLab',
+  'settings.sourceControl.accounts.inUse': '使用中',
   'settings.sourceControl.accounts.available': '可用',
   'settings.sourceControl.accounts.configured': '已配置的账户',
   'settings.sourceControl.accounts.connectedCount': '{count} 个账户',

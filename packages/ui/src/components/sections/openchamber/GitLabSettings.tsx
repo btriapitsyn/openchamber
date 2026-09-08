@@ -278,6 +278,7 @@ const GitLabInstanceItem: React.FC<GitLabInstanceItemProps> = ({ identity, sourc
           <SourceControlAccountList
             accounts={accounts}
             avatarAlt={(username) => username}
+            currentLabel={t('settings.sourceControl.accounts.inUse')}
             sourceLabel={(account) => t(account.source === 'cli' ? 'settings.gitlab.cli.label' : getManagedCredentialSourceLabelKey(account.source))}
             statusLabel={(account) => account.status === 'valid'
               ? t('settings.sourceControl.accounts.available')
