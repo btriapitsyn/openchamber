@@ -477,7 +477,7 @@ export function registerGitRoutes(app, {
   });
 
   app.post('/api/git/set-identity', async (req, res) => {
-    const { getProfile, setLocalIdentity, getGlobalIdentity } = await getGitLibraries();
+    const { getProfile, setLocalIdentity, clearLocalIdentity, getGlobalIdentity } = await getGitLibraries();
     try {
       const directory = req.query.directory;
       if (!directory) {
@@ -498,12 +498,16 @@ export function registerGitRoutes(app, {
         if (!globalIdentity?.userName || !globalIdentity?.userEmail) {
           return res.status(404).json({ error: 'Global identity is not configured' });
         }
-        profile = {
+        // The system identity is the absence of an override, not a copy of it:
+        // the repository stops naming an author and reads the machine's, which
+        // is what keeps it following later changes there.
+        await clearLocalIdentity(directory);
+        return res.json({ success: true, profile: toPublicGitIdentityProfile({
           id: 'global',
           name: 'Global Identity',
           userName: globalIdentity.userName,
           userEmail: globalIdentity.userEmail,
-        };
+        }) });
       } else {
         profile = getProfile(profileId);
         if (!profile) {

@@ -17,6 +17,7 @@ const gitLibraries = {
   updateProfile: vi.fn(),
   getProfile: vi.fn(),
   setLocalIdentity: vi.fn(),
+  clearLocalIdentity: vi.fn(),
 };
 
 vi.mock('./index.js', () => ({
@@ -36,6 +37,7 @@ vi.mock('./index.js', () => ({
   updateProfile: gitLibraries.updateProfile,
   getProfile: gitLibraries.getProfile,
   setLocalIdentity: gitLibraries.setLocalIdentity,
+  clearLocalIdentity: gitLibraries.clearLocalIdentity,
 }));
 
 const { registerGitRoutes } = await import('./routes.js');
@@ -194,10 +196,11 @@ describe('git route renderer DTOs', () => {
     expect(gitLibraries.updateProfile).not.toHaveBeenCalled();
   });
 
-  it('does not expose global SSH configuration when applying an author', async () => {
+  it('applies the global author by removing the repository own, never copying it in', async () => {
     gitLibraries.getGlobalIdentity.mockResolvedValue({
       userName: 'Global Author', userEmail: 'global@example.com', sshCommand: 'ssh -i /private/global-key',
     });
+    gitLibraries.clearLocalIdentity.mockResolvedValue(true);
     gitLibraries.setLocalIdentity.mockResolvedValue(undefined);
     const { app, getRoute } = createRouteRegistry();
     registerGitRoutes(app);
@@ -212,7 +215,10 @@ describe('git route renderer DTOs', () => {
       id: 'global', name: 'Global Identity', userName: 'Global Author', userEmail: 'global@example.com',
       account: null, transport: 'system',
     };
-    expect(gitLibraries.setLocalIdentity).toHaveBeenCalledWith('/repo', globalProfile);
+    // Choosing it means no override applies here, so the repository stops
+    // naming an author rather than pinning the machine's current one.
+    expect(gitLibraries.clearLocalIdentity).toHaveBeenCalledWith('/repo');
+    expect(gitLibraries.setLocalIdentity).not.toHaveBeenCalled();
     expect(response.body).toEqual({ success: true, profile: globalProfile });
   });
 

@@ -75,13 +75,20 @@ export function registerSourceControlRoutes(app, dependencies = {}) {
   const identityProvisioning = dependencies.identityProvisioning ?? createGitIdentityProvisioning({
     store: gitIdentityStore,
   });
+  const listGitHubAccounts = dependencies.listGitHubAccounts ?? getGitHubAuthAccounts;
   const oauthFlowRegistry = dependencies.oauthFlowRegistry ?? createOAuthFlowRegistry();
-  // Accounts connected before identities carried one still need theirs, or the
-  // add and clone screens would offer nothing for a host that is connected.
+  /**
+   * Identities for accounts connected before identities carried one.
+   *
+   * Deliberately not run while routes are registered, and deliberately not
+   * reaching for the default stores: registering routes must not read, and
+   * must not lock, a data directory the caller did not name. The owner of the
+   * real stores calls this once the server is up.
+   */
   const backfillConnectedIdentities = async () => {
     const entries = [];
     try {
-      for (const account of await getGitHubAuthAccounts()) {
+      for (const account of await listGitHubAccounts()) {
         if (account?.status === 'valid' && account.id) {
           entries.push({ account: { provider: 'github', instance: 'github.com', accountId: account.id }, user: account.user });
         }
@@ -100,7 +107,6 @@ export function registerSourceControlRoutes(app, dependencies = {}) {
     try { identityProvisioning.backfillAccountIdentities(entries); }
     catch (error) { console.warn('Failed to backfill Git identities for connected accounts:', error?.message ?? error); }
   };
-  void backfillConnectedIdentities();
   const mutationExecutor = dependencies.mutationExecutor ?? createMutationExecutor({
     store: dependencies.mutationStore ?? createMutationStore({
       filePath: path.join(configRoot, 'source-control-mutations.json'),
@@ -219,6 +225,7 @@ export function registerSourceControlRoutes(app, dependencies = {}) {
   });
   return Object.freeze({
     ...bindingService,
+    backfillConnectedIdentities,
     resolveChangeRequestSource: async (input) => {
       const provider = input?.context?.provider;
       if (provider === 'github') return github.resolveChangeRequestSource(input);

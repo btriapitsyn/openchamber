@@ -105,27 +105,28 @@ export const applyIdentityToRepository = async (
   const mutation = repositoryBindingOwner.captureMutation(scope, read);
   let outcome: ApplyIdentityOutcome = { status: 'applied' };
   try {
+    // The identity is the whole answer for this repository, so an identity
+    // that names no account leaves it answering to none — the account it used
+    // to answer to was the previous identity's, not this one's.
+    const bound = read.binding?.providers[0];
+    const target = bound && {
+      provider: bound.provider,
+      instance: bound.instance,
+      accountId: bound.accountId,
+      primaryRemote: bound.primaryRemote,
+    };
+    const context = {
+      directory,
+      expectedRepositoryId: read.repository.repositoryId,
+      expectedRevision: read.revision,
+    };
     if (identity.account) {
-      const bound = read.binding?.providers[0];
       const provider = { ...identity.account, primaryRemote: remoteName };
-      const context = {
-        directory,
-        expectedRepositoryId: read.repository.repositoryId,
-        expectedRevision: read.revision,
-      };
-      read = await sourceControl.repositoryProviderBindingMutate(bound
-        ? {
-          ...context,
-          operation: 'replace',
-          target: {
-            provider: bound.provider,
-            instance: bound.instance,
-            accountId: bound.accountId,
-            primaryRemote: bound.primaryRemote,
-          },
-          provider,
-        }
+      read = await sourceControl.repositoryProviderBindingMutate(target
+        ? { ...context, operation: 'replace', target, provider }
         : { ...context, operation: 'add', provider });
+    } else if (target) {
+      read = await sourceControl.repositoryProviderBindingMutate({ ...context, operation: 'remove', target });
     }
     const intent = transportIntent(identity, read, remoteName, acknowledgedSystem, directory);
     if (intent) {
@@ -143,9 +144,11 @@ export const applyIdentityToRepository = async (
   }
 
   // The signature is written to the repository itself, so it is applied even
-  // when the transfer side could not be.
+  // when the transfer side could not be. The system identity is applied the
+  // same way: its id removes the repository's own author instead of naming one,
+  // which is what "no override applies here" means.
   try {
-    if (identity.id && identity.id !== 'global') await git.setGitIdentity(directory, identity.id);
+    if (identity.id) await git.setGitIdentity(directory, identity.id);
   } catch {
     if (outcome.status === 'applied') outcome = { status: 'failed', reason: 'author' };
   }

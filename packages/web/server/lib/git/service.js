@@ -2315,6 +2315,24 @@ export async function hasLocalIdentity(directory) {
   }
 }
 
+/**
+ * Removes the identity a repository was given, leaving the machine's own.
+ *
+ * Choosing the system identity means no OpenChamber override applies here, so
+ * the repository stops naming an author of its own and reads whatever the
+ * machine's configuration says — including later changes to it. Only the keys
+ * an identity writes are removed, and only in this repository.
+ */
+export async function clearLocalIdentity(directory) {
+  const git = await createGit(directory);
+  // `git config --unset` exits 5 for a key that is not set, which is the
+  // ordinary case here rather than a failure.
+  for (const key of ['user.name', 'user.email', 'user.signingkey', 'commit.gpgsign', 'gpg.format']) {
+    await git.raw(['config', '--local', '--unset-all', key]).catch(() => null);
+  }
+  return true;
+}
+
 export async function setLocalIdentity(directory, profile) {
   const git = await createGit(directory);
 

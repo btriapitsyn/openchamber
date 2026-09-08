@@ -168,13 +168,37 @@ describe('applyIdentityToRepository', () => {
     expect(providerCalls).toEqual([]);
   });
 
-  test('leaves the signature alone for the global identity, which the repository does not own', async () => {
-    const { apis, authorCalls } = harness();
+  test('applies the system identity as the absence of an override', async () => {
+    const bound = {
+      ...account, primaryRemote: 'origin', readiness: 'ready' as const, endpoint: endpoint('fetch-one'),
+    };
+    const { apis, providerCalls, authorCalls } = harness(read([bound]));
+    await applyIdentityToRepository({
+      directory: '/repo', remoteName: 'origin', identity: identity({ id: 'global', transport: 'system' }),
+      acknowledgedSystem: true,
+    }, apis);
+    // The account it used to answer to belonged to the identity it replaced.
+    expect(providerCalls[0]).toEqual({
+      directory: '/repo', expectedRepositoryId: 'repo_one', expectedRevision: 2, operation: 'remove',
+      target: {
+        provider: bound.provider, instance: bound.instance, accountId: bound.accountId, primaryRemote: bound.primaryRemote,
+      },
+    });
+    // The server reads `global` as "remove this repository's own author".
+    expect(authorCalls).toEqual(['/repo:global']);
+  });
+
+  test('leaves no account bound for an identity that names none', async () => {
+    const bound = {
+      ...account, primaryRemote: 'origin', readiness: 'ready' as const, endpoint: endpoint('fetch-one'),
+    };
+    const { apis, providerCalls } = harness(read([bound]));
     await applyIdentityToRepository(
-      { directory: '/repo', remoteName: 'origin', identity: identity({ id: 'global', transport: 'anonymous' }) },
+      { directory: '/repo', remoteName: 'origin', identity: identity({ transport: 'anonymous' }) },
       apis,
     );
-    expect(authorCalls).toEqual([]);
+    expect(providerCalls).toHaveLength(1);
+    expect(providerCalls[0].operation).toBe('remove');
   });
 
   test('reports a binding it could not write, and still writes the signature', async () => {
