@@ -589,7 +589,22 @@ export const registerAuthAndAccessRoutes = (app, dependencies) => {
     res.status(statusCode).json({ error: 'Invalid or expired pairing session' });
   };
 
+  /**
+   * Endpoints that carry their own authority instead of a UI session.
+   *
+   * The agent's Git credential helper and the plugin's shell guard both run
+   * inside the managed OpenCode child. Each authenticates with a bearer token
+   * minted for that child and rotated every time it starts, and each route
+   * refuses any peer that is not loopback. Neither has a UI session or can
+   * obtain one, so leaving them behind the session guard makes repository
+   * bindings silently unenforceable — and raw transfers silently allowed — on
+   * every instance that sets a UI password, which Docker requires.
+   */
+  const selfAuthenticatedApiPaths = new Set(['/api/git/agent-credential', '/api/git/shell-boundary']);
+
   const requireApiAuth = async (req, res, next) => {
+    const pathname = (req.originalUrl || '').split('?')[0];
+    if (selfAuthenticatedApiPaths.has(pathname)) return next();
     const requestScope = tunnelAuthController.classifyRequestScope(req);
     if (requestScope === 'tunnel' || requestScope === 'unknown-public') {
       return tunnelAuthController.requireTunnelSession(req, res, next);
