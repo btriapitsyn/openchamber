@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import express from 'express';
 import request from 'supertest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -102,15 +105,27 @@ const makeApp = ({ store = makeStore(), validateMutationContext, resolveRepo, re
   return { app, store };
 };
 
+let directory;
+let previousDataDirectory;
+
 beforeEach(async () => {
+  // The auth store resolves its directory at import, so the isolated data
+  // directory must be in place before the module loads — otherwise fixture
+  // accounts land in the person's real store.
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-github-mutations-'));
+  previousDataDirectory = process.env.OPENCHAMBER_DATA_DIR;
+  process.env.OPENCHAMBER_DATA_DIR = directory;
   vi.resetModules();
   auth = await import('./auth.js');
   ({ registerGitHubRoutes } = await import('./routes.js'));
 });
 
-afterEach(() => {
+afterEach(async () => {
+  if (previousDataDirectory === undefined) delete process.env.OPENCHAMBER_DATA_DIR;
+  else process.env.OPENCHAMBER_DATA_DIR = previousDataDirectory;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  await fs.rm(directory, { recursive: true, force: true });
 });
 
 describe('canonical GitHub mutations', () => {
