@@ -14,7 +14,8 @@ import { useContributorDestinationChooser } from '@/components/views/git/contrib
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
 import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
-import { applyIdentityToRepository, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
+import { remoteTraits } from '@/lib/source-control/identity';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { PierreDiffViewer } from '@/components/views/PierreDiffViewer';
@@ -728,6 +729,10 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
           onSelect={(profile) => void handleApplyIdentity(profile)}
           isApplying={isApplyingIdentity}
           onConfigure={() => setRepositoryConfigurationOpen(true)}
+          applicability={(identity) => {
+            const url = effectiveRemotes[0]?.fetchUrl ?? '';
+            return url ? identityApplicability(identity, remoteTraits(url)) : { applicable: true };
+          }}
         />
         <SyncActions
           syncAction={operationRecovery.entry?.executing ? syncAction : null}
@@ -758,7 +763,6 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         open={isRepositoryConfigurationOpen}
         onOpenChange={setRepositoryConfigurationOpen}
         directory={currentDirectory}
-        allowAuthorApply
       />
       <GitOperationStatus className="mx-3 mt-3" entry={operationRecovery.entry} onRefresh={() => void operationRecovery.refresh()} onCancel={() => void operationRecovery.cancel()} />
       {changeEntries.length > 0 ? (

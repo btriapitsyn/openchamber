@@ -19,6 +19,7 @@ const toGitRemoteSummary = (remote) => ({
 
 export function registerGitRoutes(app, {
   networkOperations, managedSshInventory, getSourceControlBinding, contributorProvenance, resolveChangeRequestSource,
+  backfillIdentities,
   createHttpsCredentialReference, resolveSourceControlAccount, errorRedactionSecrets = [], worktreeBootstrapStore,
 } = {}) {
   let gitLibraries = null;
@@ -350,9 +351,14 @@ export function registerGitRoutes(app, {
     }
   });
 
+  let identitiesBackfilled = false;
   app.get('/api/git/identities', async (req, res) => {
     const { getProfiles } = await getGitLibraries();
     try {
+      if (!identitiesBackfilled && backfillIdentities instanceof Function) {
+        identitiesBackfilled = true;
+        await backfillIdentities();
+      }
       const profiles = getProfiles();
       res.set('Cache-Control', 'no-store');
       res.json(profiles.map(toPublicGitIdentityProfile));

@@ -1,9 +1,10 @@
 import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
-  gitRemoteHost,
   isSshRemoteUrl,
   proposeIdentityForHost,
+  remoteTraits,
+  type RemoteTraits,
 } from '@/lib/source-control/identity';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { GitOperationResultError, runGitClone } from '@/lib/boundGitNetworkOperation';
@@ -13,7 +14,8 @@ import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 import { useExistingRepositorySummary } from './useExistingRepositorySummary';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { identityTransport } from '@/lib/api/git-identity';
-import { applyIdentityToRepository } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, describeIdentityApplicability, identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
+import type { GitIdentityProfile } from '@/lib/api/types';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -431,13 +433,26 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
    * whatever the person picks instead. The key carries the host so a new host
    * proposes again rather than keeping an answer given for another one.
    */
-  const identityHost = isCloneMode
-    ? gitRemoteHost(cloneRemoteUrl)
-    : existingRepository?.primaryRemote?.host ?? null;
+  const existingPrimaryRemote = existingRepository?.primaryRemote ?? null;
+  const identityRemote = React.useMemo((): RemoteTraits | null => {
+    if (isCloneMode) return cloneRemoteUrl.trim() ? remoteTraits(cloneRemoteUrl) : null;
+    if (!existingPrimaryRemote) return null;
+    return { host: existingPrimaryRemote.host, https: existingPrimaryRemote.https, ssh: existingPrimaryRemote.ssh };
+  }, [isCloneMode, cloneRemoteUrl, existingPrimaryRemote]);
+  const identityHost = identityRemote?.host ?? null;
   const identityChoiceKey = `${isCloneMode ? 'clone' : 'add'}:${identityHost ?? ''}`;
+  // An identity is specific to an instance and to a way of reaching it; one
+  // that cannot serve this remote is shown with the reason, never proposed.
+  const identityApplicabilityOf = React.useCallback((identity: GitIdentityProfile): IdentityApplicability =>
+    identityRemote ? identityApplicability(identity, identityRemote) : { applicable: true },
+  [identityRemote]);
   const proposedIdentity = React.useMemo(
-    () => proposeIdentityForHost(availableGitIdentities, identityHost, defaultGitIdentityId),
-    [availableGitIdentities, defaultGitIdentityId, identityHost],
+    () => proposeIdentityForHost(
+      availableGitIdentities.filter((identity) => identityApplicabilityOf(identity).applicable),
+      identityHost,
+      defaultGitIdentityId,
+    ),
+    [availableGitIdentities, defaultGitIdentityId, identityApplicabilityOf, identityHost],
   );
   const selectedGitIdentity = React.useMemo(() => {
     const chosen = identityChoice?.key === identityChoiceKey
@@ -775,11 +790,15 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             {selectedGitIdentity ? selectedGitIdentity.name : undefined}
           </SelectValue>
         </SelectTrigger>
-        <SelectContent>{availableGitIdentities.map((identity) => (
-          <SelectItem key={identity.id} value={identity.id}>
-            {identity.name} · {t(TRANSPORT_LABEL_KEYS[identityTransport(identity)])}
-          </SelectItem>
-        ))}</SelectContent>
+        <SelectContent>{availableGitIdentities.map((identity) => {
+          const applicability = identityApplicabilityOf(identity);
+          return (
+            <SelectItem key={identity.id} value={identity.id} disabled={!applicability.applicable}>
+              {identity.name} · {t(TRANSPORT_LABEL_KEYS[identityTransport(identity)])}
+              {applicability.applicable ? null : <> · {describeIdentityApplicability(applicability, t)}</>}
+            </SelectItem>
+          );
+        })}</SelectContent>
       </Select>
       {identityNeedsAcknowledgement ? (
         <label className="flex items-start gap-2 typography-micro text-muted-foreground">

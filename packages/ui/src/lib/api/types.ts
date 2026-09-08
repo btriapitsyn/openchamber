@@ -37,7 +37,6 @@ import type {
 
 export type * from '../source-control/types';
 export type {
-  GitIdentityAccount,
   GitIdentityProfile,
   GitIdentitySummary,
   GitIdentityTransport,

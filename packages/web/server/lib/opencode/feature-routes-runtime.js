@@ -500,14 +500,16 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getActivePort: routeDependencies.getActivePort ?? (() => null),
     });
     gitShellBoundaryRuntime.registerRoutes(app);
-    // Once, after the Git routes exist and the server is serving: reading the
-    // provider stores takes their lock, and startup is a bad time to hold one.
-    setTimeout(() => { void walkthroughBindingService.backfillConnectedIdentities?.(); }, 0).unref?.();
     registerGitAgentAuthorityRoutes(app, {
       store: gitAgentAuthorityStore,
       resolveRepositoryId: async (directory) => (await walkthroughBindingService.get(directory)).repository.repositoryId,
     });
     registerGitRoutes(app, {
+      // Identities for accounts connected before identities carried one are
+      // made the first time identities are listed: a moment someone asked for,
+      // not startup, where a development restart can kill a process holding a
+      // provider store's lock.
+      backfillIdentities: walkthroughBindingService.backfillConnectedIdentities,
       managedSshInventory,
       networkOperations,
       contributorProvenance,

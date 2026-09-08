@@ -6,7 +6,38 @@ import type {
   SourceControlBindingRead,
 } from '@/lib/api/types';
 import { identityTransport } from '@/lib/api/git-identity';
+import { instanceHost, type RemoteTraits } from './identity';
 import { repositoryBindingOwner } from './repository-binding';
+
+export type IdentityApplicability =
+  | { applicable: true }
+  | { applicable: false; reason: 'host'; host: string }
+  | { applicable: false; reason: 'scheme'; scheme: 'https' | 'ssh' };
+
+/**
+ * Whether an identity can serve a repository on this remote.
+ *
+ * An identity is specific to an instance: one that acts as an account on
+ * gitlab.com cannot answer for a repository on a self-managed GitLab, whatever
+ * its transport. And a transport has to be able to reach the address — an
+ * account's credential and anonymous reads travel over HTTPS, a managed key
+ * over SSH. System Git reaches whatever the machine reaches.
+ */
+export const identityApplicability = (
+  identity: Pick<GitIdentityProfile, 'account' | 'transport'>,
+  remote: RemoteTraits,
+): IdentityApplicability => {
+  const accountHost = identity.account ? instanceHost(identity.account.instance) : null;
+  if (accountHost && remote.host && accountHost !== remote.host) {
+    return { applicable: false, reason: 'host', host: accountHost };
+  }
+  const transport = identityTransport(identity);
+  if ((transport === 'account' || transport === 'anonymous') && !remote.https) {
+    return { applicable: false, reason: 'scheme', scheme: 'https' };
+  }
+  if (transport === 'ssh' && !remote.ssh) return { applicable: false, reason: 'scheme', scheme: 'ssh' };
+  return { applicable: true };
+};
 
 type ApplyIdentityOutcome =
   | { status: 'applied' }
@@ -64,6 +95,17 @@ const transportIntent = (
     return { ...authority, transport: 'system', unverifiedConfirmed: true };
   }
   return null;
+};
+
+/** The words for an identity that cannot serve a remote, next to its name. */
+export const describeIdentityApplicability = (
+  applicability: IdentityApplicability,
+  t: (key: 'gitView.identity.unavailableHost' | 'gitView.identity.unavailableScheme', params?: Record<string, string>) => string,
+): string => {
+  if (applicability.applicable) return '';
+  return applicability.reason === 'host'
+    ? t('gitView.identity.unavailableHost', { host: applicability.host })
+    : t('gitView.identity.unavailableScheme', { scheme: applicability.scheme === 'ssh' ? 'SSH' : 'HTTPS' });
 };
 
 /**

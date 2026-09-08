@@ -57,7 +57,6 @@ export const gitIdentityProfileSchema = z.object({
 });
 
 export type GitIdentityProfile = z.infer<typeof gitIdentityProfileSchema>;
-export type GitIdentityAccount = z.infer<typeof gitIdentityAccountSchema>;
 
 /**
  * How an identity authenticates, for identities written before they said so.

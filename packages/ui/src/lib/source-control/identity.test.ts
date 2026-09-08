@@ -10,6 +10,8 @@ import {
   gitRemoteHost,
   isSshRemoteUrl,
   proposeIdentityForHost,
+  remoteTraits,
+  instanceHost,
 } from './identity';
 
 const remote = (url: string): GitRemote => ({ name: 'origin', fetchUrl: url, pushUrl: url });
@@ -200,5 +202,20 @@ describe('proposeIdentityForHost', () => {
     expect(proposeIdentityForHost([plain, github], null, 'missing')).toBeNull();
     // A host match wins over the default: it answers a question the default cannot.
     expect(proposeIdentityForHost([plain, github], 'github.com', 'plain')?.id).toBe('gh');
+  });
+});
+
+describe('remoteTraits and instanceHost', () => {
+  test('reads what a remote allows', () => {
+    expect(remoteTraits('https://gitlab.com/team/repo.git')).toEqual({ host: 'gitlab.com', https: true, ssh: false });
+    expect(remoteTraits('git@github.com:team/repo.git')).toEqual({ host: 'github.com', https: false, ssh: true });
+    expect(remoteTraits('ssh://git@private.gitlab.example/team/repo.git')).toEqual({ host: 'private.gitlab.example', https: false, ssh: true });
+    expect(remoteTraits('  ')).toEqual({ host: null, https: false, ssh: false });
+  });
+
+  test('reads a provider instance whether stored bare or as a URL', () => {
+    expect(instanceHost('github.com')).toBe('github.com');
+    expect(instanceHost('https://gitlab.com')).toBe('gitlab.com');
+    expect(instanceHost('https://private.gitlab.example:8443')).toBe('private.gitlab.example');
   });
 });

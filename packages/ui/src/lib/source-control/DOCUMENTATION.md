@@ -75,7 +75,7 @@ fresh owner read even when another capability caused the revision change.
 
 ## Anonymous transport
 
-Transport and clone selectors expose anonymous HTTPS as read-only in every locale, without a repeated confirmation modal. SSH URLs disable the anonymous option. Clone URL changes clear the transport selection; transport editor endpoint changes clear the pending selection. Publish destinations label and disable anonymous grants, and shared request builders reject anonymous push, sync publication and remote deletion before calling the planner. Shared binding and network parsers retain the anonymous tag, never a verified actor or System marker. The connected OpenChamber server remains the authorization owner; clone still reports retained-checkout binding failure as finish-setup rather than success.
+Anonymous HTTPS is a transport an identity may carry; identity pickers label it read-only in every locale, without a repeated confirmation modal, and disable it for SSH remotes. A clone URL change re-proposes the identity for the new host. Publish destinations label and disable anonymous grants, and shared request builders reject anonymous push, sync publication and remote deletion before calling the planner. Shared binding and network parsers retain the anonymous tag, never a verified actor or System marker. The connected OpenChamber server remains the authorization owner; clone still reports retained-checkout binding failure as finish-setup rather than success.
 
 ## Managed SSH onboarding
 
@@ -85,52 +85,49 @@ Reads distinguish failure from empty success. Failed operations retain data but 
 
 The connected OpenChamber server owns discovery and imported copies for web, Electron and both mobile clients. The UI explains that discovery is limited to immediate private-key files in the server user's approved `~/.ssh`, with no recursion, symlink, SSH config, or agent inspection. It points passphrase-protected and agent-only users to explicit unverified System transport. VS Code omits the server inventory capability; its transport is always the user's system Git. All onboarding and error copy is translated in all 11 locales. The [Git module](../../../../web/server/lib/git/DOCUMENTATION.md#exact-ref-transport-authority) owns candidate lifetime, verification, storage, protocol enforcement, rollback, and provisioning constraints.
 
-## Committed repository context
+## Repository identity
 
-`SourceControlBindingSettings.tsx` renders the shared GitView and mobile Changes
-summary from the binding owner, never from editor selections. It shows exact
-provider and instance, each remote's committed transport and readiness, the
-current author, and executor class. Managed HTTPS transport presentation comes
-only from the exact revision-pinned credential projection in the binding read;
-it includes provider, normalized instance, source, username and provider-user
-identity. Managed SSH shows only the verified public fingerprint. Missing,
-stale or omitted presentation says the managed credential is unavailable while
-the opaque grant reference remains internal. The summary neither reads nor
-refreshes the client account store, and it never uses account IDs, credential
-IDs, key paths or tokens as labels. Failed reads retain explicitly stale context,
-not an authoritative empty binding. The Git view does not render the strip in
-VS Code, where the webview projects repository remotes as a ready System
-binding and offers no binding configuration.
+One repository works as one identity. `applyIdentity.ts` turns a chosen
+`GitIdentityProfile` into the committed state: it adds, replaces, or removes the
+provider association through the exact-target mutation, writes the primary
+remote's transport grant from the identity's transport (`account`, `ssh`,
+`system`, or `anonymous`), and applies the author with
+`setGitIdentity(directory, profileId)`. The `global` profile is the System
+identity — it removes the provider association and clears the repository-local
+author so the person's own Git configuration answers, and OpenChamber never
+writes that configuration. `needsSystemAcknowledgement` gates the System
+transport behind `SystemIdentityConfirmDialog`, asked before anything is
+written; managed and anonymous choices add no routine confirmation popup.
 
-One Configure repository action opens the standard Dialog. Its private draft
-lifetime ends on close or runtime/directory scope change. The provider, transport,
-and checkout hydration editors in `RepositoryBindingEditors.tsx` reuse the binding owner;
-opening the dialog adds no account refresh loop. Saves remain independent,
-explicit actions. Removing a provider association uses the existing exact-target
-mutation, not whole-binding deletion or credential removal. A transport Remove
-action exists only for the selected remote's committed grant and sends repository,
-binding/config revision, remote, and exact fetch/push fingerprint authority. It
-preserves provider associations, sibling and auxiliary grants, credentials, and
-Git state. System setup keeps
-its explicit unverified consent; managed and anonymous choices add no routine
-confirmation popup. A separate destructive reset section removes every binding
-reference only after confirmation. It does not remove credentials, Git remotes or
-configuration, worktree content, or author identity. Draft edits and cancellation
-do not mutate. Both operations apply only their returned committed read; stale
-conflicts perform one fresh owner read without retrying the mutation. Account and
-profile inventories remain in Git Settings.
+`identityApplicability` keeps identities specific to an instance and a scheme:
+an account identity whose instance host differs from the remote host, an
+account or anonymous identity on a non-HTTPS remote, or an SSH-key identity on a
+non-SSH remote is disabled with a localized reason (`describeIdentityApplicability`)
+and never proposed. `proposeIdentityForHost` proposes only applicable identities
+from the remote host. The same rule serves the add and clone screens
+(`DirectoryExplorerDialog`), the Git panel (`IdentityDropdown` in `GitHeader`),
+and the mobile Changes surface.
+
+The Git panel button shows the identity's icon and name, drawn from the
+committed binding read and the repository author, never from an unsaved choice.
+Managed HTTPS presentation comes only from the exact revision-pinned credential
+projection in the binding read; account IDs, credential IDs, key paths and tokens
+are never labels. Failed reads retain explicitly stale context, not an
+authoritative empty binding. VS Code offers no identity switching; the webview
+projects repository remotes as a ready System binding.
+
+`RepositoryConfigurationDialog` in `SourceControlBindingSettings.tsx` is reached
+from the identity menu and holds what an identity does not decide: agent Git
+authority for this repository, checkout hydration repair
+(`AuxiliaryBindingSettings` in `RepositoryBindingEditors.tsx`), and the
+destructive reset, which removes every binding reference only after confirmation
+and touches neither credentials, Git remotes or configuration, worktree content,
+nor author identity. Its draft lifetime ends on close or runtime/directory scope
+change; drafts and cancellation do not mutate. Both operations apply only their
+returned committed read; stale conflicts perform one fresh owner read without
+retrying the mutation. Account and profile inventories remain in Git Settings.
 
 Checkout repair first runs `checkout-hydration` against a user-selected ready parent fetch remote. The immutable public plan exposes bounded repository-relative submodule/LFS paths and redacted endpoints, never raw URLs, absolute paths, or credential references. Failed hydration stays visible through `GitOperationStatus`. The user selects one discovered endpoint, explicitly chooses System, anonymous HTTPS, managed HTTPS account, or managed SSH key, and saves or removes only that grant through the narrow CAS API. Retry plans a new inspection; it never reclones the retained repository. Missing `git-lfs` has a specific install-and-retry warning. Runtime and directory changes clear all repair drafts, and late mutation results reconcile through the captured binding owner scope.
-
-Mobile mounts an author editor inside the same dialog. It reads existing
-profiles through the current GitAPI only while open, submits the selected ID
-with `setGitIdentity(directory, profileId)`, then calls the Git store's
-`fetchIdentity`. It neither writes profiles nor derives transport from legacy
-profile fields. Runtime/unmount guards reject late profile reads and author
-application completions. Signing behavior remains with the existing author API.
-An empty inventory routes to the existing mobile Settings action, or the desktop
-Settings dialog outside dedicated mobile. These dynamic repository controls do
-not add Settings search entries.
 
 ## Unresolved Git operations
 
@@ -218,12 +215,12 @@ storage context.
 demand, mutation overlays, aliases, scope invalidation, conflict reconciliation
 and retention. The 100-consumer regression permits one initial request and no
 additional requests or notifications for 10,000 warm snapshot reads.
-`useProviderBindingEditor.test.ts` exercises actual React lifecycle and scoped
-mutation intents. Binding cases in `sourceControlOAuthPolling.test.tsx` cover
-provider/transport controls, localized retry, CAS fields and runtime switching.
+`applyIdentity.test.ts` covers the provider/transport/author writes an identity
+produces, the System acknowledgement gate, and instance and scheme applicability;
+`identity.test.ts` covers remote traits and host proposal. Account cases in
+`sourceControlOAuthPolling.test.tsx` cover localized retry and runtime switching.
 These tests do not validate a packaged runtime, real credentials or browser paint.
 
-`SourceControlBindingSettings.test.tsx` covers committed safe credential presentation,
-unavailable native metadata, executor classes, anonymous/System display, all-locale
-copy, and the actual author callback's local-only API calls and stale-runtime
-guard. Editor intent tests remain in `sourceControlOAuthPolling.test.tsx`.
+`SourceControlBindingSettings.test.tsx` covers the actual reset callback's single
+confirmed exact-authority intent, its one-shot conflict reconciliation, and
+all-locale copy.

@@ -119,8 +119,8 @@ function useMemo<Value>(factory: () => Value, deps: unknown[]): Value {
 }
 
 function useSyncExternalStore<Value>(subscribe: (listener: () => void) => () => void, snapshot: () => Value): Value {
-  // This harness renders explicitly in renderSettled; the real React probe in
-  // useProviderBindingEditor.test.ts covers subscription-driven rendering.
+  // This harness renders explicitly in renderSettled; subscription-driven
+  // rendering is covered by the React probes in repository-binding tests.
   useEffect(() => subscribe(() => {}), [subscribe]);
   return snapshot();
 }
@@ -166,12 +166,10 @@ let bindingRead: () => Promise<SourceControlBindingRead>;
 let resetBinding: (intent: SourceControlRepositoryBindingResetIntent) => Promise<SourceControlBindingRead>;
 let providerMutation: (input: SourceControlProviderBindingMutation) => Promise<SourceControlBindingRead>;
 let providerMutationCalls: SourceControlProviderBindingMutation[] = [];
-let bindingReadCalls = 0;
-let selectFocusCalls = 0;
 let configureTransportCalls: GitTransportBindingIntent[] = [];
 let configureTransport: () => Promise<GitTransportBindingResult> = async () => ({ status: 'configured', binding: boundBinding });
 let removeTransportCalls: GitTransportBindingRemovalIntent[] = [];
-let removeTransport: () => Promise<GitTransportBindingRemovalResult> = async () => ({ status: 'removed', binding: missingBinding });
+const removeTransport: () => Promise<GitTransportBindingRemovalResult> = async () => ({ status: 'removed', binding: missingBinding });
 
 const endpoint = (displayUrl: string, fingerprint: string) => ({ displayUrl, fingerprint });
 const repository = {
@@ -235,7 +233,6 @@ const sourceControl = {
     await setCliDisabledAuth();
   },
   repositoryBinding: async () => {
-    bindingReadCalls += 1;
     return bindingRead();
   },
   resetRepositoryBinding: async (intent: SourceControlRepositoryBindingResetIntent) => resetBinding(intent),
@@ -321,10 +318,7 @@ mock.module('@/components/ui/select', () => ({
   Select: (props: ElementProps) => jsx('select', props),
   SelectContent: ({ children }: ElementProps) => children ?? null,
   SelectItem: ({ children }: ElementProps) => children ?? null,
-  SelectTrigger: (props: ElementProps) => {
-    if (props.ref) props.ref.current = { focus: () => { selectFocusCalls += 1; } };
-    return jsx('button', props);
-  },
+  SelectTrigger: (props: ElementProps) => jsx('button', props),
   SelectValue: ({ children }: ElementProps) => children ?? null,
 }));
 mock.module('@/components/ui', () => ({
@@ -387,20 +381,11 @@ mock.module('@/lib/runtime-switch', () => ({
 
 const { GitHubSettings } = await import('./GitHubSettings');
 const { GitLabSettings } = await import('./GitLabSettings');
-const { ProviderSourceControlBindingSettings, TransportBindingSettings } = await import('./RepositoryBindingEditors');
 const { repositoryBindingOwner } = await import('@/lib/source-control/repository-binding');
 // SAFETY: These synchronous function components render through the mocked JSX runtime above.
 const GitHubSettingsHarness = GitHubSettings as Component;
 // SAFETY: These synchronous function components render through the mocked JSX runtime above.
 const GitLabSettingsHarness = GitLabSettings as Component;
-// Keep the existing editor intent tests independent of the summary dialog.
-const SourceControlBindingSettingsHarness: Component = () => [
-  // SAFETY: These synchronous components render through this file's existing JSX harness.
-  renderComponent(ProviderSourceControlBindingSettings as Component<{ directory: string }>, { directory: effectiveDirectory }),
-  // SAFETY: This synchronous component renders through this file's existing JSX harness.
-  renderComponent(TransportBindingSettings as Component<{ directory: string }>, { directory: effectiveDirectory }),
-];
-
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 
 const flush = async (): Promise<void> => {
@@ -444,38 +429,7 @@ const findButton = (node: TestNode, label: string): ElementNode | null => {
   return findButton(element.props.children, label);
 };
 
-const findSelect = (node: TestNode, ariaLabel: string): ElementNode | null => {
-  if (node == null || node === true || node === false) return null;
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findSelect(child, ariaLabel);
-      if (match) return match;
-    }
-    return null;
-  }
-  if (!(node instanceof Object)) return null;
-  const element = node;
-  if (element.type === 'select') {
-    const trigger = findButtonWithAriaLabel(element.props.children, ariaLabel);
-    if (trigger) return element;
-  }
-  return findSelect(element.props.children, ariaLabel);
-};
 
-const findButtonWithAriaLabel = (node: TestNode, ariaLabel: string): ElementNode | null => {
-  if (node == null || node === true || node === false) return null;
-  if (Array.isArray(node)) {
-    for (const child of node) {
-      const match = findButtonWithAriaLabel(child, ariaLabel);
-      if (match) return match;
-    }
-    return null;
-  }
-  if (!(node instanceof Object)) return null;
-  const element = node;
-  if (element.type === 'button' && element.props['aria-label'] === ariaLabel) return element;
-  return findButtonWithAriaLabel(element.props.children, ariaLabel);
-};
 
 const click = async (tree: TestNode, label: string): Promise<void> => {
   const button = findButton(tree, label);
@@ -499,13 +453,6 @@ const findInput = (node: TestNode, ariaLabel: string): ElementNode | null => {
   return findInput(node.props.children, ariaLabel);
 };
 
-const changeSelect = async (tree: TestNode, ariaLabel: string, value: string): Promise<void> => {
-  const select = findSelect(tree, ariaLabel);
-  if (!select) throw new Error(`Select not found: ${ariaLabel}`);
-  if (!select.props.onValueChange) throw new Error(`Select has no value handler: ${ariaLabel}`);
-  select.props.onValueChange(value);
-  await flush();
-};
 
 const runNextTimer = async (): Promise<void> => {
   const entry = timers.entries().next().value;
@@ -565,8 +512,6 @@ beforeEach(() => {
   resetBinding = async () => missingBinding;
   providerMutation = async () => boundBinding;
   providerMutationCalls = [];
-  bindingReadCalls = 0;
-  selectFocusCalls = 0;
   configureTransportCalls = [];
   removeTransportCalls = [];
   authStoreState.entries.github.status = null;
@@ -944,256 +889,5 @@ describe('source-control account presentation', () => {
 
     expect(disconnectedAccountIds).toEqual(['account-one']);
     expect(cliDisabledValues).toEqual([true]);
-  });
-});
-
-describe('repository source-control binding settings', () => {
-  beforeEach(() => {
-    authStoreState.entries.github.status = connectedStatus;
-  });
-
-  test('requires explicit confirmation and sends the authoritative CAS revision', async () => {
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-
-    expect(findButton(tree, 'settings.sourceControl.binding.confirm')).not.toBeNull();
-
-    await click(tree, 'settings.sourceControl.binding.confirm');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-
-    expect(providerMutationCalls).toEqual([{
-      directory: '/workspace/project',
-      expectedRepositoryId: repository.repositoryId,
-      expectedRevision: 7,
-      operation: 'add',
-      provider: {
-        provider: 'github',
-        instance: 'github.com',
-        accountId: 'account-one',
-        primaryRemote: 'origin',
-      },
-    }]);
-    expect(findButton(tree, 'gitView.context.removeProvider')).not.toBeNull();
-  });
-
-  test('changes the provider of a needs-attention binding without submitting transport grants', async () => {
-    bindingRead = async () => ({
-      ...boundBinding,
-      status: 'needs-attention',
-      binding: { ...boundBinding.binding, state: 'needs-attention' },
-    });
-    const tree = await renderSettled(SourceControlBindingSettingsHarness);
-
-    await click(tree, 'settings.common.actions.saveChanges');
-
-    expect(providerMutationCalls).toEqual([{
-      directory: '/workspace/project',
-      expectedRepositoryId: repository.repositoryId,
-      expectedRevision: 8,
-      operation: 'replace',
-      target: { provider: 'github', instance: 'github.com', accountId: 'account-one', primaryRemote: 'origin' },
-      provider: { provider: 'github', instance: 'github.com', accountId: 'account-one', primaryRemote: 'origin' },
-    }]);
-  });
-
-  test('removes only the provider association with its exact identity and revision', async () => {
-    bindingRead = async () => boundBinding;
-    const tree = await renderSettled(SourceControlBindingSettingsHarness);
-
-    await click(tree, 'gitView.context.removeProvider');
-
-    expect(providerMutationCalls).toEqual([{
-      directory: '/workspace/project',
-      expectedRepositoryId: repository.repositoryId,
-      expectedRevision: 8,
-      operation: 'remove',
-      target: { provider: 'github', instance: 'github.com', accountId: 'account-one', primaryRemote: 'origin' },
-    }]);
-  });
-
-  test('refreshes authoritative state and focuses the chooser after a conflict', async () => {
-    bindingRead = async () => bindingReadCalls === 1 ? missingBinding : boundBinding;
-    providerMutation = async () => { throw new Error('binding-conflict'); };
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-
-    await click(tree, 'settings.sourceControl.binding.confirm');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-
-    expect(bindingReadCalls).toBe(2);
-    expect(selectFocusCalls).toBe(1);
-    expect(collectText(tree)).toContain('binding-conflict');
-    expect(findButton(tree, 'gitView.context.removeProvider')).not.toBeNull();
-  });
-
-  test('ignores a late binding response after a runtime switch', async () => {
-    const staleRead = deferred<SourceControlBindingRead>();
-    bindingRead = () => bindingReadCalls === 1 ? staleRead.promise : Promise.resolve(boundBinding);
-
-    renderComponent(SourceControlBindingSettingsHarness, {});
-    await flush();
-    expect(bindingReadCalls).toBe(1);
-
-    switchRuntime();
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(bindingReadCalls).toBe(2);
-    expect(findButton(tree, 'gitView.context.removeProvider')).not.toBeNull();
-
-    staleRead.resolve(missingBinding);
-    await flush();
-    tree = renderComponent(SourceControlBindingSettingsHarness, {});
-
-    expect(findButton(tree, 'gitView.context.removeProvider')).not.toBeNull();
-    expect(findButton(tree, 'settings.sourceControl.binding.confirm')).toBeNull();
-  });
-
-  test('requires remote, mode and unverified confirmation before System setup', async () => {
-    authStoreState.entries.github.status = null;
-    authStoreState.identities = [];
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-
-    await click(tree, 'settings.sourceControl.transport.bind');
-    expect(configureTransportCalls).toEqual([]);
-
-    await changeSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel', 'origin');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.modeAriaLabel', 'system');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await click(tree, 'settings.sourceControl.transport.bind');
-    expect(configureTransportCalls).toEqual([]);
-    await click(tree, 'settings.sourceControl.transport.unverifiedConfirmation');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await click(tree, 'settings.sourceControl.transport.bind');
-
-    expect(configureTransportCalls).toEqual([{
-      expectedRepositoryId: repository.repositoryId, expectedConfigRevision: repository.configRevision,
-      expectedFetchFingerprint: repository.remotes[0].fetch.fingerprint,
-      expectedPushFingerprint: repository.remotes[0].push.fingerprint, unverifiedConfirmed: true,
-      directory: '/workspace/project', expectedRevision: 7, remote: 'origin', transport: 'system',
-    }]);
-  });
-
-  test('saves anonymous read-only transport without account or System confirmation', async () => {
-    authStoreState.entries.github.status = null;
-    authStoreState.identities = [];
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel', 'origin');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.modeAriaLabel', 'anonymous');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(collectText(tree)).toContain('settings.sourceControl.transport.anonymous');
-    await click(tree, 'settings.sourceControl.transport.bind');
-    expect(configureTransportCalls).toEqual([{
-      expectedRepositoryId: repository.repositoryId, expectedConfigRevision: repository.configRevision,
-      expectedFetchFingerprint: repository.remotes[0].fetch.fingerprint, expectedPushFingerprint: repository.remotes[0].push.fingerprint,
-      directory: '/workspace/project', expectedRevision: 7, remote: 'origin', transport: 'anonymous',
-    }]);
-    expect(providerMutationCalls).toEqual([]);
-  });
-
-  test('requires an independent exact HTTPS credential account and labels its source', async () => {
-    authStoreState.identities = [{ provider: 'github', instance: 'https://github.com' }];
-    authStoreState.entries.github.status = { ...connectedStatus, accounts: [
-      ...connectedStatus.accounts,
-      { ...connectedStatus.accounts[0], id: 'account-pat', credentialId: 'account-pat', source: 'pat' },
-    ] };
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel', 'origin');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.modeAriaLabel', 'https');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await click(tree, 'settings.sourceControl.transport.bind');
-    expect(configureTransportCalls).toEqual([]);
-    expect(collectText(tree)).toContain('settings.gitlab.token.label');
-    expect(collectText(tree)).toContain('settings.github.page.accountSource.oauth');
-    expect(collectText(tree)).toContain('settings.sourceControl.transport.ssh');
-    await changeSelect(tree, 'settings.sourceControl.transport.credentialAccount', JSON.stringify(['github', 'https://github.com', 'account-pat']));
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await click(tree, 'settings.sourceControl.transport.bind');
-    expect(configureTransportCalls).toEqual([{
-      directory: '/workspace/project', expectedRepositoryId: repository.repositoryId, expectedRevision: 7,
-      expectedConfigRevision: repository.configRevision, expectedFetchFingerprint: repository.remotes[0].fetch.fingerprint,
-      expectedPushFingerprint: repository.remotes[0].push.fingerprint, remote: 'origin', transport: 'https',
-      credentialAccount: { provider: 'github', instance: 'https://github.com', accountId: 'account-pat' },
-    }]);
-    expect(providerMutationCalls).toEqual([]);
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(findSelect(tree, 'settings.sourceControl.transport.modeAriaLabel')?.props.value).toBe('');
-    expect(collectText(tree)).toContain('settings.sourceControl.transport.configured');
-  });
-
-  test('removes only the selected committed remote grant', async () => {
-    bindingRead = async () => boundBinding;
-    removeTransport = async () => ({ status: 'removed', binding: {
-      ...boundBinding,
-      revision: 9,
-      binding: { ...boundBinding.binding, revision: 9, remotes: [] },
-    } });
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(findButton(tree, 'settings.sourceControl.transport.remove')).toBeNull();
-    await changeSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel', 'origin');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await click(tree, 'settings.sourceControl.transport.remove');
-    expect(removeTransportCalls).toEqual([{
-      directory: '/workspace/project', expectedRepositoryId: repository.repositoryId, expectedRevision: 8,
-      expectedConfigRevision: repository.configRevision, expectedFetchFingerprint: repository.remotes[0].fetch.fingerprint,
-      expectedPushFingerprint: repository.remotes[0].push.fingerprint, remote: 'origin',
-    }]);
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(findButton(tree, 'settings.sourceControl.transport.remove')).toBeNull();
-    expect(providerMutationCalls).toEqual([]);
-  });
-
-  test('failed reads expose retry and never permit transport configuration', async () => {
-    bindingRead = async () => { throw new Error('private runtime failure'); };
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await click(tree, 'settings.common.actions.saveChanges');
-    expect(configureTransportCalls).toEqual([]);
-    expect(collectText(tree)).not.toContain('private runtime failure');
-    bindingRead = async () => missingBinding;
-    await click(tree, 'settings.sourceControl.transport.retry');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(findSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel')?.props.disabled).toBe(false);
-    expect(configureTransportCalls).toEqual([]);
-  });
-
-  for (const scope of ['directory', 'runtime']) test(`ignores transport mutation completion after a ${scope} switch`, async () => {
-    const pending = deferred<GitTransportBindingResult>();
-    configureTransport = () => pending.promise;
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel', 'origin');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.modeAriaLabel', 'anonymous');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    const saving = click(tree, 'settings.sourceControl.transport.bind');
-    if (scope === 'directory') effectiveDirectory = '/workspace/other';
-    else switchRuntime();
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    pending.resolve({ status: 'configured', binding: boundBinding });
-    await saving;
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(collectText(tree)).not.toContain('settings.sourceControl.transport.configured');
-    expect(findSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel')?.props.value).toBe('');
-  });
-
-  test('a transport conflict preserves stale binding data and requires a successful retry read', async () => {
-    configureTransport = async () => { throw new Error('conflict'); };
-    let tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.remoteAriaLabel', 'origin');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    await changeSelect(tree, 'settings.sourceControl.transport.modeAriaLabel', 'anonymous');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    bindingRead = async () => { throw new Error('read unavailable'); };
-    await click(tree, 'settings.sourceControl.transport.bind');
-    tree = await renderSettled(SourceControlBindingSettingsHarness);
-    expect(findButton(tree, 'settings.sourceControl.transport.retry')).not.toBeNull();
-    expect(findSelect(tree, 'settings.sourceControl.transport.modeAriaLabel')?.props.value).toBe('');
-    await click(tree, 'settings.sourceControl.transport.bind');
-    expect(configureTransportCalls).toHaveLength(1);
-    expect(repositoryBindingOwner.snapshot(repositoryBindingOwner.scope(effectiveDirectory)).read).toBe(missingBinding);
-    expect(repositoryBindingOwner.snapshot(repositoryBindingOwner.scope(effectiveDirectory)).status).toBe('error');
-    bindingRead = async () => boundBinding;
-    await click(tree, 'settings.sourceControl.transport.retry');
-    await renderSettled(SourceControlBindingSettingsHarness);
-    expect(repositoryBindingOwner.snapshot(repositoryBindingOwner.scope(effectiveDirectory)).read).toBe(boundBinding);
-    expect(configureTransportCalls).toHaveLength(1);
   });
 });

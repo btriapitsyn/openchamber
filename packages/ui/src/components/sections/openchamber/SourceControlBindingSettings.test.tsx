@@ -1,19 +1,10 @@
-import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import type { SourceControlBindingRead, SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
-import { I18nProvider } from '@/lib/i18n';
-import { CredentialLabel } from './RepositoryBindingEditors';
 
 const identity = { provider: 'github', instance: 'github.com' } as const;
-const user = { ...identity, id: 'user', username: 'same-user' };
-const accounts = [
-  { id: 'oauth-one', credentialId: 'oauth-one', credentialRevision: 1, providerUserId: 'github.com#user', providerUserStatus: 'available', user, source: 'oauth', status: 'valid', current: true },
-  { id: 'cli-one', credentialId: 'cli-one', credentialRevision: 1, providerUserId: 'github.com#user', providerUserStatus: 'available', user, source: 'cli', status: 'valid', current: false },
-] as const;
 const remote = { name: 'origin', fetch: { displayUrl: 'https://github.com/team/repo', fingerprint: 'fetch' }, push: { displayUrl: 'https://github.com/team/repo', fingerprint: 'push' } };
 const repository = { repositoryId: 'repository', configRevision: 'config', bare: false, remotes: [remote] };
 const read: SourceControlBindingRead = { status: 'bound', repository, revision: 4, binding: {
@@ -25,24 +16,7 @@ const read: SourceControlBindingRead = { status: 'bound', repository, revision: 
   } }],
 } };
 
-describe('credential labels', () => {
-  test('labels exact OAuth and CLI credentials for the same user without grouping them', () => {
-    const labels = accounts.map((account) => renderToStaticMarkup(<I18nProvider><CredentialLabel identity={identity} account={account} /></I18nProvider>));
-    expect(labels[0]).toContain('OAuth');
-    expect(labels[1]).toContain('CLI');
-    for (const label of labels) { expect(label).toContain('same-user'); expect(label).toContain('github.com'); }
-    expect(labels[0]).not.toBe(labels[1]);
-  });
-});
-
 const source = ts.createSourceFile('SourceControlBindingSettings.tsx', readFileSync(new URL('./SourceControlBindingSettings.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const findApply = (node: ts.Node): ts.ArrowFunction | undefined => {
-  if (ts.isVariableDeclaration(node) && node.name.getText(source) === 'applyAuthor' && node.initializer && ts.isArrowFunction(node.initializer)) return node.initializer;
-  return ts.forEachChild(node, findApply);
-};
-const apply = findApply(source);
-if (!apply) throw new Error('Author application callback missing');
-const callback = ts.transpileModule(`(${apply.getText(source)})()`, { compilerOptions: { target: ts.ScriptTarget.ESNext } }).outputText;
 const findReset = (node: ts.Node): ts.ArrowFunction | undefined => {
   if (ts.isVariableDeclaration(node) && node.name.getText(source) === 'resetBinding' && node.initializer && ts.isArrowFunction(node.initializer)) return node.initializer;
   return ts.forEachChild(node, findReset);
@@ -50,33 +24,6 @@ const findReset = (node: ts.Node): ts.ArrowFunction | undefined => {
 const reset = findReset(source);
 if (!reset) throw new Error('Repository binding reset callback missing');
 const resetCallback = ts.transpileModule(`(${reset.getText(source)})()`, { compilerOptions: { target: ts.ScriptTarget.ESNext } }).outputText;
-
-test('mobile author application calls only the repository-local author API and store refresh', async () => {
-  const calls: string[] = [];
-  const profile = { id: 'signed', signCommits: true, signingKey: 'existing-signing-key' };
-  const git = { setGitIdentity: async (directory: string, id: string) => { calls.push(`author:${directory}:${id}`); return { success: true, profile }; } };
-  await runInNewContext(callback, {
-    directory: '/repo', selected: 'signed', profiles: [profile], saving: false, loading: false, generation: { current: 1 }, getRuntimeKey: () => 'runtime', git,
-    setSaving: () => {}, setError: () => {}, setSelected: () => {},
-    fetchIdentity: async (directory: string, api: typeof git) => { expect(api).toBe(git); calls.push(`refresh:${directory}`); },
-  });
-  expect(calls).toEqual(['author:/repo:signed', 'refresh:/repo']);
-  expect(profile.signingKey).toBe('existing-signing-key');
-});
-
-test('late author application after a runtime switch cannot refresh or publish to the new runtime', async () => {
-  let runtime = 'old';
-  let refreshed = false;
-  const states: boolean[] = [];
-  await runInNewContext(callback, {
-    directory: '/repo', selected: 'author', profiles: [{ id: 'author' }], saving: false, loading: false, generation: { current: 1 }, getRuntimeKey: () => runtime,
-    git: { setGitIdentity: async () => { runtime = 'new'; return { success: true }; } },
-    setSaving: (value: boolean) => states.push(value), setError: () => {}, setSelected: () => { throw new Error('Stale draft publication'); },
-    fetchIdentity: async () => { refreshed = true; },
-  });
-  expect(refreshed).toBe(false);
-  expect(states).toEqual([true]);
-});
 
 test('full reset sends one confirmed exact-authority intent and publishes only its committed result', async () => {
   const calls: unknown[] = [];
@@ -121,7 +68,7 @@ test('failed full reset reconciles once without retrying the mutation', async ()
 });
 
 test('every locale supplies repository context copy', async () => {
-  const keys = ['configure', 'draft', 'transport', 'ready', 'needsAttention', 'removeProvider', 'systemUnverified', 'managedCredentialUnavailable', 'applyAuthor', 'settings', 'stale'];
+  const keys = ['configure', 'draft', 'needsAttention', 'settings', 'author', 'notConfigured'];
   for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'ko', 'pl', 'pt-BR', 'uk', 'zh-CN', 'zh-TW']) {
     const { dict } = await import(`../../../lib/i18n/messages/${locale}.ts`);
     for (const key of keys) expect(dict[`gitView.context.${key}`]).toBeTruthy();

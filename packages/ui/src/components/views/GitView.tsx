@@ -89,7 +89,8 @@ import { PublishDialog } from './git/PublishDialog';
 import { ContributorDestinationDialog } from './git/ContributorDestinationDialog';
 import { useContributorDestinationChooser } from './git/contributorDestination';
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
-import { applyIdentityToRepository, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledgement, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
+import { remoteTraits } from '@/lib/source-control/identity';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 
 type SyncAction = 'fetch' | 'sync' | 'publish' | null;
@@ -369,6 +370,10 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     ?? binding.read?.repository.remotes.find((remote) => remote.name === 'origin')?.name
     ?? binding.read?.repository.remotes[0]?.name
     ?? '';
+  const identityApplicabilityOf = React.useCallback((identity: GitIdentityProfile): IdentityApplicability => {
+    const remote = binding.read?.repository.remotes.find((entry) => entry.name === bindingRemoteName);
+    return remote ? identityApplicability(identity, remoteTraits(remote.fetch.displayUrl)) : { applicable: true };
+  }, [binding.read, bindingRemoteName]);
   const sourceControlAuthEntries = useSourceControlAuthStore((state) => state.entries);
   const beginActiveSourceControlContextsLoad = useGitHubPrStatusStore((state) => state.beginActiveContextsLoad);
   const commitActiveSourceControlContexts = useGitHubPrStatusStore((state) => state.commitActiveContexts);
@@ -2457,6 +2462,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         onSelectIdentity={handleApplyIdentity}
         isApplyingIdentity={isSettingIdentity}
         identityAttention={identityAttention}
+        identityApplicability={identityApplicabilityOf}
         onConfigureRepository={runtime.isVSCode ? undefined : () => setRepositoryConfigurationOpen(true)}
             isWorktreeMode={!!worktreeMetadata}
             onOpenHistory={() => setGitLogDialogMode('history')}

@@ -23,6 +23,7 @@ import type {
   GitHubChecksSummary,
 } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
+import { describeIdentityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
 import { useDeviceInfo } from '@/lib/device';
 
 type SyncAction = 'fetch' | 'sync' | 'publish' | null;
@@ -51,6 +52,7 @@ interface GitHeaderProps {
   isApplyingIdentity: boolean;
   /** What the binding cannot currently do, shown beside the identity it belongs to. */
   identityAttention?: string | null;
+  identityApplicability?: (identity: GitIdentityProfile) => IdentityApplicability;
   onConfigureRepository?: () => void;
   isWorktreeMode: boolean;
   onOpenHistory?: () => void;
@@ -131,6 +133,13 @@ interface IdentityDropdownProps {
   attention?: string | null;
   /** Opens what an identity does not carry: auxiliary grants, agent Git, reset. */
   onConfigure?: () => void;
+  /**
+   * Whether each identity can serve this repository's remote. One that cannot
+   * — an account on another instance, a transport that cannot reach the
+   * address — stays listed with the reason, so the person sees why it is not
+   * offered rather than wondering where it went.
+   */
+  applicability?: (identity: GitIdentityProfile) => IdentityApplicability;
 }
 
 export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
@@ -141,6 +150,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   iconOnly = false,
   attention = null,
   onConfigure,
+  applicability,
 }) => {
   const { t } = useI18n();
   const isDisabled = isApplying || identities.length === 0;
@@ -191,8 +201,9 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
         ) : (
           identities.map((profile) => {
             const isSelected = activeProfile?.id === profile.id;
+            const fit = applicability?.(profile) ?? { applicable: true as const };
             return (
-              <DropdownMenuItem key={profile.id} onSelect={() => onSelect(profile)}>
+              <DropdownMenuItem key={profile.id} disabled={!fit.applicable} onSelect={() => onSelect(profile)}>
                 <span className="flex items-center gap-2">
                   <IdentityIcon
                     icon={profile.icon}
@@ -204,7 +215,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
                       {profile.name}
                     </span>
                     <span className="typography-meta text-muted-foreground">
-                      {profile.userEmail}
+                      {fit.applicable ? profile.userEmail : describeIdentityApplicability(fit, t)}
                     </span>
                   </span>
                   {isSelected ? (
@@ -295,6 +306,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   onSelectIdentity,
   isApplyingIdentity,
   identityAttention = null,
+  identityApplicability: identityApplicabilityOf,
   onConfigureRepository,
   isWorktreeMode,
   onOpenHistory,
@@ -465,6 +477,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
       isApplying={isApplyingIdentity}
       attention={identityAttention}
       onConfigure={onConfigureRepository}
+      applicability={identityApplicabilityOf}
     />
   );
 

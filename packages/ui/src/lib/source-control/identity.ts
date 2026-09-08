@@ -181,6 +181,18 @@ export const isSshRemoteUrl = (remoteUrl: string): boolean => {
 };
 
 /** True only when every endpoint parses and shares the given origin. */
+/** What a remote URL allows: which host answers for it and how it can be reached. */
+export type RemoteTraits = { host: string | null; https: boolean; ssh: boolean };
+
+export const remoteTraits = (remoteUrl: string): RemoteTraits => {
+  const value = remoteUrl.trim();
+  return { host: gitRemoteHost(value), https: value.startsWith('https://'), ssh: isSshRemoteUrl(value) };
+};
+
+/** The host a provider instance names, whether stored bare or as a URL. */
+export const instanceHost = (instance: string): string | null =>
+  gitRemoteHost(instance.includes('://') ? instance : `https://${instance}`);
+
 /**
  * The identity to offer for a repository on this host.
  *
@@ -197,9 +209,7 @@ export const proposeIdentityForHost = <T extends { id: string; account?: { insta
   const matching = host
     ? identities.find((identity) => {
       const instance = identity.account?.instance ?? '';
-      // An instance is either a bare host or a URL, the way accounts store it.
-      return instance.length > 0
-        && gitRemoteHost(instance.includes('://') ? instance : `https://${instance}`) === host;
+      return instance.length > 0 && instanceHost(instance) === host;
     })
     : undefined;
   if (matching) return matching;

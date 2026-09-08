@@ -6,7 +6,7 @@ import type {
   SourceControlProviderBindingMutation,
   SourceControlRepositoryBinding,
 } from '@/lib/api/types';
-import { applyIdentityToRepository, needsSystemAcknowledgement } from './applyIdentity';
+import { applyIdentityToRepository, describeIdentityApplicability, identityApplicability, needsSystemAcknowledgement } from './applyIdentity';
 import { repositoryBindingOwner } from './repository-binding';
 
 const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' } as const;
@@ -60,6 +60,48 @@ const harness = (initial = read()) => {
 };
 
 afterEach(() => { repositoryBindingOwner.reset(); });
+
+describe('identityApplicability', () => {
+  const https = { host: 'gitlab.com', https: true, ssh: false };
+  const ssh = { host: 'gitlab.com', https: false, ssh: true };
+  const gitlabCom = { provider: 'gitlab', instance: 'https://gitlab.com', accountId: 'a' } as const;
+  const privateGitlab = { provider: 'gitlab', instance: 'https://private.gitlab.example', accountId: 'b' } as const;
+
+  test('an identity is specific to its instance', () => {
+    expect(identityApplicability(identity({ account: gitlabCom, transport: 'account' }), https)).toEqual({ applicable: true });
+    expect(identityApplicability(identity({ account: privateGitlab, transport: 'account' }), https))
+      .toEqual({ applicable: false, reason: 'host', host: 'private.gitlab.example' });
+    // The instance rule holds whatever the transport: an SSH identity that
+    // answers to another instance's account is still the wrong identity here.
+    expect(identityApplicability(identity({ account: privateGitlab, transport: 'ssh', sshCredentialId: 'k' }), ssh))
+      .toEqual({ applicable: false, reason: 'host', host: 'private.gitlab.example' });
+  });
+
+  test('a transport has to reach the address', () => {
+    expect(identityApplicability(identity({ account: gitlabCom, transport: 'account' }), ssh))
+      .toEqual({ applicable: false, reason: 'scheme', scheme: 'https' });
+    expect(identityApplicability(identity({ transport: 'anonymous' }), ssh))
+      .toEqual({ applicable: false, reason: 'scheme', scheme: 'https' });
+    expect(identityApplicability(identity({ transport: 'ssh', sshCredentialId: 'k' }), https))
+      .toEqual({ applicable: false, reason: 'scheme', scheme: 'ssh' });
+    expect(identityApplicability(identity({ transport: 'ssh', sshCredentialId: 'k' }), ssh)).toEqual({ applicable: true });
+  });
+
+  test('System Git reaches whatever the machine reaches, on any instance', () => {
+    expect(identityApplicability(identity({ transport: 'system' }), https)).toEqual({ applicable: true });
+    expect(identityApplicability(identity({ transport: 'system' }), ssh)).toEqual({ applicable: true });
+    expect(identityApplicability(identity(), { host: 'anything.example', https: false, ssh: false })).toEqual({ applicable: true });
+  });
+
+  test('says why, in the words the picker shows', () => {
+    const t = (key: string, params?: Record<string, string>) => `${key}:${JSON.stringify(params ?? {})}`;
+    expect(describeIdentityApplicability({ applicable: false, reason: 'host', host: 'private.gitlab.example' }, t))
+      .toBe('gitView.identity.unavailableHost:{"host":"private.gitlab.example"}');
+    expect(describeIdentityApplicability({ applicable: false, reason: 'scheme', scheme: 'ssh' }, t))
+      .toBe('gitView.identity.unavailableScheme:{"scheme":"SSH"}');
+    expect(describeIdentityApplicability({ applicable: true }, t)).toBe('');
+  });
+});
 
 describe('needsSystemAcknowledgement', () => {
   test('asks before an identity that uses whatever the machine holds', () => {

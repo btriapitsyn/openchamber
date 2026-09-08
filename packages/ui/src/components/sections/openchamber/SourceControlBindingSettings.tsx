@@ -1,23 +1,18 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { GitIdentityProfile, SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
+import type { SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { repositoryBindingOwner, useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { useUIStore } from '@/stores/useUIStore';
-import { useGitStore } from '@/stores/useGitStore';
 import {
-  SETTINGS_FIELDS_STACK_CLASS,
   SETTINGS_HELPER_CLASS,
-  SETTINGS_SELECT_SIZE,
   SettingsCheckboxRow,
   SettingsControlGroup,
-  SettingsStackedField,
 } from '../shared/SettingsSection';
 import { AuxiliaryBindingSettings } from './RepositoryBindingEditors';
 
@@ -25,85 +20,10 @@ type RepositoryConfigurationDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   directory: string;
-  allowAuthorApply?: boolean;
 };
 
 /** Every editor after the first in the dialog is separated by the settings divider. */
 const DIALOG_DIVIDER_CLASS = 'border-t border-border/60 pt-4';
-
-const RepositoryAuthorEditor = ({ directory, className }: { directory: string; className?: string }) => {
-  const { t } = useI18n();
-  const { git } = useRuntimeAPIs();
-  const fetchIdentity = useGitStore((state) => state.fetchIdentity);
-  const [profiles, setProfiles] = React.useState<GitIdentityProfile[]>([]);
-  const [selected, setSelected] = React.useState('');
-  const [loading, setLoading] = React.useState(true);
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState(false);
-  const [retry, setRetry] = React.useState(0);
-  const generation = React.useRef(0);
-  React.useEffect(() => {
-    const request = ++generation.current;
-    const runtimeKey = getRuntimeKey();
-    setLoading(true);
-    setError(false);
-    void git.getGitIdentities().then((result) => {
-      if (request === generation.current && runtimeKey === getRuntimeKey()) setProfiles(result);
-    }).catch(() => {
-      if (request === generation.current && runtimeKey === getRuntimeKey()) setError(true);
-    }).finally(() => {
-      if (request === generation.current && runtimeKey === getRuntimeKey()) setLoading(false);
-    });
-    return () => { generation.current += 1; };
-  }, [git, directory, retry]);
-
-  const applyAuthor = async () => {
-    if (!directory || saving || loading || !profiles.some((profile) => profile.id === selected)) return;
-    const request = generation.current;
-    const runtimeKey = getRuntimeKey();
-    const isCurrent = () => request === generation.current && runtimeKey === getRuntimeKey();
-    setSaving(true);
-    setError(false);
-    try {
-      const result = await git.setGitIdentity(directory, selected);
-      if (!isCurrent()) return;
-      if (!result.success) { setError(true); return; }
-      await fetchIdentity(directory, git);
-      if (isCurrent()) setSelected('');
-    } catch {
-      if (isCurrent()) setError(true);
-    } finally {
-      if (isCurrent()) setSaving(false);
-    }
-  };
-  const selectedProfile = profiles.find((profile) => profile.id === selected);
-
-  return <SettingsControlGroup title={t('gitView.context.author')} className={cn('min-w-0', className)} contentClassName={SETTINGS_FIELDS_STACK_CLASS}>
-    <SettingsStackedField label={t('gitView.header.identityTooltip')} controlClassName="max-w-none">
-      <Select value={selected} onValueChange={setSelected} disabled={loading || saving || profiles.length === 0}>
-        <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-full" aria-label={t('gitView.context.author')}>
-          <SelectValue placeholder={t(loading ? 'settings.sourceControl.binding.loading' : profiles.length ? 'gitView.header.identityTooltip' : 'gitView.header.noProfiles')}>
-            {selectedProfile ? `${selectedProfile.name} · ${selectedProfile.userEmail}` : undefined}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>{profiles.map((profile) => <SelectItem key={profile.id} value={profile.id}>
-          {profile.name} · {profile.userEmail}
-        </SelectItem>)}</SelectContent>
-      </Select>
-    </SettingsStackedField>
-    {error ? <p role="alert" className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-error)]')}>
-      {t('gitView.toast.applyIdentityFailed')}
-    </p> : null}
-    <div className="flex flex-wrap items-center gap-2">
-      <Button size="sm" className="max-w-full" disabled={!selected || loading || saving} onClick={() => void applyAuthor()}>
-        <span className="truncate">{t('gitView.context.applyAuthor')}</span>
-      </Button>
-      {error ? <Button size="sm" variant="outline" disabled={saving || loading} onClick={() => setRetry((value) => value + 1)}>
-        {t('settings.sourceControl.transport.retry')}
-      </Button> : null}
-    </div>
-  </SettingsControlGroup>;
-};
 
 /**
  * Whether OpenChamber answers Git for this repository in the agent's shell.
@@ -179,7 +99,7 @@ const AgentAuthorityEditor = ({ directory, className }: { directory: string; cla
  * not say: the separate grants for submodules and Git LFS, whether OpenChamber
  * answers Git in agent shells here, and starting over.
  */
-export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDialogProps> = ({ open, onOpenChange, directory, allowAuthorApply = false }) => {
+export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDialogProps> = ({ open, onOpenChange, directory }) => {
   const { t } = useI18n();
   const { sourceControl } = useRuntimeAPIs();
   const mobileActions = useMobileAppActions();
@@ -240,7 +160,6 @@ export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDial
           </DialogHeader>
           <AgentAuthorityEditor directory={directory} />
           <AuxiliaryBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
-          {allowAuthorApply ? <RepositoryAuthorEditor directory={directory} className={DIALOG_DIVIDER_CLASS} /> : null}
           {read?.binding ? <SettingsControlGroup
             title={t('settings.sourceControl.reset.title')}
             description={t('settings.sourceControl.reset.description')}
