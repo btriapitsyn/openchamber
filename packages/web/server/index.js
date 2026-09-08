@@ -115,6 +115,7 @@ import { createSystemPromptRuntime } from './lib/system-prompt/runtime.js';
 import { createMcpReconnectRuntime } from './lib/mcp-reconnect/runtime.js';
 import { isPlatformEnabled } from './lib/platform/index.js';
 import { registerPlatformAuthRoutes } from './lib/platform/auth/routes.js';
+import { registerPlatformWorkspaceRoutes } from './lib/platform/workspaces/routes.js';
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
@@ -1734,7 +1735,17 @@ async function main(options = {}) {
   // is a complete no-op when the platform is disabled, leaving behavior
   // unchanged.
   if (isPlatformEnabled()) {
-    await registerPlatformAuthRoutes(app, { env: process.env, logger: console });
+    const platformAuth = await registerPlatformAuthRoutes(app, { env: process.env, logger: console });
+    // Share the auth routes' platform database pool instead of opening a
+    // second one; both register before the generic /api auth gate and the
+    // OpenCode proxy fallback (see the auth registration note above).
+    if (platformAuth.enabled && platformAuth.db) {
+      await registerPlatformWorkspaceRoutes(app, {
+        env: process.env,
+        logger: console,
+        db: platformAuth.db,
+      });
+    }
   }
 
   let realtimeProxyRuntime = { stop: () => {} };

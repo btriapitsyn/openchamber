@@ -40,7 +40,7 @@ describe('platform migration runner', () => {
     const db = await createTestPlatformDb();
     const { rows } = await db.query('SELECT version, name FROM schema_migrations ORDER BY version');
     expect(rows.map((row) => row.version)).toEqual([
-      '0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009', '0010',
+      '0001', '0002', '0003', '0004', '0005', '0006', '0007', '0008', '0009', '0010', '0011',
     ]);
     expect(rows[0].name).toBe('0001_users.sql');
 
