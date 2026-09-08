@@ -1,5 +1,4 @@
 import React from 'react';
-import { getManagedCredentialSourceLabelKey } from '@/lib/source-control/identity';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,13 +6,10 @@ import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { GitIdentityProfile, GitIdentitySummary, SourceControlProvider, SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
+import type { GitIdentityProfile, SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { repositoryBindingOwner, useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { useUIStore } from '@/stores/useUIStore';
-import { Icon } from '@/components/icon/Icon';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { getSourceControlAuthKey, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { useGitStore } from '@/stores/useGitStore';
 import {
   SETTINGS_FIELDS_STACK_CLASS,
@@ -23,12 +19,12 @@ import {
   SettingsControlGroup,
   SettingsStackedField,
 } from '../shared/SettingsSection';
-import { AuxiliaryBindingSettings, ProviderSourceControlBindingSettings, TransportBindingSettings } from './RepositoryBindingEditors';
+import { AuxiliaryBindingSettings } from './RepositoryBindingEditors';
 
-type SourceControlBindingSettingsProps = {
-  className?: string;
+type RepositoryConfigurationDialogProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   directory: string;
-  author?: GitIdentitySummary | null;
   allowAuthorApply?: boolean;
 };
 
@@ -175,79 +171,26 @@ const AgentAuthorityEditor = ({ directory, className }: { directory: string; cla
   </SettingsControlGroup>;
 };
 
-type BindingReadiness = 'ready' | 'confirmation-required' | 'account-unavailable' | 'config-changed';
-
-const READINESS_REASON_KEYS = {
-  'confirmation-required': 'gitView.context.readiness.confirmationRequired',
-  'account-unavailable': 'gitView.context.readiness.accountUnavailable',
-  'config-changed': 'gitView.context.readiness.configChanged',
-} as const;
-
 /**
- * Readiness as an icon: the row is scanned, not read, and every entry repeating
- * the word "Ready" buried the one that was not. The reason the binding reports
- * is the tooltip, so a problem explains itself on hover instead of sending the
- * reader into the configure dialog to guess.
+ * What a repository needs beyond its identity.
+ *
+ * The identity carries the account, the transport and the signature, and the
+ * panel names it on its own button, so this holds only what an identity does
+ * not say: the separate grants for submodules and Git LFS, whether OpenChamber
+ * answers Git in agent shells here, and starting over.
  */
-const Readiness = ({ ready, reason }: { ready: boolean; reason?: BindingReadiness }) => {
-  const { t } = useI18n();
-  const label = ready
-    ? t('gitView.context.ready')
-    : reason && reason !== 'ready'
-      ? t(READINESS_REASON_KEYS[reason])
-      : t('gitView.context.needsAttention');
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex align-[-0.15em]" aria-label={label}>
-          <Icon
-            name={ready ? 'checkbox-circle' : 'close-circle'}
-            className={cn('size-3.5', ready ? 'text-[var(--status-success)]' : 'text-[var(--status-error)]')}
-          />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
-  );
-};
-
-/** The provider reads faster as its mark than as its name. */
-const ProviderMark = ({ provider }: { provider: SourceControlProvider }) => (
-  <Icon
-    name={provider === 'gitlab' ? 'gitlab-fill' : 'github-fill'}
-    className="size-3.5 shrink-0 align-[-0.15em] text-foreground/70"
-  />
-);
-
-export const SourceControlBindingSettings: React.FC<SourceControlBindingSettingsProps> = ({ className, directory, author, allowAuthorApply = false }) => {
+export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDialogProps> = ({ open, onOpenChange, directory, allowAuthorApply = false }) => {
   const { t } = useI18n();
   const { sourceControl } = useRuntimeAPIs();
   const mobileActions = useMobileAppActions();
   const binding = useRepositoryBinding(directory, sourceControl);
-  const [openScope, setOpenScope] = React.useState<typeof binding.scope | null>(null);
   const [resetOpen, setResetOpen] = React.useState(false);
   const [resetting, setResetting] = React.useState(false);
   const [resetError, setResetError] = React.useState(false);
   const resetRequestRef = React.useRef(0);
-  const open = openScope === binding.scope;
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
-  const authEntries = useSourceControlAuthStore((state) => state.entries);
   const read = binding.read;
-  const providers = read?.binding?.providers ?? [];
-  // The binding stores an opaque credential ID. Naming the account matters once
-  // more than one is connected: the row otherwise cannot say which identity
-  // this repository acts as.
-  const boundAccountName = (provider: (typeof providers)[number]): string => {
-    const status = authEntries[getSourceControlAuthKey(provider)]?.status;
-    const account = status?.accounts?.find((entry) => entry.id === provider.accountId);
-    return account?.user.username.trim() ?? '';
-  };
-  const remotes = read?.repository.remotes ?? [];
-  const grants = new Map((read?.binding?.remotes ?? []).map((grant) => [grant.name, grant]));
-  const ready = binding.status === 'ready';
-  const emptyContext = t(read ? 'gitView.context.notConfigured' : binding.error ? 'gitView.context.needsAttention'
-    : directory ? 'settings.sourceControl.binding.loading' : 'settings.sourceControl.binding.noRepository');
 
   React.useLayoutEffect(() => {
     resetRequestRef.current += 1;
@@ -287,64 +230,15 @@ export const SourceControlBindingSettings: React.FC<SourceControlBindingSettings
     }
   };
 
-  const summaryRow = (label: string, value: React.ReactNode, key: string) => (
-    <React.Fragment key={key}>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words text-foreground/80">{value}</dd>
-    </React.Fragment>
-  );
 
-  // The strip is its own container: on a narrow pane the summary claims the
-  // whole row so the action wraps beneath it, instead of being squeezed into
-  // the width left over beside the button. The pane body indents by px-4, so
-  // the summary aligns with the changes list below it.
-  return <div className={cn('@container shrink-0 min-w-0 border-b border-border px-4 pb-3', className)} aria-label={t('gitView.context.ariaLabel')}>
-    <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-      <dl
-        className="grid min-w-0 flex-1 basis-full grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 typography-micro @xl:basis-48"
-        data-binding-revision={read?.revision}
-      >
-        {providers.length ? providers.map((provider) => summaryRow(
-          t('gitView.context.provider'),
-          <>
-            <ProviderMark provider={provider.provider} />{' '}{provider.instance}
-            {boundAccountName(provider) ? <> · @{boundAccountName(provider)}</> : null}
-            {' · '}{provider.primaryRemote}
-            {' '}<Readiness ready={ready && provider.readiness === 'ready'} reason={provider.readiness} />
-          </>,
-          JSON.stringify([provider.provider, provider.instance, provider.accountId, provider.primaryRemote]),
-        )) : summaryRow(t('gitView.context.provider'), emptyContext, 'provider-empty')}
-        {remotes.length ? remotes.map((remote) => {
-          const grant = grants.get(remote.name);
-          // The provider row already names the provider and instance, and the
-          // provider user ID is an internal handle. The row answers "which
-          // credential" — the mark, the account and how it was obtained.
-          return summaryRow(t('gitView.context.transport'), <>{remote.name} · {grant ? <>
-            {grant.mode === 'managed' ? grant.presentation?.status === 'available'
-              ? grant.presentation.transport === 'ssh'
-                ? `SSH · ${grant.presentation.fingerprint}`
-                : <><ProviderMark provider={grant.presentation.provider} />{' '}@{grant.presentation.username}
-                  {' · '}{t(getManagedCredentialSourceLabelKey(grant.presentation.source))}</>
-              : t('gitView.context.managedCredentialUnavailable')
-              : t(grant.mode === 'anonymous' ? 'settings.sourceControl.transport.anonymous' : 'gitView.context.systemUnverified')}
-            {' '}<Readiness ready={ready && grant.readiness === 'ready'} reason={grant.readiness} />
-          </> : t('gitView.context.notConfigured')}</>, `remote:${remote.name}`);
-        }) : summaryRow(t('gitView.context.transport'), emptyContext, 'transport-empty')}
-        {author !== undefined ? summaryRow(t('gitView.context.author'), author?.userName && author.userEmail
-          ? `${author.userName} <${author.userEmail}>` : t('gitView.context.notConfigured'), 'author') : null}
-        {binding.stale ? <dd role="status" className="col-span-2 text-muted-foreground">{t('gitView.context.stale')}</dd> : null}
-        {binding.error ? <dd role="alert" className="col-span-2 text-[var(--status-error)]">{t('settings.gitlab.status.operationFailed')}</dd> : null}
-      </dl>
-      <Dialog open={open} onOpenChange={(value) => setOpenScope(value ? binding.scope : null)}>
-        <DialogTrigger asChild><Button size="sm" variant="outline" className="ml-auto" disabled={!directory}>{t('gitView.context.configure')}</Button></DialogTrigger>
+  return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
         {open ? <DialogContent className="@container min-w-0 max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('gitView.context.configure')}</DialogTitle>
             <DialogDescription>{t('gitView.context.draft')}</DialogDescription>
           </DialogHeader>
-          <ProviderSourceControlBindingSettings directory={directory} />
-          <TransportBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
-          <AgentAuthorityEditor directory={directory} className={DIALOG_DIVIDER_CLASS} />
+          <AgentAuthorityEditor directory={directory} />
           <AuxiliaryBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
           {allowAuthorApply ? <RepositoryAuthorEditor directory={directory} className={DIALOG_DIVIDER_CLASS} /> : null}
           {read?.binding ? <SettingsControlGroup
@@ -378,15 +272,14 @@ export const SourceControlBindingSettings: React.FC<SourceControlBindingSettings
           </SettingsControlGroup> : null}
           <DialogFooter className={DIALOG_DIVIDER_CLASS}>
             <Button size="sm" variant="ghost" onClick={() => {
-              setOpenScope(null);
+              onOpenChange(false);
               setSettingsPage('git');
               if (mobileActions) mobileActions.openSettings();
               else setSettingsDialogOpen(true);
             }}>{t('gitView.context.settings')}</Button>
-            <Button size="sm" variant="outline" onClick={() => setOpenScope(null)}>{t('dialog.common.actions.close')}</Button>
+            <Button size="sm" variant="outline" onClick={() => onOpenChange(false)}>{t('dialog.common.actions.close')}</Button>
           </DialogFooter>
         </DialogContent> : null}
       </Dialog>
-    </div>
-  </div>;
+  );
 };

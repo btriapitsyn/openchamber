@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -48,6 +49,9 @@ interface GitHeaderProps {
   availableIdentities: GitIdentityProfile[];
   onSelectIdentity: (profile: GitIdentityProfile) => void;
   isApplyingIdentity: boolean;
+  /** What the binding cannot currently do, shown beside the identity it belongs to. */
+  identityAttention?: string | null;
+  onConfigureRepository?: () => void;
   isWorktreeMode: boolean;
   onOpenHistory?: () => void;
   onOpenGraph?: () => void;
@@ -118,6 +122,15 @@ interface IdentityDropdownProps {
   onSelect: (profile: GitIdentityProfile) => void;
   isApplying: boolean;
   iconOnly?: boolean;
+  /**
+   * Whether the repository's binding is doing what its identity says. Shown on
+   * the button because the identity is the only thing naming it now: an
+   * account that was revoked or a configuration changed underneath has to be
+   * visible somewhere, and here it sits beside what it is about.
+   */
+  attention?: string | null;
+  /** Opens what an identity does not carry: auxiliary grants, agent Git, reset. */
+  onConfigure?: () => void;
 }
 
 export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
@@ -126,6 +139,8 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   onSelect,
   isApplying,
   iconOnly = false,
+  attention = null,
+  onConfigure,
 }) => {
   const { t } = useI18n();
   const isDisabled = isApplying || identities.length === 0;
@@ -157,11 +172,14 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
                   {activeProfile?.name || t('gitView.header.noIdentity')}
                 </span>
               )}
+              {attention ? (
+                <Icon name="close-circle" className="size-3.5 shrink-0 text-[var(--status-error)]" />
+              ) : null}
               <Icon name="arrow-down-s" className="size-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>
-        <TooltipContent sideOffset={8}>{t('gitView.header.identityTooltip')}</TooltipContent>
+        <TooltipContent sideOffset={8}>{attention ?? t('gitView.header.identityTooltip')}</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" className="w-64">
         {identities.length === 0 ? (
@@ -197,6 +215,15 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
             );
           })
         )}
+        {onConfigure ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onConfigure}>
+              <Icon name="settings-3" className="size-4" />
+              {t('gitView.context.configure')}
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -267,6 +294,8 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   availableIdentities,
   onSelectIdentity,
   isApplyingIdentity,
+  identityAttention = null,
+  onConfigureRepository,
   isWorktreeMode,
   onOpenHistory,
   onOpenGraph,
@@ -426,13 +455,16 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
     />
   ) : null;
 
+  // The identity names the whole configuration a repository acts as, so the
+  // button says which one rather than only marking that there is one.
   const identityControl = (
     <IdentityDropdown
       activeProfile={activeIdentityProfile}
       identities={availableIdentities}
       onSelect={onSelectIdentity}
       isApplying={isApplyingIdentity}
-      iconOnly={true}
+      attention={identityAttention}
+      onConfigure={onConfigureRepository}
     />
   );
 

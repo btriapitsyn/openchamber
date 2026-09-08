@@ -5,7 +5,7 @@ const profileTextSchema = z.string().trim().min(1).max(512);
 const optionalProfileTextSchema = z.string().trim().max(512).nullable().optional();
 
 /** The provider account an identity acts as, addressed exactly as bindings address it. */
-export const gitIdentityAccountSchema = z.object({
+const gitIdentityAccountSchema = z.object({
   provider: z.enum(['github', 'gitlab']),
   instance: profileTextSchema,
   accountId: profileTextSchema,
@@ -19,7 +19,7 @@ export const gitIdentityAccountSchema = z.object({
  * the account, not a separate choice. `ssh` names a managed key, and can still
  * carry an account so issues and change requests know whose they are.
  */
-export const gitIdentityTransportSchema = z.enum(['account', 'ssh', 'system', 'anonymous']);
+const gitIdentityTransportSchema = z.enum(['account', 'ssh', 'system', 'anonymous']);
 
 export type GitIdentityTransport = z.infer<typeof gitIdentityTransportSchema>;
 

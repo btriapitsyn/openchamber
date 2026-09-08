@@ -12,7 +12,7 @@ import { createOAuthFlowRegistry } from './oauth-flow-registry.js';
 import { createMutationStore } from './mutation-storage.js';
 import { createMutationExecutor } from './mutation-executor.js';
 import { createSourceControlAuthStore } from '../gitlab/auth-storage.js';
-import { getGitHubAuthByAccountId } from '../github/auth.js';
+import { getGitHubAuthAccounts, getGitHubAuthByAccountId } from '../github/auth.js';
 
 const defaultConfigRoot = () => process.env.OPENCHAMBER_DATA_DIR
   ? path.resolve(process.env.OPENCHAMBER_DATA_DIR)
@@ -76,6 +76,31 @@ export function registerSourceControlRoutes(app, dependencies = {}) {
     store: gitIdentityStore,
   });
   const oauthFlowRegistry = dependencies.oauthFlowRegistry ?? createOAuthFlowRegistry();
+  // Accounts connected before identities carried one still need theirs, or the
+  // add and clone screens would offer nothing for a host that is connected.
+  const backfillConnectedIdentities = async () => {
+    const entries = [];
+    try {
+      for (const account of await getGitHubAuthAccounts()) {
+        if (account?.status === 'valid' && account.id) {
+          entries.push({ account: { provider: 'github', instance: 'github.com', accountId: account.id }, user: account.user });
+        }
+      }
+    } catch { /* an unreadable provider store leaves its accounts for next time */ }
+    try {
+      for (const origin of await gitlabStore.listInstances()) {
+        const instance = await gitlabStore.readInstance(origin);
+        for (const account of instance?.accounts ?? []) {
+          if (account?.status === 'valid' && account.id) {
+            entries.push({ account: { provider: 'gitlab', instance: origin, accountId: account.id }, user: account.user });
+          }
+        }
+      }
+    } catch { /* as above */ }
+    try { identityProvisioning.backfillAccountIdentities(entries); }
+    catch (error) { console.warn('Failed to backfill Git identities for connected accounts:', error?.message ?? error); }
+  };
+  void backfillConnectedIdentities();
   const mutationExecutor = dependencies.mutationExecutor ?? createMutationExecutor({
     store: dependencies.mutationStore ?? createMutationStore({
       filePath: path.join(configRoot, 'source-control-mutations.json'),

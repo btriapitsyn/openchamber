@@ -11,7 +11,11 @@ import { DirtyBranchSwitchDialog } from '@/components/views/git/DirtyBranchSwitc
 import { SyncActions } from '@/components/views/git/SyncActions';
 import { ContributorDestinationDialog } from '@/components/views/git/ContributorDestinationDialog';
 import { useContributorDestinationChooser } from '@/components/views/git/contributorDestination';
-import { SourceControlBindingSettings } from '@/components/sections/openchamber/SourceControlBindingSettings';
+import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
+import { IdentityDropdown } from '@/components/views/git/GitHeader';
+import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
+import { applyIdentityToRepository } from '@/lib/source-control/applyIdentity';
+import type { GitIdentityProfile } from '@/lib/api/types';
 import { PierreDiffViewer } from '@/components/views/PierreDiffViewer';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useEffectiveDirectory } from '@/hooks/useEffectiveDirectory';
@@ -81,6 +85,47 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   const status = useGitStatus(currentDirectory || null);
   const branches = useGitBranches(currentDirectory || null);
   const currentIdentity = useGitIdentity(currentDirectory || null);
+  const [isRepositoryConfigurationOpen, setRepositoryConfigurationOpen] = React.useState(false);
+  const [isApplyingIdentity, setIsApplyingIdentity] = React.useState(false);
+  const gitIdentityProfiles = useGitIdentitiesStore((state) => state.profiles);
+  const globalGitIdentity = useGitIdentitiesStore((state) => state.globalIdentity);
+  const loadGitIdentityProfiles = useGitIdentitiesStore((state) => state.loadProfiles);
+  const loadGlobalGitIdentity = useGitIdentitiesStore((state) => state.loadGlobalIdentity);
+  React.useEffect(() => {
+    void loadGitIdentityProfiles();
+    void loadGlobalGitIdentity();
+  }, [loadGitIdentityProfiles, loadGlobalGitIdentity]);
+  const availableIdentities = React.useMemo(() => {
+    const unique = new Map<string, GitIdentityProfile>();
+    if (globalGitIdentity) unique.set(globalGitIdentity.id, globalGitIdentity);
+    for (const profile of gitIdentityProfiles) unique.set(profile.id, profile);
+    return Array.from(unique.values());
+  }, [gitIdentityProfiles, globalGitIdentity]);
+  // The repository's own author decides which identity it is already acting as.
+  const activeIdentityProfile = React.useMemo(() => availableIdentities.find((identity) =>
+    identity.userName === currentIdentity?.userName && identity.userEmail === currentIdentity?.userEmail) ?? null,
+  [availableIdentities, currentIdentity]);
+
+  /**
+   * Switching identity here writes the same three answers the add and clone
+   * screens write. System Git is the exception: trusting whatever the machine
+   * holds is confirmed in the repository configuration, not by a menu pick.
+   */
+  const handleApplyIdentity = async (profile: GitIdentityProfile) => {
+    if (!currentDirectory || isApplyingIdentity) return;
+    setIsApplyingIdentity(true);
+    try {
+      const remoteName = effectiveRemotes[0]?.name ?? '';
+      const outcome = remoteName
+        ? await applyIdentityToRepository({ directory: currentDirectory, identity: profile, remoteName }, { git, sourceControl })
+        : { status: 'applied' as const };
+      if (outcome.status === 'acknowledgement-required') toast.warning(t('gitView.context.systemUnverified'));
+      else if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
+      else toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
+    } finally {
+      setIsApplyingIdentity(false);
+    }
+  };
   const isGitRepo = useIsGitRepo(currentDirectory || null);
   const isLoadingStatus = useGitLoadingStatus(currentDirectory || null);
   const setActiveDirectory = useGitStore((state) => state.setActiveDirectory);
@@ -661,6 +706,15 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
             switchBlockedNotice={(status?.files?.length ?? 0) > 0 ? t('gitView.branch.switchBlockedNotice') : null}
           />
         </div>
+        {/* The identity names the whole configuration this repository acts as,
+            and is the way into what it does not carry. */}
+        <IdentityDropdown
+          activeProfile={activeIdentityProfile}
+          identities={availableIdentities}
+          onSelect={(profile) => void handleApplyIdentity(profile)}
+          isApplying={isApplyingIdentity}
+          onConfigure={() => setRepositoryConfigurationOpen(true)}
+        />
         <SyncActions
           syncAction={operationRecovery.entry?.executing ? syncAction : null}
           remotes={effectiveRemotes}
@@ -677,7 +731,12 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
           hasUncommittedChanges={changeEntries.length > 0}
         />
       </header>
-      <SourceControlBindingSettings className="px-3" directory={currentDirectory} author={currentIdentity} allowAuthorApply />
+      <RepositoryConfigurationDialog
+        open={isRepositoryConfigurationOpen}
+        onOpenChange={setRepositoryConfigurationOpen}
+        directory={currentDirectory}
+        allowAuthorApply
+      />
       <GitOperationStatus className="mx-3 mt-3" entry={operationRecovery.entry} onRefresh={() => void operationRecovery.refresh()} onCancel={() => void operationRecovery.cancel()} />
       {changeEntries.length > 0 ? (
         <div className="flex min-h-0 flex-1 flex-col">

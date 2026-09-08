@@ -88,7 +88,8 @@ import { useGitPublishChooser } from './git/useGitPublishChooser';
 import { PublishDialog } from './git/PublishDialog';
 import { ContributorDestinationDialog } from './git/ContributorDestinationDialog';
 import { useContributorDestinationChooser } from './git/contributorDestination';
-import { SourceControlBindingSettings } from '@/components/sections/openchamber/SourceControlBindingSettings';
+import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
+import { applyIdentityToRepository } from '@/lib/source-control/applyIdentity';
 
 type SyncAction = 'fetch' | 'sync' | 'publish' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -347,6 +348,25 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const openContextSurface = useUIStore((state) => state.openContextSurface);
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
   const binding = useRepositoryBinding(gitDirectory, sourceControl, isActive);
+  const [isRepositoryConfigurationOpen, setRepositoryConfigurationOpen] = React.useState(false);
+  /**
+   * The remote an identity answers for: the one the binding already names, or
+   * the repository's own anchor. Without one there is nothing to bind, and
+   * applying an identity writes only the signature.
+   */
+  /**
+   * The one thing the identity's name cannot say: whether the binding still
+   * does what it claims. Everything else about the configuration is the
+   * identity, so this is all that is left to surface.
+   */
+  const identityAttention = binding.read?.binding && binding.status === 'ready'
+    && binding.read.binding.state !== 'bound'
+    ? t('gitView.context.needsAttention')
+    : null;
+  const bindingRemoteName = binding.read?.binding?.remotes[0]?.name
+    ?? binding.read?.repository.remotes.find((remote) => remote.name === 'origin')?.name
+    ?? binding.read?.repository.remotes[0]?.name
+    ?? '';
   const sourceControlAuthEntries = useSourceControlAuthStore((state) => state.entries);
   const beginActiveSourceControlContextsLoad = useGitHubPrStatusStore((state) => state.beginActiveContextsLoad);
   const commitActiveSourceControlContexts = useGitHubPrStatusStore((state) => state.commitActiveContexts);
@@ -1441,15 +1461,33 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     }
   };
 
+  /**
+   * Switching a repository's identity switches all of it.
+   *
+   * An identity is the account, the transport and the signature, so choosing
+   * one here writes the same three answers the add and clone screens write.
+   * System Git is the exception it cannot write on its own: trusting whatever
+   * the machine holds is a separate confirmation, and the repository
+   * configuration dialog is where it is given.
+   */
   const handleApplyIdentity = async (profile: GitIdentityProfile) => {
     if (!gitDirectory) return;
     const runtimeKey = getRuntimeKey();
     beginIdentityApply();
 
     try {
-      const result = await git.setGitIdentity(gitDirectory, profile.id);
+      const primaryRemote = bindingRemoteName;
+      const outcome = primaryRemote
+        ? await applyIdentityToRepository({ directory: gitDirectory, identity: profile, remoteName: primaryRemote }, { git, sourceControl })
+        : { status: 'applied' as const };
       if (getRuntimeKey() !== runtimeKey) return;
-      toast.success(t('gitView.toast.appliedIdentity', { name: result.profile.name }));
+      if (outcome.status === 'acknowledgement-required') {
+        toast.warning(t('gitView.context.systemUnverified'));
+      } else if (outcome.status === 'failed') {
+        toast.error(t('gitView.toast.applyIdentityFailed'));
+      } else {
+        toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
+      }
       await refreshIdentity();
     } catch (err) {
       if (getRuntimeKey() !== runtimeKey) return;
@@ -2408,6 +2446,8 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         availableIdentities={availableIdentities}
         onSelectIdentity={handleApplyIdentity}
         isApplyingIdentity={isSettingIdentity}
+        identityAttention={identityAttention}
+        onConfigureRepository={runtime.isVSCode ? undefined : () => setRepositoryConfigurationOpen(true)}
             isWorktreeMode={!!worktreeMetadata}
             onOpenHistory={() => setGitLogDialogMode('history')}
             onOpenGraph={() => setGitLogDialogMode('graph')}
@@ -2432,9 +2472,10 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           />
 
       {/* VS Code manages Git hosting itself; the webview projects remotes as a system binding without a settings surface. */}
-      {!runtime.isVSCode ? <SourceControlBindingSettings
+      {!runtime.isVSCode ? <RepositoryConfigurationDialog
+        open={isRepositoryConfigurationOpen}
+        onOpenChange={setRepositoryConfigurationOpen}
         directory={isActive ? currentDirectory ?? '' : ''}
-        author={currentIdentity}
       /> : null}
       <GitOperationStatus className="mx-4 mt-3" entry={operationRecovery.entry} onRefresh={() => void operationRecovery.refresh()} onCancel={() => void operationRecovery.cancel()} />
 

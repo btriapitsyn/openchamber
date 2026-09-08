@@ -4,11 +4,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
-import type { RuntimeAPIs, SourceControlBindingRead, SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
-import { RuntimeAPIContext } from '@/contexts/runtimeAPIContext';
+import type { SourceControlBindingRead, SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
 import { I18nProvider } from '@/lib/i18n';
-import { repositoryBindingOwner } from '@/lib/source-control/repository-binding';
-import { SourceControlBindingSettings } from './SourceControlBindingSettings';
 import { CredentialLabel } from './RepositoryBindingEditors';
 
 const identity = { provider: 'github', instance: 'github.com' } as const;
@@ -28,94 +25,13 @@ const read: SourceControlBindingRead = { status: 'bound', repository, revision: 
   } }],
 } };
 
-const render = async (value: SourceControlBindingRead = read) => {
-  const unused = (): never => { throw new Error('Unexpected API access during summary rendering'); };
-  const sourceControl: RuntimeAPIs['sourceControl'] = {
-    repositoryBinding: async () => value, repositoryContext: unused, resetRepositoryBinding: unused,
-    repositoryProviderBindingMutate: unused, authInstances: unused,
-    capabilities: unused, authStatus: unused, authStart: unused, authComplete: unused, authSetToken: unused,
-    authDisconnect: unused, authActivate: unused, authSetCliDisabled: unused,
-    changeRequestStatus: unused, changeRequestCreate: unused, changeRequestUpdate: unused, changeRequestMerge: unused,
-    changeRequestReady: unused, changeRequestsList: unused, changeRequestContext: unused, issuesList: unused,
-    issueGet: unused, issueComments: unused, projectUpstream: unused, projectBranches: unused,
-  };
-  repositoryBindingOwner.reset();
-  await repositoryBindingOwner.read(repositoryBindingOwner.scope('/repo'), sourceControl);
-  const apis: RuntimeAPIs = {
-    runtime: { platform: 'web', isVSCode: false, isDesktop: false }, sourceControl,
-    get git() { return unused(); }, get terminal() { return unused(); }, get files() { return unused(); },
-    get settings() { return unused(); }, get permissions() { return unused(); }, get notifications() { return unused(); }, get tools() { return unused(); },
-  };
-  return renderToStaticMarkup(<RuntimeAPIContext.Provider value={apis}><I18nProvider>
-    <SourceControlBindingSettings directory="/repo" author={{ userName: 'Actual Author', userEmail: 'author@example.com' }} allowAuthorApply />
-  </I18nProvider></RuntimeAPIContext.Provider>);
-};
-
-describe('committed repository context', () => {
-  test('renders the saved provider authority and independent transport grant, without editors', async () => {
-    const html = await render();
-    expect(html).toContain('github.com');
-    expect(html).toContain('same-user');
-    expect(html).toContain('OAuth');
-    // The provider is a mark and readiness is an icon with the reason on hover.
-    expect(html).toContain('#oc-github-fill');
-    expect(html).toContain('#oc-checkbox-circle');
-    expect(html).toContain('aria-label="Ready"');
-    // The provider user ID is an internal handle; the summary names the
-    // account instead, and the provider row already carries the instance.
-    expect(html).not.toContain('github.com#42');
-    expect(html).not.toContain('oauth-one');
-    expect(html).not.toContain('cli-one');
-    expect(html).not.toContain('actual-transport-grant');
-    expect(html).toContain('Actual Author');
-    expect(html).toContain('data-binding-revision="4"');
-    expect(html.match(/<button/g)).toHaveLength(1);
-    expect(html).not.toContain('role="combobox"');
-    expect(html).not.toContain('Save changes');
-    expect(html).not.toContain('Remove binding');
-  });
-
-  test('does not substitute an available account for a missing provider binding', async () => {
-    const html = await render({ status: 'missing', repository, revision: 0, binding: null });
-    expect(html).toContain('Not configured');
-    expect(html).not.toContain('same-user');
-    expect(html).not.toContain('Ready');
-  });
-
-  test('does not expose opaque provider or transport IDs and labels unavailable managed credentials honestly', async () => {
-    const html = await render({ ...read, binding: { ...read.binding, providers: [{ ...read.binding.providers[0], accountId: 'cli-one' }] } });
-    const unavailable = await render({ ...read, binding: { ...read.binding,
-      remotes: [{ ...remote, mode: 'managed', credentialId: 'native-opaque-reference', readiness: 'ready' }] } });
-    expect(html).not.toContain('cli-one');
-    expect(unavailable).toContain('Managed credential unavailable');
-    expect(unavailable).not.toContain('native-opaque-reference');
-    expect(unavailable).toContain('Ready');
-  });
-
-  test('shows only a managed SSH public fingerprint', async () => {
-    const fingerprint = `SHA256:${'a'.repeat(43)}`;
-    const html = await render({ ...read, binding: { ...read.binding,
-      remotes: [{ ...remote, mode: 'managed', credentialId: 'ssh-opaque-reference', readiness: 'ready',
-        presentation: { status: 'available', transport: 'ssh', fingerprint } }] } });
-
-    expect(html).toContain(`SSH · ${fingerprint}`);
-    expect(html).not.toContain('ssh-opaque-reference');
-  });
-
+describe('credential labels', () => {
   test('labels exact OAuth and CLI credentials for the same user without grouping them', () => {
     const labels = accounts.map((account) => renderToStaticMarkup(<I18nProvider><CredentialLabel identity={identity} account={account} /></I18nProvider>));
     expect(labels[0]).toContain('OAuth');
     expect(labels[1]).toContain('CLI');
     for (const label of labels) { expect(label).toContain('same-user'); expect(label).toContain('github.com'); }
     expect(labels[0]).not.toBe(labels[1]);
-  });
-
-  test('shows anonymous read-only and System unverified separately from readiness', async () => {
-    for (const mode of ['anonymous', 'system'] as const) {
-      const html = await render({ ...read, binding: { ...read.binding, remotes: [{ ...remote, mode, readiness: 'ready' }] } });
-      expect(html).toContain(mode === 'anonymous' ? 'read-only' : 'System credentials, unverified');
-      expect(html).not.toContain('actual-transport-grant');
-    }
   });
 });
 

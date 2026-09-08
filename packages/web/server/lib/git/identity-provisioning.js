@@ -50,7 +50,7 @@ export function createGitIdentityProvisioning({ store, now = Date.now, randomId 
     throw new TypeError('Git identity provisioning dependencies are invalid');
   }
 
-  return Object.freeze({
+  const provisioned = Object.freeze({
     /** Creates the identity for a newly connected account, if it has none. */
     ensureAccountIdentity: ({ account, user }) => {
       if (!account?.provider || !text(account.instance) || !text(account.accountId)) return null;
@@ -74,6 +74,26 @@ export function createGitIdentityProvisioning({ store, now = Date.now, randomId 
       });
     },
 
+    /**
+     * Identities for accounts connected before identities carried one.
+     *
+     * Runs once at startup rather than on demand, because the add and clone
+     * screens propose identities and an account with none would look like an
+     * account OpenChamber does not know about.
+     */
+    backfillAccountIdentities: (accounts) => {
+      const created = [];
+      for (const entry of accounts ?? []) {
+        try {
+          const identity = provisioned.ensureAccountIdentity(entry);
+          if (identity) created.push(identity);
+        } catch {
+          // One account that cannot describe itself must not stop the rest.
+        }
+      }
+      return created;
+    },
+
     /** Follows a renewed credential, so identities keep naming a live account. */
     repointAccountIdentities: ({ from, to }) => {
       if (!sameAccount({ ...from, accountId: 'x' }, { ...to, accountId: 'x' }) || from.accountId === to.accountId) return [];
@@ -82,4 +102,5 @@ export function createGitIdentityProvisioning({ store, now = Date.now, randomId 
         .map((profile) => store.updateProfile(profile.id, { ...profile, account: to }));
     },
   });
+  return provisioned;
 }
