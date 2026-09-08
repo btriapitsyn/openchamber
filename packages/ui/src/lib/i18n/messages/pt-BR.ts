@@ -7,7 +7,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.projectAction.active': 'Ação do projeto em execução',
   ...settingsDict,
   'gitView.context.configure': 'Configurar repositório',
-  'gitView.context.draft': 'As seleções são rascunhos até serem salvas. Fechar descarta as seleções não salvas. Contas e perfis de autor são gerenciados nas configurações do Git.',
+  'gitView.context.description': 'O que a identidade não decide: o shell do agente, as permissões de submódulos e LFS, e recomeçar do zero. As identidades são gerenciadas nas configurações do Git.',
   'gitView.context.needsAttention': 'Requer atenção',
   'gitView.identity.systemConfirmTitle': 'Usar “{name}” com as credenciais deste computador?',
   'gitView.identity.systemConfirmAction': 'Usar',

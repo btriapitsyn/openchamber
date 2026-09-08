@@ -726,7 +726,7 @@ export const dict = {
   'gitView.empty.pullBehindSingle': 'Extraire le commit {count}',
   'gitView.header.identityTooltip': 'Identité Git',
   'gitView.context.configure': 'Configurer le dépôt',
-  'gitView.context.draft': 'Les sélections restent des brouillons tant qu’elles ne sont pas enregistrées. Fermer abandonne les sélections non enregistrées. Les comptes et profils d’auteur se gèrent dans les paramètres Git.',
+  'gitView.context.description': 'Ce que l\'identité ne décide pas : le shell de l\'agent, les accès aux sous-modules et à LFS, et la remise à zéro. Les identités se gèrent dans les paramètres Git.',
   'gitView.context.needsAttention': 'À vérifier',
   'gitView.identity.systemConfirmTitle': 'Utiliser « {name} » avec les identifiants de cet ordinateur ?',
   'gitView.identity.systemConfirmAction': "L'utiliser",

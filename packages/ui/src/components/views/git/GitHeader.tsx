@@ -81,6 +81,9 @@ const IDENTITY_ICON_MAP: Record<string, IconName> = {
   heart: 'heart',
   user: 'user-3',
   fingerprint: 'fingerprint',
+  // Identities made from a connected account carry the provider's mark.
+  github: 'github',
+  gitlab: 'gitlab-fill',
 };
 
 const IDENTITY_COLOR_MAP: Record<string, string> = {

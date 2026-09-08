@@ -2251,7 +2251,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.gitmoji.title': 'Insert gitmoji',
   'gitView.header.identityTooltip': 'Git identity',
   'gitView.context.configure': 'Skonfiguruj repozytorium',
-  'gitView.context.draft': 'Wybory są robocze do chwili zapisania. Zamknięcie odrzuca niezapisane wybory. Kontami i profilami autora zarządza się w ustawieniach Git.',
+  'gitView.context.description': 'To, czego tożsamość nie rozstrzyga: powłoka agenta, uprawnienia do submodułów i LFS oraz rozpoczęcie od nowa. Tożsamościami zarządzasz w ustawieniach Git.',
   'gitView.context.needsAttention': 'Wymaga uwagi',
   'gitView.identity.systemConfirmTitle': 'Użyć „{name}” z poświadczeniami tego komputera?',
   'gitView.identity.systemConfirmAction': 'Użyj',

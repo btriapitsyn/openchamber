@@ -68,7 +68,7 @@ test('failed full reset reconciles once without retrying the mutation', async ()
 });
 
 test('every locale supplies repository context copy', async () => {
-  const keys = ['configure', 'draft', 'needsAttention', 'settings', 'author', 'notConfigured'];
+  const keys = ['configure', 'description', 'needsAttention', 'settings', 'author', 'notConfigured'];
   for (const locale of ['en', 'de', 'es', 'fr', 'ja', 'ko', 'pl', 'pt-BR', 'uk', 'zh-CN', 'zh-TW']) {
     const { dict } = await import(`../../../lib/i18n/messages/${locale}.ts`);
     for (const key of keys) expect(dict[`gitView.context.${key}`]).toBeTruthy();

@@ -801,7 +801,7 @@ export const dict = {
   'gitView.empty.pullBehindSingle': '{count} Commit abrufen',
   'gitView.header.identityTooltip': 'Git-Identität',
   'gitView.context.configure': 'Repository konfigurieren',
-  'gitView.context.draft': 'Die Auswahl gilt erst nach dem Speichern. Beim Schließen wird ungespeicherte Auswahl verworfen. Konten und Autorenprofile werden in den Git-Einstellungen verwaltet.',
+  'gitView.context.description': 'Was die Identität nicht entscheidet: die Agenten-Shell, Submodul- und LFS-Freigaben und der Neuanfang. Identitäten werden in den Git-Einstellungen verwaltet.',
   'gitView.context.needsAttention': 'Handlungsbedarf',
   'gitView.identity.systemConfirmTitle': '„{name}“ mit den Zugangsdaten dieses Rechners verwenden?',
   'gitView.identity.systemConfirmAction': 'Verwenden',

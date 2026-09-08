@@ -156,7 +156,7 @@ export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDial
         {open ? <DialogContent className="@container min-w-0 max-h-[85dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{t('gitView.context.configure')}</DialogTitle>
-            <DialogDescription>{t('gitView.context.draft')}</DialogDescription>
+            <DialogDescription>{t('gitView.context.description')}</DialogDescription>
           </DialogHeader>
           <AgentAuthorityEditor directory={directory} />
           <AuxiliaryBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />

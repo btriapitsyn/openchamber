@@ -7,6 +7,7 @@ import simpleGit from 'simple-git';
 import { createWorktreeBootstrapStore } from './worktree-bootstrap-storage.js';
 
 import {
+  getCurrentIdentity,
   checkoutBranch,
   checkoutCommit,
   cherryPick,
@@ -188,6 +189,18 @@ describe.runIf(canRunGit())('setLocalIdentity', () => {
   });
 
   afterEach(() => vi.unstubAllEnvs());
+
+  it('reads the global author for a repository that sets none, and the local one when set', async () => {
+    const { tmpDir } = await createTempRepo();
+    runGit(tmpDir, ['config', '--global', 'user.name', 'Global Author']);
+    runGit(tmpDir, ['config', '--global', 'user.email', 'global@example.com']);
+    expect(await getCurrentIdentity(tmpDir)).toEqual({ userName: 'Test User', userEmail: 'test@example.com', sshCommand: null });
+
+    runGit(tmpDir, ['config', '--local', '--unset-all', 'user.name']);
+    runGit(tmpDir, ['config', '--local', '--unset-all', 'user.email']);
+    // An unset local key is a null value, not an error: the global author answers.
+    expect(await getCurrentIdentity(tmpDir)).toEqual({ userName: 'Global Author', userEmail: 'global@example.com', sshCommand: null });
+  });
 
   it.each([
     ['SSH', { authType: 'ssh', sshKey: '/unused/test key' }],

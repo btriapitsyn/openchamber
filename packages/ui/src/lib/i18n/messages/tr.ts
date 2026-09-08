@@ -3386,7 +3386,7 @@ export const dict = {
   'chat.shellBoundary.agentAria': 'Agent shell çalıştırması doğrulanmadı ve yönetilen Git sınırının dışında',
   'chat.shellBoundary.userAria': 'Kullanıcı shell çalıştırması doğrulanmadı ve yönetilen Git sınırının dışında',
   'gitView.context.configure': 'Repository\'yi yapılandır',
-  'gitView.context.draft': 'Seçimler kaydedilene kadar taslaktır. Kapatmak kaydedilmemiş seçimleri siler. Hesaplar ve yazar profilleri Git Ayarları\'nda yönetilir.',
+  'gitView.context.description': 'Kimliğin belirlemediği şeyler: aracı kabuğu, alt modül ve LFS izinleri ve sıfırdan başlama. Kimlikler Git ayarlarında yönetilir.',
   'gitView.context.needsAttention': 'Dikkat gerektiriyor',
   'gitView.identity.systemConfirmTitle': '“{name}” bu bilgisayarın kimlik bilgileriyle kullanılsın mı?',
   'gitView.identity.systemConfirmAction': 'Kullan',

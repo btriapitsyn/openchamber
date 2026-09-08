@@ -901,7 +901,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.empty.pullBehindSingle': '{count}コミットをプル',
   'gitView.header.identityTooltip': 'Git ID',
   'gitView.context.configure': 'リポジトリを設定',
-  'gitView.context.draft': '選択内容は保存するまで下書きです。閉じると未保存の選択は破棄されます。アカウントと作成者プロファイルはGit設定で管理します。',
+  'gitView.context.description': 'アイデンティティが決めない項目：エージェントのシェル、サブモジュールと LFS の許可、そしてやり直し。アイデンティティは Git 設定で管理します。',
   'gitView.context.needsAttention': '確認が必要',
   'gitView.identity.systemConfirmTitle': '「{name}」をこのコンピューターの資格情報で使いますか？',
   'gitView.identity.systemConfirmAction': '使う',

@@ -7,7 +7,7 @@ export const dict: Record<I18nKey, string> = {
   'sessions.sidebar.projectAction.active': 'Виконується дія проєкту',
   ...settingsDict,
   'gitView.context.configure': 'Налаштувати репозиторій',
-  'gitView.context.draft': 'Вибрані значення є чернеткою до збереження. Закриття скидає незбережений вибір. Обліковими записами та профілями автора можна керувати в налаштуваннях Git.',
+  'gitView.context.description': 'Те, чого ідентичність не вирішує: оболонка агента, доступи для підмодулів і LFS та початок з чистого аркуша. Ідентичностями керують у налаштуваннях Git.',
   'gitView.context.needsAttention': 'Потребує уваги',
   'gitView.identity.systemConfirmTitle': 'Використати «{name}» з обліковими даними цього комп’ютера?',
   'gitView.identity.systemConfirmAction': 'Використати',

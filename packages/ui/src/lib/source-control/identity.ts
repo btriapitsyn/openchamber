@@ -201,6 +201,9 @@ export const instanceHost = (instance: string): string | null =>
  * to reach it. Failing that, the one marked default, and failing that nothing —
  * proposing an unrelated identity would be a guess wearing a name.
  */
+/** The id the identities store gives the person's own Git configuration. */
+export const GLOBAL_IDENTITY_ID = 'global';
+
 export const proposeIdentityForHost = <T extends { id: string; account?: { instance: string } | null }>(
   identities: T[],
   host: string | null,
@@ -214,7 +217,11 @@ export const proposeIdentityForHost = <T extends { id: string; account?: { insta
     : undefined;
   if (matching) return matching;
   const preferred = defaultIdentityId?.trim();
-  return (preferred && identities.find((identity) => identity.id === preferred)) || null;
+  return (preferred && identities.find((identity) => identity.id === preferred))
+    // The System identity is what a repository has before anyone chooses; it
+    // is the default rather than a guess.
+    || identities.find((identity) => identity.id === GLOBAL_IDENTITY_ID)
+    || null;
 };
 
 export const endpointsShareOrigin = (endpoints: string[], origin: string): boolean => endpoints.every((endpoint) => {

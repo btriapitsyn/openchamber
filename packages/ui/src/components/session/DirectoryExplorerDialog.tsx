@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScrollableOverlay } from '@/components/ui/ScrollableOverlay';
 import {
+  GLOBAL_IDENTITY_ID,
   isSshRemoteUrl,
   proposeIdentityForHost,
   remoteTraits,
@@ -631,7 +632,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         });
         return;
       }
-      if (!isCloneMode && selectedGitIdentity && existingRepository?.primaryRemote
+      // A System identity proposed by default describes the repository as it
+      // is; it is written only when the person chose it or confirmed its
+      // credentials, so adding a directory never clears an author on its own.
+      const identityChosen = identityChoice?.key === identityChoiceKey;
+      const applyIdentity = selectedGitIdentity
+        && (identityChosen || selectedGitIdentity.id !== GLOBAL_IDENTITY_ID || unverifiedConfirmed);
+      if (!isCloneMode && applyIdentity && existingRepository?.primaryRemote
         && existingRepository.directory === selectedTarget) {
         const outcome = await applyIdentityToRepository({
           directory: project.path,
@@ -663,7 +670,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       cloneController.current = null;
       setIsConfirming(false);
     }
-  }, [addProject, addProjects, addedProjectPaths, agentAuthorityEnabled, canSubmitClone, cloneRecovery, cloneSelection, unverifiedConfirmed, cloneRemoteUrl, existingRepository, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity, selectedPaths, shouldCreateTarget, sourceControl, targetPath, t]);
+  }, [addProject, addProjects, addedProjectPaths, agentAuthorityEnabled, canSubmitClone, cloneRecovery, cloneSelection, identityChoice, identityChoiceKey, unverifiedConfirmed, cloneRemoteUrl, existingRepository, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity, selectedPaths, shouldCreateTarget, sourceControl, targetPath, t]);
 
   const browseToDisplayPath = React.useCallback((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));
@@ -829,7 +836,8 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             <dd className="min-w-0 break-words text-foreground/80">
               {existingRepositoryAuthor ? <>
                 {existingRepositoryAuthor}
-                {existingAuthorProfile && existingAuthorProfile.name !== existingRepository.author?.userName
+                {existingAuthorProfile && existingAuthorProfile.id !== GLOBAL_IDENTITY_ID
+                  && existingAuthorProfile.name !== existingRepository.author?.userName
                   ? <> · {existingAuthorProfile.name}</> : null}
                 {existingRepository.authorIsLocal ? null : <> · {t('directoryExplorerDialog.existing.authorGlobal')}</>}
               </> : t('gitView.context.notConfigured')}

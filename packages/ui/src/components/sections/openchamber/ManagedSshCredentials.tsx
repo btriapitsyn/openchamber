@@ -118,6 +118,11 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
     if (state.rejection === 'inventory-full') return t('settings.sourceControl.ssh.inventoryFull');
     return t('settings.sourceControl.ssh.candidateUnavailable');
   };
+  const describeCredential = (credential: GitManagedSshCredential) =>
+    [credential.label, credential.fingerprint, credentialReason(credential)].filter(Boolean).join(' · ');
+  const selectedCredential = selection
+    ? state.credentials.find((credential) => credential.credentialId === selection.value) ?? null
+    : null;
   const rejection = rejectionMessage();
   const controlsDisabled = disabled || state.status === 'loading' || !git.managedSshCredentials;
 
@@ -125,13 +130,16 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
 
     {selection ? <Select value={selection.value} onValueChange={selection.onChange} disabled={disabled || state.status !== 'ready'}>
       <SelectTrigger size={SETTINGS_SELECT_SIZE} className="w-full" aria-label={t('settings.sourceControl.ssh.title')}>
-        <SelectValue placeholder={t('settings.sourceControl.ssh.title')} />
+        <SelectValue placeholder={t('settings.sourceControl.ssh.title')}>
+          {/* The value is an opaque reference; only the safe label may be shown. */}
+          {selectedCredential ? describeCredential(selectedCredential) : undefined}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>{state.credentials.map((credential) => <SelectItem key={credential.credentialId} value={credential.credentialId} disabled={credential.capability.status !== 'ready'}>
-        {credential.label} {credential.fingerprint} {credentialReason(credential)}
+        {describeCredential(credential)}
       </SelectItem>)}</SelectContent>
     </Select> : state.credentials.map((credential) => <p key={credential.credentialId} className={cn(SETTINGS_HELPER_CLASS, 'break-all')}>
-      {credential.label} {credential.fingerprint} {credentialReason(credential)}
+      {describeCredential(credential)}
     </p>)}
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" disabled={controlsDisabled} onClick={() => void send({ operation: 'inventory' })}>
@@ -158,7 +166,7 @@ export function ManagedSshCredentials({ selection, disabled = false }: {
           {t('settings.sourceControl.ssh.import')}
         </Button>
       </div> : <p key={`${candidate.label}-${index}`} className={SETTINGS_HELPER_CLASS}>
-        {candidate.label} {candidateReason(candidate)}
+        {[candidate.label, candidateReason(candidate)].filter(Boolean).join(' · ')}
       </p>)}
     </div> : null}
     {state.status === 'loading' ? <p role="status" className={SETTINGS_HELPER_CLASS}>{t('settings.sourceControl.transport.loading')}</p> : null}

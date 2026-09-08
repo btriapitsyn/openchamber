@@ -103,8 +103,11 @@ written; managed and anonymous choices add no routine confirmation popup.
 an account identity whose instance host differs from the remote host, an
 account or anonymous identity on a non-HTTPS remote, or an SSH-key identity on a
 non-SSH remote is disabled with a localized reason (`describeIdentityApplicability`)
-and never proposed. `proposeIdentityForHost` proposes only applicable identities
-from the remote host. The same rule serves the add and clone screens
+and never proposed. `proposeIdentityForHost` proposes, among applicable identities,
+the one whose account answers for the remote host, then the default identity,
+then the System identity — the repository as it is. On the add screen a proposed
+System identity is written only when the person chose it or confirmed its
+credentials, so adding a directory never clears an author on its own. The same rule serves the add and clone screens
 (`DirectoryExplorerDialog`), the Git panel (`IdentityDropdown` in `GitHeader`),
 and the mobile Changes surface.
 

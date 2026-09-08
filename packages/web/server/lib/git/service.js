@@ -2273,26 +2273,22 @@ export async function getRemoteUrl(directory, remoteName = 'origin') {
 
 export async function getCurrentIdentity(directory) {
   const git = await createGit(directory);
+  // An unset key reads as a null value rather than an error, so the fallback
+  // to the person's global configuration has to look at the value.
+  const localOrGlobal = async (key) => {
+    const local = await git.getConfig(key, 'local').catch(() => null);
+    if (local?.value) return local.value;
+    const global = await git.getConfig(key, 'global').catch(() => null);
+    return global?.value || null;
+  };
 
   try {
-
-    const userName = await git.getConfig('user.name', 'local').catch(() =>
-      git.getConfig('user.name', 'global')
-    );
-
-    const userEmail = await git.getConfig('user.email', 'local').catch(() =>
-      git.getConfig('user.email', 'global')
-    );
-
-    const sshCommand = await git.getConfig('core.sshCommand', 'local').catch(() =>
-      git.getConfig('core.sshCommand', 'global')
-    );
-
-    return {
-      userName: userName?.value || null,
-      userEmail: userEmail?.value || null,
-      sshCommand: sshCommand?.value || null
-    };
+    const [userName, userEmail, sshCommand] = await Promise.all([
+      localOrGlobal('user.name'),
+      localOrGlobal('user.email'),
+      localOrGlobal('core.sshCommand'),
+    ]);
+    return { userName, userEmail, sshCommand };
   } catch (error) {
     console.error('Failed to get current Git identity:', error);
     return {

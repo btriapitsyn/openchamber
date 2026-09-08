@@ -196,10 +196,13 @@ describe('proposeIdentityForHost', () => {
     expect(proposeIdentityForHost([plain, github, gitlab], 'gitlab.com')?.id).toBe('gl');
   });
 
-  test('falls back to the default identity, and to nothing rather than a guess', () => {
+  test('falls back to the default identity, then to System, and never to a guess', () => {
+    const system = { id: 'global', account: null };
     expect(proposeIdentityForHost([plain, github], 'gitlab.com', 'plain')?.id).toBe('plain');
     expect(proposeIdentityForHost([plain, github], 'gitlab.com')).toBeNull();
     expect(proposeIdentityForHost([plain, github], null, 'missing')).toBeNull();
+    expect(proposeIdentityForHost([system, plain, github], 'gitlab.com')?.id).toBe('global');
+    expect(proposeIdentityForHost([system, plain, github], 'gitlab.com', 'plain')?.id).toBe('plain');
     // A host match wins over the default: it answers a question the default cannot.
     expect(proposeIdentityForHost([plain, github], 'github.com', 'plain')?.id).toBe('gh');
   });

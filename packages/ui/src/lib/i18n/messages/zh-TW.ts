@@ -917,7 +917,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.empty.pullBehindSingle': 'Pull {count} 個提交',
   'gitView.header.identityTooltip': 'Git 身分',
   'gitView.context.configure': '設定儲存庫',
-  'gitView.context.draft': '選擇在儲存前僅為草稿。關閉會捨棄尚未儲存的選擇。請在 Git 設定中管理帳戶和作者設定檔。',
+  'gitView.context.description': '身分不決定的內容：代理 Shell、子模組與 LFS 授權，以及重新開始。身分在 Git 設定中管理。',
   'gitView.context.needsAttention': '需要處理',
   'gitView.identity.systemConfirmTitle': '使用「{name}」並採用本機的憑證嗎？',
   'gitView.identity.systemConfirmAction': '使用',

@@ -36,6 +36,8 @@ const ICON_MAP: Record<string, IconName> = {
   graduation: 'graduation-cap',
   code: 'code',
   heart: 'heart',
+  github: 'github',
+  gitlab: 'gitlab-fill',
 };
 
 const COLOR_MAP: Record<string, string> = {
