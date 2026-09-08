@@ -1266,7 +1266,13 @@ const openCodeLifecycleRuntime = createOpenCodeLifecycleRuntime({
     // OpenChamber holds bindings on. Injects nothing when it holds none.
     const gitCredentialEnv = await featureRoutesRuntime.getGitAgentCredentialRuntime()
       ?.prepareManagedOpenCodeEnv().catch(() => ({})) ?? {};
-    return { ...managedEnv, ...mcpReconnectEnv, ...gitCredentialEnv };
+    // The plugin's shell guard is armed only while the plugin itself is
+    // injected, because refusing a command without offering the managed action
+    // that replaces it would leave the agent with no way to do the work.
+    const shellBoundaryEnv = Object.keys(managedEnv).length
+      ? featureRoutesRuntime.getGitShellBoundaryRuntime()?.prepareManagedOpenCodeEnv() ?? {}
+      : {};
+    return { ...managedEnv, ...mcpReconnectEnv, ...gitCredentialEnv, ...shellBoundaryEnv };
   },
 });
 

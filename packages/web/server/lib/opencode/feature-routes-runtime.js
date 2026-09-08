@@ -60,6 +60,7 @@ import { createGitCredentialResolver, createHttpsCredentialReference } from '../
 import { createNetworkOperations } from '../git/network-operations.js';
 import { createGitAgentOperations } from '../git/agent-operations.js';
 import { createGitAgentCredentialRuntime } from '../git/agent-credential-runtime.js';
+import { createGitShellBoundaryRuntime } from '../git/shell-boundary-runtime.js';
 import { createManagedSshCredentialStore } from '../git/ssh-credential-storage.js';
 import { createManagedSshInventory } from '../git/credentials.js';
 import { createSystemPushAcknowledgementStore } from '../git/system-push-acknowledgement-storage.js';
@@ -100,6 +101,7 @@ export const createFeatureRoutesRuntime = (dependencies) => {
   let networkOperations = null;
   let gitAgentOperations = null;
   let gitAgentCredentialRuntime = null;
+  let gitShellBoundaryRuntime = null;
   const getWalkthroughService = async () => {
     if (!walkthroughService) {
       const [service, pullRequest] = await Promise.all([
@@ -485,6 +487,11 @@ export const createFeatureRoutesRuntime = (dependencies) => {
       getActivePort: routeDependencies.getActivePort ?? (() => null),
     });
     gitAgentCredentialRuntime.registerRoutes(app);
+    gitShellBoundaryRuntime = createGitShellBoundaryRuntime({
+      readBinding: walkthroughBindingService.get,
+      getActivePort: routeDependencies.getActivePort ?? (() => null),
+    });
+    gitShellBoundaryRuntime.registerRoutes(app);
     registerGitRoutes(app, {
       managedSshInventory,
       networkOperations,
@@ -535,5 +542,6 @@ export const createFeatureRoutesRuntime = (dependencies) => {
     /** Null until the Git feature routes are registered. */
     getGitAgentOperations: () => gitAgentOperations,
     getGitAgentCredentialRuntime: () => gitAgentCredentialRuntime,
+    getGitShellBoundaryRuntime: () => gitShellBoundaryRuntime,
   };
 };

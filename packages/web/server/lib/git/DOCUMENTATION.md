@@ -275,6 +275,24 @@ unbound repository from silently borrowing an ambient identity.
 Nothing is injected while no binding names an HTTPS host. The bearer token
 lives only in that child's environment and dies with the process.
 
+`shell-boundary-runtime.js` closes the last gap. The credential answer already
+decides which identity a transfer uses, but it cannot reach `gh`, `glab` or an
+SSH remote, and an agent that hits an authentication error has no idea what to
+do next. The plugin's `tool.execute.before` hook asks OpenChamber about any
+shell command that mentions Git, and a repository that is configured in
+OpenChamber refuses with the managed action to use instead. A repository nobody
+configured is left alone, because there is nowhere to send the agent. The hook
+can only deny — it is not an approval prompt — and anything that goes wrong in
+it allows the command, since a guard that fails closed on its own plumbing
+would strand an agent that has done nothing wrong.
+
+`shell-boundary.js` decides what counts as a transfer. It names the
+subcommands it blocks, which is the opposite of the UI's
+`shellOperationBoundary`: that one labels a call that already ran, where a
+missed label is the worse mistake, so it treats anything it does not recognise
+as crossing. Blocking has to err the other way, because a refusal that guesses
+stops ordinary work.
+
 ## Internal Helpers
 
 The following functions are internal helpers used by exported functions:
