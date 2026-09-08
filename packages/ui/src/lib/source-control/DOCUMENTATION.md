@@ -128,15 +128,20 @@ authoritative empty binding. VS Code offers no identity switching; the webview
 projects repository remotes as a ready System binding.
 
 `RepositoryConfigurationDialog` in `SourceControlBindingSettings.tsx` is reached
-from the identity menu and holds what an identity does not decide: agent Git
-authority for this repository, checkout hydration repair
-(`AuxiliaryBindingSettings` in `RepositoryBindingEditors.tsx`), and the
-destructive reset, which removes every binding reference only after confirmation
-and touches neither credentials, Git remotes or configuration, worktree content,
-nor author identity. Its draft lifetime ends on close or runtime/directory scope
-change; drafts and cancellation do not mutate. Both operations apply only their
-returned committed read; stale conflicts perform one fresh owner read without
-retrying the mutation. Account and profile inventories remain in Git Settings.
+from the identity menu and holds what an identity does not decide: whether the
+repository's identity is applied in agent shells, and checkout hydration repair
+(`AuxiliaryBindingSettings` in `RepositoryBindingEditors.tsx`). There is no
+separate reset: choosing the System identity removes the provider association,
+the transport grant and the repository-local author. Its draft lifetime ends on
+close or runtime/directory scope change; drafts and cancellation do not mutate,
+and stale conflicts perform one fresh owner read without retrying the mutation.
+Account and profile inventories remain in Git Settings.
+
+An identity is complete or it is not offered: `isCompleteIdentity` requires an
+account, a transport that is the account's credential or a managed SSH key, and
+a signature. The editor creates nothing else; the server refuses anything else
+from a client. Records written before identities carried an account stay in
+Git Settings flagged as needing one, and no picker lists them.
 
 Checkout repair first runs `checkout-hydration` against a user-selected ready parent fetch remote. The immutable public plan exposes bounded repository-relative submodule/LFS paths and redacted endpoints, never raw URLs, absolute paths, or credential references. Failed hydration stays visible through `GitOperationStatus`. The user selects one discovered endpoint, explicitly chooses System, anonymous HTTPS, managed HTTPS account, or managed SSH key, and saves or removes only that grant through the narrow CAS API. Retry plans a new inspection; it never reclones the retained repository. Missing `git-lfs` has a specific install-and-retry warning. Runtime and directory changes clear all repair drafts, and late mutation results reconcile through the captured binding owner scope.
 
@@ -232,6 +237,4 @@ produces, the System acknowledgement gate, and instance and scheme applicability
 `sourceControlOAuthPolling.test.tsx` cover localized retry and runtime switching.
 These tests do not validate a packaged runtime, real credentials or browser paint.
 
-`SourceControlBindingSettings.test.tsx` covers the actual reset callback's single
-confirmed exact-authority intent, its one-shot conflict reconciliation, and
-all-locale copy.
+`SourceControlBindingSettings.test.tsx` covers the repository dialog's all-locale copy.

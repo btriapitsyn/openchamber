@@ -1,13 +1,11 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import { useI18n } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
-import type { SourceControlRepositoryBindingResetIntent } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { repositoryBindingOwner, useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { useUIStore } from '@/stores/useUIStore';
 import {
   SETTINGS_HELPER_CLASS,
@@ -97,59 +95,13 @@ const AgentAuthorityEditor = ({ directory, className }: { directory: string; cla
  * The identity carries the account, the transport and the signature, and the
  * panel names it on its own button, so this holds only what an identity does
  * not say: the separate grants for submodules and Git LFS, whether OpenChamber
- * answers Git in agent shells here, and starting over.
+ * answers Git in agent shells here. Starting over is choosing the System identity.
  */
 export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDialogProps> = ({ open, onOpenChange, directory }) => {
   const { t } = useI18n();
-  const { sourceControl } = useRuntimeAPIs();
   const mobileActions = useMobileAppActions();
-  const binding = useRepositoryBinding(directory, sourceControl);
-  const [resetOpen, setResetOpen] = React.useState(false);
-  const [resetting, setResetting] = React.useState(false);
-  const [resetError, setResetError] = React.useState(false);
-  const resetRequestRef = React.useRef(0);
   const setSettingsPage = useUIStore((state) => state.setSettingsPage);
   const setSettingsDialogOpen = useUIStore((state) => state.setSettingsDialogOpen);
-  const read = binding.read;
-
-  React.useLayoutEffect(() => {
-    resetRequestRef.current += 1;
-    setResetOpen(false);
-    setResetting(false);
-    setResetError(false);
-    return () => { resetRequestRef.current += 1; };
-  }, [binding.scope, sourceControl]);
-
-  const resetBinding = async (): Promise<void> => {
-    if (resetting || binding.status !== 'ready' || !binding.isCurrent() || !read?.binding) return;
-    const request = resetRequestRef.current;
-    const runtimeKey = getRuntimeKey();
-    const isCurrent = () => request === resetRequestRef.current && runtimeKey === getRuntimeKey();
-    const mutationScope = repositoryBindingOwner.captureMutation(binding.scope, read);
-    const intent: SourceControlRepositoryBindingResetIntent = {
-      directory,
-      expectedRepositoryId: read.repository.repositoryId,
-      expectedRevision: read.revision,
-      expectedConfigRevision: read.repository.configRevision,
-      confirmed: true,
-    };
-    setResetting(true);
-    setResetError(false);
-    try {
-      const result = await sourceControl.resetRepositoryBinding(intent);
-      if (!repositoryBindingOwner.setMutationResult(mutationScope, result)) {
-        await repositoryBindingOwner.reconcile(mutationScope, sourceControl);
-      }
-      if (isCurrent()) setResetOpen(false);
-    } catch {
-      if (isCurrent()) setResetError(true);
-      await repositoryBindingOwner.reconcile(mutationScope, sourceControl);
-    } finally {
-      mutationScope.release();
-      if (isCurrent()) setResetting(false);
-    }
-  };
-
 
   return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -160,35 +112,6 @@ export const RepositoryConfigurationDialog: React.FC<RepositoryConfigurationDial
           </DialogHeader>
           <AgentAuthorityEditor directory={directory} />
           <AuxiliaryBindingSettings directory={directory} className={DIALOG_DIVIDER_CLASS} />
-          {read?.binding ? <SettingsControlGroup
-            title={t('settings.sourceControl.reset.title')}
-            description={t('settings.sourceControl.reset.description')}
-            className={cn('min-w-0', DIALOG_DIVIDER_CLASS)}
-            contentClassName="pt-1"
-          >
-            <Dialog open={resetOpen} onOpenChange={(value) => { if (!resetting) { setResetOpen(value); setResetError(false); } }}>
-              <DialogTrigger asChild><Button size="sm" variant="destructive" disabled={resetting || binding.status !== 'ready'}>
-                {t('settings.sourceControl.reset.action')}
-              </Button></DialogTrigger>
-              {resetOpen ? <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{t('settings.sourceControl.reset.confirmTitle')}</DialogTitle>
-                  <DialogDescription>{t('settings.sourceControl.reset.confirmDescription')}</DialogDescription>
-                </DialogHeader>
-                {resetError ? <p role="alert" className={cn(SETTINGS_HELPER_CLASS, 'text-[var(--status-error)]')}>
-                  {t('settings.sourceControl.reset.failed')}
-                </p> : null}
-                <DialogFooter>
-                  <Button size="sm" variant="ghost" disabled={resetting} onClick={() => setResetOpen(false)}>
-                    {t('gitView.common.cancel')}
-                  </Button>
-                  <Button size="sm" variant="destructive" disabled={resetting} onClick={() => void resetBinding()}>
-                    {t('settings.sourceControl.reset.confirmAction')}
-                  </Button>
-                </DialogFooter>
-              </DialogContent> : null}
-            </Dialog>
-          </SettingsControlGroup> : null}
           <DialogFooter className={DIALOG_DIVIDER_CLASS}>
             <Button size="sm" variant="ghost" onClick={() => {
               onOpenChange(false);

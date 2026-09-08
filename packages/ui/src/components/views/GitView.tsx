@@ -1,3 +1,4 @@
+import { isCompleteIdentity } from '@/lib/api/git-identity';
 import React from 'react';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useConfigStore } from '@/stores/useConfigStore';
@@ -1572,7 +1573,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     }
 
     for (const profile of profiles) {
-      unique.set(profile.id, profile);
+      if (isCompleteIdentity(profile)) unique.set(profile.id, profile);
     }
     return Array.from(unique.values());
   }, [profiles, globalIdentity]);

@@ -67,7 +67,11 @@ export const parsePublicGitIdentityProfile = (value, expectedId) => {
   const transport = parseIdentityTransport(value.transport);
   const sshCredentialId = value.sshCredentialId === null || value.sshCredentialId === undefined
     ? null : value.sshCredentialId.trim();
-  if (transport === 'account' && !account) throw new TypeError('An account transport requires an account');
+  // An identity is complete or it is not one: the account it acts as, the way
+  // it authenticates, and the signature. Records written before identities
+  // carried an account are still read; a client cannot write another.
+  if (!account) throw new TypeError('An identity requires an account');
+  if (transport !== 'account' && transport !== 'ssh') throw new TypeError('An identity authenticates with its account or a managed key');
   if (transport === 'ssh' && !sshCredentialId) throw new TypeError('An SSH transport requires a managed key');
   if (transport !== 'ssh' && sshCredentialId) throw new TypeError('Only an SSH transport names a managed key');
   const profile = {

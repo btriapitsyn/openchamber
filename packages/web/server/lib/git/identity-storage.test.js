@@ -8,6 +8,9 @@ import { gitStorageProcess } from './storage-process.test-support.js';
 const roots = [];
 const children = [];
 const profile = (id) => ({ id, name: id, userName: id, userEmail: `${id}@example.com` });
+const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' };
+// An identity is an account, a transport and a signature; this is the smallest complete one.
+const complete = (id) => ({ ...profile(id), account, transport: 'account' });
 const setup = async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'openchamber-identities-'));
   roots.push(root);
@@ -38,7 +41,6 @@ describe('git identity storage', () => {
 
   it('stores an identity as an account, a transport and a signature', async () => {
     const { store } = await setup();
-    const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' };
     const created = store.createProfile({ ...profile('work'), account, transport: 'account' });
     expect(created).toMatchObject({ account, transport: 'account' });
 
@@ -49,17 +51,17 @@ describe('git identity storage', () => {
     // requests are a question about the host, not about the transfer.
     expect(ssh).toMatchObject({ transport: 'ssh', sshCredentialId: 'ocgit:v1:ssh:key-one', account });
 
-    const plain = store.createProfile(profile('personal'));
-    expect(plain).toMatchObject({ transport: 'system', account: null });
-    expect(plain.sshCredentialId).toBeUndefined();
+    // A signature alone is not an identity: nothing says whose it is or how it authenticates.
+    expect(() => store.createProfile(profile('personal'))).toThrow(/requires an account/i);
+    expect(() => store.createProfile({ ...profile('personal'), account, transport: 'system' }))
+      .toThrow(/account or a managed key/i);
   });
 
   it('refuses an identity whose transport and credentials disagree', async () => {
     const { store } = await setup();
-    const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' };
     expect(() => store.createProfile({ ...profile('a'), transport: 'account' }))
-      .toThrow(/account transport requires an account/i);
-    expect(() => store.createProfile({ ...profile('b'), transport: 'ssh' }))
+      .toThrow(/requires an account/i);
+    expect(() => store.createProfile({ ...profile('b'), account, transport: 'ssh' }))
       .toThrow(/SSH transport requires a managed key/i);
     expect(() => store.createProfile({ ...profile('c'), account, transport: 'account', sshCredentialId: 'k' }))
       .toThrow(/Only an SSH transport names a managed key/i);
@@ -82,7 +84,7 @@ describe('git identity storage', () => {
     const store = createGitIdentityStore({ filePath });
 
     const updated = store.updateProfile('legacy', {
-      ...profile('legacy'),
+      ...complete('legacy'),
       name: 'Updated author',
       signCommits: true,
       signingKey: '/public/signing-key.pub',
@@ -97,12 +99,11 @@ describe('git identity storage', () => {
       signingKey: '/public/signing-key.pub',
       color: 'string',
       icon: 'briefcase',
-      // An edit states the identity's account and transport, and a record
-      // written before identities carried either says System Git and no
-      // account. The legacy fields beside it named no credential this build can
-      // resolve, so they are kept but not read.
-      account: null,
-      transport: 'system',
+      // An edit completes the identity with its account and transport. The
+      // legacy fields beside it named no credential this build can resolve, so
+      // they are kept but not read.
+      account,
+      transport: 'account',
     });
     expect(JSON.parse(await fs.readFile(filePath, 'utf8')).profiles[0]).toEqual(updated);
   });
@@ -131,8 +132,8 @@ describe('git identity storage', () => {
     ]);
     children.push(...pair);
     const results = await Promise.all([
-      pair[0].call('createProfile', [profile('one')]).result,
-      pair[1].call('createProfile', [profile('two')]).result,
+      pair[0].call('createProfile', [complete('one')]).result,
+      pair[1].call('createProfile', [complete('two')]).result,
     ]);
     expect(results.every((result) => result.ok)).toBe(true);
     expect(store.getProfiles().map((entry) => entry.id).sort()).toEqual(['one', 'two']);

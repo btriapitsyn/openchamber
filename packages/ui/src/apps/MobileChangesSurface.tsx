@@ -1,3 +1,4 @@
+import { isCompleteIdentity } from '@/lib/api/git-identity';
 import React from 'react';
 import { Icon } from '@/components/icon/Icon';
 
@@ -101,7 +102,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   const availableIdentities = React.useMemo(() => {
     const unique = new Map<string, GitIdentityProfile>();
     if (globalGitIdentity) unique.set(globalGitIdentity.id, globalGitIdentity);
-    for (const profile of gitIdentityProfiles) unique.set(profile.id, profile);
+    for (const profile of gitIdentityProfiles) if (isCompleteIdentity(profile)) unique.set(profile.id, profile);
     return Array.from(unique.values());
   }, [gitIdentityProfiles, globalGitIdentity]);
   // The repository's own author decides which identity it is already acting as.

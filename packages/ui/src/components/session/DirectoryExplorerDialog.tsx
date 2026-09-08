@@ -15,7 +15,7 @@ import { useGitOperationRecovery } from '@/components/views/git/useGitOperationR
 import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 import { useExistingRepositorySummary } from './useExistingRepositorySummary';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { identityTransport } from '@/lib/api/git-identity';
+import { identityTransport, isCompleteIdentity } from '@/lib/api/git-identity';
 import { applyIdentityToRepository, identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
@@ -267,7 +267,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       unique.set(globalGitIdentity.id, globalGitIdentity);
     }
     for (const profile of gitIdentityProfiles) {
-      unique.set(profile.id, profile);
+      if (isCompleteIdentity(profile)) unique.set(profile.id, profile);
     }
     return Array.from(unique.values());
   }, [gitIdentityProfiles, globalGitIdentity]);

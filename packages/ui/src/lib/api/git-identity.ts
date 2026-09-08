@@ -82,3 +82,13 @@ export const gitIdentityMutationResultSchema = z.object({
   success: z.boolean(),
   profile: gitIdentityProfileSchema,
 }).strict();
+
+/**
+ * Whether an identity is complete: an account, a way to authenticate with it,
+ * and a signature. Records written before identities carried an account are
+ * still stored and shown in Git Settings, but no repository can choose them.
+ */
+export const isCompleteIdentity = (
+  profile: Pick<GitIdentityProfile, 'account' | 'transport' | 'sshCredentialId' | 'userName' | 'userEmail'>,
+): boolean => Boolean(profile.account) && Boolean(profile.userName) && Boolean(profile.userEmail)
+  && (profile.transport === 'account' || (profile.transport === 'ssh' && Boolean(profile.sshCredentialId)));

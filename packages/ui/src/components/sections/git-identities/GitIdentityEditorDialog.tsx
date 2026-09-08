@@ -27,19 +27,11 @@ import { useI18n } from '@/lib/i18n';
 /** Select value for an identity that answers to no connected account. */
 const NO_ACCOUNT = '__none__';
 
-/** How an identity authenticates, in the order the chips show it. */
+/** How an identity authenticates: with its account's credential, or with a managed key. */
 const AUTH_METHODS = [
   { transport: 'account', icon: 'user-3', labelKey: 'settings.gitIdentities.editor.auth.account' },
   { transport: 'ssh', icon: 'lock', labelKey: 'settings.gitIdentities.editor.auth.ssh' },
-  { transport: 'system', icon: 'terminal', labelKey: 'settings.gitIdentities.editor.auth.system' },
-  { transport: 'anonymous', icon: 'global', labelKey: 'settings.gitIdentities.editor.auth.anonymous' },
 ] as const satisfies ReadonlyArray<{ transport: GitIdentityTransport; icon: IconName; labelKey: string }>;
-const AUTH_HINT_KEYS = {
-  account: 'settings.gitIdentities.editor.auth.accountHint',
-  ssh: 'settings.sourceControl.transport.ssh',
-  system: 'settings.gitIdentities.editor.auth.systemHint',
-  anonymous: 'settings.gitIdentities.editor.auth.anonymousHint',
-} as const;
 
 const PROFILE_COLORS = [
   { key: 'keyword', label: 'Green', cssVar: 'var(--syntax-keyword)' },
@@ -92,7 +84,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
   const [color, setColor] = React.useState('keyword');
   const [icon, setIcon] = React.useState('branch');
   const [accountKey, setAccountKey] = React.useState(NO_ACCOUNT);
-  const [transport, setTransport] = React.useState<GitIdentityTransport>('system');
+  const [transport, setTransport] = React.useState<GitIdentityTransport>('account');
   const [sshCredentialId, setSshCredentialId] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = React.useState(false);
@@ -126,7 +118,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       setColor('keyword');
       setIcon('branch');
       setAccountKey(NO_ACCOUNT);
-      setTransport('system');
+      setTransport('account');
       setSshCredentialId('');
     } else if (selectedProfile) {
       setName(selectedProfile.name);
@@ -139,7 +131,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       setAccountKey(selectedProfile.account
         ? JSON.stringify([selectedProfile.account.provider, selectedProfile.account.instance, selectedProfile.account.accountId])
         : NO_ACCOUNT);
-      setTransport(selectedProfile.transport ?? 'system');
+      setTransport(selectedProfile.transport === 'ssh' ? 'ssh' : 'account');
       setSshCredentialId(selectedProfile.sshCredentialId ?? '');
     } else if (isGlobalProfile) {
       const global = getProfileById('global');
@@ -164,7 +156,8 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
       toast.error(t('settings.gitIdentities.editor.toast.signingKeyRequired'));
       return;
     }
-    if (transport === 'account' && !selectedAccount) {
+    // An identity without an account is not one, whichever way it authenticates.
+    if (!selectedAccount) {
       toast.error(t('settings.gitIdentities.editor.toast.accountRequired'));
       return;
     }
@@ -383,13 +376,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                     </label>
                     <Select
                       value={accountKey}
-                      onValueChange={(value) => {
-                        setAccountKey(value);
-                        // An identity that answers to no account cannot use an
-                        // account's credential, so the transport follows.
-                        if (value === NO_ACCOUNT && transport === 'account') setTransport('system');
-                        if (value !== NO_ACCOUNT && transport === 'system') setTransport('account');
-                      }}
+                      onValueChange={setAccountKey}
                     >
                       <SelectTrigger className="w-full" aria-label={t('settings.gitIdentities.editor.field.account')}>
                         <SelectValue>{selectedAccount?.label ?? t('settings.gitIdentities.editor.field.accountNone')}</SelectValue>
@@ -409,7 +396,6 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                       {AUTH_METHODS.map((method) => (
                         <Button key={method.transport} size="sm" type="button" variant="chip"
                           aria-pressed={transport === method.transport}
-                          disabled={method.transport === 'account' && !selectedAccount}
                           onClick={() => {
                             setTransport(method.transport);
                             if (method.transport !== 'ssh') setSshCredentialId('');
@@ -424,7 +410,7 @@ export const GitIdentityEditorDialog: React.FC<GitIdentityEditorDialogProps> = (
                   {transport === 'ssh' ? (
                     <ManagedSshCredentials selection={{ value: sshCredentialId, onChange: setSshCredentialId }} />
                   ) : (
-                    <p className={SETTINGS_HELPER_CLASS}>{t(AUTH_HINT_KEYS[transport])}</p>
+                    <p className={SETTINGS_HELPER_CLASS}>{t('settings.gitIdentities.editor.auth.accountHint')}</p>
                   )}
                 </div>
               </>

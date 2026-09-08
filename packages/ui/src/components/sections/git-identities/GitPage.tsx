@@ -1,3 +1,4 @@
+import { isCompleteIdentity } from '@/lib/api/git-identity';
 import React from 'react';
 import { toast } from '@/components/ui';
 import {
@@ -286,7 +287,9 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
             )}
           </div>
           <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-            {profile.userEmail}
+            {!isReadOnly && !isCompleteIdentity(profile)
+              ? <span className="text-[var(--status-warning)]">{t('settings.gitIdentities.page.incomplete')}</span>
+              : profile.userEmail}
           </div>
         </div>
       </div>
