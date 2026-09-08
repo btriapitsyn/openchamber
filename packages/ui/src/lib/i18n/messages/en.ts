@@ -1958,6 +1958,7 @@ export const dict = {
   'directoryExplorerDialog.existing.title': 'Already set in this repository',
   'directoryExplorerDialog.existing.accountNone': 'Do not bind an account',
   'directoryExplorerDialog.existing.noAccount': 'No connected account answers for this remote.',
+  'directoryExplorerDialog.existing.transportNone': 'Do not configure a transport',
   'directoryExplorerDialog.existing.authorGlobal': 'from the global identity',
   'directoryExplorerDialog.existing.bindFailed': 'Project added. The source control account could not be bound; set it in the Git panel.',
   'directoryExplorerDialog.browse.directories': 'Directories',

@@ -1,12 +1,13 @@
 import React from 'react';
-import type { GitAPI, GitIdentitySummary, SourceControlAPI } from '@/lib/api/types';
+import type { GitAPI, GitIdentitySummary, SourceControlAPI, SourceControlRepositoryRemote } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
-import { gitRemoteHost } from '@/lib/source-control/identity';
+import { gitRemoteHost, isSshRemoteUrl } from '@/lib/source-control/identity';
 
-export type ExistingRepositoryRemote = {
-  name: string;
-  displayUrl: string;
+export type ExistingRepositoryRemote = SourceControlRepositoryRemote & {
   host: string | null;
+  /** Whether the remote's own URLs allow a managed transport of each kind. */
+  https: boolean;
+  ssh: boolean;
 };
 
 /**
@@ -16,6 +17,8 @@ export type ExistingRepositoryRemote = {
  */
 export type ExistingRepositorySummary = {
   directory: string;
+  repositoryId: string;
+  configRevision: string;
   remotes: ExistingRepositoryRemote[];
   /** The remote a provider association would be anchored to. */
   primaryRemote: ExistingRepositoryRemote | null;
@@ -61,9 +64,10 @@ export const useExistingRepositorySummary = (
         try {
           const context = await sourceControl.repositoryContext(directory);
           const remotes: ExistingRepositoryRemote[] = context.remotes.map((remote) => ({
-            name: remote.name,
-            displayUrl: remote.fetch.displayUrl,
+            ...remote,
             host: gitRemoteHost(remote.fetch.displayUrl),
+            https: [remote.fetch, remote.push].every((endpoint) => endpoint.displayUrl.startsWith('https://')),
+            ssh: [remote.fetch, remote.push].every((endpoint) => isSshRemoteUrl(endpoint.displayUrl)),
           }));
           // A repository with no remote has nothing to associate and nothing to
           // warn about, so it is reported as no repository at all.
@@ -75,6 +79,8 @@ export const useExistingRepositorySummary = (
           if (cancelled || runtimeKey !== getRuntimeKey()) return;
           setSummary({
             directory,
+            repositoryId: context.repositoryId,
+            configRevision: context.configRevision,
             remotes,
             primaryRemote: choosePrimaryRemote(remotes),
             author: author?.userName || author?.userEmail ? author : null,

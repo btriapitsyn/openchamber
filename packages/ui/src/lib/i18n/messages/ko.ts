@@ -1960,6 +1960,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.existing.title': '이 저장소에 이미 설정됨',
   'directoryExplorerDialog.existing.accountNone': '계정을 연결하지 않음',
   'directoryExplorerDialog.existing.noAccount': '이 원격을 담당하는 연결된 계정이 없습니다.',
+  'directoryExplorerDialog.existing.transportNone': '전송을 구성하지 않음',
   'directoryExplorerDialog.existing.authorGlobal': '전역 ID에서',
   'directoryExplorerDialog.existing.bindFailed': '프로젝트를 추가했습니다. 소스 제어 계정을 연결하지 못했습니다. Git 패널에서 설정하세요.',
   'directoryExplorerDialog.browse.directories': '디렉터리',

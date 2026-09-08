@@ -1926,6 +1926,7 @@ export const dict: Record<I18nKey, string> = {
   "directoryExplorerDialog.existing.title": "Уже задано в цьому репозиторії",
   "directoryExplorerDialog.existing.accountNone": "Не прив'язувати обліковий запис",
   "directoryExplorerDialog.existing.noAccount": "Жоден підключений обліковий запис не відповідає за цей віддалений репозиторій.",
+  "directoryExplorerDialog.existing.transportNone": "Не налаштовувати транспорт",
   "directoryExplorerDialog.existing.authorGlobal": "із глобальної ідентичності",
   "directoryExplorerDialog.existing.bindFailed": "Проєкт додано. Не вдалося прив'язати обліковий запис керування кодом; задайте його на панелі Git.",
   "directoryExplorerDialog.browse.directories": "Каталоги",

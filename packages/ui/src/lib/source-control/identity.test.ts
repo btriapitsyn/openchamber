@@ -7,6 +7,7 @@ import {
   resolveSourceControlIdentity,
   resolveSourceControlTarget,
   gitRemoteHost,
+  isSshRemoteUrl,
 } from './identity';
 
 const remote = (url: string): GitRemote => ({ name: 'origin', fetchUrl: url, pushUrl: url });
@@ -137,5 +138,20 @@ describe('gitRemoteHost', () => {
     expect(gitRemoteHost('   ')).toBeNull();
     expect(gitRemoteHost('team/repo.git')).toBeNull();
     expect(gitRemoteHost('not a url')).toBeNull();
+  });
+});
+
+describe('isSshRemoteUrl', () => {
+  test('recognises explicit and scp-like SSH remotes', () => {
+    expect(isSshRemoteUrl('ssh://git@github.com/team/repo.git')).toBe(true);
+    expect(isSshRemoteUrl('git@github.com:team/repo.git')).toBe(true);
+    expect(isSshRemoteUrl('  gitlab.example.com:team/repo.git  ')).toBe(true);
+  });
+
+  test('does not mistake an HTTPS remote for the scp-like form', () => {
+    // `https:` also reads as `<word>:<rest>`, which is why the scheme is checked.
+    expect(isSshRemoteUrl('https://github.com/team/repo.git')).toBe(false);
+    expect(isSshRemoteUrl('http://gitlab.example.com:8080/team/repo.git')).toBe(false);
+    expect(isSshRemoteUrl('')).toBe(false);
   });
 });

@@ -2004,6 +2004,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.existing.title': 'Już ustawione w tym repozytorium',
   'directoryExplorerDialog.existing.accountNone': 'Nie wiąż żadnego konta',
   'directoryExplorerDialog.existing.noAccount': 'Żadne połączone konto nie odpowiada za to zdalne repozytorium.',
+  'directoryExplorerDialog.existing.transportNone': 'Nie konfiguruj transportu',
   'directoryExplorerDialog.existing.authorGlobal': 'z tożsamości globalnej',
   'directoryExplorerDialog.existing.bindFailed': 'Projekt dodany. Nie udało się powiązać konta kontroli źródeł; ustaw je w panelu Git.',
   'directoryExplorerDialog.footer.add': 'Dodaj',

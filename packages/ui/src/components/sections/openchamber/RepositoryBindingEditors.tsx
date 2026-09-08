@@ -5,6 +5,7 @@ import {
   getManagedCredentialSourceLabelKey,
   getSourceControlIdentityOrigin,
   getSourceControlProviderLabel,
+  isSshRemoteUrl,
 } from '@/lib/source-control/identity';
 import { Button } from '@/components/ui/button';
 import {
@@ -189,8 +190,7 @@ export const TransportBindingSettings: React.FC<SourceControlBindingSettingsProp
   const currentRemoteBinding = bindingRead?.binding?.remotes.find((item) => item.name === remoteName);
   const transport = selectedTransport;
   const httpsAvailable = remote?.fetch.displayUrl.startsWith('https://') && remote.push.displayUrl.startsWith('https://');
-  const sshAvailable = Boolean(remote && [remote.fetch, remote.push].every((endpoint) =>
-    endpoint.displayUrl.startsWith('ssh://') || /^(?:[^@/:\s]+@)?[^/:\s]+:[^\s]+$/.test(endpoint.displayUrl)));
+  const sshAvailable = Boolean(remote && [remote.fetch, remote.push].every((endpoint) => isSshRemoteUrl(endpoint.displayUrl)));
   React.useLayoutEffect(() => {
     setSelectedTransport('');
     setSelectedAccount('');
@@ -487,8 +487,7 @@ export const AuxiliaryBindingSettings: React.FC<SourceControlBindingSettingsProp
   });
   const account = accountOptions.find((entry) => entry.key === accountKey);
   const isHttps = selected?.endpoint.displayUrl.startsWith('https://');
-  const isSsh = Boolean(selected && (selected.endpoint.displayUrl.startsWith('ssh://')
-    || /^(?:[^@/:\s]+@)?[^/:\s]+:[^\s]+$/.test(selected.endpoint.displayUrl)));
+  const isSsh = Boolean(selected && isSshRemoteUrl(selected.endpoint.displayUrl));
   const canSave = Boolean(binding.status === 'ready' && read?.binding && remote && selected
     && git.configureAuxiliaryBinding && !saving && transport
     && (transport !== 'system' || unverifiedConfirmed)

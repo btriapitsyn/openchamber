@@ -3425,6 +3425,7 @@ export const dict = {
   'directoryExplorerDialog.existing.title': 'Bu depoda zaten ayarlı',
   'directoryExplorerDialog.existing.accountNone': 'Hiçbir hesabı bağlama',
   'directoryExplorerDialog.existing.noAccount': 'Bu uzak depo için yanıt veren bağlı bir hesap yok.',
+  'directoryExplorerDialog.existing.transportNone': 'Aktarım yapılandırma',
   'directoryExplorerDialog.existing.authorGlobal': 'genel kimlikten',
   'directoryExplorerDialog.existing.bindFailed': 'Proje eklendi. Kaynak kontrolü hesabı bağlanamadı; Git panelinden ayarlayın.',
   'session.changeRequestPicker.error.noProvider': 'Desteklenen bir kaynak kontrolü remote\'u bulunamadı',

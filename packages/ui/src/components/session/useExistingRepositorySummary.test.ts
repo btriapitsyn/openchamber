@@ -97,6 +97,20 @@ describe('useExistingRepositorySummary', () => {
     expect(probe.summary?.authorIsLocal).toBe(true);
   });
 
+  test('carries the authority a binding mutation needs, and which transports the URLs allow', async () => {
+    const probe = await mount();
+    expect(probe.summary?.repositoryId).toBe('repo_one');
+    expect(probe.summary?.configRevision).toBe('config_one');
+    // origin is scp-like, so it allows managed SSH and not managed HTTPS.
+    expect(probe.summary?.primaryRemote?.https).toBe(false);
+    expect(probe.summary?.primaryRemote?.ssh).toBe(true);
+    expect(probe.summary?.remotes[0].name).toBe('upstream');
+    expect(probe.summary?.remotes[0].https).toBe(true);
+    expect(probe.summary?.remotes[0].ssh).toBe(false);
+    expect(probe.summary?.primaryRemote?.fetch.fingerprint).toBe('origin-fetch');
+    expect(probe.summary?.primaryRemote?.push.fingerprint).toBe('origin-push');
+  });
+
   test('reports nothing for a directory that is not a repository', async () => {
     const probe = await mount({ repositoryContext: async () => { throw new Error('Not a repository'); } });
     expect(probe.summary).toBeNull();

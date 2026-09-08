@@ -1928,6 +1928,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.existing.title': '此儲存庫中已有的設定',
   'directoryExplorerDialog.existing.accountNone': '不繫結帳戶',
   'directoryExplorerDialog.existing.noAccount': '沒有已連線的帳戶負責此遠端儲存庫。',
+  'directoryExplorerDialog.existing.transportNone': '不設定傳輸方式',
   'directoryExplorerDialog.existing.authorGlobal': '來自全域身分',
   'directoryExplorerDialog.existing.bindFailed': '專案已新增。無法繫結原始碼管理帳戶；請在 Git 面板中設定。',
   'directoryExplorerDialog.browse.directories': '目錄',

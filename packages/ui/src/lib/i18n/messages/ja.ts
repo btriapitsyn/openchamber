@@ -1954,6 +1954,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.existing.title': 'このリポジトリに設定済み',
   'directoryExplorerDialog.existing.accountNone': 'アカウントを紐付けない',
   'directoryExplorerDialog.existing.noAccount': 'このリモートに対応する接続済みアカウントはありません。',
+  'directoryExplorerDialog.existing.transportNone': 'トランスポートを設定しない',
   'directoryExplorerDialog.existing.authorGlobal': 'グローバル ID から',
   'directoryExplorerDialog.existing.bindFailed': 'プロジェクトを追加しました。ソース管理アカウントを紐付けられませんでした。Git パネルで設定してください。',
   'directoryExplorerDialog.browse.directories': 'ディレクトリ',

@@ -1924,6 +1924,7 @@ export const dict: Record<I18nKey, string> = {
   'directoryExplorerDialog.existing.title': '此仓库中已有的设置',
   'directoryExplorerDialog.existing.accountNone': '不绑定账户',
   'directoryExplorerDialog.existing.noAccount': '没有已连接的账户负责该远程仓库。',
+  'directoryExplorerDialog.existing.transportNone': '不配置传输方式',
   'directoryExplorerDialog.existing.authorGlobal': '来自全局身份',
   'directoryExplorerDialog.existing.bindFailed': '项目已添加。未能绑定源代码管理账户；请在 Git 面板中设置。',
   'directoryExplorerDialog.browse.directories': '目录',

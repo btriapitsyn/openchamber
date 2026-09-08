@@ -1926,6 +1926,7 @@ export const dict: Record<I18nKey, string> = {
   "directoryExplorerDialog.existing.title": "Já definido neste repositório",
   "directoryExplorerDialog.existing.accountNone": "Não vincular nenhuma conta",
   "directoryExplorerDialog.existing.noAccount": "Nenhuma conta conectada responde por este remoto.",
+  "directoryExplorerDialog.existing.transportNone": "Não configurar transporte",
   "directoryExplorerDialog.existing.authorGlobal": "da identidade global",
   "directoryExplorerDialog.existing.bindFailed": "Projeto adicionado. Não foi possível vincular a conta de controle de código; defina-a no painel do Git.",
   "directoryExplorerDialog.browse.directories": "Diretórios",

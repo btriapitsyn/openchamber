@@ -1710,6 +1710,7 @@ export const dict = {
   'directoryExplorerDialog.existing.title': 'Déjà défini dans ce dépôt',
   'directoryExplorerDialog.existing.accountNone': 'Ne lier aucun compte',
   'directoryExplorerDialog.existing.noAccount': 'Aucun compte connecté ne répond pour ce dépôt distant.',
+  'directoryExplorerDialog.existing.transportNone': 'Ne pas configurer de transport',
   'directoryExplorerDialog.existing.authorGlobal': "de l'identité globale",
   'directoryExplorerDialog.existing.bindFailed': "Projet ajouté. Le compte de gestion de code n'a pas pu être lié ; définissez-le dans le panneau Git.",
   'directoryExplorerDialog.browse.directories': 'Annuaires',

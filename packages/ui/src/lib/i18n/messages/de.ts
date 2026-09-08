@@ -1751,6 +1751,7 @@ export const dict = {
   'directoryExplorerDialog.existing.title': 'Bereits in diesem Repository gesetzt',
   'directoryExplorerDialog.existing.accountNone': 'Kein Konto verknüpfen',
   'directoryExplorerDialog.existing.noAccount': 'Kein verbundenes Konto ist für dieses Remote zuständig.',
+  'directoryExplorerDialog.existing.transportNone': 'Keinen Transport konfigurieren',
   'directoryExplorerDialog.existing.authorGlobal': 'aus der globalen Identität',
   'directoryExplorerDialog.existing.bindFailed': 'Projekt hinzugefügt. Das Versionsverwaltungskonto konnte nicht verknüpft werden; lege es im Git-Panel fest.',
   'directoryExplorerDialog.browse.directories': 'Verzeichnisse',

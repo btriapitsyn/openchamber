@@ -6,6 +6,7 @@ import {
   getManagedCredentialSourceLabelKey,
   getSourceControlIdentityOrigin,
   gitRemoteHost,
+  isSshRemoteUrl,
 } from '@/lib/source-control/identity';
 import { ManagedSshCredentials } from '@/components/sections/openchamber/ManagedSshCredentials';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -16,7 +17,7 @@ import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 import { useExistingRepositorySummary } from './useExistingRepositorySummary';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { repositoryBindingOwner } from '@/lib/source-control/repository-binding';
-import type { SourceControlIdentity } from '@/lib/api/types';
+import type { GitTransportBindingIntent, SourceControlIdentity } from '@/lib/api/types';
 import { getSourceControlAuthKey, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -68,6 +69,24 @@ type BrowseRow =
 
 /** Select value for declining the proposed source control account. */
 const NO_PROVIDER_ACCOUNT = '__none__';
+
+/** Select value for leaving a proposed binding unset. */
+const NO_TRANSPORT = '__none__';
+
+const TRANSPORT_LABEL_KEYS = {
+  system: 'settings.sourceControl.transport.system',
+  https: 'settings.sourceControl.transport.https',
+  ssh: 'settings.sourceControl.transport.ssh',
+  anonymous: 'settings.sourceControl.transport.anonymous',
+} as const;
+
+type ExistingTransportChoice = {
+  directory: string;
+  transport: 'system' | 'https' | 'ssh' | 'anonymous' | '';
+  account: string;
+  sshCredential: string;
+  unverifiedConfirmed: boolean;
+};
 
 const isRootPath = (value: string): boolean => value === '/';
 
@@ -216,6 +235,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [unverifiedConfirmed, setUnverifiedConfirmed] = React.useState(false);
   const [cloneProviderAccountKey, setCloneProviderAccountKey] = React.useState('');
   const [existingProviderChoice, setExistingProviderChoice] = React.useState<{ directory: string; key: string } | null>(null);
+  const [existingTransportChoice, setExistingTransportChoice] = React.useState<ExistingTransportChoice | null>(null);
   const cloneController = React.useRef<AbortController | null>(null);
   const cloneRecovery = useGitOperationRecovery(open && isCloneMode ? 'clone' : null, git, sourceControl, { kind: 'clone' });
   const [selectedGitIdentityId, setSelectedGitIdentityId] = React.useState<string | null>(null);
@@ -242,6 +262,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     setCloneCredentialAccount('');
     setCloneProviderAccountKey('');
     setExistingProviderChoice(null);
+    setExistingTransportChoice(null);
     setCloneSshCredential('');
     setUnverifiedConfirmed(false);
     setSelectedPaths([]);
@@ -267,25 +288,24 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     if (open && isCloneMode && !runtime.isVSCode) void refreshAccounts(sourceControl);
   }, [open, isCloneMode, runtime.isVSCode, refreshAccounts, sourceControl, runtimeKey]);
 
-  const cloneAccounts = identities.flatMap((identity) => {
+  const connectedAccounts = (matches: (origin: string) => boolean) => identities.flatMap((identity) => {
     const entry = authEntries[getSourceControlAuthKey(identity)];
     if (identitiesError || !entry?.hasChecked || entry.isLoading || entry.status?.status !== 'connected') return [];
     const origin = getSourceControlIdentityOrigin(identity);
-    if (!origin || !cloneRemoteUrl.startsWith('https://') || !endpointsShareOrigin([cloneRemoteUrl], origin)) return [];
+    if (!origin || !matches(origin)) return [];
     return buildManagedAccountOptions(identity, entry.status.accounts, (account) => t(getManagedCredentialSourceLabelKey(account.source)));
   });
-  const cloneAccount = cloneAccounts.find((account) => account.key === cloneCredentialAccount);
+  // A managed HTTPS credential answers for one exact origin, scheme and port
+  // included, because that is what the transfer connects to.
+  const managedHttpsAccounts = (endpoints: string[]) => endpoints.every((endpoint) => endpoint.startsWith('https://'))
+    ? connectedAccounts((origin) => endpointsShareOrigin(endpoints, origin)) : [];
   // The provider association answers "whose issues and change requests", which
   // is a question about the host, not about how the bytes travel — so an SSH
   // remote offers the same accounts an HTTPS one does.
-  const providerAccountsForHost = (remoteHost: string | null) => remoteHost ? identities.flatMap((identity) => {
-    const entry = authEntries[getSourceControlAuthKey(identity)];
-    if (identitiesError || !entry?.hasChecked || entry.isLoading || entry.status?.status !== 'connected') return [];
-    const origin = getSourceControlIdentityOrigin(identity);
-    const host = origin ? gitRemoteHost(origin) : null;
-    if (!host || host !== remoteHost) return [];
-    return buildManagedAccountOptions(identity, entry.status.accounts, (account) => t(getManagedCredentialSourceLabelKey(account.source)));
-  }) : [];
+  const providerAccountsForHost = (remoteHost: string | null) => remoteHost
+    ? connectedAccounts((origin) => gitRemoteHost(origin) === remoteHost) : [];
+  const cloneAccounts = managedHttpsAccounts([cloneRemoteUrl]);
+  const cloneAccount = cloneAccounts.find((account) => account.key === cloneCredentialAccount);
   const cloneProviderAccounts = providerAccountsForHost(gitRemoteHost(cloneRemoteUrl));
   const cloneProviderAccount = cloneProviderAccounts.find((account) => account.key === cloneProviderAccountKey);
   const cloneAccountsFailed = Boolean(identitiesError) || identities.some((identity) => {
@@ -474,6 +494,27 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     ? availableGitIdentities.find((identity) => identity.userName === existingRepository.author?.userName
       && identity.userEmail === existingRepository.author?.userEmail) ?? null
     : null;
+  const existingTransportAccounts = existingRepository?.primaryRemote
+    ? managedHttpsAccounts([existingRepository.primaryRemote.fetch.displayUrl, existingRepository.primaryRemote.push.displayUrl])
+    : [];
+  // Managed HTTPS is proposed because the repository's own URLs and a connected
+  // account already agree on it. Nothing else is: System is a decision about
+  // trusting whatever the machine happens to hold, and a managed SSH key is not
+  // named anywhere in the repository, so both stay an explicit pick.
+  const proposedTransport = existingRepository?.primaryRemote?.https && existingTransportAccounts.length ? 'https' : '';
+  const existingTransport: ExistingTransportChoice = existingTransportChoice
+    && existingTransportChoice.directory === existingRepository?.directory
+    ? existingTransportChoice
+    : {
+      directory: existingRepository?.directory ?? '',
+      transport: proposedTransport,
+      account: proposedTransport === 'https' ? existingTransportAccounts[0]?.key ?? '' : '',
+      sshCredential: '',
+      unverifiedConfirmed: false,
+    } satisfies ExistingTransportChoice;
+  const existingTransportAccount = existingTransportAccounts.find((account) => account.key === existingTransport.account);
+  const updateExistingTransport = (patch: Partial<ExistingTransportChoice>) =>
+    setExistingTransportChoice({ ...existingTransport, ...patch });
   const existingRepositoryAuthor = existingRepository?.author
     ? [existingRepository.author.userName, existingRepository.author.userEmail ? `<${existingRepository.author.userEmail}>` : '']
       .filter(Boolean).join(' ')
@@ -561,36 +602,66 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     openProjectDraft(project.id, project.path);
   }, [addProject, addedProjectPaths, openProjectDraft, t]);
 
-  const bindExistingProvider = React.useCallback(async (
+  const applyExistingRepositoryBinding = React.useCallback(async (
     directory: string,
-    reference: SourceControlIdentity & { accountId: string },
-    primaryRemote: string,
+    remoteName: string,
+    proposal: {
+      providerAccount: (SourceControlIdentity & { accountId: string }) | null;
+      transport: ExistingTransportChoice;
+      transportAccount: (SourceControlIdentity & { accountId: string }) | null;
+    },
   ): Promise<void> => {
     const scope = repositoryBindingOwner.scope(directory);
     try {
-      const read = await sourceControl.repositoryBinding(directory);
-      // Whatever the repository already answers to stays: adding a project
-      // proposes an association, it never replaces one.
-      if (read.binding?.providers.length) return;
+      let read = await sourceControl.repositoryBinding(directory);
       const mutationScope = repositoryBindingOwner.captureMutation(scope, read);
       try {
-        const next = await sourceControl.repositoryProviderBindingMutate({
-          directory,
-          expectedRepositoryId: read.repository.repositoryId,
-          expectedRevision: read.revision,
-          operation: 'add',
-          provider: { ...reference, primaryRemote },
-        });
-        repositoryBindingOwner.setMutationResult(mutationScope, next);
+        // Whatever the repository already answers to stays: adding a project
+        // proposes a binding, it never replaces one.
+        if (proposal.providerAccount && !read.binding?.providers.length) {
+          read = await sourceControl.repositoryProviderBindingMutate({
+            directory,
+            expectedRepositoryId: read.repository.repositoryId,
+            expectedRevision: read.revision,
+            operation: 'add',
+            provider: { ...proposal.providerAccount, primaryRemote: remoteName },
+          });
+        }
+        const remote = read.repository.remotes.find((entry) => entry.name === remoteName);
+        const transport = proposal.transport.transport;
+        const configured = read.binding?.remotes.some((grant) => grant.name === remoteName);
+        if (transport && remote && !configured && git.configureTransportBinding) {
+          const authority = {
+            directory,
+            expectedRepositoryId: read.repository.repositoryId,
+            expectedRevision: read.revision,
+            expectedConfigRevision: read.repository.configRevision,
+            expectedFetchFingerprint: remote.fetch.fingerprint,
+            expectedPushFingerprint: remote.push.fingerprint,
+            remote: remoteName,
+          };
+          const intent: GitTransportBindingIntent | null = transport === 'system'
+            ? proposal.transport.unverifiedConfirmed ? { ...authority, transport, unverifiedConfirmed: true } : null
+            : transport === 'https'
+              ? proposal.transportAccount ? { ...authority, transport, credentialAccount: proposal.transportAccount } : null
+              : transport === 'ssh'
+                ? proposal.transport.sshCredential ? { ...authority, transport, sshCredentialId: proposal.transport.sshCredential } : null
+                : { ...authority, transport: 'anonymous' };
+          if (intent) {
+            const result = await git.configureTransportBinding(intent);
+            if (result.status === 'configured') read = result.binding;
+          }
+        }
+        repositoryBindingOwner.setMutationResult(mutationScope, read);
       } finally {
         mutationScope.release();
       }
     } catch {
-      // The project is added either way; the association can be made in the
-      // Git panel, so this is a warning and not a failed add.
+      // The project is added either way; the binding can be made in the Git
+      // panel, so this is a warning and not a failed add.
       toast.warning(t('directoryExplorerDialog.existing.bindFailed'));
     }
-  }, [sourceControl, t]);
+  }, [git, sourceControl, t]);
 
   const finalizeSelection = React.useCallback(async (target: string) => {
     if (runtimeKey !== getRuntimeKey()) return;
@@ -668,9 +739,13 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         });
         return;
       }
-      if (!isCloneMode && existingProviderAccount && existingRepository?.primaryRemote
-        && existingRepository.directory === selectedTarget) {
-        await bindExistingProvider(project.path, existingProviderAccount.reference, existingRepository.primaryRemote.name);
+      if (!isCloneMode && existingRepository?.primaryRemote && existingRepository.directory === selectedTarget
+        && (existingProviderAccount || existingTransport.transport)) {
+        await applyExistingRepositoryBinding(project.path, existingRepository.primaryRemote.name, {
+          providerAccount: existingProviderAccount?.reference ?? null,
+          transport: existingTransport,
+          transportAccount: existingTransportAccount?.reference ?? null,
+        });
       }
       openProjectDraft(project.id, project.path);
       if (setupRequired) {
@@ -688,7 +763,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       cloneController.current = null;
       setIsConfirming(false);
     }
-  }, [addProject, addProjects, addedProjectPaths, bindExistingProvider, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, existingProviderAccount, existingRepository, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, cloneProviderAccount?.reference, selectedPaths, shouldCreateTarget, targetPath, t]);
+  }, [addProject, addProjects, addedProjectPaths, applyExistingRepositoryBinding, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, existingProviderAccount, existingRepository, existingTransport, existingTransportAccount, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, cloneProviderAccount?.reference, selectedPaths, shouldCreateTarget, targetPath, t]);
 
   const browseToDisplayPath = React.useCallback((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));
@@ -801,7 +876,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
             {existingRepository.remotes.map((remote) => (
               <React.Fragment key={remote.name}>
                 <dt className="text-muted-foreground">{remote.name}</dt>
-                <dd className="min-w-0 truncate font-mono text-foreground/80">{remote.displayUrl}</dd>
+                <dd className="min-w-0 truncate font-mono text-foreground/80">{remote.fetch.displayUrl}</dd>
               </React.Fragment>
             ))}
             <dt className="text-muted-foreground">{t('gitView.context.author')}</dt>
@@ -836,6 +911,53 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
           ) : existingRepository.primaryRemote ? (
             <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.existing.noAccount')}</p>
           ) : null}
+          {existingRepository.primaryRemote ? <>
+            <Select
+              value={existingTransport.transport || NO_TRANSPORT}
+              disabled={isConfirming}
+              onValueChange={(value) => updateExistingTransport({
+                transport: value === 'system' || value === 'https' || value === 'ssh' || value === 'anonymous' ? value : '',
+                account: value === 'https' ? existingTransportAccounts[0]?.key ?? '' : '',
+                sshCredential: '',
+                unverifiedConfirmed: false,
+              })}
+            >
+              <SelectTrigger className="w-full" aria-label={t('settings.sourceControl.transport.modeLabel')}>
+                <SelectValue>{existingTransport.transport
+                  ? t(TRANSPORT_LABEL_KEYS[existingTransport.transport])
+                  : t('directoryExplorerDialog.existing.transportNone')}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="https" disabled={!existingRepository.primaryRemote.https}>{t('settings.sourceControl.transport.https')}</SelectItem>
+                <SelectItem value="ssh" disabled={!existingRepository.primaryRemote.ssh}>{t('settings.sourceControl.transport.ssh')}</SelectItem>
+                <SelectItem value="anonymous" disabled={!existingRepository.primaryRemote.https}>{t('settings.sourceControl.transport.anonymous')}</SelectItem>
+                <SelectItem value="system">{t('settings.sourceControl.transport.system')}</SelectItem>
+                <SelectItem value={NO_TRANSPORT}>{t('directoryExplorerDialog.existing.transportNone')}</SelectItem>
+              </SelectContent>
+            </Select>
+            {existingTransport.transport === 'system' ? <label className="flex items-start gap-2 typography-micro text-muted-foreground">
+              <Checkbox checked={existingTransport.unverifiedConfirmed} disabled={isConfirming}
+                onChange={(value) => updateExistingTransport({ unverifiedConfirmed: value })}
+                ariaLabel={t('settings.sourceControl.transport.unverifiedConfirmation')} />
+              {t('settings.sourceControl.transport.unverifiedConfirmation')}
+            </label> : null}
+            {existingTransport.transport === 'ssh' ? <ManagedSshCredentials disabled={isConfirming}
+              selection={{ value: existingTransport.sshCredential, onChange: (value) => updateExistingTransport({ sshCredential: value }) }} /> : null}
+            {existingTransport.transport === 'https' ? <Select
+              value={existingTransport.account}
+              disabled={isConfirming}
+              onValueChange={(value) => updateExistingTransport({ account: value })}
+            >
+              <SelectTrigger className="w-full" aria-label={t('settings.sourceControl.transport.credentialAccount')}>
+                <SelectValue placeholder={t('settings.sourceControl.transport.credentialAccount')}>{existingTransportAccount?.label}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>{existingTransportAccounts.map((account) => (
+                <SelectItem key={account.key} value={account.key}>{account.label}</SelectItem>
+              ))}</SelectContent>
+            </Select> : null}
+            {existingTransport.transport === 'https' && !existingTransportAccounts.length
+              ? <p className="typography-micro text-muted-foreground">{t('settings.sourceControl.binding.noAccounts')}</p> : null}
+          </> : null}
         </div>
       ) : null}
       {isCloneMode ? (
@@ -882,7 +1004,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
               <SelectItem value="system">{t('settings.sourceControl.transport.system')}</SelectItem>
               <SelectItem value="anonymous" disabled={!cloneRemoteUrl.trim().startsWith('https://')}>{t('settings.sourceControl.transport.anonymous')}</SelectItem>
               <SelectItem value="https" disabled={!cloneRemoteUrl.trim().startsWith('https://')}>{t('settings.sourceControl.transport.https')}</SelectItem>
-              <SelectItem value="ssh" disabled={!cloneRemoteUrl.trim().startsWith('ssh://') && !/^(?:[^@/:\s]+@)?[^/:\s]+:[^\s]+$/.test(cloneRemoteUrl.trim())}>{t('settings.sourceControl.transport.ssh')}</SelectItem>
+              <SelectItem value="ssh" disabled={!isSshRemoteUrl(cloneRemoteUrl)}>{t('settings.sourceControl.transport.ssh')}</SelectItem>
             </SelectContent>
           </Select>
           {cloneTransport === 'system' ? <label className="flex items-start gap-2 typography-micro text-muted-foreground">
