@@ -1,5 +1,5 @@
 import { isCompleteIdentity } from '@/lib/api/git-identity';
-import { identityDisplayName } from '@/lib/source-control/identity';
+import { identityAccountConnected, identityDisplayName } from '@/lib/source-control/identity';
 import React from 'react';
 import { toast } from '@/components/ui';
 import {
@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { useGitIdentitiesStore, type GitIdentityProfile } from '@/stores/useGitIdentitiesStore';
+import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
+import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { useShallow } from 'zustand/react/shallow';
 import { GitSettings } from '@/components/sections/openchamber/GitSettings';
 import { GitIdentityEditorDialog } from './GitIdentityEditorDialog';
@@ -50,6 +52,10 @@ const COLOR_MAP: Record<string, string> = {
 
 export const GitPage: React.FC = () => {
   const { t } = useI18n();
+  const { sourceControl } = useRuntimeAPIs();
+  const refreshSourceControlAccounts = useSourceControlAuthStore((state) => state.refreshAll);
+  // Read once on open: an identity whose account was disconnected has to say so.
+  React.useEffect(() => { void refreshSourceControlAccounts(sourceControl); }, [refreshSourceControlAccounts, sourceControl]);
   const {
     profiles,
     globalIdentity,
@@ -222,8 +228,15 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
   hasBorder,
 }) => {
   const { t } = useI18n();
+  const connectedAccountIds = useConnectedAccountIds();
   const [contextMenuOpen, setContextMenuOpen] = React.useState(false);
   const iconName = ICON_MAP[profile.icon || 'branch'] || 'git-branch';
+  // Why a repository cannot be given this identity, if it cannot.
+  const unusableReason = !isCompleteIdentity(profile)
+    ? 'settings.gitIdentities.page.incomplete' as const
+    : !identityAccountConnected(profile, connectedAccountIds)
+      ? 'settings.gitIdentities.page.accountGone' as const
+      : null;
   const iconColor = COLOR_MAP[profile.color || ''];
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -288,8 +301,8 @@ const IdentityRow: React.FC<IdentityRowProps> = ({
             )}
           </div>
           <div className="typography-micro text-muted-foreground/60 truncate leading-tight">
-            {!isReadOnly && !isCompleteIdentity(profile)
-              ? <span className="text-[var(--status-warning)]">{t('settings.gitIdentities.page.incomplete')}</span>
+            {!isReadOnly && unusableReason
+              ? <span className="text-[var(--status-warning)]">{t(unusableReason)}</span>
               : profile.userEmail}
           </div>
         </div>

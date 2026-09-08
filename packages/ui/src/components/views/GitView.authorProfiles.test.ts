@@ -4,7 +4,7 @@ import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { isCompleteIdentity } from '@/lib/api/git-identity';
-import { selectableIdentities } from '@/lib/source-control/identity';
+import { identityAccountConnected, selectableIdentities } from '@/lib/source-control/identity';
 
 // Execute the component's actual author callbacks without mocking React or exporting UI internals.
 const readAuthorCallback = (file: URL, name: string): string => {
@@ -44,7 +44,9 @@ const signed: GitIdentityProfile = {
 };
 const plain: GitIdentityProfile = { id: 'plain', name: 'Author', userName: 'Plain Author', userEmail: 'plain@example.com', account, transport: 'account' };
 const incomplete: GitIdentityProfile = { id: 'legacy', name: 'Legacy', userName: 'Legacy Author', userEmail: 'legacy@example.com' };
-const helpers = { selectableIdentities, isCompleteIdentity };
+// The callback also asks whether the identity's account is still connected;
+// an instance that has not been read answers null, which keeps it offered.
+const helpers = { selectableIdentities, isCompleteIdentity, identityAccountConnected, connectedAccountIds: () => null };
 const profiles = [work, signed, plain];
 
 // The clone screen no longer chooses an author on its own: it proposes one

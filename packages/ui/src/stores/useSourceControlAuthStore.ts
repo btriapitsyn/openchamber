@@ -1,3 +1,4 @@
+import React from 'react';
 import { create } from 'zustand';
 import type { SourceControlAPI, SourceControlAuthStatus, SourceControlIdentity, SourceControlReadContext } from '@/lib/api/types';
 import { getRuntimeKey } from '@/lib/runtime-switch';
@@ -163,4 +164,17 @@ export const useSourceControlAuthStore = create<SourceControlAuthStore>((set, ge
 export const useSourceControlAuthEntry = (identity: SourceControlIdentity): SourceControlAuthEntry | undefined => {
   const key = getSourceControlAuthKey(identity);
   return useSourceControlAuthStore((state) => state.entries[key]);
+};
+
+/**
+ * The credential IDs connected for a provider instance, or null when that
+ * instance has not been read yet. Callers use it to tell an identity whose
+ * account was disconnected from one whose accounts are simply not loaded.
+ */
+export const useConnectedAccountIds = (): ((identity: SourceControlIdentity) => string[] | null) => {
+  const entries = useSourceControlAuthStore((state) => state.entries);
+  return React.useCallback((identity: SourceControlIdentity) => {
+    const accounts = entries[getSourceControlAuthKey(identity)]?.status?.accounts;
+    return accounts ? accounts.map((account) => account.id) : null;
+  }, [entries]);
 };

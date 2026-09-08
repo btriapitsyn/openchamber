@@ -72,7 +72,7 @@ import {
 } from './git/branchIntegration';
 import { deriveBaseBranch } from './git/baseBranch';
 import { getFreshestSourceControlStatusForBranch, useGitHubPrStatusStore } from '@/stores/useGitHubPrStatusStore';
-import { getSourceControlAuthKey, getSourceControlReadContextAuthState, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
+import { getSourceControlAuthKey, getSourceControlReadContextAuthState, useSourceControlAuthStore, useConnectedAccountIds } from '@/stores/useSourceControlAuthStore';
 import { useRepositoryBinding } from '@/lib/source-control/repository-binding';
 import { createGitIndexMutationQueue, type GitIndexMutationDirection, type GitIndexMutationQueue } from './git/gitIndexMutationQueue';
 import type { GitRemote } from '@/lib/gitApi';
@@ -94,6 +94,7 @@ import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledg
 import { remoteTraits,
   selectableIdentities,
   identityDisplayName,
+  identityAccountConnected,
 } from '@/lib/source-control/identity';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 
@@ -379,6 +380,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     return remote ? identityApplicability(identity, remoteTraits(remote.fetch.displayUrl)) : { applicable: true };
   }, [binding.read, bindingRemoteName]);
   const sourceControlAuthEntries = useSourceControlAuthStore((state) => state.entries);
+  const refreshSourceControlAccounts = useSourceControlAuthStore((state) => state.refreshAll);
   const beginActiveSourceControlContextsLoad = useGitHubPrStatusStore((state) => state.beginActiveContextsLoad);
   const commitActiveSourceControlContexts = useGitHubPrStatusStore((state) => state.commitActiveContexts);
   const releaseActiveSourceControlContexts = useGitHubPrStatusStore((state) => state.releaseActiveContexts);
@@ -1569,9 +1571,11 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     return remoteCandidate && remoteBranches.includes(remoteCandidate) ? remoteCandidate : baseBranch;
   }, [baseBranch, binding.contexts, remoteBranches]);
 
+  const connectedAccountIds = useConnectedAccountIds();
   const availableIdentities = React.useMemo(
-    () => selectableIdentities(profiles, globalIdentity, isCompleteIdentity),
-    [profiles, globalIdentity],
+    () => selectableIdentities(profiles, globalIdentity,
+      (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
+    [profiles, globalIdentity, connectedAccountIds],
   );
 
   const activeIdentityProfile = React.useMemo((): GitIdentityProfile | null => {
@@ -2458,6 +2462,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         identityAttention={identityAttention}
         identityApplicability={identityApplicabilityOf}
         onConfigureRepository={runtime.isVSCode ? undefined : () => setRepositoryConfigurationOpen(true)}
+        onIdentityMenuOpen={() => void refreshSourceControlAccounts(sourceControl)}
             isWorktreeMode={!!worktreeMetadata}
             onOpenHistory={() => setGitLogDialogMode('history')}
             onOpenGraph={() => setGitLogDialogMode('graph')}

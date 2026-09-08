@@ -56,6 +56,8 @@ interface GitHeaderProps {
   identityAttention?: string | null;
   identityApplicability?: (identity: GitIdentityProfile) => IdentityApplicability;
   onConfigureRepository?: () => void;
+  /** Called when the identity menu opens, so connected accounts can be re-read before choosing. */
+  onIdentityMenuOpen?: () => void;
   isWorktreeMode: boolean;
   onOpenHistory?: () => void;
   onOpenGraph?: () => void;
@@ -148,6 +150,8 @@ interface IdentityDropdownProps {
   /** Lets a form give the trigger a field's width and border; the panel keeps its ghost button. */
   triggerClassName?: string;
   menuAlign?: 'start' | 'end';
+  /** Called when the menu opens, so connected accounts can be re-read before choosing. */
+  onOpen?: () => void;
 }
 
 export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
@@ -161,12 +165,13 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   applicability,
   triggerClassName,
   menuAlign = 'end',
+  onOpen,
 }) => {
   const { t } = useI18n();
   const isDisabled = isApplying || identities.length === 0;
 
   return (
-    <DropdownMenu>
+    <DropdownMenu onOpenChange={(open) => { if (open) onOpen?.(); }}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -319,6 +324,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
   identityAttention = null,
   identityApplicability: identityApplicabilityOf,
   onConfigureRepository,
+  onIdentityMenuOpen,
   isWorktreeMode,
   onOpenHistory,
   onOpenGraph,
@@ -488,6 +494,7 @@ export const GitHeader: React.FC<GitHeaderProps> = ({
       isApplying={isApplyingIdentity}
       attention={identityAttention}
       onConfigure={onConfigureRepository}
+      onOpen={onIdentityMenuOpen}
       applicability={identityApplicabilityOf}
     />
   );

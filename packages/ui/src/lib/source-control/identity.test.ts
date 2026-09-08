@@ -12,6 +12,7 @@ import {
   proposeIdentityForHost,
   selectableIdentities,
   identityDisplayName,
+  identityAccountConnected,
   remoteTraits,
   instanceHost,
 } from './identity';
@@ -247,5 +248,22 @@ describe('identityDisplayName', () => {
     expect(identityDisplayName({ id: 'global', name: 'Ada Lovelace' }, t)).toBe('System identity');
     expect(identityDisplayName({ id: 'work', name: 'Work' }, t)).toBe('Work');
     expect(identityDisplayName(null, t)).toBe('');
+  });
+});
+
+describe('identityAccountConnected', () => {
+  const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' } as const;
+  const identity = { account };
+
+  test('keeps an identity whose credential is connected, and drops one whose account was removed', () => {
+    expect(identityAccountConnected(identity, () => [account.accountId])).toBe(true);
+    expect(identityAccountConnected(identity, () => ['occred:v1:github:other:r1'])).toBe(false);
+    expect(identityAccountConnected(identity, () => [])).toBe(false);
+  });
+
+  test('an instance that has not been read yet is not treated as disconnected', () => {
+    expect(identityAccountConnected(identity, () => null)).toBe(true);
+    // The System identity names no account, so there is nothing to check.
+    expect(identityAccountConnected({ account: null }, () => [])).toBe(true);
   });
 });

@@ -19,7 +19,9 @@ import { applyIdentityToRepository, identityApplicability, needsSystemAcknowledg
 import { remoteTraits,
   selectableIdentities,
   identityDisplayName,
+  identityAccountConnected,
 } from '@/lib/source-control/identity';
+import { useConnectedAccountIds, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { PierreDiffViewer } from '@/components/views/PierreDiffViewer';
@@ -102,9 +104,12 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     void loadGitIdentityProfiles();
     void loadGlobalGitIdentity();
   }, [loadGitIdentityProfiles, loadGlobalGitIdentity]);
+  const connectedAccountIds = useConnectedAccountIds();
+  const refreshSourceControlAccounts = useSourceControlAuthStore((state) => state.refreshAll);
   const availableIdentities = React.useMemo(
-    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity, isCompleteIdentity),
-    [gitIdentityProfiles, globalGitIdentity],
+    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
+      (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
+    [gitIdentityProfiles, globalGitIdentity, connectedAccountIds],
   );
   // The repository's own author decides which identity it is already acting as.
   const activeIdentityProfile = React.useMemo(() => availableIdentities.find((identity) =>
@@ -725,6 +730,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         <IdentityDropdown
           activeProfile={activeIdentityProfile}
           identities={availableIdentities}
+          onOpen={() => void refreshSourceControlAccounts(sourceControl)}
           onSelect={(profile) => void handleApplyIdentity(profile)}
           isApplying={isApplyingIdentity}
           onConfigure={() => setRepositoryConfigurationOpen(true)}

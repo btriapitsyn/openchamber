@@ -205,6 +205,24 @@ export const instanceHost = (instance: string): string | null =>
 export const GLOBAL_IDENTITY_ID = 'global';
 
 /**
+ * Whether the account an identity names is still connected.
+ *
+ * Removing an account leaves every identity that named it pointing at a
+ * credential that no longer exists; binding a repository to one would produce
+ * a grant nothing can answer. An instance whose accounts have not been read
+ * yet answers `true`, because "not loaded" is not "not connected".
+ */
+export const identityAccountConnected = (
+  profile: { account?: (SourceControlIdentity & { accountId: string }) | null },
+  connectedAccountIds: (account: SourceControlIdentity) => string[] | null,
+): boolean => {
+  const account = profile.account;
+  if (!account) return true;
+  const known = connectedAccountIds(account);
+  return known === null || known.includes(account.accountId);
+};
+
+/**
  * The identities a repository may be given.
  *
  * The System identity is what OpenChamber discovered on this machine, and it

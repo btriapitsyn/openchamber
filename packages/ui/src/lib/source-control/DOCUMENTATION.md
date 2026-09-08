@@ -146,6 +146,14 @@ reach it. `identityDisplayName` names it from the product's own copy
 (`gitView.identity.system`) rather than from the record, whose `name` carries
 the discovered author as a fallback.
 
+An identity is also not offered once the account it names is disconnected:
+`identityAccountConnected` compares the identity's credential against the
+accounts the auth store holds for that instance, and an instance that has not
+been read yet answers "connected" rather than hiding everything. The identity
+menu re-reads the accounts when it opens, the Git Settings row says why the
+identity cannot be used, and nothing binds a repository to a credential that
+is gone.
+
 Every other identity is complete or it is not offered: `isCompleteIdentity`
 requires an account, a transport that is the account's credential (OAuth or
 token), a managed SSH key, or anonymous HTTPS, and a signature. The editor

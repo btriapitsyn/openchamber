@@ -656,6 +656,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.tokenHint': 'Push et pull avec le jeton d\'accès personnel du compte.',
   'settings.gitIdentities.editor.auth.anonymousHint': 'HTTPS public sans identifiants, lecture seule. Le compte répond toujours pour les tickets et les demandes de changement.',
   'settings.gitIdentities.page.incomplete': 'A besoin d\'un compte avant qu\'un dépôt puisse l\'utiliser',
+  'settings.gitIdentities.page.accountGone': 'Le compte utilisé par cette identité n\'est plus connecté',
   'settings.gitIdentities.editor.toast.accountRequired': "Choisissez le compte au nom duquel agit cette identité, ou un autre moyen de s'authentifier.",
   'settings.gitIdentities.editor.toast.sshKeyRequired': 'Choisissez la clé SSH gérée utilisée par cette identité.',
   'settings.gitIdentities.editor.actions.close': 'Fermer',

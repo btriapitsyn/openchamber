@@ -738,6 +738,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.tokenHint': '使用账户的个人访问令牌进行 push 和 pull。',
   'settings.gitIdentities.editor.auth.anonymousHint': '无凭据的公开 HTTPS，只读。议题和变更请求仍由该账户负责。',
   'settings.gitIdentities.page.incomplete': '需要先关联账户，仓库才能使用',
+  'settings.gitIdentities.page.accountGone': '此身份使用的账户已不再连接',
   'settings.gitIdentities.editor.toast.accountRequired': '请选择该身份所使用的账户，或另一种认证方式。',
   'settings.gitIdentities.editor.toast.sshKeyRequired': '请选择该身份使用的托管 SSH 密钥。',
   'settings.gitIdentities.editor.actions.close': '关闭',

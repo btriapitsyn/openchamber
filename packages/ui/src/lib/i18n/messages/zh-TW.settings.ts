@@ -735,6 +735,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.tokenHint': '使用帳戶的個人存取權杖進行 push 與 pull。',
   'settings.gitIdentities.editor.auth.anonymousHint': '無憑證的公開 HTTPS，唯讀。議題與變更請求仍由該帳戶負責。',
   'settings.gitIdentities.page.incomplete': '需要先關聯帳戶，儲存庫才能使用',
+  'settings.gitIdentities.page.accountGone': '此身分使用的帳戶已不再連線',
   'settings.gitIdentities.editor.toast.accountRequired': '請選擇此身分所使用的帳戶，或另一種驗證方式。',
   'settings.gitIdentities.editor.toast.sshKeyRequired': '請選擇此身分使用的受管 SSH 金鑰。',
   'settings.gitIdentities.editor.actions.close': '關閉',

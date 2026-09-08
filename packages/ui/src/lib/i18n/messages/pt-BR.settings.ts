@@ -738,6 +738,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.tokenHint': 'Push e pull com o token de acesso pessoal da conta.',
   'settings.gitIdentities.editor.auth.anonymousHint': 'HTTPS público sem credenciais, somente leitura. A conta continua respondendo por issues e solicitações de mudança.',
   'settings.gitIdentities.page.incomplete': 'Precisa de uma conta antes que um repositório possa usá-la',
+  'settings.gitIdentities.page.accountGone': 'A conta usada por esta identidade não está mais conectada',
   "settings.gitIdentities.editor.toast.accountRequired": "Escolha a conta com que esta identidade age, ou outra forma de autenticar.",
   "settings.gitIdentities.editor.toast.sshKeyRequired": "Escolha a chave SSH gerenciada que esta identidade usa.",
   "settings.gitIdentities.editor.actions.close": "Fechar",

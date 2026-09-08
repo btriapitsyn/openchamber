@@ -7,6 +7,7 @@ import {
   remoteTraits,
   type RemoteTraits,
   selectableIdentities,
+  identityAccountConnected,
 } from '@/lib/source-control/identity';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
 import { GitOperationResultError, runGitClone } from '@/lib/boundGitNetworkOperation';
@@ -19,7 +20,7 @@ import { getRuntimeKey } from '@/lib/runtime-switch';
 import { identityTransport, isCompleteIdentity } from '@/lib/api/git-identity';
 import { applyIdentityToRepository, identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
 import type { GitIdentityProfile } from '@/lib/api/types';
-import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
+import { useSourceControlAuthStore, useConnectedAccountIds } from '@/stores/useSourceControlAuthStore';
 import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
@@ -267,9 +268,11 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     void loadDefaultGitIdentityId();
   }, [loadDefaultGitIdentityId, loadGitIdentityProfiles, loadGlobalGitIdentity, open]);
 
+  const connectedAccountIds = useConnectedAccountIds();
   const availableGitIdentities = React.useMemo(
-    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity, isCompleteIdentity),
-    [gitIdentityProfiles, globalGitIdentity],
+    () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
+      (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
+    [gitIdentityProfiles, globalGitIdentity, connectedAccountIds],
   );
 
 

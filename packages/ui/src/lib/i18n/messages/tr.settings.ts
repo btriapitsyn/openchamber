@@ -746,6 +746,7 @@ export const settingsDict = {
   'settings.gitIdentities.editor.auth.tokenHint': 'Hesabın kişisel erişim belirteciyle push ve pull yapar.',
   'settings.gitIdentities.editor.auth.anonymousHint': 'Kimlik bilgisi olmadan genel HTTPS, salt okunur. Sorunlar ve değişiklik istekleri için yine hesap kullanılır.',
   'settings.gitIdentities.page.incomplete': 'Bir deponun kullanabilmesi için hesap gerekir',
+  'settings.gitIdentities.page.accountGone': 'Bu kimliğin kullandığı hesap artık bağlı değil',
   'settings.gitIdentities.editor.toast.accountRequired': 'Bu kimliğin adına hareket ettiği hesabı ya da başka bir kimlik doğrulama yolunu seç.',
   'settings.gitIdentities.editor.toast.sshKeyRequired': 'Bu kimliğin kullandığı yönetilen SSH anahtarını seç.',
   'settings.gitIdentities.editor.actions.close': 'Kapat',
