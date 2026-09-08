@@ -71,14 +71,15 @@ beforeEach(() => {
   invalidateSettingsCache();
   useUIStore.setState({ serverBrowserDebugPort: 0 });
   globalThis.fetch = async (input, init) => {
-    const url = String(input);
-    if (url.endsWith('/api/browser/runtime-status')) {
+    const url = new URL(String(input));
+    if (url.pathname === '/api/browser/runtime-status') {
       statusReads += 1;
       return statusFails ? new Response(null, { status: 401 }) : Response.json({
         configuredPort, running: activePort !== null, activePort, restartRequired: configuredPort !== 0,
       });
     }
-    if (url.endsWith('/api/config/settings') && init?.method === 'PUT') {
+    if (url.pathname === '/api/config/settings' && init?.method === 'PUT') {
+      expect(url.searchParams.get('surface')).toBe('web');
       const change = portChangeSchema.parse(JSON.parse(String(init.body)));
       writes.push(change.serverBrowserDebugPort);
       if (saveFails) return new Response(null, { status: 500 });
@@ -137,6 +138,7 @@ describe('browser CDP port settings', () => {
     await editPort('9222');
     saveFails = true;
     await savePort();
+    expect(writes).toEqual([9222]);
     expect(getSettingsSaveState()).toBe('error');
     expect(host.querySelector('input')?.value).toBe('9222');
     expect(host.textContent).toContain('Configured port: automatic');

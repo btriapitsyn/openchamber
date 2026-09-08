@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
+import { z } from 'zod';
 import { REMOTE_SELECTION_EXPRESSION } from './selection.js';
 import { createBrowserInspector } from './inspector.js';
 import { createBrowserDevTools } from './devtools.js';
@@ -24,10 +25,8 @@ const SCREENCAST_OPTIONS = {
   maxHeight: 0,
   everyNthFrame: 1,
 };
-const parseString = (value) => {
-  if (typeof value !== 'string') throw new Error('Expected a string');
-  return value;
-};
+const stringSchema = z.string();
+const parseString = (value) => stringSchema.parse(value);
 
 const parseCoordinate = (value) => {
   if (!Number.isFinite(value)) throw new Error('Expected a finite coordinate or delta');

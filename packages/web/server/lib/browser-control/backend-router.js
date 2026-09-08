@@ -99,10 +99,9 @@ export const createBrowserBackendRouter = ({
   const listServerTabs = async (target, signal) => {
     const backend = await withSignal(signal, getServerBackend);
     signal?.throwIfAborted();
-    return backend.listTabs({
-      directory: target.directory,
-      ...(target.openCodeSessionId ? { openCodeSessionId: target.openCodeSessionId } : {}),
-    }, { signal });
+    const serverTarget = { directory: target.directory };
+    if (target.openCodeSessionId) serverTarget.openCodeSessionId = target.openCodeSessionId;
+    return backend.listTabs(serverTarget, { signal });
   };
 
   /**
@@ -137,12 +136,11 @@ export const createBrowserBackendRouter = ({
     if (server.ok) {
       for (const tab of server.tabs) tabs.push(tab && tab.backend ? tab : { backend: SERVER_TAB_BACKEND, ...tab });
     }
+    const resultTarget = { directory: target.directory };
+    if (target.openCodeSessionId) resultTarget.openCodeSessionId = target.openCodeSessionId;
     const result = {
       ...base,
-      target: {
-        directory: target.directory,
-        ...(target.openCodeSessionId ? { openCodeSessionId: target.openCodeSessionId } : {}),
-      },
+      target: resultTarget,
       tabs,
     };
     if (!client.ok && client.error?.code !== 'no-client') {
