@@ -112,8 +112,18 @@ describe('sanitizeWorkStatusHiddenSections', () => {
   });
 
   test('treats a non-array payload as default hidden preference', () => {
-    expect(sanitizeWorkStatusHiddenSections(undefined)).toEqual(['telemetry']);
-    expect(sanitizeWorkStatusHiddenSections('usage')).toEqual(['telemetry']);
-    expect(sanitizeWorkStatusHiddenSections({ usage: true })).toEqual(['telemetry']);
+    expect(sanitizeWorkStatusHiddenSections(undefined)).toEqual([]);
+    expect(sanitizeWorkStatusHiddenSections('usage')).toEqual([]);
+    expect(sanitizeWorkStatusHiddenSections({ usage: true })).toEqual([]);
+  });
+
+  test('removes only the old implicit telemetry default', () => {
+    expect(sanitizeWorkStatusHiddenSections(['mcp', 'telemetry'], false)).toEqual(['mcp']);
+    expect(sanitizeWorkStatusHiddenSections([], false)).toEqual([]);
+  });
+
+  test('preserves explicit hiding, including hiding every section', () => {
+    expect(sanitizeWorkStatusHiddenSections(['mcp', 'telemetry'], true)).toEqual(['mcp', 'telemetry']);
+    expect(sanitizeWorkStatusHiddenSections([...WORK_STATUS_SECTION_IDS], true)).toEqual([...WORK_STATUS_SECTION_IDS]);
   });
 });

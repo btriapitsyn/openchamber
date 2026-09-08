@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -722,5 +722,157 @@ describe('settings helpers', () => {
       expect(sanitized.autoDeleteAfterDays).toBe(60);
       expect(sanitized.sessionRetentionAction).toBe('delete');
     });
+  });
+});
+
+describe('settings registry gate', () => {
+  const registryPath = join(dirname(testFilePath), 'settings-registry.json');
+  const registry = JSON.parse(readFileSync(registryPath, 'utf8'));
+  const persistableKeys = Object.entries(registry.fields)
+    .filter(([, field]) => !field.computed && !field.local && field.owner !== 'desktop-shell')
+    .map(([key]) => key);
+
+  // One valid value per persistable registry key. The test below fails when a
+  // key is added to the registry without a line here, and when the sanitizer
+  // stops accepting a key the registry still lists — that is the drift the
+  // registry exists to end.
+  const validValues = {
+    themeId: 'openchamber-dark', useSystemTheme: true, themeVariant: 'dark', lightThemeId: 'openchamber-light', darkThemeId: 'openchamber-dark',
+    splashBgLight: '#fff', splashFgLight: '#000', splashBgDark: '#000', splashFgDark: '#fff',
+    lastDirectory: '/home/testuser/project', homeDirectory: '/home/testuser', opencodeBinary: '/usr/local/bin/opencode',
+    projects: [{ id: 'p', path: '/home/testuser/project' }], activeProjectId: 'p',
+    securityScopedBookmarks: ['bookmark'], pinnedDirectories: ['/home/testuser/project'],
+    desktopLanAccessEnabled: true, desktopKeepAwakeEnabled: true, desktopMinimizeToTrayEnabled: true, desktopMacMenuBarEnabled: true,
+    desktopUiPassword: 'secret', githubClientId: 'client', githubScopes: 'repo', skillCatalogs: [{ id: 'c', label: 'C', source: 'https://x' }],
+    defaultGitIdentityId: 'global', permissionAutoAccept: { sessions: { s: true }, revision: 1 },
+    agentControlToolEnabled: true, agentWebToolEnabled: true, agentMemoryToolEnabled: true, openCodeUpdateToastDismissedVersion: '1.0.0',
+    autoDeleteEnabled: true, autoDeleteAfterDays: 30, sessionRetentionAction: 'archive', terminalShell: 'zsh', terminalLoginShells: ['zsh'],
+    openInAppId: 'vscode', dictationEnabled: true, sttProvider: 'local', sttServerUrl: 'http://localhost:8001/v1', sttModel: 'm', sttLocalModel: 'm', sttLanguage: 'en',
+    tunnelProvider: 'cloudflare', tunnelMode: 'quick', tunnelBootstrapTtlMs: 600000, tunnelSessionTtlMs: 86400000, managedLocalTunnelConfigPath: '/tmp/x',
+    managedRemoteTunnelHostname: 'x.example', managedRemoteTunnelToken: 'token', managedRemoteTunnelPresets: [{ id: 'a', name: 'A', hostname: 'a.example' }],
+    managedRemoteTunnelSelectedPresetId: 'a', managedRemoteTunnelPresetTokens: { a: 'token' },
+    sidebarProjectDisplayMode: 'all', sidebarSessionGroupingMode: 'flat', sidebarProjectSortOrder: 'manual', sidebarShowRecentSection: true,
+    workStatusPanelEnabled: true, workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: true,
+    showReasoningTraces: true, streamingAutoFollowEnabled: true, collapsibleThinkingBlocks: true, showTextJustificationActivity: true,
+    chatRenderMode: 'live', activityRenderMode: 'summary', mermaidRenderingMode: 'svg', userMessageRenderingMode: 'markdown', collapsibleUserMessages: true,
+    stickyUserHeader: true, promptNavigatorEnabled: true, wideChatLayoutEnabled: true, showSplitAssistantMessageActions: true, showToolFileIcons: true,
+    codeBlockLineWrap: true, showTurnChangedFiles: true, showExpandedBashTools: true, showExpandedEditTools: true, toolJsonViewMode: 'raw',
+    timeFormatPreference: '24h', weekStartPreference: 'monday', messageStreamTransport: 'ws', diffLayoutPreference: 'inline', diffWrapLines: true,
+    gitChangesViewMode: 'tree', gitmojiEnabled: true, defaultFileViewerPreview: true, directoryShowHidden: true, filesViewShowGitignored: true,
+    fileEditorKeymap: 'vim', autoSaveEnabled: true, autoCreateWorktree: true, sessionTabsEnabled: true, showOpenCodeRestartConfirm: true,
+    allowPromptingSubagentSessions: true, inputSpellcheckEnabled: true, enterToSend: true, enterToSendConfigured: true, persistChatDraft: true,
+    largeTextPasteBehavior: 'attach', followUpBehavior: 'steer', queueModeEnabled: true, inputHistoryScope: 'global', inputHistoryLimit: 40,
+    draftStarters: [{ type: 'command', name: 'plan-feature' }], draftStartersVisible: true, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
+    fontSize: 100, terminalFontSize: 14, editorFontSize: 14, uiFont: 'inter', monoFont: 'jetbrains-mono', padding: 100, cornerRadius: 8,
+    shortcutOverrides: { 'chat.send': 'mod+enter' },
+    defaultModel: 'anthropic/claude', defaultVariant: 'high', defaultAgent: 'build', smallModelUseDefault: false, smallModelOverride: 'anthropic/haiku',
+    walkthroughModelOverride: 'anthropic/claude', zenModel: 'zen/model',
+    favoriteModels: [{ providerID: 'anthropic', modelID: 'claude' }], hiddenModels: [{ providerID: 'openai', modelID: 'gpt' }], collapsedModelProviders: ['openai'],
+    recentModels: [{ providerID: 'anthropic', modelID: 'claude' }], recentAgents: ['build'], recentEfforts: { 'anthropic/claude': ['high'] }, providerOrder: ['anthropic'],
+    sessionRecapEnabled: true, sessionSuggestionEnabled: true, sessionGoalEnabled: true, sessionGoalDefaultBudgetEnabled: true, sessionGoalDefaultBudget: 5,
+    summarizeLastMessage: true, summaryThreshold: 100, summaryLength: 50, maxLastMessageLength: 200, showDeletionDialog: true,
+    nativeNotificationsEnabled: true, notificationMode: 'always', notifyOnSubtasks: true, notifyOnCompletion: true, notifyOnError: true, notifyOnQuestion: true,
+    notificationTemplates: { completion: { title: 't', message: 'm' } }, showOpenCodeUpdateNotifications: true, reportUsage: true,
+    usageDisplayMode: 'usage', usageDropdownProviders: ['anthropic'], usageSelectedModels: { anthropic: ['claude'] }, usageCollapsedFamilies: { anthropic: ['f'] },
+    usageExpandedFamilies: { anthropic: ['f'] }, usageModelGroups: { anthropic: { customGroups: [{ id: 'g', label: 'G', models: ['claude'], order: 0 }] } },
+    globalBehaviorPrompt: 'Be brief.', responseStyleEnabled: true, responseStylePreset: 'concise', responseStyleCustomInstructions: 'x', optimizeSystemPrompt: true,
+    pwaAppName: 'OpenChamber', pwaOrientation: 'portrait', mobileKeyboardMode: 'native', desktopWindowControlsPosition: 'left', desktopWindowControlsStyle: 'classic',
+    inputBarOffset: 10,
+  };
+
+  it('accepts a valid value for every persistable registry key (no server-side drift)', () => {
+    // The shared test helpers stub the injected list sanitizers to `undefined`
+    // (they are covered by their own suites); here they must pass values through
+    // so a key is judged by the sanitizer's own branch, not by a stub.
+    const helpers = createSettingsHelpers({
+      normalizePathForPersistence: (value) => value,
+      normalizeDirectoryPath: (value) => value,
+      normalizeTunnelBootstrapTtlMs: (value) => value,
+      normalizeTunnelSessionTtlMs: (value) => value,
+      normalizeTunnelProvider: (value) => value,
+      normalizeTunnelMode: (value) => value,
+      normalizeOptionalPath: (value) => value,
+      normalizeManagedRemoteTunnelHostname: (value) => value,
+      normalizeManagedRemoteTunnelPresets: (value) => value,
+      normalizeManagedRemoteTunnelPresetTokens: (value) => value,
+      normalizeStringArray: (input) => input,
+      sanitizeModelRefs: (value) => value,
+      sanitizeSkillCatalogs: (value) => value,
+      sanitizeProjects: (value) => value,
+    });
+    const missingFixture = persistableKeys.filter((key) => !(key in validValues));
+    expect(missingFixture).toEqual([]);
+
+    const rejected = persistableKeys.filter((key) => {
+      const result = helpers.sanitizeSettingsUpdate({ [key]: validValues[key] });
+      // `queueModeEnabled` is absorbed into `followUpBehavior` on purpose.
+      const landedAs = key === 'queueModeEnabled' ? 'followUpBehavior' : key;
+      return result[landedAs] === undefined;
+    });
+    expect(rejected).toEqual([]);
+  });
+
+  it('drops keys the registry does not list, computed flags, and desktop-shell-owned keys', () => {
+    const helpers = createTestHelpers();
+    expect(helpers.sanitizeSettingsUpdate({
+      markdownDisplayMode: 'raw',
+      toolCallExpansion: 'collapsed',
+      expandedEditorToolbar: true,
+      typographySizes: { base: 14 },
+      gitProviderId: 'anthropic',
+      gitModelId: 'claude',
+      messageLimit: 200,
+      agentMemoryFeatureAvailable: true,
+      desktopHosts: [],
+      notARealKey: 1,
+    })).toEqual({});
+  });
+
+  it('never returns secret keys from a formatted response', () => {
+    const helpers = createTestHelpers();
+    const secretKeys = Object.entries(registry.fields).filter(([, field]) => field.secret).map(([key]) => key);
+    expect(secretKeys).toContain('managedRemoteTunnelToken');
+    expect(secretKeys).toContain('desktopUiPassword');
+    expect(secretKeys).toContain('managedRemoteTunnelPresetTokens');
+    const response = helpers.formatSettingsResponse({
+      managedRemoteTunnelToken: 'token',
+      desktopUiPassword: 'pw',
+      managedRemoteTunnelPresetTokens: { a: 'tok' },
+      themeId: 'x',
+    });
+    for (const key of secretKeys) {
+      expect(response).not.toHaveProperty(key);
+    }
+    expect(response.hasManagedRemoteTunnelToken).toBe(true);
+    expect(response.hasDesktopUiPassword).toBe(true);
+    expect(helpers.formatSettingsResponse({ desktopUiPassword: '' }).hasDesktopUiPassword).toBe(false);
+  });
+
+  it('accepts the newly shared profile fields', () => {
+    const helpers = createTestHelpersWithRealSanitizers();
+    expect(helpers.sanitizeSettingsUpdate({
+      providerOrder: ['b', 'a', 'a'],
+      diffWrapLines: true,
+      persistChatDraft: false,
+      largeTextPasteBehavior: 'inline',
+      fileEditorKeymap: 'vim',
+      allowPromptingSubagentSessions: true,
+      showOpenCodeRestartConfirm: false,
+      codeBlockLineWrap: true,
+      streamingAutoFollowEnabled: false,
+      autoSaveEnabled: false,
+    })).toEqual({
+      providerOrder: ['b', 'a'],
+      diffWrapLines: true,
+      persistChatDraft: false,
+      largeTextPasteBehavior: 'inline',
+      fileEditorKeymap: 'vim',
+      allowPromptingSubagentSessions: true,
+      showOpenCodeRestartConfirm: false,
+      codeBlockLineWrap: true,
+      streamingAutoFollowEnabled: false,
+      autoSaveEnabled: false,
+    });
+    expect(helpers.sanitizeSettingsUpdate({ largeTextPasteBehavior: 'maybe', fileEditorKeymap: 'emacs' })).toEqual({});
   });
 });

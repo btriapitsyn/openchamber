@@ -7,6 +7,7 @@ import {
 } from './config-mutation-response.js';
 import { getClaudeCliAuthStatus } from './claude-cli-auth.js';
 import { OPENCODE_CONFIG_DIR } from './shared.js';
+import { settingsSurfaceOf } from './settings-files.js';
 
 export const registerOpenCodeRoutes = (app, dependencies) => {
   const {
@@ -210,9 +211,10 @@ ${desktopReturn ? `<a class="return" href="openchamber://focus/mcp-auth">Return 
     }
   };
 
-  app.get('/api/config/settings', async (_req, res) => {
+  app.get('/api/config/settings', async (req, res) => {
     try {
-      const settings = await readSettingsFromDiskMigrated();
+      // The surface kind resolves the per-surface profile keys; absent means base.
+      const settings = await readSettingsFromDiskMigrated({ surface: settingsSurfaceOf(req) });
       res.json(formatSettingsResponse(settings));
     } catch (error) {
       console.error('Failed to read settings:', error);
@@ -429,7 +431,7 @@ ${desktopReturn ? `<a class="return" href="openchamber://focus/mcp-auth">Return 
       return res.status(400).json({ error: 'Chrome debugging port must be an integer from 0 to 65535' });
     }
     try {
-      const updated = await persistSettings(req.body ?? {});
+      const updated = await persistSettings(req.body ?? {}, { surface: settingsSurfaceOf(req) });
       if (hasDebugPort) onServerBrowserDebugPortChanged?.(updated.serverBrowserDebugPort);
       // Live-apply the server browser toggle: enabling only arms lazy
       // construction; disabling tears the backend down before responding.

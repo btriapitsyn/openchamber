@@ -51,6 +51,7 @@ const createRealRuntime = async () => {
   return {
     runtime,
     settingsFilePath,
+    preferencesFilePath: path.join(tempRoot, 'preferences.json'),
     cleanup: () => fsPromises.rm(tempRoot, { recursive: true, force: true }),
   };
 };
@@ -112,13 +113,15 @@ describe('serverBrowserEnabled setting', () => {
   });
 
   it('round trips automatic and fixed debug ports without erasing valid settings on invalid updates', async () => {
-    const { runtime, cleanup } = await createRealRuntime();
+    const { runtime, settingsFilePath, preferencesFilePath, cleanup } = await createRealRuntime();
     try {
       expect((await runtime.persistSettings({ serverBrowserDebugPort: 9222 })).serverBrowserDebugPort).toBe(9222);
       expect((await runtime.readSettingsFromDisk()).serverBrowserDebugPort).toBe(9222);
       expect((await runtime.persistSettings({ serverBrowserDebugPort: -1 })).serverBrowserDebugPort).toBe(9222);
       expect((await runtime.persistSettings({ serverBrowserDebugPort: 0 })).serverBrowserDebugPort).toBe(0);
       expect((await runtime.readSettingsFromDisk()).serverBrowserDebugPort).toBe(0);
+      expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8')).serverBrowserDebugPort).toBe(0);
+      expect(JSON.parse(await fsPromises.readFile(preferencesFilePath, 'utf8')).fields).toEqual({});
     } finally {
       await cleanup();
     }
@@ -138,7 +141,7 @@ describe('serverBrowserEnabled setting', () => {
   });
 
   it('persists a round trip through the real settings runtime', async () => {
-    const { runtime, settingsFilePath, cleanup } = await createRealRuntime();
+    const { runtime, settingsFilePath, preferencesFilePath, cleanup } = await createRealRuntime();
     try {
       const enabled = await runtime.persistSettings({ serverBrowserEnabled: true });
       expect(enabled.serverBrowserEnabled).toBe(true);
@@ -148,6 +151,7 @@ describe('serverBrowserEnabled setting', () => {
       const disabled = await runtime.persistSettings({ serverBrowserEnabled: false });
       expect(disabled.serverBrowserEnabled).toBe(false);
       expect(JSON.parse(await fsPromises.readFile(settingsFilePath, 'utf8')).serverBrowserEnabled).toBe(false);
+      expect(JSON.parse(await fsPromises.readFile(preferencesFilePath, 'utf8')).fields).toEqual({});
     } finally {
       await cleanup();
     }

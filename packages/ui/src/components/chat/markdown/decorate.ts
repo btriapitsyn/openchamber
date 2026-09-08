@@ -344,7 +344,7 @@ const decorateTables = (root: HTMLElement, labels: DecorateLabels): void => {
     if (existing) continue;
 
     const wrapper = document.createElement('div');
-    wrapper.className = 'group my-4 flex flex-col space-y-2';
+    wrapper.className = 'group my-4 flex w-fit max-w-full flex-col space-y-2';
     wrapper.setAttribute('data-markdown', 'table-wrapper');
 
     const toolbar = document.createElement('div');

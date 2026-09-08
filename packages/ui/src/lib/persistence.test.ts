@@ -35,6 +35,18 @@ type TestWindow = {
 
 let createdWindow = false;
 let createdLocalStorage = false;
+let isolatedRuntimeCounter = 0;
+
+// Each test gets its own runtime identity so an in-flight load or save left
+// behind by the previous test is rejected as stale instead of leaking its
+// response into this test's stores or server-known values.
+const isolateRuntime = (): void => {
+  isolatedRuntimeCounter += 1;
+  switchRuntimeEndpoint({
+    apiBaseUrl: `https://isolated-${isolatedRuntimeCounter}.example`,
+    runtimeKey: `isolated-${isolatedRuntimeCounter}`,
+  });
+};
 const originalInputHistoryApplyScope = useInputHistoryStore.getState().applyScope;
 const originalInputHistoryApplyEntryLimit = useInputHistoryStore.getState().applyEntryLimit;
 
@@ -160,6 +172,7 @@ describe('applyPersistedHomeDirectoryToWindow', () => {
 describe('updateDesktopSettings', () => {
   beforeEach(() => {
     getWindow();
+    isolateRuntime();
     registerRuntimeAPIs(null);
     invalidateSettingsCache();
     resetModelPrefsState();
@@ -410,15 +423,22 @@ describe('updateDesktopSettings', () => {
     expect(localStorage.getItem('selectedThemeId')).toBeNull();
     expect(localStorage.getItem('directoryTreeShowHidden')).toBeNull();
     expect(localStorage.getItem('sttModel')).toBeNull();
+    // The mirror carries every user-owned field the server returned, so the
+    // draft-starter markers ride along with the three values under test.
     expect(JSON.parse(localStorage.getItem(getRuntimeSettingsMirrorStorageKey('mirror-a')) ?? '{}')).toEqual({
       themeId: 'theme-a',
       directoryShowHidden: true,
       sttModel: 'model-a',
+      draftStartersCraftGoalAdded: true,
+      draftStartersScheduleTaskAdded: true,
     });
-    expect(JSON.parse(localStorage.getItem(getRuntimeSettingsMirrorStorageKey('mirror-b')) ?? '{}')).toEqual({});
+    expect(JSON.parse(localStorage.getItem(getRuntimeSettingsMirrorStorageKey('mirror-b')) ?? '{}')).toEqual({
+      draftStartersCraftGoalAdded: true,
+      draftStartersScheduleTaskAdded: true,
+    });
   });
 
-  test('resets in-memory preferences omitted by an authoritative runtime snapshot', async () => {
+  test('keeps in-memory preferences that an authoritative runtime snapshot omits', async () => {
     getWindow();
     switchRuntimeEndpoint({ apiBaseUrl: 'https://preferences-a.example', runtimeKey: 'preferences-a' });
     registerSettingsApi(async () => ({}), async () => ({
@@ -453,14 +473,16 @@ describe('updateDesktopSettings', () => {
     }));
     await syncDesktopSettings();
 
-    expect(useUIStore.getState().showReasoningTraces).toBe(true);
-    expect(useUIStore.getState().serverBrowserDebugPort).toBe(0);
-    expect(useUIStore.getState().terminalShell).toBe('auto');
-    expect(useUIStore.getState().favoriteModels).toEqual([]);
-    expect(useUIStore.getState().toolJsonViewMode).toBe('summary');
-    expect(useUIStore.getState().globalDraftStarters).toBeNull();
-    expect(useUIStore.getState().draftStartersVisible).toBe(true);
-    expect(useMessageQueueStore.getState().followUpBehavior).toBe('queue');
+    // An omitted key is "unset", not "reset to default": the window keeps what
+    // it holds and nothing is written back.
+    expect(useUIStore.getState().showReasoningTraces).toBe(false);
+    expect(useUIStore.getState().serverBrowserDebugPort).toBe(9222);
+    expect(useUIStore.getState().terminalShell).toBe('fish');
+    expect(useUIStore.getState().favoriteModels).toHaveLength(1);
+    expect(useUIStore.getState().toolJsonViewMode).toBe('raw');
+    expect(useUIStore.getState().globalDraftStarters).toEqual([{ type: 'command', name: 'runtime-a' }]);
+    expect(useUIStore.getState().draftStartersVisible).toBe(false);
+    expect(useMessageQueueStore.getState().followUpBehavior).toBe('steer');
   });
 
   test('treats settings save responses as partial patches', async () => {
@@ -479,7 +501,9 @@ describe('updateDesktopSettings', () => {
   test('ignores malformed browser CDP ports returned by a settings runtime', async () => {
     getWindow();
     useUIStore.getState().setServerBrowserDebugPort(9222);
-    registerSettingsSave(async () => ({ serverBrowserDebugPort: '9223' }));
+    const invalidSettings: SettingsPayload = {};
+    Object.defineProperty(invalidSettings, 'serverBrowserDebugPort', { value: '9223', enumerable: true });
+    registerSettingsSave(async () => invalidSettings);
 
     await updateDesktopSettings({ showReasoningTraces: false });
 
@@ -541,7 +565,7 @@ describe('updateDesktopSettings', () => {
     });
   });
 
-  test('seeds missing shared sidebar preferences from the hydrated local cache', async () => {
+  test('keeps hydrated sidebar preferences the server omits and writes nothing back', async () => {
     getWindow();
     const saves: Array<Partial<SettingsPayload>> = [];
     useSessionDisplayStore.setState({
@@ -563,15 +587,21 @@ describe('updateDesktopSettings', () => {
     }));
 
     await syncDesktopSettings();
+    await delay(300);
 
-    expect(saves).toEqual([{
-      draftStartersCraftGoalAdded: true,
-      draftStartersScheduleTaskAdded: true,
-      sidebarProjectDisplayMode: 'single',
-      sidebarSessionGroupingMode: 'flat',
-      sidebarProjectSortOrder: 'a-z',
-      sidebarShowRecentSection: false,
-    }]);
+    expect(saves).toEqual([]);
+    const state = useSessionDisplayStore.getState();
+    expect({
+      projectDisplayMode: state.projectDisplayMode,
+      sessionGroupingMode: state.sessionGroupingMode,
+      projectSortOrder: state.projectSortOrder,
+      showRecentSection: state.showRecentSection,
+    }).toEqual({
+      projectDisplayMode: 'single',
+      sessionGroupingMode: 'flat',
+      projectSortOrder: 'a-z',
+      showRecentSection: false,
+    });
   });
 
   test('preserves local sidebar preferences when the authoritative load fails', async () => {
@@ -814,7 +844,6 @@ describe('updateDesktopSettings', () => {
 
       expect(saveCalls).toHaveLength(1);
       expect(saveCalls[0]).toEqual({
-        draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true,
         favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-haiku-4' }],
         hiddenModels: [{ providerID: 'openai', modelID: 'gpt-5' }],
         collapsedModelProviders: ['openai'],
@@ -831,6 +860,7 @@ describe('updateDesktopSettings', () => {
     getWindow();
     useUIStore.getState().setTerminalShell('auto');
     useUIStore.getState().setTerminalLoginShells([]);
+    useUIStore.getState().setToolJsonViewMode('summary');
     const saveCalls: Array<Partial<SettingsPayload>> = [];
     registerSettingsSave(async (changes) => {
       saveCalls.push(changes);
@@ -848,22 +878,22 @@ describe('updateDesktopSettings', () => {
     expect(saveCalls.some((changes) => changes.toolJsonViewMode === 'formatted')).toBe(true);
   });
 
-  test('legacy server lists keep telemetry hidden, while explicit opt-ins survive hydration', async () => {
+  test('legacy server lists show telemetry, while explicit hiding survives hydration', async () => {
     getWindow();
     for (const explicit of [undefined, false, true]) {
       invalidateSettingsCache();
       registerSettingsApi(async (changes) => changes, async () => ({
-        settings: { workStatusHiddenSections: ['mcp'], workStatusHiddenSectionsExplicit: explicit,
+        settings: { workStatusHiddenSections: ['mcp', 'telemetry'], workStatusHiddenSectionsExplicit: explicit,
           draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true },
         source: 'web',
       }));
       await syncDesktopSettings();
-      expect(useUIStore.getState().workStatusHiddenSections).toEqual(explicit ? ['mcp'] : ['mcp', 'telemetry']);
+      expect(useUIStore.getState().workStatusHiddenSections).toEqual(explicit ? ['mcp', 'telemetry'] : ['mcp']);
       expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(explicit === true);
     }
   });
 
-  test('autosaves telemetry opt-in and its list together, then restores them through settings load', async () => {
+  test('autosaves telemetry hiding and its list together, then restores them through settings load', async () => {
     getWindow();
     invalidateSettingsCache();
     let server: SettingsPayload = { workStatusHiddenSections: [], draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true };
@@ -871,19 +901,20 @@ describe('updateDesktopSettings', () => {
     registerSettingsApi(async (changes) => { saves.push(changes); server = { ...server, ...changes }; return changes; },
       async () => ({ settings: server, source: 'web' }));
     await syncDesktopSettings();
-    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['telemetry']);
+    expect(useUIStore.getState().workStatusHiddenSections).toEqual([]);
     startAppearanceAutoSave();
-    useUIStore.getState().setWorkStatusSectionVisible('telemetry', true);
+    useUIStore.getState().setWorkStatusSectionVisible('telemetry', false);
     await delay(600);
-    expect(saves.some((changes) => changes.workStatusHiddenSections?.length === 0 && changes.workStatusHiddenSectionsExplicit === true)).toBe(true);
-    expect(server.workStatusHiddenSections).toEqual([]);
+    expect(saves.some((changes) => changes.workStatusHiddenSectionsExplicit === true)).toBe(true);
+    expect(server.workStatusHiddenSections).toEqual(['telemetry']);
+    expect(server.workStatusHiddenSectionsExplicit).toBe(true);
     invalidateSettingsCache();
     await syncDesktopSettings();
-    expect(useUIStore.getState().workStatusHiddenSections).toEqual([]);
+    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['telemetry']);
     expect(useUIStore.getState().workStatusHiddenSectionsExplicit).toBe(true);
-    // An unrelated partial save response must not turn an opt-in back off.
+    // An unrelated partial save response must not re-enable a hidden section.
     await updateDesktopSettings({ workStatusPanelEnabled: useUIStore.getState().workStatusPanelEnabled });
-    expect(useUIStore.getState().workStatusHiddenSections).toEqual([]);
+    expect(useUIStore.getState().workStatusHiddenSections).toEqual(['telemetry']);
   });
 
   test('applies persisted autoSaveEnabled from server settings', async () => {
@@ -936,7 +967,7 @@ describe('updateDesktopSettings', () => {
     expect(useInputHistoryStore.getState().entryLimit).toBe(100);
   });
 
-  test('defaults omitted input history scope to global without writing a migration', async () => {
+  test('keeps the hydrated input history scope when the server omits it and writes nothing', async () => {
     getWindow();
     invalidateSettingsCache();
     useInputHistoryStore.getState().applyScope('session');
@@ -955,11 +986,11 @@ describe('updateDesktopSettings', () => {
 
     await syncDesktopSettings();
 
-    expect(useInputHistoryStore.getState().scope).toBe(DEFAULT_INPUT_HISTORY_SCOPE);
+    expect(useInputHistoryStore.getState().scope).toBe('session');
     expect(saveCalls.some((changes) => changes.inputHistoryScope !== undefined)).toBe(false);
   });
 
-  test('defaults omitted input history limit to forty without writing a migration', async () => {
+  test('keeps the hydrated input history limit when the server omits it and writes nothing', async () => {
     getWindow();
     invalidateSettingsCache();
     useInputHistoryStore.getState().applyEntryLimit(100);
@@ -978,7 +1009,7 @@ describe('updateDesktopSettings', () => {
 
     await syncDesktopSettings();
 
-    expect(useInputHistoryStore.getState().entryLimit).toBe(DEFAULT_INPUT_HISTORY_LIMIT);
+    expect(useInputHistoryStore.getState().entryLimit).toBe(100);
     expect(saveCalls.some((changes) => changes.inputHistoryLimit !== undefined)).toBe(false);
   });
 
@@ -1060,7 +1091,7 @@ describe('updateDesktopSettings', () => {
     expect(saveCalls.some((changes) => changes.autoSaveEnabled === false)).toBe(true);
   });
 
-  test('seeds omitted autoSaveEnabled from the hydrated client preference', async () => {
+  test('keeps the hydrated autoSaveEnabled when the server omits it and writes nothing', async () => {
     getWindow();
     invalidateSettingsCache();
     useUIStore.getState().setAutoSaveEnabled(false);
@@ -1077,27 +1108,110 @@ describe('updateDesktopSettings', () => {
     await delay(500);
 
     expect(useUIStore.getState().autoSaveEnabled).toBe(false);
-    expect(saveCalls.some((changes) => changes.autoSaveEnabled === false)).toBe(true);
+    expect(saveCalls).toEqual([]);
   });
 
-  test('seeds default autoSaveEnabled when omitted and client still has the default', async () => {
+  test('a bootstrap that adopts server values produces zero writes even with the auto-savers running', async () => {
     getWindow();
     invalidateSettingsCache();
-    useUIStore.getState().setAutoSaveEnabled(true);
+    // The setup below is itself "a person changing things" as far as the
+    // auto-savers can tell; let those writes drain before recording.
+    const saveCalls: Array<Partial<SettingsPayload>> = [];
+    let recording = false;
+    registerSettingsApi(async (changes) => {
+      if (recording) saveCalls.push(changes);
+      return { ...changes } as SettingsPayload;
+    }, async () => ({
+      settings: {
+        showReasoningTraces: false,
+        terminalShell: 'fish',
+        favoriteModels: [{ providerID: 'anthropic', modelID: 'claude-sonnet-4' }],
+        // A legacy list the client normalises on read: the normalised copy is
+        // still not this window's change and must not be written back.
+        workStatusHiddenSections: ['mcp', 'telemetry'],
+        draftStartersCraftGoalAdded: true,
+        draftStartersScheduleTaskAdded: true,
+      },
+      source: 'web',
+    }));
+    startAppearanceAutoSave();
+    const stopModelPrefs = startModelPrefsAutoSave();
+    useUIStore.getState().setShowReasoningTraces(true);
+    useUIStore.getState().setTerminalShell('auto');
+    resetModelPrefsState();
+    await delay(1500);
+    recording = true;
+
+    try {
+      await syncDesktopSettings();
+      await delay(1500);
+
+      expect(useUIStore.getState().showReasoningTraces).toBe(false);
+      expect(useUIStore.getState().terminalShell).toBe('fish');
+      expect(useUIStore.getState().favoriteModels).toHaveLength(1);
+      expect(useUIStore.getState().workStatusHiddenSections).toEqual(['mcp']);
+      expect(saveCalls).toEqual([]);
+    } finally {
+      stopModelPrefs();
+    }
+  });
+
+  test('drops a write whose value the server already holds', async () => {
+    getWindow();
+    invalidateSettingsCache();
     const saveCalls: Array<Partial<SettingsPayload>> = [];
     registerSettingsApi(async (changes) => {
       saveCalls.push(changes);
       return { ...changes } as SettingsPayload;
     }, async () => ({
-      settings: { draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true },
+      settings: { fontSize: 15, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true },
       source: 'web',
     }));
-
     await syncDesktopSettings();
-    await delay(500);
 
-    expect(useUIStore.getState().autoSaveEnabled).toBe(true);
-    expect(saveCalls.some((changes) => changes.autoSaveEnabled === true)).toBe(true);
+    await updateDesktopSettings({ fontSize: 15 });
+    expect(saveCalls).toEqual([]);
+    expect(getSettingsSaveState()).toBe('idle');
+
+    await updateDesktopSettings({ fontSize: 16 });
+    expect(saveCalls).toEqual([{ fontSize: 16 }]);
+  });
+
+  test('toggling back to the server value inside the debounce window cancels the pending write', async () => {
+    getWindow();
+    invalidateSettingsCache();
+    const saveCalls: Array<Partial<SettingsPayload>> = [];
+    registerSettingsApi(async (changes) => {
+      saveCalls.push(changes);
+      return { ...changes } as SettingsPayload;
+    }, async () => ({
+      settings: { showDeletionDialog: true, draftStartersCraftGoalAdded: true, draftStartersScheduleTaskAdded: true },
+      source: 'web',
+    }));
+    await syncDesktopSettings();
+
+    void updateDesktopSettings({ showDeletionDialog: false, fontSize: 17 });
+    await updateDesktopSettings({ showDeletionDialog: true });
+
+    expect(saveCalls).toEqual([{ fontSize: 17 }]);
+  });
+
+  test('a failed save forgets its optimistic value so the retry is sent', async () => {
+    getWindow();
+    invalidateSettingsCache();
+    let fail = true;
+    const saveCalls: Array<Partial<SettingsPayload>> = [];
+    registerSettingsSave(async (changes) => {
+      saveCalls.push(changes);
+      if (fail) throw new Error('offline');
+      return { ...changes } as SettingsPayload;
+    });
+
+    await updateDesktopSettings({ fontSize: 18 });
+    fail = false;
+    await updateDesktopSettings({ fontSize: 18 });
+
+    expect(saveCalls).toEqual([{ fontSize: 18 }, { fontSize: 18 }]);
   });
 
   test('does not invent theme defaults when the authoritative snapshot omits theme fields', async () => {
@@ -1198,6 +1312,7 @@ describe('updateDesktopSettings', () => {
 describe('unload lifecycle flush (#2197)', () => {
   beforeEach(() => {
     getWindow();
+    isolateRuntime();
     registerRuntimeAPIs(null);
     invalidateSettingsCache();
   });

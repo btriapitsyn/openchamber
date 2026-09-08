@@ -31,8 +31,7 @@ import { useSkillsStore } from "@/stores/useSkillsStore"
 import { getDeferredSafeStorage } from "@/stores/utils/safeStorage"
 import { markPendingUserSendAnimation } from "@/lib/userSendAnimation"
 import { normalizePath } from "@/lib/pathNormalization"
-import type { ProjectEntry } from "@/lib/api/types"
-import { CHAT_DRAFT_PROJECT_ID, createChatDirectory, deleteChatDirectory, getChatsRootFromDirectory, isChatDirectoryForHome, isChatDirectoryPath, warmChatsRootDirectory } from "@/lib/chatDirectories"
+import { CHAT_DRAFT_PROJECT_ID, createChatDirectory, deleteChatDirectory, getChatsRootFromDirectory, isChatDirectoryPath, warmChatsRootDirectory } from "@/lib/chatDirectories"
 import { isVSCodeRuntime } from "@/lib/desktop"
 import { composeForkSessionMessage } from "@/lib/messages/executionMeta"
 import { findLatestUserModelChoice } from "@/lib/messages/userModelChoice"
@@ -72,9 +71,7 @@ import {
   unrevertSession as unrevertSessionAction,
   forkFromMessage as forkFromMessageAction,
   fetchMessagesForSession,
-  relocateSessionFromMissingDirectory,
   type ArchiveSessionsOptions,
-  type MissingDirectoryRelocation,
   type DeleteSessionOptions,
   type DeleteSessionsOptions,
   type UnarchiveSessionsOptions,
@@ -330,6 +327,8 @@ export type NewSessionDraftState = {
   projectContextPins?: { notes: string[]; plans: string[] }
   target: NewSessionDraftTarget
   preparedChatDirectory?: string | null
+  /** Opened as a programmatic fallback (no session active at boot), not by the user. */
+  openedAutomatically?: boolean
 }
 
 export type ViewportAnchor = {
@@ -378,13 +377,6 @@ export type SessionUIState = {
     transition?: "submitted-draft",
   ) => void
   clearMaterializedDraftSession: (sessionId: string) => void
-  /**
-   * Move a session whose directory no longer exists (a worktree deleted
-   * outside OpenChamber) into its project directory. Concurrent calls for the
-   * same session share one attempt. Resolves `unchanged` when the directory is
-   * available, unknown, or the session has no project to move to.
-   */
-  recoverMissingSessionDirectory: (sessionId: string) => Promise<MissingDirectoryRelocation>
   prepareForRuntimeSwitch: (apiBaseUrl?: string | null) => void
   restoreForRuntimeSwitch: (apiBaseUrl?: string | null) => void
   openNewSessionDraft: (options?: Partial<NewSessionDraftState> & { automatic?: boolean }) => void
@@ -768,27 +760,6 @@ const resolveCreatableDraftDirectory = async (
   }
 }
 
-const pendingDirectoryRecoveries = new Map<string, Promise<MissingDirectoryRelocation>>()
-
-/**
- * Only a directory that is neither a registered project root nor a managed
- * chat directory can be a deleted worktree. Project roots and chat directories
- * have nowhere to relocate to, so they are never probed.
- */
-const isRelocatableSessionDirectory = (directory: string, projects: readonly ProjectEntry[]): boolean => {
-  if (isChatDirectoryForHome(directory, useDirectoryStore.getState().homeDirectory)) return false
-  return !projects.some((project) => normalizePath(project.path) === directory)
-}
-
-const notifySessionRelocated = async (destinationDirectory: string): Promise<void> => {
-  const { toast } = await import("sonner")
-  const { useI18nStore, formatMessage } = await import("@/lib/i18n/store")
-  const project = useProjectsStore.getState().projects.find((entry) => normalizePath(entry.path) === destinationDirectory)
-  toast.info(formatMessage(useI18nStore.getState().dictionary, "sessions.missingDirectory.movedToProject", {
-    project: project?.label ?? destinationDirectory,
-  }))
-}
-
 const recoverStaleDraftDirectory = async (openedDraft: NewSessionDraftState): Promise<void> => {
   const resolved = await resolveCreatableDraftDirectory(openedDraft, openedDraft.directoryOverride)
   if (resolved.status !== "ok") return
@@ -1109,16 +1080,6 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       console.warn("Failed to set OpenCode directory for session switch:", e)
     }
 
-    // A worktree session may have lost its directory while it was in the
-    // background. Probe on activation, the same way a reopened draft probes
-    // its inherited directory, so the session is relocated before its tabs
-    // and prompts run against a path that is gone. VS Code registers no
-    // worktrees, so every session there is its workspace root.
-    if (id && !isGuessedDir && resolvedDir && !isVSCodeRuntime()
-      && isRelocatableSessionDirectory(resolvedDir, projectsState.projects)) {
-      void get().recoverMissingSessionDirectory(id)
-    }
-
     // Defer viewport anchor save for previous session — not needed for the
     // skeleton to render and reads messages which can be expensive.
     if (previousSessionId && previousSessionId !== id) {
@@ -1210,39 +1171,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
   // ---------------------------------------------------------------------------
   // openNewSessionDraft
   // ---------------------------------------------------------------------------
-  recoverMissingSessionDirectory: (sessionId) => {
-    const runtimeKey = getRuntimeKey()
-    const key = `${runtimeKey}:${sessionId}`
-    const pending = pendingDirectoryRecoveries.get(key)
-    if (pending) return pending
 
-    const recovery = relocateSessionFromMissingDirectory(sessionId, runtimeKey)
-      .then(async (result) => {
-        if (result.status !== "moved" && result.status !== "failed") return result
-        // The worktree hint was the first thing every directory lookup read;
-        // with the worktree gone it would keep routing tabs to the dead path.
-        for (const movedId of result.movedSessionIds) {
-          get().setWorktreeMetadata(movedId, null)
-        }
-        if (result.status !== "moved") return result
-        if (get().currentSessionId === sessionId) {
-          // Re-select through the normal path so the active directory, project,
-          // and OpenCode client all follow the session to its new home.
-          get().setCurrentSession(sessionId, result.destinationDirectory)
-        }
-        // The server just confirmed a worktree directory is gone; the sidebar's
-        // worktree topology for that project is stale, so let it rediscover.
-        const { notifyWorktreeTopologyChanged } = await import("@/lib/worktrees/worktreeManager")
-        notifyWorktreeTopologyChanged(result.destinationDirectory)
-        await notifySessionRelocated(result.destinationDirectory)
-        return result
-      })
-      .finally(() => {
-        pendingDirectoryRecoveries.delete(key)
-      })
-    pendingDirectoryRecoveries.set(key, recovery)
-    return recovery
-  },
 
   openNewSessionDraft: (options) => {
     // A USER-initiated draft open is a navigation choice: the next cold launch
@@ -1353,6 +1282,7 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
       syntheticParts: options?.syntheticParts,
       targetFolderId: options?.targetFolderId,
       projectContextPins: options?.projectContextPins,
+      openedAutomatically: options?.automatic === true,
     }
 
     set({
@@ -2160,14 +2090,15 @@ export const useSessionUIStore = create<SessionUIState>()((set, get) => ({
         throw new Error("Project is not registered in OpenChamber")
       }
 
-      const [branchNameModule, configModule, createModule] = await Promise.all([
+      const [branchNameModule, configModule, trustModule, createModule] = await Promise.all([
         import("@/lib/git/branchNameGenerator"),
         import("@/lib/openchamberConfig"),
+        import("@/lib/sharedTrustConfirmation"),
         import("@/lib/worktrees/worktreeCreate"),
       ])
       const branchName = branchNameModule.generateBranchName()
       createdWorktreeProject = { id: project.id, path: project.path }
-      const setupCommands = await configModule.getWorktreeSetupCommands(createdWorktreeProject)
+      const setupCommands = await trustModule.resolveWorktreeSetupCommands(createdWorktreeProject)
       createdWorktree = await createModule.createWorktreeWithDefaults(createdWorktreeProject, {
         preferredName: branchName,
         mode: "new",

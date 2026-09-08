@@ -14,7 +14,7 @@ import { normalizePath } from '@/lib/pathNormalization';
 
 export type FollowUpBehavior = 'steer' | 'queue';
 
-export const DEFAULT_FOLLOW_UP_BEHAVIOR: FollowUpBehavior = 'queue';
+const DEFAULT_FOLLOW_UP_BEHAVIOR: FollowUpBehavior = 'queue';
 
 export const isFollowUpBehavior = (value: unknown): value is FollowUpBehavior => (
     value === 'steer' || value === 'queue'

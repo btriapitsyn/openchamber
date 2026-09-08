@@ -3,6 +3,11 @@
 ## Purpose
 This module fetches quota and usage signals for supported providers in the web server runtime.
 
+Node server entrypoints apply `../network-defaults.js` before serving requests,
+including the daemon launched directly through `server/index.js`. Connection
+attempts get 5 seconds without changing address-family selection. The VS Code
+extension applies the same policy in its own process at activation.
+
 ## Entrypoints and structure
 - `packages/web/server/lib/quota/index.js`: public entrypoint imported by `packages/web/server/index.js`.
 - `packages/web/server/lib/quota/routes.js`: Express route registration for quota endpoints.
@@ -35,7 +40,7 @@ These provider IDs are currently dispatchable via `fetchQuotaForProvider(provide
 | `zhipuai-coding-plan` | Zhipu AI Coding Plan | `providers/zhipuai-coding-plan.js` | `zhipuai-coding-plan`, `zhipuai`, `zhipu` |
 | `minimax-coding-plan` | MiniMax Coding Plan (minimax.io) | `providers/minimax-coding-plan.js` / `providers/minimax-shared.js` | `minimax-coding-plan` |
 | `minimax-cn-coding-plan` | MiniMax Coding Plan (minimaxi.com) | `providers/minimax-cn-coding-plan.js` / `providers/minimax-shared.js` | `minimax-cn-coding-plan` |
-| `ollama-cloud` | Ollama Cloud | `providers/ollama-cloud.js` | Manual cookie stored under `~/.config/openchamber/quota/` |
+| `ollama-cloud` | Ollama Cloud | `providers/ollama-cloud.js` | Manual cookie pasted into Settings (`aid=...; __Secure-session=...` from `ollama.com`), stored under `~/.config/openchamber/quota/` |
 | `wafer` | Wafer.ai | `providers/wafer.js` | `wafer`, `wafer-ai`, `wafer_ai`, `wafer.ai` |
 | `opencode-go` | OpenCode Go | `providers/opencode-go.js` | `opencode-go` API key from OpenCode `auth.json` |
 | `neuralwatt` | NeuralWatt | `providers/neuralwatt.js` | `neuralwatt` (API key under `key` or `token`) |
@@ -105,6 +110,10 @@ Web and VS Code accept finite numeric balances and non-empty numeric strings. Mi
 
 The provider computes `usedPercent` from whichever of `used`/`remaining` is present (`used` takes precedence when both exist) rather than assuming one field name. Both `packages/web/server/lib/quota/providers/kimi.js` and `packages/vscode/src/quotaProviders.ts` (`fetchKimiQuota`) must stay in sync — the VS Code extension duplicates this parsing logic rather than importing it.
 
+## Ollama Cloud settings-page shapes
+
+Ollama Cloud authentication uses two cookies (`aid` and `__Secure-session`) pasted together as one single-line Cookie header value. Ollama serves two different `/settings` page shapes and `parseOllamaSettingsHtml` supports both: session/weekly/premium-interaction windows (percent-based plans) and a `monthly` window derived from "Monthly usage: $X of $Y used" (cost-based plans) with a symmetric `$X / $Y` money `valueLabel` that reads correctly in both used/remaining display modes. The "Extra usage" credits block is surfaced as a balance-only `credits_balance` window with a plain money `valueLabel` when present, matching the Codex/DeepSeek credits treatment ("Credits Balance" in the UI); a $0 balance is omitted instead of showing an empty credits row. Keep `packages/web/server/lib/quota/providers/ollama-cloud.js` and `packages/vscode/src/quotaProviders.ts` (`parseOllamaSettingsHtml`) in sync — the VS Code extension duplicates this parsing logic rather than importing it.
+
 ## GitHub Copilot quota semantics
 
 GitHub Copilot usage exposes only the `premium_interactions` snapshot as the
@@ -123,6 +132,16 @@ snapshot carries `entitlement`, `remaining`, `unlimited`, and
 - Percent math requires a positive `entitlement`; entitlements of `0`, `-1`, or null are unusable.
 - When entitlement/remaining are unusable, fall back to `100 - percent_remaining`.
 - Snapshots other than `premium_interactions` (legacy annual plans) yield zero windows.
+
+## OpenRouter key semantics
+
+OpenRouter quota reads `GET https://openrouter.ai/api/v1/key`, which is documented as callable with any valid API key. `GET /api/v1/credits` is documented as "Management key required" and is not used. Calling `/credits` with a normal inference key has been observed to return HTTP 200 with `{total_credits:0, total_usage:0}` rather than an error; this behavior is not documented and is why the old implementation silently rendered "$0.00 left · $0.00 spent". A `/credits` fallback for unlimited keys would render the same zeros, so unlimited keys report `usage_monthly` instead.
+
+The documented `limit`, `limit_remaining`, and `limit_reset` fields are present and null on unlimited keys; null means unlimited, never missing data. For a limited key, window usage is `limit - limit_remaining`, not `usage`: `usage` is all-time and measures a different axis from the current reset window. Pairing `usage` with the current limit produces a wrong number. `limit_remaining` is server-computed and already honors `include_byok_in_limit`, so `byok_*` fields are ignored.
+
+Unlimited keys report `usage_monthly` in a `monthly` window with no percent. `limit_reset` is a period string (`daily`, `weekly`, `monthly`, or null), not a timestamp; `resetAt` is derived from the documented midnight-UTC boundaries, with weeks starting Monday. A set `limit` with a null `limit_reset` is a lifetime cap and maps to the `credits` window with no reset.
+
+Keep `packages/web/server/lib/quota/providers/openrouter.js` and `packages/vscode/src/quotaProviders.ts` in sync, as with the Kimi and Copilot providers; the VS Code extension duplicates this parsing logic rather than importing the web provider.
 
 ## Notes for contributors
 - Keep provider IDs stable; clients use them directly.

@@ -15,7 +15,6 @@ import { getDeferredSafeStorage } from '@/stores/utils/safeStorage';
 import { CHAT_DRAFT_PROJECT_ID } from '@/lib/chatDirectories';
 import { useSessionDisplayStore } from '@/stores/useSessionDisplayStore';
 import { useGlobalSessionsStore } from '@/stores/useGlobalSessionsStore';
-import { subscribeWorktreeTopologyChanged } from '@/lib/worktrees/worktreeManager';
 import { createContextPart } from '@/lib/messages/contextParts';
 
 /**
@@ -1347,52 +1346,17 @@ describe('missing session directory recovery', () => {
     useSessionUIStore.setState({ currentSessionId: null, currentSessionDirectory: null, worktreeMetadata: new Map() });
   });
 
-  test('moves the current session to its project, drops the worktree hint, and shares one attempt between callers', async () => {
-    const root = worktreeSession('root', missingWorktree);
-    const child = worktreeSession('child', missingWorktree, 'root');
-    useGlobalSessionsStore.setState({ activeSessions: [root, child], archivedSessions: [] });
-    useSessionUIStore.setState({ currentSessionId: 'root', currentSessionDirectory: missingWorktree });
-    useSessionUIStore.getState().setWorktreeMetadata('root', { path: missingWorktree, branch: 'gone' });
-    useSessionUIStore.getState().setWorktreeMetadata('child', { path: missingWorktree, branch: 'gone' });
-
-    const topologyChanges = [];
-    const unsubscribe = subscribeWorktreeTopologyChanged((directory) => topologyChanges.push(directory));
-    const store = useSessionUIStore.getState();
-    const [first, second] = await Promise.all([
-      store.recoverMissingSessionDirectory('root'),
-      store.recoverMissingSessionDirectory('root'),
-    ]);
-    unsubscribe();
-
-    expect(first).toBe(second);
-    expect(topologyChanges).toEqual([projectDirectory]);
-    expect(first.status).toBe('moved');
-    expect(moves.map((move) => move.sessionID)).toEqual(['root', 'child']);
-    expect(moves.every((move) => move.destination.directory === projectDirectory && move.moveChanges === false)).toBe(true);
-    expect(useSessionUIStore.getState().worktreeMetadata.has('root')).toBe(false);
-    expect(useSessionUIStore.getState().worktreeMetadata.has('child')).toBe(false);
-    expect(useSessionWorktreeStore.getState().getAttachment('root')).toBeUndefined();
-    expect(useSessionUIStore.getState().getDirectoryForSession('root')).toBe(projectDirectory);
-    expect(useSessionUIStore.getState().currentSessionDirectory).toBe(projectDirectory);
-    expect(useDirectoryStore.getState().currentDirectory).toBe(projectDirectory);
-  });
-
-  test('probes a worktree session on activation and relocates it only when the directory is confirmed missing', async () => {
+  test('leaves a missing worktree session in place on activation and does not probe or relocate it', async () => {
     const root = worktreeSession('root', missingWorktree);
     useGlobalSessionsStore.setState({ activeSessions: [root], archivedSessions: [] });
 
-    availability = 'available';
     useSessionUIStore.getState().setCurrentSession('root', missingWorktree);
     await settle();
-    expect(probes).toEqual([missingWorktree]);
+
+    expect(probes).toEqual([]);
     expect(moves).toEqual([]);
     expect(useSessionUIStore.getState().currentSessionDirectory).toBe(missingWorktree);
-
-    availability = 'missing';
-    useSessionUIStore.getState().setCurrentSession('root', missingWorktree);
-    await settle();
-    expect(moves.map((move) => move.sessionID)).toEqual(['root']);
-    expect(useSessionUIStore.getState().currentSessionDirectory).toBe(projectDirectory);
+    expect(useSessionUIStore.getState().getDirectoryForSession('root')).toBe(missingWorktree);
   });
 
   test('never probes a session that lives in its project root or in a managed chat directory', async () => {

@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsc --noEmit --watch",
     "build": "tsc --noEmit",
+    "build:ghostty-wasm": "bash scripts/build-libghostty-wasm.sh",
     "type-check": "tsc --noEmit",
     "lint": "eslint \"./src/**/*.{ts,tsx}\" --config ../../eslint.config.js",
     "test": "node ../../scripts/run-isolated-tests.mjs src"
@@ -61,7 +62,6 @@
     "express": "^5.1.0",
     "fflate": "^0.8.3",
     "fuse.js": "^7.1.0",
-    "ghostty-web": "^0.4.0",
     "heic2any": "^0.0.4",
     "html-to-image": "^1.11.13",
     "http-proxy-middleware": "^3.0.5",

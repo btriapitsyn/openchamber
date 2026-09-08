@@ -17,7 +17,7 @@ conditionally; passing "am I first?" down would mean each one tracking what the
 sections above it decided to render.
 
 Sections render nothing when they have no rows, so the panel collapses upward
-instead of reserving empty space. Opt-in Turn stats keeps its header for a
+instead of reserving empty space. Turn stats keeps its header for a
 selected session even without metrics, so a saved collapsed state can reopen.
 
 ## What it is not
@@ -104,7 +104,7 @@ which requests only providers enabled for this panel.
 | Subagent blockers | directory `permission` / `question` maps | one subscription covers every child |
 | Usage | `components/usage/usageGroups.ts` over `useQuotaStore` | grouping shared with the mobile popover; presentation is not |
 | Linked threads | `lib/linkedIssues.ts` over session metadata | written by the flows that attach an issue or PR |
-| Turn stats | `telemetry.ts` over `useSessionMessageRecords` | opt-in; computed only while expanded and authoritatively idle |
+| Turn stats | `telemetry.ts` over `useSessionMessageRecords` | computed only while expanded and authoritatively idle |
 | Goal | `useSessionGoal` | respects the Settings toggle |
 | MCP | `useMcpStore` | connect/disconnect reuses the dropdown's actions |
 | Pinned messages | `getContextObligatoryMessages` + `state.part` | see below |
@@ -230,7 +230,7 @@ the row reflects the reset tree rather than a mid-creation snapshot.
 Ordering is by durability, not category:
 
 1. **Session** (goal, context, cost), **Project** (attention, branch,
-   changes, PR, checks), **Usage**, and **Turn stats** (opt-in session telemetry:
+   changes, PR, checks), **Usage**, and **Turn stats** (session telemetry:
    throughput, duration, TTFT, cache hit rate) — true for as long as the session
    is open. Usage sits here rather than lower down because a spent quota stops the
    work outright;
@@ -241,12 +241,12 @@ Ordering is by durability, not category:
 
 A persisted preference (`workStatusPanelEnabled`) drives a header toggle, and a
 dialog behind the equalizer icon switches individual sections off. Hidden
-sections are stored rather than visible ones. Telemetry is the opt-in exception:
-UI-store v20 and legacy server-list hydration add it to the hidden set. A
-`workStatusHiddenSectionsExplicit` marker records that a list was chosen in a
-client with telemetry support. The marker and list travel together through
-autosave, sanitization, and server settings, so an explicit empty list enables
-everything while an old empty list does not enable telemetry. Complete settings
+sections are stored rather than visible ones. Every section, including Turn
+stats, is enabled by default. UI-store v21 migration and server-list hydration
+remove the old automatic telemetry hiding unless `workStatusHiddenSectionsExplicit`
+records a user-chosen list. Explicit hiding and other hidden sections survive.
+The marker and list travel together through autosave, sanitization, and server
+settings; an empty list enables everything. Complete settings
 snapshots own this preference; unrelated partial save echoes leave it unchanged.
 
 `workStatusPanelVisible` is separate and transient: the switch can be on while

@@ -99,16 +99,16 @@ beforeEach(() => {
 });
 
 describe('opencodeClient directory availability', () => {
-  type ProbeBody = { error?: string; reason?: string; entries?: never[] };
+  type ProbeBody = { error: string; reason?: string } | { isDirectory: boolean } | { isFile: boolean; size: number };
   const json = (status: number, body: ProbeBody): Response => new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
 
   test('stats the directory through the OpenChamber filesystem route, never through OpenCode path resolution', async () => {
-    runtimeFetchResults.push(json(200, { entries: [] }));
+    runtimeFetchResults.push(json(200, { isDirectory: true }));
     expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('available');
-    expect(runtimeFetchCalls).toEqual([{ path: '/api/fs/list', query: { path: '/private/deleted-worktree' } }]);
+    expect(runtimeFetchCalls).toEqual([{ path: '/api/fs/directory-stat', query: { path: '/private/deleted-worktree' } }]);
     expect(pathGetCalls).toBe(0);
   });
 
@@ -119,10 +119,19 @@ describe('opencodeClient directory availability', () => {
     runtimeFetchResults.push(json(400, { error: 'Specified path is not a directory', reason: 'not-directory' }));
     expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('missing');
 
+    runtimeFetchResults.push(json(200, { isFile: true, size: 12 }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
     runtimeFetchResults.push(json(404, { error: 'Not Found' }));
     expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
 
-    runtimeFetchResults.push(json(500, { error: 'Failed to list directory' }));
+    runtimeFetchResults.push(json(500, { error: 'Failed to stat path' }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
+    runtimeFetchResults.push(json(403, { error: 'Access to directory denied', reason: 'os-permission' }));
+    expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
+
+    runtimeFetchResults.push(json(501, { error: 'Unsupported' }));
     expect(await opencodeClient.getDirectoryAvailability('/private/deleted-worktree')).toBe('unknown');
 
     runtimeFetchResults.push(new Error('offline'));

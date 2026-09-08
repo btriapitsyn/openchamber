@@ -42,8 +42,7 @@ const isWorkStatusSectionId = (value: unknown): value is WorkStatusSectionId =>
   typeof value === 'string' && KNOWN_IDS.has(value);
 
 /**
- * Hidden sections are stored, not visible ones. Telemetry is opt-in; legacy
- * lists must be normalized before use so adding it does not enable it.
+ * Hidden sections are stored, not visible ones. Every section is on by default.
  */
 export const isWorkStatusSectionVisible = (
   hidden: readonly string[] | null | undefined,
@@ -76,16 +75,13 @@ export const getWorkStatusPanelPresentation = ({
   showEmptyState: contentMounted && allSectionsHidden,
 });
 
-const WORK_STATUS_DEFAULT_HIDDEN_SECTIONS = [
-  'telemetry',
-] as const satisfies readonly WorkStatusSectionId[];
-
 export const sanitizeWorkStatusHiddenSections = (value: unknown, explicit = true): WorkStatusSectionId[] => {
-  if (!Array.isArray(value)) return [...WORK_STATUS_DEFAULT_HIDDEN_SECTIONS];
+  if (!Array.isArray(value)) return [];
   const seen = new Set<WorkStatusSectionId>();
   for (const entry of value) {
     if (isWorkStatusSectionId(entry)) seen.add(entry);
   }
-  if (!explicit) seen.add('telemetry');
+  // Older clients hid telemetry automatically until the user chose a list.
+  if (!explicit) seen.delete('telemetry');
   return [...seen];
 };

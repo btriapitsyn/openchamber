@@ -76,6 +76,13 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     isAvailable: (ctx) => ctx.isMac,
   },
   {
+    id: 'appearance.scrollbars',
+    page: 'appearance',
+    titleKey: 'settings.openchamber.visual.field.alwaysShowScrollbars',
+    descriptionKey: 'settings.openchamber.visual.field.alwaysShowScrollbarsHint',
+    keywords: ['scrollbar', 'scrollbars', 'scroll', 'mouse', 'wheel', 'accessibility', 'always visible'],
+  },
+  {
     id: 'appearance.pwa-install-name',
     page: 'appearance',
     titleKey: 'settings.openchamber.visual.field.installAppName',
@@ -386,7 +393,7 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'chat',
     titleKey: 'settings.openchamber.visual.field.enterToSend',
     descriptionKey: 'settings.openchamber.visual.field.enterToSendHint',
-    keywords: ['enter', 'shift enter', 'send', 'newline'],
+    keywords: ['enter', 'shift enter', 'ctrl enter', 'cmd enter', 'mod enter', 'send', 'newline'],
   },
   {
     id: 'sessions.default-model',
@@ -643,6 +650,26 @@ const SETTINGS_SEARCH_ITEMS: readonly SettingsSearchItem[] = [
     page: 'projects',
     titleKey: 'settings.openchamber.worktrees.setup.waitForCommands',
     keywords: ['worktree', 'setup commands', 'bootstrap', 'wait'],
+  },
+  {
+    id: 'projects.worktree.setup.replace',
+    page: 'projects',
+    titleKey: 'settings.projects.shared.replaceMode',
+    keywords: ['worktree', 'setup commands', 'shared', 'team', 'only mine'],
+  },
+  {
+    id: 'projects.shared',
+    page: 'projects',
+    titleKey: 'settings.projects.shared.title',
+    descriptionKey: 'settings.projects.shared.description',
+    keywords: ['shared', 'team', 'repository', '.openchamber', 'project.json', 'trust'],
+  },
+  {
+    id: 'projects.shared.plansDir',
+    page: 'projects',
+    titleKey: 'settings.projects.shared.plansDir',
+    descriptionKey: 'settings.projects.shared.plansDirInfo',
+    keywords: ['plans', 'folder', 'shared', 'team', 'docs'],
   },
   {
     id: 'remote-instances.client-auth',

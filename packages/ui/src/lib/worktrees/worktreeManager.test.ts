@@ -117,10 +117,8 @@ const {
   createWorktree,
   getLatestWorktreeMetadata,
   listProjectWorktrees,
-  notifyWorktreeTopologyChanged,
   partitionWorktreesByRegisteredProject,
   removeProjectWorktree,
-  subscribeWorktreeTopologyChanged,
   validateWorktreeCreate,
   worktreeMapsEqual,
 } = await import('./worktreeManager');
@@ -679,21 +677,4 @@ describe('worktreeManager missing worktrees', () => {
     expect(worktreeMapsEqual(new Map([['/repo', [ready]]]), new Map([['/repo', [missing]]]))).toBe(false);
   });
 
-  test('a topology-changed signal drops the cached listing and reaches subscribers', async () => {
-    const project = { id: 'project-signal', path: '/repo-signal/' };
-    listImplementation = async () => [];
-    await listProjectWorktrees(project, { force: true });
-    await listProjectWorktrees(project);
-    expect(listCalls).toEqual(['/repo-signal']);
-
-    const notified: string[] = [];
-    const unsubscribe = subscribeWorktreeTopologyChanged((directory) => notified.push(directory));
-    notifyWorktreeTopologyChanged('/repo-signal/');
-    unsubscribe();
-    notifyWorktreeTopologyChanged('/repo-signal');
-
-    expect(notified).toEqual(['/repo-signal']);
-    await listProjectWorktrees(project);
-    expect(listCalls).toEqual(['/repo-signal', '/repo-signal']);
-  });
 });
