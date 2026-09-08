@@ -38,6 +38,26 @@ const fixture = async (inventoryOptions = {}) => {
 };
 
 describe('connected-server managed SSH inventory', () => {
+  it('discovers keys on a runtime whose directory close returns no promise', async () => {
+    // Bun's Dir.close() returns undefined where Node returns a promise, and the
+    // async iterator has already closed the directory. Assuming a promise threw
+    // before any key was seen, which broke discovery in the Docker image.
+    const { discoveryRoot, inventory } = await fixture({
+      fsImpl: {
+        ...fs,
+        opendir: async (target) => {
+          const directory = await fs.opendir(target);
+          return { [Symbol.asyncIterator]: () => directory[Symbol.asyncIterator](), close: () => undefined };
+        },
+      },
+    });
+    expect(discoveryRoot).toContain('.ssh');
+
+    const result = await inventory.discover();
+    expect(result.status).toBe('discovered');
+    expect(result.candidates.map((candidate) => candidate.label)).toContain('id_ed25519');
+  });
+
   it('binds only an existing verified SSH reference to both exact endpoints, without provider accounts', async () => {
     const { record, store, inventory, root } = await fixture();
     await store.replace([record]);

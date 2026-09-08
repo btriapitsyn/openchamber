@@ -131,9 +131,14 @@ export function createManagedSshInventory({
         entries.push(entry);
       }
     } finally {
-      await directory.close().catch((error) => {
+      try {
+        // The async iterator closes the directory when it finishes, so this is
+        // the second close; Node rejects with ERR_DIR_CLOSED and Bun returns
+        // undefined rather than a promise, and both mean the same thing.
+        await directory.close();
+      } catch (error) {
         if (error?.code !== 'ERR_DIR_CLOSED') throw error;
-      });
+      }
     }
     entries.sort((left, right) => left.name.localeCompare(right.name));
     const discovered = [];
