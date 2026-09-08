@@ -105,7 +105,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     void loadGlobalGitIdentity();
   }, [loadGitIdentityProfiles, loadGlobalGitIdentity]);
   const connectedAccountIds = useConnectedAccountIds();
-  const refreshSourceControlAccounts = useSourceControlAuthStore((state) => state.refreshAll);
+  const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
   const availableIdentities = React.useMemo(
     () => selectableIdentities(gitIdentityProfiles, globalGitIdentity,
       (identity) => isCompleteIdentity(identity) && identityAccountConnected(identity, connectedAccountIds)),
@@ -730,7 +730,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
         <IdentityDropdown
           activeProfile={activeIdentityProfile}
           identities={availableIdentities}
-          onOpen={() => void refreshSourceControlAccounts(sourceControl)}
+          onOpen={() => void refreshIdentityAccounts(sourceControl, gitIdentityProfiles.map((profile) => profile.account))}
           onSelect={(profile) => void handleApplyIdentity(profile)}
           isApplying={isApplyingIdentity}
           onConfigure={() => setRepositoryConfigurationOpen(true)}

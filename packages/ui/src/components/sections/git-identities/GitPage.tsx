@@ -53,9 +53,7 @@ const COLOR_MAP: Record<string, string> = {
 export const GitPage: React.FC = () => {
   const { t } = useI18n();
   const { sourceControl } = useRuntimeAPIs();
-  const refreshSourceControlAccounts = useSourceControlAuthStore((state) => state.refreshAll);
-  // Read once on open: an identity whose account was disconnected has to say so.
-  React.useEffect(() => { void refreshSourceControlAccounts(sourceControl); }, [refreshSourceControlAccounts, sourceControl]);
+  const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
   const {
     profiles,
     globalIdentity,
@@ -75,6 +73,11 @@ export const GitPage: React.FC = () => {
     loadDefaultGitIdentityId: s.loadDefaultGitIdentityId,
     setDefaultGitIdentityId: s.setDefaultGitIdentityId,
   })));
+  // An identity whose account was disconnected has to say so, so the accounts
+  // of the instances these identities name are read when the page opens.
+  React.useEffect(() => {
+    void refreshIdentityAccounts(sourceControl, profiles.map((profile) => profile.account));
+  }, [refreshIdentityAccounts, sourceControl, profiles]);
 
   const [editorOpen, setEditorOpen] = React.useState(false);
   const [editorProfileId, setEditorProfileId] = React.useState<string | null>(null);

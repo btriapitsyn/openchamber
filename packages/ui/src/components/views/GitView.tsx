@@ -380,7 +380,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     return remote ? identityApplicability(identity, remoteTraits(remote.fetch.displayUrl)) : { applicable: true };
   }, [binding.read, bindingRemoteName]);
   const sourceControlAuthEntries = useSourceControlAuthStore((state) => state.entries);
-  const refreshSourceControlAccounts = useSourceControlAuthStore((state) => state.refreshAll);
+  const refreshIdentityAccounts = useSourceControlAuthStore((state) => state.refreshIdentityAccounts);
   const beginActiveSourceControlContextsLoad = useGitHubPrStatusStore((state) => state.beginActiveContextsLoad);
   const commitActiveSourceControlContexts = useGitHubPrStatusStore((state) => state.commitActiveContexts);
   const releaseActiveSourceControlContexts = useGitHubPrStatusStore((state) => state.releaseActiveContexts);
@@ -2462,7 +2462,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
         identityAttention={identityAttention}
         identityApplicability={identityApplicabilityOf}
         onConfigureRepository={runtime.isVSCode ? undefined : () => setRepositoryConfigurationOpen(true)}
-        onIdentityMenuOpen={() => void refreshSourceControlAccounts(sourceControl)}
+        onIdentityMenuOpen={() => void refreshIdentityAccounts(sourceControl, profiles.map((profile) => profile.account))}
             isWorktreeMode={!!worktreeMetadata}
             onOpenHistory={() => setGitLogDialogMode('history')}
             onOpenGraph={() => setGitLogDialogMode('graph')}

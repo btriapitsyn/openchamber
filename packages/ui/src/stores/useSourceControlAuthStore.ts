@@ -35,6 +35,16 @@ type SourceControlAuthStore = {
   entries: Record<string, SourceControlAuthEntry>;
   refreshInstances: (sourceControl: Pick<SourceControlAPI, 'authInstances'>, options?: { force?: boolean }) => Promise<SourceControlIdentity[]>;
   refreshAll: (sourceControl: Pick<SourceControlAPI, 'authInstances' | 'authStatus'>, options?: { force?: boolean }) => Promise<void>;
+  /**
+   * Reads the accounts of the instances these identities name. An instance
+   * whose last account was removed disappears from the configured list, so
+   * `refreshAll` would never look at it again and an identity pointing into it
+   * would look connected forever.
+   */
+  refreshIdentityAccounts: (
+    sourceControl: Pick<SourceControlAPI, 'authStatus'>,
+    identities: Array<SourceControlIdentity | null | undefined>,
+  ) => Promise<void>;
   setStatus: (identity: SourceControlIdentity, status: SourceControlAuthStatus | null) => void;
   refreshStatus: (
     sourceControl: Pick<SourceControlAPI, 'authStatus'>,
@@ -86,6 +96,19 @@ export const useSourceControlAuthStore = create<SourceControlAuthStore>((set, ge
     const identities = await get().refreshInstances(sourceControl, options);
     if (requestGeneration !== generation || runtimeKey !== getRuntimeKey()) return;
     await Promise.all(identities.map((identity) => get().refreshStatus(sourceControl, identity, options)));
+  },
+  refreshIdentityAccounts: async (sourceControl, identities) => {
+    const seen = new Set<string>();
+    const targets: SourceControlIdentity[] = [];
+    for (const entry of identities) {
+      if (!entry) continue;
+      const identity = { provider: entry.provider, instance: entry.instance };
+      const key = getSourceControlAuthKey(identity);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push(identity);
+    }
+    await Promise.all(targets.map((identity) => get().refreshStatus(sourceControl, identity, { force: true })));
   },
   setStatus: (identity, status) => {
     const key = getSourceControlAuthKey(identity);
