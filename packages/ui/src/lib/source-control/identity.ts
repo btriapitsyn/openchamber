@@ -236,6 +236,7 @@ type ManagedAccountOption = {
   key: string;
   reference: SourceControlIdentity & { accountId: string };
   label: string;
+  source: SourceControlAuthAccount['source'];
 };
 
 /** Selectable managed HTTPS credential accounts: valid, non-CLI accounts of one connected identity. */
@@ -249,4 +250,5 @@ export const buildManagedAccountOptions = (
     key: JSON.stringify([identity.provider, identity.instance, account.id]),
     reference: { ...identity, accountId: account.id },
     label: formatSourceControlAccountLabel(identity, account, sourceLabel(account)),
+    source: account.source,
   }));

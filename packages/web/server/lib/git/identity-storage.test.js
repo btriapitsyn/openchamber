@@ -54,7 +54,7 @@ describe('git identity storage', () => {
     // A signature alone is not an identity: nothing says whose it is or how it authenticates.
     expect(() => store.createProfile(profile('personal'))).toThrow(/requires an account/i);
     expect(() => store.createProfile({ ...profile('personal'), account, transport: 'system' }))
-      .toThrow(/account or a managed key/i);
+      .toThrow(/authenticates with its account, a managed key, or anonymously/i);
   });
 
   it('refuses an identity whose transport and credentials disagree', async () => {

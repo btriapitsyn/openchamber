@@ -138,8 +138,8 @@ and stale conflicts perform one fresh owner read without retrying the mutation.
 Account and profile inventories remain in Git Settings.
 
 An identity is complete or it is not offered: `isCompleteIdentity` requires an
-account, a transport that is the account's credential or a managed SSH key, and
-a signature. The editor creates nothing else; the server refuses anything else
+account, a transport that is the account's credential (OAuth or token), a
+managed SSH key, or anonymous HTTPS, and a signature. The editor creates nothing else; the server refuses anything else
 from a client. Records written before identities carried an account stay in
 Git Settings flagged as needing one, and no picker lists them.
 

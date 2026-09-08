@@ -91,4 +91,5 @@ export const gitIdentityMutationResultSchema = z.object({
 export const isCompleteIdentity = (
   profile: Pick<GitIdentityProfile, 'account' | 'transport' | 'sshCredentialId' | 'userName' | 'userEmail'>,
 ): boolean => Boolean(profile.account) && Boolean(profile.userName) && Boolean(profile.userEmail)
-  && (profile.transport === 'account' || (profile.transport === 'ssh' && Boolean(profile.sshCredentialId)));
+  && (profile.transport === 'account' || profile.transport === 'anonymous'
+    || (profile.transport === 'ssh' && Boolean(profile.sshCredentialId)));
