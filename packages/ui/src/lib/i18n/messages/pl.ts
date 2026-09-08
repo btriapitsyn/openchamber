@@ -2252,6 +2252,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.description': 'To, czego tożsamość nie rozstrzyga: powłoka agenta, uprawnienia do submodułów i LFS oraz rozpoczęcie od nowa. Tożsamościami zarządzasz w ustawieniach Git.',
   'gitView.context.needsAttention': 'Wymaga uwagi',
   'gitView.identity.system': 'Tożsamość systemowa',
+  'gitView.identity.systemNoAuthor': 'Na tym komputerze nie skonfigurowano autora',
   'gitView.identity.systemConfirmTitle': 'Użyć własnych poświadczeń Git tego komputera?',
   'gitView.identity.systemConfirmAction': 'Użyj',
   'gitView.identity.unavailableHost': 'Odpowiada za {host}',

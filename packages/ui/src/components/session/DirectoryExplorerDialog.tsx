@@ -128,7 +128,12 @@ const normalizeDirectoryPath = (path: string | null | undefined): string | null 
 const displayPathToAbsolutePath = (value: string, homeDirectory: string): string => {
   const trimmed = value.trim();
   if (trimmed === '~') return homeDirectory;
-  if (trimmed.startsWith('~/')) return `${homeDirectory}${trimmed.slice(1)}`;
+  if (trimmed.startsWith('~/')) {
+    const rest = trimmed.slice(1);
+    // Typing or pasting an absolute path while the field still holds its "~/"
+    // prefix means that absolute path, not one nested under home.
+    return rest.startsWith('//') ? rest.slice(1) : `${homeDirectory}${rest}`;
+  }
   return trimmed;
 };
 
@@ -576,7 +581,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         const result = await runGitClone({
           remoteUrl,
           destinationPath: target,
-          gitIdentityId: selectedGitIdentity?.id,
+          // The System identity writes no author: it is the absence of an
+          // override, and the machine may not even have one to copy.
+          gitIdentityId: selectedGitIdentity && selectedGitIdentity.id !== GLOBAL_IDENTITY_ID
+            ? selectedGitIdentity.id : undefined,
           providerAccount: selectedGitIdentity?.account ?? undefined,
           git,
           selection,

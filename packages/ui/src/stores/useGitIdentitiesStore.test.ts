@@ -11,6 +11,7 @@ let writes: string[] = [];
 let failWrite = false;
 let pendingProfileRead: Promise<Response> | null = null;
 let pendingProfileWrite: Promise<Response> | null = null;
+let globalIdentityResponse: { userName: string | null; userEmail: string | null } = { userName: 'System Author', userEmail: 'system@example.com' };
 
 beforeEach(() => {
   configureRuntimeUrlResolver({ apiBaseUrl: 'https://author-profiles.example' });
@@ -20,10 +21,11 @@ beforeEach(() => {
   failWrite = false;
   pendingProfileRead = null;
   pendingProfileWrite = null;
+  globalIdentityResponse = { userName: 'System Author', userEmail: 'system@example.com' };
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     if (request.url.endsWith('/api/git/global-identity')) {
-      return Response.json({ userName: 'System Author', userEmail: 'system@example.com' });
+      return Response.json(globalIdentityResponse);
     }
     if (!request.url.endsWith('/api/git/identities') && !request.url.endsWith('/api/git/identities/author-one')) {
       throw new Error('Unexpected request outside author profile routes');
@@ -87,11 +89,22 @@ describe('author profile storage', () => {
 
     expect(useGitIdentitiesStore.getState().getProfileById('global')).toEqual({
       id: 'global',
-      name: 'Ada Lovelace',
+      name: 'System Author',
       userName: 'System Author',
       userEmail: 'system@example.com',
       color: 'info',
       icon: 'fingerprint',
+    });
+    expect(writes).toEqual([]);
+  });
+
+  test('a machine with no Git author still has a system identity to choose', async () => {
+    globalIdentityResponse = { userName: null, userEmail: null };
+    expect(await useGitIdentitiesStore.getState().loadGlobalIdentity()).toBe(true);
+
+    // Without it there is nothing to select, and a clone cannot even start.
+    expect(useGitIdentitiesStore.getState().globalIdentity).toEqual({
+      id: 'global', name: '', userName: '', userEmail: '', color: 'info', icon: 'fingerprint',
     });
     expect(writes).toEqual([]);
   });

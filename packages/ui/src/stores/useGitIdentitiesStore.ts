@@ -117,17 +117,20 @@ export const useGitIdentitiesStore = create<GitIdentitiesStore>()(
           const raw = await getGlobalGitIdentity();
           const data = raw === null ? null : gitIdentitySummarySchema.parse(raw);
           if (!isRuntimeCurrent(runtime) || loadGeneration !== globalIdentityLoadGeneration) return false;
+          // The System identity is offered whether or not this machine has an
+          // author configured: it is how a person says no override applies
+          // here, and a machine with no author still has to be able to clone.
           set({
-            globalIdentity: data?.userName && data.userEmail ? {
+            globalIdentity: {
               id: 'global',
               // The display name is the product's word for it, resolved where
               // it is rendered; the author's own name is the safe fallback.
-              name: data.userName,
-              userName: data.userName,
-              userEmail: data.userEmail,
+              name: data?.userName ?? '',
+              userName: data?.userName ?? '',
+              userEmail: data?.userEmail ?? '',
               color: 'info',
               icon: 'fingerprint',
-            } : null,
+            },
           });
           return true;
         } catch (error) {

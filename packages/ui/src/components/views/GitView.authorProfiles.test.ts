@@ -3,6 +3,8 @@ import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import type { GitIdentityProfile } from '@/lib/api/types';
+import { isCompleteIdentity } from '@/lib/api/git-identity';
+import { selectableIdentities } from '@/lib/source-control/identity';
 
 // Execute the component's actual author callbacks without mocking React or exporting UI internals.
 const readAuthorCallback = (file: URL, name: string): string => {
@@ -34,12 +36,15 @@ const availableAuthors = readAuthorCallback(new URL('./GitView.tsx', import.meta
 const activeAuthor = readAuthorCallback(new URL('./GitView.tsx', import.meta.url), 'activeIdentityProfile');
 
 const globalIdentity: GitIdentityProfile = { id: 'global', name: 'Global', userName: 'Global Author', userEmail: 'global@example.com' };
-const work: GitIdentityProfile = { id: 'work', name: 'Work', userName: 'Work Author', userEmail: 'work@example.com' };
+const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' } as const;
+const work: GitIdentityProfile = { id: 'work', name: 'Work', userName: 'Work Author', userEmail: 'work@example.com', account, transport: 'account' };
 const signed: GitIdentityProfile = {
   id: 'signed', name: 'Signed author', userName: 'Signed Author', userEmail: 'signed@example.com',
-  signCommits: true, signingKey: '/public/signing.pub',
+  account, transport: 'account', signCommits: true, signingKey: '/public/signing.pub',
 };
-const plain: GitIdentityProfile = { id: 'plain', name: 'Author', userName: 'Plain Author', userEmail: 'plain@example.com' };
+const plain: GitIdentityProfile = { id: 'plain', name: 'Author', userName: 'Plain Author', userEmail: 'plain@example.com', account, transport: 'account' };
+const incomplete: GitIdentityProfile = { id: 'legacy', name: 'Legacy', userName: 'Legacy Author', userEmail: 'legacy@example.com' };
+const helpers = { selectableIdentities, isCompleteIdentity };
 const profiles = [work, signed, plain];
 
 // The clone screen no longer chooses an author on its own: it proposes one
@@ -47,13 +52,16 @@ const profiles = [work, signed, plain];
 // owns that rule and its tests.
 describe('Git view authors', () => {
   test('offers every author for unrelated HTTPS, SSH, and absent remotes', () => {
-    expect(runInNewContext(availableAuthors, { profiles, globalIdentity })).toEqual([globalIdentity, ...profiles]);
+    expect(runInNewContext(availableAuthors, { profiles, globalIdentity, ...helpers })).toEqual([globalIdentity, ...profiles]);
   });
 
   test('retains ID deduplication, ordering, and stored signing data', () => {
-    expect(runInNewContext(availableAuthors, { profiles: [signed, work, signed], globalIdentity }))
+    expect(runInNewContext(availableAuthors, { profiles: [signed, work, signed], globalIdentity, ...helpers }))
       .toEqual([globalIdentity, signed, work]);
-    expect(runInNewContext(availableAuthors, { profiles: [signed], globalIdentity: null })[0]).toBe(signed);
+    expect(runInNewContext(availableAuthors, { profiles: [signed], globalIdentity: null, ...helpers })[0]).toBe(signed);
+    // An identity that names no account cannot be given to a repository.
+    expect(runInNewContext(availableAuthors, { profiles: [incomplete, work], globalIdentity: null, ...helpers }))
+      .toEqual([work]);
   });
 
   test('prefers a matching stored author over a matching global author and preserves signing', () => {

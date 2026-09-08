@@ -10,6 +10,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.description': 'Те, чого ідентичність не вирішує: оболонка агента, доступи для підмодулів і LFS та початок з чистого аркуша. Ідентичностями керують у налаштуваннях Git.',
   'gitView.context.needsAttention': 'Потребує уваги',
   'gitView.identity.system': 'Системна ідентичність',
+  'gitView.identity.systemNoAuthor': 'На цьому комп’ютері не налаштовано автора',
   'gitView.identity.systemConfirmTitle': 'Використати власні облікові дані Git цього комп’ютера?',
   'gitView.identity.systemConfirmAction': 'Використати',
   'gitView.identity.unavailableHost': 'Відповідає за {host}',

@@ -10,6 +10,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.description': 'O que a identidade não decide: o shell do agente, as permissões de submódulos e LFS, e recomeçar do zero. As identidades são gerenciadas nas configurações do Git.',
   'gitView.context.needsAttention': 'Requer atenção',
   'gitView.identity.system': 'Identidade do sistema',
+  'gitView.identity.systemNoAuthor': 'Nenhum autor configurado neste computador',
   'gitView.identity.systemConfirmTitle': 'Usar as credenciais Git do próprio computador?',
   'gitView.identity.systemConfirmAction': 'Usar',
   'gitView.identity.unavailableHost': 'Responde por {host}',

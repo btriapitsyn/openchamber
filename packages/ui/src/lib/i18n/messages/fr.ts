@@ -729,6 +729,7 @@ export const dict = {
   'gitView.context.description': 'Ce que l\'identité ne décide pas : le shell de l\'agent, les accès aux sous-modules et à LFS, et la remise à zéro. Les identités se gèrent dans les paramètres Git.',
   'gitView.context.needsAttention': 'À vérifier',
   'gitView.identity.system': 'Identité système',
+  'gitView.identity.systemNoAuthor': 'Aucun auteur configuré sur cet ordinateur',
   'gitView.identity.systemConfirmTitle': 'Utiliser les identifiants Git propres à cet ordinateur ?',
   'gitView.identity.systemConfirmAction': "L'utiliser",
   'gitView.identity.unavailableHost': 'Répond pour {host}',

@@ -904,6 +904,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.description': 'アイデンティティが決めない項目：エージェントのシェル、サブモジュールと LFS の許可、そしてやり直し。アイデンティティは Git 設定で管理します。',
   'gitView.context.needsAttention': '確認が必要',
   'gitView.identity.system': 'システムのアイデンティティ',
+  'gitView.identity.systemNoAuthor': 'このコンピューターには作成者が設定されていません',
   'gitView.identity.systemConfirmTitle': 'このコンピューター自身の Git 資格情報を使いますか？',
   'gitView.identity.systemConfirmAction': '使う',
   'gitView.identity.unavailableHost': '{host} 向け',

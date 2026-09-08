@@ -225,7 +225,8 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
                       {identityDisplayName(profile, t)}
                     </span>
                     <span className="typography-meta text-muted-foreground">
-                      {fit.applicable ? profile.userEmail : describeIdentityApplicability(fit, t)}
+                      {!fit.applicable ? describeIdentityApplicability(fit, t)
+                        : profile.userEmail || t('gitView.identity.systemNoAuthor')}
                     </span>
                   </span>
                   {isSelected ? (

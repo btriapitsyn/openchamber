@@ -907,6 +907,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.description': '身份不决定的内容：代理 Shell、子模块与 LFS 授权，以及重新开始。身份在 Git 设置中管理。',
   'gitView.context.needsAttention': '需要处理',
   'gitView.identity.system': '系统身份',
+  'gitView.identity.systemNoAuthor': '本机未配置提交作者',
   'gitView.identity.systemConfirmTitle': '使用本机自己的 Git 凭据？',
   'gitView.identity.systemConfirmAction': '使用',
   'gitView.identity.unavailableHost': '适用于 {host}',

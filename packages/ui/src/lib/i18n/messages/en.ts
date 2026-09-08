@@ -906,6 +906,7 @@ export const dict = {
   'gitView.context.description': 'What the identity does not decide: the agent shell, submodule and LFS grants, and starting over. Identities are managed in Git Settings.',
   'gitView.context.needsAttention': 'Needs attention',
   'gitView.identity.system': 'System identity',
+  'gitView.identity.systemNoAuthor': 'No author configured on this computer',
   'gitView.identity.systemConfirmTitle': 'Use this machine’s own Git credentials?',
   'gitView.identity.systemConfirmAction': 'Use it',
   'gitView.identity.unavailableHost': 'Answers for {host}',

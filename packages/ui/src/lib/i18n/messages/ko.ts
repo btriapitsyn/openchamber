@@ -907,6 +907,7 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.description': '아이덴티티가 결정하지 않는 항목: 에이전트 셸, 서브모듈 및 LFS 권한, 그리고 처음부터 다시 시작. 아이덴티티는 Git 설정에서 관리합니다.',
   'gitView.context.needsAttention': '확인 필요',
   'gitView.identity.system': '시스템 아이덴티티',
+  'gitView.identity.systemNoAuthor': '이 컴퓨터에는 작성자가 설정되어 있지 않습니다',
   'gitView.identity.systemConfirmTitle': '이 컴퓨터 자체의 Git 자격 증명을 사용할까요?',
   'gitView.identity.systemConfirmAction': '사용',
   'gitView.identity.unavailableHost': '{host} 전용',

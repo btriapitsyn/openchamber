@@ -3389,6 +3389,7 @@ export const dict = {
   'gitView.context.description': 'Kimliğin belirlemediği şeyler: aracı kabuğu, alt modül ve LFS izinleri ve sıfırdan başlama. Kimlikler Git ayarlarında yönetilir.',
   'gitView.context.needsAttention': 'Dikkat gerektiriyor',
   'gitView.identity.system': 'Sistem kimliği',
+  'gitView.identity.systemNoAuthor': 'Bu bilgisayarda yazar tanımlı değil',
   'gitView.identity.systemConfirmTitle': 'Bu bilgisayarın kendi Git kimlik bilgileri kullanılsın mı?',
   'gitView.identity.systemConfirmAction': 'Kullan',
   'gitView.identity.unavailableHost': '{host} için',
