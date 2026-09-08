@@ -741,15 +741,23 @@ describe('GitLab routes', () => {
       Projects: { show: vi.fn(async () => ({ id: 1, path_with_namespace: 'team/repo', web_url: `${origin}/team/repo` })) },
       Issues: { all: vi.fn(async () => [{ iid: 3, title: 'Bug', web_url: `${origin}/team/repo/-/issues/3`, state: 'opened' }]) },
     }));
+    const onAccountConnected = vi.fn();
     const app = appWith({
       store,
       fetch,
       createClient,
+      onAccountConnected,
       resolveProjects: async () => ({ branch: 'main', tracking: '', projects: [{ projectPath: 'team/repo', remoteName: 'origin' }] }),
     });
     await request(app).post('/api/source-control/gitlab/auth/token').query({ instance: origin }).send({ token: 'pat-token' }).expect(200);
     expect(fetch).toHaveBeenCalledWith(`${origin}/api/v4/user`, expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer pat-token' }) }));
     expect(store.setAccount).toHaveBeenCalledWith(origin, expect.objectContaining({ token: 'pat-token', source: 'pat', user: expect.objectContaining({ id: 9 }) }));
+    // A connected account announces itself so an identity can be made from it.
+    expect(onAccountConnected).toHaveBeenCalledWith({
+      account: { provider: 'gitlab', instance: origin, accountId: `${origin}#9` },
+      user: expect.objectContaining({ id: 9 }),
+      renews: [],
+    });
     const response = await request(app).get('/api/source-control/gitlab/issues/list')
       .query({ instance: origin, directory: '/repo' }).expect(200);
     expect(response.body).toMatchObject({ items: [{ number: 3, provider: 'gitlab', instance: origin }], hasMore: false });

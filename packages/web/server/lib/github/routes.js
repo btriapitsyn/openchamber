@@ -1159,12 +1159,26 @@ export function registerGitHubRoutes(app, options = {}) {
       const octokit = createOctokit(accessToken);
       const user = await getGitHubUserSummary(octokit);
 
-      await setGitHubAuth({
+      const credential = await setGitHubAuth({
         accessToken,
         scope: typeof payload.scope === 'string' ? payload.scope : '',
         tokenType: typeof payload.token_type === 'string' ? payload.token_type : 'bearer',
         user,
       });
+      // A connected account is a complete identity waiting to be written: who
+      // it is, what it authenticates with, and how it signs are all known here.
+      // Signing in again renews a credential rather than replacing it, so the
+      // ones this supersedes are named too.
+      if (credential?.credentialId) {
+        const account = { provider: 'github', instance: 'github.com', accountId: credential.credentialId };
+        const superseded = (await getGitHubAuthAccounts()).filter((candidate) =>
+          candidate.providerUserId === credential.providerUserId && candidate.id !== credential.credentialId);
+        options.onAccountConnected?.({
+          account,
+          user,
+          renews: superseded.map((candidate) => ({ ...account, accountId: candidate.id })),
+        });
+      }
 
       return res.json({
         connected: true,

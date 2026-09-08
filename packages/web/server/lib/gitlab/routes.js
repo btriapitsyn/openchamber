@@ -92,6 +92,25 @@ export function registerGitLabRoutes(app, options = {}) {
   const verify = (origin, token) => verifyGitLabToken({ origin, token, fetch: fetchImpl, timeoutMs });
   const createClient = options.createClient ?? createGitLabClient;
   const identityFor = (origin, accountId) => ({ provider: 'gitlab', instance: origin, accountId });
+  /**
+   * A connected account is a complete identity waiting to be written: who it
+   * is, what it authenticates with, and how it signs are all known here.
+   */
+  const announceConnectedAccount = async (origin, credential, user) => {
+    if (!credential?.credentialId) return;
+    const account = { provider: 'gitlab', instance: origin, accountId: credential.credentialId };
+    // Signing in again renews a credential rather than replacing it, so the
+    // ones this supersedes are named too: whatever followed the old credential
+    // is expected to keep working as the same account.
+    const instance = await store.readInstance(origin).catch(() => null);
+    const superseded = (instance?.accounts ?? []).filter((candidate) =>
+      candidate.providerUserId === credential.providerUserId && candidate.id !== credential.credentialId);
+    options.onAccountConnected?.({
+      account,
+      user,
+      renews: superseded.map((candidate) => ({ ...account, accountId: candidate.id })),
+    });
+  };
   const invalidateAccount = async (origin, accountId) => {
     await options.onAccountInvalidated?.(identityFor(origin, accountId));
     await store.markAccountInvalid(origin, accountId, 'unauthorized');
@@ -487,7 +506,8 @@ export function registerGitLabRoutes(app, options = {}) {
       acquired = false;
       if (result.status !== 'connected') return res.json({ connected: false, status: result.error, error: result.message });
       const user = await verify(origin, result.accessToken);
-      await store.setAccount(origin, { token: result.accessToken, user, source: 'oauth', scope: result.scope });
+      const credential = await store.setAccount(origin, { token: result.accessToken, user, source: 'oauth', scope: result.scope });
+      await announceConnectedAccount(origin, credential, user);
       return res.json({ connected: true, user, scope: result.scope });
     } catch (error) {
       if (acquired) oauthFlowRegistry.release(flowId);
@@ -504,7 +524,8 @@ export function registerGitLabRoutes(app, options = {}) {
       const token = isString(req.body?.token) ? req.body.token.trim() : '';
       if (!token) return res.status(400).json({ error: 'token is required' });
       const user = await verify(origin, token);
-      await store.setAccount(origin, { token, user, source: 'pat' });
+      const credential = await store.setAccount(origin, { token, user, source: 'pat' });
+      await announceConnectedAccount(origin, credential, user);
       return res.json({ connected: true, user });
     } catch (error) {
       const lockResponse = sendAuthStorageError(res, error);

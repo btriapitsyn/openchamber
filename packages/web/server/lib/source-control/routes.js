@@ -4,6 +4,8 @@ import { registerGitHubRoutes } from '../github/routes.js';
 import { registerGitLabRoutes } from '../gitlab/routes.js';
 import { createBindingService } from './binding-service.js';
 import { createBindingStore } from './binding-storage.js';
+import { createGitIdentityProvisioning } from '../git/identity-provisioning.js';
+import * as gitIdentityStore from '../git/identity-storage.js';
 import { resolveRepositoryIdentity } from './repository-identity.js';
 import { redactSensitiveText } from './url-redaction.js';
 import { createOAuthFlowRegistry } from './oauth-flow-registry.js';
@@ -68,6 +70,11 @@ export function registerSourceControlRoutes(app, dependencies = {}) {
     resolveCheckoutAuxiliary: dependencies.resolveCheckoutAuxiliary,
     readTransportAccount,
   });
+  // Connecting an account is the moment every part of an identity is known, so
+  // the identity is made there instead of being asked for again later.
+  const identityProvisioning = dependencies.identityProvisioning ?? createGitIdentityProvisioning({
+    store: gitIdentityStore,
+  });
   const oauthFlowRegistry = dependencies.oauthFlowRegistry ?? createOAuthFlowRegistry();
   const mutationExecutor = dependencies.mutationExecutor ?? createMutationExecutor({
     store: dependencies.mutationStore ?? createMutationStore({
@@ -83,6 +90,14 @@ export function registerSourceControlRoutes(app, dependencies = {}) {
   const github = registerGitHubRoutes(app, {
     ...dependencies.github,
     oauthFlowRegistry,
+    onAccountConnected: ({ account, user, renews = [] }) => {
+      try {
+        for (const previous of renews) identityProvisioning.repointAccountIdentities({ from: previous, to: account });
+        identityProvisioning.ensureAccountIdentity({ account, user });
+      } catch (error) {
+        console.warn('Failed to provision a Git identity for the connected account:', error?.message ?? error);
+      }
+    },
     onAccountInvalidated: (identity) => accountUnavailable(identity, dependencies.github?.onAccountInvalidated),
     onAccountRemoved: (identity) => accountUnavailable(identity, dependencies.github?.onAccountRemoved),
     validateReadContext: bindingService.validateReadContext,
@@ -93,6 +108,14 @@ export function registerSourceControlRoutes(app, dependencies = {}) {
     ...dependencies.gitlab,
     store: gitlabStore,
     oauthFlowRegistry,
+    onAccountConnected: ({ account, user, renews = [] }) => {
+      try {
+        for (const previous of renews) identityProvisioning.repointAccountIdentities({ from: previous, to: account });
+        identityProvisioning.ensureAccountIdentity({ account, user });
+      } catch (error) {
+        console.warn('Failed to provision a Git identity for the connected account:', error?.message ?? error);
+      }
+    },
     onAccountInvalidated: (identity) => accountUnavailable(identity, dependencies.gitlab?.onAccountInvalidated),
     onAccountRemoved: (identity) => accountUnavailable(identity, dependencies.gitlab?.onAccountRemoved),
     validateReadContext: bindingService.validateReadContext,
