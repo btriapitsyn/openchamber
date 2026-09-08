@@ -125,7 +125,7 @@ describe('issue #2723: Auto-discover hidden when no dev server is detectable', (
   test('launching the default primary action preserves it as the selected stop control', () => {
     const primaryClickStart = source.indexOf('const handlePrimaryClick = React.useCallback(() => {');
     expect(primaryClickStart).toBeGreaterThan(-1);
-    const primaryClickEnd = source.indexOf('  }, [normalizedDirectory, projectActionRuns, resolvedSelected, runAction, stopAction]);', primaryClickStart);
+    const primaryClickEnd = source.indexOf('  }, [executionDirectoryFor, projectActionRuns, resolvedSelected, runAction, stopAction]);', primaryClickStart);
     expect(primaryClickEnd).toBeGreaterThan(primaryClickStart);
     const primaryClick = source.slice(primaryClickStart, primaryClickEnd);
 
@@ -142,7 +142,7 @@ describe('issue #2723: Auto-discover hidden when no dev server is detectable', (
     const monitorStart = source.indexOf('const monitorRuns = () => {');
     expect(monitorStart).toBeGreaterThan(-1);
     const monitorEnd = source.indexOf(
-      '  }, [autoDiscoverAction, displayActions, openContextPreview, openExternal, projectActionRuns, removeProjectActionRun, setTabPreviewUrl, t, updateProjectActionRunStatus]);',
+      '  }, [autoDiscoverAction, clearExecutionUi, contextHostDirectoryRef, displayActions, executionKey, openContextPreview, openExternal, projectActionRuns, setTabPreviewUrl, t]);',
       monitorStart,
     );
     expect(monitorEnd).toBeGreaterThan(monitorStart);
@@ -171,9 +171,8 @@ describe('issue #2743 follow-up: empty project actions keep the dropdown entry',
   });
 
   test('the resolved-selected downstream values stay null-safe so rendering can continue without an action', () => {
-    expect(source).toContain("const selectedIconKey = (resolvedSelected?.icon || 'play') as keyof typeof PROJECT_ACTION_ICON_MAP;");
-    expect(source).toContain('const selectedIconName = resolvedSelected?.id === AUTO_DISCOVER_ACTION_ID');
-    expect(source).toContain('const selectedRunKey = resolvedSelected ? toProjectActionRunKey(normalizedDirectory, resolvedSelected.id) : null;');
+    expect(source).toContain("const selectedIconName = resolvedSelected ? resolveProjectActionIconName(resolvedSelected) : 'play';");
+    expect(source).toContain('const selectedRunKey = resolvedSelected\n    ? toProjectActionRunKey(executionDirectoryFor(resolvedSelected), resolvedSelected.id)\n    : null;');
     expect(source).toContain('const selectedRunning = selectedRunKey ? projectActionRuns[selectedRunKey] : null;');
     expect(source).toContain('const isAutoDiscoverSelected = resolvedSelected?.id === AUTO_DISCOVER_ACTION_ID;');
 

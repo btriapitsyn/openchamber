@@ -4,6 +4,7 @@ import type { PermissionRequest } from '@/types/permission';
 import type { QuestionRequest } from '@/types/question';
 
 import { ChatInput } from './ChatInput';
+import { ChatColumnSessionContext, type ChatColumnSession } from './chatColumnSession';
 import { DraftPresetChips } from './DraftPresetChips';
 import { useInputStore } from '@/sync/input-store';
 import { useUIStore } from '@/stores/useUIStore';
@@ -170,10 +171,8 @@ type ChatViewportProps = {
     scrollRef: React.RefObject<HTMLDivElement | null>;
     messageListRef: React.RefObject<MessageListHandle | null>;
     registerList: (list: TimelineListHandle | null) => void;
-    anchorMessageId: string | null;
-    onAnchorReady: (messageId: string, anchorIndex: number) => void;
-    onAnchorSizeChanged: (messageId: string) => void;
     onIsAtEndChange: (isAtEnd: boolean) => void;
+    onListMetricsChange: (metrics: { readonly footerSize: number }) => void;
     onTimelineDataChange: () => void;
     renderedMessages: SessionMessageRecord[];
     isLoadingOlder: boolean;
@@ -214,10 +213,8 @@ const ChatViewport = React.memo(({
     scrollRef,
     messageListRef,
     registerList,
-    anchorMessageId,
-    onAnchorReady,
-    onAnchorSizeChanged,
     onIsAtEndChange,
+    onListMetricsChange,
     onTimelineDataChange,
     renderedMessages,
     isLoadingOlder,
@@ -391,6 +388,13 @@ const ChatViewport = React.memo(({
     const timelineRootRef = React.useRef<HTMLDivElement | null>(null);
     const endPinningReleasedRef = React.useRef(endPinningReleased);
     endPinningReleasedRef.current = endPinningReleased;
+    // Read through a ref: the effect runs once per gate (per opened session).
+    // `revealWaited` flips for the session still on screen the moment another
+    // one is selected — before the deferred swap mounts it — and re-running
+    // the effect then would hide the outgoing timeline for the frames until
+    // the new one arrives.
+    const revealWaitedRef = React.useRef(revealWaited);
+    revealWaitedRef.current = revealWaited;
     React.useLayoutEffect(() => {
         const root = timelineRootRef.current;
         if (!root) return;
@@ -440,7 +444,7 @@ const ChatViewport = React.memo(({
             if (finished) return;
             revealGate.close();
             if (revealGate.holds === 0) {
-                reveal(revealWaited);
+                reveal(revealWaitedRef.current);
                 return;
             }
             revealGate.onEmpty = () => reveal(true);
@@ -452,7 +456,7 @@ const ChatViewport = React.memo(({
             if (frame !== null) window.cancelAnimationFrame(frame);
             revealGate.onEmpty = null;
         };
-    }, [revealGate, revealWaited, scrollRef]);
+    }, [revealGate, scrollRef]);
 
     const scrollContainerProps = React.useMemo(() => ({
         className: 'absolute inset-0 overflow-y-auto overflow-x-hidden z-0 chat-scroll overlay-scrollbar-target',
@@ -491,14 +495,12 @@ const ChatViewport = React.memo(({
                     endPinningReleased={endPinningReleased}
                     directory={directory}
                     registerList={registerList}
-                    anchorMessageId={anchorMessageId}
-                    onAnchorReady={onAnchorReady}
-                    onAnchorSizeChanged={onAnchorSizeChanged}
                     // Zero end inset: the footer spacer already reserves the
                     // zone the floating status row covers; adding its height
                     // again produced a double-tall blank band at rest.
                     composerOverlayHeight={0}
                     onIsAtEndChange={onIsAtEndChange}
+                    onListMetricsChange={onListMetricsChange}
                     onTimelineDataChange={onTimelineDataChange}
                     listHeader={listHeader}
                     listFooter={listFooter}
@@ -535,6 +537,7 @@ const ChatViewport = React.memo(({
         && prev.activeStreamingPhase === next.activeStreamingPhase
         && prev.retryOverlay === next.retryOverlay
         && prev.scrollToBottom === next.scrollToBottom
+        && prev.onListMetricsChange === next.onListMetricsChange
         && prev.endPinningReleased === next.endPinningReleased
         && prev.revealWaited === next.revealWaited
         && prev.revealGate === next.revealGate
@@ -740,7 +743,15 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
     // One gate per opened session; the scroll hook holds it until the
     // viewport is pinned to the end so the first visible frame is already
     // at the bottom.
-    const revealGate = React.useMemo(() => createTimelineRevealGate(), [currentSessionKey]);
+    const revealGateRef = React.useRef<{ key: string | null; gate: TimelineRevealGate } | null>(null);
+    if (revealGateRef.current?.key !== currentSessionKey) {
+        revealGateRef.current = { key: currentSessionKey, gate: createTimelineRevealGate() };
+    }
+    const revealGate = revealGateRef.current.gate;
+    const chatColumnSession = React.useMemo<ChatColumnSession>(
+        () => ({ sessionId: currentSessionId ?? null, directory: currentSessionId ? effectiveSessionDirectory ?? null : null }),
+        [currentSessionId, effectiveSessionDirectory],
+    );
     const ensureSessionRenderable = React.useCallback(
         (sessionId: string) => sync.ensureSessionRenderable(sessionId, false, effectiveSessionDirectory),
         [effectiveSessionDirectory, sync],
@@ -1090,24 +1101,12 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         statusOverlayObserverRef.current?.disconnect();
         statusOverlayObserverRef.current = null;
     }, []);
-    const lastUserMessageId = React.useMemo(() => {
-        for (let index = sessionMessages.length - 1; index >= 0; index -= 1) {
-            const message = sessionMessages[index];
-            if (message.info.role === 'user') {
-                return message.info.id;
-            }
-        }
-        return null;
-    }, [sessionMessages]);
-
     const {
         scrollRef,
         scrollNode,
         registerList,
-        anchorMessageId,
-        onAnchorReady,
-        onAnchorSizeChanged,
         onIsAtEndChange,
+        onListMetricsChange,
         onManualNavigation,
         onTimelineDataChange,
         goToBottom,
@@ -1122,7 +1121,6 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
         currentSessionKey,
         sessionMessageCount,
         composerOverlayHeight,
-        lastUserMessageId,
         sessionIsWorking,
         revealGate,
         onActiveTurnChange: handleActiveTurnChange,
@@ -1533,10 +1531,8 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 directory={effectiveSessionDirectory}
                 scrollRef={scrollRef}
                 registerList={registerList}
-                anchorMessageId={anchorMessageId}
-                onAnchorReady={onAnchorReady}
-                onAnchorSizeChanged={onAnchorSizeChanged}
                 onIsAtEndChange={onIsAtEndChange}
+                onListMetricsChange={onListMetricsChange}
                 onTimelineDataChange={onTimelineDataChange}
                 messageListRef={messageListRef}
                 renderedMessages={timelineController.renderedMessages}
@@ -1567,6 +1563,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
 
 	return (
 		<div ref={workStatusRowRef} className="flex h-full min-h-0 bg-background">
+		<ChatColumnSessionContext.Provider value={chatColumnSession}>
 		<div data-composer-bound className="relative flex min-w-0 flex-1 flex-col h-full bg-background">
 			{returnToParentButton}
 			{sessionSurface}
@@ -1651,6 +1648,7 @@ export const ChatContainer: React.FC<ChatContainerProps> = ({
                 onLoadEarlier={handleLoadOlderClick}
             />
         </div>
+        </ChatColumnSessionContext.Provider>
         {/* Kept mounted while it could ever show, so it can animate its own
             collapse; `visible` drives that. Unmounting on the spot is what made
             the chat jump wide before easing narrow again. */}

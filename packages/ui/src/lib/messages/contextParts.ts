@@ -20,6 +20,7 @@ import type { InlineCommentDraft } from '@/stores/useInlineCommentDraftStore';
 import { appendTerminalContexts } from './terminalContext';
 
 export const CONTEXT_METADATA_KEY = 'openchamberContext';
+const OPENCODE_COMMENT_METADATA_KEY = 'opencodeComment';
 
 export type CodeCommentContext = {
     kind: 'code-comment';
@@ -115,7 +116,18 @@ export type ContextPartPayload =
     | GitHubPrContext
     | LinearIssueContext;
 
-export type ContextPartMetadata = { [K in typeof CONTEXT_METADATA_KEY]: ContextPartPayload };
+type OpenCodeCommentMetadata = {
+    path: string;
+    selection?: { startLine: number; endLine: number; startChar?: number; endChar?: number };
+    comment: string;
+    preview?: string;
+    origin?: 'file' | 'review';
+};
+
+export type ContextPartMetadata = {
+    [CONTEXT_METADATA_KEY]: ContextPartPayload;
+    [OPENCODE_COMMENT_METADATA_KEY]?: OpenCodeCommentMetadata;
+};
 
 export type ContextPart = {
     text: string;
@@ -177,10 +189,25 @@ export function formatContextText(payload: ContextPartPayload): string {
  */
 export function createContextPart(payload: ContextPartPayload, text?: string): ContextPart {
     const resolvedText = text ?? formatContextText(payload);
+    const metadata: ContextPartMetadata = { [CONTEXT_METADATA_KEY]: payload };
+    if (payload.kind === 'code-comment') {
+        metadata[OPENCODE_COMMENT_METADATA_KEY] = {
+            path: payload.fileLabel,
+            selection: {
+                startLine: payload.startLine,
+                endLine: payload.endLine,
+                startChar: 0,
+                endChar: 0,
+            },
+            comment: payload.text,
+            preview: payload.code,
+            origin: payload.source === 'diff' ? 'review' : 'file',
+        };
+    }
     return {
         text: resolvedText,
         synthetic: true,
-        metadata: { [CONTEXT_METADATA_KEY]: payload },
+        metadata,
     };
 }
 
@@ -315,6 +342,33 @@ const contextPayloadSchema = z.discriminatedUnion('kind', [
     }),
 ]);
 
+/**
+ * Part metadata carrying a context payload, for parsing at a trust boundary
+ * (a queued message coming back from the server, for instance).
+ */
+const openCodeCommentSchema = z.object({
+    path: z.string(),
+    selection: z.object({
+        startLine: z.number().finite(),
+        endLine: z.number().finite(),
+        startChar: z.number().finite().optional(),
+        endChar: z.number().finite().optional(),
+    }).optional(),
+    comment: z.string(),
+    preview: z.string().optional(),
+    origin: z.enum(['file', 'review']).optional(),
+});
+
+/**
+ * Part metadata carrying a context payload, for parsing at a trust boundary
+ * (a queued message coming back from the server, for instance). The OpenCode
+ * Desktop mirror rides along so a queued comment keeps it too.
+ */
+export const contextPartMetadataSchema = z.object({
+    [CONTEXT_METADATA_KEY]: contextPayloadSchema,
+    [OPENCODE_COMMENT_METADATA_KEY]: openCodeCommentSchema.optional(),
+});
+
 /** The subset of a message part that context read-back inspects. */
 export type ContextCarrierPart = { type: string } & Pick<TextPart, 'metadata'>;
 
@@ -326,10 +380,110 @@ export type ContextCarrierPart = { type: string } & Pick<TextPart, 'metadata'>;
 export function readContextPart(part: ContextCarrierPart): ContextPartPayload | null {
     if (part.type !== 'text') return null;
     const parsed = contextPayloadSchema.safeParse(part.metadata?.[CONTEXT_METADATA_KEY]);
-    return parsed.success ? parsed.data : null;
+    if (parsed.success) return parsed.data;
+
+    const compatible = openCodeCommentSchema.safeParse(part.metadata?.[OPENCODE_COMMENT_METADATA_KEY]);
+    if (compatible.success) {
+        const comment = compatible.data;
+        if (!comment.selection) {
+            return {
+                kind: 'file-quote',
+                fileLabel: comment.path,
+                quote: comment.preview ?? '',
+                text: comment.comment,
+            };
+        }
+        return {
+            kind: 'code-comment',
+            source: comment.origin === 'review' ? 'diff' : 'file',
+            fileLabel: comment.path,
+            startLine: comment.selection.startLine,
+            endLine: comment.selection.endLine,
+            language: '',
+            code: comment.preview ?? '',
+            text: comment.comment,
+        };
+    }
+
+    return null;
 }
 
 /** Whether a message carries any user-attached context part. */
 export function hasContextParts(parts: ContextCarrierPart[]): boolean {
     return parts.some((part) => readContextPart(part) !== null);
+}
+
+/**
+ * The composer draft a context payload came from, so reverting or forking a
+ * message can put its attached context back on the chips instead of dropping
+ * it. Linked issues/PRs have no draft form — they are owned by their own
+ * pickers — so they map to null.
+ */
+export function draftFromContextPayload(
+    payload: ContextPartPayload,
+): Omit<InlineCommentDraft, 'id' | 'createdAt' | 'sessionKey'> | null {
+    switch (payload.kind) {
+        case 'code-comment': {
+            const draft: Omit<InlineCommentDraft, 'id' | 'createdAt' | 'sessionKey'> = {
+                source: payload.source,
+                fileLabel: payload.fileLabel,
+                startLine: payload.startLine,
+                endLine: payload.endLine,
+                code: payload.code,
+                language: payload.language,
+                text: payload.text,
+            };
+            if (payload.side) draft.side = payload.side;
+            return draft;
+        }
+        case 'terminal':
+            return {
+                source: 'terminal',
+                fileLabel: payload.terminalLabel,
+                startLine: payload.startLine,
+                endLine: payload.endLine,
+                code: payload.output,
+                language: '',
+                text: '',
+                terminalId: payload.terminalId,
+            };
+        case 'browser-annotation':
+            return {
+                source: 'preview-annotation',
+                fileLabel: payload.pageUrl,
+                startLine: 0,
+                endLine: 0,
+                code: payload.prompt,
+                language: '',
+                text: payload.text,
+            };
+        case 'pr-comment':
+            return { source: 'pr-comment', fileLabel: payload.label, startLine: 0, endLine: 0, code: payload.body, language: '', text: payload.text };
+        case 'pr-check':
+            return { source: 'pr-check', fileLabel: payload.label, startLine: 0, endLine: 0, code: payload.output, language: '', text: payload.text };
+        case 'file-quote':
+            return {
+                source: 'file-quote',
+                fileLabel: payload.fileLabel,
+                startLine: payload.startLine ?? 0,
+                endLine: payload.endLine ?? 0,
+                code: payload.quote,
+                language: '',
+                text: payload.text,
+            };
+        case 'chat-quote':
+            return {
+                source: 'chat-quote',
+                fileLabel: payload.messageId ?? '',
+                startLine: 0,
+                endLine: 0,
+                code: payload.quote,
+                language: '',
+                text: payload.text,
+            };
+        case 'github-issue':
+        case 'github-pr':
+        case 'linear-issue':
+            return null;
+    }
 }
