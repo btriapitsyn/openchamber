@@ -80,7 +80,9 @@ export type GitIdentitySummary = z.infer<typeof gitIdentitySummarySchema>;
 
 export const gitIdentityMutationResultSchema = z.object({
   success: z.boolean(),
-  profile: gitIdentityProfileSchema,
+  // Null when the repository now names no author of its own: the System
+  // identity on a machine that has none either.
+  profile: gitIdentityProfileSchema.nullable(),
 }).strict();
 
 /**

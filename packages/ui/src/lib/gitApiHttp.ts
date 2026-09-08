@@ -1898,7 +1898,7 @@ export async function getGlobalGitIdentity(): Promise<GitIdentitySummary | null>
 export async function setGitIdentity(
   directory: string,
   profileId: string
-): Promise<{ success: boolean; profile: GitIdentityProfile }> {
+): Promise<{ success: boolean; profile: GitIdentityProfile | null }> {
   const response = await runtimeFetch(buildUrl(`${API_BASE}/set-identity`, directory), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

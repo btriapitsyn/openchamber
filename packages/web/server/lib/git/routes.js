@@ -500,20 +500,22 @@ export function registerGitRoutes(app, {
       let profile = null;
 
       if (profileId === 'global') {
-        const globalIdentity = await getGlobalIdentity();
-        if (!globalIdentity?.userName || !globalIdentity?.userEmail) {
-          return res.status(404).json({ error: 'Global identity is not configured' });
-        }
         // The system identity is the absence of an override, not a copy of it:
         // the repository stops naming an author and reads the machine's, which
-        // is what keeps it following later changes there.
+        // is what keeps it following later changes there. A machine with no
+        // author of its own can still say "no override applies here", so this
+        // answers with the author it found, or with none.
         await clearLocalIdentity(directory);
-        return res.json({ success: true, profile: toPublicGitIdentityProfile({
-          id: 'global',
-          name: 'Global Identity',
-          userName: globalIdentity.userName,
-          userEmail: globalIdentity.userEmail,
-        }) });
+        const globalIdentity = await getGlobalIdentity();
+        const profile = globalIdentity?.userName && globalIdentity?.userEmail
+          ? toPublicGitIdentityProfile({
+            id: 'global',
+            name: globalIdentity.userName,
+            userName: globalIdentity.userName,
+            userEmail: globalIdentity.userEmail,
+          })
+          : null;
+        return res.json({ success: true, profile });
       } else {
         profile = getProfile(profileId);
         if (!profile) {

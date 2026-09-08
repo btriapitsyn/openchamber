@@ -212,7 +212,7 @@ describe('git route renderer DTOs', () => {
 
     // The global identity is the machine's own setup: System Git, no account.
     const globalProfile = {
-      id: 'global', name: 'Global Identity', userName: 'Global Author', userEmail: 'global@example.com',
+      id: 'global', name: 'Global Author', userName: 'Global Author', userEmail: 'global@example.com',
       account: null, transport: 'system',
     };
     // Choosing it means no override applies here, so the repository stops
@@ -220,6 +220,26 @@ describe('git route renderer DTOs', () => {
     expect(gitLibraries.clearLocalIdentity).toHaveBeenCalledWith('/repo');
     expect(gitLibraries.setLocalIdentity).not.toHaveBeenCalled();
     expect(response.body).toEqual({ success: true, profile: globalProfile });
+  });
+
+  it('applies the global author on a machine that has none of its own', async () => {
+    // A fresh install has no user.name anywhere. "No override applies here" is
+    // still a true thing to say about a repository, and refusing it left the
+    // provider and transport applied with the author half-written.
+    gitLibraries.getGlobalIdentity.mockResolvedValue({ userName: null, userEmail: null, sshCommand: null });
+    gitLibraries.clearLocalIdentity.mockResolvedValue(true);
+    const { app, getRoute } = createRouteRegistry();
+    registerGitRoutes(app);
+    const response = createMockResponse();
+
+    await getRoute('POST', '/api/git/set-identity')({
+      query: { directory: '/repo' }, body: { profileId: 'global' },
+    }, response);
+
+    expect(gitLibraries.clearLocalIdentity).toHaveBeenCalledWith('/repo');
+    expect(gitLibraries.setLocalIdentity).not.toHaveBeenCalled();
+    expect(response.body).toEqual({ success: true, profile: null });
+    expect(response.statusCode).toBe(200);
   });
 
   it('does not pass retained migration fields into author application', async () => {

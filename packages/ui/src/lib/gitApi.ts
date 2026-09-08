@@ -1028,7 +1028,7 @@ export async function hasLocalIdentity(directory: string): Promise<boolean> {
 export async function setGitIdentity(
   directory: string,
   profileId: string
-): Promise<{ success: boolean; profile: import('./api/types').GitIdentityProfile }> {
+): Promise<{ success: boolean; profile: import('./api/types').GitIdentityProfile | null }> {
   const runtime = getRuntimeGit();
   if (runtime) return runtime.setGitIdentity(directory, profileId);
   return gitHttp.setGitIdentity(directory, profileId);
