@@ -21,6 +21,7 @@ vi.mock('./catalog.js', () => ({
 vi.mock('./call.js', () => ({
   DEDICATED_WIRE_FORMAT_PROVIDERS: new Set(['github-copilot', 'copilot', 'openai', 'anthropic', 'google']),
   callSmallModel: vi.fn(),
+  listConfigCallableProviders: vi.fn(() => []),
   resolveProviderLogin: vi.fn(async ({ auth, providerID }) => {
     const entry = auth?.[providerID];
     return entry && typeof entry === 'object' ? entry : null;
@@ -36,6 +37,11 @@ const { getRuntimeProviderSnapshot } = await import('./runtime-providers.js');
 const { readConfigLayers } = await import('../opencode/shared.js');
 const { getModelCatalog } = await import('./catalog.js');
 const { callSmallModel } = await import('./call.js');
+const { listConfigCallableProviders } = await import('./call.js');
+
+beforeEach(() => {
+  listConfigCallableProviders.mockReturnValue([]);
+});
 
 describe('unsupported small-model providers', () => {
   beforeEach(() => {
@@ -65,6 +71,21 @@ describe('unsupported small-model providers', () => {
 
   it('does not offer Claude Code in the Small Model picker', async () => {
     expect(await listAuthenticatedProviders()).not.toContain('claude-code');
+  });
+
+  // Hiding it from the picker must not hide it from resolution: a session
+  // already on Claude Code has to reach the refusal that names the setting to
+  // change, not a generic "no small model available".
+  it('still refuses a session already running on Claude Code', async () => {
+    await expect(generateSmallModelText({
+      prompt: 'summarize this',
+      preferredProviderID: 'claude-code',
+      preferredModelID: 'haiku',
+    })).rejects.toMatchObject({
+      statusCode: 422,
+      code: 'small-model-provider-unsupported',
+    });
+    expect(callSmallModel).not.toHaveBeenCalled();
   });
 
   // A plugin can publish an OpenAI-compatible endpoint for Claude Code, but it
@@ -129,6 +150,54 @@ describe('provider availability for the model pickers', () => {
     getRuntimeProviderSnapshot.mockResolvedValue(null);
 
     expect(await listAuthenticatedProviders()).toContain('openai');
+  });
+
+  it('includes config-only providers for the requested directory', async () => {
+    listConfigCallableProviders.mockReturnValue(['custom']);
+
+    expect(await listAuthenticatedProviders('/proj')).toEqual(expect.arrayContaining(['openai', 'custom']));
+    expect(listConfigCallableProviders).toHaveBeenCalledWith('/proj', expect.any(Object));
+  });
+});
+
+describe('config-only provider resolution', () => {
+  beforeEach(() => {
+    readAuthFile.mockReturnValue({});
+    readConfigLayers.mockReturnValue({ mergedConfig: {} });
+    getModelCatalog.mockResolvedValue(CATALOG);
+    getRuntimeProviderSnapshot.mockResolvedValue(null);
+    listConfigCallableProviders.mockReturnValue(['anthropic']);
+    callSmallModel.mockReset();
+    callSmallModel.mockResolvedValue('generated');
+  });
+
+  it('keeps a goal audit on its config-only session provider', async () => {
+    const result = await generateSmallModelText({
+      prompt: 'Audit progress',
+      directory: '/proj',
+      preferredProviderID: 'anthropic',
+      preferredModelID: 'claude-sonnet-4-5',
+      restrictToPreferredProvider: true,
+    });
+
+    expect(result).toMatchObject({ providerID: 'anthropic', modelID: 'claude-sonnet-4-5', source: 'session-model' });
+    expect(callSmallModel).toHaveBeenCalledWith(expect.objectContaining({
+      workingDirectory: '/proj',
+      providerID: 'anthropic',
+    }));
+  });
+
+  it('skips callable-provider discovery when small_model is configured', async () => {
+    readConfigLayers.mockReturnValue({ mergedConfig: { small_model: 'anthropic/claude-sonnet-4-5' } });
+    listConfigCallableProviders.mockClear();
+
+    await generateSmallModelText({ prompt: 'Audit progress', directory: '/proj' });
+
+    expect(listConfigCallableProviders).not.toHaveBeenCalled();
+    expect(callSmallModel).toHaveBeenCalledWith(expect.objectContaining({
+      providerID: 'anthropic',
+      modelID: 'claude-sonnet-4-5',
+    }));
   });
 });
 

@@ -126,10 +126,10 @@ other runtime API.
     keys and header values honor OpenCode's `{env:NAME}` and `{file:path}`
     substitutions; file contents and resolved credentials remain server-side.
   - The runtime credential is refused for providers listed in
-    `OWN_CREDENTIAL_HANDLING`. Their branches need the stored entry rather than
-    a bearer token: the clearest case is the ChatGPT-plan `openai` login, whose
-    runtime `options.apiKey` is an OAuth access token that `api.openai.com`
-    answers with 401.
+    `DEDICATED_WIRE_FORMAT_PROVIDERS`. Their branches need the stored entry
+    rather than a bearer token: the clearest case is the ChatGPT-plan `openai`
+    login, whose runtime `options.apiKey` is an OAuth access token that
+    `api.openai.com` answers with 401.
   - `[small-model:diagnostic]` logs record provider/model, input character
     counts, output budget, thinking toggle, HTTP/finish status, and
     content/reasoning lengths without logging prompts, response text, or
@@ -144,12 +144,20 @@ other runtime API.
 
 ## Which providers the pickers may offer
 
-`listAuthenticatedProviders()` answers one question for the Small Model and
-Changes Walkthrough pickers alike: which providers can this module actually
-call. One rule decides it, applied the same way to every provider — **a
-credential we are allowed to use, and an endpoint to send it to.** The
-auth.json scan as before, plus the credential and endpoint OpenCode resolved
-for a plugin provider.
+`listAuthenticatedProviders(directory)` answers one question for the Small
+Model and Changes Walkthrough pickers alike: which providers can this module
+actually call. One rule decides it, applied the same way to every provider —
+**a credential we are allowed to use, and an endpoint to send it to.** The
+directory-scoped scan combines auth.json, provider `options.apiKey` values that
+resolve from the merged OpenCode config, and credentials/endpoints OpenCode
+resolved for plugin providers.
+
+The same callable-provider set feeds model selection. A session provider
+configured only through `provider.<id>.options.apiKey` can therefore supply a
+family-priority small model, or fall back to the session model, without a
+duplicate auth.json entry. Unset `{env:NAME}` and unreadable `{file:path}`
+credentials are not considered callable. `disabled_providers` and
+`enabled_providers` apply before a config credential enters the callable set.
 
 **opencode zen is excluded without a real login.** When the user has no zen
 credential, OpenCode substitutes the sentinel `options.apiKey = "public"` and
@@ -184,7 +192,10 @@ OpenAI-compatible endpoint for it, but that endpoint is a façade over the
 Claude Agent SDK, which spawns the Claude Code CLI per request and spends the
 user's Claude subscription rate limit. Paying that for a session title or a
 summary is the wrong trade, so an available endpoint does not lift the
-refusal — the cost is the reason, not the transport.
+refusal — the cost is the reason, not the transport. The exclusion is applied
+to the offer rather than the callable set, so a session already running on
+Claude Code still resolves to it and gets the refusal that names the setting to
+change, instead of a bare "no small model available".
 
 The result is served as `authenticatedProviders` on `GET /api/small-model`.
 The field name predates the runtime resolution; it now means "callable", which

@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Icon } from '@/components/icon/Icon';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/lib/i18n';
 import { useConfigStore } from '@/stores/useConfigStore';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { useCallableSmallModelProviders } from '@/hooks/useCallableSmallModelProviders';
 import { updateDesktopSettings } from '@/lib/persistence';
 import type { WalkthroughBlockedState, WalkthroughModel } from '@/lib/walkthrough/types';
 
 interface WalkthroughBlockerProps {
+  directory: string;
   reason: WalkthroughBlockedState;
   model?: WalkthroughModel;
   requiredChars?: number;
@@ -25,6 +26,7 @@ const modelLabel = (model?: WalkthroughModel) =>
  * in place rather than sending the user to Settings to guess.
  */
 export const WalkthroughBlocker = ({
+  directory,
   reason,
   model,
   requiredChars,
@@ -33,7 +35,6 @@ export const WalkthroughBlocker = ({
 }: WalkthroughBlockerProps) => {
   const { t } = useI18n();
   const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
-  const [providers, setProviders] = useState<string[] | undefined>(undefined);
   const [saving, setSaving] = useState(false);
 
   // Every one of these means "this small model cannot do this job", so the
@@ -42,32 +43,7 @@ export const WalkthroughBlocker = ({
   const canChooseModel = reason === 'context-too-small'
     || reason === 'structured-output-unsupported'
     || reason === 'output-exhausted';
-
-  useEffect(() => {
-    if (!canChooseModel || providers !== undefined) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await runtimeFetch('/api/small-model', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) return;
-        const payload = (await response.json().catch(() => null)) as
-          | { authenticatedProviders?: unknown }
-          | null;
-        if (!cancelled && Array.isArray(payload?.authenticatedProviders)) {
-          setProviders(payload.authenticatedProviders.filter((id): id is string => typeof id === 'string'));
-        }
-      } catch {
-        // Leave undefined: the picker then offers every provider, which is a
-        // worse experience but not a broken one.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [canChooseModel, providers]);
+  const providers = useCallableSmallModelProviders(directory, canChooseModel);
 
   const handleModelChange = useCallback(
     async (providerId: string, modelId: string) => {

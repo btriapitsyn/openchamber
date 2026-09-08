@@ -5,7 +5,7 @@ import { readAuthFile } from '../opencode/auth.js';
 import { readConfigLayers } from '../opencode/shared.js';
 import { getModelCatalog } from './catalog.js';
 import { resolveSmallModel, parseModelRef, isUsableAuthEntry, getAuthEntryForProvider } from './resolve.js';
-import { DEDICATED_WIRE_FORMAT_PROVIDERS, callSmallModel, resolveProviderLogin } from './call.js';
+import { DEDICATED_WIRE_FORMAT_PROVIDERS, callSmallModel, listConfigCallableProviders, resolveProviderLogin } from './call.js';
 import { readMergedSettingsSync } from '../opencode/settings-files.js';
 import { getRuntimeProviderSnapshot } from './runtime-providers.js';
 
@@ -93,6 +93,22 @@ const readConfiguredSmallModel = (workingDirectory) => {
   }
 };
 
+const collectCallableProviderIDs = async (auth, workingDirectory, catalog) => {
+  const ids = new Set(
+    Object.keys(auth || {}).filter((providerID) => isUsableAuthEntry(auth[providerID])),
+  );
+  if (isUsableAuthEntry(getAuthEntryForProvider(auth, 'github-copilot'))) {
+    ids.add('github-copilot');
+  }
+  for (const providerID of listConfigCallableProviders(workingDirectory, catalog)) ids.add(providerID);
+  try {
+    for (const providerID of await listRuntimeCallableProviders()) ids.add(providerID);
+  } catch {
+    // File-backed logins remain valid when runtime discovery fails.
+  }
+  return ids;
+};
+
 /**
  * Generates text with the user's small model, resolved and authenticated
  * entirely server-side from the OpenCode config and auth store.
@@ -106,15 +122,22 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
   const catalog = await getModelCatalog().catch(() => ({}));
 
   const explicit = parseModelRef(model);
+  const settingsSmallModel = readSmallModelSettingsOverride();
+  const configSmallModel = readConfiguredSmallModel(directory);
+  const hasConfiguredModel = Boolean(parseModelRef(settingsSmallModel) || parseModelRef(configSmallModel));
+  const callableProviderIDs = explicit || hasConfiguredModel
+    ? null
+    : await collectCallableProviderIDs(auth, directory, catalog);
   const resolved = explicit
     ? { ...explicit, source: 'request' }
     : resolveSmallModel({
       auth,
       catalog,
-      settingsSmallModel: readSmallModelSettingsOverride(),
-      configSmallModel: readConfiguredSmallModel(directory),
+      settingsSmallModel,
+      configSmallModel,
       preferredProviderID,
       preferredModelID,
+      callableProviderIDs,
     });
 
   if (!resolved) {
@@ -185,29 +208,21 @@ export async function generateSmallModelText({ prompt, system, maxOutputTokens, 
 }
 
 /**
- * Provider ids the small model can actually call — an auth.json login, or a
- * credential and endpoint the running OpenCode resolved for a plugin. Used by
- * the Small Model and Changes Walkthrough pickers to hide providers that would
- * only ever fail (e.g. opencode free models without a token).
+ * Provider ids the small model can actually call — an auth.json login, a
+ * config `provider.<id>.options.apiKey`, or a credential and endpoint the
+ * running OpenCode resolved for a plugin. Used by the Small Model and Changes
+ * Walkthrough pickers to hide providers that would only ever fail (e.g.
+ * opencode free models without a token).
+ *
+ * Claude Code is dropped from the offer rather than the callable set: a
+ * session already running on it must still reach the refusal below, which
+ * names the setting to change, instead of a bare "nothing available".
  */
-export async function listAuthenticatedProviders() {
+export async function listAuthenticatedProviders(directory) {
   try {
     const auth = readAuthFile();
-    const ids = new Set(
-      Object.keys(auth || {}).filter((providerID) => isUsableAuthEntry(auth[providerID])),
-    );
-    // The catalog id is github-copilot while legacy auth entries may sit
-    // under the copilot alias.
-    if (isUsableAuthEntry(getAuthEntryForProvider(auth, 'github-copilot'))) {
-      ids.add('github-copilot');
-    }
-    // Kept separate so a runtime lookup that goes wrong costs the providers it
-    // would have added, never the logins already established from disk.
-    try {
-      for (const providerID of await listRuntimeCallableProviders()) ids.add(providerID);
-    } catch {
-      // The auth.json set below stands on its own.
-    }
+    const catalog = await getModelCatalog().catch(() => ({}));
+    const ids = await collectCallableProviderIDs(auth, directory, catalog);
     ids.delete(CLAUDE_CODE_PROVIDER);
     return Array.from(ids);
   } catch {
@@ -270,15 +285,22 @@ export async function describeSmallModel({ directory, preferredProviderID, prefe
   // A caller with its own model setting (the diff walkthrough) outranks the
   // small-model chain entirely — it asked for this model on purpose.
   const explicit = parseModelRef(overrideModel);
+  const settingsSmallModel = readSmallModelSettingsOverride();
+  const configSmallModel = readConfiguredSmallModel(directory);
+  const hasConfiguredModel = Boolean(parseModelRef(settingsSmallModel) || parseModelRef(configSmallModel));
+  const callableProviderIDs = explicit || hasConfiguredModel
+    ? null
+    : await collectCallableProviderIDs(auth, directory, catalog);
   const resolved = explicit
     ? { ...explicit, source: 'request' }
     : resolveSmallModel({
       auth,
       catalog,
-      settingsSmallModel: readSmallModelSettingsOverride(),
-      configSmallModel: readConfiguredSmallModel(directory),
+      settingsSmallModel,
+      configSmallModel,
       preferredProviderID,
       preferredModelID,
+      callableProviderIDs,
     });
   if (!resolved) return resolved;
 

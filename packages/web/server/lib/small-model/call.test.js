@@ -15,9 +15,12 @@ vi.mock('../opencode/shared.js', () => ({
   isPlainObject: (value) => value instanceof Object && !Array.isArray(value),
 }));
 
-vi.mock('./runtime-providers.js', () => ({ getRuntimeProvider: vi.fn(async () => null) }));
+vi.mock('./runtime-providers.js', () => ({
+  getRuntimeProvider: vi.fn(async () => null),
+  ZEN_ANONYMOUS_API_KEY: 'public',
+}));
 
-const { callSmallModel } = await import('./call.js');
+const { callSmallModel, listConfigCallableProviders } = await import('./call.js');
 const { readConfig, readConfigLayers } = await import('../opencode/shared.js');
 const { getRuntimeProvider } = await import('./runtime-providers.js');
 
@@ -74,6 +77,43 @@ describe('callSmallModel — custom provider config', () => {
   });
 
   describe('config-supplied credentials (no auth.json entry)', () => {
+    // Every excluded provider below carries a resolvable endpoint unless the
+    // endpoint is the thing under test, so no case can pass for two reasons.
+    it('lists only config providers whose credentials resolve now', () => {
+      process.env.OPENCHAMBER_TEST_PROVIDER_KEY = 'sk-env-key';
+      delete process.env.OPENCHAMBER_TEST_MISSING_KEY;
+      readConfig.mockReturnValue({
+        provider: {
+          ready: { options: { apiKey: '{env:OPENCHAMBER_TEST_PROVIDER_KEY}', baseURL: 'https://proxy.example.test/v1' } },
+          // No baseURL and absent from the catalog: callable only because the
+          // anthropic dispatch branch carries its own URL.
+          anthropic: { options: { apiKey: 'anthropic-key' } },
+          missing: { options: { apiKey: '{env:OPENCHAMBER_TEST_MISSING_KEY}', baseURL: 'https://missing.example.test/v1' } },
+          disabled: { options: { apiKey: 'disabled-key', baseURL: 'https://disabled.example.test/v1' } },
+          endpointless: { options: { apiKey: 'endpointless-key' } },
+          opencode: { options: { apiKey: 'public', baseURL: 'https://opencode.ai/zen/v1' } },
+          // The legacy copilot alias has no dispatch branch of its own.
+          copilot: { options: { apiKey: 'copilot-key' } },
+        },
+        disabled_providers: ['disabled'],
+      });
+
+      expect(listConfigCallableProviders('/proj', {})).toEqual(['ready', 'anthropic']);
+      expect(readConfig).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats enabled_providers as an allowlist', () => {
+      readConfig.mockReturnValue({
+        provider: {
+          allowed: { options: { apiKey: 'allowed-key', baseURL: 'https://allowed.example.test/v1' } },
+          other: { options: { apiKey: 'other-key', baseURL: 'https://other.example.test/v1' } },
+        },
+        enabled_providers: ['allowed'],
+      });
+
+      expect(listConfigCallableProviders('/proj', {})).toEqual(['allowed']);
+    });
+
     it('resolves an OpenCode file variable before sending the API key', async () => {
       const secretPath = path.join(os.homedir(), '.secret');
       const originalReadFileSync = fs.readFileSync;

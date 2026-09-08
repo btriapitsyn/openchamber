@@ -6,7 +6,7 @@ import { readAuthFile, writeAuthFile } from '../opencode/auth.js';
 import { readConfig, readConfigLayers, isPlainObject } from '../opencode/shared.js';
 import { getCatalogProvider } from './catalog.js';
 import { getAuthEntryForProvider } from './resolve.js';
-import { getRuntimeProvider } from './runtime-providers.js';
+import { getRuntimeProvider, ZEN_ANONYMOUS_API_KEY } from './runtime-providers.js';
 
 // Direct, non-streaming text generation against the provider APIs, replicating
 // how OpenCode authenticates each of them (see the plugin auth loaders in the
@@ -584,9 +584,9 @@ const readConfiguredHeaders = (providerCfg, workingDirectory, providerID) => {
   return Object.keys(headers).length ? headers : null;
 };
 
-const readProviderConfig = (workingDirectory, providerID) => {
+const readProviderConfig = (workingDirectory, providerID, loadedConfig = null) => {
   try {
-    const config = readConfig(workingDirectory);
+    const config = loadedConfig ?? readConfig(workingDirectory);
     const providerCfg = config?.provider?.[providerID];
     if (!providerCfg || typeof providerCfg !== 'object') return null;
     const baseURL = typeof providerCfg?.options?.baseURL === 'string' ? providerCfg.options.baseURL.trim() : null;
@@ -604,6 +604,37 @@ const readProviderConfig = (workingDirectory, providerID) => {
     // Provider config is non-essential — continue with catalog-only resolution.
     return null;
   }
+}
+
+/**
+ * Providers whose dispatch branch below carries its own URL, so a config
+ * credential alone is enough to call them. Everyone else needs a `baseURL`
+ * from the config, the running OpenCode, or the catalog.
+ */
+const BUILT_IN_ENDPOINT_PROVIDERS = new Set(['github-copilot', 'openai', 'anthropic', 'google']);
+
+/** Provider ids whose config credential and direct-call endpoint resolve now. */
+export function listConfigCallableProviders(workingDirectory, catalog) {
+  let config;
+  try {
+    config = readConfig(workingDirectory);
+  } catch {
+    return [];
+  }
+  if (!isPlainObject(config?.provider)) return [];
+  const disabled = new Set(Array.isArray(config.disabled_providers) ? config.disabled_providers : []);
+  const enabled = Array.isArray(config.enabled_providers) ? new Set(config.enabled_providers) : null;
+  return Object.keys(config.provider).filter((providerID) => {
+    if (disabled.has(providerID) || (enabled && !enabled.has(providerID))) return false;
+    const providerConfig = readProviderConfig(workingDirectory, providerID, config);
+    const apiKey = providerConfig?.auth?.key;
+    if (!apiKey || (providerID === 'opencode' && apiKey === ZEN_ANONYMOUS_API_KEY)) return false;
+    return Boolean(
+      providerConfig.baseURL
+      || BUILT_IN_ENDPOINT_PROVIDERS.has(providerID)
+      || getCatalogProvider(catalog, providerID)?.api,
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------

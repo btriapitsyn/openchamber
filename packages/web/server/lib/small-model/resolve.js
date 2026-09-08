@@ -75,7 +75,7 @@ const pickWithinProvider = (providerID, auth, catalog, family) => {
   return model?.id ? { providerID, modelID: model.id, source: 'family-scan' } : null;
 };
 
-export function resolveSmallModel({ auth, catalog, settingsSmallModel, configSmallModel, preferredProviderID, preferredModelID }) {
+export function resolveSmallModel({ auth, catalog, settingsSmallModel, configSmallModel, preferredProviderID, preferredModelID, callableProviderIDs }) {
   // OpenChamber's own setting (Settings → Sessions → Small Model override)
   // outranks everything, including the OpenCode config.
   const fromSettings = parseModelRef(settingsSmallModel);
@@ -95,7 +95,10 @@ export function resolveSmallModel({ auth, catalog, settingsSmallModel, configSma
   const preferred = typeof preferredProviderID === 'string' && preferredProviderID
     ? preferredProviderID
     : null;
-  if (preferred && isUsableAuthEntry(getAuthEntryForProvider(auth, preferred))) {
+  const isProviderCallable = (providerID) => callableProviderIDs
+    ? callableProviderIDs.has(providerID)
+    : isUsableAuthEntry(getAuthEntryForProvider(auth, providerID));
+  if (preferred && isProviderCallable(preferred)) {
     for (const family of FAMILY_PRIORITY) {
       const match = pickWithinProvider(preferred, auth, catalog, family);
       if (match) return match;
@@ -106,9 +109,11 @@ export function resolveSmallModel({ auth, catalog, settingsSmallModel, configSma
   }
 
   // No session context (or its provider has no usable login): scan all
-  // authenticated providers by family priority.
-  const authedProviders = Object.keys(auth || {}).filter((providerID) =>
-    providerID !== preferred && isUsableAuthEntry(auth[providerID]));
+  // callable providers by family priority.
+  const authedProviders = (callableProviderIDs
+    ? [...callableProviderIDs]
+    : Object.keys(auth || {}).filter((providerID) => isUsableAuthEntry(auth[providerID])))
+    .filter((providerID) => providerID !== preferred);
 
   for (const family of FAMILY_PRIORITY) {
     for (const providerID of authedProviders) {

@@ -17,7 +17,7 @@ import { buildWalkthroughView } from '@/lib/walkthrough/model';
 import type { WalkthroughSource, WalkthroughWorkingTreeScope } from '@/lib/walkthrough/types';
 import { ModelSelector } from '@/components/sections/agents/ModelSelector';
 import { deriveBaseBranch, hasResolvableBaseBranch } from '@/components/views/git/baseBranch';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { useCallableSmallModelProviders } from '@/hooks/useCallableSmallModelProviders';
 import { useConfigStore } from '@/stores/useConfigStore';
 import { useGitBranches, useGitStatus, useGitStore, useIsGitRepo } from '@/stores/useGitStore';
 import { useGitHubAuthStore } from '@/stores/useGitHubAuthStore';
@@ -367,7 +367,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   // the picker already hides them from the menu; showing one as selected was
   // the whole "why say so?" failure mode.
   const modelsMetadata = useConfigStore((state) => state.modelsMetadata);
-  const [modelProviders, setModelProviders] = useState<string[] | undefined>(undefined);
+  const modelProviders = useCallableSmallModelProviders(directory);
 
   const providerIsAuthenticated = (providerId: string | undefined) => {
     if (!providerId) return false;
@@ -392,30 +392,6 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
   const activeModel = selectedModelUsable ?? resultModelRef ?? readinessModelRef;
   const [activeProviderId, ...activeModelParts] = (activeModel ?? '').split('/');
   const activeModelId = activeModelParts.join('/');
-
-  useEffect(() => {
-    if (modelProviders !== undefined) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await runtimeFetch('/api/small-model', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        });
-        if (!response.ok) return;
-        const payload = (await response.json().catch(() => null)) as { authenticatedProviders?: unknown } | null;
-        if (!cancelled && Array.isArray(payload?.authenticatedProviders)) {
-          setModelProviders(payload.authenticatedProviders.filter((id): id is string => typeof id === 'string'));
-        }
-      } catch {
-        // Leave undefined: the picker then offers every provider, which is
-        // worse but not broken.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [modelProviders]);
 
   const isStructuredOutputCapable = useCallback(
     (providerId: string, modelId: string) =>
@@ -816,6 +792,7 @@ export const WalkthroughView = ({ directory: rootDirectory, visible = true }: Wa
       <div className={cn('flex min-h-0 flex-1', showToc ? 'flex-row' : 'flex-col')}>
         {blockedReason ? (
           <WalkthroughBlocker
+            directory={directory}
             reason={blockedReason}
             model={blockedModel}
             requiredChars={blockedRequiredChars}

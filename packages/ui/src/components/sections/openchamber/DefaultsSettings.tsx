@@ -21,7 +21,8 @@ import { useSelectionStore } from '@/sync/selection-store';
 import { useSessionUIStore } from '@/sync/session-ui-store';
 import { useI18n } from '@/lib/i18n';
 import { parseModelIdentifier } from '@/lib/modelIdentifier';
-import { runtimeFetch } from '@/lib/runtime-fetch';
+import { useCallableSmallModelProviders } from '@/hooks/useCallableSmallModelProviders';
+import { useSettingsDirectory } from '@/hooks/useSettingsDirectory';
 import { isPrimaryMode } from '@/components/chat/mobileControlsUtils';
 
 const getDisplayModel = (
@@ -37,6 +38,7 @@ const getDisplayModel = (
 
 export const DefaultsSettings: React.FC = () => {
   const { t } = useI18n();
+  const settingsDirectory = useSettingsDirectory();
   const setProvider = useConfigStore((state) => state.setProvider);
   const setModel = useConfigStore((state) => state.setModel);
   const setAgent = useConfigStore((state) => state.setAgent);
@@ -69,7 +71,7 @@ export const DefaultsSettings: React.FC = () => {
   const [defaultAgent, setDefaultAgent] = React.useState<string | undefined>();
   const [smallModelUseDefault, setSmallModelUseDefault] = React.useState(true);
   const [smallModelOverride, setSmallModelOverride] = React.useState<string | undefined>();
-  const [smallModelProviders, setSmallModelProviders] = React.useState<string[]>([]);
+  const smallModelProviders = useCallableSmallModelProviders(settingsDirectory) ?? [];
   const [walkthroughModelOverride, setWalkthroughModelOverride] = React.useState<string | undefined>();
   const [isLoading, setIsLoading] = React.useState(true);
 
@@ -236,30 +238,6 @@ export const DefaultsSettings: React.FC = () => {
     () => getDisplayModel(walkthroughModelOverride),
     [walkthroughModelOverride]
   );
-  React.useEffect(() => {
-    // Both pickers offer the same providers — the walkthrough runs through the
-    // small model — and the walkthrough picker is always visible, so this is
-    // always worth fetching. The server answers with the providers it has a
-    // credential and an endpoint for, including plugin-registered ones that
-    // exist only inside the running OpenCode.
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = await runtimeFetch('/api/small-model', { method: 'GET', headers: { Accept: 'application/json' } });
-        if (!response.ok) return;
-        const payload = await response.json().catch(() => null) as { authenticatedProviders?: unknown } | null;
-        if (!cancelled && Array.isArray(payload?.authenticatedProviders)) {
-          setSmallModelProviders(payload.authenticatedProviders.filter((id): id is string => typeof id === 'string'));
-        }
-      } catch {
-        // Fail closed: never offer providers whose credentials were not verified.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const availableVariants = React.useMemo(() => {
     if (!parsedModel.providerId || !parsedModel.modelId) return [];
     const provider = providers.find((p) => p.id === parsedModel.providerId);

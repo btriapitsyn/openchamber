@@ -138,6 +138,30 @@ describe('resolveSmallModel', () => {
     expect(result).toEqual({ providerID: 'google', modelID: 'gemini-2.5-flash', source: 'family-scan' });
   });
 
+  it('uses a config-only preferred provider from the callable set', () => {
+    const result = resolveSmallModel({
+      auth: {},
+      catalog,
+      configSmallModel: null,
+      preferredProviderID: 'anthropic',
+      preferredModelID: 'claude-sonnet-4-5',
+      callableProviderIDs: new Set(['anthropic']),
+    });
+
+    expect(result).toEqual({ providerID: 'anthropic', modelID: 'claude-haiku-4-5', source: 'family-scan' });
+  });
+
+  it('scans config-only providers when no session provider is preferred', () => {
+    const result = resolveSmallModel({
+      auth: {},
+      catalog,
+      configSmallModel: null,
+      callableProviderIDs: new Set(['google']),
+    });
+
+    expect(result).toEqual({ providerID: 'google', modelID: 'gemini-2.5-flash', source: 'family-scan' });
+  });
+
   it('never uses a session provider without a login (opencode free models)', () => {
     // Vanilla setups default the picker to opencode/big-pickle with no
     // opencode token — those free models only work through OpenCode itself
