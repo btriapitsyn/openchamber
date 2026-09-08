@@ -116,6 +116,7 @@ import { createMcpReconnectRuntime } from './lib/mcp-reconnect/runtime.js';
 import { isPlatformEnabled } from './lib/platform/index.js';
 import { registerPlatformAuthRoutes } from './lib/platform/auth/routes.js';
 import { registerPlatformWorkspaceRoutes } from './lib/platform/workspaces/routes.js';
+import { registerPlatformAdminRoutes } from './lib/platform/admin/routes.js';
 import { createOpenChamberSessionService } from './lib/openchamber-sessions/routes.js';
 import { createScheduledTaskService } from './lib/scheduled-tasks/service.js';
 import { createOpenChamberControlService } from './lib/openchamber-control/service.js';
@@ -1741,6 +1742,11 @@ async function main(options = {}) {
     // OpenCode proxy fallback (see the auth registration note above).
     if (platformAuth.enabled && platformAuth.db) {
       await registerPlatformWorkspaceRoutes(app, {
+        env: process.env,
+        logger: console,
+        db: platformAuth.db,
+      });
+      await registerPlatformAdminRoutes(app, {
         env: process.env,
         logger: console,
         db: platformAuth.db,

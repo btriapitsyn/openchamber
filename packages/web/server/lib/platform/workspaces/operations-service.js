@@ -177,9 +177,17 @@ async function insertOperation(db, { workspace, kind, generation, userId, reques
 }
 
 // start / rebuild (plan section 8.1 steps 1-3).
-async function requestStartLike(db, { kind, user, requestId, reason, logger }) {
-  const workspace = await ensureWorkspaceForUser(db, { userId: user.id });
-  const workspaceId = workspace.id;
+// When `workspaceId` is supplied the operation targets THAT workspace instead
+// of the caller's own (admin stop/rebuild of another user's environment,
+// plan section 7.2) - the pipeline is identical either way.
+async function requestStartLike(db, { kind, user, requestId, reason, logger, workspaceId = null }) {
+  const workspace = workspaceId
+    ? await getWorkspaceById(db, { workspaceId })
+    : await ensureWorkspaceForUser(db, { userId: user.id });
+  if (!workspace) {
+    throw new WorkspaceServiceError('workspace_not_found', { status: 404 });
+  }
+  workspaceId = workspace.id;
 
   // Step 3a: an already-healthy workspace answers start with the existing
   // workspace and no operation (plan section 8.1 step 3). Rebuild is never
@@ -232,8 +240,8 @@ export async function startWorkspace(db, { user, requestId, logger } = {}) {
 // Rebuild = stop old generation, keep data, start new generation (plan
 // section 8.2). Modeled as ONE operation carrying the new generation; the
 // driver replaces the older-generation runtime inside ensureWorkspace.
-export async function rebuildWorkspace(db, { user, requestId, reason, logger } = {}) {
-  return requestStartLike(db, { kind: 'rebuild', user, requestId, reason, logger });
+export async function rebuildWorkspace(db, { user, requestId, reason, logger, workspaceId } = {}) {
+  return requestStartLike(db, { kind: 'rebuild', user, requestId, reason, logger, workspaceId });
 }
 
 // stop (plan sections 8.2 and 8.5). Repeated stop safely returns the current
