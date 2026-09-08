@@ -13,7 +13,10 @@ import { GitOperationResultError, runGitClone } from '@/lib/boundGitNetworkOpera
 import { PendingGitOperationError } from '@/lib/source-control/git-operation-recovery';
 import { useGitOperationRecovery } from '@/components/views/git/useGitOperationRecovery';
 import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
+import { useExistingRepositorySummary } from './useExistingRepositorySummary';
 import { getRuntimeKey } from '@/lib/runtime-switch';
+import { repositoryBindingOwner } from '@/lib/source-control/repository-binding';
+import type { SourceControlIdentity } from '@/lib/api/types';
 import { getSourceControlAuthKey, useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -62,6 +65,9 @@ type BrowseEntry = {
 type BrowseRow =
   | { type: 'up'; value: 'browse:up'; name: string; path: string | null; disabled?: false }
   | { type: 'directory'; value: string; name: string; path: string; disabled: boolean };
+
+/** Select value for declining the proposed source control account. */
+const NO_PROVIDER_ACCOUNT = '__none__';
 
 const isRootPath = (value: string): boolean => value === '/';
 
@@ -209,6 +215,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const [cloneCredentialAccount, setCloneCredentialAccount] = React.useState('');
   const [unverifiedConfirmed, setUnverifiedConfirmed] = React.useState(false);
   const [cloneProviderAccountKey, setCloneProviderAccountKey] = React.useState('');
+  const [existingProviderChoice, setExistingProviderChoice] = React.useState<{ directory: string; key: string } | null>(null);
   const cloneController = React.useRef<AbortController | null>(null);
   const cloneRecovery = useGitOperationRecovery(open && isCloneMode ? 'clone' : null, git, sourceControl, { kind: 'clone' });
   const [selectedGitIdentityId, setSelectedGitIdentityId] = React.useState<string | null>(null);
@@ -234,6 +241,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     setCloneTransport('');
     setCloneCredentialAccount('');
     setCloneProviderAccountKey('');
+    setExistingProviderChoice(null);
     setCloneSshCredential('');
     setUnverifiedConfirmed(false);
     setSelectedPaths([]);
@@ -269,16 +277,16 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   const cloneAccount = cloneAccounts.find((account) => account.key === cloneCredentialAccount);
   // The provider association answers "whose issues and change requests", which
   // is a question about the host, not about how the bytes travel — so an SSH
-  // clone URL offers the same accounts an HTTPS one does.
-  const cloneRemoteHost = gitRemoteHost(cloneRemoteUrl);
-  const cloneProviderAccounts = identities.flatMap((identity) => {
+  // remote offers the same accounts an HTTPS one does.
+  const providerAccountsForHost = (remoteHost: string | null) => remoteHost ? identities.flatMap((identity) => {
     const entry = authEntries[getSourceControlAuthKey(identity)];
     if (identitiesError || !entry?.hasChecked || entry.isLoading || entry.status?.status !== 'connected') return [];
     const origin = getSourceControlIdentityOrigin(identity);
     const host = origin ? gitRemoteHost(origin) : null;
-    if (!host || !cloneRemoteHost || host !== cloneRemoteHost) return [];
+    if (!host || host !== remoteHost) return [];
     return buildManagedAccountOptions(identity, entry.status.accounts, (account) => t(getManagedCredentialSourceLabelKey(account.source)));
-  });
+  }) : [];
+  const cloneProviderAccounts = providerAccountsForHost(gitRemoteHost(cloneRemoteUrl));
   const cloneProviderAccount = cloneProviderAccounts.find((account) => account.key === cloneProviderAccountKey);
   const cloneAccountsFailed = Boolean(identitiesError) || identities.some((identity) => {
     const status = authEntries[getSourceControlAuthKey(identity)]?.status?.status;
@@ -449,6 +457,32 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     && browseErrorReason !== 'invalid-response'
     && browseErrorReason !== 'unknown'
     && ((!isCloneMode && selectionPaths.length > 0) || (!isAlreadyAdded && Boolean(targetPath)));
+  // Adding a directory that is already a repository: read what its own .git
+  // states so the association can be offered instead of asked for. Nothing is
+  // written until the project is added with the proposal still selected.
+  const existingRepository = useExistingRepositorySummary(targetPath, { sourceControl, git },
+    !isCloneMode && !runtime.isVSCode && !isAlreadyAdded && !shouldCreateTarget && selectionPaths.length === 0);
+  const existingProviderAccounts = providerAccountsForHost(existingRepository?.primaryRemote?.host ?? null);
+  // The proposal is the first account that answers for the remote's host, and
+  // it holds only while the same directory is in view. Choosing "none" is a
+  // real choice: the picker offers it, and then nothing is bound.
+  const existingProviderAccountKey = existingProviderChoice && existingProviderChoice.directory === existingRepository?.directory
+    ? existingProviderChoice.key
+    : existingProviderAccounts[0]?.key ?? '';
+  const existingProviderAccount = existingProviderAccounts.find((account) => account.key === existingProviderAccountKey);
+  const existingAuthorProfile = existingRepository?.author
+    ? availableGitIdentities.find((identity) => identity.userName === existingRepository.author?.userName
+      && identity.userEmail === existingRepository.author?.userEmail) ?? null
+    : null;
+  const existingRepositoryAuthor = existingRepository?.author
+    ? [existingRepository.author.userName, existingRepository.author.userEmail ? `<${existingRepository.author.userEmail}>` : '']
+      .filter(Boolean).join(' ')
+    : '';
+
+  React.useEffect(() => {
+    if (existingRepository && !runtime.isVSCode) void refreshAccounts(sourceControl);
+  }, [existingRepository, refreshAccounts, runtime.isVSCode, runtimeKey, sourceControl]);
+
   const canSubmitClone = canAddProject && !runtime.isVSCode && !cloneRecovery.blocked && cloneRemoteUrl.trim().length > 0
     && (cloneTransport === 'system' && unverifiedConfirmed || cloneTransport === 'https' && Boolean(cloneAccount)
       || cloneTransport === 'ssh' && Boolean(cloneSshCredential)
@@ -527,6 +561,37 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     openProjectDraft(project.id, project.path);
   }, [addProject, addedProjectPaths, openProjectDraft, t]);
 
+  const bindExistingProvider = React.useCallback(async (
+    directory: string,
+    reference: SourceControlIdentity & { accountId: string },
+    primaryRemote: string,
+  ): Promise<void> => {
+    const scope = repositoryBindingOwner.scope(directory);
+    try {
+      const read = await sourceControl.repositoryBinding(directory);
+      // Whatever the repository already answers to stays: adding a project
+      // proposes an association, it never replaces one.
+      if (read.binding?.providers.length) return;
+      const mutationScope = repositoryBindingOwner.captureMutation(scope, read);
+      try {
+        const next = await sourceControl.repositoryProviderBindingMutate({
+          directory,
+          expectedRepositoryId: read.repository.repositoryId,
+          expectedRevision: read.revision,
+          operation: 'add',
+          provider: { ...reference, primaryRemote },
+        });
+        repositoryBindingOwner.setMutationResult(mutationScope, next);
+      } finally {
+        mutationScope.release();
+      }
+    } catch {
+      // The project is added either way; the association can be made in the
+      // Git panel, so this is a warning and not a failed add.
+      toast.warning(t('directoryExplorerDialog.existing.bindFailed'));
+    }
+  }, [sourceControl, t]);
+
   const finalizeSelection = React.useCallback(async (target: string) => {
     if (runtimeKey !== getRuntimeKey()) return;
     if (isConfirming) return;
@@ -603,6 +668,10 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
         });
         return;
       }
+      if (!isCloneMode && existingProviderAccount && existingRepository?.primaryRemote
+        && existingRepository.directory === selectedTarget) {
+        await bindExistingProvider(project.path, existingProviderAccount.reference, existingRepository.primaryRemote.name);
+      }
       openProjectDraft(project.id, project.path);
       if (setupRequired) {
         if (mobileActions) mobileActions.openChanges();
@@ -619,7 +688,7 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
       cloneController.current = null;
       setIsConfirming(false);
     }
-  }, [addProject, addProjects, addedProjectPaths, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, cloneProviderAccount?.reference, selectedPaths, shouldCreateTarget, targetPath, t]);
+  }, [addProject, addProjects, addedProjectPaths, bindExistingProvider, canSubmitClone, cloneRecovery, cloneTransport, cloneAccount, cloneSshCredential, unverifiedConfirmed, cloneRemoteUrl, existingProviderAccount, existingRepository, git, handleClose, isCloneMode, isConfirming, mobileActions, openContextSurface, openProjectDraft, runtimeKey, selectedGitIdentity?.id, cloneProviderAccount?.reference, selectedPaths, shouldCreateTarget, targetPath, t]);
 
   const browseToDisplayPath = React.useCallback((displayPath: string) => {
     setQuery(ensureBrowseDirectoryPath(displayPath));
@@ -725,6 +794,50 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
 
   const inputSection = (
     <div className="px-2.5 py-1.5">
+      {!isCloneMode && existingRepository ? (
+        <div className="mb-1.5 space-y-1.5">
+          <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.existing.title')}</p>
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 typography-micro">
+            {existingRepository.remotes.map((remote) => (
+              <React.Fragment key={remote.name}>
+                <dt className="text-muted-foreground">{remote.name}</dt>
+                <dd className="min-w-0 truncate font-mono text-foreground/80">{remote.displayUrl}</dd>
+              </React.Fragment>
+            ))}
+            <dt className="text-muted-foreground">{t('gitView.context.author')}</dt>
+            <dd className="min-w-0 break-words text-foreground/80">
+              {existingRepositoryAuthor ? <>
+                {existingRepositoryAuthor}
+                {existingAuthorProfile && existingAuthorProfile.name !== existingRepository.author?.userName
+                  ? <> · {existingAuthorProfile.name}</> : null}
+                {existingRepository.authorIsLocal ? null : <> · {t('directoryExplorerDialog.existing.authorGlobal')}</>}
+              </> : t('gitView.context.notConfigured')}
+            </dd>
+          </dl>
+          {existingProviderAccounts.length ? (
+            <Select
+              value={existingProviderAccountKey || NO_PROVIDER_ACCOUNT}
+              disabled={isConfirming}
+              onValueChange={(value) => setExistingProviderChoice({
+                directory: existingRepository.directory,
+                key: value === NO_PROVIDER_ACCOUNT ? '' : value,
+              })}
+            >
+              <SelectTrigger className="w-full" aria-label={t('settings.sourceControl.binding.accountAriaLabel')}>
+                <SelectValue>{existingProviderAccount?.label ?? t('directoryExplorerDialog.existing.accountNone')}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {existingProviderAccounts.map((account) => (
+                  <SelectItem key={account.key} value={account.key}>{account.label}</SelectItem>
+                ))}
+                <SelectItem value={NO_PROVIDER_ACCOUNT}>{t('directoryExplorerDialog.existing.accountNone')}</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : existingRepository.primaryRemote ? (
+            <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.existing.noAccount')}</p>
+          ) : null}
+        </div>
+      ) : null}
       {isCloneMode ? (
         <div className="mb-1.5 space-y-1.5">
           <GitOperationStatus entry={cloneRecovery.entry} onRefresh={() => void cloneRecovery.refresh()} onCancel={() => void cloneRecovery.cancel()} />
