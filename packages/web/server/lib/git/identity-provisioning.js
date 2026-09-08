@@ -58,6 +58,14 @@ export function createGitIdentityProvisioning({ store, now = Date.now, randomId 
       const existing = profiles.find((profile) => sameAccount(profile.account, account));
       if (existing) return existing;
       const signature = accountSignature(account, user);
+      // The same person connecting again after disconnecting is the same
+      // identity, not a second one: their signature on this instance already
+      // names them, so it follows the new credential instead of being cloned.
+      const sameSignature = signature.userEmail ? profiles.find((profile) => profile.account
+        && profile.account.provider === account.provider
+        && profile.account.instance === account.instance
+        && profile.userEmail === signature.userEmail) : null;
+      if (sameSignature) return store.updateProfile(sameSignature.id, { ...sameSignature, account });
       // A signature is required, and an account that publishes neither a name
       // nor an address cannot supply one. The person makes that identity.
       if (!signature.userName || !signature.userEmail) return null;

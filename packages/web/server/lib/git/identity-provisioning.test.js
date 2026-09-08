@@ -97,4 +97,19 @@ describe('repointAccountIdentities', () => {
     expect(provisioning.repointAccountIdentities({ from: gitlab, to: gitlab })).toEqual([]);
     expect(profiles[0].account).toEqual(gitlab);
   });
+  test('reuses the identity of a person who connects again after disconnecting', () => {
+    const { provisioning, profiles } = harness();
+    const user = { id: 7, login: 'ada', name: 'Ada', email: 'ada@example.com' };
+    const first = provisioning.ensureAccountIdentity({ account: gitlab, user });
+    expect(first.name).toBe('ada');
+
+    // Disconnecting leaves the identity behind; connecting again mints a new
+    // credential id, and the person expects their identity, not a second one.
+    const renewed = { ...gitlab, accountId: 'occred:v1:gitlab:two:r1' };
+    const again = provisioning.ensureAccountIdentity({ account: renewed, user });
+    expect(again.id).toBe(first.id);
+    expect(again.account).toEqual(renewed);
+    expect(profiles).toHaveLength(1);
+  });
+
 });
