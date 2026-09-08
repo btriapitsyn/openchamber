@@ -26,6 +26,7 @@ type WorktreeListEntry = {
   branch?: string;
   head?: string;
   name?: string;
+  prunable?: boolean;
 };
 
 const deriveHeadStateFromWorktreeEntry = (entry: WorktreeListEntry): 'branch' | 'detached' | 'unborn' => {
@@ -44,7 +45,11 @@ const deriveCanonicalWorktreeFields = (
 ): Pick<WorktreeMetadata, 'worktreeRoot' | 'worktreeStatus' | 'headState' | 'worktreeSource'> => {
   return {
     worktreeRoot: worktreePath,
-    worktreeStatus: 'ready',
+    // A prunable worktree is still registered by git but its directory is
+    // gone. It stays in the topology as `missing` so the sessions that lived
+    // there keep their group in the sidebar and can be opened and relocated;
+    // dropping it would hide those sessions with no way back.
+    worktreeStatus: entry.prunable === true ? 'missing' : 'ready',
     headState: deriveHeadStateFromWorktreeEntry(entry),
     worktreeSource: 'existing',
   };
@@ -299,6 +304,7 @@ export const worktreeMapsEqual = (
         || next.projectDirectory !== current.projectDirectory
         || next.worktreeRoot !== current.worktreeRoot
         || next.headState !== current.headState
+        || next.worktreeStatus !== current.worktreeStatus
         || next.worktreeSource !== current.worktreeSource
         || next.source !== current.source) return false;
     }

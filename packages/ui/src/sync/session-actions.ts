@@ -3,7 +3,7 @@
  * Replaces the action methods from the old useSessionStore.
  */
 
-import type { OpencodeClient, Session, Message, Part } from "@opencode-ai/sdk/v2/client"
+import type { FilePart, OpencodeClient, Session, Message, Part } from "@opencode-ai/sdk/v2/client"
 import { Binary } from "./binary"
 import { useSessionUIStore } from "./session-ui-store"
 import { useInputStore } from "./input-store"
@@ -43,6 +43,7 @@ import { normalizePath } from "@/lib/pathNormalization"
 import { mergeMessages } from "./optimistic"
 import { messagesBefore, messagesFrom } from "./message-ordering"
 import { deleteChatDirectory } from "@/lib/chatDirectories"
+import { createChatDraftIdentity } from "@/lib/chatDraftPersistence"
 
 const MESSAGE_REFETCH_LIMIT = 100
 const SEND_CONFIRMATION_REFETCH_LIMIT = 30
@@ -303,8 +304,11 @@ function reconcileSessionMove(
   const destinationStore = stores?.ensureChild(destinationDirectory, { bootstrap: false })
   const sourceState = sourceStore?.getState()
   const destinationState = destinationStore?.getState()
-  const liveSession = sourceState?.session.find((candidate) => candidate.id === session.id) ?? session
-  const movedSession = { ...liveSession, directory: destinationDirectory } as Session
+  const liveSession = sourceState?.session.find((candidate) => candidate.id === session.id)
+  const movedSession = {
+    ...mergeSessionDirectoryMetadata(session, liveSession),
+    directory: destinationDirectory,
+  } as Session
 
   if (!destinationStore || !destinationState || sourceStore === destinationStore) {
     return movedSession
@@ -370,6 +374,7 @@ export async function moveSessionToDirectory(
   sourceDirectory: string,
   destinationDirectory: string,
   moveChanges = true,
+  expectedRuntimeKey?: string,
 ): Promise<void> {
   const result = await opencodeClient.getSdkClient().experimental.controlPlane.moveSession({
     sessionID: session.id,
@@ -377,6 +382,10 @@ export async function moveSessionToDirectory(
     moveChanges,
   })
   assertSdkSuccess(result, "Move session")
+
+  // If the runtime changed during the control-plane request, the server move
+  // already happened, but we must not publish stale local state to the UI/stores.
+  if (isStaleRuntime(expectedRuntimeKey)) return
 
   invalidateSessionLoads(session.id, [sourceDirectory, destinationDirectory])
 
@@ -1136,10 +1145,45 @@ function finalizeConfirmedSessionDeletion(
   }
 }
 
-async function cleanupDeletedChatDirectory(directory: string | undefined, deleteDirectory: boolean): Promise<void> {
-  if (!directory || !deleteDirectory) return
+type ChatDirectoryCleanupPlan = {
+  directory: string | undefined
+  /** Only a root session owns its managed chat directory. */
+  rootDeleted: boolean
+  /** The deleted session and the descendants the server cascade-deletes with it. */
+  cascadeIds: ReadonlySet<string>
+}
+
+function planChatDirectoryCleanup(sessionId: string, snapshot: Session | null, directory: string | undefined): ChatDirectoryCleanupPlan {
+  const global = useGlobalSessionsStore.getState()
+  return {
+    directory,
+    rootDeleted: Boolean(snapshot && snapshot.parentID == null),
+    cascadeIds: computeSubtreeIds([...global.activeSessions, ...global.archivedSessions], sessionId),
+  }
+}
+
+/**
+ * A managed chat directory is shared by every fork, side thread, and subagent
+ * of the chat that created it, and OpenCode fails every prompt in a session
+ * whose directory is gone. The directory is therefore removed only once no
+ * known session outside the deleted subtree still resolves to it. An unloaded
+ * global cache cannot prove that, so it keeps the directory: a leaked scratch
+ * directory is recoverable, a stranded session is not.
+ */
+function isChatDirectoryStillReferenced(directory: string, excludedIds: ReadonlySet<string>): boolean {
+  const global = useGlobalSessionsStore.getState()
+  if (!global.hasLoaded) return true
+  const normalized = normalizePath(directory)
+  return [...global.activeSessions, ...global.archivedSessions].some((session) => (
+    !excludedIds.has(session.id) && resolveGlobalSessionDirectory(session) === normalized
+  ))
+}
+
+async function cleanupDeletedChatDirectory(plan: ChatDirectoryCleanupPlan): Promise<void> {
+  if (!plan.directory || !plan.rootDeleted) return
+  if (isChatDirectoryStillReferenced(plan.directory, plan.cascadeIds)) return
   try {
-    await deleteChatDirectory(directory)
+    await deleteChatDirectory(plan.directory)
   } catch (error) {
     console.warn("[session-actions] deleted chat directory cleanup failed", error)
   }
@@ -1173,8 +1217,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
   const expectedRuntimeKey = options?.expectedRuntimeKey ?? getRuntimeKey()
   if (isStaleRuntime(expectedRuntimeKey)) return false
   const sessionDirectory = getSessionDirectory(sessionId)
-  const sessionSnapshot = getGlobalSessionSnapshot(sessionId)
-  const deleteManagedDirectory = Boolean(sessionSnapshot && sessionSnapshot.parentID == null)
+  const chatDirectoryCleanup = planChatDirectoryCleanup(sessionId, getGlobalSessionSnapshot(sessionId), sessionDirectory)
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, sessionDirectory, expectedRuntimeKey)
     if (isStaleRuntime(expectedRuntimeKey)) return false
@@ -1184,7 +1227,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
       throw new Error("session.delete failed: server did not confirm deletion")
     }
     finalizeConfirmedSessionDeletion(sessionId, sessionDirectory, expectedRuntimeKey)
-    await cleanupDeletedChatDirectory(sessionDirectory, deleteManagedDirectory)
+    await cleanupDeletedChatDirectory(chatDirectoryCleanup)
     return true
   } catch (error) {
     console.error("[session-actions] deleteSession failed", error)
@@ -1194,7 +1237,7 @@ export async function deleteSession(sessionId: string, options?: DeleteSessionOp
     if ((error as { status?: number })?.status === 404) {
       if (isStaleRuntime(expectedRuntimeKey)) return false
       finalizeConfirmedSessionDeletion(sessionId, sessionDirectory, expectedRuntimeKey)
-      await cleanupDeletedChatDirectory(sessionDirectory, deleteManagedDirectory)
+      await cleanupDeletedChatDirectory(chatDirectoryCleanup)
       return true
     }
     return false
@@ -1208,8 +1251,7 @@ export async function deleteSessionInDirectory(
   expectedRuntimeKey = getRuntimeKey(),
 ): Promise<boolean> {
   if (isStaleRuntime(expectedRuntimeKey)) return false
-  const sessionSnapshot = getGlobalSessionSnapshot(sessionId)
-  const deleteManagedDirectory = Boolean(sessionSnapshot && sessionSnapshot.parentID == null)
+  const chatDirectoryCleanup = planChatDirectoryCleanup(sessionId, getGlobalSessionSnapshot(sessionId), directory)
   try {
     await cleanupReviewMetadataBeforeDelete(sessionId, directory, expectedRuntimeKey)
     if (isStaleRuntime(expectedRuntimeKey)) return false
@@ -1219,14 +1261,14 @@ export async function deleteSessionInDirectory(
       throw new Error("session.delete failed: server did not confirm deletion")
     }
     finalizeConfirmedSessionDeletion(sessionId, directory, expectedRuntimeKey)
-    await cleanupDeletedChatDirectory(directory, deleteManagedDirectory)
+    await cleanupDeletedChatDirectory(chatDirectoryCleanup)
     return true
   } catch (error) {
     console.error("[session-actions] deleteSessionInDirectory failed", error)
     if ((error as { status?: number })?.status === 404) {
       if (isStaleRuntime(expectedRuntimeKey)) return false
       finalizeConfirmedSessionDeletion(sessionId, directory, expectedRuntimeKey)
-      await cleanupDeletedChatDirectory(directory, deleteManagedDirectory)
+      await cleanupDeletedChatDirectory(chatDirectoryCleanup)
       return true
     }
     return false
@@ -1559,9 +1601,15 @@ export async function unarchiveSessions(
   return { restoredIds, failedIds }
 }
 
-export async function updateSessionTitle(sessionId: string, title: string): Promise<void> {
-  const sessionDirectory = getSessionDirectory(sessionId)
+export async function updateSessionTitle(
+  sessionId: string,
+  title: string,
+  options?: { directory?: string | null; expectedRuntimeKey?: string },
+): Promise<void> {
+  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
+  const sessionDirectory = options?.directory ?? getSessionDirectory(sessionId)
   const session = await opencodeClient.updateSession(sessionId, { title }, sessionDirectory)
+  if (isStaleRuntime(options?.expectedRuntimeKey)) throw new Error("runtime changed")
   useGlobalSessionsStore.getState().upsertSession(session)
   mirrorSessionIntoLiveStores(session, sessionDirectory)
 }
@@ -1644,6 +1692,7 @@ export async function optimisticSend(input: {
   agent?: string
   directory?: string | null
   files?: Array<{ type: "file"; mime: string; url: string; filename: string }>
+  appendSubmissions?: () => void
   onOptimisticInsert?: () => void
   onMessageID?: (messageID: string) => void
   beforeOptimisticInsert?: () => void
@@ -1667,6 +1716,7 @@ export async function optimisticSend(input: {
   await waitForConnectionOrThrow()
   input.beforeOptimisticInsert?.()
   assertRuntimeUnchanged()
+  input.appendSubmissions?.()
 
   const targetDirectory = input.directory ?? dir()
   const store = targetDirectory ? dirStoreForDirectory(targetDirectory) : dirStore()
@@ -2382,9 +2432,10 @@ export async function unrevertSession(sessionId: string): Promise<void> {
  * 1. Extract text from the message for input restoration
  * 2. Call the runtime fork endpoint
  * 3. Insert the new session into the child store (so sidebar updates immediately)
- * 4. Switch to new session and set pending input text
+ * 4. Switch to the new session and stage its composer replay
  */
 export async function forkFromMessage(sessionId: string, messageId: string): Promise<void> {
+  const expectedRuntimeKey = getRuntimeKey()
   const { store, directory } = dirStoreForSession(sessionId)
   const state = store.getState()
 
@@ -2399,9 +2450,12 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
     .map((p: Part) => ((p as Record<string, unknown>).text as string) || ((p as Record<string, unknown>).content as string) || "")
     .join("\n")
     .trim()
-  const fileParts = parts.filter((p) => p.type === "file" && !isSyntheticPart(p)) as Array<Record<string, unknown>>
+  const fileParts = parts.filter((part): part is FilePart => part.type === "file" && !isSyntheticPart(part))
 
   const forkedSession = await opencodeClient.forkSession(sessionId, messageId, directory)
+  if (isStaleRuntime(expectedRuntimeKey)) return
+  const target = createChatDraftIdentity(expectedRuntimeKey, resolveSessionOwnedDirectory(forkedSession) ?? directory, forkedSession.id)
+  if (!target) throw new Error("Forked session has no composer directory")
 
   // Insert new session into child store so sidebar updates immediately
   const current = store.getState()
@@ -2413,22 +2467,24 @@ export async function forkFromMessage(sessionId: string, messageId: string): Pro
   }
 
   // Switch to new session
-  useSessionUIStore.getState().setCurrentSession(forkedSession.id)
+  useSessionUIStore.getState().setCurrentSession(forkedSession.id, target.directory)
 
-  // Restore forked message text and file attachments to input
-  if (messageText) {
-    useInputStore.setState({
-      pendingInputText: messageText,
-      pendingInputMode: "replace" as const,
-    })
-  }
-  // Clear existing attachments and restore file parts from the forked message.
-  restoreFilePartsToInput(fileParts)
+  // Navigation is deferred in the chat column. Leave the source composer alone
+  // until the rendered draft identity matches the fork, including for file-only prompts.
+  useInputStore.setState({
+    pendingComposerRestore: {
+      target,
+      text: messageText,
+      files: fileParts.filter((part) => part.url).map((part) => ({
+        url: part.url,
+        mimeType: part.mime,
+        filename: part.filename ?? "attachment",
+      })),
+    },
+  })
   // The forked session is a fresh draft target, so the attached context of the
   // forked message follows the text into its composer.
-  if (directory) {
-    restoreContextPartsToInput(parts, { directory, sessionKey: forkedSession.id })
-  }
+  restoreContextPartsToInput(parts, { directory: target.directory, sessionKey: forkedSession.id })
 }
 
 export async function fetchMessagesForSession(sessionID: string, directory?: string | null): Promise<void> {

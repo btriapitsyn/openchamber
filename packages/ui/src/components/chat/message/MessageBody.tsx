@@ -1730,6 +1730,17 @@ const AssistantMessageBody = React.memo(({
 
     const renderedParts = React.useMemo(() => {
         const rendered: React.ReactNode[] = [];
+        let hasRenderedAnswerText = false;
+        const isFinalLiveAnswer = chatRenderMode === 'live' && isLastAssistantInTurn && hasStopFinish;
+        const hasEarlierVisibleActivity = isFinalLiveAnswer && Boolean(turnGroupingContext?.activityParts?.some((activity) => {
+            if (activity.messageId === messageId) {
+                return false;
+            }
+            if (activity.part.type === 'tool') {
+                return shouldShowTool(activity.part);
+            }
+            return (activity.kind !== 'reasoning' || showReasoningTraces) && !isEmptyTextPart(activity.part);
+        }));
 
         const renderSegmentBlock = (segment: TurnActivityGroup): React.ReactNode | null => {
             if (!shouldRenderActivityGroup || !toggleActivityGroup) {
@@ -1820,6 +1831,16 @@ const AssistantMessageBody = React.memo(({
                     i += 1;
                     continue;
                 }
+                if (isFinalLiveAnswer && !hasRenderedAnswerText && (rendered.length > 0 || hasEarlierVisibleActivity || turnGroupingContext?.hasEarlierAssistantText)) {
+                    rendered.push(
+                        <div
+                            key={`final-answer-divider-${messageId}`}
+                            aria-hidden="true"
+                            className="mt-1.5 mb-4 h-px w-full bg-muted-foreground/60"
+                        />
+                    );
+                }
+                hasRenderedAnswerText = true;
                 rendered.push(
                     <div key={`assistant-text-${messageId}-${i}`} ref={messageTextContentRef} data-message-text-export-source="true">
                         <AssistantTextPart
@@ -1982,6 +2003,8 @@ const AssistantMessageBody = React.memo(({
         isMobile,
         isActivityOwnerMessage,
         isSortedRenderMode,
+        isLastAssistantInTurn,
+        hasStopFinish,
         lastRenderableTextPartIndex,
         messageId,
         messageActionButtons,

@@ -1,6 +1,7 @@
 import type { ContextPartMetadata } from '@/lib/messages/contextParts';
 import { createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk/v2";
 import type { PermissionV2Request, PermissionV2Effect, PermissionV2Source } from "@opencode-ai/sdk/v2/client";
+import { z } from "zod";
 import type { FilesAPI } from "../api/types";
 import { getDesktopHomeDirectory } from "../desktop";
 import type {
@@ -70,19 +71,8 @@ type SdkResult<T> = {
 };
 
 type DirectoryAvailability = "available" | "missing" | "unknown";
+const directoryProbeErrorSchema = z.object({ reason: z.string().optional(), isDirectory: z.boolean().optional() });
 
-const isMissingDirectoryError = (error: unknown): boolean => {
-  if (error instanceof FilesystemError) {
-    return error.reason === "not-found" || error.reason === "not-directory";
-  }
-  if (error && typeof error === "object") {
-    const code = (error as { code?: unknown }).code;
-    if (code === "ENOENT" || code === "ENOTDIR") {
-      return true;
-    }
-  }
-  return /\bENOENT\b|\bENOTDIR\b|no such file or directory/i.test(formatSdkError(error));
-};
 
 function unwrapSdkData<T>(result: SdkResult<T>, operation: string): T {
   if (result.error) {
@@ -340,6 +330,11 @@ const getDesktopFilesApi = (): FilesAPI | null => {
   }
   return null;
 };
+
+// /api/fs/home parsing boundary. Older servers answer without chatsRoot;
+// only a valid home response may use the legacy chats-root fallback.
+const fsAbsolutePathSchema = z.string().trim().regex(/^(?:\/|[A-Za-z]:[\\/]|\\\\)/);
+const fsHomeResponseSchema = z.object({ home: fsAbsolutePathSchema, chatsRoot: fsAbsolutePathSchema.optional() });
 
 class OpencodeService {
   private client: OpencodeClient;
@@ -602,24 +597,30 @@ class OpencodeService {
   }
 
   /**
-   * Distinguishes a confirmed-missing directory from an unavailable probe.
-   * Offline, permission, and other transport failures stay `unknown` so callers
-   * do not treat a temporary outage as proof the path was deleted.
-   */
+    * Distinguishes a confirmed-missing directory from an unavailable probe.
+    * Offline, permission, and other transport failures stay `unknown` so callers
+    * do not treat a temporary outage as proof the path was deleted.
+    *
+    * The probe is OpenChamber's own `/api/fs/directory-stat`, which asks the
+    * server to stat the path without listing its contents. OpenCode's `/path`
+    * cannot answer this question: it echoes the requested directory and resolves
+    * its project through Git discovery that swallows errors, so a deleted worktree
+    * still comes back as a valid location. A runtime without that route (VS Code)
+    * answers `unknown`.
+    */
   async getDirectoryAvailability(directory: string): Promise<DirectoryAvailability> {
     const normalized = this.normalizeCandidatePath(directory);
     if (!normalized) {
       return "unknown";
     }
     try {
-      const response = await this.client.path.get({ directory: normalized }) as SdkResult<{ directory?: unknown }>;
-      if (response.error) {
-        return isMissingDirectoryError(response.error) ? "missing" : "unknown";
-      }
-      const returned = typeof response.data?.directory === "string" ? response.data.directory.trim() : "";
-      return returned ? "available" : "unknown";
-    } catch (error) {
-      return isMissingDirectoryError(error) ? "missing" : "unknown";
+      const response = await runtimeFetch("/api/fs/directory-stat", { query: { path: normalized } });
+      const body = directoryProbeErrorSchema.safeParse(await response.json().catch(() => null)).data;
+      if (response.ok && body?.isDirectory === true) return "available";
+      const reason = parseFilesystemErrorReason(body?.reason);
+      return reason === "not-found" || reason === "not-directory" ? "missing" : "unknown";
+    } catch {
+      return "unknown";
     }
   }
 
@@ -1945,6 +1946,21 @@ class OpencodeService {
       console.warn('Failed to resolve filesystem home directory:', error);
       return null;
     }
+  }
+
+  // Both roots must describe the same server response, including on desktop.
+  // Failure is distinct from an older server omitting chatsRoot.
+  async getFilesystemHomeInfo(): Promise<z.infer<typeof fsHomeResponseSchema>> {
+    const response = await runtimeFetch(`${this.baseUrl}/fs/home`, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to resolve the chats root (${response.status})`);
+    }
+    return fsHomeResponseSchema.parse(await response.json());
   }
 
   async setOpenCodeWorkingDirectory(directoryPath: string | null | undefined): Promise<DirectorySwitchResult | null> {

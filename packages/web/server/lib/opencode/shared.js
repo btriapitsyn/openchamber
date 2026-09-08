@@ -6,10 +6,10 @@ import { parse as parseJsonc, printParseErrorCode } from 'jsonc-parser';
 
 // ============== PATH CONSTANTS ==============
 
-const XDG_CONFIG_HOME = typeof process.env.XDG_CONFIG_HOME === 'string' && process.env.XDG_CONFIG_HOME.trim()
-  ? process.env.XDG_CONFIG_HOME.trim()
-  : path.join(os.homedir(), '.config');
-const OPENCODE_CONFIG_DIR = path.join(XDG_CONFIG_HOME, 'opencode');
+const OPENCODE_CONFIG_DIR = path.join(
+  process.env.XDG_CONFIG_HOME?.trim() || path.join(os.homedir(), '.config'),
+  'opencode',
+);
 const AGENT_DIR = path.join(OPENCODE_CONFIG_DIR, 'agents');
 const COMMAND_DIR = path.join(OPENCODE_CONFIG_DIR, 'commands');
 const SKILL_DIR = path.join(OPENCODE_CONFIG_DIR, 'skills');

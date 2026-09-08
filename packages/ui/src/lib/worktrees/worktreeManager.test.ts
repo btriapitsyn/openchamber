@@ -646,3 +646,35 @@ describe('worktreeManager fork remote payload wiring', () => {
     expect('pullRequest' in created).toBe(false);
   });
 });
+
+describe('worktreeManager missing worktrees', () => {
+  beforeEach(() => {
+    listCalls.length = 0;
+    listResolvers.length = 0;
+    listRejecters.length = 0;
+    listImplementation = undefined;
+  });
+
+  test('keeps a prunable worktree in the topology as missing instead of dropping it', async () => {
+    listImplementation = async () => [
+      { path: '/repo-missing/.worktrees/alive', branch: 'alive', head: 'abc', name: 'alive' },
+      { path: '/repo-missing/.worktrees/gone', branch: 'gone', head: 'def', name: 'gone', prunable: true },
+    ];
+
+    const result = await listProjectWorktrees({ id: 'project-missing', path: '/repo-missing' }, { force: true });
+
+    expect(result.map((entry) => [entry.path, entry.worktreeStatus])).toEqual([
+      ['/repo-missing/.worktrees/alive', 'ready'],
+      ['/repo-missing/.worktrees/gone', 'missing'],
+    ]);
+  });
+
+  test('a worktree that changes only its status still counts as a topology change', () => {
+    const ready: WorktreeMetadata = { path: '/repo/.worktrees/a', projectDirectory: '/repo', branch: 'a', label: 'a', worktreeStatus: 'ready' };
+    const missing: WorktreeMetadata = { ...ready, worktreeStatus: 'missing' };
+
+    expect(worktreeMapsEqual(new Map([['/repo', [ready]]]), new Map([['/repo', [ready]]]))).toBe(true);
+    expect(worktreeMapsEqual(new Map([['/repo', [ready]]]), new Map([['/repo', [missing]]]))).toBe(false);
+  });
+
+});
