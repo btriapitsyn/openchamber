@@ -85,7 +85,18 @@ export const OpenChamberMcpReconnectPlugin = async ({ client }) => {
     running = true
     let delay = IDLE_CHECK_MS
     try {
-      const statuses = (await client.mcp.status())?.data ?? {}
+      // The SDK client given to plugins resolves HTTP errors instead of
+      // throwing: the result carries { error } and no data. Treating that as
+      // an empty server list would wipe every retry counter in the cleanup
+      // below and re-arm servers already given up on, so an unavailable
+      // response is routed to the catch, which keeps the counters and waits
+      // for the next idle check. An empty success is still { data: {} }, an
+      // object, and passes.
+      const response = await client.mcp.status()
+      if (response?.error || !response?.data || typeof response.data !== "object") {
+        throw new Error("MCP status is unavailable")
+      }
+      const statuses = response.data
       const now = Date.now()
       const due = []
       for (const [name, entry] of Object.entries(statuses)) {

@@ -265,6 +265,29 @@ describe('managed MCP reconnect runtime', () => {
     expect(client.attempts).toHaveLength(1);
   });
 
+  it('keeps the attempt cap when a status response resolves with an error', async () => {
+    vi.useFakeTimers();
+    const { plugin } = await materialize();
+    const client = createClient({ broken: { status: 'failed', error: 'refused' } });
+    await arm(await start(plugin, client));
+
+    await vi.advanceTimersByTimeAsync(92_000);
+    expect(client.attempts).toHaveLength(5);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+
+    // The SDK resolves HTTP errors instead of throwing: { error } with no
+    // data. The old `?? {}` fallback treated this as an authoritative empty
+    // server list and the cleanup wiped the cap, granting a fresh episode.
+    client.mcp.status.mockResolvedValueOnce({ error: new Error('ECONNRESET') });
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    // The failed server is back in the next successful response. If the
+    // counters had been wiped, this tick would have reconnected it.
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(client.attempts).toHaveLength(5);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
   it('does nothing after dispose', async () => {
     vi.useFakeTimers();
     const { plugin } = await materialize();

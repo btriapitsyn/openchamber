@@ -26,12 +26,16 @@ server that was slow to start or crashed mid-session comes back on its own.
    so a plugin that polled from load spawned every configured stdio server in
    every background instance within seconds of launch. An instance publishes
    `mcp.tools.changed` only once its MCP is actually running, which makes that
-   event the arming signal. Once armed, the plugin reads status, calls connect
-   for every server in the `failed` state, then re-reads status after a
-   per-server delay that doubles from one second to a cap of thirty, jittered
-   by up to ±20% so directory instances retry out of phase. A server seen in
-   any other state resets its counter. While nothing is failed it checks every
-   thirty seconds.
+    event the arming signal. Once armed, the plugin reads status, calls connect
+    for every server in the `failed` state, then re-reads status after a
+    per-server delay that doubles from one second to a cap of thirty, jittered
+    by up to ±20% so directory instances retry out of phase. A server seen in
+    any other state resets its counter. While nothing is failed it checks every
+    thirty seconds. An unavailable status response, an HTTP error the SDK
+    resolves as `{ error }` instead of throwing, is treated as no answer at
+    all: the retry counters survive it and the next idle check tries again,
+    because reading the failure as an authoritative empty server list would
+    wipe the counters and re-arm servers already given up on.
 5. Every reconnect spawns a child process, so two bounds apply:
    - a server is retried at most five consecutive times before the plugin
      gives up on it; it is left alone until it is seen healthy again (a manual
