@@ -3,6 +3,7 @@ import { retry } from "./retry"
 import type { GlobalState, State } from "./types"
 import { runtimeFetch } from "../lib/runtime-fetch"
 import { emitSyncConfigChanged } from "./sync-refs"
+import { warmChatsRootDirectory } from "../lib/chatDirectories"
 
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0)
 
@@ -69,6 +70,9 @@ export async function bootstrapGlobal(
   set: (patch: Partial<GlobalState>) => void,
 ) {
   const results = await Promise.allSettled([
+    // Sync chat classification needs the chats root before session lists load;
+    // it resolves alongside the other bootstrap calls, not ahead of them.
+    warmChatsRootDirectory(),
     retry(() => sdk.path.get().then((x) => set({ path: unwrap(x, "path.get") }))),
     retry(() => sdk.global.config.get().then((x) => set({ config: unwrap(x, "global.config.get") }))),
     retry(() =>
@@ -176,8 +180,9 @@ export async function bootstrapDirectory(input: {
     ),
     retry(() =>
       sdk.session.status().then((x) => {
-        committedStatuses = unwrap(x, "session.status")
-        commit({ session_status: committedStatuses })
+        const statuses = unwrap(x, "session.status")
+        committedStatuses = statuses
+        commit({ session_status: statuses, sessionStatusReady: true })
       }),
     ),
   ])

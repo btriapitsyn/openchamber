@@ -103,7 +103,8 @@ const QueuedMessageChip = memo(({ message, target, onEdit, onSend }: QueuedMessa
 QueuedMessageChip.displayName = 'QueuedMessageChip';
 
 interface QueuedMessageChipsProps {
-    onEditMessage: (content: string, attachments?: QueuedMessage['attachments']) => void;
+    /** The message was taken from the queue in full; the composer restores it. */
+    onEditMessage: (message: QueuedMessage) => void;
     onSendMessage: (messageId: string) => void;
 }
 
@@ -159,7 +160,7 @@ export const QueuedMessageChips = memo(({ onEditMessage, onSendMessage }: Queued
                 const currentAttachments = useInputStore.getState().attachedFiles;
                 useInputStore.getState().setAttachedFiles([...currentAttachments, ...popped.attachments]);
             }
-            onEditMessage(popped.content, popped.attachments);
+            onEditMessage(popped);
         }).catch((error) => {
             console.warn('[queue] failed to take queued message for editing:', error);
             toast.error(t('chat.queuedMessage.toast.takeFailed'));

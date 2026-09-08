@@ -31,18 +31,30 @@ send never re-resolves mutable UI state:
 {
   id, createdAt,
   content,        // raw text for display and editing
-  text,           // text to deliver (agent mention stripped); defaults to content
+  text,           // text to deliver (agent mention stripped, file mentions resolved); defaults to content
   agentMention?,  // delivered as an `agent` part
   attachments: [{ id, filename, mimeType, size, source, serverPath?, dataUrl }],
+  context: [      // what the composer had attached, in send order
+    { kind: 'context', text, metadata, instructions? },  // a draft chip or linked issue/PR; metadata is the UI's structured payload
+    { kind: 'instruction', text },                       // derived from the text (skill instruction)
+    { kind: 'synthetic', text },                         // handed to the composer by another surface
+  ],
   sendConfig: { providerID, modelID, agent?, variant? }   // required
 }
 ```
 
+The server is a courier for `context`: it validates the shape (a kind it
+knows, a `metadata` object on `context` entries) and delivers each entry as a
+synthetic text part, an entry's `instructions` going out as its own part just
+before it and its `metadata` riding the part verbatim so the timeline renders
+the context block back. The payload inside `metadata` is the UI's contract
+(`lib/messages/contextParts.ts`), parsed by the UI on the way back.
+
 `parseQueuedItemInput` rejects anything the server could not deliver later
-(no text and no attachments, missing model, malformed attachment). Public
-snapshots and broadcasts strip `dataUrl` from attachments — payloads can be
-megabytes of base64 and must not ride every update; the only way to get them
-back is a `take`.
+(no text, attachments, or context; missing model; malformed attachment or
+context entry). Public snapshots and broadcasts strip the payloads —
+attachment `dataUrl` (megabytes of base64) and `context` (a PR diff, say) —
+so they do not ride every update; the only way to get them back is a `take`.
 
 ## Persistence
 
@@ -83,10 +95,17 @@ persisted "sending" flag would strand a message forever.
    the tick re-arms with backoff.
 5. The head is marked in flight (broadcast), then sent:
    - text starting with `/` that names a command in OpenCode's `/command`
-     list (skills included) goes to `POST /session/:id/command` with the
-     captured model, agent, variant, and file parts;
+     list (skills included) and carries no captured context goes to
+     `POST /session/:id/command` with the captured model, agent, variant, and
+     file parts. That route accepts file parts only, so a command queued
+     **with** context takes the prompt route instead, the same rule the
+     composer applies: the command's template is expanded with its arguments
+     (`$ARGUMENTS`, `$1..$N`, or appended), a skill keeps its `/name args` text
+     and gets an explicit "the user invoked this skill" synthetic part after
+     the context;
    - otherwise `POST /session/:id/prompt_async` with the parts in the same
-     order a UI send uses: text, files, pending project knowledge
+     order a UI send uses: text, files, the captured context, the skill
+     invocation when there is one, pending project knowledge
      (`sessionKnowledgeRuntime.resolvePendingForSession`, synthetic, recorded
      as delivered only after the prompt is accepted), then the agent mention.
    Success removes the item, persists, broadcasts, and marks the user
@@ -121,7 +140,11 @@ allowlists.
 
 Every mutation broadcasts `openchamber:message-queue.updated` with
 `{ revision, session }` to all connected clients (SSE and WS), so several
-devices on one server see one queue.
+devices on one server see one queue. The session in that payload always names
+its `directory`, including the broadcast that removes the last item: the UI
+keys its projection by directory, and a broadcast without one left the
+delivered message on screen (a session's directory is remembered until the
+session is deleted or evicted).
 
 Limits: 20 items per session, 50 sessions (oldest evicted, never one with an
 item in flight), 200k characters of content; attachment payloads are bounded

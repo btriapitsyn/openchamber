@@ -5,9 +5,6 @@
 [![Discord](https://img.shields.io/badge/Discord-join.svg?style=flat&labelColor=100F0F&color=8B7EC8&logo=discord&logoColor=FFFCF0)](https://discord.gg/ZYRSdnwwKA)
 [![Support the project](https://img.shields.io/badge/Support-Project-black?style=flat&labelColor=100F0F&color=EC8B49&logo=patreon&logoColor=FFFCF0)](https://www.patreon.com/openchamber)
 
-> [!IMPORTANT]
-> I'm on vacation from 31 Aug to 4 Sep. I'll review issues and PRs when I'm back. Thanks for your patience.
-
 ## Run agent work. Keep control. Ship from anywhere.
 
 **OpenChamber is an open-source workspace for running and reviewing AI coding work on desktop, web, VS Code, and mobile.**
@@ -155,7 +152,7 @@ Special thanks to:
 
 - [OpenCode](https://opencode.ai) for the API and open-source architecture OpenChamber builds on
 - [Pierre](https://pierrejs-docs.vercel.app/) for the diff viewer and syntax highlighting
-- [Ghostty-web](https://github.com/coder/ghostty-web) for its Ghostty web renderer
+- The [T3 Code](https://github.com/pingdotgg/t3code) team for their browser adapter for [libghostty-vt](https://github.com/ghostty-org/ghostty), which our terminal is built on
 - [Yulia Ivashko](https://github.com/yulia-ivashko), who built the firework celebration that plays on every successful push
 - Everyone who contributed code, reported bugs, or shared ideas
 
