@@ -23,6 +23,7 @@ import type {
   GitHubChecksSummary,
 } from '@/lib/api/types';
 import { useI18n } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { describeIdentityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
 import { useDeviceInfo } from '@/lib/device';
 
@@ -143,6 +144,9 @@ interface IdentityDropdownProps {
    * offered rather than wondering where it went.
    */
   applicability?: (identity: GitIdentityProfile) => IdentityApplicability;
+  /** Lets a form give the trigger a field's width and border; the panel keeps its ghost button. */
+  triggerClassName?: string;
+  menuAlign?: 'start' | 'end';
 }
 
 export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
@@ -154,6 +158,8 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
   attention = null,
   onConfigure,
   applicability,
+  triggerClassName,
+  menuAlign = 'end',
 }) => {
   const { t } = useI18n();
   const isDisabled = isApplying || identities.length === 0;
@@ -166,7 +172,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 min-w-0 max-w-[15rem] justify-start gap-1.5 px-2 py-1 typography-ui-label"
+              className={cn('h-8 min-w-0 max-w-[15rem] justify-start gap-1.5 px-2 py-1 typography-ui-label', triggerClassName)}
               style={{ color: getIdentityColor(activeProfile?.color) }}
               disabled={isDisabled}
               aria-label={t('gitView.header.identityTooltip')}
@@ -194,7 +200,7 @@ export const IdentityDropdown: React.FC<IdentityDropdownProps> = ({
         </TooltipTrigger>
         <TooltipContent sideOffset={8}>{attention ?? t('gitView.header.identityTooltip')}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align={menuAlign} className="w-64">
         {identities.length === 0 ? (
           <div className="px-2 py-1.5">
             <p className="typography-meta text-muted-foreground">

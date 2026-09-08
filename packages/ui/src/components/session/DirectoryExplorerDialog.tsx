@@ -16,10 +16,10 @@ import { GitOperationStatus } from '@/components/views/git/GitOperationStatus';
 import { useExistingRepositorySummary } from './useExistingRepositorySummary';
 import { getRuntimeKey } from '@/lib/runtime-switch';
 import { identityTransport } from '@/lib/api/git-identity';
-import { applyIdentityToRepository, describeIdentityApplicability, identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, identityApplicability, type IdentityApplicability } from '@/lib/source-control/applyIdentity';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { useSourceControlAuthStore } from '@/stores/useSourceControlAuthStore';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMobileAppActions } from '@/apps/mobileAppContext';
 import {
@@ -65,13 +65,6 @@ type BrowseEntry = {
 type BrowseRow =
   | { type: 'up'; value: 'browse:up'; name: string; path: string | null; disabled?: false }
   | { type: 'directory'; value: string; name: string; path: string; disabled: boolean };
-
-const TRANSPORT_LABEL_KEYS = {
-  system: 'settings.sourceControl.transport.system',
-  account: 'settings.gitIdentities.editor.transport.account',
-  ssh: 'settings.sourceControl.transport.ssh',
-  anonymous: 'settings.sourceControl.transport.anonymous',
-} as const;
 
 const isRootPath = (value: string): boolean => value === '/';
 
@@ -791,29 +784,18 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
    */
   const identityPicker = availableGitIdentities.length ? (
     <>
-      <Select
-        value={selectedGitIdentity?.id ?? ''}
-        disabled={isConfirming}
-        onValueChange={(value) => {
-          setIdentityChoice({ key: identityChoiceKey, id: value });
+      <IdentityDropdown
+        activeProfile={selectedGitIdentity ?? null}
+        identities={availableGitIdentities}
+        onSelect={(identity) => {
+          setIdentityChoice({ key: identityChoiceKey, id: identity.id });
           setUnverifiedConfirmed(false);
         }}
-      >
-        <SelectTrigger className="w-full" aria-label={t('gitView.header.identityTooltip')}>
-          <SelectValue placeholder={t('gitView.header.identityTooltip')}>
-            {selectedGitIdentity ? selectedGitIdentity.name : undefined}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>{availableGitIdentities.map((identity) => {
-          const applicability = identityApplicabilityOf(identity);
-          return (
-            <SelectItem key={identity.id} value={identity.id} disabled={!applicability.applicable}>
-              {identity.name} · {t(TRANSPORT_LABEL_KEYS[identityTransport(identity)])}
-              {applicability.applicable ? null : <> · {describeIdentityApplicability(applicability, t)}</>}
-            </SelectItem>
-          );
-        })}</SelectContent>
-      </Select>
+        isApplying={isConfirming}
+        applicability={identityApplicabilityOf}
+        triggerClassName="w-full max-w-none border border-border"
+        menuAlign="start"
+      />
       {identityNeedsAcknowledgement ? (
         <label className="flex items-start gap-2 typography-micro text-muted-foreground">
           <Checkbox checked={unverifiedConfirmed} onChange={setUnverifiedConfirmed} disabled={isConfirming}
