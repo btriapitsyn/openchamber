@@ -407,15 +407,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
   // written until the project is added with the proposal still selected.
   const existingRepository = useExistingRepositorySummary(targetPath, { sourceControl, git },
     !isCloneMode && !runtime.isVSCode && !isAlreadyAdded && !shouldCreateTarget && selectionPaths.length === 0);
-  const existingAuthorProfile = existingRepository?.author
-    ? availableGitIdentities.find((identity) => identity.userName === existingRepository.author?.userName
-      && identity.userEmail === existingRepository.author?.userEmail) ?? null
-    : null;
-  const existingRepositoryAuthor = existingRepository?.author
-    ? [existingRepository.author.userName, existingRepository.author.userEmail ? `<${existingRepository.author.userEmail}>` : '']
-      .filter(Boolean).join(' ')
-    : '';
-
   React.useEffect(() => {
     if (existingRepository && !runtime.isVSCode) void refreshAccounts(sourceControl);
   }, [existingRepository, refreshAccounts, runtime.isVSCode, runtimeKey, sourceControl]);
@@ -813,25 +804,6 @@ export const DirectoryExplorerDialog: React.FC<DirectoryExplorerDialogProps> = (
     <div className="px-2.5 py-1.5">
       {!isCloneMode && existingRepository ? (
         <div className="mb-1.5 space-y-1.5">
-          <p className="typography-micro text-muted-foreground">{t('directoryExplorerDialog.existing.title')}</p>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 typography-micro">
-            {existingRepository.remotes.map((remote) => (
-              <React.Fragment key={remote.name}>
-                <dt className="text-muted-foreground">{remote.name}</dt>
-                <dd className="min-w-0 truncate font-mono text-foreground/80">{remote.fetch.displayUrl}</dd>
-              </React.Fragment>
-            ))}
-            <dt className="text-muted-foreground">{t('gitView.context.author')}</dt>
-            <dd className="min-w-0 break-words text-foreground/80">
-              {existingRepositoryAuthor ? <>
-                {existingRepositoryAuthor}
-                {existingAuthorProfile && existingAuthorProfile.id !== GLOBAL_IDENTITY_ID
-                  && existingAuthorProfile.name !== existingRepository.author?.userName
-                  ? <> · {existingAuthorProfile.name}</> : null}
-                {existingRepository.authorIsLocal ? null : <> · {t('directoryExplorerDialog.existing.authorGlobal')}</>}
-              </> : t('gitView.context.notConfigured')}
-            </dd>
-          </dl>
           {identityPicker}
           {agentGitAuthorityEnabled && git.setAgentGitAuthority ? (
             <label className="flex items-start gap-2 typography-micro text-muted-foreground">
