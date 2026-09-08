@@ -198,9 +198,13 @@ async function requestStartLike(db, { kind, user, requestId, reason, logger, wor
   }
 
   // Step 2: an in-flight operation of this kind -> return that same operation.
+  // Re-read the workspace: the winner of the race has since bumped the
+  // generation, and returning the handler-start snapshot would answer an
+  // incoherent view (RT-01).
   const inFlight = await findInFlightOperation(db, { workspaceId, kind });
   if (inFlight) {
-    return { status: 'accepted', workspace: toWorkspace(workspace), operation: toOperation(inFlight) };
+    const fresh = await getWorkspaceById(db, { workspaceId });
+    return { status: 'accepted', workspace: toWorkspace(fresh), operation: toOperation(inFlight) };
   }
 
   // Step 3b: register a new operation carrying the next generation.
@@ -258,7 +262,10 @@ export async function stopWorkspace(db, { user, workspaceId, requestId, reason, 
 
   const inFlight = await findInFlightOperation(db, { workspaceId, kind: 'stop' });
   if (inFlight) {
-    return { status: 'accepted', workspace: toWorkspace(workspace), operation: toOperation(inFlight) };
+    // Re-read as in requestStartLike: the in-flight stop bumped the row
+    // (desired/observed) after our snapshot was taken.
+    const fresh = await getWorkspaceById(db, { workspaceId });
+    return { status: 'accepted', workspace: toWorkspace(fresh), operation: toOperation(inFlight) };
   }
 
   const alreadyStopped = workspace.desired_state === 'stopped'

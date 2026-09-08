@@ -166,6 +166,10 @@ describe('stopWorkspace (plan sections 8.2 and 8.5)', () => {
       user, workspaceId, requestId: 'r2', reason: 'two', logger: silentLogger,
     });
     expect(second.operation.id).toBe(first.operation.id);
+    // The in-flight response must reflect the bump performed by the first
+    // stop, not the caller's stale snapshot (RT-01 coherence).
+    expect(second.workspace.desiredState).toBe('stopped');
+    expect(second.workspace.observedState).toBe('stopping');
   });
 
   it('stop on an error workspace rejects with 409 and creates no operation row', async () => {

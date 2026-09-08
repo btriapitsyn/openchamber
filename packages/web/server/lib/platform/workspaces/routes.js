@@ -10,6 +10,8 @@
 
 import { randomUUID } from 'node:crypto';
 
+import express from 'express';
+
 import { isPlatformEnabled, createMigratedPlatformDb } from '../index.js';
 import {
   readSessionCookie,
@@ -105,10 +107,16 @@ export async function registerPlatformWorkspaceRoutes(app, options = {}) {
     }
   });
 
+  // JSON body parser mounted per-route (upstream style): the common request
+  // middleware intentionally skips /api paths, so platform POST routes must
+  // attach their own parser or req.body stays undefined in production.
+  const parseJsonBody = express.json({ limit: '64kb' });
+
   app.post(
     '/api/platform/workspace/start',
     requirePlatformSession,
     requireCsrfHeader,
+    parseJsonBody,
     async (req, res) => {
       try {
         const supplied = FORBIDDEN_START_PARAMETERS.filter(

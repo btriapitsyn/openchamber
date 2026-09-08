@@ -105,6 +105,30 @@ describe('POST /api/platform/workspace/start', () => {
     expect(ops).toHaveLength(0);
   });
 
+  it('parses the JSON body without a global parser (production wiring)', async () => {
+    // Boot the router the way production does: NO app-level express.json().
+    // The route must carry its own parser, otherwise the forbidden-parameter
+    // defense below never sees the body and the start would be accepted.
+    const bareApp = express();
+    const result = await registerPlatformWorkspaceRoutes(bareApp, { logger: silentLogger, db });
+    expect(result.enabled).toBe(true);
+
+    const rejected = await request(bareApp)
+      .post('/api/platform/workspace/start')
+      .set('Cookie', cookie)
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({ image: 'alpine:latest' });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.error).toBe('unsupported_parameter');
+
+    const accepted = await request(bareApp)
+      .post('/api/platform/workspace/start')
+      .set('Cookie', cookie)
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({});
+    expect(accepted.status).toBe(202);
+  });
+
   it('accepts a start and returns 202 with the operation id', async () => {
     const res = await request(app)
       .post('/api/platform/workspace/start')

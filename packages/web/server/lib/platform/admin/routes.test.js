@@ -192,6 +192,29 @@ describe('GET /api/platform/admin/workspaces', () => {
 });
 
 describe('POST /api/platform/admin/workspaces/:id/stop', () => {
+  it('parses the JSON body without a global parser (production wiring)', async () => {
+    // Boot the router the way production does: NO app-level express.json().
+    // The route must carry its own parser or the reason never reaches
+    // requireReason and every stop answers 400 reason_required.
+    const bareApp = express();
+    const result = await registerPlatformAdminRoutes(bareApp, { logger: silentLogger, db });
+    expect(result.enabled).toBe(true);
+
+    await ensureWorkspaceForUser(db, { userId: user.id });
+    await startWorkspace(db, { user, requestId: 'seed-start' });
+    const { rows: [workspace] } = await db.query('SELECT id FROM workspaces');
+
+    const res = await request(bareApp)
+      .post(`/api/platform/admin/workspaces/${workspace.id}/stop`)
+      .set('Cookie', adminCookie)
+      .set('X-Requested-With', 'XMLHttpRequest')
+      .send({ reason: 'maintenance window' });
+    expect(res.status).toBe(202);
+    const { rows: ops } = await db.query("SELECT reason FROM runtime_operations WHERE kind = 'stop'");
+    expect(ops).toHaveLength(1);
+    expect(ops[0].reason).toBe('maintenance window');
+  });
+
   it('requires a reason (400 reason_required, failure audited)', async () => {
     const workspace = await ensureWorkspaceForUser(db, { userId: user.id });
     for (const body of [{}, { reason: '' }, { reason: '   ' }]) {

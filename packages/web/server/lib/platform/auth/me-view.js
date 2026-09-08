@@ -59,7 +59,8 @@ export async function buildMeView(db, { user }) {
     },
     capabilities: capabilitiesForRole(user.role),
     locale,
-    // Placeholder until workspace scheduling lands; Task 8 fills this in.
+    // Workspace lifecycle state is deliberately NOT joined here (keep the me
+    // view lean): clients read it from GET /api/platform/workspace.
     workspace: null,
   };
 }

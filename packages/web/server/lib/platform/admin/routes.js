@@ -17,6 +17,8 @@
 
 import { randomUUID } from 'node:crypto';
 
+import express from 'express';
+
 import { isPlatformEnabled, createMigratedPlatformDb } from '../index.js';
 import { writeAuditEvent } from '../audit/audit-writer.js';
 import {
@@ -197,11 +199,17 @@ export async function registerPlatformAdminRoutes(app, options = {}) {
     },
   );
 
+  // JSON body parser mounted per-route (upstream style): the common request
+  // middleware intentionally skips /api paths, so platform POST routes must
+  // attach their own parser or req.body stays undefined in production.
+  const parseJsonBody = express.json({ limit: '64kb' });
+
   app.post(
     '/api/platform/admin/workspaces/:id/stop',
     requirePlatformSession,
     adminGuard,
     requireCsrfHeader,
+    parseJsonBody,
     async (req, res) => {
       const reason = requireReason(req, res);
       if (reason === null) {
@@ -258,6 +266,7 @@ export async function registerPlatformAdminRoutes(app, options = {}) {
     requirePlatformSession,
     adminGuard,
     requireCsrfHeader,
+    parseJsonBody,
     async (req, res) => {
       const reason = requireReason(req, res);
       if (reason === null) {
