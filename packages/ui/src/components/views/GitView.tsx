@@ -1483,13 +1483,10 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     beginIdentityApply();
 
     try {
-      const primaryRemote = bindingRemoteName;
-      const outcome = primaryRemote
-        ? await applyIdentityToRepository(
-          { directory: gitDirectory, identity: profile, remoteName: primaryRemote, acknowledgedSystem },
-          { git, sourceControl },
-        )
-        : { status: 'applied' as const };
+      const outcome = await applyIdentityToRepository(
+        { directory: gitDirectory, identity: profile, remoteName: bindingRemoteName || null, acknowledgedSystem },
+        { git, sourceControl },
+      );
       if (getRuntimeKey() !== runtimeKey) return;
       if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
       else toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));

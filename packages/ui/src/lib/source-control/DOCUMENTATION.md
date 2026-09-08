@@ -92,7 +92,8 @@ One repository works as one identity. `applyIdentity.ts` turns a chosen
 provider association through the exact-target mutation, writes the primary
 remote's transport grant from the identity's transport (`account`, `ssh`,
 `system`, or `anonymous`), and applies the author with
-`setGitIdentity(directory, profileId)`. The `global` profile is the System
+`setGitIdentity(directory, profileId)`. A repository with no remote, and a
+runtime that holds no bindings (VS Code), receive the signature alone. The `global` profile is the System
 identity — it removes the provider association and clears the repository-local
 author so the person's own Git configuration answers, and OpenChamber never
 writes that configuration. `needsSystemAcknowledgement` gates the System
@@ -107,7 +108,14 @@ and never proposed. `proposeIdentityForHost` proposes, among applicable identiti
 the one whose account answers for the remote host, then the default identity,
 then the System identity — the repository as it is. On the add screen a proposed
 System identity is written only when the person chose it or confirmed its
-credentials, so adding a directory never clears an author on its own. The same rule serves the add and clone screens
+credentials, so adding a directory never clears an author on its own.
+
+Git in an agent shell answers to bindings only through the environment the
+managed OpenCode child was started with, so the first HTTPS credential grant a
+remote receives — from an identity apply or a clone — records a pending
+OpenCode restart (`recordDeferredOpenCodeRestart('cli', …)`), the same way the
+machine-wide agent switch does. A key identity travels over SSH and records
+none; a remote the agent already answers for records none either. The same rule serves the add and clone screens
 (`DirectoryExplorerDialog`), the Git panel (`IdentityDropdown` in `GitHeader`),
 and the mobile Changes surface.
 

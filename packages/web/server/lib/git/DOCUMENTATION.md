@@ -273,8 +273,10 @@ the person's own chain with this helper removed from it, and anything else
 answers nothing at all — which is the point, because nothing is what stops an
 unbound repository from silently borrowing an ambient identity.
 
-Nothing is injected while no binding names an HTTPS host. The bearer token
-lives only in that child's environment and dies with the process.
+Nothing is injected while no binding names an HTTPS host, and the set is read
+when the child starts: the shared UI records a pending OpenCode restart when a
+remote first receives an HTTPS credential grant. The bearer token lives only in
+that child's environment and dies with the process.
 
 `shell-boundary-runtime.js` closes the last gap. The credential answer already
 decides which identity a transfer uses, but it cannot reach `gh`, `glab` or an

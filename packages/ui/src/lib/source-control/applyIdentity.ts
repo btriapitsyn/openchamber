@@ -8,6 +8,7 @@ import type {
 import { identityTransport } from '@/lib/api/git-identity';
 import { instanceHost, type RemoteTraits } from './identity';
 import { repositoryBindingOwner } from './repository-binding';
+import { recordDeferredOpenCodeRestart } from '@/lib/opencode/deferredRestart';
 
 export type IdentityApplicability =
   | { applicable: true }
@@ -41,15 +42,14 @@ export const identityApplicability = (
 
 type ApplyIdentityOutcome =
   | { status: 'applied' }
-  | { status: 'unsupported' }
   | { status: 'acknowledgement-required' }
   | { status: 'failed'; reason: 'binding' | 'author' };
 
 type ApplyIdentityInput = {
   directory: string;
   identity: GitIdentityProfile;
-  /** The remote the identity answers for; the repository's own anchor. */
-  remoteName: string;
+  /** The remote the identity answers for, or null when the repository has none. */
+  remoteName: string | null;
   /** Passing System Git on means the person confirmed the unverified transport. */
   acknowledgedSystem?: boolean;
 };
@@ -136,7 +136,37 @@ export const applyIdentityToRepository = async (
   { directory, identity, remoteName, acknowledgedSystem = false }: ApplyIdentityInput,
   { git, sourceControl }: ApplyIdentityAPIs,
 ): Promise<ApplyIdentityOutcome> => {
-  if (!git.configureTransportBinding) return { status: 'unsupported' };
+  // The transfer half needs a remote to answer for and a runtime that holds
+  // bindings — VS Code holds none. The signature is written either way.
+  let outcome: ApplyIdentityOutcome = remoteName && git.configureTransportBinding
+    ? await applyBinding(
+      { directory, identity, remoteName, acknowledgedSystem },
+      { configureTransportBinding: git.configureTransportBinding, sourceControl },
+    )
+    : { status: 'applied' };
+
+  // The signature is written to the repository itself, so it is applied even
+  // when the transfer side could not be. The system identity is applied the
+  // same way: its id removes the repository's own author instead of naming one,
+  // which is what "no override applies here" means.
+  try {
+    if (identity.id) await git.setGitIdentity(directory, identity.id);
+  } catch {
+    if (outcome.status === 'applied') outcome = { status: 'failed', reason: 'author' };
+  }
+  return outcome;
+};
+
+/** The account and transport half of an identity, written through the binding owner. */
+const applyBinding = async (
+  { directory, identity, remoteName, acknowledgedSystem }: {
+    directory: string; identity: GitIdentityProfile; remoteName: string; acknowledgedSystem: boolean;
+  },
+  { configureTransportBinding, sourceControl }: {
+    configureTransportBinding: NonNullable<GitAPI['configureTransportBinding']>;
+    sourceControl: ApplyIdentityAPIs['sourceControl'];
+  },
+): Promise<ApplyIdentityOutcome> => {
   const scope = repositoryBindingOwner.scope(directory);
   let read: SourceControlBindingRead;
   try {
@@ -146,6 +176,13 @@ export const applyIdentityToRepository = async (
   }
   const mutation = repositoryBindingOwner.captureMutation(scope, read);
   let outcome: ApplyIdentityOutcome = { status: 'applied' };
+  // Git in the agent's shell learns about an HTTPS host only when the managed
+  // OpenCode child starts with it in its environment, so the first credential
+  // grant on a remote asks for a restart the way other configuration does.
+  const previousGrant = read.binding?.remotes.find((entry) => entry.name === remoteName);
+  const remoteIsHttps = read.repository.remotes.find((entry) => entry.name === remoteName)
+    ?.fetch.displayUrl.startsWith('https://') ?? false;
+  const agentGitAnswered = Boolean(previousGrant && (previousGrant.mode === 'managed' || previousGrant.mode === 'system'));
   try {
     // The identity is the whole answer for this repository, so an identity
     // that names no account leaves it answering to none — the account it used
@@ -172,8 +209,13 @@ export const applyIdentityToRepository = async (
     }
     const intent = transportIntent(identity, read, remoteName, acknowledgedSystem, directory);
     if (intent) {
-      const result = await git.configureTransportBinding(intent);
-      if (result.status === 'configured') read = result.binding;
+      const result = await configureTransportBinding(intent);
+      if (result.status === 'configured') {
+        read = result.binding;
+        if (remoteIsHttps && !agentGitAnswered && (intent.transport === 'https' || intent.transport === 'system')) {
+          recordDeferredOpenCodeRestart('cli', { id: `agent-git:${directory}` });
+        }
+      }
     } else if (identityTransport(identity) === 'system') {
       outcome = { status: 'acknowledgement-required' };
     }
@@ -183,16 +225,6 @@ export const applyIdentityToRepository = async (
     await repositoryBindingOwner.reconcile(mutation, sourceControl);
   } finally {
     mutation.release();
-  }
-
-  // The signature is written to the repository itself, so it is applied even
-  // when the transfer side could not be. The system identity is applied the
-  // same way: its id removes the repository's own author instead of naming one,
-  // which is what "no override applies here" means.
-  try {
-    if (identity.id) await git.setGitIdentity(directory, identity.id);
-  } catch {
-    if (outcome.status === 'applied') outcome = { status: 'failed', reason: 'author' };
   }
   return outcome;
 };

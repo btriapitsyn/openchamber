@@ -118,13 +118,10 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
     if (!currentDirectory || isApplyingIdentity) return;
     setIsApplyingIdentity(true);
     try {
-      const remoteName = effectiveRemotes[0]?.name ?? '';
-      const outcome = remoteName
-        ? await applyIdentityToRepository(
-          { directory: currentDirectory, identity: profile, remoteName, acknowledgedSystem },
-          { git, sourceControl },
-        )
-        : { status: 'applied' as const };
+      const outcome = await applyIdentityToRepository(
+        { directory: currentDirectory, identity: profile, remoteName: effectiveRemotes[0]?.name ?? null, acknowledgedSystem },
+        { git, sourceControl },
+      );
       if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
       else toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
     } finally {
