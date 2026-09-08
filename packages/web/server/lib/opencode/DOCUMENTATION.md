@@ -213,6 +213,12 @@ Managed health failures are classified as `timeout`, `connection_refused`, `conn
 - Persistent permission auto-accept policy is stored under `permissionAutoAccept`; execution ownership lives in `lib/permission-auto-accept/`.
 - Queued follow-up messages live in `<data-dir>/message-queue.json`, not in settings; execution ownership lives in `lib/message-queue/`.
 - Shared sidebar preferences are stored as validated top-level fields: `sidebarProjectDisplayMode`, `sidebarSessionGroupingMode`, `sidebarProjectSortOrder`, and `sidebarShowRecentSection`. Device-local picker selection and sticky-header state do not enter `settings.json`.
+- `serverBrowserDebugPort` stores `0` for automatic selection, the default, or
+  an integer from `1` through `65535` for a fixed loopback CDP port. Settings
+  responses normalize missing or invalid stored values to `0`; updates with
+  invalid values return HTTP 400 before writing. Saving changes the next
+  Chrome launch without stopping the active process. The live status and
+  process contract belong to [the browser runtime](../browser/DOCUMENTATION.md).
 
 ## Public exports (settings-helpers.js)
 - `createSettingsHelpers(dependencies)`: creates settings helper runtime for settings request/response shaping.
