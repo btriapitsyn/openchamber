@@ -927,6 +927,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.readiness.configChanged': '綁定後儲存庫的遠端位址已變更',
   'gitView.context.removeProvider': '移除供應商關聯',
   'gitView.context.systemUnverified': '系統憑證，未經驗證',
+  'gitView.identity.systemConfirmTitle': '使用「{name}」並採用本機的憑證嗎？',
+  'gitView.identity.systemConfirmAction': '使用',
   'gitView.context.managedCredentialUnavailable': '受管理的憑證無法使用',
   'gitView.context.applyAuthor': '將作者套用到此儲存庫',
   'gitView.context.settings': '開啟 Git 設定',

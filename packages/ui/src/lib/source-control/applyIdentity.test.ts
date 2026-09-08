@@ -6,7 +6,7 @@ import type {
   SourceControlProviderBindingMutation,
   SourceControlRepositoryBinding,
 } from '@/lib/api/types';
-import { applyIdentityToRepository } from './applyIdentity';
+import { applyIdentityToRepository, needsSystemAcknowledgement } from './applyIdentity';
 import { repositoryBindingOwner } from './repository-binding';
 
 const account = { provider: 'github', instance: 'github.com', accountId: 'occred:v1:github:one:r1' } as const;
@@ -60,6 +60,24 @@ const harness = (initial = read()) => {
 };
 
 afterEach(() => { repositoryBindingOwner.reset(); });
+
+describe('needsSystemAcknowledgement', () => {
+  test('asks before an identity that uses whatever the machine holds', () => {
+    expect(needsSystemAcknowledgement(identity({ transport: 'system' }), true)).toBe(true);
+    // An identity written before identities carried a transport means the same.
+    expect(needsSystemAcknowledgement(identity(), true)).toBe(true);
+  });
+
+  test('asks nothing when the identity names its own credentials', () => {
+    expect(needsSystemAcknowledgement(identity({ account, transport: 'account' }), true)).toBe(false);
+    expect(needsSystemAcknowledgement(identity({ transport: 'ssh', sshCredentialId: 'k' }), true)).toBe(false);
+    expect(needsSystemAcknowledgement(identity({ transport: 'anonymous' }), true)).toBe(false);
+  });
+
+  test('asks nothing when there is no remote to bind', () => {
+    expect(needsSystemAcknowledgement(identity({ transport: 'system' }), false)).toBe(false);
+  });
+});
 
 describe('applyIdentityToRepository', () => {
   test('writes the account, the transport and the signature from one identity', async () => {

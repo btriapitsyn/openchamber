@@ -811,6 +811,8 @@ export const dict = {
   'gitView.context.readiness.configChanged': 'Die Remotes des Repositorys haben sich seit der Bindung geändert',
   'gitView.context.removeProvider': 'Anbieterzuordnung entfernen',
   'gitView.context.systemUnverified': 'System-Zugangsdaten, ungeprüft',
+  'gitView.identity.systemConfirmTitle': '„{name}“ mit den Zugangsdaten dieses Rechners verwenden?',
+  'gitView.identity.systemConfirmAction': 'Verwenden',
   'gitView.context.managedCredentialUnavailable': 'Verwaltete Zugangsdaten nicht verfügbar',
   'gitView.context.applyAuthor': 'Autor für dieses Repository anwenden',
   'gitView.context.settings': 'Git-Einstellungen öffnen',

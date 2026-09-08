@@ -67,6 +67,19 @@ const transportIntent = (
 };
 
 /**
+ * Whether applying this identity has to be confirmed first.
+ *
+ * A System Git identity says "use whatever this machine holds", and
+ * OpenChamber cannot tell whose credentials those are. Asking beforehand keeps
+ * a cancelled choice from leaving a signature written and a transport refused.
+ * A repository with no remote binds nothing, so there is nothing to confirm.
+ */
+export const needsSystemAcknowledgement = (
+  identity: Pick<GitIdentityProfile, 'transport'>,
+  hasBindableRemote: boolean,
+): boolean => hasBindableRemote && identityTransport(identity) === 'system';
+
+/**
  * Writes one identity onto a repository.
  *
  * The three answers a repository needs — whose issues these are, how transfers

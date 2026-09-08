@@ -3396,6 +3396,8 @@ export const dict = {
   'gitView.context.readiness.configChanged': 'Bağlamadan bu yana deponun uzak sunucuları değişti',
   'gitView.context.removeProvider': 'Provider ilişkisini kaldır',
   'gitView.context.systemUnverified': 'Sistem kimlik bilgileri, doğrulanmadı',
+  'gitView.identity.systemConfirmTitle': '“{name}” bu bilgisayarın kimlik bilgileriyle kullanılsın mı?',
+  'gitView.identity.systemConfirmAction': 'Kullan',
   'gitView.context.managedCredentialUnavailable': 'Yönetilen kimlik bilgisi kullanılamıyor',
   'gitView.context.applyAuthor': 'Yazarı bu repository\'ye uygula',
   'gitView.context.settings': 'Git Ayarları\'nı aç',

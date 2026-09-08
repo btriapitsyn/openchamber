@@ -16,6 +16,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.readiness.configChanged': 'Ремоути репозиторію змінилися після прив\'язки',
   'gitView.context.removeProvider': 'Прибрати зв’язок із провайдером',
   'gitView.context.systemUnverified': 'Системні облікові дані, не перевірено',
+  'gitView.identity.systemConfirmTitle': 'Використати «{name}» з обліковими даними цього комп’ютера?',
+  'gitView.identity.systemConfirmAction': 'Використати',
   'gitView.context.managedCredentialUnavailable': 'Керовані облікові дані недоступні',
   'gitView.context.applyAuthor': 'Застосувати автора до цього репозиторію',
   'gitView.context.settings': 'Відкрити налаштування Git',

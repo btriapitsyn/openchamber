@@ -2264,6 +2264,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.readiness.configChanged': 'Zdalne repozytoria zmieniły się od czasu powiązania',
   'gitView.context.removeProvider': 'Usuń powiązanie z dostawcą',
   'gitView.context.systemUnverified': 'Poświadczenia systemowe, niezweryfikowane',
+  'gitView.identity.systemConfirmTitle': 'Użyć „{name}” z poświadczeniami tego komputera?',
+  'gitView.identity.systemConfirmAction': 'Użyj',
   'gitView.context.managedCredentialUnavailable': 'Zarządzane poświadczenie jest niedostępne',
   'gitView.context.applyAuthor': 'Zastosuj autora w tym repozytorium',
   'gitView.context.settings': 'Otwórz ustawienia Git',

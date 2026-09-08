@@ -914,6 +914,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.readiness.configChanged': '연결 이후 저장소의 원격이 변경되었습니다',
   'gitView.context.removeProvider': '공급자 연결 제거',
   'gitView.context.systemUnverified': '시스템 자격 증명, 확인되지 않음',
+  'gitView.identity.systemConfirmTitle': '‘{name}’을(를) 이 컴퓨터의 자격 증명으로 사용할까요?',
+  'gitView.identity.systemConfirmAction': '사용',
   'gitView.context.managedCredentialUnavailable': '관리형 자격 증명을 사용할 수 없음',
   'gitView.context.applyAuthor': '이 저장소에 작성자 적용',
   'gitView.context.settings': 'Git 설정 열기',

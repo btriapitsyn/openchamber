@@ -736,6 +736,8 @@ export const dict = {
   'gitView.context.readiness.configChanged': 'Les remotes du dépôt ont changé depuis la liaison',
   'gitView.context.removeProvider': 'Supprimer l’association au fournisseur',
   'gitView.context.systemUnverified': 'Identifiants système, non vérifiés',
+  'gitView.identity.systemConfirmTitle': 'Utiliser « {name} » avec les identifiants de cet ordinateur ?',
+  'gitView.identity.systemConfirmAction': "L'utiliser",
   'gitView.context.managedCredentialUnavailable': 'Identifiant géré indisponible',
   'gitView.context.applyAuthor': 'Appliquer l’auteur à ce dépôt',
   'gitView.context.settings': 'Ouvrir les paramètres Git',

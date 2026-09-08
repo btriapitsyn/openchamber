@@ -914,6 +914,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.readiness.configChanged': '绑定后仓库的远程地址已更改',
   'gitView.context.removeProvider': '移除提供商关联',
   'gitView.context.systemUnverified': '系统凭据，未经验证',
+  'gitView.identity.systemConfirmTitle': '使用“{name}”并采用本机的凭据吗？',
+  'gitView.identity.systemConfirmAction': '使用',
   'gitView.context.managedCredentialUnavailable': '托管凭据不可用',
   'gitView.context.applyAuthor': '将作者应用到此仓库',
   'gitView.context.settings': '打开 Git 设置',

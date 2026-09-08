@@ -14,7 +14,8 @@ import { useContributorDestinationChooser } from '@/components/views/git/contrib
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
 import { IdentityDropdown } from '@/components/views/git/GitHeader';
 import { useGitIdentitiesStore } from '@/stores/useGitIdentitiesStore';
-import { applyIdentityToRepository } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
+import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 import type { GitIdentityProfile } from '@/lib/api/types';
 import { PierreDiffViewer } from '@/components/views/PierreDiffViewer';
 import { useRuntimeAPIs } from '@/hooks/useRuntimeAPIs';
@@ -87,6 +88,7 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
   const currentIdentity = useGitIdentity(currentDirectory || null);
   const [isRepositoryConfigurationOpen, setRepositoryConfigurationOpen] = React.useState(false);
   const [isApplyingIdentity, setIsApplyingIdentity] = React.useState(false);
+  const [pendingSystemIdentity, setPendingSystemIdentity] = React.useState<GitIdentityProfile | null>(null);
   const gitIdentityProfiles = useGitIdentitiesStore((state) => state.profiles);
   const globalGitIdentity = useGitIdentitiesStore((state) => state.globalIdentity);
   const loadGitIdentityProfiles = useGitIdentitiesStore((state) => state.loadProfiles);
@@ -111,20 +113,32 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
    * screens write. System Git is the exception: trusting whatever the machine
    * holds is confirmed in the repository configuration, not by a menu pick.
    */
-  const handleApplyIdentity = async (profile: GitIdentityProfile) => {
+  const applyIdentity = async (profile: GitIdentityProfile, acknowledgedSystem: boolean) => {
     if (!currentDirectory || isApplyingIdentity) return;
     setIsApplyingIdentity(true);
     try {
       const remoteName = effectiveRemotes[0]?.name ?? '';
       const outcome = remoteName
-        ? await applyIdentityToRepository({ directory: currentDirectory, identity: profile, remoteName }, { git, sourceControl })
+        ? await applyIdentityToRepository(
+          { directory: currentDirectory, identity: profile, remoteName, acknowledgedSystem },
+          { git, sourceControl },
+        )
         : { status: 'applied' as const };
-      if (outcome.status === 'acknowledgement-required') toast.warning(t('gitView.context.systemUnverified'));
-      else if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
+      if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
       else toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
     } finally {
       setIsApplyingIdentity(false);
     }
+  };
+
+  const handleApplyIdentity = async (profile: GitIdentityProfile) => {
+    // Asked before anything is written, so cancelling leaves the repository as
+    // it was rather than with a signature applied and a transport refused.
+    if (needsSystemAcknowledgement(profile, effectiveRemotes.length > 0)) {
+      setPendingSystemIdentity(profile);
+      return;
+    }
+    await applyIdentity(profile, false);
   };
   const isGitRepo = useIsGitRepo(currentDirectory || null);
   const isLoadingStatus = useGitLoadingStatus(currentDirectory || null);
@@ -731,6 +745,15 @@ export const MobileChangesSurface: React.FC<MobileChangesSurfaceProps> = ({ onCl
           hasUncommittedChanges={changeEntries.length > 0}
         />
       </header>
+      <SystemIdentityConfirmDialog
+        identityName={pendingSystemIdentity?.name ?? null}
+        onCancel={() => setPendingSystemIdentity(null)}
+        onConfirm={() => {
+          const profile = pendingSystemIdentity;
+          setPendingSystemIdentity(null);
+          if (profile) void applyIdentity(profile, true);
+        }}
+      />
       <RepositoryConfigurationDialog
         open={isRepositoryConfigurationOpen}
         onOpenChange={setRepositoryConfigurationOpen}

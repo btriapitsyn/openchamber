@@ -16,6 +16,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.readiness.configChanged': 'Os remotos do repositório mudaram desde a vinculação',
   'gitView.context.removeProvider': 'Remover associação com o provedor',
   'gitView.context.systemUnverified': 'Credenciais do sistema, não verificadas',
+  'gitView.identity.systemConfirmTitle': 'Usar “{name}” com as credenciais deste computador?',
+  'gitView.identity.systemConfirmAction': 'Usar',
   'gitView.context.managedCredentialUnavailable': 'Credencial gerenciada indisponível',
   'gitView.context.applyAuthor': 'Aplicar autor a este repositório',
   'gitView.context.settings': 'Abrir configurações do Git',

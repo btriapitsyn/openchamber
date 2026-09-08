@@ -911,6 +911,8 @@ export const dict: Record<I18nKey, string> = {
   'gitView.context.readiness.configChanged': '関連付け以降にリポジトリのリモートが変更されました',
   'gitView.context.removeProvider': 'プロバイダーの関連付けを削除',
   'gitView.context.systemUnverified': 'システム認証情報、未検証',
+  'gitView.identity.systemConfirmTitle': '「{name}」をこのコンピューターの資格情報で使いますか？',
+  'gitView.identity.systemConfirmAction': '使う',
   'gitView.context.managedCredentialUnavailable': '管理対象の認証情報を利用できません',
   'gitView.context.applyAuthor': 'このリポジトリに作成者を適用',
   'gitView.context.settings': 'Git設定を開く',

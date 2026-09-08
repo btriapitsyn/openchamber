@@ -89,7 +89,8 @@ import { PublishDialog } from './git/PublishDialog';
 import { ContributorDestinationDialog } from './git/ContributorDestinationDialog';
 import { useContributorDestinationChooser } from './git/contributorDestination';
 import { RepositoryConfigurationDialog } from '@/components/sections/openchamber/SourceControlBindingSettings';
-import { applyIdentityToRepository } from '@/lib/source-control/applyIdentity';
+import { applyIdentityToRepository, needsSystemAcknowledgement } from '@/lib/source-control/applyIdentity';
+import { SystemIdentityConfirmDialog } from '@/components/views/git/SystemIdentityConfirmDialog';
 
 type SyncAction = 'fetch' | 'sync' | 'publish' | null;
 type CommitAction = 'commit' | 'commitAndPush' | null;
@@ -349,6 +350,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
   const [remotes, setRemotes] = React.useState<GitRemote[]>([]);
   const binding = useRepositoryBinding(gitDirectory, sourceControl, isActive);
   const [isRepositoryConfigurationOpen, setRepositoryConfigurationOpen] = React.useState(false);
+  const [pendingSystemIdentity, setPendingSystemIdentity] = React.useState<GitIdentityProfile | null>(null);
   /**
    * The remote an identity answers for: the one the binding already names, or
    * the repository's own anchor. Without one there is nothing to bind, and
@@ -1470,7 +1472,7 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
    * the machine holds is a separate confirmation, and the repository
    * configuration dialog is where it is given.
    */
-  const handleApplyIdentity = async (profile: GitIdentityProfile) => {
+  const applyIdentity = async (profile: GitIdentityProfile, acknowledgedSystem: boolean) => {
     if (!gitDirectory) return;
     const runtimeKey = getRuntimeKey();
     beginIdentityApply();
@@ -1478,16 +1480,14 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     try {
       const primaryRemote = bindingRemoteName;
       const outcome = primaryRemote
-        ? await applyIdentityToRepository({ directory: gitDirectory, identity: profile, remoteName: primaryRemote }, { git, sourceControl })
+        ? await applyIdentityToRepository(
+          { directory: gitDirectory, identity: profile, remoteName: primaryRemote, acknowledgedSystem },
+          { git, sourceControl },
+        )
         : { status: 'applied' as const };
       if (getRuntimeKey() !== runtimeKey) return;
-      if (outcome.status === 'acknowledgement-required') {
-        toast.warning(t('gitView.context.systemUnverified'));
-      } else if (outcome.status === 'failed') {
-        toast.error(t('gitView.toast.applyIdentityFailed'));
-      } else {
-        toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
-      }
+      if (outcome.status === 'failed') toast.error(t('gitView.toast.applyIdentityFailed'));
+      else toast.success(t('gitView.toast.appliedIdentity', { name: profile.name }));
       await refreshIdentity();
     } catch (err) {
       if (getRuntimeKey() !== runtimeKey) return;
@@ -1496,6 +1496,16 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
     } finally {
       endIdentityApply();
     }
+  };
+
+  const handleApplyIdentity = async (profile: GitIdentityProfile) => {
+    // Asked before anything is written, so cancelling leaves the repository as
+    // it was rather than with a signature applied and a transport refused.
+    if (needsSystemAcknowledgement(profile, Boolean(bindingRemoteName))) {
+      setPendingSystemIdentity(profile);
+      return;
+    }
+    await applyIdentity(profile, false);
   };
 
   const localBranches = React.useMemo(() => {
@@ -2472,6 +2482,15 @@ export const GitView: React.FC<GitViewProps> = ({ isActive }) => {
           />
 
       {/* VS Code manages Git hosting itself; the webview projects remotes as a system binding without a settings surface. */}
+      <SystemIdentityConfirmDialog
+        identityName={pendingSystemIdentity?.name ?? null}
+        onCancel={() => setPendingSystemIdentity(null)}
+        onConfirm={() => {
+          const profile = pendingSystemIdentity;
+          setPendingSystemIdentity(null);
+          if (profile) void applyIdentity(profile, true);
+        }}
+      />
       {!runtime.isVSCode ? <RepositoryConfigurationDialog
         open={isRepositoryConfigurationOpen}
         onOpenChange={setRepositoryConfigurationOpen}

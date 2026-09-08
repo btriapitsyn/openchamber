@@ -913,6 +913,8 @@ export const dict = {
   'gitView.context.readiness.configChanged': 'The repository\'s remotes changed since this was bound',
   'gitView.context.removeProvider': 'Remove provider association',
   'gitView.context.systemUnverified': 'System credentials, unverified',
+  'gitView.identity.systemConfirmTitle': 'Use “{name}” with this machine’s credentials?',
+  'gitView.identity.systemConfirmAction': 'Use it',
   'gitView.context.managedCredentialUnavailable': 'Managed credential unavailable',
   'gitView.context.applyAuthor': 'Apply author to this repository',
   'gitView.context.settings': 'Open Git Settings',
